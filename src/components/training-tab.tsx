@@ -380,7 +380,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
         {over && (
           <div className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${
-            state.status === "bankrupt" || state.totalProfit < cfg.targetProfit
+            state.status === "bankrupt" || state.totalProfit < seasonTarget
               ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
               : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
             {state.status === "bankrupt"
@@ -388,6 +388,14 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               : <><Trophy size={15} className="mt-0.5" /> Sezon tamam: {compact(state.totalRevenue)} ciro, {compact(state.totalProfit)} net kâr, {state.totalOrders} sipariş, {missionsDone} görev.</>}
           </div>
         )}
+
+        {state.status === "finished" && (
+          <button onClick={doContinueSeason}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2.5 text-xs font-semibold glow">
+            <RefreshCw size={13} /> Sezon {season + 1}'e devam et — mağazan, markan ve stokun korunur
+          </button>
+        )}
+
       </div>
 
       {/* View switch */}
