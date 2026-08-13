@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bot, Loader2, Send, X } from "lucide-react";
+import { Loader2, Send, X } from "lucide-react";
+import { VeloraMark } from "@/components/velora-mark";
 import { askCopilot } from "@/lib/competitor.functions";
 
 type Msg = { role: "user" | "ai"; text: string };
@@ -68,7 +69,7 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
       {open && (
         <div className="absolute bottom-16 right-0 w-[330px] max-w-[85vw] rounded-2xl border border-white/10 bg-[oklch(0.18_0.03_265)]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-            <span className="text-xs font-semibold flex items-center gap-1.5"><Bot size={13} /> AI Co-Pilot</span>
+            <span className="text-xs font-semibold flex items-center gap-1.5"><VeloraMark size={15} className="text-[oklch(0.78_0.16_265)]" /> Velora Co-Pilot</span>
             <button onClick={() => setOpen(false)} className="p-1 rounded hover:bg-white/10" aria-label="Kapat"><X size={13} /></button>
           </div>
           <div className="max-h-64 overflow-y-auto p-3 space-y-2 text-xs">
@@ -114,7 +115,7 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
         aria-label="AI Co-Pilot"
         title="Sürükleyebilirsin · tıkla ve sohbet et"
       >
-        <Bot size={22} />
+        <VeloraMark size={26} />
       </button>
     </div>
   );

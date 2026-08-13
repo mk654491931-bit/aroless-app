@@ -166,6 +166,15 @@ export function coachTips(s: SimState): Tip[] {
     if (p.rating < 4 && p.reviews > 5) {
       tips.push({ kind: "warn", title: `${p.name}: puan düşüyor`, body: "Düşük puan iade oranını ve dönüşümü doğrudan bozar. Fiyatı değeriyle hizala." });
     }
+    if ((p.fatigue ?? 0) > 0.55 && p.adBudget > 0) {
+      tips.push({ kind: "warn", title: `${p.name}: kreatif yorgun`, body: `Yorgunluk %${Math.round((p.fatigue ?? 0) * 100)}. Aynı reklam tıklama başına daha pahalı ve daha az satıyor — yeni kreatif çek ya da bütçeyi birkaç gün dinlendir.` });
+    }
+    if ((p.returnPool ?? 0) > 25) {
+      tips.push({ kind: "good", title: `${p.name}: sadık kitle oluştu`, body: "Geri dönen müşteri havuzun büyüyor; bu trafiği bedava alıyorsun. Stoğu boş bırakma." });
+    }
+    if ((p.channel ?? "meta") === "tiktok" && p.price > p.recommendedPrice) {
+      tips.push({ kind: "idea", title: `${p.name}: kanal-fiyat uyumsuz`, body: "TikTok kitlesi düşük niyetli ve fiyat hassas. Premium fiyat için Google, agresif fiyat için TikTok daha uygun." });
+    }
     if (p.stock > 0 && p.listed && p.adBudget === 0 && p.unitsSold < 5) {
       tips.push({ kind: "idea", title: `${p.name}: trafik yok`, body: "Stok var ama bütçe 0. Küçük bir test bütçesiyle (10-25$/gün) veri toplamaya başla." });
     }

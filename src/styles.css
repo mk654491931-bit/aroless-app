@@ -876,3 +876,7 @@ html, body, .premium-card, .glass {
   .velora-letter { animation-duration: 0.01s; }
 }
 
+
+/* Velora AI mark */
+@keyframes vm-spin { to { transform: rotate(360deg); } }
+@keyframes vm-pulse { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.06); } }

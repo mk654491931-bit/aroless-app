@@ -61,7 +61,29 @@ export type StoreProduct = {
   reviews: number;
   stockouts: number;
   listed: boolean;
+  /* --- deep mechanics (optional for older saves) --- */
+  channel?: AdChannel;          // where the ad budget is spent
+  fatigue?: number;             // 0..1 creative fatigue
+  lastBudget?: number;          // budget of previous day (scaling penalty)
+  returnPool?: number;          // happy customers that may buy again
+  repeatOrders?: number;        // lifetime repeat orders
 };
+
+export type AdChannel = "meta" | "tiktok" | "google";
+
+export const CHANNELS: Record<AdChannel, { label: string; blurb: string; cpcMult: number; cvrMult: number; fatigueRate: number }> = {
+  meta:   { label: "Meta",   blurb: "Dengeli: orta TBM, orta dönüşüm, orta yorulma.",        cpcMult: 1,    cvrMult: 1,    fatigueRate: 0.06 },
+  tiktok: { label: "TikTok", blurb: "Ucuz tıklama ama hızlı yorulan kitle, düşük niyet.",    cpcMult: 0.72, cvrMult: 0.86, fatigueRate: 0.11 },
+  google: { label: "Google", blurb: "Pahalı tıklama, yüksek alım niyeti, çok yavaş yorulur.", cpcMult: 1.38, cvrMult: 1.34, fatigueRate: 0.025 },
+};
+
+/** Pzt→Paz talep katsayısı: hafta sonu alışveriş yoğunlaşır. */
+export const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] as const;
+const WEEKDAY_DEMAND = [0.9, 0.94, 1.0, 1.06, 1.16, 1.2, 1.02];
+export const weekdayOf = (day: number) => (day - 1) % 7;
+export const weekdayDemand = (day: number) => WEEKDAY_DEMAND[weekdayOf(day)];
+
+export const CREATIVE_COST = 45;
 
 export type DayRecord = {
   day: number;
@@ -92,6 +114,8 @@ export type SimState = {
   totalOrders: number;
   spentOnInventory: number;
   status: "running" | "bankrupt" | "finished";
+  pendingDecision?: { id: string; day: number };
+  decisionsTaken?: number;
   activeEvent?: { text: string; daysLeft: number; cpcMult: number; cvrMult: number };
 };
 
@@ -141,6 +165,11 @@ export function productFromWinner(p: WinningProduct): StoreProduct {
     reviews: 0,
     stockouts: 0,
     listed: true,
+    channel: "meta",
+    fatigue: 0,
+    lastBudget: 0,
+    returnPool: 0,
+    repeatOrders: 0,
   };
 }
 
@@ -196,23 +225,37 @@ export function simulateDay(prev: SimState): DayResult {
 
   let visitors = 0, orders = 0, revenue = 0, adSpend = 0, cogs = 0, fees = 0, refundAmt = 0;
 
+  const dow = weekdayDemand(day);
+
   for (const p of s.products) {
     if (!p.listed) continue;
 
+    const ch = CHANNELS[p.channel ?? "meta"];
+    const fatigue = Math.max(0, Math.min(0.95, p.fatigue ?? 0));
     const compMult = p.competition === "High" ? 1.35 : p.competition === "Low" ? 0.8 : 1;
-    const cpc = cfg.cpc * compMult * evCpc * rnd(0.85, 1.18);
+
+    // scaling too fast burns money: a >60% budget jump spikes CPC and fatigue
+    const prevBudget = p.lastBudget ?? p.adBudget;
+    const jump = prevBudget > 0 ? p.adBudget / prevBudget : 1;
+    const scalingPenalty = jump > 1.6 ? 1 + Math.min(0.35, (jump - 1.6) * 0.25) : 1;
+
+    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * (1 + fatigue * 0.65) * scalingPenalty * rnd(0.85, 1.18);
     const spend = Math.min(p.adBudget, Math.max(0, s.cash + revenue - adSpend));
     const paidVisits = spend > 0 ? spend / cpc : 0;
     // organic traffic grows with sales history, reviews and trend
     const organic =
       cfg.organicMult * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
-    const traffic = paidVisits + organic;
+    // loyal buyers come back on their own — no ad cost
+    const pool = p.returnPool ?? 0;
+    const returning = pool * 0.06 * rnd(0.6, 1.4);
+    const traffic = (paidVisits + organic + returning) * dow;
 
     // price elasticity: cheaper than recommended converts better, pricier worse
     const ratio = p.price / Math.max(0.01, p.recommendedPrice);
     const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * evCvr * rnd(0.75, 1.3);
+    const fatigueMult = 1 - fatigue * 0.5;
+    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
@@ -243,6 +286,22 @@ export function simulateDay(prev: SimState): DayResult {
       p.rating = (p.rating * p.reviews + target * newReviews) / (p.reviews + newReviews);
       p.reviews += newReviews;
     }
+
+    // creative fatigue: burns while spending, cools down when paused
+    p.fatigue = Math.max(0, Math.min(0.95,
+      spend > 0
+        ? fatigue + ch.fatigueRate * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
+        : fatigue - 0.09,
+    ));
+    if (p.fatigue > 0.7 && fatigue <= 0.7) {
+      events.push({ day, kind: "bad", text: `${p.name} kreatifi yoruldu — TBM artıyor, dönüşüm düşüyor. Yeni kreatif çek.` });
+    }
+    p.lastBudget = p.adBudget;
+
+    // loyalty: happy buyers join the return pool, unhappy ones leave it
+    const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty);
+    p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
 
     visitors += traffic;
     orders += netUnits;
@@ -289,6 +348,12 @@ export function simulateDay(prev: SimState): DayResult {
     });
   }
 
+  // strategic decision card (player choice) — one at a time
+  if (s.status === "running" && !s.pendingDecision && s.products.length > 0 && day > 2 && Math.random() < 0.16) {
+    const card = DECISIONS[Math.floor(Math.random() * DECISIONS.length)];
+    s.pendingDecision = { id: card.id, day };
+  }
+
   s.log = [...s.log, ...events].slice(-120);
   return { state: s, record, events };
 }
@@ -330,4 +395,125 @@ export function netMarginPct(p: StoreProduct, cfg: DifficultyConfig) {
 
 export function unitProfit(p: StoreProduct, cfg: DifficultyConfig) {
   return p.price - p.unitCost - p.price * cfg.platformFeePct - cfg.shippingPerUnit;
+}
+
+/* ---------------- Strategic decision cards ---------------- */
+
+export type DecisionEffect = {
+  cash?: number;                 // + income / - spend
+  ratingDelta?: number;          // applied to every product
+  fatigueDelta?: number;         // applied to every product
+  priceMult?: number;            // discount / raise across the store
+  stockPerProduct?: number;      // free units added
+  event?: { text: string; days: number; cpcMult: number; cvrMult: number };
+  log: string;
+};
+
+export type Decision = {
+  id: string;
+  title: string;
+  body: string;
+  options: { label: string; detail: string; effect: DecisionEffect }[];
+};
+
+export const DECISIONS: Decision[] = [
+  {
+    id: "influencer",
+    title: "Mikro-influencer teklifi",
+    body: "45B takipçili bir içerik üreticisi ürününü tanıtmak için $120 istiyor. Barter da teklif ediyor.",
+    options: [
+      { label: "$120 öde", detail: "3 gün ucuz ve iyi dönüşen trafik", effect: { cash: -120, event: { text: "Influencer videosu yayında — trafik ucuzladı ve dönüşüm arttı.", days: 3, cpcMult: 0.72, cvrMult: 1.4 }, log: "Influencer iş birliği için $120 ödendi." } },
+      { label: "Ürün gönder", detail: "Ücretsiz ama etki daha zayıf", effect: { stockPerProduct: -2, event: { text: "Barter içerik yayınlandı — ılımlı bir trafik artışı var.", days: 2, cpcMult: 0.9, cvrMult: 1.15 }, log: "Influencer'a numune ürün gönderildi." } },
+      { label: "Reddet", detail: "Nakit korunur", effect: { log: "Influencer teklifi reddedildi." } },
+    ],
+  },
+  {
+    id: "supplier",
+    title: "Tedarikçi zam yapıyor",
+    body: "Ana tedarikçin birim maliyeti %8 artırıyor. Alternatif tedarikçi daha ucuz ama kalite riski var.",
+    options: [
+      { label: "Zammı kabul et", detail: "Kalite sabit", effect: { cash: -40, log: "Tedarikçi zammı kabul edildi." } },
+      { label: "Ucuz tedarikçiye geç", detail: "Nakit kalır, puan düşebilir", effect: { cash: 60, ratingDelta: -0.25, log: "Daha ucuz tedarikçiye geçildi, kalite riski alındı." } },
+      { label: "Stok yığ", detail: "Şimdiden ücretsiz 8 birim", effect: { cash: -150, stockPerProduct: 8, log: "Zam öncesi toplu stok alındı." } },
+    ],
+  },
+  {
+    id: "review",
+    title: "1 yıldızlı kritik yorum",
+    body: "Kargo gecikmesi yüzünden öfkeli bir müşteri kötü yorum bıraktı ve görülme oranı yüksek.",
+    options: [
+      { label: "İade + özür kiti", detail: "Puanı toparlar", effect: { cash: -55, ratingDelta: 0.3, log: "Müşteriye iade ve özür kiti gönderildi." } },
+      { label: "Yalnızca yanıt yaz", detail: "Ücretsiz, küçük etki", effect: { ratingDelta: 0.08, log: "Yoruma kamuya açık yanıt verildi." } },
+      { label: "Görmezden gel", detail: "Dönüşüm 2 gün düşer", effect: { event: { text: "Kötü yorum öne çıktı — dönüşüm baskı altında.", days: 2, cpcMult: 1, cvrMult: 0.82 }, ratingDelta: -0.1, log: "Kötü yorum yanıtsız bırakıldı." } },
+    ],
+  },
+  {
+    id: "flash",
+    title: "Flaş indirim fırsatı",
+    body: "Pazaryeri hafta sonu kampanyasına seni davet ediyor. Katılmak için fiyatları %12 düşürmen gerekiyor.",
+    options: [
+      { label: "Kampanyaya gir", detail: "Fiyatlar -%12, 3 gün talep patlaması", effect: { priceMult: 0.88, event: { text: "Kampanya sayfasındasın — talep arttı.", days: 3, cpcMult: 0.95, cvrMult: 1.45 }, log: "Flaş indirim kampanyasına girildi." } },
+      { label: "Katılma", detail: "Marj korunur", effect: { log: "Kampanya daveti reddedildi." } },
+    ],
+  },
+  {
+    id: "creative",
+    title: "Kreatif ajansı teklifi",
+    body: "Bir UGC ajansı $90'a 5 yeni video paketi sunuyor.",
+    options: [
+      { label: "Paketi al", detail: "Tüm kreatif yorgunluğu sıfırlanır", effect: { cash: -90, fatigueDelta: -1, log: "UGC kreatif paketi satın alındı, reklamlar tazelendi." } },
+      { label: "Kendin çek", detail: "Ücretsiz, kısmi tazeleme", effect: { fatigueDelta: -0.35, log: "Kendi kreatiflerin çekildi." } },
+    ],
+  },
+  {
+    id: "shipping",
+    title: "Hızlı kargo anlaşması",
+    body: "Kargo firması, ek ücretle 2 gün daha hızlı teslimat sunuyor. Müşteri memnuniyeti artabilir.",
+    options: [
+      { label: "Anlaş", detail: "Puan artar, nakit azalır", effect: { cash: -75, ratingDelta: 0.22, log: "Hızlı kargo anlaşması yapıldı." } },
+      { label: "Mevcutta kal", detail: "Değişiklik yok", effect: { log: "Kargo anlaşması değiştirilmedi." } },
+    ],
+  },
+];
+
+export function applyDecision(state: SimState, optionIndex: number): SimState {
+  const pending = state.pendingDecision;
+  if (!pending) return state;
+  const card = DECISIONS.find((d) => d.id === pending.id);
+  const opt = card?.options[optionIndex];
+  if (!card || !opt) return { ...state, pendingDecision: undefined };
+  const e = opt.effect;
+
+  const products = state.products.map((p) => ({
+    ...p,
+    rating: e.ratingDelta ? Math.max(1, Math.min(5, p.rating + e.ratingDelta)) : p.rating,
+    fatigue: e.fatigueDelta ? Math.max(0, Math.min(0.95, (p.fatigue ?? 0) + e.fatigueDelta)) : p.fatigue,
+    price: e.priceMult ? Math.round(p.price * e.priceMult * 100) / 100 : p.price,
+    stock: e.stockPerProduct ? Math.max(0, p.stock + e.stockPerProduct) : p.stock,
+  }));
+
+  return {
+    ...state,
+    products,
+    cash: Math.round((state.cash + (e.cash ?? 0)) * 100) / 100,
+    activeEvent: e.event ? { text: e.event.text, daysLeft: e.event.days, cpcMult: e.event.cpcMult, cvrMult: e.event.cvrMult } : state.activeEvent,
+    decisionsTaken: (state.decisionsTaken ?? 0) + 1,
+    pendingDecision: undefined,
+    log: [...state.log, { day: state.day, kind: "info" as const, text: `${card.title}: ${e.log}` }].slice(-120),
+  };
+}
+
+/** Shoot a fresh creative for one product: costs cash, resets fatigue. */
+export function refreshCreative(state: SimState, productId: string): { state: SimState; error?: string } {
+  const p = state.products.find((x) => x.id === productId);
+  if (!p) return { state };
+  if (state.cash < CREATIVE_COST) return { state, error: "Kreatif çekimi için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - CREATIVE_COST) * 100) / 100,
+      products: state.products.map((x) => (x.id === productId ? { ...x, fatigue: 0 } : x)),
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `${p.name} için yeni kreatif yayına alındı (-$${CREATIVE_COST}).` }].slice(-120),
+    },
+  };
 }
