@@ -418,8 +418,11 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       {view === "products" && (
         <CatalogView state={state} catalog={catalog} onAdd={addProduct} onRestock={doRestock} onRemove={removeProduct} onPatch={patch} />
       )}
-      {view === "ads" && <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} />}
+      {view === "ads" && <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} onAbTest={doAbTest} />}
       {view === "analytics" && <Analytics state={state} />}
+      {view === "market" && <MarketView state={state} />}
+      {view === "ops" && <OpsView state={state} onSupportBudget={doSupportBudget} />}
+
       {view === "growth" && (
         <GrowthView state={state} onUpgrade={doUpgrade} onLoan={doLoan} onRepay={doRepay} onCampaign={doCampaign} />
       )}
