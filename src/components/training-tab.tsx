@@ -197,6 +197,25 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       return r.state;
     });
 
+  const doAbTest = (id: string) =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = startAbTest(prev, id);
+      if (r.error) toast.error(r.error); else toast.success(`A/B testi başladı — ${AB_TEST_DAYS} gün sonra kazanan uygulanacak.`);
+      return r.state;
+    });
+
+  const doSupportBudget = (amount: number) =>
+    setState((prev) => (prev ? setSupportBudget(prev, amount) : prev));
+
+  const doContinueSeason = () =>
+    setState((prev) => {
+      if (!prev) return prev;
+      savedRun.current = false;
+      toast.success("Yeni sezon başladı — takvim baştan işliyor.");
+      return continueSeason(prev);
+    });
+
   const chooseDecision = (idx: number) =>
     setState((prev) => (prev ? applyDecision(prev, idx) : prev));
 
@@ -205,7 +224,13 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
   const totalAds = state.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
   const inventoryValue = state.products.reduce((a, p) => a + p.stock * p.unitCost, 0);
-  const progress = Math.max(0, Math.min(100, (state.totalProfit / cfg.targetProfit) * 100));
+  const season = state.season ?? 1;
+  const seasonTarget = cfg.targetProfit * season;
+  const progress = Math.max(0, Math.min(100, (state.totalProfit / seasonTarget) * 100));
+  const sDay = seasonDayOf(Math.min(state.day, RUN_LENGTH * season));
+  const cal = calendarFor(state.day);
+  const share = marketShare(state);
+  const brand = Math.round(state.brand ?? 0);
 
   const missions = missionState(state);
   const missionsDone = missions.filter((m) => m.done).length;
@@ -214,17 +239,21 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const tips = coachTips(state);
   const alerts = tips.filter((t) => t.kind === "warn").length;
   const nextMission = missions.find((m) => !m.done);
+  const queue = Math.round(state.supportQueue ?? 0);
 
-  const views: { id: typeof view; label: string; icon: React.ComponentType<{ size?: number }>; badge?: string }[] = [
+  const views: { id: ViewId; label: string; icon: React.ComponentType<{ size?: number }>; badge?: string }[] = [
     { id: "storefront", label: "Vitrin", icon: Store },
     { id: "products", label: "Katalog & Stok", icon: Package },
     { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
     { id: "analytics", label: "Analitik", icon: BarChart3 },
+    { id: "market", label: "Rakipler", icon: Swords, badge: `%${Math.round(share.you * 100)}` },
+    { id: "ops", label: "Operasyon", icon: Headphones, badge: queue > 0 ? String(queue) : undefined },
     { id: "growth", label: "Büyüme", icon: Rocket, badge: (state.upgrades?.length ? String(state.upgrades.length) : undefined) },
     { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
     { id: "coach", label: "Koç", icon: VeloraIcon, badge: alerts ? String(alerts) : undefined },
     { id: "log", label: "Günlük", icon: ScrollText },
   ];
+
 
 
   return (
