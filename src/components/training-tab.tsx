@@ -468,17 +468,35 @@ function SetupScreen(props: {
 
         <button onClick={props.onStart}
           className="w-full rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold glow">
-          Open my training store
+          Eğitim mağazamı aç
         </button>
         <p className="text-[11px] text-muted-foreground text-center">
           {props.catalogCount > 0
-            ? `${props.catalogCount} researched product(s) ready to list.`
-            : "Tip: run a product search or save favourites first — you'll list those products in the store."}
+            ? `${props.catalogCount} araştırılmış ürün listelenmeye hazır.`
+            : "İpucu: önce Ürün Bulucu'da arama yap veya favori kaydet — mağazada o ürünleri satacaksın."}
         </p>
       </div>
+
+      {props.hof.length > 0 && (
+        <div className="premium-card rounded-2xl p-5">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Trophy size={15} className="text-amber-300" /> Şeref listesi</h3>
+          <div className="mt-3 space-y-2">
+            {props.hof.map((r, i) => (
+              <div key={r.at} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i === 0 ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-muted-foreground"}`}>{i + 1}</span>
+                <span className="font-medium truncate">{r.storeName}</span>
+                <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-muted-foreground">{r.difficulty}</span>
+                <span className="ml-auto shrink-0 text-muted-foreground">{r.days} gün · {r.orders} sipariş</span>
+                <b className={r.profit >= 0 ? "text-emerald-300" : "text-rose-300"}>{compact(r.profit)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+
 
 const Row = ({ k, v }: { k: string; v: string }) => (
   <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>
