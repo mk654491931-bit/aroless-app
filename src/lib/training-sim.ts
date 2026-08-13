@@ -336,7 +336,10 @@ export function productFromWinner(p: WinningProduct): StoreProduct {
     lastBudget: 0,
     returnPool: 0,
     repeatOrders: 0,
+    cvrBonus: 0,
+    abTest: null,
   };
+
 }
 
 const rnd = (min: number, max: number) => min + Math.random() * (max - min);
