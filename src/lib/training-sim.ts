@@ -710,7 +710,9 @@ export function restock(state: SimState, productId: string, qty: number): { stat
   if (!p || qty <= 0) return { state };
   const bulkDiscount = qty >= 100 ? 0.85 : qty >= 50 ? 0.92 : 1;
   const supplierMult = hasUpgrade(state, "supplier") ? 0.94 : 1;
-  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0));
+  const holidayAdd = calendarFor(state.day)?.leadTimeAdd ?? 0;
+  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0) + holidayAdd);
+
   const unitCost = Math.round(p.unitCost * bulkDiscount * supplierMult * 100) / 100;
   const total = unitCost * qty;
   if (total > state.cash) return { state, error: "Not enough cash for that purchase order." };
