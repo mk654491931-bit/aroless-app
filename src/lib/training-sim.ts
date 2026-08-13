@@ -117,6 +117,13 @@ export type SimState = {
   pendingDecision?: { id: string; day: number };
   decisionsTaken?: number;
   activeEvent?: { text: string; daysLeft: number; cpcMult: number; cvrMult: number };
+  /* --- growth systems --- */
+  upgrades?: UpgradeId[];
+  loan?: { balance: number; takenDay: number; paidInterest: number };
+  subscribers?: number;
+  lastCampaignDay?: number;
+  /** rakip fiyat endeksi: 1 = piyasa referansı */
+  marketIndex?: number;
 };
 
 export const RUN_LENGTH = 30;
