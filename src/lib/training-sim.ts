@@ -234,6 +234,26 @@ export function simulateDay(prev: SimState): DayResult {
 
   const dow = weekdayDemand(day);
 
+  // 2b. Rakip fiyat endeksi: piyasa referans fiyatı gün gün kayar
+  const prevIndex = s.marketIndex ?? 1;
+  const drift = prevIndex > 1.05 ? -0.012 : prevIndex < 0.9 ? 0.014 : 0;
+  s.marketIndex = Math.max(0.78, Math.min(1.22, prevIndex + drift + rnd(-0.035, 0.03)));
+  if (s.marketIndex < 0.9 && prevIndex >= 0.9) {
+    events.push({ day, kind: "bad", text: `Rakipler fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
+  } else if (s.marketIndex > 1.1 && prevIndex <= 1.1) {
+    events.push({ day, kind: "good", text: `Piyasa fiyatları yükseldi (endeks ${s.marketIndex.toFixed(2)}) — zam yapma fırsatı.` });
+  }
+  const marketIndex = s.marketIndex;
+
+  // yükseltmelerin etkileri
+  const upCheckout = hasUpgrade(s, "checkout") ? 1.14 : 1;
+  const upShipping = hasUpgrade(s, "logistics") ? 0.72 : 1;
+  const upRetention = hasUpgrade(s, "retention") ? 1.6 : 1;
+  const upStudio = hasUpgrade(s, "studio") ? 0.55 : 1;
+  const upBundle = hasUpgrade(s, "bundle") ? 1.18 : 1;
+  const shipCost = cfg.shippingPerUnit * upShipping;
+
+
   for (const p of s.products) {
     if (!p.listed) continue;
 
