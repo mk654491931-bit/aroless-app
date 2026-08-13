@@ -260,10 +260,49 @@ export function coachTips(s: SimState): Tip[] {
   if (s.activeEvent) {
     tips.push({ kind: "idea", title: "Piyasa olayı aktif", body: `${s.activeEvent.text} Bu pencerede bütçeni buna göre ayarla.` });
   }
+
+  /* --- layer 4 --- */
+  const queue = s.supportQueue ?? 0;
+  if (queue > 12) {
+    tips.push({ kind: "warn", title: "Destek kuyruğu birikti", body: `${Math.round(queue)} bilet bekliyor. Yanıtsız talepler puanı düşürüp iadeleri artırıyor — Operasyon sekmesinden günlük destek bütçesini yükselt ya da destek ekibini işe al.` });
+  } else if ((s.totalOrders ?? 0) > 20 && (s.supportBudget ?? 0) === 0) {
+    tips.push({ kind: "idea", title: "Destek bütçesi sıfır", body: "Sipariş sayın arttı ama hiç destek bütçen yok. Günde 15-30$ ayırmak puanını korur." });
+  }
+  const share = s.share ?? 0;
+  const rivals = marketShare(s).rivals;
+  const leader = [...rivals].sort((a, b) => b.share - a.share)[0];
+  if (leader && leader.share > share + 0.08) {
+    tips.push({ kind: "warn", title: `${leader.c.name} pazarı domine ediyor`, body: `Payı %${(leader.share * 100).toFixed(0)}, seninki %${(share * 100).toFixed(0)}. Fiyatını endekse yaklaştır, bütçeyi kademeli artır ya da puanını yükselt.` });
+  } else if (share > 0.4) {
+    tips.push({ kind: "good", title: "Pazar liderisin", body: `Payın %${(share * 100).toFixed(0)}. Bu momentumda fiyatı biraz yükseltip marj toplayabilirsin.` });
+  }
+  const brand = s.brand ?? 0;
+  if (brand < 15 && s.history.length > 8) {
+    tips.push({ kind: "idea", title: "Marka değeri zayıf", body: "Marka düşükken organik trafik gelmez ve fiyat esnekliğin yüksek olur. Puanı yüksek tut, stoksuz kalma, aşırı indirimden kaçın." });
+  } else if (brand >= 55) {
+    tips.push({ kind: "good", title: "Marka güçlü", body: `Marka değerin ${Math.round(brand)}. Premium segment payın büyüyor — fiyatı yukarı test etmenin tam zamanı.` });
+  }
+  const mix = s.segmentMix;
+  if (mix && mix.bargain > 0.55) {
+    tips.push({ kind: "idea", title: "Fiyat avcısı ağırlıklı kitle", body: "Müşterinin yarıdan fazlası fiyat avcısı: iade oranı yüksek, sadakat düşük. Fiyatı biraz yükselt ya da Google kanalını dene." });
+  }
+  const sd = ((s.day - 1) % RUN_LENGTH) + 1;
+  if (sd >= 20 && sd < 24) {
+    const stock = s.products.reduce((a, p) => a + p.stock, 0);
+    tips.push({ kind: sd >= 22 && stock < 60 ? "warn" : "idea", title: "Black Friday yaklaşıyor", body: `${24 - sd} gün kaldı. Talep ×2.2 olacak; stok (${stock} birim) ve taze kreatif şimdiden hazır olsun, tedarik süresini unutma.` });
+  }
+  if (s.products.some((p) => p.adBudget > 40 && !p.abTest && !(p.cvrBonus ?? 0))) {
+    tips.push({ kind: "idea", title: "A/B testi yapmadın", body: "Bütçe akarken kreatif testi yapmamak kalıcı dönüşüm kazancını kaçırmak demek. Reklam sekmesinden varyant testi başlat." });
+  }
+  if (s.status === "finished" && !(s.endless ?? false)) {
+    tips.push({ kind: "good", title: "Sonsuz mod açılabilir", body: "Sezonu bitirdin. 'Sezona devam et' ile takvim baştan işler, skorun ve mağazan korunur." });
+  }
+
   if (tips.length === 0) {
     tips.push({ kind: "good", title: "Panel temiz", body: "Kritik bir uyarı yok. Günleri ilerlet ve analitikte dönüşüm eğilimini izle." });
   }
-  return tips.slice(0, 6);
+  return tips.slice(0, 8);
+
 }
 
 /* ---------------- Hall of fame ---------------- */
