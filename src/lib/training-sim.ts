@@ -128,7 +128,43 @@ export type SimState = {
   lastCampaignDay?: number;
   /** rakip fiyat endeksi: 1 = piyasa referansı */
   marketIndex?: number;
+  /* --- layer 4: living market, brand, ops, seasons --- */
+  competitors?: Competitor[];
+  /** 0..100 marka değeri */
+  brand?: number;
+  /** senin pazar payın 0..1 */
+  share?: number;
+  /** bekleyen destek talebi */
+  supportQueue?: number;
+  /** günlük destek bütçesi ($) */
+  supportBudget?: number;
+  supportResolved?: number;
+  slaBreaches?: number;
+  segmentMix?: { bargain: number; mainstream: number; premium: number };
+  abWins?: number;
+  season?: number;
+  endless?: boolean;
 };
+
+export type Competitor = {
+  id: string;
+  name: string;
+  emoji: string;
+  /** fiyat endeksi (1 = referans) */
+  price: number;
+  /** reklam gücü 0..100 */
+  adPower: number;
+  /** 0..1 saldırganlık */
+  aggression: number;
+  share: number;
+  rating: number;
+};
+
+const COMPETITOR_SEED: Omit<Competitor, "share">[] = [
+  { id: "nova",  name: "NovaMart",    emoji: "🛒", price: 1.02, adPower: 42, aggression: 0.45, rating: 4.3 },
+  { id: "drop",  name: "DropKing",    emoji: "👑", price: 0.93, adPower: 55, aggression: 0.75, rating: 3.9 },
+  { id: "lux",   name: "Lumière Co.", emoji: "✨", price: 1.14, adPower: 34, aggression: 0.3,  rating: 4.7 },
+];
 
 export const RUN_LENGTH = 30;
 
@@ -150,9 +186,125 @@ export function newRun(storeName: string, difficulty: Difficulty): SimState {
     upgrades: [],
     subscribers: 0,
     marketIndex: 1,
+    competitors: COMPETITOR_SEED.map((c) => ({ ...c, share: 0.25 })),
+    brand: 8,
+    share: 0.25,
+    supportQueue: 0,
+    supportBudget: 0,
+    supportResolved: 0,
+    slaBreaches: 0,
+    segmentMix: { bargain: 0.34, mainstream: 0.44, premium: 0.22 },
+    abWins: 0,
+    season: 1,
+    endless: false,
     status: "running",
   };
 }
+
+/* ---------------- Customer segments ---------------- */
+
+export type SegmentId = "bargain" | "mainstream" | "premium";
+
+export const SEGMENTS: Record<SegmentId, {
+  label: string; blurb: string; weight: number; elasticity: number; refundBias: number;
+  channel: Record<AdChannel, number>; aovMult: number;
+}> = {
+  bargain: {
+    label: "Fiyat avcısı", blurb: "Endeksin altına inersen akın eder; iade oranı yüksek, sadakati düşük.",
+    weight: 0.36, elasticity: 1.75, refundBias: 1.35, channel: { meta: 1, tiktok: 1.3, google: 0.75 }, aovMult: 0.9,
+  },
+  mainstream: {
+    label: "Ana akım", blurb: "Fiyat/puan dengesine bakar. Mağazanın omurgası.",
+    weight: 0.44, elasticity: 1, refundBias: 1, channel: { meta: 1.2, tiktok: 1, google: 1.05 }, aovMult: 1,
+  },
+  premium: {
+    label: "Premium", blurb: "Marka ve puana bakar, fiyata az duyarlı; iade etmez, geri gelir.",
+    weight: 0.2, elasticity: 0.45, refundBias: 0.6, channel: { meta: 0.95, tiktok: 0.6, google: 1.35 }, aovMult: 1.22,
+  },
+};
+
+/* ---------------- Season calendar ---------------- */
+
+export type CalendarEvent = {
+  day: number; days: number; title: string; blurb: string;
+  demandMult?: number; cpcMult?: number; cvrMult?: number; leadTimeAdd?: number;
+};
+
+export const CALENDAR: CalendarEvent[] = [
+  { day: 11, days: 2, title: "Flaş indirim penceresi", blurb: "Pazaryeri kampanya trafiği: talep artar, tıklama biraz pahalanır.", demandMult: 1.35, cpcMult: 1.1, cvrMult: 1.1 },
+  { day: 18, days: 3, title: "Tedarikçi tatili", blurb: "Fabrikalar kapalı: bu günlerde verilen siparişler +3 gün gecikir.", leadTimeAdd: 3 },
+  { day: 24, days: 2, title: "Black Friday", blurb: "Yılın en yoğun günü: talep patlar ama reklam açık artırması kızışır.", demandMult: 2.2, cpcMult: 1.6, cvrMult: 1.15 },
+];
+
+/** Sezon içindeki gün (sonsuz modda 30'da bir başa sarar). */
+export const seasonDayOf = (day: number) => ((day - 1) % RUN_LENGTH) + 1;
+
+export function calendarFor(day: number): CalendarEvent | undefined {
+  const sd = seasonDayOf(day);
+  return CALENDAR.find((c) => sd >= c.day && sd < c.day + c.days);
+}
+
+/** Sezon bittiğinde oyuna devam et: yeni 30 günlük hedef açılır. */
+export function continueSeason(state: SimState): SimState {
+  if (state.status === "bankrupt") return state;
+  const season = (state.season ?? 1) + 1;
+  return {
+    ...state,
+    status: "running",
+    endless: true,
+    season,
+    log: [...state.log, { day: state.day, kind: "info" as const, text: `Sezon ${season} başladı — takvim baştan işliyor, skorun birikmeye devam ediyor.` }].slice(-120),
+  };
+}
+
+/** Kim pazarın ne kadarını alıyor? */
+export function marketShare(s: SimState): { you: number; rivals: { c: Competitor; share: number }[] } {
+  const comps = s.competitors ?? [];
+  const listed = s.products.filter((p) => p.listed);
+  const avgRating = listed.length ? listed.reduce((a, p) => a + p.rating, 0) / listed.length : 3.5;
+  const avgRatio = listed.length
+    ? listed.reduce((a, p) => a + p.price / Math.max(0.01, p.recommendedPrice), 0) / listed.length
+    : 1.2;
+  const ads = listed.reduce((a, p) => a + p.adBudget, 0);
+  const brand = s.brand ?? 0;
+  const youStrength = Math.max(0.5, (ads * 0.25 + 6) * (avgRating / 4.2) * (1 + brand / 90) / Math.max(0.5, avgRatio));
+  const rivalStrengths = comps.map((c) => Math.max(0.5, c.adPower * 0.42 * (c.rating / 4.2) / Math.max(0.5, c.price)));
+  const total = youStrength + rivalStrengths.reduce((a, b) => a + b, 0);
+  return {
+    you: youStrength / total,
+    rivals: comps.map((c, i) => ({ c, share: rivalStrengths[i] / total })),
+  };
+}
+
+/* ---------------- A/B creative testing ---------------- */
+
+export const AB_TEST_COST = 70;
+export const AB_TEST_DAYS = 3;
+
+export function startAbTest(state: SimState, productId: string): { state: SimState; error?: string } {
+  const p = state.products.find((x) => x.id === productId);
+  if (!p) return { state };
+  if (p.abTest) return { state, error: "Bu üründe zaten bir test yayında." };
+  if (p.adBudget <= 0) return { state, error: "Test için önce reklam bütçesi aç." };
+  if (state.cash < AB_TEST_COST) return { state, error: "A/B testi için yeterli nakit yok." };
+  const a = Math.round(rnd(-0.04, 0.18) * 1000) / 1000;
+  const b = Math.round(rnd(-0.04, 0.18) * 1000) / 1000;
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - AB_TEST_COST) * 100) / 100,
+      products: state.products.map((x) => (x.id === productId ? { ...x, abTest: { startDay: state.day, a, b } } : x)),
+      log: [...state.log, { day: state.day, kind: "info" as const, text: `${p.name}: iki kreatif varyantı test ediliyor (${AB_TEST_DAYS} gün, -$${AB_TEST_COST}).` }].slice(-120),
+    },
+  };
+}
+
+/** Günlük destek bütçesini ayarla (bilet başı ~$3.2 kapasite). */
+export const SUPPORT_TICKET_COST = 3.2;
+export function setSupportBudget(state: SimState, amount: number): SimState {
+  return { ...state, supportBudget: Math.max(0, Math.round(amount)) };
+}
+
 
 export function productFromWinner(p: WinningProduct): StoreProduct {
   const cost = Math.max(0.5, parseMoneyNum(p.supplier_price_usd));
