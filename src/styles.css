@@ -743,7 +743,10 @@ html.light.palette-aurora {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: velora-shine 6s ease-in-out infinite;
+}
+.velora-letter.velora-shine {
+  animation: letter-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+             velora-shine 6s ease-in-out infinite;
 }
 @keyframes velora-shine {
   0%, 100% { background-position: 130% 0; }
