@@ -61,7 +61,29 @@ export type StoreProduct = {
   reviews: number;
   stockouts: number;
   listed: boolean;
+  /* --- deep mechanics (optional for older saves) --- */
+  channel?: AdChannel;          // where the ad budget is spent
+  fatigue?: number;             // 0..1 creative fatigue
+  lastBudget?: number;          // budget of previous day (scaling penalty)
+  returnPool?: number;          // happy customers that may buy again
+  repeatOrders?: number;        // lifetime repeat orders
 };
+
+export type AdChannel = "meta" | "tiktok" | "google";
+
+export const CHANNELS: Record<AdChannel, { label: string; blurb: string; cpcMult: number; cvrMult: number; fatigueRate: number }> = {
+  meta:   { label: "Meta",   blurb: "Dengeli: orta TBM, orta dönüşüm, orta yorulma.",        cpcMult: 1,    cvrMult: 1,    fatigueRate: 0.06 },
+  tiktok: { label: "TikTok", blurb: "Ucuz tıklama ama hızlı yorulan kitle, düşük niyet.",    cpcMult: 0.72, cvrMult: 0.86, fatigueRate: 0.11 },
+  google: { label: "Google", blurb: "Pahalı tıklama, yüksek alım niyeti, çok yavaş yorulur.", cpcMult: 1.38, cvrMult: 1.34, fatigueRate: 0.025 },
+};
+
+/** Pzt→Paz talep katsayısı: hafta sonu alışveriş yoğunlaşır. */
+export const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] as const;
+const WEEKDAY_DEMAND = [0.9, 0.94, 1.0, 1.06, 1.16, 1.2, 1.02];
+export const weekdayOf = (day: number) => (day - 1) % 7;
+export const weekdayDemand = (day: number) => WEEKDAY_DEMAND[weekdayOf(day)];
+
+export const CREATIVE_COST = 45;
 
 export type DayRecord = {
   day: number;
@@ -92,6 +114,8 @@ export type SimState = {
   totalOrders: number;
   spentOnInventory: number;
   status: "running" | "bankrupt" | "finished";
+  pendingDecision?: { id: string; day: number };
+  decisionsTaken?: number;
   activeEvent?: { text: string; daysLeft: number; cpcMult: number; cvrMult: number };
 };
 
@@ -141,6 +165,11 @@ export function productFromWinner(p: WinningProduct): StoreProduct {
     reviews: 0,
     stockouts: 0,
     listed: true,
+    channel: "meta",
+    fatigue: 0,
+    lastBudget: 0,
+    returnPool: 0,
+    repeatOrders: 0,
   };
 }
 
