@@ -294,16 +294,16 @@ export function simulateDay(prev: SimState): DayResult {
       wanted = p.stock;
     }
 
-    const gross = wanted * p.price;
     const refundRate = cfg.refundBase * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1);
     const refundUnits = Math.round(wanted * refundRate);
     const netUnits = wanted - refundUnits;
+    const aov = p.price * upBundle; // paket/üst satış ortalama sepeti büyütür
 
     p.stock -= wanted;
     p.stock += refundUnits; // returned to stock
     p.unitsSold += netUnits;
     p.unitsRefunded += refundUnits;
-    p.revenue += netUnits * p.price;
+    p.revenue += netUnits * aov;
 
     // reviews accumulate on ~18% of net orders
     const newReviews = Math.round(netUnits * 0.18);
@@ -317,7 +317,7 @@ export function simulateDay(prev: SimState): DayResult {
     // creative fatigue: burns while spending, cools down when paused
     p.fatigue = Math.max(0, Math.min(0.95,
       spend > 0
-        ? fatigue + ch.fatigueRate * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
+        ? fatigue + ch.fatigueRate * upStudio * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
         : fatigue - 0.09,
     ));
     if (p.fatigue > 0.7 && fatigue <= 0.7) {
@@ -327,17 +327,21 @@ export function simulateDay(prev: SimState): DayResult {
 
     // loyalty: happy buyers join the return pool, unhappy ones leave it
     const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
-    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty * upRetention);
     p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
+
+    // e-posta listesi: her siparişin bir kısmı aboneye dönüşür
+    s.subscribers = (s.subscribers ?? 0) + netUnits * 0.55 * (hasUpgrade(s, "retention") ? 1.5 : 1);
 
     visitors += traffic;
     orders += netUnits;
-    revenue += netUnits * p.price;
+    revenue += netUnits * aov;
     adSpend += spend;
-    fees += netUnits * p.price * cfg.platformFeePct + netUnits * cfg.shippingPerUnit;
+    fees += netUnits * aov * cfg.platformFeePct + netUnits * shipCost;
     refundAmt += refundUnits * p.price * 0.35; // shipping + processing lost on refunds
     cogs += 0; // COGS is paid when inventory is purchased
   }
+
 
   const fixed = cfg.dailyFixedCost;
   const profit = revenue - adSpend - fees - refundAmt - fixed;
