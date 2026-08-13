@@ -207,28 +207,49 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         </div>
 
         <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
-          <Kpi icon={Wallet} label="Cash" value={money(state.cash)} tone={state.cash < 100 ? "bad" : "good"} />
-          <Kpi icon={Coins} label="Revenue" value={compact(state.totalRevenue)} />
-          <Kpi icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown} label="Net profit" value={compact(state.totalProfit)} tone={state.totalProfit >= 0 ? "good" : "bad"} />
-          <Kpi icon={ShoppingCart} label="Orders" value={String(state.totalOrders)} />
-          <Kpi icon={Package} label="Stock value" value={compact(inventoryValue)} />
-          <Kpi icon={Megaphone} label="Daily ads" value={money(totalAds)} />
+          <Kpi icon={Wallet} label="Nakit" value={money(state.cash)} tone={state.cash < 100 ? "bad" : "good"} />
+          <Kpi icon={Coins} label="Ciro" value={compact(state.totalRevenue)} />
+          <Kpi icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown} label="Net kâr" value={compact(state.totalProfit)} tone={state.totalProfit >= 0 ? "good" : "bad"} />
+          <Kpi icon={ShoppingCart} label="Sipariş" value={String(state.totalOrders)} />
+          <Kpi icon={Package} label="Stok değeri" value={compact(inventoryValue)} />
+          <Kpi icon={Megaphone} label="Günlük reklam" value={money(totalAds)} />
         </div>
 
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><Target size={12} /> Profit target {compact(cfg.targetProfit)}</span>
-            <span>{progress.toFixed(0)}%</span>
+        <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5"><Target size={12} /> Kâr hedefi {compact(cfg.targetProfit)}</span>
+              <span>{progress.toFixed(0)}%</span>
+            </div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all" style={{ width: `${progress}%` }} />
+            </div>
           </div>
-          <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all" style={{ width: `${progress}%` }} />
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Crown size={12} className="text-amber-300" /> Seviye {lvl.level} · {lvl.title}
+              </span>
+              <span>{lvl.into}/{lvl.need} XP</span>
+            </div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all" style={{ width: `${lvl.pct}%` }} />
+            </div>
           </div>
         </div>
+
+        {nextMission && !over && (
+          <button onClick={() => setView("missions")}
+            className="mt-3 w-full text-left flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 transition">
+            <Flag size={14} className="mt-0.5 shrink-0 text-[oklch(0.72_0.18_265)]" />
+            <span><b>Sıradaki görev:</b> {nextMission.title} — <span className="text-muted-foreground">{nextMission.hint}</span></span>
+          </button>
+        )}
 
         {state.activeEvent && (
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <Sparkles size={14} className="mt-0.5 shrink-0" />
-            <span>{state.activeEvent.text} <span className="opacity-70">({state.activeEvent.daysLeft} day(s) left)</span></span>
+            <span>{state.activeEvent.text} <span className="opacity-70">({state.activeEvent.daysLeft} gün kaldı)</span></span>
           </div>
         )}
 
@@ -238,8 +259,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
               : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
             {state.status === "bankrupt"
-              ? <><AlertTriangle size={15} className="mt-0.5" /> Insolvent on day {state.day - 1}. Ad spend outran margin — restart and order stock before scaling budget.</>
-              : <><Trophy size={15} className="mt-0.5" /> Run complete: {compact(state.totalRevenue)} revenue, {compact(state.totalProfit)} net profit, {state.totalOrders} orders.</>}
+              ? <><AlertTriangle size={15} className="mt-0.5" /> {state.day - 1}. günde nakit bitti. Reklam harcaması marjı aştı — yeniden başla ve ölçeklemeden önce stok al.</>
+              : <><Trophy size={15} className="mt-0.5" /> Sezon tamam: {compact(state.totalRevenue)} ciro, {compact(state.totalProfit)} net kâr, {state.totalOrders} sipariş, {missionsDone} görev.</>}
           </div>
         )}
       </div>
@@ -253,6 +274,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition ${on ? "bg-white/12 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                 <Icon size={13} /> {v.label}
+                {v.badge && <span className="rounded-full bg-white/12 px-1.5 py-0.5 text-[9px] font-semibold">{v.badge}</span>}
               </button>
             );
           })}
@@ -265,7 +287,10 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       )}
       {view === "ads" && <AdsView state={state} onPatch={patch} />}
       {view === "analytics" && <Analytics state={state} />}
+      {view === "missions" && <MissionsView missions={missions} lvl={lvl} />}
+      {view === "coach" && <CoachView tips={tips} state={state} onGo={setView} />}
       {view === "log" && <ActivityLog state={state} />}
+
     </section>
   );
 }
