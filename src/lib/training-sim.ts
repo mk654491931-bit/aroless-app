@@ -655,7 +655,7 @@ export function simulateDay(prev: SimState): DayResult {
   // liste doğal olarak erir
   s.subscribers = Math.max(0, (s.subscribers ?? 0) * 0.992);
 
-  const fixed = cfg.dailyFixedCost + interest;
+  const fixed = cfg.dailyFixedCost + interest + supportCost;
   const profit = revenue - adSpend - fees - refundAmt - fixed;
   s.cash = Math.round((s.cash + profit) * 100) / 100;
   s.totalRevenue += revenue;
@@ -677,19 +677,22 @@ export function simulateDay(prev: SimState): DayResult {
   s.history.push(record);
   s.day = day + 1;
 
+  const seasonEnd = RUN_LENGTH * (s.season ?? 1);
   if (s.cash < 0) {
     s.status = "bankrupt";
     events.push({ day, kind: "bad", text: "You ran out of cash. The store is insolvent." });
-  } else if (s.day > RUN_LENGTH) {
+  } else if (s.day > seasonEnd) {
     s.status = "finished";
+    const target = cfg.targetProfit * (s.season ?? 1);
     events.push({
       day,
-      kind: s.totalProfit >= cfg.targetProfit ? "good" : "bad",
-      text: s.totalProfit >= cfg.targetProfit
-        ? `30-day run complete — target beaten with $${s.totalProfit.toFixed(0)} net profit.`
-        : `30-day run complete — $${s.totalProfit.toFixed(0)} net profit vs $${cfg.targetProfit} target.`,
+      kind: s.totalProfit >= target ? "good" : "bad",
+      text: s.totalProfit >= target
+        ? `Sezon ${s.season ?? 1} tamamlandı — hedef aşıldı, toplam net kâr $${s.totalProfit.toFixed(0)}.`
+        : `Sezon ${s.season ?? 1} tamamlandı — $${s.totalProfit.toFixed(0)} net kâr / $${target.toFixed(0)} hedef.`,
     });
   }
+
 
   // strategic decision card (player choice) — one at a time
   if (s.status === "running" && !s.pendingDecision && s.products.length > 0 && day > 2 && Math.random() < 0.16) {
