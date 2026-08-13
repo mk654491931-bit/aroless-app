@@ -466,44 +466,81 @@ export function simulateDay(prev: SimState): DayResult {
     const jump = prevBudget > 0 ? p.adBudget / prevBudget : 1;
     const scalingPenalty = jump > 1.6 ? 1 + Math.min(0.35, (jump - 1.6) * 0.25) : 1;
 
-    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * (1 + fatigue * 0.65) * scalingPenalty * rnd(0.85, 1.18);
+    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * calCpc * (1 + fatigue * 0.65) * scalingPenalty * (1 - Math.min(0.12, brand / 800)) * rnd(0.85, 1.18);
     const spend = Math.min(p.adBudget, Math.max(0, s.cash + revenue - adSpend));
     const paidVisits = spend > 0 ? spend / cpc : 0;
-    // organic traffic grows with sales history, reviews and trend
+    // organic traffic grows with sales history, reviews, trend and brand equity
     const organic =
-      cfg.organicMult * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
+      cfg.organicMult * brandOrganic * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
     // loyal buyers come back on their own — no ad cost
     const pool = p.returnPool ?? 0;
     const returning = pool * 0.06 * rnd(0.6, 1.4);
-    const traffic = (paidVisits + organic + returning) * dow;
+    const traffic = (paidVisits + organic + returning) * dow * calDemand * shareMult;
 
     // price elasticity: rakip piyasa fiyatına göre pahalı/ucuz olmak dönüşümü belirler
     const ratio = p.price / Math.max(0.01, p.recommendedPrice * marketIndex);
-    const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
+
+    // müşteri segmentleri: fiyat + kanal hangi kitleyi çektiğini belirler
+    const chId = (p.channel ?? "meta") as AdChannel;
+    const segScore: Record<SegmentId, number> = { bargain: 0, mainstream: 0, premium: 0 };
+    for (const key of Object.keys(SEGMENTS) as SegmentId[]) {
+      const seg = SEGMENTS[key];
+      const fit = Math.max(0.05, 1 - Math.abs(ratio - 1) * seg.elasticity)
+        * seg.channel[chId]
+        * (key === "premium" ? 0.6 + brand / 90 + (p.rating - 4) * 0.35 : 1)
+        * (key === "bargain" ? (ratio < 1 ? 1.35 : 0.7) : 1);
+      segScore[key] = Math.max(0.02, seg.weight * fit);
+    }
+    const segSum = segScore.bargain + segScore.mainstream + segScore.premium;
+    const segShare = {
+      bargain: segScore.bargain / segSum,
+      mainstream: segScore.mainstream / segSum,
+      premium: segScore.premium / segSum,
+    };
+    const segCvr = segSum / (SEGMENTS.bargain.weight + SEGMENTS.mainstream.weight + SEGMENTS.premium.weight);
+    const segRefund = segShare.bargain * SEGMENTS.bargain.refundBias
+      + segShare.mainstream * SEGMENTS.mainstream.refundBias
+      + segShare.premium * SEGMENTS.premium.refundBias;
+    const segAov = segShare.bargain * SEGMENTS.bargain.aovMult
+      + segShare.mainstream * SEGMENTS.mainstream.aovMult
+      + segShare.premium * SEGMENTS.premium.aovMult;
+
+    const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio * brandTolerance));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
     const fatigueMult = 1 - fatigue * 0.5;
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * upCheckout * rnd(0.75, 1.3);
+    const abSplit = p.abTest ? 0.96 : 1; // test sırasında trafik bölünür
+    const cvr = (p.baseCvrPct / 100) * (1 + (p.cvrBonus ?? 0)) * priceMult * ratingMult * ch.cvrMult
+      * fatigueMult * segCvr * evCvr * calCvr * upCheckout * abSplit * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
       if (p.stock === 0 && wanted > 0) {
         p.stockouts += 1;
         p.rating = Math.max(1, p.rating - 0.12);
+        brandDelta -= 1.6;
         events.push({ day, kind: "bad", text: `${p.name} sold out — ${wanted} buyers left empty-handed.` });
       }
       wanted = p.stock;
     }
 
-    const refundRate = cfg.refundBase * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1);
+    const refundRate = cfg.refundBase * segRefund * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1)
+      * (1 + Math.min(0.8, (s.supportQueue ?? 0) / 60));
     const refundUnits = Math.round(wanted * refundRate);
     const netUnits = wanted - refundUnits;
-    const aov = p.price * upBundle; // paket/üst satış ortalama sepeti büyütür
+    const aov = p.price * upBundle * segAov; // paket/üst satış + segment karışımı sepeti belirler
+
+    segTotals.bargain += segShare.bargain * Math.max(1, wanted);
+    segTotals.mainstream += segShare.mainstream * Math.max(1, wanted);
+    segTotals.premium += segShare.premium * Math.max(1, wanted);
 
     p.stock -= wanted;
     p.stock += refundUnits; // returned to stock
     p.unitsSold += netUnits;
     p.unitsRefunded += refundUnits;
     p.revenue += netUnits * aov;
+
+    // destek talepleri: her siparişin bir kısmı yanıt bekler
+    tickets += netUnits * 0.22 + refundUnits * 0.8;
 
     // reviews accumulate on ~18% of net orders
     const newReviews = Math.round(netUnits * 0.18);
@@ -512,6 +549,27 @@ export function simulateDay(prev: SimState): DayResult {
       const target = Math.max(2, Math.min(5, valueScore + rnd(-0.3, 0.3)));
       p.rating = (p.rating * p.reviews + target * newReviews) / (p.reviews + newReviews);
       p.reviews += newReviews;
+    }
+
+    // marka değeri: memnun müşteri ve premium karışım büyütür, iade ve dampingli fiyat düşürür
+    brandDelta += netUnits * 0.05 * (p.rating >= 4.4 ? 1.4 : p.rating >= 4 ? 1 : 0.2)
+      + segShare.premium * 0.5
+      - refundUnits * 0.12
+      - (ratio < 0.78 ? 0.5 : 0);
+
+    // A/B testi sonucu
+    if (p.abTest && day >= p.abTest.startDay + AB_TEST_DAYS) {
+      const winner = Math.max(p.abTest.a, p.abTest.b);
+      p.cvrBonus = Math.round(Math.min(0.6, (p.cvrBonus ?? 0) + Math.max(0, winner)) * 1000) / 1000;
+      p.fatigue = Math.max(0, (p.fatigue ?? 0) - 0.3);
+      p.abTest = null;
+      if (winner > 0.02) {
+        s.abWins = (s.abWins ?? 0) + 1;
+        brandDelta += 0.6;
+        events.push({ day, kind: "good", text: `${p.name}: A/B testi bitti — kazanan varyant dönüşümü kalıcı olarak %${(winner * 100).toFixed(0)} artırdı.` });
+      } else {
+        events.push({ day, kind: "bad", text: `${p.name}: A/B testinde iki varyant da mevcut kreatifi geçemedi.` });
+      }
     }
 
     // creative fatigue: burns while spending, cools down when paused
@@ -527,7 +585,7 @@ export function simulateDay(prev: SimState): DayResult {
 
     // loyalty: happy buyers join the return pool, unhappy ones leave it
     const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
-    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty * upRetention);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * (0.5 + segShare.premium * 0.4) * loyalty * upRetention);
     p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
 
     // e-posta listesi: her siparişin bir kısmı aboneye dönüşür
@@ -541,6 +599,48 @@ export function simulateDay(prev: SimState): DayResult {
     refundAmt += refundUnits * p.price * 0.35; // shipping + processing lost on refunds
     cogs += 0; // COGS is paid when inventory is purchased
   }
+
+  // 3b. Destek operasyonu: bütçe + ekip kapasitesi kadar bilet kapanır
+  let supportCost = 0;
+  {
+    const queue = (s.supportQueue ?? 0) + tickets;
+    const freeCap = hasUpgrade(s, "support") ? 14 : 0;
+    const paidCap = Math.floor((s.supportBudget ?? 0) / SUPPORT_TICKET_COST);
+    const resolved = Math.min(queue, freeCap + paidCap);
+    const paidResolved = Math.max(0, resolved - freeCap);
+    supportCost = Math.round(paidResolved * SUPPORT_TICKET_COST * 100) / 100;
+    s.supportQueue = Math.max(0, Math.round((queue - resolved) * 10) / 10);
+    s.supportResolved = Math.round((s.supportResolved ?? 0) + resolved);
+    if (s.supportQueue > 15) {
+      s.slaBreaches = (s.slaBreaches ?? 0) + 1;
+      brandDelta -= 1.2 + s.supportQueue * 0.02;
+      for (const p of s.products) p.rating = Math.max(1, p.rating - 0.05);
+      if (s.supportQueue > 15 && (s.slaBreaches ?? 0) % 3 === 1) {
+        events.push({ day, kind: "bad", text: `Destek kuyruğu ${Math.round(s.supportQueue)} bilete çıktı — puanlar düşüyor, iadeler artıyor. Destek bütçesini yükselt.` });
+      }
+    } else if (resolved > 0 && s.supportQueue === 0) {
+      brandDelta += 0.35;
+    }
+  }
+
+  // 3c. Marka değeri güncellenir
+  const brandBefore = brand;
+  s.brand = Math.max(0, Math.min(100, brand + brandDelta * 0.6 - 0.15));
+  if (Math.floor(s.brand / 20) > Math.floor(brandBefore / 20)) {
+    events.push({ day, kind: "good", text: `Marka değerin ${Math.round(s.brand)} seviyesine çıktı — organik trafik ve fiyat toleransı arttı.` });
+  }
+
+  // 3d. Segment karışımı kaydedilir
+  const segAll = segTotals.bargain + segTotals.mainstream + segTotals.premium;
+  if (segAll > 0) {
+    s.segmentMix = {
+      bargain: segTotals.bargain / segAll,
+      mainstream: segTotals.mainstream / segAll,
+      premium: segTotals.premium / segAll,
+    };
+  }
+
+
 
 
   // kredi faizi her gün işler
