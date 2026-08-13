@@ -141,9 +141,15 @@ Zorunlu test ve sertifikaları (CPC, CPSIA, CE, UKCA, FCC, RoHS, REACH, FDA, LFG
 Bu ürünü bu pazarda 0-100 arası puanla: talep, rekabet, marj, lojistik ve mevzuat riskini birlikte değerlendir.`;
 
     case "news":
+      if (f(c, "mode") === "live")
+        return `${BASE}
+Bugünün tarihi: ${f(c, "today")}, şu anki saat (UTC): ${f(c, "hour")}. Son 24 saat içinde çıkmış, e-ticareti ŞU AN etkileyebilecek 8 SICAK gelişmeyi getir (pazar yeri politika değişiklikleri, tarife/gümrük, navlun-lojistik aksaklıkları, ödeme/reklam platformu güncellemeleri, döviz ve talep şokları). Sadece gerçek, doğrulanabilir haberler; en yeniden eskiye sırala.
+Return ONLY minified JSON:
+{"items":[{"title": string (kısa, max 90 karakter), "source": string, "date": string (YYYY-MM-DD), "time_ago": string ("2 saat önce" gibi), "category": string, "summary": string (1 cümle, Türkçe), "impact": "high"|"medium"|"low", "action": string (satıcı için tek cümlelik aksiyon)}]}`;
       return `${BASE}
 Bugünün tarihi: ${f(c, "today")}. Amazon, TikTok Shop, Shopify, Etsy, gümrük/tarife, navlun, ödeme sistemleri ve reklam platformları tarafındaki EN GÜNCEL 6 gelişmeyi getir. Sadece gerçek, doğrulanabilir haberler.
 Return ONLY minified JSON:
 {"items":[{"title": string, "source": string, "date": string (YYYY-MM-DD), "category": string, "summary": string (2 cümle, Türkçe), "impact": "high"|"medium"|"low", "explainer": {"means": string (bu makro olay senin için ne demek, 1-2 cümle), "actions": string[3] (bu hafta atılacak somut satıcı adımları), "risk": string (1 cümle)}}]}`;
+
   }
 }
