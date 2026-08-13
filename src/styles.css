@@ -48,7 +48,7 @@
   --card-foreground: oklch(0.97 0.005 260);
   --popover: #0f172a;
   --popover-foreground: oklch(0.97 0.005 260);
-  --primary: var(--brand);
+  --primary: oklch(0.68 0.20 265);
   --primary-foreground: oklch(0.99 0.005 260);
   --secondary: oklch(0.27 0.04 265);
   --secondary-foreground: oklch(0.97 0.005 260);
@@ -60,11 +60,12 @@
   --destructive-foreground: oklch(0.98 0.005 260);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 12%);
-  --ring: var(--brand);
-  --brand: var(--brand);   /* electric blue */
-  --brand-2: var(--brand-2); /* violet */
+  --ring: oklch(0.68 0.20 265);
+  --brand: oklch(0.68 0.20 265);   /* electric blue */
+  --brand-2: oklch(0.66 0.24 305); /* violet */
   /* Semantic accents */
-  --accent-active: var(--accent-active); /* cyan — active UI */
+  --accent-active: oklch(0.80 0.14 200); /* cyan — active UI */
+
   --profit: oklch(0.76 0.17 158);        /* emerald — profit */
   --warning: oklch(0.82 0.16 80);        /* amber — warnings */
   --ai: oklch(0.70 0.20 290);            /* indigo/purple — AI */
