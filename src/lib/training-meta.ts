@@ -59,7 +59,7 @@ export type Mission = {
   title: string;
   hint: string;
   reward: number;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   progress: (s: SimState) => { value: number; goal: number };
 };
 
