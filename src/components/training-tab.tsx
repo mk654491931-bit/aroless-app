@@ -4,6 +4,7 @@ import {
   Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
   Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
   Flag, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle, CalendarDays, Flame, RefreshCw,
+  Rocket, Mail, Landmark, LineChart, Users,
 } from "lucide-react";
 import { VeloraMark } from "@/components/velora-mark";
 import { toast } from "sonner";
@@ -12,6 +13,8 @@ import {
   DIFFICULTIES, RUN_LENGTH, newRun, productFromWinner, restock, simulateDay,
   netMarginPct, unitProfit, applyDecision, refreshCreative,
   CHANNELS, DECISIONS, CREATIVE_COST, WEEKDAYS, weekdayOf, weekdayDemand,
+  UPGRADES, hasUpgrade, buyUpgrade, takeLoan, repayLoan, sendCampaign,
+  LOAN_MAX, LOAN_DAILY_RATE, CAMPAIGN_COOLDOWN,
   type AdChannel, type Difficulty, type SimState, type StoreProduct,
 } from "@/lib/training-sim";
 import {
@@ -37,7 +40,7 @@ function load(): SimState | null {
 export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const [state, setState] = useState<SimState | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log">("storefront");
+  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "growth" | "missions" | "coach" | "log">("storefront");
   const [storeName, setStoreName] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [busy, setBusy] = useState(false);
@@ -157,6 +160,38 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       return r.state;
     });
 
+  const doUpgrade = (id: Parameters<typeof buyUpgrade>[1]) =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = buyUpgrade(prev, id);
+      if (r.error) toast.error(r.error); else toast.success("Yükseltme aktif!");
+      return r.state;
+    });
+
+  const doLoan = (amount: number) =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = takeLoan(prev, amount);
+      if (r.error) toast.error(r.error); else toast.success("Kredi hesabına geçti — faiz her gün işler.");
+      return r.state;
+    });
+
+  const doRepay = (amount: number) =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = repayLoan(prev, amount);
+      if (r.error) toast.error(r.error); else toast.success("Kredi ödemesi yapıldı.");
+      return r.state;
+    });
+
+  const doCampaign = () =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = sendCampaign(prev);
+      if (r.error) toast.error(r.error); else toast.success("Kampanya gönderildi!");
+      return r.state;
+    });
+
   const chooseDecision = (idx: number) =>
     setState((prev) => (prev ? applyDecision(prev, idx) : prev));
 
@@ -180,6 +215,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     { id: "products", label: "Katalog & Stok", icon: Package },
     { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
     { id: "analytics", label: "Analitik", icon: BarChart3 },
+    { id: "growth", label: "Büyüme", icon: Rocket, badge: (state.upgrades?.length ? String(state.upgrades.length) : undefined) },
     { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
     { id: "coach", label: "Koç", icon: VeloraIcon, badge: alerts ? String(alerts) : undefined },
     { id: "log", label: "Günlük", icon: ScrollText },
@@ -203,6 +239,22 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground">
               <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(Math.min(state.day, RUN_LENGTH))]} · talep ×{weekdayDemand(state.day).toFixed(2)}
             </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
+                (state.marketIndex ?? 1) < 0.95 ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                : (state.marketIndex ?? 1) > 1.05 ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                : "border-white/10 bg-white/5 text-muted-foreground"}`}>
+                <LineChart size={11} /> Rakip fiyat endeksi {(state.marketIndex ?? 1).toFixed(2)}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
+                <Users size={11} /> {Math.floor(state.subscribers ?? 0)} abone
+              </span>
+              {!!state.loan?.balance && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+                  <Landmark size={11} /> Kredi borcu {money(state.loan.balance)}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button disabled={over || busy || autoplay} onClick={() => advance(1)}
@@ -306,6 +358,9 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       )}
       {view === "ads" && <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} />}
       {view === "analytics" && <Analytics state={state} />}
+      {view === "growth" && (
+        <GrowthView state={state} onUpgrade={doUpgrade} onLoan={doLoan} onRepay={doRepay} onCampaign={doCampaign} />
+      )}
       {view === "missions" && <MissionsView missions={missions} lvl={lvl} />}
       {view === "coach" && <CoachView tips={tips} state={state} onGo={setView} />}
       {view === "log" && <ActivityLog state={state} />}
