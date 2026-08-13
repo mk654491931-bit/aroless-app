@@ -439,11 +439,13 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 /* ---------------- Missions ---------------- */
 
 function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionState>; lvl: ReturnType<typeof levelFromXp> }) {
-  const tiers: { t: 1 | 2 | 3; label: string }[] = [
+  const tiers: { t: 1 | 2 | 3 | 4; label: string }[] = [
     { t: 1, label: "Temel operasyon" },
     { t: 2, label: "Kârlılık" },
     { t: 3, label: "Ölçekleme" },
+    { t: 4, label: "Pazar hakimiyeti" },
   ];
+
   return (
     <div className="space-y-4">
       <div className="premium-card rounded-2xl p-4 flex flex-wrap items-center gap-4">
