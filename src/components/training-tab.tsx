@@ -735,7 +735,11 @@ const Stat = ({ label, value, tone }: { label: string; value: string; tone?: "go
 
 /* ---------------- Ads & pricing ---------------- */
 
-function AdsView({ state, onPatch }: { state: SimState; onPatch: (id: string, f: Partial<StoreProduct>) => void }) {
+function AdsView({ state, onPatch, onRefresh }: {
+  state: SimState;
+  onPatch: (id: string, f: Partial<StoreProduct>) => void;
+  onRefresh: (id: string) => void;
+}) {
   const cfg = DIFFICULTIES[state.difficulty];
   const total = state.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
   const runway = total > 0 ? state.cash / total : Infinity;
@@ -754,14 +758,48 @@ function AdsView({ state, onPatch }: { state: SimState; onPatch: (id: string, f:
 
       {state.products.map((p) => {
         const up = unitProfit(p, cfg);
-        const clicks = p.adBudget / cfg.cpc;
-        const expected = clicks * (p.baseCvrPct / 100) * Math.max(0.1, Math.min(2, 1.75 - 0.78 * (p.price / p.recommendedPrice)));
+        const ch = CHANNELS[p.channel ?? "meta"];
+        const fatigue = p.fatigue ?? 0;
+        const effCpc = cfg.cpc * ch.cpcMult * (1 + fatigue * 0.65);
+        const clicks = p.adBudget / effCpc;
+        const expected = clicks * (p.baseCvrPct / 100) * ch.cvrMult * (1 - fatigue * 0.5) *
+          Math.max(0.1, Math.min(2, 1.75 - 0.78 * (p.price / p.recommendedPrice)));
         const breakEvenRoas = p.price > 0 ? p.price / Math.max(0.01, up) : 0;
         return (
           <div key={p.id} className="premium-card rounded-xl p-4">
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/8 text-lg">{p.emoji}</span>
               <div className="font-semibold text-sm">{p.name}</div>
+              <div className="ml-auto inline-flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px]">
+                {(Object.keys(CHANNELS) as AdChannel[]).map((c) => (
+                  <button key={c} title={CHANNELS[c].blurb}
+                    onClick={() => onPatch(p.id, { channel: c })}
+                    className={`rounded-full px-2.5 py-1 transition ${(p.channel ?? "meta") === c ? "bg-white/14 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    {CHANNELS[c].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">{ch.blurb} · efektif TBM {money(effCpc)}</p>
+
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Flame size={12} className={fatigue > 0.6 ? "text-rose-300" : fatigue > 0.3 ? "text-amber-300" : "text-emerald-300"} />
+                  Kreatif yorgunluğu
+                </span>
+                <span className={fatigue > 0.6 ? "text-rose-300" : ""}>{Math.round(fatigue * 100)}%</span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${fatigue > 0.6 ? "bg-rose-400" : fatigue > 0.3 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${fatigue * 100}%` }} />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                <span>Yorulan kreatif TBM'yi artırır, dönüşümü düşürür. Reklamı durdurursan yavaşça soğur.</span>
+                <button onClick={() => onRefresh(p.id)} disabled={fatigue < 0.02}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10 disabled:opacity-40">
+                  <RefreshCw size={11} /> Yeni kreatif · {money(CREATIVE_COST)}
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid md:grid-cols-2 gap-5">
@@ -891,6 +929,35 @@ function ActivityLog({ state }: { state: SimState }) {
           <span className={l.kind === "good" ? "text-emerald-300" : l.kind === "bad" ? "text-rose-300" : ""}>{l.text}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/* ---------------- Strategic decision card ---------------- */
+
+function DecisionModal({ id, onChoose }: { id: string; onChoose: (i: number) => void }) {
+  const card = DECISIONS.find((d) => d.id === id);
+  if (!card) return null;
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="premium-card w-full max-w-lg rounded-2xl p-5 animate-rise-in">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          <Zap size={12} className="text-amber-300" /> Stratejik karar
+        </div>
+        <h3 className="mt-2 text-lg font-bold">{card.title}</h3>
+        <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{card.body}</p>
+        <div className="mt-4 space-y-2">
+          {card.options.map((o, i) => (
+            <button key={i} onClick={() => onChoose(i)}
+              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 hover:bg-white/10 hover:border-[oklch(0.68_0.20_265)]/50 transition card-lift">
+              <div className="text-sm font-semibold">{o.label}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{o.detail}</div>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[10px] text-muted-foreground text-center">Kararın anında mağazanı etkiler — gün ilerlemeden seçmelisin.</p>
+      </div>
     </div>
   );
 }
