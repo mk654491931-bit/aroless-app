@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   GraduationCap, ChevronDown, Check, CircleDashed, Trophy, Lightbulb,
   RotateCcw, PlayCircle, ExternalLink, ListChecks, BookOpen, AlertTriangle, MessageSquare,
+  Flame, Zap, Brain, Target, Sparkles, Search, PenLine, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 type Quiz = { q: string; options: string[]; answer: number; why: string };
@@ -650,313 +651,467 @@ const WEEKS: { id: 1 | 2 | 3; title: string; blurb: string }[] = [
 const TOTAL_TASKS = DAYS.reduce((n, d) => n + d.tasks.length, 0);
 const STORE_KEY = "education-progress-v2";
 
-type Saved = { tasks: Record<string, boolean>; answers: Record<number, number> };
+type Saved = {
+  tasks: Record<string, boolean>;
+  answers: Record<number, number>;
+  notes?: Record<number, string>;
+  streak?: number;
+  lastDay?: string;
+  active?: number;
+};
+
+const XP_PER_TASK = 10;
+const XP_PER_QUIZ = 25;
+const LEVELS = ["Rookie", "Explorer", "Operator", "Merchant", "Strategist", "Velora Pro"];
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+function levelFor(xp: number) {
+  const totalXp = TOTAL_TASKS * XP_PER_TASK + DAYS.length * XP_PER_QUIZ;
+  const step = Math.max(1, Math.round(totalXp / LEVELS.length));
+  const idx = Math.min(LEVELS.length - 1, Math.floor(xp / step));
+  const nextAt = Math.min(totalXp, (idx + 1) * step);
+  return { name: LEVELS[idx], idx, nextAt, pct: Math.min(100, Math.round(((xp % step) / step) * 100)) };
+}
 
 export function AcademyTab() {
   const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [openDay, setOpenDay] = useState<number | null>(1);
-  const [videoOpen, setVideoOpen] = useState<number | null>(null);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [streak, setStreak] = useState(0);
+  const [activeDay, setActiveDay] = useState(1);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [celebrate, setCelebrate] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const lastDayRef = useState<{ v: string }>(() => ({ v: "" }))[0];
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const p = JSON.parse(raw) as Partial<Saved>;
-        setTasksDone(p.tasks ?? {});
-        setAnswers(p.answers ?? {});
+      const p = raw ? (JSON.parse(raw) as Partial<Saved>) : {};
+      setTasksDone(p.tasks ?? {});
+      setAnswers(p.answers ?? {});
+      setNotes(p.notes ?? {});
+      setActiveDay(p.active ?? 1);
+
+      // streak: +1 when returning the next calendar day, reset when a day is skipped
+      const today = todayKey();
+      const last = p.lastDay ?? "";
+      let s = p.streak ?? 0;
+      if (last !== today) {
+        const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        s = last === y ? s + 1 : 1;
       }
+      lastDayRef.v = today;
+      setStreak(Math.max(1, s));
     } catch { /* ignore */ }
     setHydrated(true);
-  }, []);
+  }, [lastDayRef]);
 
   useEffect(() => {
     if (!hydrated) return;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ tasks: tasksDone, answers })); } catch { /* ignore */ }
-  }, [tasksDone, answers, hydrated]);
+    try {
+      localStorage.setItem(
+        STORE_KEY,
+        JSON.stringify({ tasks: tasksDone, answers, notes, streak, lastDay: lastDayRef.v, active: activeDay }),
+      );
+    } catch { /* ignore */ }
+  }, [tasksDone, answers, notes, streak, activeDay, hydrated, lastDayRef]);
 
   const doneCount = useMemo(() => Object.values(tasksDone).filter(Boolean).length, [tasksDone]);
+  const quizzesPassed = DAYS.filter((d) => answers[d.day] === d.quiz.answer).length;
   const pct = Math.round((doneCount / TOTAL_TASKS) * 100);
-  const quizzesPassed = DAYS.filter(d => answers[d.day] === d.quiz.answer).length;
+  const xp = doneCount * XP_PER_TASK + quizzesPassed * XP_PER_QUIZ;
+  const level = levelFor(xp);
 
   const dayComplete = (d: Day) =>
     d.tasks.every((_, i) => tasksDone[`${d.day}-${i}`]) && answers[d.day] === d.quiz.answer;
   const completedDays = DAYS.filter(dayComplete).length;
 
-  const toggleTask = (key: string) => setTasksDone(p => ({ ...p, [key]: !p[key] }));
-  const reset = () => { setTasksDone({}); setAnswers({}); setOpenDay(1); setVideoOpen(null); };
+  const day = DAYS.find((d) => d.day === activeDay) ?? DAYS[0]!;
+  const answered = answers[day.day];
+  const correct = answered === day.quiz.answer;
+  const tDone = day.tasks.filter((_, i) => tasksDone[`${day.day}-${i}`]).length;
+  const dayPct = Math.round(((tDone + (correct ? 1 : 0)) / (day.tasks.length + 1)) * 100);
+  const finished = dayComplete(day);
+
+  const badges = [
+    { id: "start", label: "İlk adım", icon: Sparkles, got: doneCount > 0 },
+    { id: "quiz3", label: "3 quiz", icon: Brain, got: quizzesPassed >= 3 },
+    { id: "week1", label: "1. hafta", icon: Flame, got: DAYS.filter((d) => d.week === 1).every(dayComplete) },
+    { id: "half", label: "Yarı yol", icon: Target, got: completedDays >= Math.ceil(DAYS.length / 2) },
+    { id: "all", label: "Mezun", icon: Trophy, got: completedDays === DAYS.length },
+  ];
+
+  const toggleTask = (key: string) => setTasksDone((p) => ({ ...p, [key]: !p[key] }));
+  const reset = () => { setTasksDone({}); setAnswers({}); setNotes({}); setActiveDay(1); setVideoOpen(false); };
+
+  const goTo = (n: number) => {
+    setActiveDay(Math.min(DAYS.length, Math.max(1, n)));
+    setVideoOpen(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (finished) {
+      setCelebrate(true);
+      const t = setTimeout(() => setCelebrate(false), 1800);
+      return () => clearTimeout(t);
+    }
+  }, [finished, activeDay]);
+
+  const filtered = DAYS.filter((d) =>
+    !search.trim() ||
+    `${d.day} ${d.title} ${d.goal}`.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const nextUnfinished = DAYS.find((d) => !dayComplete(d));
 
   return (
-    <section className="max-w-4xl mx-auto">
-      <div className="text-center mb-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground mb-3">
-          <GraduationCap size={13} /> 15-Day Interactive Program
-        </div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-          E-Commerce <span className="text-gradient">From Zero</span>
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm md:text-base max-w-2xl mx-auto">
-          A complete beginner course: one lesson a day for 15 days. Every day includes a written lesson,
-          key terms, a video, action tasks and a short quiz. Your progress is saved automatically.
-        </p>
-      </div>
-
-      <div className="glass rounded-2xl p-5 mb-6 border border-[oklch(0.68_0.20_265)]/25">
-        <div className="flex items-start gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 flex items-center justify-center">
-            <MessageSquare size={16} className="text-[oklch(0.85_0.15_265)]" />
-          </div>
+    <section className="mx-auto max-w-7xl">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[var(--brand)]/15 via-transparent to-[var(--brand-2)]/15 p-6 md:p-8">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[var(--brand)]/20 blur-3xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0">
-            <h2 className="font-semibold text-sm">Feedback</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Want to share feedback, report a problem or suggest a lesson? Send us an email at{" "}
-              <a
-                href="mailto:mk65449191@gmail.com?subject=Velora%20Feedback"
-                className="font-semibold text-[oklch(0.85_0.15_265)] hover:underline"
-              >
-                mk65449191@gmail.com
-              </a>{" "}
-              — we read every message.
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground">
+              <GraduationCap size={13} /> {DAYS.length} günlük interaktif program
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+              Velora <span className="text-gradient">Academy</span>
+            </h1>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+              Her gün bir ders: yazılı anlatım, terimler, video, görevler, quiz ve kendi notların.
+              İlerlemen otomatik kaydedilir.
             </p>
-            <a
-              href="mailto:mk65449191@gmail.com?subject=Velora%20Feedback"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-semibold"
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {nextUnfinished && (
+                <button
+                  onClick={() => goTo(nextUnfinished.day)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white shadow-lg"
+                >
+                  <PlayCircle size={15} /> {doneCount ? "Kaldığın yerden devam et" : "Programa başla"} · Gün {nextUnfinished.day}
+                </button>
+              )}
+              <button onClick={reset} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
+                <RotateCcw size={12} /> Sıfırla
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat icon={Flame} label="Seri" value={`${streak} gün`} />
+            <Stat icon={Zap} label="XP" value={xp} />
+            <Stat icon={Trophy} label="Tamamlanan" value={`${completedDays}/${DAYS.length}`} />
+            <Stat icon={Brain} label="Quiz" value={`${quizzesPassed}/${DAYS.length}`} />
+          </div>
+        </div>
+
+        <div className="relative mt-6">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="font-semibold">{level.name}</span>
+            <span className="text-muted-foreground">{pct}% · {doneCount}/{TOTAL_TASKS} görev</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-700" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+
+        <div className="relative mt-4 flex flex-wrap gap-2">
+          {badges.map((b) => (
+            <span
+              key={b.id}
+              title={b.label}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                b.got
+                  ? "border-[var(--brand)]/50 bg-[var(--brand)]/15 text-foreground"
+                  : "border-white/10 bg-white/[0.03] text-muted-foreground opacity-60"
+              }`}
             >
-              <MessageSquare size={12} /> Send feedback
-            </a>
-          </div>
+              <b.icon size={12} /> {b.label}
+            </span>
+          ))}
         </div>
       </div>
 
-
-
-      <div className="glass rounded-2xl p-5 mb-6">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="font-semibold">Your progress</span>
-          <span className="text-muted-foreground">
-            {completedDays}/{DAYS.length} days · {doneCount}/{TOTAL_TASKS} tasks · {quizzesPassed}/{DAYS.length} quizzes
-          </span>
-        </div>
-        <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-xs text-muted-foreground">
-            {pct === 100 ? "All tasks complete — outstanding work." : `${pct}% complete`}
-          </span>
-          <button onClick={reset} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-            <RotateCcw size={12} /> Reset progress
-          </button>
-        </div>
-      </div>
-
-      {completedDays === DAYS.length && (
-        <div className="glass rounded-2xl p-5 mb-6 border border-[oklch(0.85_0.18_90)]/40 flex items-center gap-3">
-          <Trophy size={22} className="text-[oklch(0.85_0.18_90)]" />
-          <div>
-            <p className="font-semibold text-sm">Program completed</p>
-            <p className="text-xs text-muted-foreground">You now have the full loop. Run it again with your next product.</p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-8">
-        {WEEKS.map((w) => (
-          <div key={w.id}>
-            <div className="mb-3 px-1">
-              <h2 className="text-lg font-bold">{w.title}</h2>
-              <p className="text-xs text-muted-foreground">{w.blurb}</p>
+      <div className="mt-6 grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+        {/* Curriculum sidebar */}
+        <aside className="lg:sticky lg:top-20 lg:self-start">
+          <div className="glass rounded-2xl p-3">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Derslerde ara…"
+                className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-8 pr-2 text-xs outline-none focus:border-[var(--brand)]/50"
+              />
             </div>
 
-            <div className="space-y-3">
-              {DAYS.filter(d => d.week === w.id).map((d) => {
-                const isOpen = openDay === d.day;
-                const answered = answers[d.day];
-                const correct = answered === d.quiz.answer;
-                const tDone = d.tasks.filter((_, i) => tasksDone[`${d.day}-${i}`]).length;
-                const finished = dayComplete(d);
-
+            <div className="mt-3 space-y-3 lg:max-h-[60vh] lg:overflow-y-auto lg:pr-1">
+              {WEEKS.map((w) => {
+                const days = filtered.filter((d) => d.week === w.id);
+                if (!days.length) return null;
                 return (
-                  <div key={d.day} className="glass rounded-2xl overflow-hidden">
-                    <button
-                      onClick={() => setOpenDay(isOpen ? null : d.day)}
-                      className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/5 transition"
-                      aria-expanded={isOpen}
-                    >
-                      <span className={`shrink-0 grid place-items-center size-11 rounded-xl border text-sm font-bold ${finished ? "border-[oklch(0.75_0.19_150)]/50 bg-[oklch(0.75_0.19_150)]/15" : "border-white/10 bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25"}`}>
-                        {finished ? <Check size={18} className="text-[oklch(0.75_0.19_150)]" /> : d.day}
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block font-semibold text-sm truncate">Day {d.day} — {d.title}</span>
-                        <span className="block text-xs text-muted-foreground line-clamp-1">{d.goal}</span>
-                      </span>
-                      <span className="hidden sm:inline shrink-0 text-[11px] text-muted-foreground">~{d.minutes} min</span>
-                      <span className="shrink-0 text-[11px] rounded-full bg-white/10 px-2 py-0.5">{tDone}/{d.tasks.length}</span>
-                      <ChevronDown size={16} className={`shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {isOpen && (
-                      <div className="px-4 pb-5 space-y-4">
-                        {/* Lesson */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3.5">
-                          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            <BookOpen size={13} /> Lesson
-                          </p>
-                          {d.sections.map((s) => (
-                            <div key={s.heading}>
-                              <p className="text-sm font-semibold">{s.heading}</p>
-                              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{s.body}</p>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Key terms */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Key terms</p>
-                          <dl className="grid sm:grid-cols-2 gap-2.5">
-                            {d.terms.map((t) => (
-                              <div key={t.term} className="rounded-lg bg-white/5 border border-white/10 p-2.5">
-                                <dt className="text-xs font-semibold">{t.term}</dt>
-                                <dd className="text-xs text-muted-foreground mt-0.5">{t.meaning}</dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </div>
-
-                        {/* Video */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div className="min-w-0">
-                              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                <PlayCircle size={13} /> Watch
-                              </p>
-                              <p className="text-sm mt-1">{d.video.title}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => setVideoOpen(videoOpen === d.day ? null : d.day)}
-                                className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-1.5 text-xs font-semibold"
-                              >
-                                {videoOpen === d.day ? "Hide video" : "Play video"}
-                              </button>
-                              <a
-                                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(d.video.query)}`}
-                                target="_blank" rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
-                              >
-                                YouTube <ExternalLink size={11} />
-                              </a>
-                            </div>
-                          </div>
-                          {videoOpen === d.day && (
-                            <div className="mt-3 aspect-video w-full overflow-hidden rounded-lg border border-white/10 bg-black">
-                              <iframe
-                                className="w-full h-full"
-                                src={`https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(d.video.query)}`}
-                                title={d.video.title}
-                                allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
-                                allowFullScreen
-                                loading="lazy"
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Tasks */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                            <ListChecks size={13} /> Today&apos;s tasks
-                          </p>
-                          <div className="space-y-2">
-                            {d.tasks.map((task, i) => {
-                              const key = `${d.day}-${i}`;
-                              const on = !!tasksDone[key];
-                              return (
-                                <button
-                                  key={key}
-                                  onClick={() => toggleTask(key)}
-                                  className={`w-full flex items-start gap-2.5 text-left rounded-lg border p-2.5 transition ${on ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10" : "border-white/10 hover:bg-white/5"}`}
-                                >
-                                  {on
-                                    ? <Check size={16} className="mt-0.5 shrink-0 text-[oklch(0.75_0.19_150)]" />
-                                    : <CircleDashed size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
-                                  <span className={`text-sm ${on ? "text-muted-foreground line-through" : ""}`}>{task}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="mt-3 flex items-start gap-2 text-xs rounded-lg bg-white/5 border border-white/10 p-2.5">
-                            <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[oklch(0.80_0.16_60)]" />
-                            <span><span className="font-semibold">Common mistake: </span>{d.mistake}</span>
-                          </p>
-                        </div>
-
-                        {/* Quiz */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                            <Lightbulb size={13} /> Quick check
-                          </p>
-                          <p className="text-sm font-semibold mb-3">{d.quiz.q}</p>
-                          <div className="grid gap-2">
-                            {d.quiz.options.map((opt, i) => {
-                              const chosen = answered === i;
-                              const state = answered === undefined
-                                ? "border-white/10 hover:bg-white/5"
-                                : i === d.quiz.answer
-                                  ? "border-[oklch(0.75_0.19_150)]/50 bg-[oklch(0.75_0.19_150)]/10"
-                                  : chosen
-                                    ? "border-[oklch(0.68_0.20_25)]/50 bg-[oklch(0.68_0.20_25)]/10"
-                                    : "border-white/10 opacity-60";
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => setAnswers(p => ({ ...p, [d.day]: i }))}
-                                  className={`text-left text-sm rounded-lg border px-3 py-2 transition ${state}`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {answered !== undefined && (
-                            <div className="mt-3 text-xs text-muted-foreground">
-                              <span className={`font-semibold ${correct ? "text-[oklch(0.75_0.19_150)]" : "text-[oklch(0.72_0.19_25)]"}`}>
-                                {correct ? "Correct. " : "Not quite. "}
-                              </span>
-                              {d.quiz.why}
-                              {!correct && (
-                                <button
-                                  onClick={() => setAnswers(p => { const n = { ...p }; delete n[d.day]; return n; })}
-                                  className="ml-2 underline hover:text-foreground"
-                                >
-                                  try again
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {d.day < DAYS.length && (
+                  <div key={w.id}>
+                    <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{w.title}</p>
+                    <div className="mt-1.5 space-y-1">
+                      {days.map((d) => {
+                        const done = dayComplete(d);
+                        const on = d.day === activeDay;
+                        return (
                           <button
-                            onClick={() => { setOpenDay(d.day + 1); setVideoOpen(null); }}
-                            className="w-full rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-semibold"
+                            key={d.day}
+                            onClick={() => goTo(d.day)}
+                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition ${
+                              on ? "bg-[var(--brand)]/15 border border-[var(--brand)]/40" : "border border-transparent hover:bg-white/5"
+                            }`}
                           >
-                            Continue to Day {d.day + 1} →
+                            <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-bold ${done ? "bg-[oklch(0.75_0.19_150)]/20 text-[oklch(0.75_0.19_150)]" : "bg-white/10"}`}>
+                              {done ? <Check size={12} /> : d.day}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate font-medium">{d.title}</span>
+                            <span className="shrink-0 text-[10px] text-muted-foreground">{d.minutes}′</span>
                           </button>
-                        )}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        ))}
+
+          <div className="glass mt-3 rounded-2xl border border-[var(--brand)]/25 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold"><MessageSquare size={13} /> Geri bildirim</div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Ders önerin veya sorunun mu var?{" "}
+              <a href="mailto:mk65449191@gmail.com?subject=Velora%20Academy" className="font-semibold text-[var(--brand)] hover:underline">
+                mk65449191@gmail.com
+              </a>
+            </p>
+          </div>
+        </aside>
+
+        {/* Lesson pane */}
+        <div className="space-y-4">
+          <div className={`glass relative overflow-hidden rounded-2xl p-5 ${celebrate ? "ring-2 ring-[oklch(0.75_0.19_150)]/60" : ""}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Gün {day.day} / {DAYS.length} · ~{day.minutes} dk
+                </p>
+                <h2 className="mt-1 text-xl font-bold md:text-2xl">{day.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{day.goal}</p>
+              </div>
+              {finished && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 px-2.5 py-1 text-[11px] font-semibold text-[oklch(0.75_0.19_150)]">
+                  <Check size={12} /> Tamamlandı
+                </span>
+              )}
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-500" style={{ width: `${dayPct}%` }} />
+            </div>
+          </div>
+
+          {/* Lesson */}
+          <div className="glass rounded-2xl p-5">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <BookOpen size={13} /> Ders
+            </p>
+            <div className="mt-3 space-y-4">
+              {day.sections.map((s) => (
+                <div key={s.heading} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-sm font-semibold">{s.heading}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Terms */}
+          <div className="glass rounded-2xl p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anahtar terimler</p>
+            <dl className="grid gap-2.5 sm:grid-cols-2">
+              {day.terms.map((t) => (
+                <div key={t.term} className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+                  <dt className="text-xs font-semibold">{t.term}</dt>
+                  <dd className="mt-0.5 text-xs text-muted-foreground">{t.meaning}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          {/* Video */}
+          <div className="glass rounded-2xl p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <PlayCircle size={13} /> İzle
+                </p>
+                <p className="mt-1 text-sm">{day.video.title}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setVideoOpen((v) => !v)}
+                  className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  {videoOpen ? "Videoyu gizle" : "Videoyu oynat"}
+                </button>
+                <a
+                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(day.video.query)}`}
+                  target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                >
+                  YouTube <ExternalLink size={11} />
+                </a>
+              </div>
+            </div>
+            {videoOpen && (
+              <div className="mt-3 aspect-video w-full overflow-hidden rounded-lg border border-white/10 bg-black">
+                <iframe
+                  className="h-full w-full"
+                  src={`https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(day.video.query)}`}
+                  title={day.video.title}
+                  allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Tasks */}
+          <div className="glass rounded-2xl p-5">
+            <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <ListChecks size={13} /> Bugünün görevleri
+            </p>
+            <div className="space-y-2">
+              {day.tasks.map((task, i) => {
+                const key = `${day.day}-${i}`;
+                const on = !!tasksDone[key];
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleTask(key)}
+                    className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${on ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10" : "border-white/10 hover:bg-white/5"}`}
+                  >
+                    {on
+                      ? <Check size={16} className="mt-0.5 shrink-0 text-[oklch(0.75_0.19_150)]" />
+                      : <CircleDashed size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
+                    <span className={`text-sm ${on ? "text-muted-foreground line-through" : ""}`}>{task}</span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">+{XP_PER_TASK} XP</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 p-2.5 text-xs">
+              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[oklch(0.80_0.16_60)]" />
+              <span><span className="font-semibold">Sık yapılan hata: </span>{day.mistake}</span>
+            </p>
+          </div>
+
+          {/* Notes */}
+          <div className="glass rounded-2xl p-5">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <PenLine size={13} /> Notların (bu güne özel, otomatik kaydedilir)
+            </p>
+            <textarea
+              value={notes[day.day] ?? ""}
+              onChange={(e) => setNotes((p) => ({ ...p, [day.day]: e.target.value }))}
+              placeholder="Bu dersten çıkardığın 3 fikri yaz…"
+              rows={4}
+              className="w-full resize-y rounded-lg border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-[var(--brand)]/50"
+            />
+          </div>
+
+          {/* Quiz */}
+          <div className="glass rounded-2xl p-5">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Lightbulb size={13} /> Hızlı kontrol · +{XP_PER_QUIZ} XP
+            </p>
+            <p className="mb-3 text-sm font-semibold">{day.quiz.q}</p>
+            <div className="grid gap-2">
+              {day.quiz.options.map((opt, i) => {
+                const chosen = answered === i;
+                const state = answered === undefined
+                  ? "border-white/10 hover:bg-white/5"
+                  : i === day.quiz.answer
+                    ? "border-[oklch(0.75_0.19_150)]/50 bg-[oklch(0.75_0.19_150)]/10"
+                    : chosen
+                      ? "border-[oklch(0.68_0.20_25)]/50 bg-[oklch(0.68_0.20_25)]/10"
+                      : "border-white/10 opacity-60";
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setAnswers((p) => ({ ...p, [day.day]: i }))}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm transition ${state}`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+            {answered !== undefined && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                <span className={`font-semibold ${correct ? "text-[oklch(0.75_0.19_150)]" : "text-[oklch(0.72_0.19_25)]"}`}>
+                  {correct ? "Doğru. " : "Tam değil. "}
+                </span>
+                {day.quiz.why}
+                {!correct && (
+                  <button
+                    onClick={() => setAnswers((p) => { const n = { ...p }; delete n[day.day]; return n; })}
+                    className="ml-2 underline hover:text-foreground"
+                  >
+                    tekrar dene
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Nav */}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => goTo(day.day - 1)}
+              disabled={day.day === 1}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold disabled:opacity-40"
+            >
+              <ChevronLeft size={14} /> Önceki
+            </button>
+            <span className="text-[11px] text-muted-foreground">{dayPct}% tamamlandı</span>
+            <button
+              onClick={() => goTo(day.day + 1)}
+              disabled={day.day === DAYS.length}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              Sonraki ders <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {completedDays === DAYS.length && (
+            <div className="glass flex items-center gap-3 rounded-2xl border border-[oklch(0.85_0.18_90)]/40 p-5">
+              <Trophy size={22} className="text-[oklch(0.85_0.18_90)]" />
+              <div>
+                <p className="text-sm font-semibold">Program tamamlandı 🎓</p>
+                <p className="text-xs text-muted-foreground">Tüm döngüyü öğrendin. Şimdi bir sonraki ürününle baştan çalıştır.</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </section>
+  );
+}
+
+function Stat({ icon: Icon, label, value }: { icon: typeof Flame; label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <Icon size={11} /> {label}
+      </div>
+      <div className="mt-0.5 text-sm font-bold">{value}</div>
+    </div>
   );
 }
