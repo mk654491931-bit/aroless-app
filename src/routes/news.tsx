@@ -26,22 +26,37 @@ type NewsItem = {
   explainer: { means: string; actions: string[]; risk: string };
 };
 
-async function fetchNews(): Promise<NewsItem[]> {
+type LiveItem = {
+  title: string; source: string; date: string; time_ago?: string; category: string;
+  summary: string; impact: "high" | "medium" | "low"; action?: string;
+};
+
+async function callNews<T>(input: Record<string, string>): Promise<T[]> {
   const res = await fetch("/api/public/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tool: "news", input: { today: new Date().toISOString().slice(0, 10) } }),
+    body: JSON.stringify({ tool: "news", input }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Haberler alınamadı");
-  const json = (await res.json()) as { items?: NewsItem[] };
-  return (json.items ?? []).filter((i) => i && i.title);
+  const json = (await res.json()) as { items?: T[] };
+  return (json.items ?? []).filter((i) => i && (i as { title?: string }).title);
 }
+
+const fetchNews = () => callNews<NewsItem>({ today: new Date().toISOString().slice(0, 10) });
+
+const fetchLive = () =>
+  callNews<LiveItem>({
+    mode: "live",
+    today: new Date().toISOString().slice(0, 10),
+    hour: new Date().toISOString().slice(11, 13) + ":00",
+  });
 
 const impactTone: Record<string, string> = {
   high: "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]",
   medium: "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/10 text-[var(--accent-active)]",
   low: "border-white/15 bg-white/5 text-muted-foreground",
 };
+
 
 function SkeletonCard() {
   return (
