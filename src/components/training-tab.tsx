@@ -151,13 +151,24 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const inventoryValue = state.products.reduce((a, p) => a + p.stock * p.unitCost, 0);
   const progress = Math.max(0, Math.min(100, (state.totalProfit / cfg.targetProfit) * 100));
 
-  const views: { id: typeof view; label: string; icon: typeof Store }[] = [
-    { id: "storefront", label: "Storefront", icon: Store },
-    { id: "products", label: "Catalog & Stock", icon: Package },
-    { id: "ads", label: "Ads & Pricing", icon: Megaphone },
-    { id: "analytics", label: "Analytics", icon: BarChart3 },
-    { id: "log", label: "Activity", icon: ScrollText },
+  const missions = missionState(state);
+  const missionsDone = missions.filter((m) => m.done).length;
+  const xp = computeXp(state) + missions.reduce((a, m) => a + (m.done ? m.reward : 0), 0);
+  const lvl = levelFromXp(xp);
+  const tips = coachTips(state);
+  const alerts = tips.filter((t) => t.kind === "warn").length;
+  const nextMission = missions.find((m) => !m.done);
+
+  const views: { id: typeof view; label: string; icon: typeof Store; badge?: string }[] = [
+    { id: "storefront", label: "Vitrin", icon: Store },
+    { id: "products", label: "Katalog & Stok", icon: Package },
+    { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
+    { id: "analytics", label: "Analitik", icon: BarChart3 },
+    { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
+    { id: "coach", label: "Koç", icon: Brain, badge: alerts ? String(alerts) : undefined },
+    { id: "log", label: "Günlük", icon: ScrollText },
   ];
+
 
   return (
     <section className="space-y-5">
