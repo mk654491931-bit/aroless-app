@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Store, Play, FastForward, RotateCcw, Plus, Package, Megaphone, BarChart3, ScrollText,
   Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
   Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
+  Flag, Brain, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { WinningProduct } from "@/lib/gemini.functions";
@@ -11,6 +12,10 @@ import {
   netMarginPct, unitProfit,
   type Difficulty, type SimState, type StoreProduct,
 } from "@/lib/training-sim";
+import {
+  computeXp, levelFromXp, missionState, coachTips, loadHof, saveHof, type RunResult,
+} from "@/lib/training-meta";
+
 
 const KEY = "omni-training-run-v1";
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
