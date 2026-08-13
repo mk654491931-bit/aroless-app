@@ -343,7 +343,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         <div className="mt-4 grid md:grid-cols-2 gap-4">
           <div>
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Target size={12} /> Kâr hedefi {compact(cfg.targetProfit)}</span>
+              <span className="inline-flex items-center gap-1.5"><Target size={12} /> Kâr hedefi {compact(seasonTarget)}</span>
               <span>{progress.toFixed(0)}%</span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
