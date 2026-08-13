@@ -1227,3 +1227,166 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
     </div>
   );
 }
+
+/* ---------------- Market / competitors ---------------- */
+
+function MarketView({ state }: { state: SimState }) {
+  const share = marketShare(state);
+  const mix = state.segmentMix ?? { bargain: 0.34, mainstream: 0.44, premium: 0.22 };
+  const brand = Math.round(state.brand ?? 0);
+  const rows = [
+    { key: "you", name: state.storeName, emoji: "🏪", share: share.you, price: state.marketIndex ?? 1, rating: state.products.length ? state.products.reduce((a, p) => a + p.rating, 0) / state.products.length : 4.6, you: true },
+    ...share.rivals.map((r) => ({ key: r.c.id, name: r.c.name, emoji: r.c.emoji, share: r.share, price: r.c.price, rating: r.c.rating, you: false })),
+  ].sort((a, b) => b.share - a.share);
+
+  return (
+    <div className="space-y-4">
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Swords size={14} /> Pazar payı</h3>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Rakipler her gün fiyatlarını ve reklam güçlerini senin performansına göre günceller. Pay; fiyat, puan, marka ve reklam bütçesinin bileşimi.
+        </p>
+        <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-white/8">
+          {rows.map((r) => (
+            <div key={r.key} title={`${r.name} %${(r.share * 100).toFixed(0)}`}
+              className={r.you ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]" : "bg-white/18 border-l border-black/30"}
+              style={{ width: `${r.share * 100}%` }} />
+          ))}
+        </div>
+        <div className="mt-3 space-y-2">
+          {rows.map((r) => (
+            <div key={r.key} className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${r.you ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : "border-white/10 bg-white/5"}`}>
+              <span className="text-base">{r.emoji}</span>
+              <b>{r.name}</b>
+              {r.you && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">sen</span>}
+              <span className="ml-auto text-muted-foreground">fiyat endeksi {r.price.toFixed(2)}</span>
+              <span className="inline-flex items-center gap-1 text-muted-foreground"><Star size={11} className="text-amber-300" /> {r.rating.toFixed(1)}</span>
+              <b className="w-14 text-right">%{(r.share * 100).toFixed(0)}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Gem size={14} className="text-[oklch(0.78_0.16_265)]" /> Marka değeri {brand}/100</h3>
+        <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
+          <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all" style={{ width: `${brand}%` }} />
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Marka; yüksek puan, tekrar alan müşteriler ve premium fiyatlamayla büyür; stoksuzluk, iade ve yanıtlanmayan destek bileti düşürür.
+          Güçlü marka organik trafik getirir ve fiyat hassasiyetini azaltır.
+        </p>
+      </div>
+
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><PieChart size={14} /> Müşteri segmentleri</h3>
+        <div className="mt-3 grid md:grid-cols-3 gap-3">
+          {(Object.keys(SEGMENTS) as (keyof typeof SEGMENTS)[]).map((k) => {
+            const seg = SEGMENTS[k];
+            const pct = Math.round((mix[k] ?? 0) * 100);
+            return (
+              <div key={k} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center justify-between text-xs"><b>{seg.label}</b><span>%{pct}</span></div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                  <div className="h-full rounded-full bg-white/40" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground">{seg.blurb}</p>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Fiyat hassasiyeti ×{seg.elasticity} · iade ×{seg.refundBias} · sepet ×{seg.aovMult}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={14} /> Sezon takvimi</h3>
+        <div className="mt-3 space-y-2">
+          {CALENDAR.map((c) => {
+            const sd = seasonDayOf(state.day);
+            const active = sd >= c.day && sd < c.day + c.days;
+            const past = sd >= c.day + c.days;
+            return (
+              <div key={c.title} className={`rounded-xl border px-3 py-2 text-xs ${active ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : past ? "border-white/10 bg-white/5 opacity-50" : "border-white/10 bg-white/5"}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <b>{c.title}</b>
+                  <span className="text-muted-foreground">Gün {c.day}-{c.day + c.days - 1}</span>
+                  {active && <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px]">aktif</span>}
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {c.blurb}
+                  {c.demandMult ? ` · talep ×${c.demandMult}` : ""}
+                  {c.cpcMult ? ` · TBM ×${c.cpcMult}` : ""}
+                  {c.leadTimeAdd ? ` · tedarik +${c.leadTimeAdd} gün` : ""}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Operations / support ---------------- */
+
+function OpsView({ state, onSupportBudget }: { state: SimState; onSupportBudget: (n: number) => void }) {
+  const queue = state.supportQueue ?? 0;
+  const budget = state.supportBudget ?? 0;
+  const capacity = Math.floor(budget / SUPPORT_TICKET_COST);
+  const orders = state.history.slice(-3).reduce((a, d) => a + d.orders, 0) / Math.max(1, Math.min(3, state.history.length));
+  const suggested = Math.ceil((orders * 0.55 * SUPPORT_TICKET_COST) / 5) * 5;
+
+  return (
+    <div className="space-y-4">
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Headphones size={14} /> Müşteri destek merkezi</h3>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Her sipariş destek bileti üretir. Kuyruk 15 bileti aşarsa SLA ihlali başlar: puanlar düşer, iadeler artar, marka erir.
+        </p>
+        <div className="mt-3 grid sm:grid-cols-4 gap-3 text-xs">
+          <Kpi icon={Headphones} label="Bekleyen bilet" value={String(Math.round(queue))} tone={queue > 12 ? "bad" : queue > 0 ? undefined : "good"} />
+          <Kpi icon={CheckCircle2} label="Çözülen" value={String(state.supportResolved ?? 0)} />
+          <Kpi icon={AlertTriangle} label="SLA ihlali" value={String(state.slaBreaches ?? 0)} tone={(state.slaBreaches ?? 0) > 0 ? "bad" : "good"} />
+          <Kpi icon={Zap} label="Günlük kapasite" value={`${capacity} bilet`} />
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Günlük destek bütçesi</span>
+            <b>{money(budget)}</b>
+          </div>
+          <input type="range" min={0} max={150} step={5} value={budget}
+            onChange={(e) => onSupportBudget(Number(e.target.value))}
+            className="mt-2 w-full accent-[oklch(0.68_0.20_265)]" />
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <span>Bilet başına {money(SUPPORT_TICKET_COST)} · sipariş hacmine göre önerilen ≈ {money(suggested)}</span>
+            <button onClick={() => onSupportBudget(suggested)} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10">
+              Önerilen bütçeyi uygula
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 h-2 rounded-full bg-white/8 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${queue > 15 ? "bg-rose-400" : queue > 8 ? "bg-amber-400" : "bg-emerald-400"}`}
+            style={{ width: `${Math.min(100, (queue / 20) * 100)}%` }} />
+        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">Kuyruk / SLA eşiği (15 bilet)</p>
+      </div>
+
+      <div className="premium-card rounded-xl p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><FlaskConical size={14} /> Kreatif test performansı</h3>
+        <div className="mt-3 grid sm:grid-cols-3 gap-3 text-xs">
+          <Kpi icon={Trophy} label="Kazanılan test" value={String(state.abWins ?? 0)} />
+          <Kpi icon={Sparkles} label="Aktif test" value={String(state.products.filter((p) => p.abTest).length)} />
+          <Kpi icon={TrendingUp} label="Toplam dönüşüm artışı"
+            value={`+${Math.round(state.products.reduce((a, p) => a + (p.cvrBonus ?? 0), 0) * 100)}%`} tone="good" />
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Testler Reklam & Fiyat sekmesinden başlatılır. Kazanan varyantın etkisi ürün ömrü boyunca kalıcıdır.
+        </p>
+      </div>
+    </div>
+  );
+}
