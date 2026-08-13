@@ -625,7 +625,7 @@ export function simulateDay(prev: SimState): DayResult {
 
   // 3c. Marka değeri güncellenir
   const brandBefore = brand;
-  s.brand = Math.max(0, Math.min(100, brand + brandDelta * 0.6 - 0.15));
+  s.brand = Math.max(0, Math.min(100, brand + brandDelta * 0.6 - 0.15 + (hasUpgrade(s, "brandkit") ? 1.2 : 0)));
   if (Math.floor(s.brand / 20) > Math.floor(brandBefore / 20)) {
     events.push({ day, kind: "good", text: `Marka değerin ${Math.round(s.brand)} seviyesine çıktı — organik trafik ve fiyat toleransı arttı.` });
   }
