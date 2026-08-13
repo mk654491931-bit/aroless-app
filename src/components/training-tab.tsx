@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Store, Play, FastForward, RotateCcw, Plus, Package, Megaphone, BarChart3, ScrollText,
   Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
   Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
+  Flag, Brain, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { WinningProduct } from "@/lib/gemini.functions";
@@ -11,6 +12,10 @@ import {
   netMarginPct, unitProfit,
   type Difficulty, type SimState, type StoreProduct,
 } from "@/lib/training-sim";
+import {
+  computeXp, levelFromXp, missionState, coachTips, loadHof, saveHof, type RunResult,
+} from "@/lib/training-meta";
+
 
 const KEY = "omni-training-run-v1";
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -29,19 +34,60 @@ function load(): SimState | null {
 export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const [state, setState] = useState<SimState | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "log">("storefront");
+  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log">("storefront");
   const [storeName, setStoreName] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [busy, setBusy] = useState(false);
+  const [autoplay, setAutoplay] = useState(false);
+  const [hof, setHof] = useState<RunResult[]>([]);
+  const doneMissions = useRef<Set<string>>(new Set());
+  const savedRun = useRef(false);
 
-  useEffect(() => { setState(load()); setHydrated(true); }, []);
+  useEffect(() => { setState(load()); setHof(loadHof()); setHydrated(true); }, []);
   useEffect(() => {
     if (!hydrated) return;
     if (state) window.localStorage.setItem(KEY, JSON.stringify(state));
     else window.localStorage.removeItem(KEY);
   }, [state, hydrated]);
 
+  // celebrate newly completed missions
+  useEffect(() => {
+    if (!state) return;
+    const ms = missionState(state);
+    const first = doneMissions.current.size === 0;
+    for (const m of ms) {
+      if (m.done && !doneMissions.current.has(m.id)) {
+        doneMissions.current.add(m.id);
+        if (!first) toast.success(`Görev tamam: ${m.title}`, { description: `+${m.reward} XP` });
+      }
+    }
+  }, [state]);
+
+  // autoplay the season day by day
+  useEffect(() => {
+    if (!autoplay || !state || state.status !== "running") { if (autoplay && state && state.status !== "running") setAutoplay(false); return; }
+    const t = setTimeout(() => {
+      setState((prev) => (prev && prev.status === "running" ? simulateDay(prev).state : prev));
+    }, 550);
+    return () => clearTimeout(t);
+  }, [autoplay, state]);
+
+  // archive finished runs into the hall of fame
+  useEffect(() => {
+    if (!state || state.status === "running" || savedRun.current) return;
+    savedRun.current = true;
+    const r: RunResult = {
+      storeName: state.storeName, difficulty: DIFFICULTIES[state.difficulty].label,
+      profit: Math.round(state.totalProfit), revenue: Math.round(state.totalRevenue),
+      orders: state.totalOrders, days: state.history.length, xp: computeXp(state),
+      status: state.status, at: Date.now(),
+    };
+    saveHof(r);
+    setHof(loadHof());
+  }, [state]);
+
   if (!hydrated) return <div className="h-40" />;
+
 
   if (!state) {
     return (
@@ -49,10 +95,16 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         storeName={storeName} setStoreName={setStoreName}
         difficulty={difficulty} setDifficulty={setDifficulty}
         catalogCount={catalog.length}
-        onStart={() => setState(newRun(storeName, difficulty))}
+        hof={hof}
+        onStart={() => {
+          doneMissions.current = new Set();
+          savedRun.current = false;
+          setState(newRun(storeName, difficulty));
+        }}
       />
     );
   }
+
 
   const cfg = DIFFICULTIES[state.difficulty];
   const over = state.status !== "running";
@@ -99,13 +151,24 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const inventoryValue = state.products.reduce((a, p) => a + p.stock * p.unitCost, 0);
   const progress = Math.max(0, Math.min(100, (state.totalProfit / cfg.targetProfit) * 100));
 
-  const views: { id: typeof view; label: string; icon: typeof Store }[] = [
-    { id: "storefront", label: "Storefront", icon: Store },
-    { id: "products", label: "Catalog & Stock", icon: Package },
-    { id: "ads", label: "Ads & Pricing", icon: Megaphone },
-    { id: "analytics", label: "Analytics", icon: BarChart3 },
-    { id: "log", label: "Activity", icon: ScrollText },
+  const missions = missionState(state);
+  const missionsDone = missions.filter((m) => m.done).length;
+  const xp = computeXp(state) + missions.reduce((a, m) => a + (m.done ? m.reward : 0), 0);
+  const lvl = levelFromXp(xp);
+  const tips = coachTips(state);
+  const alerts = tips.filter((t) => t.kind === "warn").length;
+  const nextMission = missions.find((m) => !m.done);
+
+  const views: { id: typeof view; label: string; icon: typeof Store; badge?: string }[] = [
+    { id: "storefront", label: "Vitrin", icon: Store },
+    { id: "products", label: "Katalog & Stok", icon: Package },
+    { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
+    { id: "analytics", label: "Analitik", icon: BarChart3 },
+    { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
+    { id: "coach", label: "Koç", icon: Brain, badge: alerts ? String(alerts) : undefined },
+    { id: "log", label: "Günlük", icon: ScrollText },
   ];
+
 
   return (
     <section className="space-y-5">
@@ -119,48 +182,74 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{cfg.label}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Day {Math.min(state.day, RUN_LENGTH)} of {RUN_LENGTH} · Simulated store — no real money, real mechanics.
+              Gün {Math.min(state.day, RUN_LENGTH)} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button disabled={over || busy} onClick={() => advance(1)}
+            <button disabled={over || busy || autoplay} onClick={() => advance(1)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40">
-              <Play size={13} /> Run 1 day
+              <Play size={13} /> 1 gün
             </button>
-            <button disabled={over || busy} onClick={() => advance(7)}
+            <button disabled={over || busy || autoplay} onClick={() => advance(7)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40">
-              <FastForward size={13} /> 7 days
+              <FastForward size={13} /> 7 gün
             </button>
-            <button onClick={() => { if (confirm("Reset this training run?")) setState(null); }}
+            <button disabled={over} onClick={() => setAutoplay((a) => !a)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition disabled:opacity-40 ${autoplay ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+              {autoplay ? <><Pause size={13} /> Duraklat</> : <><Zap size={13} /> Sezonu oynat</>}
+            </button>
+            <button onClick={() => { if (confirm("Bu eğitim koşusu sıfırlansın mı?")) { setAutoplay(false); doneMissions.current = new Set(); savedRun.current = false; setState(null); } }}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
-              <RotateCcw size={13} /> Reset
+              <RotateCcw size={13} /> Sıfırla
             </button>
           </div>
+
         </div>
 
         <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
-          <Kpi icon={Wallet} label="Cash" value={money(state.cash)} tone={state.cash < 100 ? "bad" : "good"} />
-          <Kpi icon={Coins} label="Revenue" value={compact(state.totalRevenue)} />
-          <Kpi icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown} label="Net profit" value={compact(state.totalProfit)} tone={state.totalProfit >= 0 ? "good" : "bad"} />
-          <Kpi icon={ShoppingCart} label="Orders" value={String(state.totalOrders)} />
-          <Kpi icon={Package} label="Stock value" value={compact(inventoryValue)} />
-          <Kpi icon={Megaphone} label="Daily ads" value={money(totalAds)} />
+          <Kpi icon={Wallet} label="Nakit" value={money(state.cash)} tone={state.cash < 100 ? "bad" : "good"} />
+          <Kpi icon={Coins} label="Ciro" value={compact(state.totalRevenue)} />
+          <Kpi icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown} label="Net kâr" value={compact(state.totalProfit)} tone={state.totalProfit >= 0 ? "good" : "bad"} />
+          <Kpi icon={ShoppingCart} label="Sipariş" value={String(state.totalOrders)} />
+          <Kpi icon={Package} label="Stok değeri" value={compact(inventoryValue)} />
+          <Kpi icon={Megaphone} label="Günlük reklam" value={money(totalAds)} />
         </div>
 
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><Target size={12} /> Profit target {compact(cfg.targetProfit)}</span>
-            <span>{progress.toFixed(0)}%</span>
+        <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5"><Target size={12} /> Kâr hedefi {compact(cfg.targetProfit)}</span>
+              <span>{progress.toFixed(0)}%</span>
+            </div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all" style={{ width: `${progress}%` }} />
+            </div>
           </div>
-          <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all" style={{ width: `${progress}%` }} />
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Crown size={12} className="text-amber-300" /> Seviye {lvl.level} · {lvl.title}
+              </span>
+              <span>{lvl.into}/{lvl.need} XP</span>
+            </div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all" style={{ width: `${lvl.pct}%` }} />
+            </div>
           </div>
         </div>
+
+        {nextMission && !over && (
+          <button onClick={() => setView("missions")}
+            className="mt-3 w-full text-left flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 transition">
+            <Flag size={14} className="mt-0.5 shrink-0 text-[oklch(0.72_0.18_265)]" />
+            <span><b>Sıradaki görev:</b> {nextMission.title} — <span className="text-muted-foreground">{nextMission.hint}</span></span>
+          </button>
+        )}
 
         {state.activeEvent && (
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <Sparkles size={14} className="mt-0.5 shrink-0" />
-            <span>{state.activeEvent.text} <span className="opacity-70">({state.activeEvent.daysLeft} day(s) left)</span></span>
+            <span>{state.activeEvent.text} <span className="opacity-70">({state.activeEvent.daysLeft} gün kaldı)</span></span>
           </div>
         )}
 
@@ -170,8 +259,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
               : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
             {state.status === "bankrupt"
-              ? <><AlertTriangle size={15} className="mt-0.5" /> Insolvent on day {state.day - 1}. Ad spend outran margin — restart and order stock before scaling budget.</>
-              : <><Trophy size={15} className="mt-0.5" /> Run complete: {compact(state.totalRevenue)} revenue, {compact(state.totalProfit)} net profit, {state.totalOrders} orders.</>}
+              ? <><AlertTriangle size={15} className="mt-0.5" /> {state.day - 1}. günde nakit bitti. Reklam harcaması marjı aştı — yeniden başla ve ölçeklemeden önce stok al.</>
+              : <><Trophy size={15} className="mt-0.5" /> Sezon tamam: {compact(state.totalRevenue)} ciro, {compact(state.totalProfit)} net kâr, {state.totalOrders} sipariş, {missionsDone} görev.</>}
           </div>
         )}
       </div>
@@ -185,6 +274,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition ${on ? "bg-white/12 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                 <Icon size={13} /> {v.label}
+                {v.badge && <span className="rounded-full bg-white/12 px-1.5 py-0.5 text-[9px] font-semibold">{v.badge}</span>}
               </button>
             );
           })}
@@ -197,8 +287,129 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       )}
       {view === "ads" && <AdsView state={state} onPatch={patch} />}
       {view === "analytics" && <Analytics state={state} />}
+      {view === "missions" && <MissionsView missions={missions} lvl={lvl} />}
+      {view === "coach" && <CoachView tips={tips} state={state} onGo={setView} />}
       {view === "log" && <ActivityLog state={state} />}
+
     </section>
+  );
+}
+
+/* ---------------- Missions ---------------- */
+
+function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionState>; lvl: ReturnType<typeof levelFromXp> }) {
+  const tiers: { t: 1 | 2 | 3; label: string }[] = [
+    { t: 1, label: "Temel operasyon" },
+    { t: 2, label: "Kârlılık" },
+    { t: 3, label: "Ölçekleme" },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="premium-card rounded-2xl p-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] font-bold">{lvl.level}</span>
+          <div>
+            <div className="text-sm font-semibold">{lvl.title}</div>
+            <div className="text-[11px] text-muted-foreground">{lvl.xp.toLocaleString("tr-TR")} XP toplandı</div>
+          </div>
+        </div>
+        <div className="ml-auto text-xs text-muted-foreground">
+          {missions.filter((m) => m.done).length}/{missions.length} görev tamamlandı
+        </div>
+      </div>
+
+      {tiers.map(({ t, label }) => (
+        <div key={t} className="space-y-2">
+          <h3 className="text-xs uppercase tracking-wider text-muted-foreground">{label}</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            {missions.filter((m) => m.tier === t).map((m) => (
+              <div key={m.id} className={`premium-card rounded-xl p-4 transition ${m.done ? "border-emerald-400/30 bg-emerald-500/8" : ""}`}>
+                <div className="flex items-start gap-2.5">
+                  {m.done ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-300" /> : <Circle size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold">{m.title}</div>
+                      <span className="shrink-0 rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-amber-200">+{m.reward} XP</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{m.hint}</p>
+                    <div className="mt-2.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"}`} style={{ width: `${m.pct}%` }} />
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {m.value < 10 ? m.value.toFixed(1).replace(/\.0$/, "") : Math.round(m.value)} / {m.goal}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- Coach ---------------- */
+
+function CoachView({ tips, state, onGo }: {
+  tips: ReturnType<typeof coachTips>;
+  state: SimState;
+  onGo: (v: "storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log") => void;
+}) {
+  const cfg = DIFFICULTIES[state.difficulty];
+  const week = state.history.slice(-7);
+  const sum = week.reduce((a, d) => ({
+    revenue: a.revenue + d.revenue, adSpend: a.adSpend + d.adSpend, profit: a.profit + d.profit,
+    orders: a.orders + d.orders, visitors: a.visitors + d.visitors,
+  }), { revenue: 0, adSpend: 0, profit: 0, orders: 0, visitors: 0 });
+
+  return (
+    <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Brain size={15} /> Velora Koçu</h3>
+        {tips.map((t, i) => (
+          <div key={i} className={`premium-card rounded-xl p-4 border ${
+            t.kind === "warn" ? "border-rose-500/30 bg-rose-500/8"
+              : t.kind === "good" ? "border-emerald-500/30 bg-emerald-500/8" : "border-white/10"}`}>
+            <div className="flex items-start gap-2.5">
+              {t.kind === "warn" ? <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-300" />
+                : t.kind === "good" ? <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+                : <Lightbulb size={15} className="mt-0.5 shrink-0 text-amber-300" />}
+              <div>
+                <div className="text-sm font-semibold">{t.title}</div>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{t.body}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => onGo("ads")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Reklam & fiyatı düzenle</button>
+          <button onClick={() => onGo("products")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Stok siparişi ver</button>
+          <button onClick={() => onGo("analytics")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Analitiği aç</button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={15} /> Son 7 gün</h3>
+        <div className="premium-card rounded-xl p-4 grid grid-cols-2 gap-2 text-[11px]">
+          <Stat label="Ciro" value={compact(sum.revenue)} />
+          <Stat label="Reklam" value={compact(sum.adSpend)} />
+          <Stat label="Net kâr" value={compact(sum.profit)} tone={sum.profit >= 0 ? "good" : "bad"} />
+          <Stat label="ROAS" value={sum.adSpend > 0 ? `${(sum.revenue / sum.adSpend).toFixed(2)}x` : "—"} />
+          <Stat label="Sipariş" value={String(sum.orders)} />
+          <Stat label="Dönüşüm" value={sum.visitors > 0 ? `${((sum.orders / sum.visitors) * 100).toFixed(2)}%` : "—"} />
+        </div>
+        <div className="premium-card rounded-xl p-4 text-[11px] text-muted-foreground space-y-2">
+          <div className="text-xs font-semibold text-foreground">Bu zorlukta oyunun kuralları</div>
+          <Row k="Ortalama TBM" v={money(cfg.cpc)} />
+          <Row k="Platform komisyonu" v={`${(cfg.platformFeePct * 100).toFixed(1)}%`} />
+          <Row k="Kargo / sipariş" v={money(cfg.shippingPerUnit)} />
+          <Row k="Baz iade oranı" v={`${(cfg.refundBase * 100).toFixed(0)}%`} />
+          <Row k="Tedarik süresi" v={`${cfg.leadTimeDays} gün`} />
+          <Row k="Sabit gider / gün" v={money(cfg.dailyFixedCost)} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -207,8 +418,9 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 function SetupScreen(props: {
   storeName: string; setStoreName: (v: string) => void;
   difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  catalogCount: number; onStart: () => void;
+  catalogCount: number; onStart: () => void; hof: RunResult[];
 }) {
+
   return (
     <section className="max-w-3xl mx-auto space-y-6">
       <div className="text-center animate-rise-in">
@@ -256,17 +468,35 @@ function SetupScreen(props: {
 
         <button onClick={props.onStart}
           className="w-full rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold glow">
-          Open my training store
+          Eğitim mağazamı aç
         </button>
         <p className="text-[11px] text-muted-foreground text-center">
           {props.catalogCount > 0
-            ? `${props.catalogCount} researched product(s) ready to list.`
-            : "Tip: run a product search or save favourites first — you'll list those products in the store."}
+            ? `${props.catalogCount} araştırılmış ürün listelenmeye hazır.`
+            : "İpucu: önce Ürün Bulucu'da arama yap veya favori kaydet — mağazada o ürünleri satacaksın."}
         </p>
       </div>
+
+      {props.hof.length > 0 && (
+        <div className="premium-card rounded-2xl p-5">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Trophy size={15} className="text-amber-300" /> Şeref listesi</h3>
+          <div className="mt-3 space-y-2">
+            {props.hof.map((r, i) => (
+              <div key={r.at} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i === 0 ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-muted-foreground"}`}>{i + 1}</span>
+                <span className="font-medium truncate">{r.storeName}</span>
+                <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-muted-foreground">{r.difficulty}</span>
+                <span className="ml-auto shrink-0 text-muted-foreground">{r.days} gün · {r.orders} sipariş</span>
+                <b className={r.profit >= 0 ? "text-emerald-300" : "text-rose-300"}>{compact(r.profit)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+
 
 const Row = ({ k, v }: { k: string; v: string }) => (
   <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>
