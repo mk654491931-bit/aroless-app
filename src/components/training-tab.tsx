@@ -34,19 +34,60 @@ function load(): SimState | null {
 export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const [state, setState] = useState<SimState | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "log">("storefront");
+  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log">("storefront");
   const [storeName, setStoreName] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [busy, setBusy] = useState(false);
+  const [autoplay, setAutoplay] = useState(false);
+  const [hof, setHof] = useState<RunResult[]>([]);
+  const doneMissions = useRef<Set<string>>(new Set());
+  const savedRun = useRef(false);
 
-  useEffect(() => { setState(load()); setHydrated(true); }, []);
+  useEffect(() => { setState(load()); setHof(loadHof()); setHydrated(true); }, []);
   useEffect(() => {
     if (!hydrated) return;
     if (state) window.localStorage.setItem(KEY, JSON.stringify(state));
     else window.localStorage.removeItem(KEY);
   }, [state, hydrated]);
 
+  // celebrate newly completed missions
+  useEffect(() => {
+    if (!state) return;
+    const ms = missionState(state);
+    const first = doneMissions.current.size === 0;
+    for (const m of ms) {
+      if (m.done && !doneMissions.current.has(m.id)) {
+        doneMissions.current.add(m.id);
+        if (!first) toast.success(`Görev tamam: ${m.title}`, { description: `+${m.reward} XP` });
+      }
+    }
+  }, [state]);
+
+  // autoplay the season day by day
+  useEffect(() => {
+    if (!autoplay || !state || state.status !== "running") { if (autoplay && state && state.status !== "running") setAutoplay(false); return; }
+    const t = setTimeout(() => {
+      setState((prev) => (prev && prev.status === "running" ? simulateDay(prev).state : prev));
+    }, 550);
+    return () => clearTimeout(t);
+  }, [autoplay, state]);
+
+  // archive finished runs into the hall of fame
+  useEffect(() => {
+    if (!state || state.status === "running" || savedRun.current) return;
+    savedRun.current = true;
+    const r: RunResult = {
+      storeName: state.storeName, difficulty: DIFFICULTIES[state.difficulty].label,
+      profit: Math.round(state.totalProfit), revenue: Math.round(state.totalRevenue),
+      orders: state.totalOrders, days: state.history.length, xp: computeXp(state),
+      status: state.status, at: Date.now(),
+    };
+    saveHof(r);
+    setHof(loadHof());
+  }, [state]);
+
   if (!hydrated) return <div className="h-40" />;
+
 
   if (!state) {
     return (
