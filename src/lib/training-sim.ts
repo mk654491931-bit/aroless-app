@@ -343,7 +343,19 @@ export function simulateDay(prev: SimState): DayResult {
   }
 
 
-  const fixed = cfg.dailyFixedCost;
+  // kredi faizi her gün işler
+  let interest = 0;
+  if (s.loan && s.loan.balance > 0) {
+    interest = Math.round(s.loan.balance * LOAN_DAILY_RATE * 100) / 100;
+    s.loan = { ...s.loan, paidInterest: Math.round((s.loan.paidInterest + interest) * 100) / 100 };
+    if (day % 7 === 0) {
+      events.push({ day, kind: "bad", text: `Kredi faizi işliyor: bugüne kadar $${s.loan.paidInterest.toFixed(2)} faiz ödendi.` });
+    }
+  }
+  // liste doğal olarak erir
+  s.subscribers = Math.max(0, (s.subscribers ?? 0) * 0.992);
+
+  const fixed = cfg.dailyFixedCost + interest;
   const profit = revenue - adSpend - fees - refundAmt - fixed;
   s.cash = Math.round((s.cash + profit) * 100) / 100;
   s.totalRevenue += revenue;
