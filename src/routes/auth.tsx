@@ -370,8 +370,12 @@ function AuthPage() {
               alt="Velora"
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_oklch(0.62_0.19_250/0.5)]"
             />
-            <h1 className="leading-none">
-              <span className="block text-[42px] font-light uppercase tracking-[0.32em]" aria-label="Velora">
+            <h1 className="relative leading-none">
+              <span aria-hidden className="velora-halo" />
+              <span
+                className="relative block text-[52px] font-extralight uppercase tracking-[0.34em]"
+                aria-label="Velora"
+              >
                 {"VELORA".split("").map((ch, i) => (
                   <span
                     key={`${ch}-${i}`}
@@ -383,6 +387,7 @@ function AuthPage() {
                   </span>
                 ))}
               </span>
+              <span className="velora-underline mt-3 block w-56" />
               <span className="mt-3 block text-[10px] font-medium uppercase tracking-[0.42em] text-[var(--brand)]">
                 AI Commerce OS
               </span>
@@ -395,6 +400,7 @@ function AuthPage() {
               {ROTATING[rotIndex]}
             </p>
           </div>
+
 
           <ul className="mt-9 space-y-3">
             {PERKS.map((p, i) => (
