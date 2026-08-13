@@ -324,6 +324,11 @@ function AuthPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
+      {/* Animated aurora / grid / beam backdrop */}
+      <div aria-hidden className="auth-aurora" />
+      <div aria-hidden className="auth-grid" />
+      <div aria-hidden className="auth-beam" />
+
       {/* Quantum data mesh */}
       <QuantumMesh />
 
@@ -358,8 +363,17 @@ function AuthPage() {
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_oklch(0.62_0.19_250/0.5)]"
             />
             <h1 className="leading-none">
-              <span className="block text-[42px] font-light uppercase tracking-[0.32em] text-foreground/95">
-                Velora
+              <span className="block text-[42px] font-light uppercase tracking-[0.32em]" aria-label="Velora">
+                {"VELORA".split("").map((ch, i) => (
+                  <span
+                    key={`${ch}-${i}`}
+                    aria-hidden
+                    className="velora-letter velora-shine"
+                    style={{ animationDelay: `${i * 0.09}s` }}
+                  >
+                    {ch}
+                  </span>
+                ))}
               </span>
               <span className="mt-3 block text-[10px] font-medium uppercase tracking-[0.42em] text-[var(--brand)]">
                 AI Commerce OS
