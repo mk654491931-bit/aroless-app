@@ -1,4 +1,4 @@
-import { DIFFICULTIES, RUN_LENGTH, netMarginPct, unitProfit, type SimState } from "./training-sim";
+import { DIFFICULTIES, RUN_LENGTH, netMarginPct, unitProfit, marketShare, type SimState } from "./training-sim";
 
 /* ---------------- XP & levels ---------------- */
 
@@ -21,9 +21,17 @@ export function computeXp(s: SimState): number {
   const orderXp = s.totalOrders * 4;
   const dayXp = (s.history.length ?? 0) * 12;
   const reviewXp = s.products.reduce((a, p) => a + p.reviews * 2, 0);
+  const brandXp = (s.brand ?? 0) * 9;
+  const shareXp = (s.share ?? 0) * 700;
+  const abXp = (s.abWins ?? 0) * 90;
+  const supportXp = (s.supportResolved ?? 0) * 1.2 - (s.slaBreaches ?? 0) * 15;
+  const seasonXp = ((s.season ?? 1) - 1) * 500;
   const targetXp = s.totalProfit >= cfg.targetProfit ? 600 : 0;
-  return Math.round((profitXp + orderXp + dayXp + reviewXp + targetXp) * diffMult);
+  return Math.round(Math.max(0,
+    (profitXp + orderXp + dayXp + reviewXp + brandXp + shareXp + abXp + supportXp + seasonXp + targetXp) * diffMult,
+  ));
 }
+
 
 export function levelFromXp(xp: number): LevelInfo {
   let level = 1;
