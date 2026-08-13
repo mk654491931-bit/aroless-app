@@ -138,7 +138,47 @@ export const MISSIONS: Mission[] = [
     hint: "İflas etmeden sezonu bitir.",
     progress: (s) => ({ value: Math.min(RUN_LENGTH, s.history.length), goal: RUN_LENGTH }),
   },
+  {
+    id: "brand", tier: 4, reward: 300,
+    title: "Marka değerini 60'a çıkar",
+    hint: "Yüksek puan, tekrar alım ve premium segment marka değerini büyütür; stoksuzluk ve iade düşürür.",
+    progress: (s) => ({ value: Math.round(s.brand ?? 0), goal: 60 }),
+  },
+  {
+    id: "share", tier: 4, reward: 340,
+    title: "Pazarın %35'ini al",
+    hint: "Rakipler sekmesinden paylarını izle: fiyat, puan ve reklam gücü payını belirler.",
+    progress: (s) => ({ value: Math.round((s.share ?? 0) * 100), goal: 35 }),
+  },
+  {
+    id: "abwin", tier: 4, reward: 220,
+    title: "2 A/B testi kazan",
+    hint: "Reklam sekmesinde iki kreatif varyantını yarıştır; kazanan kalıcı dönüşüm artışı verir.",
+    progress: (s) => ({ value: s.abWins ?? 0, goal: 2 }),
+  },
+  {
+    id: "sla", tier: 4, reward: 260,
+    title: "Destek SLA'sını koru",
+    hint: "Kuyruk 15 bileti aşmadan 120 destek talebini kapat (Operasyon sekmesi).",
+    progress: (s) => ({ value: (s.slaBreaches ?? 0) > 3 ? 0 : Math.min(120, s.supportResolved ?? 0), goal: 120 }),
+  },
+  {
+    id: "bf", tier: 4, reward: 380,
+    title: "Black Friday'i kârlı kapat",
+    hint: "24-25. günlerde toplam 400$ net kâr yap; öncesinde stok ve kreatif hazır olsun.",
+    progress: (s) => {
+      const bf = s.history.filter((d) => { const sd = ((d.day - 1) % RUN_LENGTH) + 1; return sd >= 24 && sd < 26; });
+      return { value: Math.max(0, bf.reduce((a, d) => a + d.profit, 0)), goal: 400 };
+    },
+  },
+  {
+    id: "season2", tier: 4, reward: 500,
+    title: "2. sezona geç",
+    hint: "Sezonu bitirdikten sonra 'Sezona devam et' ile sonsuz modu aç.",
+    progress: (s) => ({ value: (s.season ?? 1) >= 2 ? 1 : 0, goal: 1 }),
+  },
 ];
+
 
 export function missionState(s: SimState) {
   return MISSIONS.map((m) => {
