@@ -95,10 +95,16 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         storeName={storeName} setStoreName={setStoreName}
         difficulty={difficulty} setDifficulty={setDifficulty}
         catalogCount={catalog.length}
-        onStart={() => setState(newRun(storeName, difficulty))}
+        hof={hof}
+        onStart={() => {
+          doneMissions.current = new Set();
+          savedRun.current = false;
+          setState(newRun(storeName, difficulty));
+        }}
       />
     );
   }
+
 
   const cfg = DIFFICULTIES[state.difficulty];
   const over = state.status !== "running";
