@@ -3,14 +3,16 @@ import {
   Store, Play, FastForward, RotateCcw, Plus, Package, Megaphone, BarChart3, ScrollText,
   Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
   Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
-  Flag, Brain, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle,
+  Flag, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle, CalendarDays, Flame, RefreshCw,
 } from "lucide-react";
+import { VeloraMark } from "@/components/velora-mark";
 import { toast } from "sonner";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import {
   DIFFICULTIES, RUN_LENGTH, newRun, productFromWinner, restock, simulateDay,
-  netMarginPct, unitProfit,
-  type Difficulty, type SimState, type StoreProduct,
+  netMarginPct, unitProfit, applyDecision, refreshCreative,
+  CHANNELS, DECISIONS, CREATIVE_COST, WEEKDAYS, weekdayOf, weekdayDemand,
+  type AdChannel, type Difficulty, type SimState, type StoreProduct,
 } from "@/lib/training-sim";
 import {
   computeXp, levelFromXp, missionState, coachTips, loadHof, saveHof, type RunResult,
@@ -18,6 +20,7 @@ import {
 
 
 const KEY = "omni-training-run-v1";
+const VeloraIcon = ({ size = 14 }: { size?: number }) => <VeloraMark size={size} />;
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
@@ -65,6 +68,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
   // autoplay the season day by day
   useEffect(() => {
+    if (state?.pendingDecision && autoplay) { setAutoplay(false); return; }
     if (!autoplay || !state || state.status !== "running") { if (autoplay && state && state.status !== "running") setAutoplay(false); return; }
     const t = setTimeout(() => {
       setState((prev) => (prev && prev.status === "running" ? simulateDay(prev).state : prev));
@@ -144,6 +148,18 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       return r.state;
     });
 
+  const doRefreshCreative = (id: string) =>
+    setState((prev) => {
+      if (!prev) return prev;
+      const r = refreshCreative(prev, id);
+      if (r.error) toast.error(r.error);
+      else toast.success("Yeni kreatif yayında — yorgunluk sıfırlandı.");
+      return r.state;
+    });
+
+  const chooseDecision = (idx: number) =>
+    setState((prev) => (prev ? applyDecision(prev, idx) : prev));
+
   const removeProduct = (id: string) =>
     setState((prev) => prev ? { ...prev, products: prev.products.filter((p) => p.id !== id) } : prev);
 
@@ -165,7 +181,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
     { id: "analytics", label: "Analitik", icon: BarChart3 },
     { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
-    { id: "coach", label: "Koç", icon: Brain, badge: alerts ? String(alerts) : undefined },
+    { id: "coach", label: "Koç", icon: VeloraIcon, badge: alerts ? String(alerts) : undefined },
     { id: "log", label: "Günlük", icon: ScrollText },
   ];
 
@@ -183,6 +199,9 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Gün {Math.min(state.day, RUN_LENGTH)} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
+            </p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground">
+              <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(Math.min(state.day, RUN_LENGTH))]} · talep ×{weekdayDemand(state.day).toFixed(2)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -285,11 +304,13 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       {view === "products" && (
         <CatalogView state={state} catalog={catalog} onAdd={addProduct} onRestock={doRestock} onRemove={removeProduct} onPatch={patch} />
       )}
-      {view === "ads" && <AdsView state={state} onPatch={patch} />}
+      {view === "ads" && <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} />}
       {view === "analytics" && <Analytics state={state} />}
       {view === "missions" && <MissionsView missions={missions} lvl={lvl} />}
       {view === "coach" && <CoachView tips={tips} state={state} onGo={setView} />}
       {view === "log" && <ActivityLog state={state} />}
+
+      {state.pendingDecision && <DecisionModal id={state.pendingDecision.id} onChoose={chooseDecision} />}
 
     </section>
   );
@@ -366,7 +387,7 @@ function CoachView({ tips, state, onGo }: {
   return (
     <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Brain size={15} /> Velora Koçu</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><VeloraMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Velora Koçu</h3>
         {tips.map((t, i) => (
           <div key={i} className={`premium-card rounded-xl p-4 border ${
             t.kind === "warn" ? "border-rose-500/30 bg-rose-500/8"
