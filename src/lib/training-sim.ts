@@ -67,6 +67,10 @@ export type StoreProduct = {
   lastBudget?: number;          // budget of previous day (scaling penalty)
   returnPool?: number;          // happy customers that may buy again
   repeatOrders?: number;        // lifetime repeat orders
+  /* --- layer 4 --- */
+  cvrBonus?: number;            // permanent CVR lift won from A/B tests
+  abTest?: { startDay: number; a: number; b: number } | null;
+
 };
 
 export type AdChannel = "meta" | "tiktok" | "google";
