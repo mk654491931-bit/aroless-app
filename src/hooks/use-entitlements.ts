@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { checkIsAdmin } from "@/lib/admin.functions";
 
-const ADMIN_EMAIL = "mryetenek@gmail.com";
+const ADMIN_EMAIL = "omnic.111111@gmail.com";
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 
 export type Entitlements = {

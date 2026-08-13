@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const ADMIN_EMAIL = "mryetenek@gmail.com";
+const ADMIN_EMAIL = "omnic.111111@gmail.com";
 
 async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
   const email = String(context.claims?.email ?? "").toLowerCase();

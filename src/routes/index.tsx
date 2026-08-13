@@ -160,7 +160,7 @@ function Dashboard() {
     queryFn: () => checkAdminFn(),
     enabled: !!user,
   });
-  const isAdmin = !!adminQ.data?.isAdmin || (user?.email?.toLowerCase() === "mryetenek@gmail.com");
+  const isAdmin = !!adminQ.data?.isAdmin || (user?.email?.toLowerCase() === "omnic.111111@gmail.com");
 
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
 
