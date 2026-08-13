@@ -1,4 +1,4 @@
-import { DIFFICULTIES, RUN_LENGTH, netMarginPct, unitProfit, type SimState } from "./training-sim";
+import { DIFFICULTIES, RUN_LENGTH, netMarginPct, unitProfit, marketShare, type SimState } from "./training-sim";
 
 /* ---------------- XP & levels ---------------- */
 
@@ -21,9 +21,17 @@ export function computeXp(s: SimState): number {
   const orderXp = s.totalOrders * 4;
   const dayXp = (s.history.length ?? 0) * 12;
   const reviewXp = s.products.reduce((a, p) => a + p.reviews * 2, 0);
+  const brandXp = (s.brand ?? 0) * 9;
+  const shareXp = (s.share ?? 0) * 700;
+  const abXp = (s.abWins ?? 0) * 90;
+  const supportXp = (s.supportResolved ?? 0) * 1.2 - (s.slaBreaches ?? 0) * 15;
+  const seasonXp = ((s.season ?? 1) - 1) * 500;
   const targetXp = s.totalProfit >= cfg.targetProfit ? 600 : 0;
-  return Math.round((profitXp + orderXp + dayXp + reviewXp + targetXp) * diffMult);
+  return Math.round(Math.max(0,
+    (profitXp + orderXp + dayXp + reviewXp + brandXp + shareXp + abXp + supportXp + seasonXp + targetXp) * diffMult,
+  ));
 }
+
 
 export function levelFromXp(xp: number): LevelInfo {
   let level = 1;
@@ -51,7 +59,7 @@ export type Mission = {
   title: string;
   hint: string;
   reward: number;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   progress: (s: SimState) => { value: number; goal: number };
 };
 
@@ -130,7 +138,47 @@ export const MISSIONS: Mission[] = [
     hint: "İflas etmeden sezonu bitir.",
     progress: (s) => ({ value: Math.min(RUN_LENGTH, s.history.length), goal: RUN_LENGTH }),
   },
+  {
+    id: "brand", tier: 4, reward: 300,
+    title: "Marka değerini 60'a çıkar",
+    hint: "Yüksek puan, tekrar alım ve premium segment marka değerini büyütür; stoksuzluk ve iade düşürür.",
+    progress: (s) => ({ value: Math.round(s.brand ?? 0), goal: 60 }),
+  },
+  {
+    id: "share", tier: 4, reward: 340,
+    title: "Pazarın %35'ini al",
+    hint: "Rakipler sekmesinden paylarını izle: fiyat, puan ve reklam gücü payını belirler.",
+    progress: (s) => ({ value: Math.round((s.share ?? 0) * 100), goal: 35 }),
+  },
+  {
+    id: "abwin", tier: 4, reward: 220,
+    title: "2 A/B testi kazan",
+    hint: "Reklam sekmesinde iki kreatif varyantını yarıştır; kazanan kalıcı dönüşüm artışı verir.",
+    progress: (s) => ({ value: s.abWins ?? 0, goal: 2 }),
+  },
+  {
+    id: "sla", tier: 4, reward: 260,
+    title: "Destek SLA'sını koru",
+    hint: "Kuyruk 15 bileti aşmadan 120 destek talebini kapat (Operasyon sekmesi).",
+    progress: (s) => ({ value: (s.slaBreaches ?? 0) > 3 ? 0 : Math.min(120, s.supportResolved ?? 0), goal: 120 }),
+  },
+  {
+    id: "bf", tier: 4, reward: 380,
+    title: "Black Friday'i kârlı kapat",
+    hint: "24-25. günlerde toplam 400$ net kâr yap; öncesinde stok ve kreatif hazır olsun.",
+    progress: (s) => {
+      const bf = s.history.filter((d) => { const sd = ((d.day - 1) % RUN_LENGTH) + 1; return sd >= 24 && sd < 26; });
+      return { value: Math.max(0, bf.reduce((a, d) => a + d.profit, 0)), goal: 400 };
+    },
+  },
+  {
+    id: "season2", tier: 4, reward: 500,
+    title: "2. sezona geç",
+    hint: "Sezonu bitirdikten sonra 'Sezona devam et' ile sonsuz modu aç.",
+    progress: (s) => ({ value: (s.season ?? 1) >= 2 ? 1 : 0, goal: 1 }),
+  },
 ];
+
 
 export function missionState(s: SimState) {
   return MISSIONS.map((m) => {
@@ -212,10 +260,49 @@ export function coachTips(s: SimState): Tip[] {
   if (s.activeEvent) {
     tips.push({ kind: "idea", title: "Piyasa olayı aktif", body: `${s.activeEvent.text} Bu pencerede bütçeni buna göre ayarla.` });
   }
+
+  /* --- layer 4 --- */
+  const queue = s.supportQueue ?? 0;
+  if (queue > 12) {
+    tips.push({ kind: "warn", title: "Destek kuyruğu birikti", body: `${Math.round(queue)} bilet bekliyor. Yanıtsız talepler puanı düşürüp iadeleri artırıyor — Operasyon sekmesinden günlük destek bütçesini yükselt ya da destek ekibini işe al.` });
+  } else if ((s.totalOrders ?? 0) > 20 && (s.supportBudget ?? 0) === 0) {
+    tips.push({ kind: "idea", title: "Destek bütçesi sıfır", body: "Sipariş sayın arttı ama hiç destek bütçen yok. Günde 15-30$ ayırmak puanını korur." });
+  }
+  const share = s.share ?? 0;
+  const rivals = marketShare(s).rivals;
+  const leader = [...rivals].sort((a, b) => b.share - a.share)[0];
+  if (leader && leader.share > share + 0.08) {
+    tips.push({ kind: "warn", title: `${leader.c.name} pazarı domine ediyor`, body: `Payı %${(leader.share * 100).toFixed(0)}, seninki %${(share * 100).toFixed(0)}. Fiyatını endekse yaklaştır, bütçeyi kademeli artır ya da puanını yükselt.` });
+  } else if (share > 0.4) {
+    tips.push({ kind: "good", title: "Pazar liderisin", body: `Payın %${(share * 100).toFixed(0)}. Bu momentumda fiyatı biraz yükseltip marj toplayabilirsin.` });
+  }
+  const brand = s.brand ?? 0;
+  if (brand < 15 && s.history.length > 8) {
+    tips.push({ kind: "idea", title: "Marka değeri zayıf", body: "Marka düşükken organik trafik gelmez ve fiyat esnekliğin yüksek olur. Puanı yüksek tut, stoksuz kalma, aşırı indirimden kaçın." });
+  } else if (brand >= 55) {
+    tips.push({ kind: "good", title: "Marka güçlü", body: `Marka değerin ${Math.round(brand)}. Premium segment payın büyüyor — fiyatı yukarı test etmenin tam zamanı.` });
+  }
+  const mix = s.segmentMix;
+  if (mix && mix.bargain > 0.55) {
+    tips.push({ kind: "idea", title: "Fiyat avcısı ağırlıklı kitle", body: "Müşterinin yarıdan fazlası fiyat avcısı: iade oranı yüksek, sadakat düşük. Fiyatı biraz yükselt ya da Google kanalını dene." });
+  }
+  const sd = ((s.day - 1) % RUN_LENGTH) + 1;
+  if (sd >= 20 && sd < 24) {
+    const stock = s.products.reduce((a, p) => a + p.stock, 0);
+    tips.push({ kind: sd >= 22 && stock < 60 ? "warn" : "idea", title: "Black Friday yaklaşıyor", body: `${24 - sd} gün kaldı. Talep ×2.2 olacak; stok (${stock} birim) ve taze kreatif şimdiden hazır olsun, tedarik süresini unutma.` });
+  }
+  if (s.products.some((p) => p.adBudget > 40 && !p.abTest && !(p.cvrBonus ?? 0))) {
+    tips.push({ kind: "idea", title: "A/B testi yapmadın", body: "Bütçe akarken kreatif testi yapmamak kalıcı dönüşüm kazancını kaçırmak demek. Reklam sekmesinden varyant testi başlat." });
+  }
+  if (s.status === "finished" && !(s.endless ?? false)) {
+    tips.push({ kind: "good", title: "Sonsuz mod açılabilir", body: "Sezonu bitirdin. 'Sezona devam et' ile takvim baştan işler, skorun ve mağazan korunur." });
+  }
+
   if (tips.length === 0) {
     tips.push({ kind: "good", title: "Panel temiz", body: "Kritik bir uyarı yok. Günleri ilerlet ve analitikte dönüşüm eğilimini izle." });
   }
-  return tips.slice(0, 6);
+  return tips.slice(0, 8);
+
 }
 
 /* ---------------- Hall of fame ---------------- */

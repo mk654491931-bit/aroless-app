@@ -67,6 +67,10 @@ export type StoreProduct = {
   lastBudget?: number;          // budget of previous day (scaling penalty)
   returnPool?: number;          // happy customers that may buy again
   repeatOrders?: number;        // lifetime repeat orders
+  /* --- layer 4 --- */
+  cvrBonus?: number;            // permanent CVR lift won from A/B tests
+  abTest?: { startDay: number; a: number; b: number } | null;
+
 };
 
 export type AdChannel = "meta" | "tiktok" | "google";
@@ -124,7 +128,43 @@ export type SimState = {
   lastCampaignDay?: number;
   /** rakip fiyat endeksi: 1 = piyasa referansı */
   marketIndex?: number;
+  /* --- layer 4: living market, brand, ops, seasons --- */
+  competitors?: Competitor[];
+  /** 0..100 marka değeri */
+  brand?: number;
+  /** senin pazar payın 0..1 */
+  share?: number;
+  /** bekleyen destek talebi */
+  supportQueue?: number;
+  /** günlük destek bütçesi ($) */
+  supportBudget?: number;
+  supportResolved?: number;
+  slaBreaches?: number;
+  segmentMix?: { bargain: number; mainstream: number; premium: number };
+  abWins?: number;
+  season?: number;
+  endless?: boolean;
 };
+
+export type Competitor = {
+  id: string;
+  name: string;
+  emoji: string;
+  /** fiyat endeksi (1 = referans) */
+  price: number;
+  /** reklam gücü 0..100 */
+  adPower: number;
+  /** 0..1 saldırganlık */
+  aggression: number;
+  share: number;
+  rating: number;
+};
+
+const COMPETITOR_SEED: Omit<Competitor, "share">[] = [
+  { id: "nova",  name: "NovaMart",    emoji: "🛒", price: 1.02, adPower: 42, aggression: 0.45, rating: 4.3 },
+  { id: "drop",  name: "DropKing",    emoji: "👑", price: 0.93, adPower: 55, aggression: 0.75, rating: 3.9 },
+  { id: "lux",   name: "Lumière Co.", emoji: "✨", price: 1.14, adPower: 34, aggression: 0.3,  rating: 4.7 },
+];
 
 export const RUN_LENGTH = 30;
 
@@ -146,9 +186,125 @@ export function newRun(storeName: string, difficulty: Difficulty): SimState {
     upgrades: [],
     subscribers: 0,
     marketIndex: 1,
+    competitors: COMPETITOR_SEED.map((c) => ({ ...c, share: 0.25 })),
+    brand: 8,
+    share: 0.25,
+    supportQueue: 0,
+    supportBudget: 0,
+    supportResolved: 0,
+    slaBreaches: 0,
+    segmentMix: { bargain: 0.34, mainstream: 0.44, premium: 0.22 },
+    abWins: 0,
+    season: 1,
+    endless: false,
     status: "running",
   };
 }
+
+/* ---------------- Customer segments ---------------- */
+
+export type SegmentId = "bargain" | "mainstream" | "premium";
+
+export const SEGMENTS: Record<SegmentId, {
+  label: string; blurb: string; weight: number; elasticity: number; refundBias: number;
+  channel: Record<AdChannel, number>; aovMult: number;
+}> = {
+  bargain: {
+    label: "Fiyat avcısı", blurb: "Endeksin altına inersen akın eder; iade oranı yüksek, sadakati düşük.",
+    weight: 0.36, elasticity: 1.75, refundBias: 1.35, channel: { meta: 1, tiktok: 1.3, google: 0.75 }, aovMult: 0.9,
+  },
+  mainstream: {
+    label: "Ana akım", blurb: "Fiyat/puan dengesine bakar. Mağazanın omurgası.",
+    weight: 0.44, elasticity: 1, refundBias: 1, channel: { meta: 1.2, tiktok: 1, google: 1.05 }, aovMult: 1,
+  },
+  premium: {
+    label: "Premium", blurb: "Marka ve puana bakar, fiyata az duyarlı; iade etmez, geri gelir.",
+    weight: 0.2, elasticity: 0.45, refundBias: 0.6, channel: { meta: 0.95, tiktok: 0.6, google: 1.35 }, aovMult: 1.22,
+  },
+};
+
+/* ---------------- Season calendar ---------------- */
+
+export type CalendarEvent = {
+  day: number; days: number; title: string; blurb: string;
+  demandMult?: number; cpcMult?: number; cvrMult?: number; leadTimeAdd?: number;
+};
+
+export const CALENDAR: CalendarEvent[] = [
+  { day: 11, days: 2, title: "Flaş indirim penceresi", blurb: "Pazaryeri kampanya trafiği: talep artar, tıklama biraz pahalanır.", demandMult: 1.35, cpcMult: 1.1, cvrMult: 1.1 },
+  { day: 18, days: 3, title: "Tedarikçi tatili", blurb: "Fabrikalar kapalı: bu günlerde verilen siparişler +3 gün gecikir.", leadTimeAdd: 3 },
+  { day: 24, days: 2, title: "Black Friday", blurb: "Yılın en yoğun günü: talep patlar ama reklam açık artırması kızışır.", demandMult: 2.2, cpcMult: 1.6, cvrMult: 1.15 },
+];
+
+/** Sezon içindeki gün (sonsuz modda 30'da bir başa sarar). */
+export const seasonDayOf = (day: number) => ((day - 1) % RUN_LENGTH) + 1;
+
+export function calendarFor(day: number): CalendarEvent | undefined {
+  const sd = seasonDayOf(day);
+  return CALENDAR.find((c) => sd >= c.day && sd < c.day + c.days);
+}
+
+/** Sezon bittiğinde oyuna devam et: yeni 30 günlük hedef açılır. */
+export function continueSeason(state: SimState): SimState {
+  if (state.status === "bankrupt") return state;
+  const season = (state.season ?? 1) + 1;
+  return {
+    ...state,
+    status: "running",
+    endless: true,
+    season,
+    log: [...state.log, { day: state.day, kind: "info" as const, text: `Sezon ${season} başladı — takvim baştan işliyor, skorun birikmeye devam ediyor.` }].slice(-120),
+  };
+}
+
+/** Kim pazarın ne kadarını alıyor? */
+export function marketShare(s: SimState): { you: number; rivals: { c: Competitor; share: number }[] } {
+  const comps = s.competitors ?? [];
+  const listed = s.products.filter((p) => p.listed);
+  const avgRating = listed.length ? listed.reduce((a, p) => a + p.rating, 0) / listed.length : 3.5;
+  const avgRatio = listed.length
+    ? listed.reduce((a, p) => a + p.price / Math.max(0.01, p.recommendedPrice), 0) / listed.length
+    : 1.2;
+  const ads = listed.reduce((a, p) => a + p.adBudget, 0);
+  const brand = s.brand ?? 0;
+  const youStrength = Math.max(0.5, (ads * 0.25 + 6) * (avgRating / 4.2) * (1 + brand / 90) / Math.max(0.5, avgRatio));
+  const rivalStrengths = comps.map((c) => Math.max(0.5, c.adPower * 0.42 * (c.rating / 4.2) / Math.max(0.5, c.price)));
+  const total = youStrength + rivalStrengths.reduce((a, b) => a + b, 0);
+  return {
+    you: youStrength / total,
+    rivals: comps.map((c, i) => ({ c, share: rivalStrengths[i] / total })),
+  };
+}
+
+/* ---------------- A/B creative testing ---------------- */
+
+export const AB_TEST_COST = 70;
+export const AB_TEST_DAYS = 3;
+
+export function startAbTest(state: SimState, productId: string): { state: SimState; error?: string } {
+  const p = state.products.find((x) => x.id === productId);
+  if (!p) return { state };
+  if (p.abTest) return { state, error: "Bu üründe zaten bir test yayında." };
+  if (p.adBudget <= 0) return { state, error: "Test için önce reklam bütçesi aç." };
+  if (state.cash < AB_TEST_COST) return { state, error: "A/B testi için yeterli nakit yok." };
+  const a = Math.round(rnd(-0.04, 0.18) * 1000) / 1000;
+  const b = Math.round(rnd(-0.04, 0.18) * 1000) / 1000;
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - AB_TEST_COST) * 100) / 100,
+      products: state.products.map((x) => (x.id === productId ? { ...x, abTest: { startDay: state.day, a, b } } : x)),
+      log: [...state.log, { day: state.day, kind: "info" as const, text: `${p.name}: iki kreatif varyantı test ediliyor (${AB_TEST_DAYS} gün, -$${AB_TEST_COST}).` }].slice(-120),
+    },
+  };
+}
+
+/** Günlük destek bütçesini ayarla (bilet başı ~$3.2 kapasite). */
+export const SUPPORT_TICKET_COST = 3.2;
+export function setSupportBudget(state: SimState, amount: number): SimState {
+  return { ...state, supportBudget: Math.max(0, Math.round(amount)) };
+}
+
 
 export function productFromWinner(p: WinningProduct): StoreProduct {
   const cost = Math.max(0.5, parseMoneyNum(p.supplier_price_usd));
@@ -180,7 +336,10 @@ export function productFromWinner(p: WinningProduct): StoreProduct {
     lastBudget: 0,
     returnPool: 0,
     repeatOrders: 0,
+    cvrBonus: 0,
+    abTest: null,
   };
+
 }
 
 const rnd = (min: number, max: number) => min + Math.random() * (max - min);
@@ -237,16 +396,44 @@ export function simulateDay(prev: SimState): DayResult {
 
   const dow = weekdayDemand(day);
 
-  // 2b. Rakip fiyat endeksi: piyasa referans fiyatı gün gün kayar
+  // 2b. Yaşayan rakipler: her mağaza fiyatını, bütçesini ve puanını günceller
   const prevIndex = s.marketIndex ?? 1;
-  const drift = prevIndex > 1.05 ? -0.012 : prevIndex < 0.9 ? 0.014 : 0;
-  s.marketIndex = Math.max(0.78, Math.min(1.22, prevIndex + drift + rnd(-0.035, 0.03)));
+  const yourAvgRatio = (() => {
+    const listed = s.products.filter((x) => x.listed);
+    if (!listed.length) return 1;
+    return listed.reduce((a, x) => a + x.price / Math.max(0.01, x.recommendedPrice), 0) / listed.length;
+  })();
+  const comps = (s.competitors ?? COMPETITOR_SEED.map((c) => ({ ...c, share: 0.25 }))).map((c) => ({ ...c }));
+  for (const c of comps) {
+    // seni pahalı görürse altını keser, ucuz görürse marj toplar
+    const target = yourAvgRatio - c.aggression * 0.12 + rnd(-0.03, 0.03);
+    c.price = Math.max(0.7, Math.min(1.35, c.price + (target - c.price) * (0.12 + c.aggression * 0.2)));
+    c.adPower = Math.max(10, Math.min(100, c.adPower + rnd(-4, 4) + (c.aggression - 0.5) * 3));
+    c.rating = Math.max(3, Math.min(5, c.rating + rnd(-0.05, 0.05)));
+  }
+  s.competitors = comps;
+  s.marketIndex = Math.max(0.75, Math.min(1.3, comps.reduce((a, c) => a + c.price, 0) / Math.max(1, comps.length)));
   if (s.marketIndex < 0.9 && prevIndex >= 0.9) {
-    events.push({ day, kind: "bad", text: `Rakipler fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
+    const worst = [...comps].sort((a, b) => a.price - b.price)[0];
+    events.push({ day, kind: "bad", text: `${worst?.name ?? "Rakipler"} fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
   } else if (s.marketIndex > 1.1 && prevIndex <= 1.1) {
     events.push({ day, kind: "good", text: `Piyasa fiyatları yükseldi (endeks ${s.marketIndex.toFixed(2)}) — zam yapma fırsatı.` });
   }
   const marketIndex = s.marketIndex;
+
+  // 2c. Sezon takvimi (Black Friday, tedarikçi tatili, flaş indirim)
+  const cal = calendarFor(day);
+  if (cal && seasonDayOf(day) === cal.day) {
+    events.push({ day, kind: cal.leadTimeAdd ? "bad" : "good", text: `${cal.title}: ${cal.blurb}` });
+  }
+  const calDemand = cal?.demandMult ?? 1;
+  const calCpc = cal?.cpcMult ?? 1;
+  const calCvr = cal?.cvrMult ?? 1;
+
+  // 2d. Pazar payı
+  const shareInfo = marketShare(s);
+  s.share = shareInfo.you;
+  const shareMult = 0.75 + shareInfo.you * 1.2;
 
   // yükseltmelerin etkileri
   const upCheckout = hasUpgrade(s, "checkout") ? 1.14 : 1;
@@ -255,6 +442,16 @@ export function simulateDay(prev: SimState): DayResult {
   const upStudio = hasUpgrade(s, "studio") ? 0.55 : 1;
   const upBundle = hasUpgrade(s, "bundle") ? 1.18 : 1;
   const shipCost = cfg.shippingPerUnit * upShipping;
+
+  // marka değeri: organik trafiği ve fiyat toleransını belirler
+  const brand = Math.max(0, Math.min(100, s.brand ?? 0));
+  const brandOrganic = 1 + brand / 90;
+  const brandTolerance = 1 - Math.min(0.45, brand / 240); // yüksek marka = fiyat esnekliği düşer
+  let brandDelta = 0;
+  let tickets = 0;
+  const segTotals = { bargain: 0, mainstream: 0, premium: 0 };
+
+
 
 
   for (const p of s.products) {
@@ -269,44 +466,81 @@ export function simulateDay(prev: SimState): DayResult {
     const jump = prevBudget > 0 ? p.adBudget / prevBudget : 1;
     const scalingPenalty = jump > 1.6 ? 1 + Math.min(0.35, (jump - 1.6) * 0.25) : 1;
 
-    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * (1 + fatigue * 0.65) * scalingPenalty * rnd(0.85, 1.18);
+    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * calCpc * (1 + fatigue * 0.65) * scalingPenalty * (1 - Math.min(0.12, brand / 800)) * rnd(0.85, 1.18);
     const spend = Math.min(p.adBudget, Math.max(0, s.cash + revenue - adSpend));
     const paidVisits = spend > 0 ? spend / cpc : 0;
-    // organic traffic grows with sales history, reviews and trend
+    // organic traffic grows with sales history, reviews, trend and brand equity
     const organic =
-      cfg.organicMult * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
+      cfg.organicMult * brandOrganic * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
     // loyal buyers come back on their own — no ad cost
     const pool = p.returnPool ?? 0;
     const returning = pool * 0.06 * rnd(0.6, 1.4);
-    const traffic = (paidVisits + organic + returning) * dow;
+    const traffic = (paidVisits + organic + returning) * dow * calDemand * shareMult;
 
     // price elasticity: rakip piyasa fiyatına göre pahalı/ucuz olmak dönüşümü belirler
     const ratio = p.price / Math.max(0.01, p.recommendedPrice * marketIndex);
-    const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
+
+    // müşteri segmentleri: fiyat + kanal hangi kitleyi çektiğini belirler
+    const chId = (p.channel ?? "meta") as AdChannel;
+    const segScore: Record<SegmentId, number> = { bargain: 0, mainstream: 0, premium: 0 };
+    for (const key of Object.keys(SEGMENTS) as SegmentId[]) {
+      const seg = SEGMENTS[key];
+      const fit = Math.max(0.05, 1 - Math.abs(ratio - 1) * seg.elasticity)
+        * seg.channel[chId]
+        * (key === "premium" ? 0.6 + brand / 90 + (p.rating - 4) * 0.35 : 1)
+        * (key === "bargain" ? (ratio < 1 ? 1.35 : 0.7) : 1);
+      segScore[key] = Math.max(0.02, seg.weight * fit);
+    }
+    const segSum = segScore.bargain + segScore.mainstream + segScore.premium;
+    const segShare = {
+      bargain: segScore.bargain / segSum,
+      mainstream: segScore.mainstream / segSum,
+      premium: segScore.premium / segSum,
+    };
+    const segCvr = segSum / (SEGMENTS.bargain.weight + SEGMENTS.mainstream.weight + SEGMENTS.premium.weight);
+    const segRefund = segShare.bargain * SEGMENTS.bargain.refundBias
+      + segShare.mainstream * SEGMENTS.mainstream.refundBias
+      + segShare.premium * SEGMENTS.premium.refundBias;
+    const segAov = segShare.bargain * SEGMENTS.bargain.aovMult
+      + segShare.mainstream * SEGMENTS.mainstream.aovMult
+      + segShare.premium * SEGMENTS.premium.aovMult;
+
+    const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio * brandTolerance));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
     const fatigueMult = 1 - fatigue * 0.5;
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * upCheckout * rnd(0.75, 1.3);
+    const abSplit = p.abTest ? 0.96 : 1; // test sırasında trafik bölünür
+    const cvr = (p.baseCvrPct / 100) * (1 + (p.cvrBonus ?? 0)) * priceMult * ratingMult * ch.cvrMult
+      * fatigueMult * segCvr * evCvr * calCvr * upCheckout * abSplit * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
       if (p.stock === 0 && wanted > 0) {
         p.stockouts += 1;
         p.rating = Math.max(1, p.rating - 0.12);
+        brandDelta -= 1.6;
         events.push({ day, kind: "bad", text: `${p.name} sold out — ${wanted} buyers left empty-handed.` });
       }
       wanted = p.stock;
     }
 
-    const refundRate = cfg.refundBase * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1);
+    const refundRate = cfg.refundBase * segRefund * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1)
+      * (1 + Math.min(0.8, (s.supportQueue ?? 0) / 60));
     const refundUnits = Math.round(wanted * refundRate);
     const netUnits = wanted - refundUnits;
-    const aov = p.price * upBundle; // paket/üst satış ortalama sepeti büyütür
+    const aov = p.price * upBundle * segAov; // paket/üst satış + segment karışımı sepeti belirler
+
+    segTotals.bargain += segShare.bargain * Math.max(1, wanted);
+    segTotals.mainstream += segShare.mainstream * Math.max(1, wanted);
+    segTotals.premium += segShare.premium * Math.max(1, wanted);
 
     p.stock -= wanted;
     p.stock += refundUnits; // returned to stock
     p.unitsSold += netUnits;
     p.unitsRefunded += refundUnits;
     p.revenue += netUnits * aov;
+
+    // destek talepleri: her siparişin bir kısmı yanıt bekler
+    tickets += netUnits * 0.22 + refundUnits * 0.8;
 
     // reviews accumulate on ~18% of net orders
     const newReviews = Math.round(netUnits * 0.18);
@@ -315,6 +549,27 @@ export function simulateDay(prev: SimState): DayResult {
       const target = Math.max(2, Math.min(5, valueScore + rnd(-0.3, 0.3)));
       p.rating = (p.rating * p.reviews + target * newReviews) / (p.reviews + newReviews);
       p.reviews += newReviews;
+    }
+
+    // marka değeri: memnun müşteri ve premium karışım büyütür, iade ve dampingli fiyat düşürür
+    brandDelta += netUnits * 0.05 * (p.rating >= 4.4 ? 1.4 : p.rating >= 4 ? 1 : 0.2)
+      + segShare.premium * 0.5
+      - refundUnits * 0.12
+      - (ratio < 0.78 ? 0.5 : 0);
+
+    // A/B testi sonucu
+    if (p.abTest && day >= p.abTest.startDay + AB_TEST_DAYS) {
+      const winner = Math.max(p.abTest.a, p.abTest.b);
+      p.cvrBonus = Math.round(Math.min(0.6, (p.cvrBonus ?? 0) + Math.max(0, winner)) * 1000) / 1000;
+      p.fatigue = Math.max(0, (p.fatigue ?? 0) - 0.3);
+      p.abTest = null;
+      if (winner > 0.02) {
+        s.abWins = (s.abWins ?? 0) + 1;
+        brandDelta += 0.6;
+        events.push({ day, kind: "good", text: `${p.name}: A/B testi bitti — kazanan varyant dönüşümü kalıcı olarak %${(winner * 100).toFixed(0)} artırdı.` });
+      } else {
+        events.push({ day, kind: "bad", text: `${p.name}: A/B testinde iki varyant da mevcut kreatifi geçemedi.` });
+      }
     }
 
     // creative fatigue: burns while spending, cools down when paused
@@ -330,7 +585,7 @@ export function simulateDay(prev: SimState): DayResult {
 
     // loyalty: happy buyers join the return pool, unhappy ones leave it
     const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
-    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty * upRetention);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * (0.5 + segShare.premium * 0.4) * loyalty * upRetention);
     p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
 
     // e-posta listesi: her siparişin bir kısmı aboneye dönüşür
@@ -345,6 +600,48 @@ export function simulateDay(prev: SimState): DayResult {
     cogs += 0; // COGS is paid when inventory is purchased
   }
 
+  // 3b. Destek operasyonu: bütçe + ekip kapasitesi kadar bilet kapanır
+  let supportCost = 0;
+  {
+    const queue = (s.supportQueue ?? 0) + tickets;
+    const freeCap = hasUpgrade(s, "support") ? 14 : 0;
+    const paidCap = Math.floor((s.supportBudget ?? 0) / SUPPORT_TICKET_COST);
+    const resolved = Math.min(queue, freeCap + paidCap);
+    const paidResolved = Math.max(0, resolved - freeCap);
+    supportCost = Math.round(paidResolved * SUPPORT_TICKET_COST * 100) / 100;
+    s.supportQueue = Math.max(0, Math.round((queue - resolved) * 10) / 10);
+    s.supportResolved = Math.round((s.supportResolved ?? 0) + resolved);
+    if (s.supportQueue > 15) {
+      s.slaBreaches = (s.slaBreaches ?? 0) + 1;
+      brandDelta -= 1.2 + s.supportQueue * 0.02;
+      for (const p of s.products) p.rating = Math.max(1, p.rating - 0.05);
+      if (s.supportQueue > 15 && (s.slaBreaches ?? 0) % 3 === 1) {
+        events.push({ day, kind: "bad", text: `Destek kuyruğu ${Math.round(s.supportQueue)} bilete çıktı — puanlar düşüyor, iadeler artıyor. Destek bütçesini yükselt.` });
+      }
+    } else if (resolved > 0 && s.supportQueue === 0) {
+      brandDelta += 0.35;
+    }
+  }
+
+  // 3c. Marka değeri güncellenir
+  const brandBefore = brand;
+  s.brand = Math.max(0, Math.min(100, brand + brandDelta * 0.6 - 0.15 + (hasUpgrade(s, "brandkit") ? 1.2 : 0)));
+  if (Math.floor(s.brand / 20) > Math.floor(brandBefore / 20)) {
+    events.push({ day, kind: "good", text: `Marka değerin ${Math.round(s.brand)} seviyesine çıktı — organik trafik ve fiyat toleransı arttı.` });
+  }
+
+  // 3d. Segment karışımı kaydedilir
+  const segAll = segTotals.bargain + segTotals.mainstream + segTotals.premium;
+  if (segAll > 0) {
+    s.segmentMix = {
+      bargain: segTotals.bargain / segAll,
+      mainstream: segTotals.mainstream / segAll,
+      premium: segTotals.premium / segAll,
+    };
+  }
+
+
+
 
   // kredi faizi her gün işler
   let interest = 0;
@@ -358,7 +655,7 @@ export function simulateDay(prev: SimState): DayResult {
   // liste doğal olarak erir
   s.subscribers = Math.max(0, (s.subscribers ?? 0) * 0.992);
 
-  const fixed = cfg.dailyFixedCost + interest;
+  const fixed = cfg.dailyFixedCost + interest + supportCost;
   const profit = revenue - adSpend - fees - refundAmt - fixed;
   s.cash = Math.round((s.cash + profit) * 100) / 100;
   s.totalRevenue += revenue;
@@ -380,19 +677,22 @@ export function simulateDay(prev: SimState): DayResult {
   s.history.push(record);
   s.day = day + 1;
 
+  const seasonEnd = RUN_LENGTH * (s.season ?? 1);
   if (s.cash < 0) {
     s.status = "bankrupt";
     events.push({ day, kind: "bad", text: "You ran out of cash. The store is insolvent." });
-  } else if (s.day > RUN_LENGTH) {
+  } else if (s.day > seasonEnd) {
     s.status = "finished";
+    const target = cfg.targetProfit * (s.season ?? 1);
     events.push({
       day,
-      kind: s.totalProfit >= cfg.targetProfit ? "good" : "bad",
-      text: s.totalProfit >= cfg.targetProfit
-        ? `30-day run complete — target beaten with $${s.totalProfit.toFixed(0)} net profit.`
-        : `30-day run complete — $${s.totalProfit.toFixed(0)} net profit vs $${cfg.targetProfit} target.`,
+      kind: s.totalProfit >= target ? "good" : "bad",
+      text: s.totalProfit >= target
+        ? `Sezon ${s.season ?? 1} tamamlandı — hedef aşıldı, toplam net kâr $${s.totalProfit.toFixed(0)}.`
+        : `Sezon ${s.season ?? 1} tamamlandı — $${s.totalProfit.toFixed(0)} net kâr / $${target.toFixed(0)} hedef.`,
     });
   }
+
 
   // strategic decision card (player choice) — one at a time
   if (s.status === "running" && !s.pendingDecision && s.products.length > 0 && day > 2 && Math.random() < 0.16) {
@@ -410,7 +710,9 @@ export function restock(state: SimState, productId: string, qty: number): { stat
   if (!p || qty <= 0) return { state };
   const bulkDiscount = qty >= 100 ? 0.85 : qty >= 50 ? 0.92 : 1;
   const supplierMult = hasUpgrade(state, "supplier") ? 0.94 : 1;
-  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0));
+  const holidayAdd = calendarFor(state.day)?.leadTimeAdd ?? 0;
+  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0) + holidayAdd);
+
   const unitCost = Math.round(p.unitCost * bulkDiscount * supplierMult * 100) / 100;
   const total = unitCost * qty;
   if (total > state.cash) return { state, error: "Not enough cash for that purchase order." };
@@ -578,7 +880,7 @@ export function refreshCreative(state: SimState, productId: string): { state: Si
 /* ---------------- Growth systems: upgrades, financing, CRM ---------------- */
 
 export type UpgradeId =
-  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle";
+  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle" | "support" | "brandkit";
 
 export type Upgrade = {
   id: UpgradeId;
@@ -595,7 +897,10 @@ export const UPGRADES: Upgrade[] = [
   { id: "retention", title: "Sadakat programı",     blurb: "Geri dönen müşteri havuzu +%60 daha hızlı büyür.",  cost: 240, icon: "💎" },
   { id: "studio",    title: "İçerik stüdyosu",      blurb: "Kreatif yorulması -%45, kreatif çekimi ücretsiz.",  cost: 320, icon: "🎬" },
   { id: "bundle",    title: "Paket & üst satış",    blurb: "Sipariş başı ortalama sepet +%18.",                 cost: 280, icon: "🎁" },
+  { id: "support",   title: "Destek ekibi",         blurb: "Her gün 14 destek bileti ücretsiz kapanır.",        cost: 250, icon: "🎧" },
+  { id: "brandkit",  title: "Marka kimliği",        blurb: "Marka değeri her gün +1.2 daha hızlı büyür.",       cost: 290, icon: "🏷️" },
 ];
+
 
 export const hasUpgrade = (s: SimState, id: UpgradeId) => (s.upgrades ?? []).includes(id);
 
