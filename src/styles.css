@@ -769,28 +769,76 @@ html, body, .premium-card, .glass {
   to   { left: 85%; opacity: 0.55; }
 }
 
+/* Ek premium arka plan katmanları */
+.auth-orbits {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  opacity: 0.5;
+}
+.auth-orbits span {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--brand) 22%, transparent);
+  box-shadow: 0 0 60px -20px color-mix(in oklab, var(--brand-2) 60%, transparent) inset;
+  animation: orbit-spin 40s linear infinite;
+}
+.auth-orbits span:nth-child(1) { width: 46rem; height: 46rem; }
+.auth-orbits span:nth-child(2) { width: 32rem; height: 32rem; animation-duration: 28s; animation-direction: reverse; border-color: color-mix(in oklab, var(--brand-2) 24%, transparent); }
+.auth-orbits span:nth-child(3) { width: 20rem; height: 20rem; animation-duration: 18s; border-color: color-mix(in oklab, var(--accent-active) 28%, transparent); }
+@keyframes orbit-spin {
+  from { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.06); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+
+.auth-shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, oklch(1 0 0 / 0.06) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: shine-sweep 9s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.auth-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 40%, oklch(0 0 0 / 0.55) 100%);
+}
+
 /* Harf harf beliren VELORA yazısı */
 .velora-letter {
   display: inline-block;
   opacity: 0;
-  transform: translateY(0.4em) rotateX(-70deg);
-  animation: letter-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(0.5em) rotateX(-70deg) scale(0.92);
+  animation: letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.5, 1), filter 0.35s ease;
+}
+.velora-letter:hover {
+  transform: translateY(-6px) scale(1.06);
+  filter: drop-shadow(0 8px 22px color-mix(in oklab, var(--brand) 70%, transparent));
 }
 @keyframes letter-in {
   to { opacity: 1; transform: none; }
 }
 .velora-shine {
   background: linear-gradient(100deg,
-    var(--foreground) 0%, var(--foreground) 38%,
-    var(--brand) 50%, var(--brand-2) 58%,
-    var(--foreground) 70%, var(--foreground) 100%);
+    var(--foreground) 0%, var(--foreground) 32%,
+    oklch(1 0 0) 44%,
+    var(--brand) 52%, var(--brand-2) 60%,
+    var(--foreground) 72%, var(--foreground) 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 .velora-letter.velora-shine {
-  animation: letter-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+  animation: letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards,
              velora-shine 6s ease-in-out infinite;
 }
 @keyframes velora-shine {
@@ -798,7 +846,32 @@ html, body, .premium-card, .glass {
   50% { background-position: 0% 0; }
 }
 
+/* Başlığın arkasındaki nefes alan hale */
+.velora-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120%;
+  height: 220%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, color-mix(in oklab, var(--brand) 45%, transparent), transparent 68%);
+  filter: blur(46px);
+  opacity: 0.4;
+  animation: pulse-soft 4.5s ease-in-out infinite;
+}
+
+/* Başlık altındaki ışıklı çizgi */
+.velora-underline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand), var(--brand-2), transparent);
+  background-size: 200% 100%;
+  animation: aurora-pan 6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .auth-aurora, .auth-grid, .auth-beam, .velora-shine { animation: none; }
+  .auth-aurora, .auth-grid, .auth-beam, .velora-shine,
+  .auth-orbits span, .auth-shimmer, .velora-halo, .velora-underline { animation: none; }
   .velora-letter { animation-duration: 0.01s; }
 }
+
