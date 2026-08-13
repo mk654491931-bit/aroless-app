@@ -143,6 +143,9 @@ export function newRun(storeName: string, difficulty: Difficulty): SimState {
     totalProfit: 0,
     totalOrders: 0,
     spentOnInventory: 0,
+    upgrades: [],
+    subscribers: 0,
+    marketIndex: 1,
     status: "running",
   };
 }
@@ -406,7 +409,9 @@ export function restock(state: SimState, productId: string, qty: number): { stat
   const p = state.products.find((x) => x.id === productId);
   if (!p || qty <= 0) return { state };
   const bulkDiscount = qty >= 100 ? 0.85 : qty >= 50 ? 0.92 : 1;
-  const unitCost = Math.round(p.unitCost * bulkDiscount * 100) / 100;
+  const supplierMult = hasUpgrade(state, "supplier") ? 0.94 : 1;
+  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0));
+  const unitCost = Math.round(p.unitCost * bulkDiscount * supplierMult * 100) / 100;
   const total = unitCost * qty;
   if (total > state.cash) return { state, error: "Not enough cash for that purchase order." };
   const next: SimState = {
@@ -416,7 +421,7 @@ export function restock(state: SimState, productId: string, qty: number): { stat
     totalProfit: state.totalProfit, // inventory is an asset swap until sold
     products: state.products.map((x) =>
       x.id === productId
-        ? { ...x, incoming: [...x.incoming, { qty, arrivesDay: state.day + cfg.leadTimeDays, unitCost }] }
+        ? { ...x, incoming: [...x.incoming, { qty, arrivesDay: state.day + leadTime, unitCost }] }
         : x,
     ),
     log: [
@@ -424,7 +429,7 @@ export function restock(state: SimState, productId: string, qty: number): { stat
       {
         day: state.day,
         kind: "info" as const,
-        text: `Ordered ${qty}× ${p.name} for $${total.toFixed(2)} (arrives day ${state.day + cfg.leadTimeDays}).`,
+        text: `Ordered ${qty}× ${p.name} for $${total.toFixed(2)} (arrives day ${state.day + leadTime}).`,
       },
     ],
   };
@@ -550,6 +555,15 @@ export function applyDecision(state: SimState, optionIndex: number): SimState {
 export function refreshCreative(state: SimState, productId: string): { state: SimState; error?: string } {
   const p = state.products.find((x) => x.id === productId);
   if (!p) return { state };
+  if (hasUpgrade(state, "studio")) {
+    return {
+      state: {
+        ...state,
+        products: state.products.map((x) => (x.id === productId ? { ...x, fatigue: 0 } : x)),
+        log: [...state.log, { day: state.day, kind: "good" as const, text: `${p.name} için stüdyoda ücretsiz yeni kreatif çekildi.` }].slice(-120),
+      },
+    };
+  }
   if (state.cash < CREATIVE_COST) return { state, error: "Kreatif çekimi için yeterli nakit yok." };
   return {
     state: {
