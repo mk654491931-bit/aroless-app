@@ -855,11 +855,13 @@ const Stat = ({ label, value, tone }: { label: string; value: string; tone?: "go
 
 /* ---------------- Ads & pricing ---------------- */
 
-function AdsView({ state, onPatch, onRefresh }: {
+function AdsView({ state, onPatch, onRefresh, onAbTest }: {
   state: SimState;
   onPatch: (id: string, f: Partial<StoreProduct>) => void;
   onRefresh: (id: string) => void;
+  onAbTest: (id: string) => void;
 }) {
+
   const cfg = DIFFICULTIES[state.difficulty];
   const total = state.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
   const runway = total > 0 ? state.cash / total : Infinity;
