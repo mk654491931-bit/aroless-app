@@ -396,16 +396,44 @@ export function simulateDay(prev: SimState): DayResult {
 
   const dow = weekdayDemand(day);
 
-  // 2b. Rakip fiyat endeksi: piyasa referans fiyatı gün gün kayar
+  // 2b. Yaşayan rakipler: her mağaza fiyatını, bütçesini ve puanını günceller
   const prevIndex = s.marketIndex ?? 1;
-  const drift = prevIndex > 1.05 ? -0.012 : prevIndex < 0.9 ? 0.014 : 0;
-  s.marketIndex = Math.max(0.78, Math.min(1.22, prevIndex + drift + rnd(-0.035, 0.03)));
+  const yourAvgRatio = (() => {
+    const listed = s.products.filter((x) => x.listed);
+    if (!listed.length) return 1;
+    return listed.reduce((a, x) => a + x.price / Math.max(0.01, x.recommendedPrice), 0) / listed.length;
+  })();
+  const comps = (s.competitors ?? COMPETITOR_SEED.map((c) => ({ ...c, share: 0.25 }))).map((c) => ({ ...c }));
+  for (const c of comps) {
+    // seni pahalı görürse altını keser, ucuz görürse marj toplar
+    const target = yourAvgRatio - c.aggression * 0.12 + rnd(-0.03, 0.03);
+    c.price = Math.max(0.7, Math.min(1.35, c.price + (target - c.price) * (0.12 + c.aggression * 0.2)));
+    c.adPower = Math.max(10, Math.min(100, c.adPower + rnd(-4, 4) + (c.aggression - 0.5) * 3));
+    c.rating = Math.max(3, Math.min(5, c.rating + rnd(-0.05, 0.05)));
+  }
+  s.competitors = comps;
+  s.marketIndex = Math.max(0.75, Math.min(1.3, comps.reduce((a, c) => a + c.price, 0) / Math.max(1, comps.length)));
   if (s.marketIndex < 0.9 && prevIndex >= 0.9) {
-    events.push({ day, kind: "bad", text: `Rakipler fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
+    const worst = [...comps].sort((a, b) => a.price - b.price)[0];
+    events.push({ day, kind: "bad", text: `${worst?.name ?? "Rakipler"} fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
   } else if (s.marketIndex > 1.1 && prevIndex <= 1.1) {
     events.push({ day, kind: "good", text: `Piyasa fiyatları yükseldi (endeks ${s.marketIndex.toFixed(2)}) — zam yapma fırsatı.` });
   }
   const marketIndex = s.marketIndex;
+
+  // 2c. Sezon takvimi (Black Friday, tedarikçi tatili, flaş indirim)
+  const cal = calendarFor(day);
+  if (cal && seasonDayOf(day) === cal.day) {
+    events.push({ day, kind: cal.leadTimeAdd ? "bad" : "good", text: `${cal.title}: ${cal.blurb}` });
+  }
+  const calDemand = cal?.demandMult ?? 1;
+  const calCpc = cal?.cpcMult ?? 1;
+  const calCvr = cal?.cvrMult ?? 1;
+
+  // 2d. Pazar payı
+  const shareInfo = marketShare(s);
+  s.share = shareInfo.you;
+  const shareMult = 0.75 + shareInfo.you * 1.2;
 
   // yükseltmelerin etkileri
   const upCheckout = hasUpgrade(s, "checkout") ? 1.14 : 1;
@@ -414,6 +442,16 @@ export function simulateDay(prev: SimState): DayResult {
   const upStudio = hasUpgrade(s, "studio") ? 0.55 : 1;
   const upBundle = hasUpgrade(s, "bundle") ? 1.18 : 1;
   const shipCost = cfg.shippingPerUnit * upShipping;
+
+  // marka değeri: organik trafiği ve fiyat toleransını belirler
+  const brand = Math.max(0, Math.min(100, s.brand ?? 0));
+  const brandOrganic = 1 + brand / 90;
+  const brandTolerance = 1 - Math.min(0.45, brand / 240); // yüksek marka = fiyat esnekliği düşer
+  let brandDelta = 0;
+  let tickets = 0;
+  const segTotals = { bargain: 0, mainstream: 0, premium: 0 };
+
+
 
 
   for (const p of s.products) {
