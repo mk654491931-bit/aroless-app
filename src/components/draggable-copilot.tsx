@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bot, Loader2, Send, X } from "lucide-react";
+import { Loader2, Send, X } from "lucide-react";
+import { VeloraMark } from "@/components/velora-mark";
 import { askCopilot } from "@/lib/competitor.functions";
 
 type Msg = { role: "user" | "ai"; text: string };
