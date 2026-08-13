@@ -225,23 +225,37 @@ export function simulateDay(prev: SimState): DayResult {
 
   let visitors = 0, orders = 0, revenue = 0, adSpend = 0, cogs = 0, fees = 0, refundAmt = 0;
 
+  const dow = weekdayDemand(day);
+
   for (const p of s.products) {
     if (!p.listed) continue;
 
+    const ch = CHANNELS[p.channel ?? "meta"];
+    const fatigue = Math.max(0, Math.min(0.95, p.fatigue ?? 0));
     const compMult = p.competition === "High" ? 1.35 : p.competition === "Low" ? 0.8 : 1;
-    const cpc = cfg.cpc * compMult * evCpc * rnd(0.85, 1.18);
+
+    // scaling too fast burns money: a >60% budget jump spikes CPC and fatigue
+    const prevBudget = p.lastBudget ?? p.adBudget;
+    const jump = prevBudget > 0 ? p.adBudget / prevBudget : 1;
+    const scalingPenalty = jump > 1.6 ? 1 + Math.min(0.35, (jump - 1.6) * 0.25) : 1;
+
+    const cpc = cfg.cpc * compMult * ch.cpcMult * evCpc * (1 + fatigue * 0.65) * scalingPenalty * rnd(0.85, 1.18);
     const spend = Math.min(p.adBudget, Math.max(0, s.cash + revenue - adSpend));
     const paidVisits = spend > 0 ? spend / cpc : 0;
     // organic traffic grows with sales history, reviews and trend
     const organic =
       cfg.organicMult * (Math.sqrt(p.unitsSold) * 2.2 + p.reviews * 1.1 + (p.trend / 100) * 6) * rnd(0.7, 1.3);
-    const traffic = paidVisits + organic;
+    // loyal buyers come back on their own — no ad cost
+    const pool = p.returnPool ?? 0;
+    const returning = pool * 0.06 * rnd(0.6, 1.4);
+    const traffic = (paidVisits + organic + returning) * dow;
 
     // price elasticity: cheaper than recommended converts better, pricier worse
     const ratio = p.price / Math.max(0.01, p.recommendedPrice);
     const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * evCvr * rnd(0.75, 1.3);
+    const fatigueMult = 1 - fatigue * 0.5;
+    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
@@ -272,6 +286,22 @@ export function simulateDay(prev: SimState): DayResult {
       p.rating = (p.rating * p.reviews + target * newReviews) / (p.reviews + newReviews);
       p.reviews += newReviews;
     }
+
+    // creative fatigue: burns while spending, cools down when paused
+    p.fatigue = Math.max(0, Math.min(0.95,
+      spend > 0
+        ? fatigue + ch.fatigueRate * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
+        : fatigue - 0.09,
+    ));
+    if (p.fatigue > 0.7 && fatigue <= 0.7) {
+      events.push({ day, kind: "bad", text: `${p.name} kreatifi yoruldu — TBM artıyor, dönüşüm düşüyor. Yeni kreatif çek.` });
+    }
+    p.lastBudget = p.adBudget;
+
+    // loyalty: happy buyers join the return pool, unhappy ones leave it
+    const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty);
+    p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
 
     visitors += traffic;
     orders += netUnits;
@@ -316,6 +346,12 @@ export function simulateDay(prev: SimState): DayResult {
         ? `30-day run complete — target beaten with $${s.totalProfit.toFixed(0)} net profit.`
         : `30-day run complete — $${s.totalProfit.toFixed(0)} net profit vs $${cfg.targetProfit} target.`,
     });
+  }
+
+  // strategic decision card (player choice) — one at a time
+  if (s.status === "running" && !s.pendingDecision && s.products.length > 0 && day > 2 && Math.random() < 0.16) {
+    const card = DECISIONS[Math.floor(Math.random() * DECISIONS.length)];
+    s.pendingDecision = { id: card.id, day };
   }
 
   s.log = [...s.log, ...events].slice(-120);
