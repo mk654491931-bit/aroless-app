@@ -749,8 +749,8 @@ html.light.palette-aurora {
              velora-shine 6s ease-in-out infinite;
 }
 @keyframes velora-shine {
-  0%, 100% { background-position: 130% 0; }
-  50% { background-position: -30% 0; }
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
