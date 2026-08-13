@@ -277,12 +277,12 @@ export function simulateDay(prev: SimState): DayResult {
     const returning = pool * 0.06 * rnd(0.6, 1.4);
     const traffic = (paidVisits + organic + returning) * dow;
 
-    // price elasticity: cheaper than recommended converts better, pricier worse
-    const ratio = p.price / Math.max(0.01, p.recommendedPrice);
+    // price elasticity: rakip piyasa fiyatına göre pahalı/ucuz olmak dönüşümü belirler
+    const ratio = p.price / Math.max(0.01, p.recommendedPrice * marketIndex);
     const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
     const fatigueMult = 1 - fatigue * 0.5;
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * rnd(0.75, 1.3);
+    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * upCheckout * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
