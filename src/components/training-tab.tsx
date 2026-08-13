@@ -495,7 +495,7 @@ function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionSt
 function CoachView({ tips, state, onGo }: {
   tips: ReturnType<typeof coachTips>;
   state: SimState;
-  onGo: (v: "storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log") => void;
+  onGo: (v: ViewId) => void;
 }) {
   const cfg = DIFFICULTIES[state.difficulty];
   const week = state.history.slice(-7);
