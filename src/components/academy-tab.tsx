@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  GraduationCap, ChevronDown, Check, CircleDashed, Trophy, Lightbulb,
+  GraduationCap, Check, CircleDashed, Trophy, Lightbulb,
   RotateCcw, PlayCircle, ExternalLink, ListChecks, BookOpen, AlertTriangle, MessageSquare,
   Flame, Zap, Brain, Target, Sparkles, Search, PenLine, ChevronLeft, ChevronRight,
 } from "lucide-react";
