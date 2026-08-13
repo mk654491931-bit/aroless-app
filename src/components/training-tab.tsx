@@ -45,7 +45,7 @@ function load(): SimState | null {
 export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const [state, setState] = useState<SimState | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [view, setView] = useState<"storefront" | "products" | "ads" | "analytics" | "growth" | "missions" | "coach" | "log">("storefront");
+  const [view, setView] = useState<ViewId>("storefront");
   const [storeName, setStoreName] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [busy, setBusy] = useState(false);
