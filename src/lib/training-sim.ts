@@ -517,3 +517,127 @@ export function refreshCreative(state: SimState, productId: string): { state: Si
     },
   };
 }
+
+/* ---------------- Growth systems: upgrades, financing, CRM ---------------- */
+
+export type UpgradeId =
+  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle";
+
+export type Upgrade = {
+  id: UpgradeId;
+  title: string;
+  blurb: string;
+  cost: number;
+  icon: string;
+};
+
+export const UPGRADES: Upgrade[] = [
+  { id: "checkout",  title: "Tek tık ödeme",        blurb: "Sepet terkini azaltır: dönüşüm +%14.",              cost: 220, icon: "⚡" },
+  { id: "logistics", title: "3PL depo anlaşması",   blurb: "Sipariş başı kargo maliyeti -%28.",                 cost: 260, icon: "🚚" },
+  { id: "supplier",  title: "Öncelikli tedarikçi",  blurb: "Teslim süresi -2 gün, birim maliyet -%6.",          cost: 300, icon: "🏭" },
+  { id: "retention", title: "Sadakat programı",     blurb: "Geri dönen müşteri havuzu +%60 daha hızlı büyür.",  cost: 240, icon: "💎" },
+  { id: "studio",    title: "İçerik stüdyosu",      blurb: "Kreatif yorulması -%45, kreatif çekimi ücretsiz.",  cost: 320, icon: "🎬" },
+  { id: "bundle",    title: "Paket & üst satış",    blurb: "Sipariş başı ortalama sepet +%18.",                 cost: 280, icon: "🎁" },
+];
+
+export const hasUpgrade = (s: SimState, id: UpgradeId) => (s.upgrades ?? []).includes(id);
+
+export function buyUpgrade(state: SimState, id: UpgradeId): { state: SimState; error?: string } {
+  const up = UPGRADES.find((u) => u.id === id);
+  if (!up) return { state };
+  if (hasUpgrade(state, id)) return { state, error: "Bu yükseltme zaten aktif." };
+  if (state.cash < up.cost) return { state, error: "Yükseltme için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - up.cost) * 100) / 100,
+      upgrades: [...(state.upgrades ?? []), id],
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `Yükseltme alındı: ${up.title} (-$${up.cost}).` }].slice(-120),
+    },
+  };
+}
+
+export const LOAN_MAX = 1500;
+export const LOAN_DAILY_RATE = 0.014;
+
+export function takeLoan(state: SimState, amount: number): { state: SimState; error?: string } {
+  const owed = state.loan?.balance ?? 0;
+  const room = LOAN_MAX - owed;
+  const amt = Math.floor(Math.max(0, Math.min(room, amount)));
+  if (amt <= 0) return { state, error: "Kredi limitin dolu." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash + amt) * 100) / 100,
+      loan: { balance: Math.round((owed + amt) * 100) / 100, takenDay: state.day, paidInterest: state.loan?.paidInterest ?? 0 },
+      log: [...state.log, { day: state.day, kind: "info" as const, text: `$${amt} işletme kredisi çekildi (günlük %${(LOAN_DAILY_RATE * 100).toFixed(1)} faiz).` }].slice(-120),
+    },
+  };
+}
+
+export function repayLoan(state: SimState, amount: number): { state: SimState; error?: string } {
+  const owed = state.loan?.balance ?? 0;
+  if (owed <= 0) return { state, error: "Ödenecek kredi yok." };
+  const amt = Math.round(Math.max(0, Math.min(owed, Math.min(amount, state.cash))) * 100) / 100;
+  if (amt <= 0) return { state, error: "Ödeme için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - amt) * 100) / 100,
+      loan: { balance: Math.round((owed - amt) * 100) / 100, takenDay: state.loan?.takenDay ?? state.day, paidInterest: state.loan?.paidInterest ?? 0 },
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `Krediden $${amt.toFixed(0)} geri ödendi.` }].slice(-120),
+    },
+  };
+}
+
+export const CAMPAIGN_COOLDOWN = 4;
+
+/** E-posta listene kampanya gönder: anında sipariş yaratır, listeyi bir miktar yorar. */
+export function sendCampaign(state: SimState): { state: SimState; error?: string } {
+  const subs = Math.floor(state.subscribers ?? 0);
+  if (subs < 25) return { state, error: "Liste henüz çok küçük (en az 25 abone gerekir)." };
+  const last = state.lastCampaignDay ?? -99;
+  if (state.day - last < CAMPAIGN_COOLDOWN) {
+    return { state, error: `Listeyi yakma: ${CAMPAIGN_COOLDOWN - (state.day - last)} gün daha beklemelisin.` };
+  }
+  const listed = state.products.filter((p) => p.listed && p.stock > 0);
+  if (!listed.length) return { state, error: "Stokta satılabilir ürün yok." };
+
+  const cfg = DIFFICULTIES[state.difficulty];
+  let orders = 0, revenue = 0, fees = 0;
+  const products = state.products.map((p) => ({ ...p }));
+  let budget = Math.round(subs * (0.045 + Math.random() * 0.03));
+  for (const p of products) {
+    if (budget <= 0) break;
+    if (!p.listed || p.stock <= 0) continue;
+    const take = Math.min(p.stock, Math.ceil(budget / listed.length) || 1);
+    if (take <= 0) continue;
+    p.stock -= take;
+    p.unitsSold += take;
+    p.revenue += take * p.price;
+    p.repeatOrders = (p.repeatOrders ?? 0) + take;
+    orders += take;
+    revenue += take * p.price;
+    fees += take * p.price * cfg.platformFeePct + take * cfg.shippingPerUnit;
+    budget -= take;
+  }
+  const profit = revenue - fees;
+  return {
+    state: {
+      ...state,
+      products,
+      cash: Math.round((state.cash + profit) * 100) / 100,
+      totalRevenue: state.totalRevenue + revenue,
+      totalProfit: state.totalProfit + profit,
+      totalOrders: state.totalOrders + orders,
+      subscribers: Math.max(0, subs * 0.94),
+      lastCampaignDay: state.day,
+      log: [...state.log, {
+        day: state.day, kind: orders > 0 ? "good" as const : "info" as const,
+        text: `E-posta kampanyası gönderildi: ${orders} sipariş, ${money2(revenue)} ciro (reklam maliyeti $0).`,
+      }].slice(-120),
+    },
+  };
+}
+
+const money2 = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
