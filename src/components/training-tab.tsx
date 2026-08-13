@@ -4,7 +4,7 @@ import {
   Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
   Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
   Flag, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle, CalendarDays, Flame, RefreshCw,
-  Rocket, Mail, Landmark, LineChart, Users,
+  Rocket, Mail, Landmark, LineChart, Users, Swords, Headphones, FlaskConical, Gem, PieChart,
 } from "lucide-react";
 import { VeloraMark } from "@/components/velora-mark";
 import { toast } from "sonner";
@@ -15,15 +15,20 @@ import {
   CHANNELS, DECISIONS, CREATIVE_COST, WEEKDAYS, weekdayOf, weekdayDemand,
   UPGRADES, hasUpgrade, buyUpgrade, takeLoan, repayLoan, sendCampaign,
   LOAN_MAX, LOAN_DAILY_RATE, CAMPAIGN_COOLDOWN,
+  CALENDAR, calendarFor, seasonDayOf, marketShare, SEGMENTS,
+  startAbTest, setSupportBudget, continueSeason,
+  AB_TEST_COST, AB_TEST_DAYS, SUPPORT_TICKET_COST,
   type AdChannel, type Difficulty, type SimState, type StoreProduct,
 } from "@/lib/training-sim";
 import {
   computeXp, levelFromXp, missionState, coachTips, loadHof, saveHof, type RunResult,
 } from "@/lib/training-meta";
 
+type ViewId = "storefront" | "products" | "ads" | "analytics" | "market" | "ops" | "growth" | "missions" | "coach" | "log";
 
 const KEY = "omni-training-run-v1";
 const VeloraIcon = ({ size = 14 }: { size?: number }) => <VeloraMark size={size} />;
+
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
