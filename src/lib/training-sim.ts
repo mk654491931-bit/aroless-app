@@ -117,6 +117,13 @@ export type SimState = {
   pendingDecision?: { id: string; day: number };
   decisionsTaken?: number;
   activeEvent?: { text: string; daysLeft: number; cpcMult: number; cvrMult: number };
+  /* --- growth systems --- */
+  upgrades?: UpgradeId[];
+  loan?: { balance: number; takenDay: number; paidInterest: number };
+  subscribers?: number;
+  lastCampaignDay?: number;
+  /** rakip fiyat endeksi: 1 = piyasa referansı */
+  marketIndex?: number;
 };
 
 export const RUN_LENGTH = 30;
@@ -136,6 +143,9 @@ export function newRun(storeName: string, difficulty: Difficulty): SimState {
     totalProfit: 0,
     totalOrders: 0,
     spentOnInventory: 0,
+    upgrades: [],
+    subscribers: 0,
+    marketIndex: 1,
     status: "running",
   };
 }
@@ -227,6 +237,26 @@ export function simulateDay(prev: SimState): DayResult {
 
   const dow = weekdayDemand(day);
 
+  // 2b. Rakip fiyat endeksi: piyasa referans fiyatı gün gün kayar
+  const prevIndex = s.marketIndex ?? 1;
+  const drift = prevIndex > 1.05 ? -0.012 : prevIndex < 0.9 ? 0.014 : 0;
+  s.marketIndex = Math.max(0.78, Math.min(1.22, prevIndex + drift + rnd(-0.035, 0.03)));
+  if (s.marketIndex < 0.9 && prevIndex >= 0.9) {
+    events.push({ day, kind: "bad", text: `Rakipler fiyat kırdı (endeks ${s.marketIndex.toFixed(2)}) — fiyatını gözden geçir.` });
+  } else if (s.marketIndex > 1.1 && prevIndex <= 1.1) {
+    events.push({ day, kind: "good", text: `Piyasa fiyatları yükseldi (endeks ${s.marketIndex.toFixed(2)}) — zam yapma fırsatı.` });
+  }
+  const marketIndex = s.marketIndex;
+
+  // yükseltmelerin etkileri
+  const upCheckout = hasUpgrade(s, "checkout") ? 1.14 : 1;
+  const upShipping = hasUpgrade(s, "logistics") ? 0.72 : 1;
+  const upRetention = hasUpgrade(s, "retention") ? 1.6 : 1;
+  const upStudio = hasUpgrade(s, "studio") ? 0.55 : 1;
+  const upBundle = hasUpgrade(s, "bundle") ? 1.18 : 1;
+  const shipCost = cfg.shippingPerUnit * upShipping;
+
+
   for (const p of s.products) {
     if (!p.listed) continue;
 
@@ -250,12 +280,12 @@ export function simulateDay(prev: SimState): DayResult {
     const returning = pool * 0.06 * rnd(0.6, 1.4);
     const traffic = (paidVisits + organic + returning) * dow;
 
-    // price elasticity: cheaper than recommended converts better, pricier worse
-    const ratio = p.price / Math.max(0.01, p.recommendedPrice);
+    // price elasticity: rakip piyasa fiyatına göre pahalı/ucuz olmak dönüşümü belirler
+    const ratio = p.price / Math.max(0.01, p.recommendedPrice * marketIndex);
     const priceMult = Math.max(0.1, Math.min(2, 1.75 - 0.78 * ratio));
     const ratingMult = Math.max(0.4, Math.min(1.25, 0.4 + (p.rating - 2.5) / 2.6));
     const fatigueMult = 1 - fatigue * 0.5;
-    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * rnd(0.75, 1.3);
+    const cvr = (p.baseCvrPct / 100) * priceMult * ratingMult * ch.cvrMult * fatigueMult * evCvr * upCheckout * rnd(0.75, 1.3);
 
     let wanted = Math.floor(traffic * cvr + (Math.random() < (traffic * cvr) % 1 ? 1 : 0));
     if (wanted > p.stock) {
@@ -267,16 +297,16 @@ export function simulateDay(prev: SimState): DayResult {
       wanted = p.stock;
     }
 
-    const gross = wanted * p.price;
     const refundRate = cfg.refundBase * (p.rating < 4 ? 1.6 : 1) * (ratio > 1.35 ? 1.4 : 1);
     const refundUnits = Math.round(wanted * refundRate);
     const netUnits = wanted - refundUnits;
+    const aov = p.price * upBundle; // paket/üst satış ortalama sepeti büyütür
 
     p.stock -= wanted;
     p.stock += refundUnits; // returned to stock
     p.unitsSold += netUnits;
     p.unitsRefunded += refundUnits;
-    p.revenue += netUnits * p.price;
+    p.revenue += netUnits * aov;
 
     // reviews accumulate on ~18% of net orders
     const newReviews = Math.round(netUnits * 0.18);
@@ -290,7 +320,7 @@ export function simulateDay(prev: SimState): DayResult {
     // creative fatigue: burns while spending, cools down when paused
     p.fatigue = Math.max(0, Math.min(0.95,
       spend > 0
-        ? fatigue + ch.fatigueRate * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
+        ? fatigue + ch.fatigueRate * upStudio * (0.6 + Math.min(1.4, spend / 60)) * (scalingPenalty > 1 ? 1.5 : 1)
         : fatigue - 0.09,
     ));
     if (p.fatigue > 0.7 && fatigue <= 0.7) {
@@ -300,19 +330,35 @@ export function simulateDay(prev: SimState): DayResult {
 
     // loyalty: happy buyers join the return pool, unhappy ones leave it
     const loyalty = Math.max(0, (p.rating - 3.4) / 1.6);
-    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty);
+    p.returnPool = Math.max(0, (pool - returning * 0.35) + netUnits * 0.5 * loyalty * upRetention);
     p.repeatOrders = (p.repeatOrders ?? 0) + Math.round(Math.min(netUnits, returning * cvr));
+
+    // e-posta listesi: her siparişin bir kısmı aboneye dönüşür
+    s.subscribers = (s.subscribers ?? 0) + netUnits * 0.55 * (hasUpgrade(s, "retention") ? 1.5 : 1);
 
     visitors += traffic;
     orders += netUnits;
-    revenue += netUnits * p.price;
+    revenue += netUnits * aov;
     adSpend += spend;
-    fees += netUnits * p.price * cfg.platformFeePct + netUnits * cfg.shippingPerUnit;
+    fees += netUnits * aov * cfg.platformFeePct + netUnits * shipCost;
     refundAmt += refundUnits * p.price * 0.35; // shipping + processing lost on refunds
     cogs += 0; // COGS is paid when inventory is purchased
   }
 
-  const fixed = cfg.dailyFixedCost;
+
+  // kredi faizi her gün işler
+  let interest = 0;
+  if (s.loan && s.loan.balance > 0) {
+    interest = Math.round(s.loan.balance * LOAN_DAILY_RATE * 100) / 100;
+    s.loan = { ...s.loan, paidInterest: Math.round((s.loan.paidInterest + interest) * 100) / 100 };
+    if (day % 7 === 0) {
+      events.push({ day, kind: "bad", text: `Kredi faizi işliyor: bugüne kadar $${s.loan.paidInterest.toFixed(2)} faiz ödendi.` });
+    }
+  }
+  // liste doğal olarak erir
+  s.subscribers = Math.max(0, (s.subscribers ?? 0) * 0.992);
+
+  const fixed = cfg.dailyFixedCost + interest;
   const profit = revenue - adSpend - fees - refundAmt - fixed;
   s.cash = Math.round((s.cash + profit) * 100) / 100;
   s.totalRevenue += revenue;
@@ -363,7 +409,9 @@ export function restock(state: SimState, productId: string, qty: number): { stat
   const p = state.products.find((x) => x.id === productId);
   if (!p || qty <= 0) return { state };
   const bulkDiscount = qty >= 100 ? 0.85 : qty >= 50 ? 0.92 : 1;
-  const unitCost = Math.round(p.unitCost * bulkDiscount * 100) / 100;
+  const supplierMult = hasUpgrade(state, "supplier") ? 0.94 : 1;
+  const leadTime = Math.max(1, cfg.leadTimeDays - (hasUpgrade(state, "supplier") ? 2 : 0));
+  const unitCost = Math.round(p.unitCost * bulkDiscount * supplierMult * 100) / 100;
   const total = unitCost * qty;
   if (total > state.cash) return { state, error: "Not enough cash for that purchase order." };
   const next: SimState = {
@@ -373,7 +421,7 @@ export function restock(state: SimState, productId: string, qty: number): { stat
     totalProfit: state.totalProfit, // inventory is an asset swap until sold
     products: state.products.map((x) =>
       x.id === productId
-        ? { ...x, incoming: [...x.incoming, { qty, arrivesDay: state.day + cfg.leadTimeDays, unitCost }] }
+        ? { ...x, incoming: [...x.incoming, { qty, arrivesDay: state.day + leadTime, unitCost }] }
         : x,
     ),
     log: [
@@ -381,7 +429,7 @@ export function restock(state: SimState, productId: string, qty: number): { stat
       {
         day: state.day,
         kind: "info" as const,
-        text: `Ordered ${qty}× ${p.name} for $${total.toFixed(2)} (arrives day ${state.day + cfg.leadTimeDays}).`,
+        text: `Ordered ${qty}× ${p.name} for $${total.toFixed(2)} (arrives day ${state.day + leadTime}).`,
       },
     ],
   };
@@ -507,6 +555,15 @@ export function applyDecision(state: SimState, optionIndex: number): SimState {
 export function refreshCreative(state: SimState, productId: string): { state: SimState; error?: string } {
   const p = state.products.find((x) => x.id === productId);
   if (!p) return { state };
+  if (hasUpgrade(state, "studio")) {
+    return {
+      state: {
+        ...state,
+        products: state.products.map((x) => (x.id === productId ? { ...x, fatigue: 0 } : x)),
+        log: [...state.log, { day: state.day, kind: "good" as const, text: `${p.name} için stüdyoda ücretsiz yeni kreatif çekildi.` }].slice(-120),
+      },
+    };
+  }
   if (state.cash < CREATIVE_COST) return { state, error: "Kreatif çekimi için yeterli nakit yok." };
   return {
     state: {
@@ -517,3 +574,127 @@ export function refreshCreative(state: SimState, productId: string): { state: Si
     },
   };
 }
+
+/* ---------------- Growth systems: upgrades, financing, CRM ---------------- */
+
+export type UpgradeId =
+  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle";
+
+export type Upgrade = {
+  id: UpgradeId;
+  title: string;
+  blurb: string;
+  cost: number;
+  icon: string;
+};
+
+export const UPGRADES: Upgrade[] = [
+  { id: "checkout",  title: "Tek tık ödeme",        blurb: "Sepet terkini azaltır: dönüşüm +%14.",              cost: 220, icon: "⚡" },
+  { id: "logistics", title: "3PL depo anlaşması",   blurb: "Sipariş başı kargo maliyeti -%28.",                 cost: 260, icon: "🚚" },
+  { id: "supplier",  title: "Öncelikli tedarikçi",  blurb: "Teslim süresi -2 gün, birim maliyet -%6.",          cost: 300, icon: "🏭" },
+  { id: "retention", title: "Sadakat programı",     blurb: "Geri dönen müşteri havuzu +%60 daha hızlı büyür.",  cost: 240, icon: "💎" },
+  { id: "studio",    title: "İçerik stüdyosu",      blurb: "Kreatif yorulması -%45, kreatif çekimi ücretsiz.",  cost: 320, icon: "🎬" },
+  { id: "bundle",    title: "Paket & üst satış",    blurb: "Sipariş başı ortalama sepet +%18.",                 cost: 280, icon: "🎁" },
+];
+
+export const hasUpgrade = (s: SimState, id: UpgradeId) => (s.upgrades ?? []).includes(id);
+
+export function buyUpgrade(state: SimState, id: UpgradeId): { state: SimState; error?: string } {
+  const up = UPGRADES.find((u) => u.id === id);
+  if (!up) return { state };
+  if (hasUpgrade(state, id)) return { state, error: "Bu yükseltme zaten aktif." };
+  if (state.cash < up.cost) return { state, error: "Yükseltme için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - up.cost) * 100) / 100,
+      upgrades: [...(state.upgrades ?? []), id],
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `Yükseltme alındı: ${up.title} (-$${up.cost}).` }].slice(-120),
+    },
+  };
+}
+
+export const LOAN_MAX = 1500;
+export const LOAN_DAILY_RATE = 0.014;
+
+export function takeLoan(state: SimState, amount: number): { state: SimState; error?: string } {
+  const owed = state.loan?.balance ?? 0;
+  const room = LOAN_MAX - owed;
+  const amt = Math.floor(Math.max(0, Math.min(room, amount)));
+  if (amt <= 0) return { state, error: "Kredi limitin dolu." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash + amt) * 100) / 100,
+      loan: { balance: Math.round((owed + amt) * 100) / 100, takenDay: state.day, paidInterest: state.loan?.paidInterest ?? 0 },
+      log: [...state.log, { day: state.day, kind: "info" as const, text: `$${amt} işletme kredisi çekildi (günlük %${(LOAN_DAILY_RATE * 100).toFixed(1)} faiz).` }].slice(-120),
+    },
+  };
+}
+
+export function repayLoan(state: SimState, amount: number): { state: SimState; error?: string } {
+  const owed = state.loan?.balance ?? 0;
+  if (owed <= 0) return { state, error: "Ödenecek kredi yok." };
+  const amt = Math.round(Math.max(0, Math.min(owed, Math.min(amount, state.cash))) * 100) / 100;
+  if (amt <= 0) return { state, error: "Ödeme için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - amt) * 100) / 100,
+      loan: { balance: Math.round((owed - amt) * 100) / 100, takenDay: state.loan?.takenDay ?? state.day, paidInterest: state.loan?.paidInterest ?? 0 },
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `Krediden $${amt.toFixed(0)} geri ödendi.` }].slice(-120),
+    },
+  };
+}
+
+export const CAMPAIGN_COOLDOWN = 4;
+
+/** E-posta listene kampanya gönder: anında sipariş yaratır, listeyi bir miktar yorar. */
+export function sendCampaign(state: SimState): { state: SimState; error?: string } {
+  const subs = Math.floor(state.subscribers ?? 0);
+  if (subs < 25) return { state, error: "Liste henüz çok küçük (en az 25 abone gerekir)." };
+  const last = state.lastCampaignDay ?? -99;
+  if (state.day - last < CAMPAIGN_COOLDOWN) {
+    return { state, error: `Listeyi yakma: ${CAMPAIGN_COOLDOWN - (state.day - last)} gün daha beklemelisin.` };
+  }
+  const listed = state.products.filter((p) => p.listed && p.stock > 0);
+  if (!listed.length) return { state, error: "Stokta satılabilir ürün yok." };
+
+  const cfg = DIFFICULTIES[state.difficulty];
+  let orders = 0, revenue = 0, fees = 0;
+  const products = state.products.map((p) => ({ ...p }));
+  let budget = Math.round(subs * (0.045 + Math.random() * 0.03));
+  for (const p of products) {
+    if (budget <= 0) break;
+    if (!p.listed || p.stock <= 0) continue;
+    const take = Math.min(p.stock, Math.ceil(budget / listed.length) || 1);
+    if (take <= 0) continue;
+    p.stock -= take;
+    p.unitsSold += take;
+    p.revenue += take * p.price;
+    p.repeatOrders = (p.repeatOrders ?? 0) + take;
+    orders += take;
+    revenue += take * p.price;
+    fees += take * p.price * cfg.platformFeePct + take * cfg.shippingPerUnit;
+    budget -= take;
+  }
+  const profit = revenue - fees;
+  return {
+    state: {
+      ...state,
+      products,
+      cash: Math.round((state.cash + profit) * 100) / 100,
+      totalRevenue: state.totalRevenue + revenue,
+      totalProfit: state.totalProfit + profit,
+      totalOrders: state.totalOrders + orders,
+      subscribers: Math.max(0, subs * 0.94),
+      lastCampaignDay: state.day,
+      log: [...state.log, {
+        day: state.day, kind: orders > 0 ? "good" as const : "info" as const,
+        text: `E-posta kampanyası gönderildi: ${orders} sipariş, ${money2(revenue)} ciro (reklam maliyeti $0).`,
+      }].slice(-120),
+    },
+  };
+}
+
+const money2 = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;

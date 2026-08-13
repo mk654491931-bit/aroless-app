@@ -193,6 +193,22 @@ export function coachTips(s: SimState): Tip[] {
   if (ad > 50 && rev / ad >= 3) {
     tips.push({ kind: "good", title: "ROAS güçlü", body: "3x üzeri getiri yakaladın. Stok yetiyorsa bütçeyi %20-30 adımlarla artır." });
   }
+  const mi = s.marketIndex ?? 1;
+  if (mi < 0.93 && s.products.some((p) => p.price > p.recommendedPrice * mi * 1.05)) {
+    tips.push({ kind: "warn", title: "Rakipler fiyat kırdı", body: `Piyasa endeksi ${mi.toFixed(2)}. Fiyatların referansın üzerinde kaldı; dönüşüm düşer. Fiyatı endekse yaklaştır ya da paketle değer yarat.` });
+  }
+  if (mi > 1.07 && s.products.some((p) => p.price < p.recommendedPrice * mi * 0.98)) {
+    tips.push({ kind: "idea", title: "Zam penceresi açık", body: `Piyasa endeksi ${mi.toFixed(2)}; rakipler pahalı. Fiyatı yükselterek marjı büyütebilirsin.` });
+  }
+  if ((s.loan?.balance ?? 0) > 0) {
+    tips.push({ kind: "warn", title: "Kredi faizi işliyor", body: `Borç $${(s.loan?.balance ?? 0).toFixed(0)}, bugüne kadar $${(s.loan?.paidInterest ?? 0).toFixed(2)} faiz ödedin. Nakit rahatladıkça kapat.` });
+  }
+  if ((s.subscribers ?? 0) >= 60 && (s.day - (s.lastCampaignDay ?? -99)) >= 4) {
+    tips.push({ kind: "good", title: "Liste kampanyaya hazır", body: `${Math.floor(s.subscribers ?? 0)} abonen var. Büyüme sekmesinden bedava trafikle sipariş al.` });
+  }
+  if ((s.upgrades?.length ?? 0) === 0 && s.cash > 400) {
+    tips.push({ kind: "idea", title: "Yükseltme almadın", body: "Nakit yeterli. Tek tık ödeme veya 3PL anlaşması her siparişte kalıcı kazanç sağlar." });
+  }
   if (s.activeEvent) {
     tips.push({ kind: "idea", title: "Piyasa olayı aktif", body: `${s.activeEvent.text} Bu pencerede bütçeni buna göre ayarla.` });
   }
