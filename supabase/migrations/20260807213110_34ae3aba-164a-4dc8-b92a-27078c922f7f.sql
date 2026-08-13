@@ -34,8 +34,8 @@ BEGIN
   INSERT INTO public.profiles (id, email, credits, sim_credits, subscription_tier)
   VALUES (
     NEW.id, NEW.email,
-    CASE WHEN lower(NEW.email) = 'mryetenek@gmail.com' THEN 250 ELSE 2 END,
-    CASE WHEN lower(NEW.email) = 'mryetenek@gmail.com' THEN 100 ELSE 1 END,
+    CASE WHEN lower(NEW.email) = 'omnic.111111@gmail.com' THEN 250 ELSE 2 END,
+    CASE WHEN lower(NEW.email) = 'omnic.111111@gmail.com' THEN 100 ELSE 1 END,
     'Free'
   )
   ON CONFLICT (id) DO NOTHING;
@@ -102,7 +102,7 @@ CREATE POLICY "Admins read all roles" ON public.user_roles
 CREATE OR REPLACE FUNCTION public.grant_admin_for_designated_email()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF lower(NEW.email) = 'mryetenek@gmail.com' THEN
+  IF lower(NEW.email) = 'omnic.111111@gmail.com' THEN
     INSERT INTO public.user_roles (user_id, role) VALUES (NEW.id, 'admin')
     ON CONFLICT (user_id, role) DO NOTHING;
     UPDATE public.profiles SET credits = GREATEST(credits, 250) WHERE id = NEW.id;
@@ -308,10 +308,10 @@ GRANT EXECUTE ON FUNCTION public.get_sim_leaderboard() TO authenticated, service
 DO $$
 DECLARE _uid uuid;
 BEGIN
-  SELECT id INTO _uid FROM auth.users WHERE lower(email) = 'mryetenek@gmail.com' LIMIT 1;
+  SELECT id INTO _uid FROM auth.users WHERE lower(email) = 'omnic.111111@gmail.com' LIMIT 1;
   IF _uid IS NOT NULL THEN
     INSERT INTO public.profiles (id, email, credits, sim_credits, subscription_tier)
-      VALUES (_uid, 'mryetenek@gmail.com', 250, 100, 'Free')
+      VALUES (_uid, 'omnic.111111@gmail.com', 250, 100, 'Free')
       ON CONFLICT (id) DO UPDATE SET credits = 250, sim_credits = 100;
     INSERT INTO public.user_roles (user_id, role) VALUES (_uid, 'admin')
       ON CONFLICT (user_id, role) DO NOTHING;
