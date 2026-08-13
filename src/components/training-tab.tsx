@@ -182,23 +182,28 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{cfg.label}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Day {Math.min(state.day, RUN_LENGTH)} of {RUN_LENGTH} · Simulated store — no real money, real mechanics.
+              Gün {Math.min(state.day, RUN_LENGTH)} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button disabled={over || busy} onClick={() => advance(1)}
+            <button disabled={over || busy || autoplay} onClick={() => advance(1)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40">
-              <Play size={13} /> Run 1 day
+              <Play size={13} /> 1 gün
             </button>
-            <button disabled={over || busy} onClick={() => advance(7)}
+            <button disabled={over || busy || autoplay} onClick={() => advance(7)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40">
-              <FastForward size={13} /> 7 days
+              <FastForward size={13} /> 7 gün
             </button>
-            <button onClick={() => { if (confirm("Reset this training run?")) setState(null); }}
+            <button disabled={over} onClick={() => setAutoplay((a) => !a)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition disabled:opacity-40 ${autoplay ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+              {autoplay ? <><Pause size={13} /> Duraklat</> : <><Zap size={13} /> Sezonu oynat</>}
+            </button>
+            <button onClick={() => { if (confirm("Bu eğitim koşusu sıfırlansın mı?")) { setAutoplay(false); doneMissions.current = new Set(); savedRun.current = false; setState(null); } }}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
-              <RotateCcw size={13} /> Reset
+              <RotateCcw size={13} /> Sıfırla
             </button>
           </div>
+
         </div>
 
         <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
