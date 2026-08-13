@@ -295,13 +295,132 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   );
 }
 
+/* ---------------- Missions ---------------- */
+
+function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionState>; lvl: ReturnType<typeof levelFromXp> }) {
+  const tiers: { t: 1 | 2 | 3; label: string }[] = [
+    { t: 1, label: "Temel operasyon" },
+    { t: 2, label: "Kârlılık" },
+    { t: 3, label: "Ölçekleme" },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="premium-card rounded-2xl p-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] font-bold">{lvl.level}</span>
+          <div>
+            <div className="text-sm font-semibold">{lvl.title}</div>
+            <div className="text-[11px] text-muted-foreground">{lvl.xp.toLocaleString("tr-TR")} XP toplandı</div>
+          </div>
+        </div>
+        <div className="ml-auto text-xs text-muted-foreground">
+          {missions.filter((m) => m.done).length}/{missions.length} görev tamamlandı
+        </div>
+      </div>
+
+      {tiers.map(({ t, label }) => (
+        <div key={t} className="space-y-2">
+          <h3 className="text-xs uppercase tracking-wider text-muted-foreground">{label}</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            {missions.filter((m) => m.tier === t).map((m) => (
+              <div key={m.id} className={`premium-card rounded-xl p-4 transition ${m.done ? "border-emerald-400/30 bg-emerald-500/8" : ""}`}>
+                <div className="flex items-start gap-2.5">
+                  {m.done ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-300" /> : <Circle size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold">{m.title}</div>
+                      <span className="shrink-0 rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-amber-200">+{m.reward} XP</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{m.hint}</p>
+                    <div className="mt-2.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"}`} style={{ width: `${m.pct}%` }} />
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {m.value < 10 ? m.value.toFixed(1).replace(/\.0$/, "") : Math.round(m.value)} / {m.goal}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- Coach ---------------- */
+
+function CoachView({ tips, state, onGo }: {
+  tips: ReturnType<typeof coachTips>;
+  state: SimState;
+  onGo: (v: "storefront" | "products" | "ads" | "analytics" | "missions" | "coach" | "log") => void;
+}) {
+  const cfg = DIFFICULTIES[state.difficulty];
+  const week = state.history.slice(-7);
+  const sum = week.reduce((a, d) => ({
+    revenue: a.revenue + d.revenue, adSpend: a.adSpend + d.adSpend, profit: a.profit + d.profit,
+    orders: a.orders + d.orders, visitors: a.visitors + d.visitors,
+  }), { revenue: 0, adSpend: 0, profit: 0, orders: 0, visitors: 0 });
+
+  return (
+    <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Brain size={15} /> Velora Koçu</h3>
+        {tips.map((t, i) => (
+          <div key={i} className={`premium-card rounded-xl p-4 border ${
+            t.kind === "warn" ? "border-rose-500/30 bg-rose-500/8"
+              : t.kind === "good" ? "border-emerald-500/30 bg-emerald-500/8" : "border-white/10"}`}>
+            <div className="flex items-start gap-2.5">
+              {t.kind === "warn" ? <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-300" />
+                : t.kind === "good" ? <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+                : <Lightbulb size={15} className="mt-0.5 shrink-0 text-amber-300" />}
+              <div>
+                <div className="text-sm font-semibold">{t.title}</div>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{t.body}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => onGo("ads")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Reklam & fiyatı düzenle</button>
+          <button onClick={() => onGo("products")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Stok siparişi ver</button>
+          <button onClick={() => onGo("analytics")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Analitiği aç</button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={15} /> Son 7 gün</h3>
+        <div className="premium-card rounded-xl p-4 grid grid-cols-2 gap-2 text-[11px]">
+          <Stat label="Ciro" value={compact(sum.revenue)} />
+          <Stat label="Reklam" value={compact(sum.adSpend)} />
+          <Stat label="Net kâr" value={compact(sum.profit)} tone={sum.profit >= 0 ? "good" : "bad"} />
+          <Stat label="ROAS" value={sum.adSpend > 0 ? `${(sum.revenue / sum.adSpend).toFixed(2)}x` : "—"} />
+          <Stat label="Sipariş" value={String(sum.orders)} />
+          <Stat label="Dönüşüm" value={sum.visitors > 0 ? `${((sum.orders / sum.visitors) * 100).toFixed(2)}%` : "—"} />
+        </div>
+        <div className="premium-card rounded-xl p-4 text-[11px] text-muted-foreground space-y-2">
+          <div className="text-xs font-semibold text-foreground">Bu zorlukta oyunun kuralları</div>
+          <Row k="Ortalama TBM" v={money(cfg.cpc)} />
+          <Row k="Platform komisyonu" v={`${(cfg.platformFeePct * 100).toFixed(1)}%`} />
+          <Row k="Kargo / sipariş" v={money(cfg.shippingPerUnit)} />
+          <Row k="Baz iade oranı" v={`${(cfg.refundBase * 100).toFixed(0)}%`} />
+          <Row k="Tedarik süresi" v={`${cfg.leadTimeDays} gün`} />
+          <Row k="Sabit gider / gün" v={money(cfg.dailyFixedCost)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Setup ---------------- */
 
 function SetupScreen(props: {
   storeName: string; setStoreName: (v: string) => void;
   difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  catalogCount: number; onStart: () => void;
+  catalogCount: number; onStart: () => void; hof: RunResult[];
 }) {
+
   return (
     <section className="max-w-3xl mx-auto space-y-6">
       <div className="text-center animate-rise-in">
