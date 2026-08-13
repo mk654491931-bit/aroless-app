@@ -924,6 +924,30 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
               </div>
             </div>
 
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <FlaskConical size={12} className="text-[oklch(0.72_0.18_265)]" /> Kreatif A/B testi
+                  {!!(p.cvrBonus ?? 0) && <b className="text-emerald-300">+{Math.round((p.cvrBonus ?? 0) * 100)}% kalıcı dönüşüm</b>}
+                </span>
+                {p.abTest ? (
+                  <span className="rounded-full border border-white/10 bg-white/8 px-2.5 py-1">
+                    Test yayında · {Math.max(0, p.abTest.startDay + AB_TEST_DAYS - state.day)} gün kaldı
+                  </span>
+                ) : (
+                  <button onClick={() => onAbTest(p.id)} disabled={p.adBudget <= 0 || state.cash < AB_TEST_COST}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 hover:bg-white/10 disabled:opacity-40">
+                    <FlaskConical size={11} /> Test başlat · {money(AB_TEST_COST)}
+                  </button>
+                )}
+              </div>
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                İki varyant {AB_TEST_DAYS} gün yarışır; trafiğin bir kısmı teste gider. Kazanan varyant kalıcı dönüşüm artışı olarak kalır.
+              </p>
+            </div>
+
+
+
             <div className="mt-4 grid md:grid-cols-2 gap-5">
               <div>
                 <div className="flex items-center justify-between text-xs">
