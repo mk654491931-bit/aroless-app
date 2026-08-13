@@ -266,12 +266,13 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <span className="rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5"><Store size={15} /></span>
               <h2 className="text-lg font-bold">{state.storeName}</h2>
               <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{cfg.label}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">Sezon {season}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Gün {Math.min(state.day, RUN_LENGTH)} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
+              Gün {sDay} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
             </p>
             <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground">
-              <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(Math.min(state.day, RUN_LENGTH))]} · talep ×{weekdayDemand(state.day).toFixed(2)}
+              <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(state.day)]} · talep ×{weekdayDemand(state.day).toFixed(2)}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
               <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
@@ -280,15 +281,34 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
                 : "border-white/10 bg-white/5 text-muted-foreground"}`}>
                 <LineChart size={11} /> Rakip fiyat endeksi {(state.marketIndex ?? 1).toFixed(2)}
               </span>
+              <button onClick={() => setView("market")}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground hover:bg-white/10">
+                <Swords size={11} /> Pazar payın %{Math.round(share.you * 100)}
+              </button>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
+                <Gem size={11} className="text-[oklch(0.78_0.16_265)]" /> Marka {brand}/100
+              </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
                 <Users size={11} /> {Math.floor(state.subscribers ?? 0)} abone
               </span>
+              {queue > 0 && (
+                <button onClick={() => setView("ops")}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${queue > 12 ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-white/10 bg-white/5 text-muted-foreground"} hover:bg-white/10`}>
+                  <Headphones size={11} /> {queue} destek bileti
+                </button>
+              )}
               {!!state.loan?.balance && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-amber-200">
                   <Landmark size={11} /> Kredi borcu {money(state.loan.balance)}
                 </span>
               )}
+              {cal && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-foreground">
+                  <Sparkles size={11} /> {cal.title}
+                </span>
+              )}
             </div>
+
           </div>
           <div className="flex items-center gap-2">
             <button disabled={over || busy || autoplay} onClick={() => advance(1)}
