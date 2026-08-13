@@ -328,6 +328,14 @@ function AuthPage() {
       <div aria-hidden className="auth-aurora" />
       <div aria-hidden className="auth-grid" />
       <div aria-hidden className="auth-beam" />
+      <div aria-hidden className="auth-orbits">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div aria-hidden className="auth-shimmer" />
+      <div aria-hidden className="auth-vignette" />
+
 
       {/* Quantum data mesh */}
       <QuantumMesh />
@@ -360,10 +368,14 @@ function AuthPage() {
             <img
               src={veloraV.url}
               alt="Velora"
-              className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_oklch(0.62_0.19_250/0.5)]"
+              className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
             />
-            <h1 className="leading-none">
-              <span className="block text-[42px] font-light uppercase tracking-[0.32em]" aria-label="Velora">
+            <h1 className="relative leading-none">
+              <span aria-hidden className="velora-halo" />
+              <span
+                className="relative block text-[52px] font-extralight uppercase tracking-[0.34em]"
+                aria-label="Velora"
+              >
                 {"VELORA".split("").map((ch, i) => (
                   <span
                     key={`${ch}-${i}`}
@@ -375,6 +387,7 @@ function AuthPage() {
                   </span>
                 ))}
               </span>
+              <span className="velora-underline mt-3 block w-56" />
               <span className="mt-3 block text-[10px] font-medium uppercase tracking-[0.42em] text-[var(--brand)]">
                 AI Commerce OS
               </span>
@@ -387,6 +400,7 @@ function AuthPage() {
               {ROTATING[rotIndex]}
             </p>
           </div>
+
 
           <ul className="mt-9 space-y-3">
             {PERKS.map((p, i) => (
@@ -438,7 +452,7 @@ function AuthPage() {
                 className="pointer-events-none absolute inset-0 opacity-60 transition-opacity"
                 style={{
                   background:
-                    "radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), oklch(0.68 0.20 265 / 0.16), transparent 70%)",
+                    "radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), color-mix(in oklab, var(--brand) 16%, transparent), transparent 70%)",
                 }}
               />
 
@@ -471,7 +485,7 @@ function AuthPage() {
                 <div className="relative mt-6 grid grid-cols-2 rounded-xl border border-border bg-card/40 p-1 text-sm">
                   <span
                     aria-hidden
-                    className="mercury absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                    className="mercury absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
                     style={{
                       transform: mode === "signin" ? "translateX(0.125rem)" : "translateX(calc(100% + 0.375rem))",
                     }}
@@ -484,7 +498,7 @@ function AuthPage() {
                       className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
                         mode === m
                           ? "text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:drop-shadow-[0_0_10px_oklch(0.68_0.20_265_/_0.6)]"
+                          : "text-muted-foreground hover:text-foreground hover:drop-shadow-[0_0_10px_color-mix(in_oklab,var(--brand)_60%,transparent)]"
                       }`}
                     >
                       {m === "signin" ? "Sign in" : "Sign up"}
@@ -498,7 +512,7 @@ function AuthPage() {
                     void google();
                   }}
                   disabled={busy !== null}
-                  className="card-lift liquid-surface group relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-border px-4 py-3 text-sm font-medium hover:-translate-y-0.5 hover:border-[oklch(0.68_0.20_265)] disabled:opacity-60"
+                  className="card-lift liquid-surface group relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-border px-4 py-3 text-sm font-medium hover:-translate-y-0.5 hover:border-[var(--brand)] disabled:opacity-60"
                 >
                   {googleRipple.layer}
                   <svg
@@ -639,7 +653,7 @@ function AuthPage() {
                           key={i}
                           className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                             strength >= i
-                              ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                              ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
                               : "bg-border"
                           }`}
                         />
@@ -677,7 +691,7 @@ function AuthPage() {
                     type="submit"
                     onClick={emailRipple.spawn}
                     disabled={busy !== null || (mode === "signup" && !legalOk)}
-                    className="glow card-lift group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold text-primary-foreground hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="glow card-lift group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-3 text-sm font-semibold text-primary-foreground hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {emailRipple.layer}
                     <span className="relative z-10 inline-flex items-center justify-center gap-2">

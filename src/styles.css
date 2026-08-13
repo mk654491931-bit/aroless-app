@@ -65,6 +65,7 @@
   --brand-2: oklch(0.66 0.24 305); /* violet */
   /* Semantic accents */
   --accent-active: oklch(0.80 0.14 200); /* cyan — active UI */
+
   --profit: oklch(0.76 0.17 158);        /* emerald — profit */
   --warning: oklch(0.82 0.16 80);        /* amber — warnings */
   --ai: oklch(0.70 0.20 290);            /* indigo/purple — AI */
@@ -116,8 +117,8 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   body {
     font-family: var(--font-sans);
     background-image:
-      radial-gradient(1200px 600px at 10% -10%, oklch(0.68 0.20 265 / 0.18), transparent 60%),
-      radial-gradient(1000px 500px at 100% 0%, oklch(0.66 0.24 305 / 0.15), transparent 60%);
+      radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, var(--brand) 18%, transparent), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, color-mix(in oklab, var(--brand-2) 15%, transparent), transparent 60%);
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -143,7 +144,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 
 @utility glow {
-  box-shadow: 0 0 0 1px oklch(0.68 0.20 265 / 0.3), 0 10px 40px -10px oklch(0.68 0.20 265 / 0.45);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 30%, transparent), 0 10px 40px -10px color-mix(in oklab, var(--brand) 45%, transparent);
 }
 
 @utility text-gradient {
@@ -261,7 +262,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(140deg, oklch(1 0 0 / 0.22), oklch(1 0 0 / 0.04) 35%, transparent 60%, oklch(0.66 0.24 305 / 0.28));
+    background: linear-gradient(140deg, oklch(1 0 0 / 0.22), oklch(1 0 0 / 0.04) 35%, transparent 60%, color-mix(in oklab, var(--brand-2) 28%, transparent));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
@@ -276,7 +277,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 
 @utility divider-glow {
-  background: linear-gradient(90deg, transparent, oklch(0.68 0.20 265 / 0.5), oklch(0.66 0.24 305 / 0.5), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--brand) 50%, transparent), color-mix(in oklab, var(--brand-2) 50%, transparent), transparent);
 }
 
 /* Live "most sellable right now" ticker — continuous vertical scroll */
@@ -308,7 +309,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   width: 320px;
   height: 320px;
   border-radius: 9999px;
-  background: radial-gradient(circle, oklch(1 0 0 / 0.55), oklch(0.80 0.14 200 / 0.25) 45%, transparent 70%);
+  background: radial-gradient(circle, oklch(1 0 0 / 0.55), color-mix(in oklab, var(--accent-active) 25%, transparent) 45%, transparent 70%);
   animation: ripple-out 0.62s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
@@ -335,7 +336,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
     border-radius 0.62s ease,
     filter 0.62s ease;
   filter: blur(0.2px) saturate(1.25);
-  box-shadow: 0 0 24px -6px oklch(0.68 0.20 265 / 0.9);
+  box-shadow: 0 0 24px -6px color-mix(in oklab, var(--brand) 90%, transparent);
 }
 
 @keyframes liquid-pan {
@@ -345,10 +346,10 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 .liquid-surface {
   background-image: linear-gradient(
     100deg,
-    oklch(0.24 0.04 265 / 0.7) 0%,
-    oklch(0.34 0.08 240 / 0.7) 35%,
-    oklch(0.30 0.07 290 / 0.7) 65%,
-    oklch(0.24 0.04 265 / 0.7) 100%
+    color-mix(in oklab, var(--brand) 18%, oklch(0.16 0.02 265 / 0.75)) 0%,
+    color-mix(in oklab, var(--brand) 45%, oklch(0.18 0.02 265 / 0.7)) 35%,
+    color-mix(in oklab, var(--brand-2) 45%, oklch(0.18 0.02 265 / 0.7)) 65%,
+    color-mix(in oklab, var(--brand) 18%, oklch(0.16 0.02 265 / 0.75)) 100%
   );
   background-size: 200% 100%;
   animation: liquid-pan 9s linear infinite;
@@ -356,8 +357,8 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 
 @keyframes neon-pulse {
-  0%, 100% { box-shadow: 0 0 0 1px oklch(0.68 0.20 265 / 0.35), 0 0 18px -8px oklch(0.68 0.20 265 / 0.5); }
-  50%      { box-shadow: 0 0 0 1px oklch(0.80 0.14 200 / 0.6), 0 0 26px -6px oklch(0.80 0.14 200 / 0.7); }
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 35%, transparent), 0 0 18px -8px color-mix(in oklab, var(--brand) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-active) 60%, transparent), 0 0 26px -6px color-mix(in oklab, var(--accent-active) 70%, transparent); }
 }
 .neon-field {
   border-radius: 0.6rem;
@@ -366,7 +367,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 .neon-field.is-focused {
   animation-duration: 1.4s;
-  box-shadow: 0 0 0 1px oklch(0.85 0.14 200 / 0.9), 0 0 34px -6px oklch(0.80 0.14 200 / 0.85);
+  box-shadow: 0 0 0 1px oklch(0.85 0.14 200 / 0.9), 0 0 34px -6px color-mix(in oklab, var(--accent-active) 85%, transparent);
 }
 .neon-field .inp { border-color: transparent; }
 
@@ -397,7 +398,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   50% { background-position: 100% 50%; }
 }
 .holo-badge {
-  background-image: linear-gradient(100deg, oklch(0.80 0.14 200 / 0.35), oklch(0.66 0.24 305 / 0.35), oklch(0.76 0.17 158 / 0.35));
+  background-image: linear-gradient(100deg, color-mix(in oklab, var(--accent-active) 35%, transparent), color-mix(in oklab, var(--brand-2) 35%, transparent), oklch(0.76 0.17 158 / 0.35));
   background-size: 220% 100%;
   animation: holo-shift 4s ease-in-out infinite;
   border: 1px solid oklch(1 0 0 / 0.14);
@@ -420,8 +421,8 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 
 @keyframes elite-breathe {
-  0%, 100% { box-shadow: 0 0 0 1px oklch(0.80 0.14 200 / 0.25), 0 0 14px -6px oklch(0.80 0.14 200 / 0.6); }
-  50%      { box-shadow: 0 0 0 1px oklch(0.80 0.14 200 / 0.55), 0 0 24px -4px oklch(0.80 0.14 200 / 0.9); }
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-active) 25%, transparent), 0 0 14px -6px color-mix(in oklab, var(--accent-active) 60%, transparent); }
+  50%      { box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-active) 55%, transparent), 0 0 24px -4px color-mix(in oklab, var(--accent-active) 90%, transparent); }
 }
 .elite-glow { animation: elite-breathe 3.2s ease-in-out infinite; }
 
@@ -434,7 +435,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   transform: translate(-50%, 0);
   border-radius: 9999px;
   filter: blur(58px);
-  background: radial-gradient(ellipse at center, oklch(0.68 0.20 265 / 0.55), oklch(0.80 0.14 200 / 0.22) 55%, transparent 75%);
+  background: radial-gradient(ellipse at center, color-mix(in oklab, var(--brand) 55%, transparent), color-mix(in oklab, var(--accent-active) 22%, transparent) 55%, transparent 75%);
   animation: pulse-soft 4.5s ease-in-out infinite;
   pointer-events: none;
   transition: transform 0.35s ease-out;
@@ -444,7 +445,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 .refract {
   background-image:
     linear-gradient(180deg, oklch(1 0 0 / 0.07), oklch(1 0 0 / 0.02)),
-    radial-gradient(120% 60% at 15% 0%, oklch(0.80 0.14 200 / 0.10), transparent 60%);
+    radial-gradient(120% 60% at 15% 0%, color-mix(in oklab, var(--accent-active) 10%, transparent), transparent 60%);
 }
 
 /* Simulated premium laptop frame */
@@ -485,8 +486,8 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   border-radius: 9999px;
   filter: blur(90px);
   background: radial-gradient(ellipse at center,
-    oklch(0.68 0.20 265 / 0.30),
-    oklch(0.80 0.14 200 / 0.16) 52%,
+    color-mix(in oklab, var(--brand) 30%, transparent),
+    color-mix(in oklab, var(--accent-active) 16%, transparent) 52%,
     transparent 74%);
   animation: pulse-soft 6s ease-in-out infinite;
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
@@ -505,7 +506,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   border-radius: inherit;
   z-index: -1;
   opacity: 0;
-  background: linear-gradient(100deg, oklch(0.68 0.20 265 / 0.45), oklch(0.66 0.24 305 / 0.4), oklch(0.80 0.14 200 / 0.35));
+  background: linear-gradient(100deg, color-mix(in oklab, var(--brand) 45%, transparent), color-mix(in oklab, var(--brand-2) 40%, transparent), color-mix(in oklab, var(--accent-active) 35%, transparent));
   background-size: 200% 100%;
   transition: opacity 0.32s ease;
 }
@@ -527,7 +528,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
 }
 .morph-pill:hover {
   transform: scale(1.06);
-  box-shadow: 0 10px 30px -14px oklch(0.68 0.20 265 / 0.9);
+  box-shadow: 0 10px 30px -14px color-mix(in oklab, var(--brand) 90%, transparent);
 }
 .morph-pill:hover::before { opacity: 1; animation: liquid-pan 4s linear infinite; }
 .morph-pill:hover::after { opacity: 1; }
@@ -549,11 +550,11 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   bottom: 0.25rem;
   border-radius: 9999px;
   background-image: linear-gradient(100deg,
-    oklch(0.68 0.20 265) 0%,
-    oklch(0.66 0.24 305) 45%,
+    var(--brand) 0%,
+    var(--brand-2) 45%,
     oklch(0.72 0.18 240) 100%);
   background-size: 180% 100%;
-  box-shadow: 0 0 0 1px oklch(0.85 0.14 200 / 0.4), 0 12px 32px -12px oklch(0.68 0.20 265 / 0.95);
+  box-shadow: 0 0 0 1px oklch(0.85 0.14 200 / 0.4), 0 12px 32px -12px color-mix(in oklab, var(--brand) 95%, transparent);
   transition: left 0.6s cubic-bezier(0.34, 1.5, 0.48, 1), width 0.6s cubic-bezier(0.34, 1.5, 0.48, 1), transform 0.6s ease;
   animation: liquid-pan 7s linear infinite;
   pointer-events: none;
@@ -575,10 +576,10 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   border-radius: inherit;
   padding: 1px;
   background-image: linear-gradient(100deg,
-    oklch(0.68 0.20 265 / 0.5),
+    color-mix(in oklab, var(--brand) 50%, transparent),
     oklch(0.85 0.14 200 / 0.85) 40%,
-    oklch(0.66 0.24 305 / 0.5) 70%,
-    oklch(0.68 0.20 265 / 0.5));
+    color-mix(in oklab, var(--brand-2) 50%, transparent) 70%,
+    color-mix(in oklab, var(--brand) 50%, transparent));
   background-size: 200% 100%;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -590,7 +591,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
   pointer-events: none;
 }
 .light-wave.is-focused::before { opacity: 1; animation-duration: 2s; }
-.light-wave.is-focused { box-shadow: 0 0 26px -8px oklch(0.80 0.14 200 / 0.8); }
+.light-wave.is-focused { box-shadow: 0 0 26px -8px color-mix(in oklab, var(--accent-active) 80%, transparent); }
 
 /* Morphing surface transition between main menu sections */
 @keyframes surface-morph {
@@ -633,7 +634,7 @@ html.light .premium-card {
     0 24px 60px -34px oklch(0.35 0.06 265 / 0.35);
 }
 html.light .premium-card::before {
-  background: linear-gradient(140deg, oklch(0.62 0.19 250 / 0.35), oklch(0.25 0.04 265 / 0.08) 35%, transparent 60%, oklch(0.66 0.24 305 / 0.25));
+  background: linear-gradient(140deg, oklch(0.62 0.19 250 / 0.35), oklch(0.25 0.04 265 / 0.08) 35%, transparent 60%, color-mix(in oklab, var(--brand-2) 25%, transparent));
 }
 html.light .liquid-surface {
   background-image: linear-gradient(
@@ -653,17 +654,51 @@ html.light .light-trace::after { mix-blend-mode: multiply; background: linear-gr
 
 /* ---------- İkinci renk paleti: "Aurora" (zümrüt / turkuaz) ---------- */
 html.palette-aurora {
-  --primary: oklch(0.72 0.16 172);
-  --ring: oklch(0.72 0.16 172);
-  --brand: oklch(0.72 0.16 172);      /* emerald-teal */
-  --brand-2: oklch(0.74 0.15 205);    /* aqua */
-  --accent-active: oklch(0.82 0.13 190);
-  --ai: oklch(0.72 0.16 178);
-  --accent: oklch(0.30 0.05 190);
+  --background: #04120f;
+  --surface: #071c18;
+  --foreground: oklch(0.97 0.015 175);
+  --card: oklch(0.24 0.045 180 / 0.7);
+  --card-foreground: oklch(0.97 0.015 175);
+  --popover: #071c18;
+  --popover-foreground: oklch(0.97 0.015 175);
+  --primary: oklch(0.78 0.17 168);
+  --primary-foreground: oklch(0.16 0.04 180);
+  --secondary: oklch(0.28 0.05 180);
+  --muted: oklch(0.26 0.045 180);
+  --muted-foreground: oklch(0.76 0.04 178);
+  --border: oklch(0.85 0.12 180 / 18%);
+  --input: oklch(0.85 0.12 180 / 20%);
+  --ring: oklch(0.78 0.17 168);
+  --brand: oklch(0.78 0.17 168);      /* emerald-teal */
+  --brand-2: oklch(0.80 0.15 205);    /* aqua */
+  --accent-active: oklch(0.86 0.14 190);
+  --profit: oklch(0.82 0.17 150);
+  --warning: oklch(0.85 0.16 95);
+  --ai: oklch(0.76 0.16 178);
+  --accent: oklch(0.32 0.07 190);
+}
+html.palette-aurora body {
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, oklch(0.78 0.17 168 / 0.22), transparent 60%),
+    radial-gradient(1000px 520px at 100% 0%, oklch(0.80 0.15 205 / 0.18), transparent 60%),
+    radial-gradient(900px 500px at 50% 110%, oklch(0.86 0.14 190 / 0.12), transparent 65%);
+}
+html.palette-aurora .premium-card {
+  background:
+    linear-gradient(180deg, oklch(0.86 0.14 185 / 0.08), oklch(0.86 0.14 185 / 0.02)),
+    oklch(0.20 0.05 180 / 0.55);
 }
 html.palette-aurora.light,
 html.light.palette-aurora {
+  --background: #eefbf6;
+  --surface: #ffffff;
+  --foreground: oklch(0.24 0.05 180);
+  --card: oklch(1 0 0 / 0.85);
+  --card-foreground: oklch(0.24 0.05 180);
   --primary: oklch(0.52 0.13 172);
+  --secondary: oklch(0.93 0.03 180);
+  --muted: oklch(0.93 0.025 180);
+  --muted-foreground: oklch(0.46 0.05 178);
   --ring: oklch(0.52 0.13 172);
   --brand: oklch(0.52 0.13 172);
   --brand-2: oklch(0.54 0.12 205);
@@ -671,6 +706,17 @@ html.light.palette-aurora {
   --ai: oklch(0.52 0.13 178);
   --accent: oklch(0.92 0.03 190);
 }
+html.light.palette-aurora body {
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, oklch(0.52 0.13 172 / 0.14), transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%, oklch(0.54 0.12 205 / 0.10), transparent 60%);
+}
+
+/* Palet geçişini yumuşat */
+html, body, .premium-card, .glass {
+  transition: background-color 0.5s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
 
 /* ---------- Giriş ekranı: animasyonlu arka plan ---------- */
 .auth-aurora {
@@ -724,28 +770,76 @@ html.light.palette-aurora {
   to   { left: 85%; opacity: 0.55; }
 }
 
+/* Ek premium arka plan katmanları */
+.auth-orbits {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  opacity: 0.5;
+}
+.auth-orbits span {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--brand) 22%, transparent);
+  box-shadow: 0 0 60px -20px color-mix(in oklab, var(--brand-2) 60%, transparent) inset;
+  animation: orbit-spin 40s linear infinite;
+}
+.auth-orbits span:nth-child(1) { width: 46rem; height: 46rem; }
+.auth-orbits span:nth-child(2) { width: 32rem; height: 32rem; animation-duration: 28s; animation-direction: reverse; border-color: color-mix(in oklab, var(--brand-2) 24%, transparent); }
+.auth-orbits span:nth-child(3) { width: 20rem; height: 20rem; animation-duration: 18s; border-color: color-mix(in oklab, var(--accent-active) 28%, transparent); }
+@keyframes orbit-spin {
+  from { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.06); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+
+.auth-shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, oklch(1 0 0 / 0.06) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: shine-sweep 9s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.auth-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 40%, oklch(0 0 0 / 0.55) 100%);
+}
+
 /* Harf harf beliren VELORA yazısı */
 .velora-letter {
   display: inline-block;
   opacity: 0;
-  transform: translateY(0.4em) rotateX(-70deg);
-  animation: letter-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(0.5em) rotateX(-70deg) scale(0.92);
+  animation: letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.5, 1), filter 0.35s ease;
+}
+.velora-letter:hover {
+  transform: translateY(-6px) scale(1.06);
+  filter: drop-shadow(0 8px 22px color-mix(in oklab, var(--brand) 70%, transparent));
 }
 @keyframes letter-in {
   to { opacity: 1; transform: none; }
 }
 .velora-shine {
   background: linear-gradient(100deg,
-    var(--foreground) 0%, var(--foreground) 38%,
-    var(--brand) 50%, var(--brand-2) 58%,
-    var(--foreground) 70%, var(--foreground) 100%);
+    var(--foreground) 0%, var(--foreground) 32%,
+    oklch(1 0 0) 44%,
+    var(--brand) 52%, var(--brand-2) 60%,
+    var(--foreground) 72%, var(--foreground) 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 .velora-letter.velora-shine {
-  animation: letter-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+  animation: letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards,
              velora-shine 6s ease-in-out infinite;
 }
 @keyframes velora-shine {
@@ -753,7 +847,32 @@ html.light.palette-aurora {
   50% { background-position: 0% 0; }
 }
 
+/* Başlığın arkasındaki nefes alan hale */
+.velora-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120%;
+  height: 220%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, color-mix(in oklab, var(--brand) 45%, transparent), transparent 68%);
+  filter: blur(46px);
+  opacity: 0.4;
+  animation: pulse-soft 4.5s ease-in-out infinite;
+}
+
+/* Başlık altındaki ışıklı çizgi */
+.velora-underline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand), var(--brand-2), transparent);
+  background-size: 200% 100%;
+  animation: aurora-pan 6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .auth-aurora, .auth-grid, .auth-beam, .velora-shine { animation: none; }
+  .auth-aurora, .auth-grid, .auth-beam, .velora-shine,
+  .auth-orbits span, .auth-shimmer, .velora-halo, .velora-underline { animation: none; }
   .velora-letter { animation-duration: 0.01s; }
 }
+
