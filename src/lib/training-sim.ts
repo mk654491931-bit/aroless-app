@@ -878,7 +878,7 @@ export function refreshCreative(state: SimState, productId: string): { state: Si
 /* ---------------- Growth systems: upgrades, financing, CRM ---------------- */
 
 export type UpgradeId =
-  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle";
+  | "checkout" | "logistics" | "supplier" | "retention" | "studio" | "bundle" | "support" | "brandkit";
 
 export type Upgrade = {
   id: UpgradeId;
@@ -895,7 +895,10 @@ export const UPGRADES: Upgrade[] = [
   { id: "retention", title: "Sadakat programı",     blurb: "Geri dönen müşteri havuzu +%60 daha hızlı büyür.",  cost: 240, icon: "💎" },
   { id: "studio",    title: "İçerik stüdyosu",      blurb: "Kreatif yorulması -%45, kreatif çekimi ücretsiz.",  cost: 320, icon: "🎬" },
   { id: "bundle",    title: "Paket & üst satış",    blurb: "Sipariş başı ortalama sepet +%18.",                 cost: 280, icon: "🎁" },
+  { id: "support",   title: "Destek ekibi",         blurb: "Her gün 14 destek bileti ücretsiz kapanır.",        cost: 250, icon: "🎧" },
+  { id: "brandkit",  title: "Marka kimliği",        blurb: "Marka değeri her gün +1.2 daha hızlı büyür.",       cost: 290, icon: "🏷️" },
 ];
+
 
 export const hasUpgrade = (s: SimState, id: UpgradeId) => (s.upgrades ?? []).includes(id);
 
