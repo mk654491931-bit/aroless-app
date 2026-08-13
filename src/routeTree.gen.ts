@@ -10,33 +10,416 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CommandCenterRouteImport } from './routes/command-center'
+import { Route as CompareRouteImport } from './routes/compare'
+import { Route as CompetitorAnalysisRouteImport } from './routes/competitor-analysis'
+import { Route as CouncilRouteImport } from './routes/council'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as NewsRouteImport } from './routes/news'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TrendRadarRouteImport } from './routes/trend-radar'
+import { Route as ViralAdsRouteImport } from './routes/viral-ads'
+import { Route as HotIdRouteImport } from './routes/hot.$id'
+import { Route as LegalIndexRouteImport } from './routes/legal/index'
+import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
+import { Route as ToolsComplianceRouteImport } from './routes/tools/compliance'
+import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
+import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
+import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
+import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
+import { Route as ApiPublicLemonsqueezyWebhookRouteImport } from './routes/api/public/lemonsqueezy-webhook'
+import { Route as ApiPublicPredictiveTrendsRouteImport } from './routes/api/public/predictive-trends'
+import { Route as ApiPublicProductImageRouteImport } from './routes/api/public/product-image'
+import { Route as ApiPublicToolRouteImport } from './routes/api/public/tool'
+import { Route as ApiPublicTrendAnalysisRouteImport } from './routes/api/public/trend-analysis'
+import { Route as ApiPublicTrendRadarRouteImport } from './routes/api/public/trend-radar'
+import { Route as ApiPublicViralFeedRouteImport } from './routes/api/public/viral-feed'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommandCenterRoute = CommandCenterRouteImport.update({
+  id: '/command-center',
+  path: '/command-center',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompareRoute = CompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompetitorAnalysisRoute = CompetitorAnalysisRouteImport.update({
+  id: '/competitor-analysis',
+  path: '/competitor-analysis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CouncilRoute = CouncilRouteImport.update({
+  id: '/council',
+  path: '/council',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsRoute = NewsRouteImport.update({
+  id: '/news',
+  path: '/news',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrendRadarRoute = TrendRadarRouteImport.update({
+  id: '/trend-radar',
+  path: '/trend-radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ViralAdsRoute = ViralAdsRouteImport.update({
+  id: '/viral-ads',
+  path: '/viral-ads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HotIdRoute = HotIdRouteImport.update({
+  id: '/hot/$id',
+  path: '/hot/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalIndexRoute = LegalIndexRouteImport.update({
+  id: '/legal/',
+  path: '/legal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalSlugRoute = LegalSlugRouteImport.update({
+  id: '/legal/$slug',
+  path: '/legal/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsComplianceRoute = ToolsComplianceRouteImport.update({
+  id: '/tools/compliance',
+  path: '/tools/compliance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsFinanceRoute = ToolsFinanceRouteImport.update({
+  id: '/tools/finance',
+  path: '/tools/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsGrowthRoute = ToolsGrowthRouteImport.update({
+  id: '/tools/growth',
+  path: '/tools/growth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
+  id: '/tools/sourcing',
+  path: '/tools/sourcing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicFxRoute = ApiPublicFxRouteImport.update({
+  id: '/api/public/fx',
+  path: '/api/public/fx',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHotProductsRoute = ApiPublicHotProductsRouteImport.update({
+  id: '/api/public/hot-products',
+  path: '/api/public/hot-products',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicLemonsqueezyWebhookRoute =
+  ApiPublicLemonsqueezyWebhookRouteImport.update({
+    id: '/api/public/lemonsqueezy-webhook',
+    path: '/api/public/lemonsqueezy-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicPredictiveTrendsRoute =
+  ApiPublicPredictiveTrendsRouteImport.update({
+    id: '/api/public/predictive-trends',
+    path: '/api/public/predictive-trends',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicProductImageRoute = ApiPublicProductImageRouteImport.update({
+  id: '/api/public/product-image',
+  path: '/api/public/product-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicToolRoute = ApiPublicToolRouteImport.update({
+  id: '/api/public/tool',
+  path: '/api/public/tool',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicTrendAnalysisRoute = ApiPublicTrendAnalysisRouteImport.update({
+  id: '/api/public/trend-analysis',
+  path: '/api/public/trend-analysis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicTrendRadarRoute = ApiPublicTrendRadarRouteImport.update({
+  id: '/api/public/trend-radar',
+  path: '/api/public/trend-radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
+  id: '/api/public/viral-feed',
+  path: '/api/public/viral-feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth': typeof AuthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/compare': typeof CompareRoute
+  '/competitor-analysis': typeof CompetitorAnalysisRoute
+  '/council': typeof CouncilRoute
+  '/dashboard': typeof DashboardRoute
+  '/news': typeof NewsRoute
+  '/notifications': typeof NotificationsRoute
+  '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trend-radar': typeof TrendRadarRoute
+  '/viral-ads': typeof ViralAdsRoute
+  '/hot/$id': typeof HotIdRoute
+  '/legal/$slug': typeof LegalSlugRoute
+  '/tools/compliance': typeof ToolsComplianceRoute
+  '/tools/finance': typeof ToolsFinanceRoute
+  '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/sourcing': typeof ToolsSourcingRoute
+  '/legal/': typeof LegalIndexRoute
+  '/api/public/fx': typeof ApiPublicFxRoute
+  '/api/public/hot-products': typeof ApiPublicHotProductsRoute
+  '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
+  '/api/public/tool': typeof ApiPublicToolRoute
+  '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
+  '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
+  '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth': typeof AuthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/compare': typeof CompareRoute
+  '/competitor-analysis': typeof CompetitorAnalysisRoute
+  '/council': typeof CouncilRoute
+  '/dashboard': typeof DashboardRoute
+  '/news': typeof NewsRoute
+  '/notifications': typeof NotificationsRoute
+  '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trend-radar': typeof TrendRadarRoute
+  '/viral-ads': typeof ViralAdsRoute
+  '/hot/$id': typeof HotIdRoute
+  '/legal/$slug': typeof LegalSlugRoute
+  '/tools/compliance': typeof ToolsComplianceRoute
+  '/tools/finance': typeof ToolsFinanceRoute
+  '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/sourcing': typeof ToolsSourcingRoute
+  '/legal': typeof LegalIndexRoute
+  '/api/public/fx': typeof ApiPublicFxRoute
+  '/api/public/hot-products': typeof ApiPublicHotProductsRoute
+  '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
+  '/api/public/tool': typeof ApiPublicToolRoute
+  '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
+  '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
+  '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth': typeof AuthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/compare': typeof CompareRoute
+  '/competitor-analysis': typeof CompetitorAnalysisRoute
+  '/council': typeof CouncilRoute
+  '/dashboard': typeof DashboardRoute
+  '/news': typeof NewsRoute
+  '/notifications': typeof NotificationsRoute
+  '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trend-radar': typeof TrendRadarRoute
+  '/viral-ads': typeof ViralAdsRoute
+  '/hot/$id': typeof HotIdRoute
+  '/legal/$slug': typeof LegalSlugRoute
+  '/tools/compliance': typeof ToolsComplianceRoute
+  '/tools/finance': typeof ToolsFinanceRoute
+  '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/sourcing': typeof ToolsSourcingRoute
+  '/legal/': typeof LegalIndexRoute
+  '/api/public/fx': typeof ApiPublicFxRoute
+  '/api/public/hot-products': typeof ApiPublicHotProductsRoute
+  '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
+  '/api/public/tool': typeof ApiPublicToolRoute
+  '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
+  '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
+  '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/command-center'
+    | '/compare'
+    | '/competitor-analysis'
+    | '/council'
+    | '/dashboard'
+    | '/news'
+    | '/notifications'
+    | '/settings'
+    | '/sitemap.xml'
+    | '/trend-radar'
+    | '/viral-ads'
+    | '/hot/$id'
+    | '/legal/$slug'
+    | '/tools/compliance'
+    | '/tools/finance'
+    | '/tools/growth'
+    | '/tools/sourcing'
+    | '/legal/'
+    | '/api/public/fx'
+    | '/api/public/hot-products'
+    | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/predictive-trends'
+    | '/api/public/product-image'
+    | '/api/public/tool'
+    | '/api/public/trend-analysis'
+    | '/api/public/trend-radar'
+    | '/api/public/viral-feed'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/command-center'
+    | '/compare'
+    | '/competitor-analysis'
+    | '/council'
+    | '/dashboard'
+    | '/news'
+    | '/notifications'
+    | '/settings'
+    | '/sitemap.xml'
+    | '/trend-radar'
+    | '/viral-ads'
+    | '/hot/$id'
+    | '/legal/$slug'
+    | '/tools/compliance'
+    | '/tools/finance'
+    | '/tools/growth'
+    | '/tools/sourcing'
+    | '/legal'
+    | '/api/public/fx'
+    | '/api/public/hot-products'
+    | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/predictive-trends'
+    | '/api/public/product-image'
+    | '/api/public/tool'
+    | '/api/public/trend-analysis'
+    | '/api/public/trend-radar'
+    | '/api/public/viral-feed'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/command-center'
+    | '/compare'
+    | '/competitor-analysis'
+    | '/council'
+    | '/dashboard'
+    | '/news'
+    | '/notifications'
+    | '/settings'
+    | '/sitemap.xml'
+    | '/trend-radar'
+    | '/viral-ads'
+    | '/hot/$id'
+    | '/legal/$slug'
+    | '/tools/compliance'
+    | '/tools/finance'
+    | '/tools/growth'
+    | '/tools/sourcing'
+    | '/legal/'
+    | '/api/public/fx'
+    | '/api/public/hot-products'
+    | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/predictive-trends'
+    | '/api/public/product-image'
+    | '/api/public/tool'
+    | '/api/public/trend-analysis'
+    | '/api/public/trend-radar'
+    | '/api/public/viral-feed'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
+  AuthRoute: typeof AuthRoute
+  CommandCenterRoute: typeof CommandCenterRoute
+  CompareRoute: typeof CompareRoute
+  CompetitorAnalysisRoute: typeof CompetitorAnalysisRoute
+  CouncilRoute: typeof CouncilRoute
+  DashboardRoute: typeof DashboardRoute
+  NewsRoute: typeof NewsRoute
+  NotificationsRoute: typeof NotificationsRoute
+  SettingsRoute: typeof SettingsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TrendRadarRoute: typeof TrendRadarRoute
+  ViralAdsRoute: typeof ViralAdsRoute
+  HotIdRoute: typeof HotIdRoute
+  LegalSlugRoute: typeof LegalSlugRoute
+  ToolsComplianceRoute: typeof ToolsComplianceRoute
+  ToolsFinanceRoute: typeof ToolsFinanceRoute
+  ToolsGrowthRoute: typeof ToolsGrowthRoute
+  ToolsSourcingRoute: typeof ToolsSourcingRoute
+  LegalIndexRoute: typeof LegalIndexRoute
+  ApiPublicFxRoute: typeof ApiPublicFxRoute
+  ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
+  ApiPublicLemonsqueezyWebhookRoute: typeof ApiPublicLemonsqueezyWebhookRoute
+  ApiPublicPredictiveTrendsRoute: typeof ApiPublicPredictiveTrendsRoute
+  ApiPublicProductImageRoute: typeof ApiPublicProductImageRoute
+  ApiPublicToolRoute: typeof ApiPublicToolRoute
+  ApiPublicTrendAnalysisRoute: typeof ApiPublicTrendAnalysisRoute
+  ApiPublicTrendRadarRoute: typeof ApiPublicTrendRadarRoute
+  ApiPublicViralFeedRoute: typeof ApiPublicViralFeedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +431,243 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/command-center': {
+      id: '/command-center'
+      path: '/command-center'
+      fullPath: '/command-center'
+      preLoaderRoute: typeof CommandCenterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compare': {
+      id: '/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof CompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/competitor-analysis': {
+      id: '/competitor-analysis'
+      path: '/competitor-analysis'
+      fullPath: '/competitor-analysis'
+      preLoaderRoute: typeof CompetitorAnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/council': {
+      id: '/council'
+      path: '/council'
+      fullPath: '/council'
+      preLoaderRoute: typeof CouncilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/news': {
+      id: '/news'
+      path: '/news'
+      fullPath: '/news'
+      preLoaderRoute: typeof NewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trend-radar': {
+      id: '/trend-radar'
+      path: '/trend-radar'
+      fullPath: '/trend-radar'
+      preLoaderRoute: typeof TrendRadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/viral-ads': {
+      id: '/viral-ads'
+      path: '/viral-ads'
+      fullPath: '/viral-ads'
+      preLoaderRoute: typeof ViralAdsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hot/$id': {
+      id: '/hot/$id'
+      path: '/hot/$id'
+      fullPath: '/hot/$id'
+      preLoaderRoute: typeof HotIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/': {
+      id: '/legal/'
+      path: '/legal'
+      fullPath: '/legal/'
+      preLoaderRoute: typeof LegalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/$slug': {
+      id: '/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/legal/$slug'
+      preLoaderRoute: typeof LegalSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tools/compliance': {
+      id: '/tools/compliance'
+      path: '/tools/compliance'
+      fullPath: '/tools/compliance'
+      preLoaderRoute: typeof ToolsComplianceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tools/finance': {
+      id: '/tools/finance'
+      path: '/tools/finance'
+      fullPath: '/tools/finance'
+      preLoaderRoute: typeof ToolsFinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tools/growth': {
+      id: '/tools/growth'
+      path: '/tools/growth'
+      fullPath: '/tools/growth'
+      preLoaderRoute: typeof ToolsGrowthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tools/sourcing': {
+      id: '/tools/sourcing'
+      path: '/tools/sourcing'
+      fullPath: '/tools/sourcing'
+      preLoaderRoute: typeof ToolsSourcingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/fx': {
+      id: '/api/public/fx'
+      path: '/api/public/fx'
+      fullPath: '/api/public/fx'
+      preLoaderRoute: typeof ApiPublicFxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hot-products': {
+      id: '/api/public/hot-products'
+      path: '/api/public/hot-products'
+      fullPath: '/api/public/hot-products'
+      preLoaderRoute: typeof ApiPublicHotProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/lemonsqueezy-webhook': {
+      id: '/api/public/lemonsqueezy-webhook'
+      path: '/api/public/lemonsqueezy-webhook'
+      fullPath: '/api/public/lemonsqueezy-webhook'
+      preLoaderRoute: typeof ApiPublicLemonsqueezyWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/predictive-trends': {
+      id: '/api/public/predictive-trends'
+      path: '/api/public/predictive-trends'
+      fullPath: '/api/public/predictive-trends'
+      preLoaderRoute: typeof ApiPublicPredictiveTrendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/product-image': {
+      id: '/api/public/product-image'
+      path: '/api/public/product-image'
+      fullPath: '/api/public/product-image'
+      preLoaderRoute: typeof ApiPublicProductImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/tool': {
+      id: '/api/public/tool'
+      path: '/api/public/tool'
+      fullPath: '/api/public/tool'
+      preLoaderRoute: typeof ApiPublicToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/trend-analysis': {
+      id: '/api/public/trend-analysis'
+      path: '/api/public/trend-analysis'
+      fullPath: '/api/public/trend-analysis'
+      preLoaderRoute: typeof ApiPublicTrendAnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/trend-radar': {
+      id: '/api/public/trend-radar'
+      path: '/api/public/trend-radar'
+      fullPath: '/api/public/trend-radar'
+      preLoaderRoute: typeof ApiPublicTrendRadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/viral-feed': {
+      id: '/api/public/viral-feed'
+      path: '/api/public/viral-feed'
+      fullPath: '/api/public/viral-feed'
+      preLoaderRoute: typeof ApiPublicViralFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
+  AuthRoute: AuthRoute,
+  CommandCenterRoute: CommandCenterRoute,
+  CompareRoute: CompareRoute,
+  CompetitorAnalysisRoute: CompetitorAnalysisRoute,
+  CouncilRoute: CouncilRoute,
+  DashboardRoute: DashboardRoute,
+  NewsRoute: NewsRoute,
+  NotificationsRoute: NotificationsRoute,
+  SettingsRoute: SettingsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TrendRadarRoute: TrendRadarRoute,
+  ViralAdsRoute: ViralAdsRoute,
+  HotIdRoute: HotIdRoute,
+  LegalSlugRoute: LegalSlugRoute,
+  ToolsComplianceRoute: ToolsComplianceRoute,
+  ToolsFinanceRoute: ToolsFinanceRoute,
+  ToolsGrowthRoute: ToolsGrowthRoute,
+  ToolsSourcingRoute: ToolsSourcingRoute,
+  LegalIndexRoute: LegalIndexRoute,
+  ApiPublicFxRoute: ApiPublicFxRoute,
+  ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
+  ApiPublicLemonsqueezyWebhookRoute: ApiPublicLemonsqueezyWebhookRoute,
+  ApiPublicPredictiveTrendsRoute: ApiPublicPredictiveTrendsRoute,
+  ApiPublicProductImageRoute: ApiPublicProductImageRoute,
+  ApiPublicToolRoute: ApiPublicToolRoute,
+  ApiPublicTrendAnalysisRoute: ApiPublicTrendAnalysisRoute,
+  ApiPublicTrendRadarRoute: ApiPublicTrendRadarRoute,
+  ApiPublicViralFeedRoute: ApiPublicViralFeedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
