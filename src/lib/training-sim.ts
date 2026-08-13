@@ -396,3 +396,124 @@ export function netMarginPct(p: StoreProduct, cfg: DifficultyConfig) {
 export function unitProfit(p: StoreProduct, cfg: DifficultyConfig) {
   return p.price - p.unitCost - p.price * cfg.platformFeePct - cfg.shippingPerUnit;
 }
+
+/* ---------------- Strategic decision cards ---------------- */
+
+export type DecisionEffect = {
+  cash?: number;                 // + income / - spend
+  ratingDelta?: number;          // applied to every product
+  fatigueDelta?: number;         // applied to every product
+  priceMult?: number;            // discount / raise across the store
+  stockPerProduct?: number;      // free units added
+  event?: { text: string; days: number; cpcMult: number; cvrMult: number };
+  log: string;
+};
+
+export type Decision = {
+  id: string;
+  title: string;
+  body: string;
+  options: { label: string; detail: string; effect: DecisionEffect }[];
+};
+
+export const DECISIONS: Decision[] = [
+  {
+    id: "influencer",
+    title: "Mikro-influencer teklifi",
+    body: "45B takipçili bir içerik üreticisi ürününü tanıtmak için $120 istiyor. Barter da teklif ediyor.",
+    options: [
+      { label: "$120 öde", detail: "3 gün ucuz ve iyi dönüşen trafik", effect: { cash: -120, event: { text: "Influencer videosu yayında — trafik ucuzladı ve dönüşüm arttı.", days: 3, cpcMult: 0.72, cvrMult: 1.4 }, log: "Influencer iş birliği için $120 ödendi." } },
+      { label: "Ürün gönder", detail: "Ücretsiz ama etki daha zayıf", effect: { stockPerProduct: -2, event: { text: "Barter içerik yayınlandı — ılımlı bir trafik artışı var.", days: 2, cpcMult: 0.9, cvrMult: 1.15 }, log: "Influencer'a numune ürün gönderildi." } },
+      { label: "Reddet", detail: "Nakit korunur", effect: { log: "Influencer teklifi reddedildi." } },
+    ],
+  },
+  {
+    id: "supplier",
+    title: "Tedarikçi zam yapıyor",
+    body: "Ana tedarikçin birim maliyeti %8 artırıyor. Alternatif tedarikçi daha ucuz ama kalite riski var.",
+    options: [
+      { label: "Zammı kabul et", detail: "Kalite sabit", effect: { cash: -40, log: "Tedarikçi zammı kabul edildi." } },
+      { label: "Ucuz tedarikçiye geç", detail: "Nakit kalır, puan düşebilir", effect: { cash: 60, ratingDelta: -0.25, log: "Daha ucuz tedarikçiye geçildi, kalite riski alındı." } },
+      { label: "Stok yığ", detail: "Şimdiden ücretsiz 8 birim", effect: { cash: -150, stockPerProduct: 8, log: "Zam öncesi toplu stok alındı." } },
+    ],
+  },
+  {
+    id: "review",
+    title: "1 yıldızlı kritik yorum",
+    body: "Kargo gecikmesi yüzünden öfkeli bir müşteri kötü yorum bıraktı ve görülme oranı yüksek.",
+    options: [
+      { label: "İade + özür kiti", detail: "Puanı toparlar", effect: { cash: -55, ratingDelta: 0.3, log: "Müşteriye iade ve özür kiti gönderildi." } },
+      { label: "Yalnızca yanıt yaz", detail: "Ücretsiz, küçük etki", effect: { ratingDelta: 0.08, log: "Yoruma kamuya açık yanıt verildi." } },
+      { label: "Görmezden gel", detail: "Dönüşüm 2 gün düşer", effect: { event: { text: "Kötü yorum öne çıktı — dönüşüm baskı altında.", days: 2, cpcMult: 1, cvrMult: 0.82 }, ratingDelta: -0.1, log: "Kötü yorum yanıtsız bırakıldı." } },
+    ],
+  },
+  {
+    id: "flash",
+    title: "Flaş indirim fırsatı",
+    body: "Pazaryeri hafta sonu kampanyasına seni davet ediyor. Katılmak için fiyatları %12 düşürmen gerekiyor.",
+    options: [
+      { label: "Kampanyaya gir", detail: "Fiyatlar -%12, 3 gün talep patlaması", effect: { priceMult: 0.88, event: { text: "Kampanya sayfasındasın — talep arttı.", days: 3, cpcMult: 0.95, cvrMult: 1.45 }, log: "Flaş indirim kampanyasına girildi." } },
+      { label: "Katılma", detail: "Marj korunur", effect: { log: "Kampanya daveti reddedildi." } },
+    ],
+  },
+  {
+    id: "creative",
+    title: "Kreatif ajansı teklifi",
+    body: "Bir UGC ajansı $90'a 5 yeni video paketi sunuyor.",
+    options: [
+      { label: "Paketi al", detail: "Tüm kreatif yorgunluğu sıfırlanır", effect: { cash: -90, fatigueDelta: -1, log: "UGC kreatif paketi satın alındı, reklamlar tazelendi." } },
+      { label: "Kendin çek", detail: "Ücretsiz, kısmi tazeleme", effect: { fatigueDelta: -0.35, log: "Kendi kreatiflerin çekildi." } },
+    ],
+  },
+  {
+    id: "shipping",
+    title: "Hızlı kargo anlaşması",
+    body: "Kargo firması, ek ücretle 2 gün daha hızlı teslimat sunuyor. Müşteri memnuniyeti artabilir.",
+    options: [
+      { label: "Anlaş", detail: "Puan artar, nakit azalır", effect: { cash: -75, ratingDelta: 0.22, log: "Hızlı kargo anlaşması yapıldı." } },
+      { label: "Mevcutta kal", detail: "Değişiklik yok", effect: { log: "Kargo anlaşması değiştirilmedi." } },
+    ],
+  },
+];
+
+export function applyDecision(state: SimState, optionIndex: number): SimState {
+  const pending = state.pendingDecision;
+  if (!pending) return state;
+  const card = DECISIONS.find((d) => d.id === pending.id);
+  const opt = card?.options[optionIndex];
+  if (!card || !opt) return { ...state, pendingDecision: undefined };
+  const e = opt.effect;
+
+  const products = state.products.map((p) => ({
+    ...p,
+    rating: e.ratingDelta ? Math.max(1, Math.min(5, p.rating + e.ratingDelta)) : p.rating,
+    fatigue: e.fatigueDelta ? Math.max(0, Math.min(0.95, (p.fatigue ?? 0) + e.fatigueDelta)) : p.fatigue,
+    price: e.priceMult ? Math.round(p.price * e.priceMult * 100) / 100 : p.price,
+    stock: e.stockPerProduct ? Math.max(0, p.stock + e.stockPerProduct) : p.stock,
+  }));
+
+  return {
+    ...state,
+    products,
+    cash: Math.round((state.cash + (e.cash ?? 0)) * 100) / 100,
+    activeEvent: e.event ? { text: e.event.text, daysLeft: e.event.days, cpcMult: e.event.cpcMult, cvrMult: e.event.cvrMult } : state.activeEvent,
+    decisionsTaken: (state.decisionsTaken ?? 0) + 1,
+    pendingDecision: undefined,
+    log: [...state.log, { day: state.day, kind: "info" as const, text: `${card.title}: ${e.log}` }].slice(-120),
+  };
+}
+
+/** Shoot a fresh creative for one product: costs cash, resets fatigue. */
+export function refreshCreative(state: SimState, productId: string): { state: SimState; error?: string } {
+  const p = state.products.find((x) => x.id === productId);
+  if (!p) return { state };
+  if (state.cash < CREATIVE_COST) return { state, error: "Kreatif çekimi için yeterli nakit yok." };
+  return {
+    state: {
+      ...state,
+      cash: Math.round((state.cash - CREATIVE_COST) * 100) / 100,
+      products: state.products.map((x) => (x.id === productId ? { ...x, fatigue: 0 } : x)),
+      log: [...state.log, { day: state.day, kind: "good" as const, text: `${p.name} için yeni kreatif yayına alındı (-$${CREATIVE_COST}).` }].slice(-120),
+    },
+  };
+}
