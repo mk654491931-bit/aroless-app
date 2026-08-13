@@ -1016,3 +1016,123 @@ function DecisionModal({ id, onChoose }: { id: string; onChoose: (i: number) => 
     </div>
   );
 }
+
+/* ---------------- Growth: upgrades, financing, CRM ---------------- */
+
+function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
+  state: SimState;
+  onUpgrade: (id: (typeof UPGRADES)[number]["id"]) => void;
+  onLoan: (n: number) => void;
+  onRepay: (n: number) => void;
+  onCampaign: () => void;
+}) {
+  const owed = state.loan?.balance ?? 0;
+  const room = Math.max(0, LOAN_MAX - owed);
+  const subs = Math.floor(state.subscribers ?? 0);
+  const cd = Math.max(0, CAMPAIGN_COOLDOWN - (state.day - (state.lastCampaignDay ?? -99)));
+  const canCampaign = subs >= 25 && cd === 0 && state.status === "running";
+
+  return (
+    <div className="space-y-4">
+      <div className="premium-card rounded-2xl p-4 md:p-5">
+        <div className="flex items-center gap-2">
+          <Rocket size={15} className="text-[oklch(0.72_0.18_265)]" />
+          <h3 className="text-sm font-bold">Mağaza yükseltmeleri</h3>
+          <span className="text-[11px] text-muted-foreground">Kalıcı etki — bir kez alınır, sezon boyunca çalışır.</span>
+        </div>
+        <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {UPGRADES.map((u) => {
+            const owned = hasUpgrade(state, u.id);
+            const afford = state.cash >= u.cost;
+            return (
+              <div key={u.id} className={`rounded-xl border p-3 transition ${owned ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/5"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{u.icon}</span>
+                    <span className="text-xs font-semibold">{u.title}</span>
+                  </div>
+                  {owned && <CheckCircle2 size={14} className="shrink-0 text-emerald-300" />}
+                </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{u.blurb}</p>
+                <button
+                  disabled={owned || !afford || state.status !== "running"}
+                  onClick={() => onUpgrade(u.id)}
+                  className="mt-2.5 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-40"
+                >
+                  {owned ? "Aktif" : `Satın al · ${money(u.cost)}`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="premium-card rounded-2xl p-4 md:p-5">
+          <div className="flex items-center gap-2">
+            <Landmark size={15} className="text-amber-300" />
+            <h3 className="text-sm font-bold">İşletme kredisi</h3>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            Stok almak için nakit sıkışırsan kredi çekebilirsin. Günlük %{(LOAN_DAILY_RATE * 100).toFixed(1)} faiz
+            her gün kârından düşer — hızlı kapatmak marjını korur.
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+              <div className="text-[10px] text-muted-foreground">Borç</div>
+              <div className="text-sm font-bold">{money(owed)}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+              <div className="text-[10px] text-muted-foreground">Limit kalan</div>
+              <div className="text-sm font-bold">{money(room)}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+              <div className="text-[10px] text-muted-foreground">Ödenen faiz</div>
+              <div className="text-sm font-bold text-rose-300">{money(state.loan?.paidInterest ?? 0)}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[250, 500, 1000].map((n) => (
+              <button key={n} disabled={room < n || state.status !== "running"} onClick={() => onLoan(n)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-40">
+                +{money(n)} çek
+              </button>
+            ))}
+            <button disabled={owed <= 0 || state.cash <= 0} onClick={() => onRepay(Math.min(owed, state.cash))}
+              className="rounded-lg border border-emerald-400/30 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40">
+              Elden geldiğince öde
+            </button>
+          </div>
+        </div>
+
+        <div className="premium-card rounded-2xl p-4 md:p-5">
+          <div className="flex items-center gap-2">
+            <Mail size={15} className="text-[oklch(0.72_0.18_265)]" />
+            <h3 className="text-sm font-bold">E-posta listesi & kampanya</h3>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            Her sipariş listeni büyütür. Kampanya reklam maliyeti olmadan sipariş getirir ama listeyi yorar —
+            {CAMPAIGN_COOLDOWN} günde birden sık gönderemezsin.
+          </p>
+          <div className="mt-3 flex items-end gap-3">
+            <div>
+              <div className="text-[10px] text-muted-foreground">Abone</div>
+              <div className="text-2xl font-bold tabular-nums">{subs}</div>
+            </div>
+            <div className="flex-1">
+              <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                  style={{ width: `${Math.min(100, (subs / 400) * 100)}%` }} />
+              </div>
+              <div className="mt-1 text-[10px] text-muted-foreground">Tahmini sipariş: ~{Math.round(subs * 0.06)}</div>
+            </div>
+          </div>
+          <button disabled={!canCampaign} onClick={onCampaign}
+            className="mt-3 w-full rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold glow disabled:opacity-40">
+            {cd > 0 ? `${cd} gün sonra gönderilebilir` : subs < 25 ? "Liste çok küçük" : "Kampanyayı gönder"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
