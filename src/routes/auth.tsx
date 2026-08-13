@@ -328,6 +328,14 @@ function AuthPage() {
       <div aria-hidden className="auth-aurora" />
       <div aria-hidden className="auth-grid" />
       <div aria-hidden className="auth-beam" />
+      <div aria-hidden className="auth-orbits">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div aria-hidden className="auth-shimmer" />
+      <div aria-hidden className="auth-vignette" />
+
 
       {/* Quantum data mesh */}
       <QuantumMesh />
