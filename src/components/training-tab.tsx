@@ -175,7 +175,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const alerts = tips.filter((t) => t.kind === "warn").length;
   const nextMission = missions.find((m) => !m.done);
 
-  const views: { id: typeof view; label: string; icon: typeof Store; badge?: string }[] = [
+  const views: { id: typeof view; label: string; icon: React.ComponentType<{ size?: number }>; badge?: string }[] = [
     { id: "storefront", label: "Vitrin", icon: Store },
     { id: "products", label: "Katalog & Stok", icon: Package },
     { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
