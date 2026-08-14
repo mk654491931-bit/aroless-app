@@ -539,6 +539,27 @@ JSON shape:
     }
     const normalized = products.map(normalizeProduct);
 
+    // ---- Winner Gate: ucuz, deterministik ön eleme (kara liste + eşikler) ----
+    const gate = winnerGate(normalized, {
+      minNetMargin: data.competition_pref === "low" ? 20 : 16,
+      priceMin: data.price_target_min || 0,
+      priceMax: data.price_target_max || 0,
+      keepAtLeast: 3,
+    });
+    const rejectedCandidates = gate.rejected.map((r) => ({
+      name: r.product.name,
+      emoji: r.product.emoji,
+      selling_price_usd: r.product.selling_price_usd,
+      supplier_price_usd: r.product.supplier_price_usd,
+      competition_level: r.product.competition_level,
+      rejection_reason: r.rejection_reason,
+    }));
+    // Pahalı derin analiz sadece kapıyı geçen en iyi adaylara uygulanır.
+    const deepLimit = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
+    const gated = gate.survivors.slice(0, deepLimit);
+
+
+
     // ---- Hybrid scoring: AI1 Groq (55%) + AI2 Gemini logistics (45%) ----
     const country = (data.target_country || "GLOBAL").toUpperCase();
     const minScore = Math.max(0, Math.min(100, Math.round(data.min_score ?? 65)));
