@@ -774,6 +774,8 @@ function Dashboard() {
                     />
                   ))}
                 </div>
+                <RejectedPanel items={rejected} />
+
                 </>
                 );
               })()}
