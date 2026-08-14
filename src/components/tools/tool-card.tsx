@@ -144,11 +144,11 @@ export function ToolCard({
   };
 
   return (
-    <Card className="group relative overflow-hidden border-white/10 bg-[var(--surface)]/70 backdrop-blur transition-colors hover:border-[var(--accent-active)]/30">
+    <Card className={`group premium-card live-card relative overflow-hidden border-transparent bg-transparent transition-colors ${loading ? "card-shimmer" : ""}`}>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-active)]/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3">
             <Icon size={15} className="text-[var(--accent-active)]" />
           </span>
           {title}
@@ -157,7 +157,7 @@ export function ToolCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {children}
-        <Button onClick={run} disabled={loading || disabled} className="w-full gap-2">
+        <Button onClick={run} disabled={loading || disabled} className={`press w-full gap-2 ${loading || disabled ? "" : "edge-light"}`}>
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
           {loading ? "Hibrit AI çalışıyor…" : runLabel}
         </Button>
@@ -172,7 +172,7 @@ export function ToolCard({
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-10 animate-pulse rounded-lg bg-white/5" />
+                <div key={i} className="h-10 rounded-lg border border-white/5 bg-white/5" style={{ opacity: 0.5 + (i % 2) * 0.2 }} />
               ))}
             </div>
           </div>
