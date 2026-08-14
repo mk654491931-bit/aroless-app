@@ -1295,9 +1295,10 @@ function ProductCard({
   );
 }
 
-type SortKey = "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
+type SortKey = "winner" | "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
 
 const SORTS: { id: SortKey; label: string }[] = [
+  { id: "winner", label: "Winner Score" },
   { id: "ai", label: "AI score" },
   { id: "buyers", label: "Buyers / 1k" },
   { id: "margin", label: "Margin" },
@@ -1309,6 +1310,7 @@ const SORTS: { id: SortKey; label: string }[] = [
 
 function sortValue(p: WinningProduct, key: SortKey): number {
   const e = enrichProduct(p);
+  if (key === "winner") return p.winner_score ?? e.ai_score;
   if (key === "buyers") return buyersPer1000(p).value;
   if (key === "margin") return p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0;
   if (key === "trend") return e.trend_score;
@@ -1317,6 +1319,7 @@ function sortValue(p: WinningProduct, key: SortKey): number {
   if (key === "momentum") return p.market_evidence?.trend_momentum_pct ?? 0;
   return e.ai_score;
 }
+
 
 
 function sortProducts(list: WinningProduct[], key: SortKey, onlyLaunch: boolean, desc = true): WinningProduct[] {
