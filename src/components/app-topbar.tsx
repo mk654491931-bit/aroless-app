@@ -31,7 +31,11 @@ const TITLES: Record<string, string> = {
  */
 export function AppTopbar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { credits, tier } = useEntitlements();
+  const { tier } = useEntitlements();
+  const { user } = useAuth();
+  const profileFn = useServerFn(getFullProfile);
+  const profileQ = useQuery({ queryKey: ["profile", user?.id], queryFn: () => profileFn(), enabled: !!user });
+  const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
   const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Velora");
 
   return (
