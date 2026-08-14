@@ -1,3 +1,4 @@
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Gauge, PackagePlus, CalendarClock, Globe2, Megaphone, Loader2, Sparkles } from "lucide-react";
@@ -63,7 +64,7 @@ function ConsensusCard() {
       const res = await fetch("/api/public/tool", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: "consensus", input }),
+        body: JSON.stringify({ tool: "consensus", input: { ...input, uiLang: getUiLang() } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Consensus başarısız");
       setData((await res.json()) as Consensus);
