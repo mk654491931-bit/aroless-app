@@ -671,12 +671,15 @@ function Dashboard() {
               {!searching && results.length > 0 && (() => {
                 const q = resultQuery.trim().toLowerCase();
                 const bandPass = (p: WinningProduct) => {
+                  if (band === "winner") return (p.winner_score ?? 0) >= 70;
                   if (band === "high") return enrichProduct(p).ai_score >= 80;
                   if (band === "lowcomp") return p.competition_level === "Low";
                   if (band === "margin") return (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40;
                   if (band === "saved") return favoriteNames.has(p.name);
-                  if (band === "verified") return (p.realism_score ?? 0) >= 75;
+                  if (band === "verified") return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
                   if (band === "rising") return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
+                  if (band === "shippable")
+                    return (p.score_breakdown?.components.find((c) => c.key === "logistics")?.score ?? 0) >= 70;
                   return true;
                 };
 
@@ -689,13 +692,16 @@ function Dashboard() {
                 const shown = sortProducts(filtered, sortBy, onlyLaunch, sortDesc);
                 const bands = [
                   { id: "all", label: `Tümü (${results.length})` },
+                  { id: "winner", label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})` },
                   { id: "high", label: "80+ AI skoru" },
                   { id: "lowcomp", label: "Düşük rekabet" },
                   { id: "margin", label: "Marj %40+" },
                   { id: "saved", label: "Kaydedilenler" },
-                  { id: "verified", label: `Doğrulanmış (${results.filter((p) => (p.realism_score ?? 0) >= 75).length})` },
+                  { id: "verified", label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})` },
                   { id: "rising", label: "Canlı yükselişte" },
+                  { id: "shippable", label: "Kargoya uygun" },
                 ] as const;
+
 
 
                 return (
