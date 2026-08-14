@@ -7,6 +7,20 @@
 // ============================================================================
 import { netMarginOf } from "./profitability";
 import { parseMoney } from "./unit-economics";
+import { countryFit, PLATFORM_MARKETS } from "./platform-market";
+import type { Platform } from "./gemini.functions";
+
+/** Ülkeye özel sertifika / gümrük bariyeri olan ürün kalıpları. */
+const COUNTRY_BARRIERS: Record<string, { re: RegExp; why: string }[]> = {
+  SA: [{ re: /(elektronik|electronic|cosmetic|kozmetik|toy|oyuncak|charger|şarj)/i, why: "Suudi Arabistan SABER/SASO belgesi gerektiriyor" }],
+  AE: [{ re: /(cosmetic|kozmetik|supplement|takviye|food|gıda|charger|şarj)/i, why: "BAE ESMA/MoHAP tescili gerektiriyor" }],
+  DE: [{ re: /(battery|pil|batarya|elektronik|electronic|packaging)/i, why: "Almanya VerpackG (ambalaj kaydı) + WEEE/BattG zorunluluğu" }],
+  FR: [{ re: /(battery|pil|elektronik|electronic|textile|tekstil)/i, why: "Fransa EPR (Triman) kayıt zorunluluğu" }],
+  TR: [{ re: /(supplement|takviye|cosmetic|kozmetik|medikal|medical)/i, why: "Türkiye'de Tarım/Sağlık Bakanlığı izni gerekiyor" }],
+  IN: [{ re: /(elektronik|electronic|charger|şarj|toy|oyuncak)/i, why: "Hindistan BIS sertifikası gerekiyor" }],
+  BR: [{ re: /(elektronik|electronic|charger|şarj|wireless|telsiz)/i, why: "Brezilya ANATEL/INMETRO onayı gerekiyor" }],
+  JP: [{ re: /(charger|şarj|battery|pil|wireless|telsiz)/i, why: "Japonya PSE/GİTELEC onayı gerekiyor" }],
+};
 
 export type GateInput = {
   name?: string;
@@ -83,6 +97,10 @@ export type GateOptions = {
   priceMax?: number;
   /** Elemeden sonra en az kaç ürün kalmalı — altına düşerse en iyiler geri alınır. */
   keepAtLeast?: number;
+  /** Hedef ülke kodu (TR, DE, GLOBAL ...). */
+  country?: string;
+  /** Kullanıcının seçtiği satış kanalları. */
+  platforms?: string[];
 };
 
 /** Deterministik ön eleme. Hayatta kalanlar + gerekçeli elenenler döner. */
@@ -94,6 +112,10 @@ export function winnerGate<T extends GateInput>(
   const priceMin = opts.priceMin ?? 0;
   const priceMax = opts.priceMax ?? 0;
   const keepAtLeast = opts.keepAtLeast ?? 3;
+  const country = (opts.country || "GLOBAL").toUpperCase();
+  // Kullanıcının seçtiği kanallardan bu ülkede gerçekten çalışanlar.
+  const usable = (opts.platforms ?? []).filter((p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable");
+  const barriers = COUNTRY_BARRIERS[country] ?? [];
 
   const unique = dedupeCandidates(items);
   const survivors: T[] = [];
@@ -114,6 +136,18 @@ export function winnerGate<T extends GateInput>(
     else if (priceMin > 0 && price > 0 && price < priceMin) reason = `Hedef fiyat bandının altında ($${price.toFixed(2)}).`;
     else if (priceMax > 0 && price > 0 && price > priceMax) reason = `Hedef fiyat bandının üstünde ($${price.toFixed(2)}).`;
     else if (margin < minMargin) reason = `Net marj yetersiz (%${Math.round(margin)} < %${minMargin}).`;
+    else if (
+      usable.length > 0 &&
+      (p.platform_fit ?? []).length > 0 &&
+      !(p.platform_fit ?? []).some(
+        (f) => !(f in PLATFORM_MARKETS) || countryFit(f as Platform, country) !== "unavailable",
+      )
+    )
+      reason = `Önerilen satış kanalları ${country} pazarında kullanılamıyor.`;
+    else {
+      const hit = barriers.find((b) => b.re.test(text));
+      if (hit && !hasDiff) reason = `Pazar uyumu: ${hit.why} — küçük satıcı için giriş bariyeri yüksek.`;
+    }
 
     if (reason) rejected.push({ product: p, rejection_reason: reason });
     else survivors.push(p);

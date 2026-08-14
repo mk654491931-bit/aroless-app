@@ -6,6 +6,7 @@ import { normalizeProduct } from "@/lib/consistency";
 import type { RealEconomics } from "@/lib/real-economics";
 import { HYBRID_RELAXED_MIN_SCORE, type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
+import { marketBriefBlock, countryAngles, countryFit } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { MarketEvidence } from "@/lib/market-evidence";
 import type { WinnerBreakdown } from "@/lib/winner-score";
@@ -321,6 +322,11 @@ export const generateProducts = createServerFn({ method: "POST" })
     const deepBrief = deepLines.length ? `\nDEEP SEARCH CONSTRAINTS (mandatory, applied before ranking):\n${deepLines.join("\n")}\n` : "";
 
 
+    // ---- Country + platform reality (commissions, shipping, tax, barriers) ----
+    const targetCode = (data.target_country || (data.marketplace === "turkey" ? "TR" : "GLOBAL")).toUpperCase();
+    const marketBrief = marketBriefBlock(data.platforms, targetCode);
+    const localAngles = countryAngles(targetCode, data.platforms);
+
     const buildPrompt = (angle: string, extra = "") => `You are an elite e-commerce product research analyst with LIVE Google Search access.
 CRITICAL: Use the Google Search tool before answering. Base every number, price, competitor, link and trend claim on real, current search results you actually retrieved. Never invent, estimate blindly, or simulate data. If a figure cannot be verified, give the closest verified real-world figure and say so in "confidence_reason".
 ANGLE FOR THIS BATCH: ${angle}
@@ -340,8 +346,9 @@ Brief:
 - MARKETPLACE FOCUS: ${
       data.marketplace === "turkey"
         ? "Turkey — source and price for Trendyol and Hepsiburada. Give prices in TRY (Turkish Lira), apply real Trendyol/Hepsiburada commission rates (10-22%) and local cargo costs in cost_breakdown, and score demand against Turkish local search/sales data."
-        : "Global — source from AliExpress/Alibaba and benchmark retail against Amazon. Prices in USD."
+        : "Global sourcing from AliExpress/Alibaba, but every demand and price claim must be validated for the target country below."
     }
+${marketBrief}
 ${deepBrief}${extra ? extra + "\n" : ""}- OUTPUT LANGUAGE: write every human-readable string in ${data.lang === "tr" ? "Turkish" : data.lang === "es" ? "Spanish" : data.lang === "de" ? "German" : data.lang === "fr" ? "French" : data.lang === "ar" ? "Arabic" : "English"} (keep URLs, numbers and product brand names as-is).
 
 
@@ -462,7 +469,9 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
       "DIFFERENTIATION PLAY — a product where existing listings have loud, repeated review complaints you can fix; state the complaint and the fix.",
     ];
     const angleCount = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
-    const anglePrompts = ANGLES.slice(0, angleCount).map((a) => buildPrompt(a, githubBlock + liveBlock));
+    // İlk iki açı hedef ülkeye özel (yerel trend + yerel platform çok satanları).
+    const activeAngles = [...localAngles, ...ANGLES].slice(0, angleCount);
+    const anglePrompts = activeAngles.map((a) => buildPrompt(a, githubBlock + liveBlock));
     // Each angle goes out on a DIFFERENT rotated key (apiKey omitted → the
     // round-robin scheduler in ai.server picks the next cool key), with a small
     // stagger so both calls never hit the same per-minute bucket at once.
@@ -553,6 +562,8 @@ JSON shape:
       priceMin: data.price_target_min || 0,
       priceMax: data.price_target_max || 0,
       keepAtLeast: 3,
+      country: targetCode,
+      platforms: data.platforms,
     });
     const rejectedCandidates = gate.rejected.map((r) => ({
       name: r.product.name,
