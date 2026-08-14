@@ -1018,7 +1018,7 @@ html.light .live-card:hover {
 /* Sequenced entrance for card grids */
 .stagger-in > * {
   opacity: 0;
-  animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: stagger-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .stagger-in > *:nth-child(1) { animation-delay: 0.02s; }
 .stagger-in > *:nth-child(2) { animation-delay: 0.08s; }
@@ -1027,7 +1027,7 @@ html.light .live-card:hover {
 .stagger-in > *:nth-child(5) { animation-delay: 0.26s; }
 .stagger-in > *:nth-child(6) { animation-delay: 0.32s; }
 .stagger-in > *:nth-child(n+7) { animation-delay: 0.38s; }
-@keyframes fade-in {
+@keyframes stagger-in {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
 }
