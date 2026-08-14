@@ -485,21 +485,53 @@ function Dashboard() {
               </div>
 
               <div>
-                <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2"><Store size={12} /> {t("sales_platforms")}</label>
+                <label className="flex items-center justify-between gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                  <span className="flex items-center gap-1.5"><Store size={12} /> {t("sales_platforms")}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPlatforms(recommendedPlatforms(effectiveCountry))}
+                    className="normal-case tracking-normal text-[11px] rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[oklch(0.86_0.10_265)] hover:bg-[oklch(0.68_0.20_265)]/22"
+                  >
+                    {countryName(effectiveCountry)} için öner
+                  </button>
+                </label>
 
                 <div className="flex flex-wrap gap-2">
                   {PLATFORMS.map((p) => {
                     const on = platforms.includes(p);
+                    const fit = countryFit(p, effectiveCountry);
+                    const blocked = fit === "unavailable";
+                    const [c1, c2] = commissionRange(p, effectiveCountry);
+                    const [d1, d2] = shipDays(p, effectiveCountry);
                     return (
                       <button type="button" key={p} onClick={() => togglePlatform(p)}
-                        className={`text-xs pl-1.5 pr-3 py-1 rounded-full border transition inline-flex items-center gap-1.5 ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}>
+                        title={`${fitLabel(fit)} · komisyon %${c1}-%${c2} · teslimat ${d1}-${d2} gün`}
+                        className={`text-xs pl-1.5 pr-3 py-1 rounded-full border transition inline-flex items-center gap-1.5 ${
+                          on
+                            ? blocked
+                              ? "border-amber-400/60 bg-amber-400/15 text-amber-200"
+                              : "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground"
+                            : blocked
+                              ? "border-white/5 bg-white/[0.02] text-muted-foreground/50 line-through"
+                              : fit === "native"
+                                ? "border-emerald-400/30 bg-emerald-400/[0.07] text-muted-foreground hover:text-foreground"
+                                : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                        }`}>
                         <img src={PLATFORM_LOGO[p]} alt="" loading="lazy" className="h-5 w-5 rounded-full bg-white/90 p-0.5 object-contain" onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                         <span>{p}</span>
+                        {fit === "native" && <span className="text-[9px] text-emerald-300/80">yerel</span>}
+                        {fit === "cross-border" && <span className="text-[9px] text-sky-300/70">sınır ötesi</span>}
                       </button>
                     );
                   })}
                 </div>
+                {blockedSelected.length > 0 && (
+                  <p className="mt-2 text-[11px] text-amber-300/90">
+                    {blockedSelected.join(", ")} — {countryName(effectiveCountry)} pazarında satış yapılamıyor. Sonuçlar bu kanallara göre optimize edilmez.
+                  </p>
+                )}
               </div>
+
 
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2"><Wallet size={12} /> Starting Capital</label>
