@@ -17,6 +17,7 @@ import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PageHero } from "@/components/page-hero";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
