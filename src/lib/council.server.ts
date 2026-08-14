@@ -108,8 +108,17 @@ const SHAPE = `Return ONLY minified JSON:
  "bullets": [string] (3-5 concrete Turkish insights, each with a number),
  "metrics": [{"label": string, "value": string}] (3-4 items)}`;
 
+const COUNCIL_LANG_NAMES: Record<string, string> = {
+  tr: "Turkish", en: "English", es: "Spanish", de: "German", fr: "French", ar: "Arabic",
+};
+let activeCouncilLang = "tr";
+function langDirective(): string {
+  const name = COUNCIL_LANG_NAMES[activeCouncilLang] ?? "English";
+  return `\n\nOUTPUT LANGUAGE: write every human-readable string in ${name}. Keep numbers, currency codes, URLs and brand names unchanged.`;
+}
+
 function teamPrompt(role: string, task: string, block: string): string {
-  return `${role}\n\nGÖREV: ${task}\n\nCANLI VERİ SİNYALLERİ:\n${block}\n\n${SHAPE}`;
+  return `${role}\n\nGÖREV: ${task}\n\nCANLI VERİ SİNYALLERİ:\n${block}\n\n${SHAPE}${langDirective()}`;
 }
 
 function baseTeam(
@@ -203,7 +212,7 @@ MADDELER: ${team.bullets.join(" | ")}
 CANLI VERİ:
 ${block}
 
-Return ONLY JSON: {"score": number 1-100, "note": string (max 140 karakter Türkçe gerekçe)}`;
+Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${langDirective()}`;
   await stagger(slot);
   const runners: Runner[] =
     team.team === "market"
@@ -249,7 +258,7 @@ async function runDirector(
   alt: string;
 }> {
   const prompt = `Sen 7. YAPAY ZEKA — MÜDÜR / SENTEZLEME MOTORU'sun.
-Üç ekibin raporunu ve hakem düzeltmelerini birleştirip tek sayfalık temiz bir "İCRA RAPORU" yaz (Türkçe).
+Üç ekibin raporunu ve hakem düzeltmelerini birleştirip tek sayfalık temiz bir "İCRA RAPORU" yaz.
 
 ÜRÜN/NİŞ: ${query} | HEDEF ÜLKE: ${country}
 ${teams
@@ -381,17 +390,19 @@ export async function runCouncil(
   query: string,
   country = "GLOBAL",
   category = "General",
+  lang = "tr",
 ): Promise<CouncilReport> {
-  const { data, cache_hit } = await cached("council", [query, country, category], () =>
+  activeCouncilLang = lang.slice(0, 2);
+  const { data, cache_hit } = await cached("council", [query, country, category, lang], () =>
     build(query, country, category),
   );
   return { ...data, cache_hit };
 }
 
 /** Cache lookup only — used to skip credit spend on a repeat query. */
-export async function peekCouncil(query: string, country: string, category: string): Promise<CouncilReport | null> {
+export async function peekCouncil(query: string, country: string, category: string, lang = "tr"): Promise<CouncilReport | null> {
   const { cacheGet, cacheKey } = await import("./ai-cache.server");
-  const key = await cacheKey("council", [query, country, category]);
+  const key = await cacheKey("council", [query, country, category, lang]);
   const hit = await cacheGet<CouncilReport>(key);
   return hit ? { ...hit, cache_hit: true } : null;
 }

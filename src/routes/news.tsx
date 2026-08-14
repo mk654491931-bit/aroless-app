@@ -1,3 +1,4 @@
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Newspaper, Target, ArrowLeft, Loader2, AlertTriangle, RefreshCw, Clock, Zap } from "lucide-react";
@@ -35,7 +36,7 @@ async function callNews<T>(input: Record<string, string>): Promise<T[]> {
   const res = await fetch("/api/public/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tool: "news", input }),
+    body: JSON.stringify({ tool: "news", input: { ...input, uiLang: getUiLang() } }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Haberler alınamadı");
   const json = (await res.json()) as { items?: T[] };

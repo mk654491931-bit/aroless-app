@@ -15,6 +15,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
+import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
+import i18n from "@/lib/i18n";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -104,7 +106,13 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const chromeless = pathname.startsWith("/auth");
-  useEffect(() => { initI18n(); }, []);
+  useEffect(() => {
+    initI18n();
+    setAutoLanguage(i18n.language);
+    const onLang = (lng: string) => { setAutoLanguage(lng); };
+    i18n.on("languageChanged", onLang);
+    return () => { i18n.off("languageChanged", onLang); };
+  }, []);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {

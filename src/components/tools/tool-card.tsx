@@ -1,3 +1,4 @@
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState, type ReactNode } from "react";
 import {
   Loader2, Sparkles, AlertTriangle, Copy, Check, ShieldAlert, ListChecks,
@@ -29,7 +30,7 @@ export async function callTool(tool: string, input: Record<string, string>): Pro
   const res = await fetch("/api/public/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tool, input }),
+    body: JSON.stringify({ tool, input: { ...input, uiLang: getUiLang() } }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "AI isteği başarısız");
   return (await res.json()) as ToolResult;

@@ -1,3 +1,4 @@
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -72,7 +73,7 @@ function CouncilPage() {
       setStage(0);
       const timer = window.setInterval(() => setStage((s) => Math.min(STAGES.length - 1, s + 1)), 4500);
       try {
-        return (await runFn({ data: { query, country } })) as CouncilReport;
+        return (await runFn({ data: { query, country, lang: getUiLang() } })) as CouncilReport;
       } finally {
         window.clearInterval(timer);
       }

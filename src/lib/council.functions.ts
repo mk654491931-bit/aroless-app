@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type Input = { query: string; country?: string; category?: string };
+type Input = { query: string; country?: string; category?: string; lang?: string };
 
 /**
  * 7'li AI Konsey çalıştırıcısı.
@@ -17,12 +17,13 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       query,
       country: String(input?.country ?? "GLOBAL").toUpperCase().slice(0, 8),
       category: String(input?.category ?? "General").slice(0, 60),
+      lang: String(input?.lang ?? "tr").slice(0, 5),
     };
   })
   .handler(async ({ data, context }) => {
     const { runCouncil, peekCouncil } = await import("@/lib/council.server");
 
-    const cachedReport = await peekCouncil(data.query, data.country, data.category);
+    const cachedReport = await peekCouncil(data.query, data.country, data.category, data.lang);
     if (cachedReport) return cachedReport;
 
     const { error } = await context.supabase.rpc("deduct_credit");
@@ -34,5 +35,5 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       );
     }
 
-    return runCouncil(data.query, data.country, data.category);
+    return runCouncil(data.query, data.country, data.category, data.lang);
   });
