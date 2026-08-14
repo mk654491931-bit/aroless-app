@@ -15,6 +15,20 @@
 // Everything here is a pure function — client-safe and testable.
 // ============================================================================
 
+export type EconomicsBenchmark = {
+  /** Hangi katman: Sektör / Ülke / Pazaryeri / Reklam / Lojistik. */
+  scope: "Sektör" | "Ülke" | "Pazaryeri" | "Reklam" | "Lojistik" | "Ödeme";
+  label: string;
+  /** Modelde kullanılan sayı, okunabilir biçimde. */
+  value: string;
+  /** Bu sayının hesaba nasıl girdiği. */
+  basis: string;
+  /** Kaynağın adı. */
+  source: string;
+  /** Kaynak bağlantısı. */
+  url: string;
+};
+
 export type RealEconomics = {
   retail: number;
   supplier: number;
@@ -44,6 +58,10 @@ export type RealEconomics = {
     high_usd: number;
   };
   assumptions: string[];
+  /** Hangi sektör/ülke/pazar tahminlerinin kullanıldığı + kaynak bağlantıları. */
+  benchmarks: EconomicsBenchmark[];
+  /** Modelin uygulandığı bağlam (rozetlerde gösterilir). */
+  context: { country: string; country_label: string; category: string; platform: string };
 };
 
 export type RealEconomicsInput = {
@@ -55,7 +73,12 @@ export type RealEconomicsInput = {
   trend_score?: number;
   cvr_pct?: number;
   startup_cost_usd?: unknown;
+  /** ISO ülke kodu (US, DE, TR…) veya GLOBAL. */
+  country?: string;
+  /** Ürün kategorisi / niş (sektör benchmark'ı için). */
+  category?: string;
 };
+
 
 export function money(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
