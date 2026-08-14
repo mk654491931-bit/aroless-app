@@ -11,7 +11,7 @@ export function AmbientBackground() {
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return setParticles(0);
-    const apply = () => setParticles(window.innerWidth < 768 ? 8 : 18);
+    const apply = () => setParticles(window.innerWidth < 768 ? 14 : 34);
     apply();
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
