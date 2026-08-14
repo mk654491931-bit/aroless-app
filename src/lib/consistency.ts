@@ -1,4 +1,5 @@
 import type { WinningProduct } from "./gemini.functions";
+import { realEconomics } from "./real-economics";
 
 export type Issue = {
   level: "error" | "warn";
@@ -211,7 +212,6 @@ export function normalizeProduct(p: WinningProduct): WinningProduct {
   // in the UI never render "—" or empty. Values are derived, never invented.
   const sell = parseMoneyNum(out.selling_price_usd) || 25;
   const sup = parseMoneyNum(out.supplier_price_usd) || Math.max(1, sell * 0.28);
-  const margin = out.profit_margin_pct || 35;
   const trend = out.trend_score ?? 60;
   const comp = out.competition_level ?? "Medium";
   const fmt = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
@@ -349,6 +349,23 @@ export function normalizeProduct(p: WinningProduct): WinningProduct {
       { week: "Week 3", theme: "Social proof", posts: ["5-star review carousel", "Customer transformation video", "Founder Q&A"] },
       { week: "Week 4", theme: "Offer + urgency", posts: ["Flash-sale countdown", "Bundle showcase", "'Last chance' story"] },
     ];
+  }
+
+  // financial_projection: gerçek birim ekonomisine göre 3 aylık gerçekçi rampa
+  {
+    const ramp = [0.6, 1, 1.35];
+    out.financial_projection = ramp.map((k, i) => {
+      const units = Math.max(3, Math.round(re.monthly.units * k));
+      const ad = Math.round(re.monthly.ad_budget_usd * k);
+      const net = Math.round(units * re.net_per_unit + re.monthly.organic_units * k * re.cac - re.monthly.overhead_usd);
+      return {
+        month: `Month ${i + 1}`,
+        units,
+        revenue_usd: fmt(units * re.retail),
+        ad_spend_usd: fmt(ad),
+        net_profit_usd: fmt(net),
+      };
+    });
   }
 
   return out;
