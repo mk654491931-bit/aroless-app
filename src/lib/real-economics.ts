@@ -130,6 +130,85 @@ function cvrFor(retail: number, competition: string, trend: number): number {
   return clamp(r2(cvr), 0.4, 4.5);
 }
 
+// ---------------------------------------------------------------------------
+// Country & sector benchmark tables (published 2024/2025 references).
+// ---------------------------------------------------------------------------
+
+type CountryBench = {
+  label: string;
+  /** Paid-traffic CPC multiplier vs the global baseline. */
+  cpc: number;
+  /** Typical store CVR (%) for that market. */
+  cvr: number;
+  /** Domestic last-mile shipping, USD. */
+  ship: number;
+  /** VAT / sales-tax note. */
+  tax: string;
+  source: string;
+  url: string;
+};
+
+const COUNTRY_BENCH: Record<string, CountryBench> = {
+  US: { label: "ABD", cpc: 1.15, cvr: 2.3, ship: 5.5, tax: "Eyalet satış vergisi %0-9.5 (fiyata dahil değil)", source: "Statista – US e-commerce & CPC benchmarks", url: "https://www.statista.com/topics/2443/us-ecommerce/" },
+  DE: { label: "Almanya", cpc: 0.85, cvr: 2.6, ship: 4.9, tax: "KDV %19 (fiyata dahil)", source: "Eurostat – E-commerce statistics", url: "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=E-commerce_statistics" },
+  UK: { label: "Birleşik Krallık", cpc: 0.95, cvr: 2.9, ship: 4.5, tax: "KDV %20 (fiyata dahil)", source: "ONS – Retail sales, internet sales", url: "https://www.ons.gov.uk/businessindustryandtrade/retailindustry" },
+  FR: { label: "Fransa", cpc: 0.8, cvr: 2.4, ship: 5.2, tax: "KDV %20 (fiyata dahil)", source: "FEVAD – Bilan du e-commerce", url: "https://www.fevad.com/" },
+  CA: { label: "Kanada", cpc: 0.95, cvr: 2.2, ship: 6.5, tax: "GST/HST %5-15", source: "Statistics Canada – Retail e-commerce", url: "https://www150.statcan.gc.ca/n1/en/subjects/business_performance_and_ownership/retail_and_wholesale" },
+  AU: { label: "Avustralya", cpc: 0.9, cvr: 2.5, ship: 7.5, tax: "GST %10", source: "Australia Post – eCommerce Industry Report", url: "https://auspost.com.au/business/marketing-and-communications/access-data-and-insights/ecommerce-industry-report" },
+  TR: { label: "Türkiye", cpc: 0.35, cvr: 1.9, ship: 2.2, tax: "KDV %20 (fiyata dahil)", source: "TÜİK / TOBB E-Ticaret Bilgi Sistemi", url: "https://www.eticaret.gov.tr/istatistikler" },
+  GLOBAL: { label: "Global", cpc: 1, cvr: 2.1, ship: 5, tax: "Pazara göre değişken KDV/satış vergisi", source: "Statista – Global e-commerce benchmarks", url: "https://www.statista.com/markets/413/e-commerce/" },
+};
+
+function countryBench(code?: string): CountryBench {
+  const c = (code ?? "GLOBAL").toUpperCase();
+  const alias: Record<string, string> = { GB: "UK", TUR: "TR", USA: "US", TURKEY: "TR", TÜRKIYE: "TR" };
+  return COUNTRY_BENCH[alias[c] ?? c] ?? COUNTRY_BENCH.GLOBAL;
+}
+
+type SectorBench = { label: string; returns: number; cvr: number; source: string; url: string };
+
+const SECTOR_BENCH: SectorBench[] = [
+  { label: "Moda & Giyim", returns: 0.24, cvr: 1.9, source: "NRF & Appriss – Consumer Returns in Retail", url: "https://nrf.com/research/2024-consumer-returns-retail-industry" },
+  { label: "Elektronik & Aksesuar", returns: 0.12, cvr: 1.6, source: "NRF – Returns by category", url: "https://nrf.com/research/2024-consumer-returns-retail-industry" },
+  { label: "Ev & Yaşam", returns: 0.09, cvr: 1.8, source: "Statista – Home & living e-commerce", url: "https://www.statista.com/outlook/emo/furniture/worldwide" },
+  { label: "Güzellik & Kişisel Bakım", returns: 0.07, cvr: 3.0, source: "Statista – Beauty & personal care", url: "https://www.statista.com/outlook/cmo/beauty-personal-care/worldwide" },
+  { label: "Spor & Outdoor", returns: 0.13, cvr: 2.0, source: "Statista – Sports e-commerce", url: "https://www.statista.com/outlook/cmo/eyewear/worldwide" },
+  { label: "Bebek & Çocuk", returns: 0.08, cvr: 2.4, source: "Statista – Baby products market", url: "https://www.statista.com/outlook/cmo/toys-hobby/worldwide" },
+  { label: "Evcil Hayvan", returns: 0.06, cvr: 2.8, source: "Statista – Pet care market", url: "https://www.statista.com/outlook/cmo/pet-care/worldwide" },
+  { label: "Sağlık & Wellness", returns: 0.07, cvr: 2.5, source: "Statista – Health & wellness", url: "https://www.statista.com/outlook/hmo/worldwide" },
+  { label: "Genel perakende", returns: 0.10, cvr: 2.1, source: "IRP / Statista – Average online return rate", url: "https://www.statista.com/statistics/1263954/return-rate-by-product-category/" },
+];
+
+function sectorBench(category?: string): SectorBench {
+  const c = (category ?? "").toLowerCase();
+  const map: Array<[RegExp, string]> = [
+    [/moda|giyim|fashion|apparel|cloth|ayakkab|shoe|takı|jewel/, "Moda & Giyim"],
+    [/elektronik|electronic|tech|gadget|phone|telefon|kulaklık|audio/, "Elektronik & Aksesuar"],
+    [/ev |home|kitchen|mutfak|dekor|decor|furniture|mobilya|garden|bahçe/, "Ev & Yaşam"],
+    [/beauty|güzellik|kozmetik|cosmet|skincare|cilt|makyaj|hair|saç/, "Güzellik & Kişisel Bakım"],
+    [/spor|sport|fitness|outdoor|camp|bisiklet|yoga/, "Spor & Outdoor"],
+    [/bebek|baby|kid|çocuk|toy|oyuncak/, "Bebek & Çocuk"],
+    [/pet|evcil|köpek|kedi|dog|cat/, "Evcil Hayvan"],
+    [/sağlık|health|wellness|supplement|vitamin|massage|masaj/, "Sağlık & Wellness"],
+  ];
+  const hit = map.find(([re]) => re.test(c))?.[1];
+  return SECTOR_BENCH.find((s) => s.label === hit) ?? SECTOR_BENCH[SECTOR_BENCH.length - 1];
+}
+
+/** Published rate-card link for the selected sales channel. */
+function platformSource(platform?: string): { source: string; url: string } {
+  const p = (platform ?? "").toLowerCase();
+  if (p.includes("amazon")) return { source: "Amazon Seller Central – Referral fee schedule", url: "https://sellercentral.amazon.com/help/hub/reference/GTG4BAWSY39Z98Z9" };
+  if (p.includes("etsy")) return { source: "Etsy – Fees & payments policy", url: "https://www.etsy.com/legal/fees" };
+  if (p.includes("ebay")) return { source: "eBay – Selling fees", url: "https://www.ebay.com/help/selling/fees-credits-invoices/store-selling-fees" };
+  if (p.includes("tiktok")) return { source: "TikTok Shop – Seller commission", url: "https://seller-us.tiktok.com/university/essay?knowledge_id=10000103" };
+  if (p.includes("trendyol")) return { source: "Trendyol – Komisyon oranları", url: "https://partner.trendyol.com/" };
+  if (p.includes("hepsi")) return { source: "Hepsiburada – Komisyon oranları", url: "https://www.hepsiburada.com/satici-ol" };
+  if (p.includes("walmart")) return { source: "Walmart Marketplace – Referral fees", url: "https://marketplace.walmart.com/referral-fees/" };
+  return { source: "Shopify – Pricing & payment rates", url: "https://www.shopify.com/pricing" };
+}
+
+
 /**
  * Grounded unit + monthly economics for an AVERAGE small seller.
  * Never returns fantasy numbers: sourcing, fees, CAC and volume are all bounded.
