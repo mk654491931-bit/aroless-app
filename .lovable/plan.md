@@ -12,9 +12,11 @@ Yani animasyonlar teknik olarak çalışıyor ama ekranda pratikte görünmüyor
 
 ## Yapılacaklar
 
-### 1. Arka planı gerçekten görünür kıl
+### 1. Arkaya belirgin hareketli animasyon
 - Body'yi düz renk yerine derinlikli degrade yap, ambient katmanları içerikle aynı sahnede görünür hale getir.
 - Aurora/blob/ışın opaklıklarını belirgin seviyeye çıkar (koyu temada ~0.5–0.7 bant), parçacık sayısını ve hareket genliğini artır.
+- Sürekli hareket eden katmanlar: yavaş dönen aurora bulutları, nefes alan renk blobları, ekranı düzenli tarayan ışık huzmesi, yukarı süzülen parçacıklar ve hafifçe kayan ızgara.
+- Fare ve kaydırmaya bağlı parallax derinliği (katmanlar farklı hızlarda hareket eder).
 - Sayfa kapsayıcılarındaki opak arka planları yarı saydam cam yüzeye çevir ki arka plan hareketi içerik altından okunsun.
 
 ### 2. Yeni üst uygulama çubuğu (en görünür değişiklik)
