@@ -173,10 +173,13 @@ function Dashboard() {
     mutationFn: (vars: { niche: string; category: string; audience: string; platforms: Platform[]; budget: Budget; target_country: string; min_score: number; marketplace: MarketplaceId; lang: string; use_github_trends: boolean } & DeepSearchOptions) =>
       generateFn({ data: vars }),
     onSuccess: (res, vars) => {
-      setResults(res.products);
+      const scored = attachWinnerScores(res.products);
+      setResults(scored);
+      setRejected((res as { rejected?: RejectedCandidate[] }).rejected ?? []);
       setFallbackNotice(res.fallback?.message ?? null);
       qc.invalidateQueries({ queryKey: ["profile"] });
       toast.success(`${res.products.length} winning products generated!`);
+
       // fire-and-forget history save
       saveAnalysisFn({ data: { search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`, results: res.products } }).catch(() => {});
       // persist products for reliability tracking & viral scoring
