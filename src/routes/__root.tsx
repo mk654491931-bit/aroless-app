@@ -135,8 +135,13 @@ function RootComponent() {
           <div className="flex min-h-screen w-full">
             <AppSidebar />
             <div className="flex-1 min-w-0">
-              <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2"><PaletteToggle /><ThemeToggle /></div>
-              <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-[var(--surface)]/90 backdrop-blur hover:bg-white/10" />
+              {pathname !== "/" && <AppTopbar />}
+              {pathname === "/" && (
+                <>
+                  <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2"><PaletteToggle /><ThemeToggle /></div>
+                  <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-[var(--surface)]/90 backdrop-blur hover:bg-white/10" />
+                </>
+              )}
               <div key={pathname} className="page-fade"><Outlet /></div>
               <SiteFooter />
             </div>
