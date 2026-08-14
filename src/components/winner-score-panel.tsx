@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, ShieldCheck, Trophy } from "lucide-react";
-import { evidenceLabel, evidenceStyle, type WinnerBreakdown } from "@/lib/winner-score";
+import { AlertTriangle, BadgeCheck, ChevronDown, CircleDashed, ExternalLink, ShieldCheck, Sigma, Trophy } from "lucide-react";
+import { evidenceLabel, evidenceStyle, type ScoreComponent, type WinnerBreakdown } from "@/lib/winner-score";
+
 
 const barColor = (v: number) =>
   v >= 75 ? "bg-emerald-400" : v >= 55 ? "bg-[var(--brand,oklch(0.68_0.20_265))]" : v >= 40 ? "bg-amber-400" : "bg-rose-400";
