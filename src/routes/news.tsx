@@ -2,7 +2,6 @@ import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Newspaper, Target, ArrowLeft, Loader2, AlertTriangle, RefreshCw, Clock, Zap } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
 import { PageHero } from "@/components/page-hero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
