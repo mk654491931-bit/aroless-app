@@ -172,7 +172,10 @@ export function conversionTone(per1000: number) {
  * Repairs internally inconsistent AI output so the UI never shows contradicting numbers.
  * Only derives missing/impossible values — never invents new facts.
  */
-export function normalizeProduct(p: WinningProduct): WinningProduct {
+export function normalizeProduct(
+  p: WinningProduct,
+  ctx?: { country?: string; category?: string },
+): WinningProduct {
   const out: WinningProduct = { ...p };
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -227,6 +230,8 @@ export function normalizeProduct(p: WinningProduct): WinningProduct {
     trend_score: trend,
     cvr_pct: out.conversion?.cvr_pct,
     startup_cost_usd: out.startup_cost_usd,
+    country: ctx?.country,
+    category: ctx?.category || out.name,
   });
   out.real_economics = re;
   out.cost_breakdown = {

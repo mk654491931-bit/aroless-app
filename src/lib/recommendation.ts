@@ -41,6 +41,7 @@ export function enrichProduct(p: WinningProduct): EnrichedScores {
     trend_score: trend,
     cvr_pct: p.conversion?.cvr_pct,
     startup_cost_usd: p.startup_cost_usd,
+    category: p.name,
   });
   const est_monthly_sales = re.monthly.units;
   const est_monthly_revenue_usd = re.monthly.revenue_usd;
