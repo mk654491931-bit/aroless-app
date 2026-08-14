@@ -180,3 +180,17 @@ export function evidenceStyle(level: EvidenceLevel): string {
       ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
       : "border-rose-500/40 bg-rose-500/10 text-rose-300";
 }
+
+/**
+ * Sunucudan Winner Score gelmeyen yollar (ör. Hugging Face motoru) için
+ * istemci tarafında aynı puanı hesaplar. Zaten puanlı ürünler dokunulmaz.
+ */
+export function attachWinnerScores<T extends ScorableProduct & { winner_score?: number; score_breakdown?: WinnerBreakdown; evidence_level?: EvidenceLevel }>(
+  products: T[],
+): T[] {
+  return products.map((p) => {
+    if (typeof p.winner_score === "number" && p.score_breakdown) return p;
+    const breakdown = computeWinnerScore(p);
+    return { ...p, winner_score: breakdown.winner_score, score_breakdown: breakdown, evidence_level: breakdown.evidence_level };
+  });
+}
