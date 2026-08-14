@@ -194,30 +194,23 @@ function NewsPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="glass top-light sticky top-0 z-40 border-b border-white/10">
-        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3">
-          <BrandLogo subtitle="E-Com News & AI Explainer" />
-          <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10">
-            <ArrowLeft size={13} /> Product Finder
-          </Link>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight md:text-3xl">
-              📰 E-Com News & AI Explainer
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Pazar yerleri, lojistik, vergi ve reklam tarafındaki güncel gelişmeler — her başlığın altında
-              "bu senin için ne anlama geliyor?" kutusuyla.
-            </p>
-          </div>
-          <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => q.refetch()} disabled={q.isFetching}>
-            {q.isFetching ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Yenile
-          </Button>
-        </div>
+        <PageHero
+          icon={<Newspaper size={18} />}
+          title="E-Com News & AI Explainer"
+          description='Pazar yerleri, lojistik, vergi ve reklam tarafındaki güncel gelişmeler — her başlığın altında "bu senin için ne anlama geliyor?" kutusuyla.'
+          actions={
+            <>
+              <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => q.refetch()} disabled={q.isFetching}>
+                {q.isFetching ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Yenile
+              </Button>
+              <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10">
+                <ArrowLeft size={13} /> Product Finder
+              </Link>
+            </>
+          }
+        />
+
 
         <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section>
