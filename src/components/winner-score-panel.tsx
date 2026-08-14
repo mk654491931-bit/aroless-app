@@ -30,6 +30,91 @@ export function WinnerBadge({ score, level }: { score?: number; level?: WinnerBr
   );
 }
 
+/** Tek bileşen: puan çubuğu + açılır kanıt tablosu (metrik · değer · kaynak · ağırlık). */
+function ComponentRow({ c }: { c: ScoreComponent }) {
+  const [open, setOpen] = useState(false);
+  const ev = c.evidence ?? [];
+  const verified = ev.filter((e) => e.verified).length;
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={ev.length === 0 && !c.formula}
+        className="w-full text-left disabled:cursor-default"
+      >
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            {(ev.length > 0 || c.formula) && <ChevronDown size={11} className={`transition ${open ? "rotate-180" : "-rotate-90"}`} />}
+            {c.label} <span className="opacity-60">· ağırlık %{Math.round(c.weight * 100)}</span>
+          </span>
+          <span className="inline-flex items-center gap-2">
+            {ev.length > 0 && (
+              <span className="text-[9px] text-muted-foreground">
+                {verified}/{ev.length} kanıt doğrulandı
+              </span>
+            )}
+            <b className="text-foreground">{c.score}</b>
+          </span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className={`h-full ${barColor(c.score)}`} style={{ width: `${c.score}%` }} />
+        </div>
+      </button>
+
+      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{c.reason}</p>
+
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {c.formula && (
+            <div className="flex items-start gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-muted-foreground">
+              <Sigma size={10} className="mt-0.5 shrink-0 text-[oklch(0.78_0.16_265)]" />
+              <span>
+                <b className="text-foreground">Hesap:</b> {c.formula}
+              </span>
+            </div>
+          )}
+          {ev.map((e, i) => (
+            <div key={i} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5">
+              <div className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  {e.verified ? (
+                    <BadgeCheck size={10} className="text-emerald-400" />
+                  ) : (
+                    <CircleDashed size={10} className="text-amber-400/80" />
+                  )}
+                  {e.metric}
+                </span>
+                <b className="shrink-0 text-foreground">{e.value}</b>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between gap-2 text-[9px] text-muted-foreground">
+                <span className="truncate">
+                  Kaynak: {e.source}
+                  {e.verified ? "" : " · doğrulanmadı"}
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  {typeof e.weight === "number" && <span>katkı %{Math.round(e.weight * 100)}</span>}
+                  {e.url && (
+                    <a
+                      href={e.url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      onClick={(evt) => evt.stopPropagation()}
+                      className="inline-flex items-center gap-0.5 text-[oklch(0.82_0.15_265)] hover:underline"
+                    >
+                      kanıt <ExternalLink size={9} />
+                    </a>
+                  )}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Winner Score kırılımı: her bileşen için puan çubuğu + "neden bu puan". */
 export function WinnerScorePanel({ breakdown }: { breakdown?: WinnerBreakdown }) {
   const [open, setOpen] = useState(false);
