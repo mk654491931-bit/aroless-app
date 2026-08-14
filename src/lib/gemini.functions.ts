@@ -562,6 +562,8 @@ JSON shape:
       priceMin: data.price_target_min || 0,
       priceMax: data.price_target_max || 0,
       keepAtLeast: 3,
+      country: targetCode,
+      platforms: data.platforms,
     });
     const rejectedCandidates = gate.rejected.map((r) => ({
       name: r.product.name,
