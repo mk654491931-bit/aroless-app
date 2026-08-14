@@ -453,15 +453,19 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
       "UNDERRATED HIGH-MARGIN — proven-selling products with strong margins and lower competition/saturation than the obvious viral picks.",
       "PROBLEM-SOLVER / EVERGREEN — products that fix a painful, frequently-searched problem in this niche with steady year-round demand and easy ad angles.",
       "BUNDLE & UPSELL POTENTIAL — anchor products with natural accessories/refills that lift AOV, low return rate and easy repeat purchase.",
+      "EARLY WINDOW — demand started rising in the last 30-60 days, very few established sellers, ad libraries still thin. Prove the rise with a real signal.",
+      "PREMIUM / HIGH-AOV — $60-250 retail products with a defensible quality story, low return rate and buyers who are not price-shoppers.",
+      "CONSUMABLE / REPEAT PURCHASE — refill, subscription or run-out products with natural repurchase cycles and high LTV.",
+      "DIFFERENTIATION PLAY — a product where existing listings have loud, repeated review complaints you can fix; state the complaint and the fix.",
     ];
-    const angleCount = data.depth === "ultra" ? 4 : data.depth === "deep" ? 3 : 2;
+    const angleCount = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
     const anglePrompts = ANGLES.slice(0, angleCount).map((a) => buildPrompt(a, githubBlock + liveBlock));
     // Each angle goes out on a DIFFERENT rotated key (apiKey omitted → the
     // round-robin scheduler in ai.server picks the next cool key), with a small
     // stagger so both calls never hit the same per-minute bucket at once.
     const results = await Promise.allSettled(
       anglePrompts.map(async (pr, i) => {
-        if (i > 0) await new Promise((r) => setTimeout(r, 900 * i));
+        if (i > 0) await new Promise((r) => setTimeout(r, 700 * i));
         return callGemini(pr, undefined);
       }),
     );
@@ -477,21 +481,17 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
       Array.isArray(p?.viral_proof) &&
       p.viral_proof.some((v) => v && /^https?:\/\//i.test(v.url ?? "") && String(v.views ?? "").trim().length > 0);
 
-    // De-duplicate by name (case-insensitive)
-    const seen = new Set<string>();
-    const unique: WinningProduct[] = collected.filter((p) => {
-      const k = (p?.name ?? "").trim().toLowerCase();
-      if (!k || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    // Fuzzy de-duplication: aynı ürünün farklı isimleri tek adaya iner.
+    const { dedupeCandidates, winnerGate } = await import("@/lib/winner-gate.server");
+    const unique: WinningProduct[] = dedupeCandidates(collected as WinningProduct[]);
     // Prefer products with real viral proof, but never return an empty set
     // just because the model omitted proof URLs.
     const proven = unique.filter(hasViralProof);
-    let products: WinningProduct[] = proven.length > 0 ? proven : unique;
-    // Cap scales with the requested depth (2 products per angle)
-    const cap = angleCount * 2;
+    let products: WinningProduct[] = proven.length >= 3 ? proven : unique;
+    // Aday havuzu geniş tutulur; asıl eleme Winner Gate + skorlamada yapılır.
+    const cap = Math.max(10, angleCount * 2);
     if (products.length > cap) products = products.slice(0, cap);
+
 
 
     // If nothing came back, retry the first angle without grounding (strict JSON)
