@@ -223,10 +223,14 @@ export type WinningProduct = {
   market_evidence?: MarketEvidence;
   /** 0-100: sonucun gerçek piyasa verisiyle ne kadar örtüştüğü. */
   realism_score?: number;
-
-
-
+  /** Winner Gate + Winner Score katmanı (tek, açıklanabilir kazanan puanı). */
+  winner_score?: number;
+  score_breakdown?: WinnerBreakdown;
+  evidence_level?: WinnerBreakdown["evidence_level"];
+  /** Eleme sebebi — sadece "Elenenler" listesindeki ürünlerde dolu olur. */
+  rejection_reason?: string;
 };
+
 
 /** Compact, model-friendly summary of a product used as debate context. */
 export function productDebateContext(p: WinningProduct): string {
