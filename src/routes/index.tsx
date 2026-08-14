@@ -54,6 +54,7 @@ import { HotTicker } from "@/components/hot-ticker";
 import { PredictiveTrendsTab } from "@/components/predictive-trends-tab";
 import { ApiKeyBadge, DataSourcesButton } from "@/components/header-extras";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/countries";
+import { countryFit, fitLabel, commissionRange, shipDays, recommendedPlatforms } from "@/lib/platform-market";
 import { CountryFlag, CountryCurrencyBadge } from "@/components/country-flag";
 import { HYBRID_DEFAULT_MIN_SCORE, hybridBadge } from "@/lib/consensus-types";
 import { Globe, Gauge, Swords, Radar, Cpu } from "lucide-react";
@@ -108,6 +109,8 @@ function Dashboard() {
   const [budget, setBudget] = usePersistentState<Budget>("velora.finder.budget", "$500 - $2,000");
   const marketplace: MarketplaceId = platforms.some((p) => p === "Trendyol" || p === "Hepsiburada") ? "turkey" : "global";
   const [targetCountry, setTargetCountry] = usePersistentState<string>("velora.finder.country", DEFAULT_TARGET_COUNTRY);
+  const effectiveCountry = marketplace === "turkey" ? "TR" : targetCountry;
+  const blockedSelected = platforms.filter((p) => countryFit(p, effectiveCountry) === "unavailable");
   const [minScore, setMinScore] = usePersistentState<number>("velora.finder.min_score", HYBRID_DEFAULT_MIN_SCORE);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [engine, setEngine] = usePersistentState<EngineId>("velora.finder.engine", "default");
