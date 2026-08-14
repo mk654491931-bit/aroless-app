@@ -8,6 +8,8 @@
  * on every DOM mutation so React re-renders stay translated.
  */
 
+import { extrasFor } from "./extras";
+
 export type AutoLang = "tr" | "en" | "es" | "de" | "fr" | "ar";
 
 export const AUTO_LANGS: AutoLang[] = ["tr", "en", "es", "de", "fr", "ar"];
