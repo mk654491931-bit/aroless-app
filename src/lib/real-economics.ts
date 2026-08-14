@@ -139,8 +139,13 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
   const cvr = input.cvr_pct && input.cvr_pct > 0.2 && input.cvr_pct < 12
     ? Number(input.cvr_pct) : cvrFor(retail, competition, trend);
   // CAC from real ad math; ~25% of orders arrive organic/repeat, lowering blended CAC.
-  const rawCac = cpc / (cvr / 100);
-  const cac = clamp(r2(rawCac * 0.75), 1.5, retail * 0.6);
+  // Pazaryerlerinde trafiğin çoğu platform içi organik: reklam gideri TACoS
+  // (satışın %10-15'i) olarak gerçekleşir. Kendi mağazanda ise CAC = CPC / CVR.
+  const isMarketplace = rate > 0;
+  const rawCac = isMarketplace
+    ? retail * (competition === "High" ? 0.15 : competition === "Low" ? 0.09 : 0.12)
+    : (cpc / (cvr / 100)) * 0.7; // ~%30 organik + tekrar eden müşteri harmanı
+  const cac = clamp(r2(rawCac), 1.2, retail * 0.45);
 
   const rr = returnRate(retail, input.platform);
   const returns_cost = rr * (supplier + shipping + retail * 0.05);
@@ -192,7 +197,9 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
         ? `Tedarik fiyatı gerçekçi banda çekildi (perakendenin ~%30'u): $${r2(supplier)}`
         : `Tedarik fiyatı kaynak verisinden: $${r2(supplier)}`,
       `${label} + ödeme komisyonu %2.9 + $0.30`,
-      `CPC $${cpc} · dönüşüm %${cvr} → müşteri edinme maliyeti $${r2(cac)} (%25 organik/tekrar harmanlı)`,
+      isMarketplace
+        ? `Reklam gideri satışın %${Math.round((cac / retail) * 100)}'i (pazaryeri TACoS) → $${r2(cac)}/sipariş`
+        : `CPC $${cpc} · dönüşüm %${cvr} → müşteri edinme maliyeti $${r2(cac)} (%30 organik/tekrar harmanlı)`,
       `İade/hasar oranı %${Math.round(rr * 100)} maliyete yansıtıldı`,
       `Aylık $${Math.round(ad_budget)} reklam bütçesi ve $${overhead} sabit gider varsayıldı`,
     ],
