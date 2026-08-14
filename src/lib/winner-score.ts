@@ -170,14 +170,157 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
     penalties.push(`Fiyat piyasa medyanından %${Math.round(Math.abs(ev.price_delta_pct))} sapıyor.`);
   }
 
+  const trendLive = ev?.trend_source === "google-trends";
+  const viralUrl = (p.viral_proof ?? []).find((v) => /^https?:\/\//i.test(v?.url ?? ""))?.url;
+  const topSeller = ev?.sellers?.[0];
+  const supplierLive = ev?.supplier_source === "aliexpress";
+
   const components: ScoreComponent[] = [
-    { key: "demand", label: "Talep momentumu", score: demand, weight: 0.26, reason: demandReason },
-    { key: "margin", label: "Kâr marjı", score: margin, weight: 0.22, reason: marginReason },
-    { key: "competition", label: "Rekabet açığı", score: competition, weight: 0.18, reason: competitionReason },
-    { key: "evidence", label: "Kanıt gücü", score: evidenceScore, weight: 0.16, reason: evidenceReason },
-    { key: "differentiation", label: "Farklılaşma", score: differentiation, weight: 0.10, reason: differentiationReason },
-    { key: "logistics", label: "Lojistik", score: logistics, weight: 0.08, reason: logisticsReason },
+    {
+      key: "demand",
+      label: "Talep momentumu",
+      score: demand,
+      weight: 0.26,
+      reason: demandReason,
+      formula: "0.55 × trend skoru + 0.35 × momentum endeksi + 0.10 × viral kanıt",
+      evidence: [
+        { metric: "Trend skoru", value: `${trend}/100`, source: trendLive ? "Google Trends (canlı)" : "AI tahmini", weight: 0.55, verified: trendLive },
+        {
+          metric: "30 günlük momentum",
+          value: `${momentum > 0 ? "+" : ""}${momentum}%`,
+          source: trendLive ? "Google Trends 30g serisi" : "AI tahmini",
+          weight: 0.35,
+          verified: trendLive,
+        },
+        {
+          metric: "Viral kanıt",
+          value: viral ? `${(p.viral_proof ?? []).length} gönderi` : "bulunamadı",
+          source: viral ? "Sosyal sinyal taraması" : "—",
+          weight: 0.1,
+          verified: viral,
+          ...(viralUrl ? { url: viralUrl } : {}),
+        },
+      ],
+    },
+    {
+      key: "margin",
+      label: "Kâr marjı",
+      score: margin,
+      weight: 0.22,
+      reason: marginReason,
+      formula: "net marj % × 2.2 (≥%45 net marj = 100 puan)",
+      evidence: [
+        { metric: "Net marj", value: `%${Math.round(netMargin)}`, source: "Birim ekonomi hesabı", weight: 0.7, verified: true },
+        { metric: "Satış fiyatı", value: price > 0 ? `$${price.toFixed(2)}` : "belirsiz", source: "AI fiyat önerisi", weight: 0.15, verified: false },
+        {
+          metric: "Tedarik fiyatı",
+          value: ev?.supplier_price_usd ? `$${ev.supplier_price_usd.toFixed(2)}` : (p.supplier_price_usd ?? "belirsiz"),
+          source: supplierLive ? "AliExpress (canlı)" : "AI tahmini",
+          weight: 0.15,
+          verified: !!supplierLive,
+        },
+      ],
+    },
+    {
+      key: "competition",
+      label: "Rekabet açığı",
+      score: competition,
+      weight: 0.18,
+      reason: competitionReason,
+      formula: "(rekabet tabanı + (100 − doygunluk)) / 2 − canlı satıcı cezası",
+      evidence: [
+        { metric: "Rekabet seviyesi", value: String(p.competition_level ?? "Orta"), source: "AI + konsey değerlendirmesi", weight: 0.5, verified: false },
+        {
+          metric: "Doygunluk skoru",
+          value: Number.isFinite(satScore) ? `${clamp(satScore)}/100` : "yok",
+          source: "Pazar doygunluk analizi",
+          weight: 0.25,
+          verified: false,
+        },
+        {
+          metric: "Canlı satıcı sayısı",
+          value: sellerCount ? `${sellerCount} ilan (−${sellerPenalty} puan)` : "0 ilan",
+          source: topSeller ? `Pazar yeri taraması · ${topSeller.platform}` : "Pazar yeri taraması",
+          weight: 0.25,
+          verified: sellerCount > 0,
+          ...(topSeller?.url ? { url: topSeller.url } : {}),
+        },
+      ],
+    },
+    {
+      key: "evidence",
+      label: "Kanıt gücü",
+      score: evidenceScore,
+      weight: 0.16,
+      reason: evidenceReason,
+      formula: "0.7 × gerçekçilik puanı + 6 × doğrulanmış sinyal (maks. 5)",
+      evidence: [
+        { metric: "Gerçekçilik puanı", value: `${realism}/100`, source: "Canlı piyasa çapraz kontrolü", weight: 0.7, verified: realism >= 45 },
+        {
+          metric: "Doğrulanmış sinyaller",
+          value: verifiedSignals ? (ev?.verified_signals ?? []).slice(0, 3).join(", ") : "yok",
+          source: "Trends + pazar yeri + tedarikçi",
+          weight: 0.3,
+          verified: verifiedSignals > 0,
+        },
+        {
+          metric: "Piyasa medyanı sapması",
+          value: ev && ev.market_price_usd > 0 ? `${ev.price_delta_pct > 0 ? "+" : ""}${ev.price_delta_pct}%` : "ölçülemedi",
+          source: ev && ev.market_price_usd > 0 ? `Medyan $${ev.market_price_usd.toFixed(2)}` : "—",
+          verified: !!(ev && ev.market_price_usd > 0),
+        },
+      ],
+    },
+    {
+      key: "differentiation",
+      label: "Farklılaşma",
+      score: differentiation,
+      weight: 0.1,
+      reason: differentiationReason,
+      formula: "35 + 14 × farklılaşma açısı + 9 × rakip şikâyeti + 6 × paket fikri",
+      evidence: [
+        { metric: "Farklılaşma açısı", value: `${diffCount} adet`, source: "Ürün analiz ajanı", weight: 0.5, verified: diffCount > 0 },
+        {
+          metric: "Rakip yorum şikâyeti",
+          value: painCount ? `${painCount} şikâyet → fırsat` : "yok",
+          source: "Yorum madenciliği",
+          weight: 0.3,
+          verified: painCount > 0,
+        },
+        { metric: "Paket/bundle fikri", value: `${bundleCount} adet`, source: "Teklif tasarımı ajanı", weight: 0.2, verified: bundleCount > 0 },
+      ],
+    },
+    {
+      key: "logistics",
+      label: "Lojistik",
+      score: logistics,
+      weight: 0.08,
+      reason: logisticsReason,
+      formula: "78 taban − hacim/kırılganlık/tedarik cezaları + ideal fiyat bandı bonusu",
+      evidence: [
+        {
+          metric: "Boyut/ağırlık",
+          value: BULKY.test(name) ? "hacimli (−40)" : "kargoya uygun",
+          source: "Ürün adı & kategori analizi",
+          verified: false,
+        },
+        { metric: "Kırılganlık", value: FRAGILE.test(name) ? "kırılgan (−18)" : "dayanıklı", source: "Malzeme analizi", verified: false },
+        {
+          metric: "Tedarik süresi",
+          value: lead ? `${lead} gün${lead > 25 ? " (−15)" : ""}` : "bilinmiyor",
+          source: p.sourcing?.shipping_method ? `Tedarikçi verisi · ${p.sourcing.shipping_method}` : "Tedarikçi verisi",
+          verified: lead > 0,
+        },
+        {
+          metric: "Fiyat bandı bonusu",
+          value: price >= 25 && price <= 120 ? "+10 (ideal $25-$120)" : "yok",
+          source: "Reklam maliyeti eşiği kuralı",
+          verified: false,
+        },
+      ],
+    },
   ];
+
 
   const weighted = components.reduce((s, c) => s + c.score * c.weight, 0);
   const penalty = Math.min(24, penalties.length * 6);
