@@ -1429,7 +1429,17 @@ function ResultsToolbar({
     <div className="premium-card grain rounded-2xl p-4 mb-4 flex flex-col gap-3">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <SummaryStat label="Products" value={String(shown.length)} />
+        <SummaryStat
+          label="Avg Winner Score"
+          value={String(
+            shown.length
+              ? Math.round(shown.reduce((s, p) => s + (p.winner_score ?? 0), 0) / shown.length)
+              : 0,
+          )}
+          highlight
+        />
         <SummaryStat label="Launch-ready" value={String(launches)} />
+
         <SummaryStat label="Avg AI score" value={String(avgScore)} />
         <SummaryStat label="Avg net margin" value={`${avgMargin}%`} />
         <SummaryStat label="Avg buyers / 1k" value={String(avgBuyers)} />
