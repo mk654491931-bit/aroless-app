@@ -1172,11 +1172,52 @@ function ProductCard({
                 </b>{" "}
                 ({p.real_economics.monthly.units} adet/ay · ${p.real_economics.monthly.ad_budget_usd} reklam)
               </div>
+              <div className="flex flex-wrap gap-1">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px]">
+                  Ülke: {p.real_economics.context.country_label}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px]">
+                  Sektör: {p.real_economics.context.category}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px]">
+                  Kanal: {p.real_economics.context.platform}
+                </span>
+              </div>
               <ul className="list-disc space-y-0.5 pl-3.5">
                 {p.real_economics.assumptions.map((a) => (
                   <li key={a}>{a}</li>
                 ))}
               </ul>
+              {p.real_economics.benchmarks?.length > 0 && (
+                <details className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                  <summary className="cursor-pointer text-[10px] font-semibold text-foreground/80">
+                    Kullanılan gerçek dünya verileri & kaynaklar ({p.real_economics.benchmarks.length})
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {p.real_economics.benchmarks.map((b) => (
+                      <div key={`${b.scope}-${b.label}`} className="rounded-md border border-white/10 bg-white/[0.03] p-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="rounded-full border border-white/10 px-1.5 py-px text-[9px] uppercase tracking-wide text-muted-foreground">
+                            {b.scope}
+                          </span>
+                          <span className="text-[10px] font-semibold text-foreground/90">{b.value}</span>
+                        </div>
+                        <div className="mt-1 text-[10px] text-foreground/80">{b.label}</div>
+                        <div className="text-[10px] text-muted-foreground">{b.basis}</div>
+                        <a
+                          href={b.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-[oklch(0.75_0.18_265)] hover:underline"
+                        >
+                          {b.source} ↗
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
             </div>
           )}
         </div>
