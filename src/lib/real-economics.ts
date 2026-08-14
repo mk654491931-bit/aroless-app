@@ -159,7 +159,10 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
   // ---- Monthly volume for an average seller: budget constrained, not market size.
   const startup = money(input.startup_cost_usd);
   const ad_budget = clamp(startup > 0 ? startup * 0.45 : 600, 300, 2500);
-  const paid_units = Math.round(ad_budget / Math.max(1.5, cac));
+  // Hacim, en pahalı gerçekçi edinme maliyetiyle sınırlanır (pazaryerinde bile
+  // reklam tıklama maliyeti geçerlidir), böylece "ayda 5.000 adet" çıkmaz.
+  const acquisitionCost = Math.max(cac, (cpc / (cvr / 100)) * 0.5, 2.5);
+  const paid_units = Math.round(ad_budget / acquisitionCost);
   const organic_units = Math.round(clamp((trend - 45) / 5, 0, 14) * (competition === "Low" ? 1.4 : competition === "High" ? 0.6 : 1));
   const units = Math.max(5, paid_units + organic_units);
   const overhead = 120; // Shopify + apps + domain + basic tooling
