@@ -47,6 +47,9 @@ import { CreditCost } from "@/components/credit-cost";
 
 import { TrainingSection } from "@/components/training-section";
 import { AdvancedFilters, DEFAULT_FILTERS, applyFilters, type FinderFilters } from "@/components/advanced-filters";
+import { RejectedPanel, WinnerBadge, WinnerScorePanel, type RejectedCandidate } from "@/components/winner-score-panel";
+import { attachWinnerScores } from "@/lib/winner-score";
+
 import { HotTicker } from "@/components/hot-ticker";
 import { PredictiveTrendsTab } from "@/components/predictive-trends-tab";
 import { ApiKeyBadge, DataSourcesButton } from "@/components/header-extras";
@@ -114,11 +117,13 @@ function Dashboard() {
   const nicheInputRef = useRef<HTMLInputElement>(null);
 
   const [results, setResults] = useState<WinningProduct[]>([]);
-  const [sortBy, setSortBy] = usePersistentState<SortKey>("velora.finder.sort", "ai");
+  const [rejected, setRejected] = useState<RejectedCandidate[]>([]);
+  const [sortBy, setSortBy] = usePersistentState<SortKey>("velora.finder.sort", "winner");
   const [sortDesc, setSortDesc] = useState(true);
   const [resultQuery, setResultQuery] = useState("");
   const [onlyLaunch, setOnlyLaunch] = useState(false);
-  const [band, setBand] = usePersistentState<"all" | "high" | "lowcomp" | "margin" | "saved" | "verified" | "rising">("velora.finder.band", "all");
+  const [band, setBand] = usePersistentState<"all" | "high" | "lowcomp" | "margin" | "saved" | "verified" | "rising" | "winner" | "shippable">("velora.finder.band", "all");
+
 
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
 
@@ -168,10 +173,13 @@ function Dashboard() {
     mutationFn: (vars: { niche: string; category: string; audience: string; platforms: Platform[]; budget: Budget; target_country: string; min_score: number; marketplace: MarketplaceId; lang: string; use_github_trends: boolean } & DeepSearchOptions) =>
       generateFn({ data: vars }),
     onSuccess: (res, vars) => {
-      setResults(res.products);
+      const scored = attachWinnerScores(res.products);
+      setResults(scored);
+      setRejected((res as { rejected?: RejectedCandidate[] }).rejected ?? []);
       setFallbackNotice(res.fallback?.message ?? null);
       qc.invalidateQueries({ queryKey: ["profile"] });
       toast.success(`${res.products.length} winning products generated!`);
+
       // fire-and-forget history save
       saveAnalysisFn({ data: { search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`, results: res.products } }).catch(() => {});
       // persist products for reliability tracking & viral scoring
@@ -199,8 +207,10 @@ function Dashboard() {
         },
       }),
     onSuccess: (res) => {
-      setResults(res.products);
+      setResults(attachWinnerScores(res.products));
+      setRejected([]);
       setFallbackNotice(null);
+
       qc.invalidateQueries({ queryKey: ["profile"] });
       if (res.products.length === 0) toast.error("Hugging Face returned no products — try another niche.");
       else toast.success(`${res.products.length} products from ${res.model}`);
@@ -661,12 +671,15 @@ function Dashboard() {
               {!searching && results.length > 0 && (() => {
                 const q = resultQuery.trim().toLowerCase();
                 const bandPass = (p: WinningProduct) => {
+                  if (band === "winner") return (p.winner_score ?? 0) >= 70;
                   if (band === "high") return enrichProduct(p).ai_score >= 80;
                   if (band === "lowcomp") return p.competition_level === "Low";
                   if (band === "margin") return (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40;
                   if (band === "saved") return favoriteNames.has(p.name);
-                  if (band === "verified") return (p.realism_score ?? 0) >= 75;
+                  if (band === "verified") return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
                   if (band === "rising") return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
+                  if (band === "shippable")
+                    return (p.score_breakdown?.components.find((c) => c.key === "logistics")?.score ?? 0) >= 70;
                   return true;
                 };
 
@@ -679,13 +692,16 @@ function Dashboard() {
                 const shown = sortProducts(filtered, sortBy, onlyLaunch, sortDesc);
                 const bands = [
                   { id: "all", label: `Tümü (${results.length})` },
+                  { id: "winner", label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})` },
                   { id: "high", label: "80+ AI skoru" },
                   { id: "lowcomp", label: "Düşük rekabet" },
                   { id: "margin", label: "Marj %40+" },
                   { id: "saved", label: "Kaydedilenler" },
-                  { id: "verified", label: `Doğrulanmış (${results.filter((p) => (p.realism_score ?? 0) >= 75).length})` },
+                  { id: "verified", label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})` },
                   { id: "rising", label: "Canlı yükselişte" },
+                  { id: "shippable", label: "Kargoya uygun" },
                 ] as const;
+
 
 
                 return (
@@ -758,6 +774,8 @@ function Dashboard() {
                     />
                   ))}
                 </div>
+                <RejectedPanel items={rejected} />
+
                 </>
                 );
               })()}
@@ -1011,7 +1029,13 @@ function ProductCard({
         </div>
       </div>
       <h3 className="font-bold text-lg leading-tight">{p.name}</h3>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <WinnerBadge score={p.winner_score} level={p.evidence_level} />
+      </div>
       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+      <WinnerScorePanel breakdown={p.score_breakdown} />
+
+
 
 
       {p.hybrid && (
@@ -1293,9 +1317,10 @@ function ProductCard({
   );
 }
 
-type SortKey = "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
+type SortKey = "winner" | "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
 
 const SORTS: { id: SortKey; label: string }[] = [
+  { id: "winner", label: "Winner Score" },
   { id: "ai", label: "AI score" },
   { id: "buyers", label: "Buyers / 1k" },
   { id: "margin", label: "Margin" },
@@ -1307,6 +1332,7 @@ const SORTS: { id: SortKey; label: string }[] = [
 
 function sortValue(p: WinningProduct, key: SortKey): number {
   const e = enrichProduct(p);
+  if (key === "winner") return p.winner_score ?? e.ai_score;
   if (key === "buyers") return buyersPer1000(p).value;
   if (key === "margin") return p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0;
   if (key === "trend") return e.trend_score;
@@ -1315,6 +1341,7 @@ function sortValue(p: WinningProduct, key: SortKey): number {
   if (key === "momentum") return p.market_evidence?.trend_momentum_pct ?? 0;
   return e.ai_score;
 }
+
 
 
 function sortProducts(list: WinningProduct[], key: SortKey, onlyLaunch: boolean, desc = true): WinningProduct[] {
@@ -1402,7 +1429,17 @@ function ResultsToolbar({
     <div className="premium-card grain rounded-2xl p-4 mb-4 flex flex-col gap-3">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <SummaryStat label="Products" value={String(shown.length)} />
+        <SummaryStat
+          label="Avg Winner Score"
+          value={String(
+            shown.length
+              ? Math.round(shown.reduce((s, p) => s + (p.winner_score ?? 0), 0) / shown.length)
+              : 0,
+          )}
+          highlight
+        />
         <SummaryStat label="Launch-ready" value={String(launches)} />
+
         <SummaryStat label="Avg AI score" value={String(avgScore)} />
         <SummaryStat label="Avg net margin" value={`${avgMargin}%`} />
         <SummaryStat label="Avg buyers / 1k" value={String(avgBuyers)} />
