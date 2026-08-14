@@ -997,7 +997,7 @@ html.palette-aurora .amb-blob { opacity: 0.6; }
 .amb-vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 95% 80% at 50% 45%, transparent 55%, oklch(0 0 0 / 0.42) 100%);
+  background: radial-gradient(ellipse 95% 80% at 50% 45%, transparent 62%, oklch(0 0 0 / 0.32) 100%);
 }
 html.light .amb-vignette {
   background: radial-gradient(ellipse 95% 80% at 50% 45%, transparent 50%, oklch(0.35 0.05 265 / 0.10) 100%);
@@ -1265,4 +1265,11 @@ html.light .page-hero { border-color: oklch(0.25 0.04 265 / 0.1); }
   .hero-halo, .flow-line, .card-shimmer::before, .edge-light::after { animation: none; }
   .stagger-in > * { opacity: 1; animation: none; }
   .live-card:hover { transform: none; }
+}
+
+
+/* Let the animated background read through the app chrome */
+[data-sidebar="sidebar"] {
+  background: color-mix(in oklab, var(--surface) 62%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(140%);
 }
