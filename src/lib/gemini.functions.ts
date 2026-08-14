@@ -540,7 +540,12 @@ JSON shape:
       await refund();
       throw new Error("The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.");
     }
-    const normalized = products.map(normalizeProduct);
+    const normalized = products.map((prod) =>
+      normalizeProduct(prod, {
+        country: data.target_country,
+        category: data.category && data.category !== "Any" ? data.category : data.niche,
+      }),
+    );
 
     // ---- Winner Gate: ucuz, deterministik ön eleme (kara liste + eşikler) ----
     const gate = winnerGate(normalized, {
