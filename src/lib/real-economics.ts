@@ -313,8 +313,85 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
         : `CPC $${cpc} · dönüşüm %${cvr} → müşteri edinme maliyeti $${r2(cac)} (%30 organik/tekrar harmanlı)`,
       `İade/hasar oranı %${Math.round(rr * 100)} maliyete yansıtıldı`,
       `Aylık $${Math.round(ad_budget)} reklam bütçesi ve $${overhead} sabit gider varsayıldı`,
+      `Ülke pazarı: ${cb.label} (CPC çarpanı ×${cb.cpc} · yerel kargo $${cb.ship}) · ${cb.tax}`,
+      `Sektör: ${sb.label} — ortalama iade %${Math.round(sb.returns * 100)}, dönüşüm %${sb.cvr}`,
+    ],
+    context: {
+      country: (input.country ?? "GLOBAL").toUpperCase(),
+      country_label: cb.label,
+      category: sb.label,
+      platform: input.platform ?? "Shopify",
+    },
+    benchmarks: [
+      {
+        scope: "Sektör",
+        label: `${sb.label} iade oranı`,
+        value: `%${Math.round(sb.returns * 100)}`,
+        basis: `Model iade maliyetini %${Math.round(rr * 100)} ile hesapladı (sektör ortalaması + fiyat/platform düzeltmesi).`,
+        source: sb.source,
+        url: sb.url,
+      },
+      {
+        scope: "Sektör",
+        label: `${sb.label} ortalama dönüşüm`,
+        value: `%${sb.cvr}`,
+        basis: `Kullanılan dönüşüm oranı %${cvr} (sektör + ülke + fiyat/rekabet modeli ortalaması).`,
+        source: sb.source,
+        url: sb.url,
+      },
+      {
+        scope: "Ülke",
+        label: `${cb.label} pazar dönüşümü`,
+        value: `%${cb.cvr}`,
+        basis: `Ülke ortalaması dönüşüm harmanına girdi; hacim buna göre sınırlandı.`,
+        source: cb.source,
+        url: cb.url,
+      },
+      {
+        scope: "Reklam",
+        label: `${cb.label} tıklama maliyeti çarpanı`,
+        value: `×${cb.cpc} → CPC $${cpc}`,
+        basis: isMarketplace
+          ? `Pazaryerinde reklam gideri TACoS olarak $${r2(cac)}/sipariş uygulandı.`
+          : `CAC = CPC ÷ dönüşüm × 0.7 = $${r2(cac)}.`,
+        source: "WordStream / Meta – Ortalama CPC kıyaslamaları",
+        url: "https://www.wordstream.com/blog/ws/2022/02/28/facebook-advertising-benchmarks",
+      },
+      {
+        scope: "Lojistik",
+        label: `${cb.label} yerel kargo`,
+        value: `$${cb.ship}`,
+        basis: `Birim kargo $${r2(shipping)} olarak modellendi (yerel kargo + ürün ağırlığı proxy'si).`,
+        source: cb.source,
+        url: cb.url,
+      },
+      {
+        scope: "Ülke",
+        label: `${cb.label} vergi rejimi`,
+        value: cb.tax,
+        basis: "Fiyatlandırma yorumunda dikkate alınır; net kâr KDV hariç hesaplanır.",
+        source: cb.source,
+        url: cb.url,
+      },
+      {
+        scope: "Pazaryeri",
+        label: label,
+        value: rate > 0 ? `%${Math.round(rate * 1000) / 10}` : "%0",
+        basis: `Komisyon gideri $${r2(platform_fee)}/sipariş.`,
+        source: platformSource(input.platform).source,
+        url: platformSource(input.platform).url,
+      },
+      {
+        scope: "Ödeme",
+        label: "Ödeme işlem komisyonu",
+        value: "%2.9 + $0.30",
+        basis: `Sipariş başına $${r2(payment_fee)} düşüldü.`,
+        source: "Stripe – Pricing",
+        url: "https://stripe.com/pricing",
+      },
     ],
   };
+
 }
 
 /** Formats a USD amount the same way the cards do. */
