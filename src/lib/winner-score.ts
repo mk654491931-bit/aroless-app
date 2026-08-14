@@ -8,13 +8,34 @@ import { netMarginOf } from "./profitability";
 import { parseMoney } from "./unit-economics";
 import type { MarketEvidence } from "./market-evidence";
 
+/** Bir bileşenin puanını üreten tek bir kanıt satırı. */
+export type ScoreEvidence = {
+  /** Ölçülen metrik adı, ör. "Trend momentumu (30g)". */
+  metric: string;
+  /** Ölçülen değer, ör. "+18%". */
+  value: string;
+  /** Verinin nereden geldiği, ör. "Google Trends (canlı)" / "AI tahmini". */
+  source: string;
+  /** Bu kanıtın bileşen puanı içindeki ağırlığı (0-1). */
+  weight?: number;
+  /** Kanıt gerçek bir kaynaktan mı doğrulandı? */
+  verified: boolean;
+  /** Varsa tıklanabilir kaynak bağlantısı. */
+  url?: string;
+};
+
 export type ScoreComponent = {
   key: "demand" | "competition" | "margin" | "logistics" | "differentiation" | "evidence";
   label: string;
   score: number; // 0-100
   weight: number; // 0-1
   reason: string;
+  /** Puanın nasıl hesaplandığını açıklayan kısa formül. */
+  formula?: string;
+  /** Puanı destekleyen örnek kanıtlar. */
+  evidence?: ScoreEvidence[];
 };
+
 
 export type EvidenceLevel = "verified" | "partial" | "ai_only";
 
