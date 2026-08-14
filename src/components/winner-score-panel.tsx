@@ -59,19 +59,9 @@ export function WinnerScorePanel({ breakdown }: { breakdown?: WinnerBreakdown })
       {open && (
         <div className="mt-3 space-y-2">
           {breakdown.components.map((c) => (
-            <div key={c.key}>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">
-                  {c.label} <span className="opacity-60">· ağırlık %{Math.round(c.weight * 100)}</span>
-                </span>
-                <b className="text-foreground">{c.score}</b>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className={`h-full ${barColor(c.score)}`} style={{ width: `${c.score}%` }} />
-              </div>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{c.reason}</p>
-            </div>
+            <ComponentRow key={c.key} c={c} />
           ))}
+
 
           {(breakdown.penalties.length > 0 || breakdown.flags.length > 0) && (
             <ul className="mt-2 space-y-1">
