@@ -226,20 +226,24 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
   if (sourcingOutOfBand) supplier = retail * 0.3;
   supplier = clamp(supplier, retail * 0.12, retail * 0.55);
 
-  // Inbound + last-mile shipping, weight-proxied from unit cost.
+  const cb = countryBench(input.country);
+  const sb = sectorBench(input.category);
+
+  // Inbound + last-mile shipping, weight-proxied from unit cost + country last-mile.
   const shipInput = money(input.shipping_cost);
   const shipping = shipInput > 0 && shipInput < retail * 0.5
     ? shipInput
-    : clamp(2.2 + supplier * 0.4, 2.2, Math.max(4, retail * 0.28));
+    : clamp(cb.ship * 0.55 + supplier * 0.4, 2.2, Math.max(4, retail * 0.28));
 
   const { rate, label } = platformRate(input.platform);
   const platform_fee = retail * rate;
   // Payment processing is charged on every order, marketplace or not.
   const payment_fee = retail * 0.029 + 0.3;
 
-  const cpc = cpcFor(competition, retail);
+  const cpc = r2(cpcFor(competition, retail) * cb.cpc);
   const cvr = input.cvr_pct && input.cvr_pct > 0.2 && input.cvr_pct < 12
-    ? Number(input.cvr_pct) : cvrFor(retail, competition, trend);
+    ? Number(input.cvr_pct)
+    : clamp(r2((cvrFor(retail, competition, trend) + cb.cvr + sb.cvr) / 3 * 1.02), 0.4, 4.5);
   // CAC from real ad math; ~25% of orders arrive organic/repeat, lowering blended CAC.
   // Pazaryerlerinde trafiğin çoğu platform içi organik: reklam gideri TACoS
   // (satışın %10-15'i) olarak gerçekleşir. Kendi mağazanda ise CAC = CPC / CVR.
@@ -249,8 +253,10 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
     : (cpc / (cvr / 100)) * 0.7; // ~%30 organik + tekrar eden müşteri harmanı
   const cac = clamp(r2(rawCac), 1.2, retail * 0.45);
 
-  const rr = returnRate(retail, input.platform);
+  // İade oranı: fiyat/platform proxy'si ile sektör ortalamasının harmanı.
+  const rr = clamp((returnRate(retail, input.platform) + sb.returns) / 2, 0.03, 0.28);
   const returns_cost = rr * (supplier + shipping + retail * 0.05);
+
   const misc = 0.45; // packaging insert, app/tool cost per order, support time
 
   const gross_per_unit = retail - (supplier + shipping + platform_fee + payment_fee + returns_cost + misc);
