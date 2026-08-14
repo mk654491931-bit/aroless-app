@@ -1132,7 +1132,7 @@ html.light .card-shimmer::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .amb-aurora, .amb-grid, .amb-beam, .amb-particles span,
+  .amb-aurora, .amb-grid, .amb-beam, .amb-particles span, .amb-blob, .page-fade,
   .hero-halo, .flow-line, .card-shimmer::before, .edge-light::after { animation: none; }
   .stagger-in > * { opacity: 1; animation: none; }
   .live-card:hover { transform: none; }
