@@ -62,13 +62,6 @@ export function enrichProduct(p: WinningProduct): EnrichedScores {
 }
 
 function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)); }
-function parseMoney(s: string | undefined): number {
-  if (!s) return 0;
-  const m = String(s).match(/[\d,.]+/);
-  if (!m) return 0;
-  const n = Number(m[0].replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
 
 export function recommendationStyle(r: Recommendation) {
   if (r === "Launch") return { emoji: "🟢", cls: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" };
