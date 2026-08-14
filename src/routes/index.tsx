@@ -114,11 +114,13 @@ function Dashboard() {
   const nicheInputRef = useRef<HTMLInputElement>(null);
 
   const [results, setResults] = useState<WinningProduct[]>([]);
-  const [sortBy, setSortBy] = usePersistentState<SortKey>("velora.finder.sort", "ai");
+  const [rejected, setRejected] = useState<RejectedCandidate[]>([]);
+  const [sortBy, setSortBy] = usePersistentState<SortKey>("velora.finder.sort", "winner");
   const [sortDesc, setSortDesc] = useState(true);
   const [resultQuery, setResultQuery] = useState("");
   const [onlyLaunch, setOnlyLaunch] = useState(false);
-  const [band, setBand] = usePersistentState<"all" | "high" | "lowcomp" | "margin" | "saved" | "verified" | "rising">("velora.finder.band", "all");
+  const [band, setBand] = usePersistentState<"all" | "high" | "lowcomp" | "margin" | "saved" | "verified" | "rising" | "winner" | "shippable">("velora.finder.band", "all");
+
 
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
 
