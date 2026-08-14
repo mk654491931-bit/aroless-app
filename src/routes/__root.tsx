@@ -22,6 +22,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PaletteToggle } from "@/components/palette-toggle";
 import { AmbientBackground } from "@/components/ambient-background";
+import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 
