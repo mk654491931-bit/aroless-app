@@ -11,7 +11,7 @@ export function AmbientBackground() {
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return setParticles(0);
-    const apply = () => setParticles(window.innerWidth < 768 ? 8 : 18);
+    const apply = () => setParticles(window.innerWidth < 768 ? 14 : 34);
     apply();
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
@@ -58,11 +58,14 @@ export function AmbientBackground() {
 
   return (
     <div className="amb-root" aria-hidden="true" data-no-translate ref={rootRef}>
+      <div className="amb-layer amb-swirl" />
       <div className="amb-layer amb-aurora" />
       <div className="amb-layer amb-blob amb-blob-1" />
       <div className="amb-layer amb-blob amb-blob-2" />
+      <div className="amb-layer amb-rays" />
       <div className="amb-layer amb-grid" />
       <div className="amb-layer amb-beam" />
+      <div className="amb-layer amb-scan" />
       <div className="amb-layer amb-particles">
         {Array.from({ length: particles }).map((_, i) => (
           <span

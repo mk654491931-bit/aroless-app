@@ -17,6 +17,7 @@ import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PageHero } from "@/components/page-hero";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -119,32 +120,29 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-white/10 glass sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
-              <Sparkles size={18} className="text-white" />
-            </div>
-            <div className="font-bold">{t("dashboard")}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <LanguageSwitcher />
-            <Link to="/notifications" className="relative text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
-              <Bell size={14} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] flex items-center justify-center font-semibold">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
-              <ArrowLeft size={14} /> Back
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        <PageHero
+          icon={<Sparkles size={18} />}
+          title={t("dashboard")}
+          description="Analizleriniz, kayıtlı ürünleriniz ve kredi kullanımınızın canlı özeti."
+          actions={
+            <>
+              <LanguageSwitcher />
+              <Link to="/notifications" className="relative text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
+                <Bell size={14} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] flex items-center justify-center font-semibold">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link to="/" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
+                <ArrowLeft size={14} /> Back
+              </Link>
+            </>
+          }
+        />
+
         <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi icon={History} label="Analyses" value={analyses.length} />
           <Kpi icon={Bookmark} label="Saved Items" value={favorites.length} />
