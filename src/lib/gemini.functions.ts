@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
+import type { RealEconomics } from "@/lib/real-economics";
 import { HYBRID_RELAXED_MIN_SCORE, type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
@@ -229,6 +230,8 @@ export type WinningProduct = {
   winner_score?: number;
   score_breakdown?: WinnerBreakdown;
   evidence_level?: WinnerBreakdown["evidence_level"];
+  /** Gerçek dünya verisine dayalı birim + aylık ekonomi (deterministik, AI değil). */
+  real_economics?: RealEconomics;
   /** Eleme sebebi — sadece "Elenenler" listesindeki ürünlerde dolu olur. */
   rejection_reason?: string;
 };

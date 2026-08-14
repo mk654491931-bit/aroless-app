@@ -1163,9 +1163,26 @@ function ProductCard({
             <span className="font-semibold text-emerald-300 flex items-center gap-1 pt-1 border-t border-white/10 mt-1"><DollarSign size={10} /> Net / unit</span>
             <span className="text-right font-semibold text-emerald-300 pt-1 border-t border-white/10 mt-1">{money(cb.net_profit, { showUsd: false })} ({cb.net_margin_pct}%)</span>
           </div>
+          {p.real_economics && (
+            <div className="mt-2 space-y-1 border-t border-white/10 pt-2 text-[10px] text-muted-foreground">
+              <div className="text-foreground/90">
+                Gerçekçi aylık net kâr:{" "}
+                <b className="text-emerald-300">
+                  {money(enriched.monthly_net_low_usd, { compact: true, showUsd: false })} – {money(enriched.monthly_net_high_usd, { compact: true, showUsd: false })}
+                </b>{" "}
+                ({p.real_economics.monthly.units} adet/ay · ${p.real_economics.monthly.ad_budget_usd} reklam)
+              </div>
+              <ul className="list-disc space-y-0.5 pl-3.5">
+                {p.real_economics.assumptions.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
       )}
+
 
       <div className="mt-3 space-y-2 text-xs">
         <div className="flex gap-2"><Sparkles size={14} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" /><span className="text-muted-foreground">{p.why_winning}</span></div>

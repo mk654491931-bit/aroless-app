@@ -1,4 +1,5 @@
 import type { WinningProduct } from "./gemini.functions";
+import { realEconomics } from "./real-economics";
 
 export type Issue = {
   level: "error" | "warn";
@@ -211,44 +212,48 @@ export function normalizeProduct(p: WinningProduct): WinningProduct {
   // in the UI never render "—" or empty. Values are derived, never invented.
   const sell = parseMoneyNum(out.selling_price_usd) || 25;
   const sup = parseMoneyNum(out.supplier_price_usd) || Math.max(1, sell * 0.28);
-  const margin = out.profit_margin_pct || 35;
   const trend = out.trend_score ?? 60;
   const comp = out.competition_level ?? "Medium";
   const fmt = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
   const platform = out.platform_fit?.[0] ?? "Shopify";
 
-  // cost_breakdown
-  if (!out.cost_breakdown || !out.cost_breakdown.supplier_cost) {
-    const ship = Math.max(1.5, sup * 0.5);
-    const fee = Math.max(0.3, sell * (platform === "Amazon" ? 0.15 : platform === "Etsy" ? 0.11 : platform === "eBay" ? 0.12 : 0.06));
-    const ad = Math.max(2, sell * 0.25);
-    const net = Math.max(0, sell - sup - ship - fee - ad);
-    out.cost_breakdown = {
-      supplier_cost: fmt(sup),
-      shipping_cost: fmt(ship),
-      platform_fee: `${fmt(fee)} (${Math.round((fee / sell) * 100)}%)`,
-      ad_spend: fmt(ad),
-      net_profit: fmt(net),
-      net_margin_pct: Math.round((net / sell) * 100),
-    };
-  }
-
-  // demand: search volume / seasonality are only shown when measured live.
-
+  // ---- Gerçek dünya birim ekonomisi (AI'nin uydurduğu marjların yerine) ----
+  const re = realEconomics({
+    selling_price_usd: out.selling_price_usd,
+    supplier_price_usd: out.supplier_price_usd ?? out.cost_breakdown?.supplier_cost,
+    shipping_cost: out.cost_breakdown?.shipping_cost,
+    competition_level: out.competition_level,
+    platform,
+    trend_score: trend,
+    cvr_pct: out.conversion?.cvr_pct,
+    startup_cost_usd: out.startup_cost_usd,
+  });
+  out.real_economics = re;
+  out.cost_breakdown = {
+    supplier_cost: fmt(re.supplier),
+    shipping_cost: fmt(re.shipping),
+    platform_fee: `${fmt(re.platform_fee + re.payment_fee)} (${Math.round(((re.platform_fee + re.payment_fee) / re.retail) * 100)}%)`,
+    ad_spend: fmt(re.cac),
+    net_profit: fmt(re.net_per_unit),
+    net_margin_pct: Math.round(re.net_margin_pct),
+  };
+  out.profit_margin_pct = Math.round(re.net_margin_pct);
+  if (!parseMoneyNum(out.supplier_price_usd)) out.supplier_price_usd = fmt(re.supplier);
 
   // unit_economics
-  if (!out.unit_economics) {
+  {
     const startup = parseMoneyNum(out.startup_cost_usd) || 500;
-    const netUnit = parseMoneyNum(out.cost_breakdown?.net_profit) || Math.max(1, sell * 0.25);
+    const netUnit = re.net_per_unit;
     out.unit_economics = {
-      breakeven_units: Math.max(1, Math.round(startup / Math.max(1, netUnit))),
-      breakeven_roas: Math.round((sell / Math.max(1, sell - netUnit)) * 10) / 10,
-      target_cpa_usd: fmt(Math.max(2, netUnit * 0.6)),
-      ltv_usd: fmt(sell * 1.3),
-      repeat_purchase_rate_pct: 18,
-      return_rate_pct: sell > 60 ? 6 : 3,
+      breakeven_units: netUnit > 0 ? Math.max(1, Math.round(startup / netUnit)) : 0,
+      breakeven_roas: re.breakeven_roas,
+      target_cpa_usd: fmt(Math.max(1.5, re.gross_per_unit * 0.7)),
+      ltv_usd: fmt(re.retail * 1.25),
+      repeat_purchase_rate_pct: out.unit_economics?.repeat_purchase_rate_pct ?? 15,
+      return_rate_pct: Math.round((re.returns_cost / Math.max(1, re.supplier + re.shipping)) * 100),
     };
   }
+
 
   // sourcing
   if (!out.sourcing) {
@@ -344,6 +349,23 @@ export function normalizeProduct(p: WinningProduct): WinningProduct {
       { week: "Week 3", theme: "Social proof", posts: ["5-star review carousel", "Customer transformation video", "Founder Q&A"] },
       { week: "Week 4", theme: "Offer + urgency", posts: ["Flash-sale countdown", "Bundle showcase", "'Last chance' story"] },
     ];
+  }
+
+  // financial_projection: gerçek birim ekonomisine göre 3 aylık gerçekçi rampa
+  {
+    const ramp = [0.6, 1, 1.35];
+    out.financial_projection = ramp.map((k, i) => {
+      const units = Math.max(3, Math.round(re.monthly.units * k));
+      const ad = Math.round(re.monthly.ad_budget_usd * k);
+      const net = Math.round(units * re.net_per_unit + re.monthly.organic_units * k * re.cac - re.monthly.overhead_usd);
+      return {
+        month: `Month ${i + 1}`,
+        units,
+        revenue_usd: fmt(units * re.retail),
+        ad_spend_usd: fmt(ad),
+        net_profit_usd: fmt(net),
+      };
+    });
   }
 
   return out;

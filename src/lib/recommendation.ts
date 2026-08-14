@@ -1,8 +1,13 @@
 import type { WinningProduct } from "./gemini.functions";
+import { realEconomics } from "./real-economics";
 
 export type Recommendation = "Launch" | "Watch" | "Avoid";
 
 export type EnrichedScores = {
+  /** Gerçekçi aylık net kâr aralığı (düşük / yüksek senaryo). */
+  monthly_net_low_usd: number;
+  monthly_net_high_usd: number;
+  net_per_unit_usd: number;
   ai_score: number;
   opportunity_score: number;
   trend_score: number;
@@ -26,15 +31,25 @@ export function enrichProduct(p: WinningProduct): EnrichedScores {
   if (opportunity >= 75 && p.competition_level !== "High") recommendation = "Launch";
   else if (opportunity < 45 || (p.competition_level === "High" && marginPct < 30)) recommendation = "Avoid";
 
-  const sell = parseMoney(p.selling_price_usd);
-  const netPer = parseMoney(p.cost_breakdown?.net_profit ?? "");
-  const baseSales = 200 + Math.round((trend / 100) * 4800);
-  const compMult = p.competition_level === "Low" ? 1.2 : p.competition_level === "High" ? 0.6 : 1.0;
-  const est_monthly_sales = Math.round(baseSales * compMult);
-  const est_monthly_revenue_usd = Math.round(est_monthly_sales * sell);
-  const est_monthly_net_profit_usd = Math.round(est_monthly_sales * (netPer > 0 ? netPer : sell * (marginPct / 100)));
+  // Gerçek dünya modeli: reklam bütçesiyle sınırlı hacim, gerçek komisyon/CAC/iade.
+  const re = p.real_economics ?? realEconomics({
+    selling_price_usd: p.selling_price_usd,
+    supplier_price_usd: p.supplier_price_usd,
+    shipping_cost: p.cost_breakdown?.shipping_cost,
+    competition_level: p.competition_level,
+    platform: p.platform_fit?.[0],
+    trend_score: trend,
+    cvr_pct: p.conversion?.cvr_pct,
+    startup_cost_usd: p.startup_cost_usd,
+  });
+  const est_monthly_sales = re.monthly.units;
+  const est_monthly_revenue_usd = re.monthly.revenue_usd;
+  const est_monthly_net_profit_usd = re.monthly.net_profit_usd;
 
   return {
+    monthly_net_low_usd: re.monthly.low_usd,
+    monthly_net_high_usd: re.monthly.high_usd,
+    net_per_unit_usd: re.net_per_unit,
     ai_score: ai,
     opportunity_score: opportunity,
     trend_score: trend,
@@ -47,13 +62,6 @@ export function enrichProduct(p: WinningProduct): EnrichedScores {
 }
 
 function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)); }
-function parseMoney(s: string | undefined): number {
-  if (!s) return 0;
-  const m = String(s).match(/[\d,.]+/);
-  if (!m) return 0;
-  const n = Number(m[0].replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
 
 export function recommendationStyle(r: Recommendation) {
   if (r === "Launch") return { emoji: "🟢", cls: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" };
