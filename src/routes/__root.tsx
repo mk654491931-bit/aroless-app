@@ -21,6 +21,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PaletteToggle } from "@/components/palette-toggle";
+import { AmbientBackground } from "@/components/ambient-background";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 
@@ -123,6 +124,7 @@ function RootComponent() {
   }, [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
+      {!chromeless && <AmbientBackground />}
       {chromeless ? (
         <>
           <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2"><PaletteToggle /><ThemeToggle /></div>
