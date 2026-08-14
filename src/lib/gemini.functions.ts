@@ -942,7 +942,11 @@ export const listFavorites = createServerFn({ method: "GET" })
       .from("favorites")
       .select("id, name, collection_name, notes, tags, product, created_at")
       .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Clock-skew / stale token ("JWT issued at future") must not blank the app.
+      if (/jwt/i.test(String(error.message))) return [] as FavoriteRow[];
+      throw new Error(error.message);
+    }
     return (data ?? []).map((row) => ({
       ...row,
       tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
