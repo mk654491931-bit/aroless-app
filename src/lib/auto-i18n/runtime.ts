@@ -34,11 +34,50 @@ const originalText = new WeakMap<Text, string>();
 const originalAttrs = new WeakMap<Element, Record<string, string>>();
 const dirty = new Set<Node>();
 
+const SEGMENT_SPLIT = /(\s+[·•|—–]\s+)/;
+
+function translateKey(key: string): string | null {
+  const hit = dict[key];
+  return hit && hit !== key ? hit : null;
+}
+
+/** Translates a segment, tolerating a trailing dynamic value ("son: 00:32"). */
+function translateSegment(part: string): string | null {
+  const trimmed = part.trim();
+  const direct = translateKey(trimmed);
+  if (direct) return part.replace(trimmed, direct);
+  const m = trimmed.match(/^(.*?)[:：]\s*(\S.*)$/);
+  if (m) {
+    const head = translateKey(m[1]) ?? translateKey(`${m[1]}:`);
+    if (head) return part.replace(trimmed, `${head.replace(/[:：]\s*$/, "")}: ${m[2]}`);
+  }
+  return null;
+}
+
+function translateBody(key: string): string | null {
+  const direct = translateKey(key);
+  if (direct) return direct;
+
+  // "Label · other label" — translate each segment on its own.
+  if (SEGMENT_SPLIT.test(key)) {
+    const parts = key.split(SEGMENT_SPLIT);
+    let changed = false;
+    const mapped = parts.map((part) => {
+      if (SEGMENT_SPLIT.test(part) || !part.trim()) return part;
+      const seg = translateSegment(part);
+      if (seg) { changed = true; return seg; }
+      return part;
+    });
+    if (changed) return mapped.join("");
+  }
+  return translateSegment(key);
+}
+
 function lookup(raw: string): string | null {
   const key = raw.replace(/\s+/g, " ").trim();
   if (key.length < 2) return null;
-  const hit = dict[key];
-  if (!hit || hit === key) return null;
+  const hit = translateBody(key);
+  if (!hit) return null;
   const lead = raw.match(/^\s*/)?.[0] ?? "";
   const tail = raw.match(/\s*$/)?.[0] ?? "";
   return lead + hit + tail;
