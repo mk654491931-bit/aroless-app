@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -6,6 +8,9 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { PaletteToggle } from "@/components/palette-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { useAuth } from "@/hooks/use-auth";
+import { getFullProfile } from "@/lib/analysis.functions";
+
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
