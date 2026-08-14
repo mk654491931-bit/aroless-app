@@ -65,13 +65,13 @@ Extract RAW product candidates that are real, specific, nameable SKUs currently 
 No categories. No invented products. Use real supplier price bands (AliExpress/1688) and real retail bands.
 
 Return ONLY JSON:
-{ "candidates": [ { "name": string, "why_now": string (1 sentence demand signal happening right now), "price_band_usd": string, "supplier_cost_usd": string, "demand_signal": string (search/social/marketplace evidence), "channel": string (best sales channel) } ] (2-4 candidates),
+{ "candidates": [ { "name": string, "why_now": string (1 sentence demand signal happening right now), "price_band_usd": string, "supplier_cost_usd": string, "demand_signal": string (search/social/marketplace evidence), "channel": string (best sales channel) } ] (6-10 candidates),
   "market_note": string (1 sentence on the overall market condition) }`;
   try {
     const text = await callGemini(prompt, AGENT3_KEY(), 0.6, true, FLASH);
     const parsed = extractJson<MarketScan>(text, { candidates: [], market_note: "" });
     return {
-      candidates: Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, 4) : [],
+      candidates: Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, 10) : [],
       market_note: String(parsed.market_note ?? ""),
     };
   } catch {
