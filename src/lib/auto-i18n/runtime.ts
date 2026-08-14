@@ -243,7 +243,7 @@ export async function setAutoLanguage(lang: string | undefined | null) {
   }
   if (token !== loadToken) return;
   currentLang = code;
-  dict = next;
+  dict = { ...next, ...extrasFor(code) };
   ensureObserver();
   restoreAll();
   dirty.clear();
