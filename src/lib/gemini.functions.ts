@@ -570,7 +570,7 @@ JSON shape:
     // Judge at most 2 products at a time: each product fans out into several
     // agent calls, so an unbounded Promise.all is what trips rate limits.
     const { mapWithConcurrency } = await import("@/lib/ai.server");
-    const judged = await mapWithConcurrency(normalized, 2, async (p) => {
+    const judged = await mapWithConcurrency(gated, 2, async (p) => {
       const ctx = productDebateContext(p);
       const [hybrid, consensus] = await Promise.all([
         scoreProductForCountry(ctx, country).catch(() => undefined),
