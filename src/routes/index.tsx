@@ -207,8 +207,10 @@ function Dashboard() {
         },
       }),
     onSuccess: (res) => {
-      setResults(res.products);
+      setResults(attachWinnerScores(res.products));
+      setRejected([]);
       setFallbackNotice(null);
+
       qc.invalidateQueries({ queryKey: ["profile"] });
       if (res.products.length === 0) toast.error("Hugging Face returned no products — try another niche.");
       else toast.success(`${res.products.length} products from ${res.model}`);
