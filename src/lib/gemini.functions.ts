@@ -690,18 +690,35 @@ JSON shape:
       );
     }
 
-
-
-
+    // ---- Winner Score: tüm sinyalleri tek, açıklanabilir puana indirger ----
+    {
+      const { computeWinnerScore } = await import("@/lib/winner-score");
+      finalProducts = finalProducts
+        .map((p) => {
+          const breakdown = computeWinnerScore(p);
+          return {
+            ...p,
+            winner_score: breakdown.winner_score,
+            score_breakdown: breakdown,
+            evidence_level: breakdown.evidence_level,
+          };
+        })
+        .sort(
+          (a, b) =>
+            (b.winner_score ?? 0) - (a.winner_score ?? 0) ||
+            (b.unified_score ?? 0) - (a.unified_score ?? 0),
+        );
+    }
 
     return {
       products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),
-
+      rejected: rejectedCandidates,
       creditsRemaining: remaining as number,
       target_country: country,
       min_score: minScore,
       fallback,
     };
+
 
 
   });
