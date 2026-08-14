@@ -1029,7 +1029,13 @@ function ProductCard({
         </div>
       </div>
       <h3 className="font-bold text-lg leading-tight">{p.name}</h3>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <WinnerBadge score={p.winner_score} level={p.evidence_level} />
+      </div>
       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+      <WinnerScorePanel breakdown={p.score_breakdown} />
+
+
 
 
       {p.hybrid && (
