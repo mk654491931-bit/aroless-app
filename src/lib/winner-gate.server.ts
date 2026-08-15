@@ -8,6 +8,7 @@
 import { netMarginOf } from "./profitability";
 import { parseMoney } from "./unit-economics";
 import { countryFit, PLATFORM_MARKETS } from "./platform-market";
+import { buildVerdict, type MarketVerdict, type VerdictCheck } from "./market-verdict";
 import type { Platform } from "./gemini.functions";
 
 /** Ülkeye özel sertifika / gümrük bariyeri olan ürün kalıpları. */
