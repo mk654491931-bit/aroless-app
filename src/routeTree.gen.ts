@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
 import { Route as CompareRouteImport } from './routes/compare'
@@ -20,8 +21,11 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as RadarRouteImport } from './routes/radar'
+import { Route as RoiRouteImport } from './routes/roi'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
@@ -49,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -96,6 +105,16 @@ const PricingRoute = PricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RadarRoute = RadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoiRoute = RoiRouteImport.update({
+  id: '/roi',
+  path: '/roi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -104,6 +123,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrendRadarRoute = TrendRadarRouteImport.update({
@@ -202,6 +226,7 @@ const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -211,8 +236,11 @@ export interface FileRoutesByFullPath {
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
+  '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -235,6 +263,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -244,8 +273,11 @@ export interface FileRoutesByTo {
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
+  '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -269,6 +301,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -278,8 +311,11 @@ export interface FileRoutesById {
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
+  '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -304,6 +340,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -313,8 +350,11 @@ export interface FileRouteTypes {
     | '/news'
     | '/notifications'
     | '/pricing'
+    | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -337,6 +377,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -346,8 +387,11 @@ export interface FileRouteTypes {
     | '/news'
     | '/notifications'
     | '/pricing'
+    | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -370,6 +414,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -379,8 +424,11 @@ export interface FileRouteTypes {
     | '/news'
     | '/notifications'
     | '/pricing'
+    | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -404,6 +452,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AuditRoute: typeof AuditRoute
   AuthRoute: typeof AuthRoute
   CommandCenterRoute: typeof CommandCenterRoute
   CompareRoute: typeof CompareRoute
@@ -413,8 +462,11 @@ export interface RootRouteChildren {
   NewsRoute: typeof NewsRoute
   NotificationsRoute: typeof NotificationsRoute
   PricingRoute: typeof PricingRoute
+  RadarRoute: typeof RadarRoute
+  RoiRoute: typeof RoiRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudioRoute: typeof StudioRoute
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
   HotIdRoute: typeof HotIdRoute
@@ -449,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -514,6 +573,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/radar': {
+      id: '/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roi': {
+      id: '/roi'
+      path: '/roi'
+      fullPath: '/roi'
+      preLoaderRoute: typeof RoiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -526,6 +599,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/trend-radar': {
@@ -660,6 +740,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AuditRoute: AuditRoute,
   AuthRoute: AuthRoute,
   CommandCenterRoute: CommandCenterRoute,
   CompareRoute: CompareRoute,
@@ -669,8 +750,11 @@ const rootRouteChildren: RootRouteChildren = {
   NewsRoute: NewsRoute,
   NotificationsRoute: NotificationsRoute,
   PricingRoute: PricingRoute,
+  RadarRoute: RadarRoute,
+  RoiRoute: RoiRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudioRoute: StudioRoute,
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
   HotIdRoute: HotIdRoute,

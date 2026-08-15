@@ -65,6 +65,36 @@ export type Database = {
         }
         Relationships: []
       }
+      creative_assets: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          payload: Json
+          platform: string
+          product_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          payload?: Json
+          platform?: string
+          product_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          payload?: Json
+          platform?: string
+          product_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       credit_usage_log: {
         Row: {
           created_at: string
@@ -463,6 +493,60 @@ export type Database = {
           },
         ]
       }
+      radar_items: {
+        Row: {
+          category: string
+          country: string
+          created_at: string
+          day: string
+          est_margin_pct: number
+          id: string
+          momentum: number
+          niche: string
+          payload: Json
+          platform: string
+          price_max: number
+          price_min: number
+          reason: string | null
+          title: string
+          winner_score: number
+        }
+        Insert: {
+          category?: string
+          country?: string
+          created_at?: string
+          day?: string
+          est_margin_pct?: number
+          id?: string
+          momentum?: number
+          niche?: string
+          payload?: Json
+          platform?: string
+          price_max?: number
+          price_min?: number
+          reason?: string | null
+          title: string
+          winner_score?: number
+        }
+        Update: {
+          category?: string
+          country?: string
+          created_at?: string
+          day?: string
+          est_margin_pct?: number
+          id?: string
+          momentum?: number
+          niche?: string
+          payload?: Json
+          platform?: string
+          price_max?: number
+          price_min?: number
+          reason?: string | null
+          title?: string
+          winner_score?: number
+        }
+        Relationships: []
+      }
       referral_events: {
         Row: {
           code: string
@@ -490,6 +574,66 @@ export type Database = {
           referred_user_id?: string
           referrer_credits?: number
           referrer_id?: string
+        }
+        Relationships: []
+      }
+      roi_entries: {
+        Row: {
+          ad_spend: number
+          cost_price: number
+          country: string
+          created_at: string
+          currency: string
+          expected_margin_pct: number | null
+          id: string
+          notes: string | null
+          orders: number
+          other_cost: number
+          platform: string
+          product_name: string
+          refunds: number
+          sell_price: number
+          shipping_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ad_spend?: number
+          cost_price?: number
+          country?: string
+          created_at?: string
+          currency?: string
+          expected_margin_pct?: number | null
+          id?: string
+          notes?: string | null
+          orders?: number
+          other_cost?: number
+          platform?: string
+          product_name: string
+          refunds?: number
+          sell_price?: number
+          shipping_cost?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ad_spend?: number
+          cost_price?: number
+          country?: string
+          created_at?: string
+          currency?: string
+          expected_margin_pct?: number | null
+          id?: string
+          notes?: string | null
+          orders?: number
+          other_cost?: number
+          platform?: string
+          product_name?: string
+          refunds?: number
+          sell_price?: number
+          shipping_cost?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -585,6 +729,33 @@ export type Database = {
           starting_capital?: number
           store_name?: string
           store_rating?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      store_audits: {
+        Row: {
+          created_at: string
+          health_score: number
+          id: string
+          report: Json
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          health_score?: number
+          id?: string
+          report?: Json
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          health_score?: number
+          id?: string
+          report?: Json
+          url?: string
           user_id?: string
         }
         Relationships: []
