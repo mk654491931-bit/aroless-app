@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { AlertTriangle, BadgeCheck, ChevronDown, CircleDashed, ExternalLink, ShieldCheck, Sigma, Trophy } from "lucide-react";
 import { evidenceLabel, evidenceStyle, type ScoreComponent, type WinnerBreakdown } from "@/lib/winner-score";
+import { MarketFitPanel } from "@/components/market-fit-panel";
+import type { MarketVerdict } from "@/lib/market-verdict";
 
 
 const barColor = (v: number) =>
