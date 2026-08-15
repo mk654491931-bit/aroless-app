@@ -66,6 +66,8 @@ import { huggingFaceSearch } from "@/lib/hf.functions";
 import { ENGINES, engineLabel, storedHfToken, type EngineId, type MarketplaceId } from "@/lib/engines";
 import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
+import { FinderInsights, FilterPresets } from "@/components/finder-insights";
+
 import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/components/deep-search-panel";
 import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
 
