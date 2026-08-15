@@ -21,6 +21,7 @@ import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as RadarRouteImport } from './routes/radar'
+import { Route as RoiRouteImport } from './routes/roi'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
@@ -101,6 +102,11 @@ const PricingRoute = PricingRouteImport.update({
 const RadarRoute = RadarRouteImport.update({
   id: '/radar',
   path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoiRoute = RoiRouteImport.update({
+  id: '/roi',
+  path: '/roi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
@@ -259,6 +266,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
@@ -295,6 +303,7 @@ export interface FileRoutesById {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
@@ -332,6 +341,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
     | '/studio'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
     | '/studio'
@@ -402,6 +413,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/roi'
     | '/settings'
     | '/sitemap.xml'
     | '/studio'
@@ -438,6 +450,7 @@ export interface RootRouteChildren {
   NotificationsRoute: typeof NotificationsRoute
   PricingRoute: typeof PricingRoute
   RadarRoute: typeof RadarRoute
+  RoiRoute: typeof RoiRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
@@ -545,6 +558,13 @@ declare module '@tanstack/react-router' {
       path: '/radar'
       fullPath: '/radar'
       preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roi': {
+      id: '/roi'
+      path: '/roi'
+      fullPath: '/roi'
+      preLoaderRoute: typeof RoiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -710,6 +730,7 @@ const rootRouteChildren: RootRouteChildren = {
   NotificationsRoute: NotificationsRoute,
   PricingRoute: PricingRoute,
   RadarRoute: RadarRoute,
+  RoiRoute: RoiRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
