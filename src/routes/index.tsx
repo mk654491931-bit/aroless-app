@@ -159,7 +159,7 @@ function Dashboard() {
     },
   });
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  const onboarding = useOnboarding();
 
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
