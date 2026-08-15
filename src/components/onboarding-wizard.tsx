@@ -48,18 +48,15 @@ export function OnboardingWizard({
       hint: "Komisyon, KDV ve kargo süreleri bu seçime göre hesaplanır.",
       body: (
         <div className="grid max-h-64 grid-cols-2 gap-2 overflow-auto pr-1 sm:grid-cols-3">
-          {TARGET_COUNTRIES.slice(0, 24).map((c) => {
-            const code = typeof c === "string" ? c : (c as { code: string }).code;
-            return (
-              <button
-                key={code}
-                onClick={() => setCountry(code)}
-                className={`rounded-lg border px-3 py-2 text-xs ${country === code ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
-              >
-                {countryName(code)}
-              </button>
-            );
-          })}
+          {TARGET_COUNTRIES.slice(0, 24).map((c) => (
+            <button
+              key={c.code}
+              onClick={() => setCountry(c.code)}
+              className={`rounded-lg border px-3 py-2 text-xs ${country === c.code ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
+            >
+              {countryName(c.code)}
+            </button>
+          ))}
         </div>
       ),
     },
