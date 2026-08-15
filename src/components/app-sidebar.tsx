@@ -77,6 +77,15 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
     items: [{ key: "trend_radar", title: "Multi-Platform Trend Radar", url: "/trend-radar", icon: Radar }],
   },
   {
+    id: "growth_suite", key: "g_growth_suite", label: "Büyüme Suite", emoji: "📈", icon: Rocket,
+    items: [
+      { key: "win_radar", title: "Kazanan Ürün Radarı", url: "/radar", icon: Radar },
+      { key: "roi_panel", title: "Kâr / ROI Paneli", url: "/roi", icon: Wallet },
+      { key: "store_audit", title: "AI Mağaza Denetçisi", url: "/audit", icon: ShieldCheck },
+      { key: "creative_studio", title: "Reklam Kreatif Stüdyosu", url: "/studio", icon: Megaphone },
+    ],
+  },
+  {
     id: "news", key: "g_news", label: "E-Com News Explainer", emoji: "📰", icon: Newspaper,
     items: [{ key: "news", title: "News & AI Explainer", url: "/news", icon: Target }],
   },

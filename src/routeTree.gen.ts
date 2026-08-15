@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
 import { Route as CompareRouteImport } from './routes/compare'
@@ -52,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -220,6 +226,7 @@ const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -256,6 +263,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -293,6 +301,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/audit': typeof AuditRoute
   '/auth': typeof AuthRoute
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/audit'
     | '/auth'
     | '/command-center'
     | '/compare'
@@ -440,6 +452,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AuditRoute: typeof AuditRoute
   AuthRoute: typeof AuthRoute
   CommandCenterRoute: typeof CommandCenterRoute
   CompareRoute: typeof CompareRoute
@@ -488,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -720,6 +740,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AuditRoute: AuditRoute,
   AuthRoute: AuthRoute,
   CommandCenterRoute: CommandCenterRoute,
   CompareRoute: CompareRoute,
