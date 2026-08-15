@@ -201,6 +201,7 @@ export function RejectedPanel({ items }: { items: RejectedCandidate[] }) {
                 {r.selling_price_usd && <span className="text-[10px] text-muted-foreground">{r.selling_price_usd}</span>}
               </div>
               <p className="mt-1 text-[11px] text-rose-300/90">{r.rejection_reason}</p>
+              <MarketFitPanel verdict={r.market_verdict} />
             </li>
           ))}
         </ul>
