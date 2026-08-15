@@ -133,7 +133,14 @@ function SettingsPage() {
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
             <Info label={t("credits")} value={String(profQ.data?.credits ?? 0)} />
           </div>
+          <Link to="/pricing" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10">
+            Planları ve kredi paketlerini gör
+          </Link>
         </section>
+
+        <ReferralPanel />
+        <SupportPanel />
+        <AccountDataPanel />
       </main>
     </div>
   );
