@@ -390,7 +390,32 @@ function Dashboard() {
       </header>
 
 
+      {onboarding.needsOnboarding && (
+        <OnboardingWizard
+          onSkip={onboarding.skip}
+          onComplete={(r) => {
+            setTargetCountry(r.country);
+            setCategory(r.category);
+            setBudget(r.budget as Budget);
+            setPlatforms([r.platform as Platform]);
+            onboarding.complete(r);
+            setTab("finder");
+            setTimeout(() => nicheInputRef.current?.focus(), 200);
+            toast.success("Hazır! Nişini yaz ve motoru çalıştır.");
+          }}
+        />
+      )}
+
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+       <div className="mb-4">
+         <ActivationChecklist
+           items={[
+             { label: "İlk aramanı yap", done: results.length > 0, action: () => { setTab("finder"); nicheInputRef.current?.focus(); } },
+             { label: "Bir ürünü favorilere ekle", done: favorites.length > 0, action: () => setTab("finder") },
+             { label: "Simülatörde bir sezon oyna", done: false, action: () => setTab("training") },
+           ]}
+         />
+       </div>
        <div className="laptop-shell grain px-3 py-6 md:px-8 md:py-10">
         <TabSwitcher
           tabDefs={tabDefs}
