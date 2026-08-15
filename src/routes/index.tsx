@@ -163,6 +163,24 @@ function Dashboard() {
 
   const onboarding = useOnboarding();
 
+  // Davet linkiyle gelen kullanıcıya (ve davet edene) bonus krediyi bir kez uygula.
+  const claimReferralFn = useServerFn(claimReferral);
+  useEffect(() => {
+    if (!user) return;
+    let code: string | null = null;
+    try { code = window.localStorage.getItem("velora.ref"); } catch { code = null; }
+    if (!code) return;
+    try { window.localStorage.removeItem("velora.ref"); } catch { /* yoksay */ }
+    claimReferralFn({ data: { code } })
+      .then((res) => {
+        if (res.ok) {
+          toast.success(`Davet bonusu eklendi · +${res.credits} kredi`);
+          qc.invalidateQueries({ queryKey: ["profile"] });
+        }
+      })
+      .catch(() => {});
+  }, [user, claimReferralFn, qc]);
+
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
     queryFn: () => getProfileFn(),
