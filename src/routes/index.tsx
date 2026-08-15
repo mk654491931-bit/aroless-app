@@ -427,7 +427,9 @@ function Dashboard() {
       )}
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+       <VeloraCover className="mb-6" />
        <div className="mb-4">
+
          <ActivationChecklist
            items={[
              { label: "İlk aramanı yap", done: results.length > 0, action: () => { setTab("finder"); nicheInputRef.current?.focus(); } },
