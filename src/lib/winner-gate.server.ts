@@ -113,8 +113,9 @@ export function winnerGate<T extends GateInput>(
   const priceMax = opts.priceMax ?? 0;
   const keepAtLeast = opts.keepAtLeast ?? 3;
   const country = (opts.country || "GLOBAL").toUpperCase();
+  const platforms = opts.platforms ?? [];
   // Kullanıcının seçtiği kanallardan bu ülkede gerçekten çalışanlar.
-  const usable = (opts.platforms ?? []).filter((p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable");
+  const usable = platforms.filter((p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable");
   const barriers = COUNTRY_BARRIERS[country] ?? [];
 
   const unique = dedupeCandidates(items);
@@ -126,6 +127,55 @@ export function winnerGate<T extends GateInput>(
     const price = parseMoney(p.selling_price_usd);
     const margin = netMarginOf(p);
     const hasDiff = (p.differentiation ?? []).length >= 2;
+    const barrierHit = barriers.find((b) => b.re.test(text));
+    const channelBlocked =
+      usable.length > 0 &&
+      (p.platform_fit ?? []).length > 0 &&
+      !(p.platform_fit ?? []).some(
+        (f) => !(f in PLATFORM_MARKETS) || countryFit(f as Platform, country) !== "unavailable",
+      );
+
+    const checks: VerdictCheck[] = [
+      { label: "Yasal risk taraması", passed: !ILLEGAL.test(text), detail: "Taklit / kısıtlı ürün kalıpları" },
+      {
+        label: "Doygunluk",
+        passed: !(SATURATED.some((r) => r.test(text)) && !hasDiff),
+        detail: hasDiff ? "En az 2 farklılaşma kanıtı var" : "Farklılaşma kanıtı yetersiz",
+      },
+      { label: "Kargo uygunluğu", passed: !BULKY.test(text), detail: "Hacimli/ağır ürün kontrolü" },
+      {
+        label: "Satış fiyatı tabanı",
+        passed: !(price > 0 && price < 9),
+        value: price > 0 ? `$${price.toFixed(2)}` : "—",
+        threshold: "≥ $9",
+      },
+      {
+        label: "Hedef fiyat bandı",
+        passed: !((priceMin > 0 && price > 0 && price < priceMin) || (priceMax > 0 && price > 0 && price > priceMax)),
+        value: price > 0 ? `$${price.toFixed(2)}` : "—",
+        threshold: priceMin || priceMax ? `$${priceMin || 0} – $${priceMax || "∞"}` : "sınır yok",
+      },
+      {
+        label: "Net marj eşiği",
+        passed: margin >= minMargin,
+        value: `%${Math.round(margin)}`,
+        threshold: `≥ %${minMargin}`,
+      },
+      {
+        label: "Kanal uyumu",
+        passed: !channelBlocked,
+        detail: channelBlocked
+          ? `Önerilen kanallar ${country} pazarında kullanılamıyor`
+          : usable.length
+            ? `${usable.length} seçili kanal bu ülkede çalışıyor`
+            : "Kanal filtresi uygulanmadı",
+      },
+      {
+        label: "Sertifika / gümrük bariyeri",
+        passed: !(barrierHit && !hasDiff),
+        detail: barrierHit ? barrierHit.why : "Ülkeye özel bariyer kuralı tetiklenmedi",
+      },
+    ];
 
     let reason = "";
     if (ILLEGAL.test(text)) reason = "Yasal risk: taklit / kısıtlı ürün.";
@@ -136,20 +186,20 @@ export function winnerGate<T extends GateInput>(
     else if (priceMin > 0 && price > 0 && price < priceMin) reason = `Hedef fiyat bandının altında ($${price.toFixed(2)}).`;
     else if (priceMax > 0 && price > 0 && price > priceMax) reason = `Hedef fiyat bandının üstünde ($${price.toFixed(2)}).`;
     else if (margin < minMargin) reason = `Net marj yetersiz (%${Math.round(margin)} < %${minMargin}).`;
-    else if (
-      usable.length > 0 &&
-      (p.platform_fit ?? []).length > 0 &&
-      !(p.platform_fit ?? []).some(
-        (f) => !(f in PLATFORM_MARKETS) || countryFit(f as Platform, country) !== "unavailable",
-      )
-    )
-      reason = `Önerilen satış kanalları ${country} pazarında kullanılamıyor.`;
-    else {
-      const hit = barriers.find((b) => b.re.test(text));
-      if (hit && !hasDiff) reason = `Pazar uyumu: ${hit.why} — küçük satıcı için giriş bariyeri yüksek.`;
-    }
+    else if (channelBlocked) reason = `Önerilen satış kanalları ${country} pazarında kullanılamıyor.`;
+    else if (barrierHit && !hasDiff) reason = `Pazar uyumu: ${barrierHit.why} — küçük satıcı için giriş bariyeri yüksek.`;
 
-    if (reason) rejected.push({ product: p, rejection_reason: reason });
+    const verdict = buildVerdict({
+      decision: reason ? "rejected" : "kept",
+      country,
+      platforms,
+      checks,
+      barrier: barrierHit ? { rule: `${country} pazar kuralı`, why: barrierHit.why } : undefined,
+      reason: reason || undefined,
+    });
+    (p as GateInput).market_verdict = verdict;
+
+    if (reason) rejected.push({ product: p, rejection_reason: reason, verdict });
     else survivors.push(p);
   }
 
@@ -159,6 +209,18 @@ export function winnerGate<T extends GateInput>(
       .sort((a, b) => netMarginOf(b.product) - netMarginOf(a.product))
       .slice(0, keepAtLeast - survivors.length);
     for (const r of rescued) {
+      const v = (r.product as GateInput).market_verdict;
+      if (v) {
+        v.decision = "rescued";
+        v.summary = buildVerdict({
+          decision: "rescued",
+          country,
+          platforms,
+          checks: v.checks,
+          barrier: v.barrier,
+          reason: r.rejection_reason,
+        }).summary;
+      }
       survivors.push(r.product);
       rejected.splice(rejected.indexOf(r), 1);
     }
@@ -166,3 +228,4 @@ export function winnerGate<T extends GateInput>(
 
   return { survivors, rejected };
 }
+
