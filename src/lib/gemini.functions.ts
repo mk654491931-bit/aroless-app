@@ -103,6 +103,8 @@ export type WinningProduct = {
   trend_score: number;
   emoji: string;
   image_url?: string;
+  /** Ülke + platform karar gerekçesi (Winner Gate üretir). */
+  market_verdict?: import("@/lib/market-verdict").MarketVerdict;
   sales_tactic?: string;
   ai_insight?: string;
   platform_difficulty?: Array<{
