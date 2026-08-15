@@ -10,6 +10,9 @@ import { LANGUAGES } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
+import { ReferralPanel } from "@/components/referral-panel";
+import { SupportPanel } from "@/components/support-panel";
+import { AccountDataPanel } from "@/components/account-data-panel";
 
 const CURRENCIES = ["USD", "EUR", "TRY", "SAR", "GBP"] as const;
 
