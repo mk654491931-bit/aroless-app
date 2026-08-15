@@ -148,6 +148,8 @@ export function OnboardingWizard({
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
 
 /** Aktivasyon kontrol listesi — ilk değeri veren aksiyonlara yönlendirir. */
