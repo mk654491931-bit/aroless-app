@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Rocket, ArrowRight, ArrowLeft, Check, X } from "lucide-react";
 import { TARGET_COUNTRIES, countryName } from "@/lib/countries";
 
