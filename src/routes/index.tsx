@@ -1043,9 +1043,25 @@ function ProductCard({
   const realImg = useRealProductImage(p.name);
   const modelImg = resolveProductImage(p);
   return (
-    <article className="premium-card grain card-lift rounded-xl p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border border-transparent flex flex-col animate-rise-in">
+    <article className={`premium-card grain card-lift rounded-xl p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border flex flex-col animate-rise-in relative ${selected ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]" : "border-transparent"}`}>
+      {onToggleSelect && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          aria-pressed={selected}
+          title={selected ? "Karşılaştırmadan çıkar" : "Karşılaştırmaya ekle"}
+          className={`absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition ${
+            selected
+              ? "border-[oklch(0.68_0.20_265)]/70 bg-[oklch(0.68_0.20_265)]/30 text-white"
+              : "border-white/20 bg-black/40 text-white/80 hover:bg-black/60"
+          }`}
+        >
+          <Columns3 size={11} /> {selected ? "Seçildi" : "Karşılaştır"}
+        </button>
+      )}
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
         className="mb-3 -mx-5 -mt-5 aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer">
+
         {realImg || modelImg ? (
           <img
             src={realImg || modelImg!}
