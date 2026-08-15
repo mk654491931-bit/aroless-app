@@ -115,6 +115,15 @@ function RootComponent() {
     i18n.on("languageChanged", onLang);
     return () => { i18n.off("languageChanged", onLang); };
   }, []);
+  // Davet linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
+        window.localStorage.setItem("velora.ref", ref.toUpperCase());
+      }
+    } catch { /* yoksay */ }
+  }, [pathname]);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
