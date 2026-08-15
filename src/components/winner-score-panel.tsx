@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { AlertTriangle, BadgeCheck, ChevronDown, CircleDashed, ExternalLink, ShieldCheck, Sigma, Trophy } from "lucide-react";
 import { evidenceLabel, evidenceStyle, type ScoreComponent, type WinnerBreakdown } from "@/lib/winner-score";
+import { MarketFitPanel } from "@/components/market-fit-panel";
+import type { MarketVerdict } from "@/lib/market-verdict";
 
 
 const barColor = (v: number) =>
@@ -171,6 +173,7 @@ export type RejectedCandidate = {
   supplier_price_usd?: string;
   competition_level?: string;
   rejection_reason: string;
+  market_verdict?: MarketVerdict;
 };
 
 /** Şeffaflık: kaliteyi geçemeyen adaylar ve gerekçeleri. */
@@ -198,6 +201,7 @@ export function RejectedPanel({ items }: { items: RejectedCandidate[] }) {
                 {r.selling_price_usd && <span className="text-[10px] text-muted-foreground">{r.selling_price_usd}</span>}
               </div>
               <p className="mt-1 text-[11px] text-rose-300/90">{r.rejection_reason}</p>
+              <MarketFitPanel verdict={r.market_verdict} />
             </li>
           ))}
         </ul>

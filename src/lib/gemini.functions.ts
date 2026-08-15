@@ -103,6 +103,8 @@ export type WinningProduct = {
   trend_score: number;
   emoji: string;
   image_url?: string;
+  /** Ülke + platform karar gerekçesi (Winner Gate üretir). */
+  market_verdict?: import("@/lib/market-verdict").MarketVerdict;
   sales_tactic?: string;
   ai_insight?: string;
   platform_difficulty?: Array<{
@@ -572,6 +574,7 @@ JSON shape:
       supplier_price_usd: r.product.supplier_price_usd,
       competition_level: r.product.competition_level,
       rejection_reason: r.rejection_reason,
+      market_verdict: r.verdict,
     }));
     // Pahalı derin analiz sadece kapıyı geçen en iyi adaylara uygulanır.
     const deepLimit = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;

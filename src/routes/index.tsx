@@ -48,6 +48,7 @@ import { CreditCost } from "@/components/credit-cost";
 import { TrainingSection } from "@/components/training-section";
 import { AdvancedFilters, DEFAULT_FILTERS, applyFilters, type FinderFilters } from "@/components/advanced-filters";
 import { RejectedPanel, WinnerBadge, WinnerScorePanel, type RejectedCandidate } from "@/components/winner-score-panel";
+import { MarketFitPanel } from "@/components/market-fit-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
 
 import { HotTicker } from "@/components/hot-ticker";
@@ -1069,6 +1070,7 @@ function ProductCard({
       </div>
       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
       <WinnerScorePanel breakdown={p.score_breakdown} />
+      <MarketFitPanel verdict={p.market_verdict} />
 
 
 
