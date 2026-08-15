@@ -58,7 +58,9 @@ import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/cou
 import { countryFit, fitLabel, commissionRange, shipDays, recommendedPlatforms } from "@/lib/platform-market";
 import { CountryFlag, CountryCurrencyBadge } from "@/components/country-flag";
 import { HYBRID_DEFAULT_MIN_SCORE, hybridBadge } from "@/lib/consensus-types";
-import { Globe, Gauge, Swords, Radar, Cpu } from "lucide-react";
+import { Globe, Gauge, Swords, Radar, Cpu, Columns3 } from "lucide-react";
+import { CompareTray, CompareModal } from "@/components/compare-tray";
+
 import {
   AmbientBackdrop, GlobalRippleLayer, BiometricButton,
 } from "@/components/premium-fx";
