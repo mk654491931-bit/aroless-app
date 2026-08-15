@@ -171,6 +171,7 @@ export type RejectedCandidate = {
   supplier_price_usd?: string;
   competition_level?: string;
   rejection_reason: string;
+  market_verdict?: MarketVerdict;
 };
 
 /** Şeffaflık: kaliteyi geçemeyen adaylar ve gerekçeleri. */
