@@ -742,12 +742,24 @@ function Dashboard() {
 
                 return (
                 <>
+                <FinderInsights products={filtered} />
                 <AdvancedFilters
                   products={results}
                   filters={filters}
                   onChange={setFilters}
                   onReset={() => setFilters(DEFAULT_FILTERS)}
                 />
+                <FilterPresets
+                  current={{ filters, band, sortBy, sortDesc, onlyLaunch }}
+                  onApply={(s) => {
+                    setFilters(s.filters);
+                    setBand(s.band);
+                    setSortBy(s.sortBy);
+                    setSortDesc(s.sortDesc);
+                    setOnlyLaunch(s.onlyLaunch);
+                  }}
+                />
+
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   {bands.map((b) => (
                     <button
