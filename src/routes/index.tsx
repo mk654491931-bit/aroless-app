@@ -119,6 +119,7 @@ function Dashboard() {
   const [targetCountry, setTargetCountry] = usePersistentState<string>("velora.finder.country", DEFAULT_TARGET_COUNTRY);
   const effectiveCountry = marketplace === "turkey" ? "TR" : targetCountry;
   const blockedSelected = platforms.filter((p) => countryFit(p, effectiveCountry) === "unavailable");
+  const [recoOpen, setRecoOpen] = useState(false);
   const [minScore, setMinScore] = usePersistentState<number>("velora.finder.min_score", HYBRID_DEFAULT_MIN_SCORE);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [engine, setEngine] = usePersistentState<EngineId>("velora.finder.engine", "default");
