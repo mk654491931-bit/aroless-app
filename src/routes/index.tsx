@@ -58,7 +58,9 @@ import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/cou
 import { countryFit, fitLabel, commissionRange, shipDays, recommendedPlatforms } from "@/lib/platform-market";
 import { CountryFlag, CountryCurrencyBadge } from "@/components/country-flag";
 import { HYBRID_DEFAULT_MIN_SCORE, hybridBadge } from "@/lib/consensus-types";
-import { Globe, Gauge, Swords, Radar, Cpu } from "lucide-react";
+import { Globe, Gauge, Swords, Radar, Cpu, Columns3 } from "lucide-react";
+import { CompareTray, CompareModal } from "@/components/compare-tray";
+
 import {
   AmbientBackdrop, GlobalRippleLayer, BiometricButton,
 } from "@/components/premium-fx";
@@ -132,6 +134,12 @@ function Dashboard() {
 
 
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
+  const [compareNames, setCompareNames] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const toggleCompare = (name: string) =>
+    setCompareNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : prev.length >= 4 ? prev : [...prev, name]));
+  const compareProducts = results.filter((p) => compareNames.includes(p.name));
+
 
   const [showPricing, setShowPricing] = useState(false);
   const [reportProduct, setReportProduct] = useState<WinningProduct | null>(null);
@@ -811,12 +819,15 @@ function Dashboard() {
                   {shown.map((p, i) => (
                     <ProductCard
                       key={i} p={p}
+                      selected={compareNames.includes(p.name)}
+                      onToggleSelect={() => toggleCompare(p.name)}
                       saved={favoriteNames.has(p.name)}
                       onSave={() => saveMut.mutate(p)}
                       onSeo={(name) => { setTab("seo"); requestRun("seo", name); }}
                       onCreative={(name) => { setTab("creative"); requestRun("creative", name); }}
                       onReport={() => setReportProduct(p)}
                       onOpen={() => setDeepDiveProduct(p)}
+
                       locked={locked}
                       onUpgrade={() => setShowPricing(true)}
 
@@ -825,6 +836,22 @@ function Dashboard() {
                   ))}
                 </div>
                 <RejectedPanel items={rejected} />
+
+                <CompareTray
+                  products={compareProducts}
+                  onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                  onClear={() => setCompareNames([])}
+                  onOpen={() => setCompareOpen(true)}
+                />
+                {compareOpen && compareProducts.length >= 2 && (
+                  <CompareModal
+                    products={compareProducts}
+                    onClose={() => setCompareOpen(false)}
+                    onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                  />
+                )}
+
+
 
                 </>
                 );
@@ -1006,6 +1033,7 @@ function requestRun(target: "seo" | "creative", name: string) {
 
 function ProductCard({
   p, saved, onSave, onSeo, onCreative, onReport, onOpen: onOpenRaw, locked = false, onUpgrade = () => {},
+  selected = false, onToggleSelect,
 }: {
   p: WinningProduct;
   saved: boolean;
@@ -1016,7 +1044,10 @@ function ProductCard({
   onOpen: () => void;
   locked?: boolean;
   onUpgrade?: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
+
   // Standard accounts see the product identity + general info only; the full
   // intelligence suite (pricing, economics, deep dive, simulations) is premium.
   const onOpen = () => (locked ? onUpgrade() : onOpenRaw());
@@ -1030,9 +1061,25 @@ function ProductCard({
   const realImg = useRealProductImage(p.name);
   const modelImg = resolveProductImage(p);
   return (
-    <article className="premium-card grain card-lift rounded-xl p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border border-transparent flex flex-col animate-rise-in">
+    <article className={`premium-card grain card-lift rounded-xl p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border flex flex-col animate-rise-in relative ${selected ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]" : "border-transparent"}`}>
+      {onToggleSelect && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          aria-pressed={selected}
+          title={selected ? "Karşılaştırmadan çıkar" : "Karşılaştırmaya ekle"}
+          className={`absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition ${
+            selected
+              ? "border-[oklch(0.68_0.20_265)]/70 bg-[oklch(0.68_0.20_265)]/30 text-white"
+              : "border-white/20 bg-black/40 text-white/80 hover:bg-black/60"
+          }`}
+        >
+          <Columns3 size={11} /> {selected ? "Seçildi" : "Karşılaştır"}
+        </button>
+      )}
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
         className="mb-3 -mx-5 -mt-5 aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer">
+
         {realImg || modelImg ? (
           <img
             src={realImg || modelImg!}
