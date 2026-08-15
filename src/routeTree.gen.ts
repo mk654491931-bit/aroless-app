@@ -23,6 +23,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
@@ -110,6 +111,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrendRadarRoute = TrendRadarRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/radar': typeof RadarRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByTo {
   '/radar': typeof RadarRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -289,6 +297,7 @@ export interface FileRoutesById {
   '/radar': typeof RadarRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/hot/$id': typeof HotIdRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -393,6 +404,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/settings'
     | '/sitemap.xml'
+    | '/studio'
     | '/trend-radar'
     | '/viral-ads'
     | '/hot/$id'
@@ -428,6 +440,7 @@ export interface RootRouteChildren {
   RadarRoute: typeof RadarRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudioRoute: typeof StudioRoute
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
   HotIdRoute: typeof HotIdRoute
@@ -546,6 +559,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/trend-radar': {
@@ -692,6 +712,7 @@ const rootRouteChildren: RootRouteChildren = {
   RadarRoute: RadarRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudioRoute: StudioRoute,
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
   HotIdRoute: HotIdRoute,
