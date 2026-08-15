@@ -66,6 +66,8 @@ import { huggingFaceSearch } from "@/lib/hf.functions";
 import { ENGINES, engineLabel, storedHfToken, type EngineId, type MarketplaceId } from "@/lib/engines";
 import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
+import { FinderInsights, FilterPresets } from "@/components/finder-insights";
+
 import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/components/deep-search-panel";
 import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
 
@@ -742,12 +744,24 @@ function Dashboard() {
 
                 return (
                 <>
+                <FinderInsights products={filtered} />
                 <AdvancedFilters
                   products={results}
                   filters={filters}
                   onChange={setFilters}
                   onReset={() => setFilters(DEFAULT_FILTERS)}
                 />
+                <FilterPresets
+                  current={{ filters, band, sortBy, sortDesc, onlyLaunch }}
+                  onApply={(s) => {
+                    setFilters(s.filters);
+                    setBand(s.band);
+                    setSortBy(s.sortBy);
+                    setSortDesc(s.sortDesc);
+                    setOnlyLaunch(s.onlyLaunch);
+                  }}
+                />
+
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   {bands.map((b) => (
                     <button
