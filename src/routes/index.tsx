@@ -817,12 +817,15 @@ function Dashboard() {
                   {shown.map((p, i) => (
                     <ProductCard
                       key={i} p={p}
+                      selected={compareNames.includes(p.name)}
+                      onToggleSelect={() => toggleCompare(p.name)}
                       saved={favoriteNames.has(p.name)}
                       onSave={() => saveMut.mutate(p)}
                       onSeo={(name) => { setTab("seo"); requestRun("seo", name); }}
                       onCreative={(name) => { setTab("creative"); requestRun("creative", name); }}
                       onReport={() => setReportProduct(p)}
                       onOpen={() => setDeepDiveProduct(p)}
+
                       locked={locked}
                       onUpgrade={() => setShowPricing(true)}
 
