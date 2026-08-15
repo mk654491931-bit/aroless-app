@@ -63,7 +63,9 @@ export function CompareModal({
   const rows: { label: string; get: (p: WinningProduct) => string }[] = [
     { label: "Winner Score", get: (p) => num(p.winner_score) },
     { label: "Satış fiyatı", get: (p) => String(p.selling_price_usd ?? "—") },
-    { label: "Tedarik maliyeti", get: (p) => String(p.cost_breakdown?.product_cost ?? p.sourcing_cost_usd ?? "—") },
+    { label: "Tedarik maliyeti", get: (p) => String(p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd ?? "—") },
+    { label: "Net kâr", get: (p) => String(p.cost_breakdown?.net_profit ?? "—") },
+
     { label: "Net marj", get: (p) => num(p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct, "%") },
     { label: "Rekabet", get: (p) => String(p.competition_level ?? "—") },
     { label: "Kanıt seviyesi", get: (p) => String(p.evidence_level ?? "—") },
