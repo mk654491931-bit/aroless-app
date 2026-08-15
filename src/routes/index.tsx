@@ -1015,6 +1015,7 @@ function requestRun(target: "seo" | "creative", name: string) {
 
 function ProductCard({
   p, saved, onSave, onSeo, onCreative, onReport, onOpen: onOpenRaw, locked = false, onUpgrade = () => {},
+  selected = false, onToggleSelect,
 }: {
   p: WinningProduct;
   saved: boolean;
@@ -1025,7 +1026,10 @@ function ProductCard({
   onOpen: () => void;
   locked?: boolean;
   onUpgrade?: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
+
   // Standard accounts see the product identity + general info only; the full
   // intelligence suite (pricing, economics, deep dive, simulations) is premium.
   const onOpen = () => (locked ? onUpgrade() : onOpenRaw());
