@@ -132,6 +132,12 @@ function Dashboard() {
 
 
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
+  const [compareNames, setCompareNames] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const toggleCompare = (name: string) =>
+    setCompareNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : prev.length >= 4 ? prev : [...prev, name]));
+  const compareProducts = results.filter((p) => compareNames.includes(p.name));
+
 
   const [showPricing, setShowPricing] = useState(false);
   const [reportProduct, setReportProduct] = useState<WinningProduct | null>(null);
