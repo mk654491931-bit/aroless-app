@@ -76,6 +76,7 @@ import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
 import { OnboardingWizard, ActivationChecklist, useOnboarding } from "@/components/onboarding-wizard";
+import { claimReferral } from "@/lib/referral.functions";
 
 
 
