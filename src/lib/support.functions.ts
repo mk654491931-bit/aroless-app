@@ -96,7 +96,7 @@ export const adminUpdateTicket = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {};
+    const patch: { status?: string; admin_note?: string } = {};
     if (data.status) patch.status = data.status;
     if (data.admin_note !== undefined) patch.admin_note = data.admin_note;
     const { error } = await supabaseAdmin.from("support_tickets").update(patch).eq("id", data.id);
