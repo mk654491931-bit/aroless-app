@@ -1,3 +1,4 @@
+import { VeloraCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -427,7 +428,9 @@ function Dashboard() {
       )}
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+       <VeloraCover className="mb-6" />
        <div className="mb-4">
+
          <ActivationChecklist
            items={[
              { label: "İlk aramanı yap", done: results.length > 0, action: () => { setTab("finder"); nicheInputRef.current?.focus(); } },
