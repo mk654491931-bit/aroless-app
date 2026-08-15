@@ -297,9 +297,11 @@ function Dashboard() {
   }, [tab]);
 
 
-  if (loading || !user) {
+  if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
   }
+  if (!user) return <MarketingLanding />;
+
 
   const credits = profileQ.data?.credits ?? 0;
   const tier = profileQ.data?.subscription_tier ?? "Free";
