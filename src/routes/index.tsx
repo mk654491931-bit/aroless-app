@@ -1069,6 +1069,7 @@ function ProductCard({
       </div>
       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
       <WinnerScorePanel breakdown={p.score_breakdown} />
+      <MarketFitPanel verdict={p.market_verdict} />
 
 
 
