@@ -74,6 +74,8 @@ import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/
 import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
 
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
+import { MarketingLanding } from "@/components/marketing-landing";
+import { OnboardingWizard, ActivationChecklist, useOnboarding } from "@/components/onboarding-wizard";
 
 
 
