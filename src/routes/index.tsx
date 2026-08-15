@@ -74,6 +74,9 @@ import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/
 import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
 
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
+import { MarketingLanding } from "@/components/marketing-landing";
+import { OnboardingWizard, ActivationChecklist, useOnboarding } from "@/components/onboarding-wizard";
+import { claimReferral } from "@/lib/referral.functions";
 
 
 
@@ -159,7 +162,25 @@ function Dashboard() {
     },
   });
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  const onboarding = useOnboarding();
+
+  // Davet linkiyle gelen kullanıcıya (ve davet edene) bonus krediyi bir kez uygula.
+  const claimReferralFn = useServerFn(claimReferral);
+  useEffect(() => {
+    if (!user) return;
+    let code: string | null = null;
+    try { code = window.localStorage.getItem("velora.ref"); } catch { code = null; }
+    if (!code) return;
+    try { window.localStorage.removeItem("velora.ref"); } catch { /* yoksay */ }
+    claimReferralFn({ data: { code } })
+      .then((res) => {
+        if (res.ok) {
+          toast.success(`Davet bonusu eklendi · +${res.credits} kredi`);
+          qc.invalidateQueries({ queryKey: ["profile"] });
+        }
+      })
+      .catch(() => {});
+  }, [user, claimReferralFn, qc]);
 
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
@@ -297,9 +318,11 @@ function Dashboard() {
   }, [tab]);
 
 
-  if (loading || !user) {
+  if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
   }
+  if (!user) return <MarketingLanding />;
+
 
   const credits = profileQ.data?.credits ?? 0;
   const tier = profileQ.data?.subscription_tier ?? "Free";
@@ -386,7 +409,32 @@ function Dashboard() {
       </header>
 
 
+      {onboarding.needsOnboarding && (
+        <OnboardingWizard
+          onSkip={onboarding.skip}
+          onComplete={(r) => {
+            setTargetCountry(r.country);
+            setCategory(r.category);
+            setBudget(r.budget as Budget);
+            setPlatforms([r.platform as Platform]);
+            onboarding.complete(r);
+            setTab("finder");
+            setTimeout(() => nicheInputRef.current?.focus(), 200);
+            toast.success("Hazır! Nişini yaz ve motoru çalıştır.");
+          }}
+        />
+      )}
+
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+       <div className="mb-4">
+         <ActivationChecklist
+           items={[
+             { label: "İlk aramanı yap", done: results.length > 0, action: () => { setTab("finder"); nicheInputRef.current?.focus(); } },
+             { label: "Bir ürünü favorilere ekle", done: favorites.length > 0, action: () => setTab("finder") },
+             { label: "Simülatörde bir sezon oyna", done: false, action: () => setTab("training") },
+           ]}
+         />
+       </div>
        <div className="laptop-shell grain px-3 py-6 md:px-8 md:py-10">
         <TabSwitcher
           tabDefs={tabDefs}

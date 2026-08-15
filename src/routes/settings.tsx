@@ -10,6 +10,9 @@ import { LANGUAGES } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
+import { ReferralPanel } from "@/components/referral-panel";
+import { SupportPanel } from "@/components/support-panel";
+import { AccountDataPanel } from "@/components/account-data-panel";
 
 const CURRENCIES = ["USD", "EUR", "TRY", "SAR", "GBP"] as const;
 
@@ -133,7 +136,14 @@ function SettingsPage() {
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
             <Info label={t("credits")} value={String(profQ.data?.credits ?? 0)} />
           </div>
+          <Link to="/pricing" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10">
+            Planları ve kredi paketlerini gör
+          </Link>
         </section>
+
+        <ReferralPanel />
+        <SupportPanel />
+        <AccountDataPanel />
       </main>
     </div>
   );

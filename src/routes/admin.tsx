@@ -8,6 +8,7 @@ import {
   getAdminStats, listAdminUsers, listAdminTransactions, checkIsAdmin,
 } from "@/lib/admin.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
+import { AdminTickets } from "@/components/admin-tickets";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -99,6 +100,7 @@ function AdminPage() {
 
         {/* Users */}
         <AdminPromoCodes />
+        <AdminTickets />
 
         <section className="glass rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">

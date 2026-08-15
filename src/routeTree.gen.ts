@@ -19,6 +19,7 @@ import { Route as CouncilRouteImport } from './routes/council'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
@@ -88,6 +89,11 @@ const NewsRoute = NewsRouteImport.update({
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trend-radar': typeof TrendRadarRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trend-radar': typeof TrendRadarRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trend-radar': typeof TrendRadarRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/pricing'
     | '/settings'
     | '/sitemap.xml'
     | '/trend-radar'
@@ -335,6 +345,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/pricing'
     | '/settings'
     | '/sitemap.xml'
     | '/trend-radar'
@@ -367,6 +378,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/pricing'
     | '/settings'
     | '/sitemap.xml'
     | '/trend-radar'
@@ -400,6 +412,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   NewsRoute: typeof NewsRoute
   NotificationsRoute: typeof NotificationsRoute
+  PricingRoute: typeof PricingRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TrendRadarRoute: typeof TrendRadarRoute
@@ -492,6 +505,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -648,6 +668,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   NewsRoute: NewsRoute,
   NotificationsRoute: NotificationsRoute,
+  PricingRoute: PricingRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TrendRadarRoute: TrendRadarRoute,

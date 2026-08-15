@@ -65,6 +65,42 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_usage_log: {
+        Row: {
+          created_at: string
+          credits: number
+          duration_ms: number | null
+          id: string
+          meta: Json
+          model: string | null
+          success: boolean
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits?: number
+          duration_ms?: number | null
+          id?: string
+          meta?: Json
+          model?: string | null
+          success?: boolean
+          tool: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          duration_ms?: number | null
+          id?: string
+          meta?: Json
+          model?: string | null
+          success?: boolean
+          tool?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       device_fingerprints: {
         Row: {
           created_at: string
@@ -293,7 +329,10 @@ export type Database = {
           lemon_customer_id: string | null
           lemon_subscription_id: string | null
           notifications_enabled: boolean
+          onboarding_completed: boolean
           promo_code: string | null
+          referral_code: string | null
+          referred_by: string | null
           sim_credits: number
           subscription_tier: string
           updated_at: string
@@ -309,7 +348,10 @@ export type Database = {
           lemon_customer_id?: string | null
           lemon_subscription_id?: string | null
           notifications_enabled?: boolean
+          onboarding_completed?: boolean
           promo_code?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           sim_credits?: number
           subscription_tier?: string
           updated_at?: string
@@ -325,7 +367,10 @@ export type Database = {
           lemon_customer_id?: string | null
           lemon_subscription_id?: string | null
           notifications_enabled?: boolean
+          onboarding_completed?: boolean
           promo_code?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           sim_credits?: number
           subscription_tier?: string
           updated_at?: string
@@ -417,6 +462,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      referral_events: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          referred_credits: number
+          referred_user_id: string
+          referrer_credits: number
+          referrer_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          referred_credits?: number
+          referred_user_id: string
+          referrer_credits?: number
+          referrer_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          referred_credits?: number
+          referred_user_id?: string
+          referrer_credits?: number
+          referrer_id?: string
+        }
+        Relationships: []
       }
       scraped_platform_trends: {
         Row: {
@@ -558,6 +633,45 @@ export type Database = {
           },
         ]
       }
+      support_tickets: {
+        Row: {
+          admin_note: string | null
+          category: string
+          created_at: string
+          email: string | null
+          id: string
+          message: string
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          category?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          message: string
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          category?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          message?: string
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount_cents: number
@@ -680,6 +794,7 @@ export type Database = {
       }
       deduct_credit: { Args: never; Returns: number }
       deduct_sim_credit: { Args: never; Returns: number }
+      gen_referral_code: { Args: never; Returns: string }
       get_sim_leaderboard: {
         Args: never
         Returns: {
