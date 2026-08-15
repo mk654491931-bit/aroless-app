@@ -99,6 +99,7 @@ function AdminPage() {
 
         {/* Users */}
         <AdminPromoCodes />
+        <AdminTickets />
 
         <section className="glass rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
