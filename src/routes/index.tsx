@@ -837,6 +837,22 @@ function Dashboard() {
                 </div>
                 <RejectedPanel items={rejected} />
 
+                <CompareTray
+                  products={compareProducts}
+                  onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                  onClear={() => setCompareNames([])}
+                  onOpen={() => setCompareOpen(true)}
+                />
+                {compareOpen && compareProducts.length >= 2 && (
+                  <CompareModal
+                    products={compareProducts}
+                    onClose={() => setCompareOpen(false)}
+                    onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                  />
+                )}
+
+
+
                 </>
                 );
               })()}
