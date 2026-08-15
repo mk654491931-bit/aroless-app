@@ -106,9 +106,12 @@ export function OnboardingWizard({
   ];
 
   const last = step === steps.length - 1;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+  const overlay = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
       <div className="glass w-full max-w-xl rounded-2xl p-6">
         <div className="flex items-start justify-between">
           <div className="inline-flex items-center gap-2">
