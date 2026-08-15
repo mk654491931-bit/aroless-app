@@ -8,6 +8,7 @@ import {
   getAdminStats, listAdminUsers, listAdminTransactions, checkIsAdmin,
 } from "@/lib/admin.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
+import { AdminTickets } from "@/components/admin-tickets";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
