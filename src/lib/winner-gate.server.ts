@@ -34,9 +34,10 @@ export type GateInput = {
   cost_breakdown?: { supplier_cost?: string; net_margin_pct?: number };
   platform_fit?: string[];
   trend_score?: number;
+  market_verdict?: MarketVerdict;
 };
 
-export type Rejected<T> = { product: T; rejection_reason: string };
+export type Rejected<T> = { product: T; rejection_reason: string; verdict?: MarketVerdict };
 
 /** Klişeleşmiş, aşırı doymuş ürünler — belirgin farklılaşma kanıtı yoksa elenir. */
 const SATURATED = [
