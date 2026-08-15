@@ -44,12 +44,7 @@ export const getRadar = createServerFn({ method: "POST" })
     if (seeds.length === 0) return { day: today, items: [], generated: false };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin
-      .from("radar_items")
-      .upsert(
-        seeds.map((s) => ({ ...s, day: today })),
-        { onConflict: "day,country,title", ignoreDuplicates: true },
-      );
+    await supabaseAdmin.from("radar_items").insert(seeds.map((s) => ({ ...s, day: today })));
 
     rows = await read();
     return { day: today, items: rows ?? [], generated: true };
