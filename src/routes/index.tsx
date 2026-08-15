@@ -48,6 +48,7 @@ import { CreditCost } from "@/components/credit-cost";
 import { TrainingSection } from "@/components/training-section";
 import { AdvancedFilters, DEFAULT_FILTERS, applyFilters, type FinderFilters } from "@/components/advanced-filters";
 import { RejectedPanel, WinnerBadge, WinnerScorePanel, type RejectedCandidate } from "@/components/winner-score-panel";
+import { MarketFitPanel } from "@/components/market-fit-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
 
 import { HotTicker } from "@/components/hot-ticker";
