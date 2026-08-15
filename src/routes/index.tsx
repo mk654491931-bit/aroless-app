@@ -550,14 +550,40 @@ function Dashboard() {
               <div>
                 <label className="flex items-center justify-between gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
                   <span className="flex items-center gap-1.5"><Store size={12} /> {t("sales_platforms")}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPlatforms(recommendedPlatforms(effectiveCountry))}
-                    className="normal-case tracking-normal text-[11px] rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[oklch(0.86_0.10_265)] hover:bg-[oklch(0.68_0.20_265)]/22"
-                  >
-                    {countryName(effectiveCountry)} için öner
-                  </button>
+                  <span className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setRecoOpen((v) => !v)}
+                      className="normal-case tracking-normal text-[11px] inline-flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[oklch(0.86_0.10_265)] hover:bg-[oklch(0.68_0.20_265)]/22"
+                    >
+                      {countryName(effectiveCountry)} için öner
+                      <ChevronDown size={11} className={recoOpen ? "rotate-180 transition" : "transition"} />
+                    </button>
+                    {recoOpen && (
+                      <>
+                        <span className="fixed inset-0 z-30" onClick={() => setRecoOpen(false)} />
+                        <div className="absolute right-0 z-40 mt-1 max-h-64 w-56 overflow-auto rounded-xl border border-white/10 bg-[oklch(0.20_0.035_265)] p-1 shadow-2xl">
+                          {TARGET_COUNTRIES.map((c) => (
+                            <button
+                              key={c.code}
+                              type="button"
+                              onClick={() => {
+                                setTargetCountry(c.code);
+                                setPlatforms(recommendedPlatforms(c.code));
+                                setRecoOpen(false);
+                              }}
+                              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs normal-case tracking-normal hover:bg-white/10 ${c.code === effectiveCountry ? "bg-white/10 text-foreground" : "text-muted-foreground"}`}
+                            >
+                              <span>{c.flag}</span>
+                              <span className="truncate">{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </span>
                 </label>
+
 
                 <div className="flex flex-wrap gap-2">
                   {PLATFORMS.map((p) => {
