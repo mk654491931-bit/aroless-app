@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { VeloraMark } from "@/components/velora-mark";
+import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 const FEATURES = [
   { icon: Search, title: "Ürün Bulucu", text: "20 analiz açısı ile üretilen adaylar, Winner Score ile 0–100 puanlanır." },
@@ -35,22 +36,26 @@ const STATS = [
 ];
 
 export function AuthShowcase() {
+  const ref = useScrollReveal<HTMLDivElement>();
+
   return (
-    <div className="relative mx-auto w-full max-w-6xl px-5">
+    <div ref={ref} className="relative mx-auto w-full max-w-6xl px-4 sm:px-5">
       {/* ---------- Intro cover ---------- */}
-      <section className="flex min-h-[86vh] flex-col items-center justify-center py-16 text-center">
-        <div
-                    className="animate-rise-in inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground backdrop-blur"
-        >
+      <section className="flex min-h-[80svh] flex-col items-center justify-center py-12 text-center sm:min-h-[86svh] sm:py-16">
+        <div className="animate-rise-in inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground backdrop-blur sm:px-3.5 sm:text-[11px] sm:tracking-[0.28em]">
           <Sparkles className="h-3.5 w-3.5 animate-pulse-soft" />
           AI Commerce OS
         </div>
 
-        <div data-reveal className="animate-rise-in mt-8 flex items-center justify-center gap-4" style={{ animationDelay: "80ms" }}>
-          <VeloraMark size={64} />
+        <div
+          className="animate-rise-in mt-6 flex w-full items-center justify-center gap-3 sm:mt-8 sm:gap-4"
+          style={{ animationDelay: "80ms" }}
+        >
+          <VeloraMark size={44} className="shrink-0 sm:hidden" />
+          <VeloraMark size={64} className="hidden shrink-0 sm:block" />
           <h1
-            className="font-extralight uppercase leading-none tracking-[0.3em]"
-            style={{ fontSize: "clamp(2rem,8vw,4.5rem)" }}
+            className="min-w-0 font-extralight uppercase leading-none tracking-[0.18em] sm:tracking-[0.3em]"
+            style={{ fontSize: "clamp(1.75rem,8vw,4.5rem)" }}
             aria-label="Velora"
           >
             {"VELORA".split("").map((ch, i) => (
@@ -67,7 +72,7 @@ export function AuthShowcase() {
         </div>
 
         <p
-                    className="animate-rise-in mx-auto mt-7 max-w-2xl text-balance text-base text-muted-foreground md:text-xl"
+          className="animate-rise-in mx-auto mt-6 max-w-2xl text-balance text-sm text-muted-foreground sm:mt-7 sm:text-base md:text-xl"
           style={{ animationDelay: "160ms" }}
         >
           Kazandıran ürünü <span className="text-gradient font-semibold">tahminle değil, veriyle</span> buluyoruz.
@@ -76,20 +81,22 @@ export function AuthShowcase() {
         </p>
 
         <div
-                    className="animate-rise-in mt-9 grid w-full max-w-3xl grid-cols-2 gap-3 md:grid-cols-4"
+          className="animate-rise-in mt-8 grid w-full max-w-3xl grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4"
           style={{ animationDelay: "240ms" }}
         >
           {STATS.map((s) => (
-            <div key={s.k} className="premium-card px-3 py-4">
-              <div className="text-xl font-semibold md:text-2xl">{s.k}</div>
-              <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">{s.v}</div>
+            <div key={s.k} className="premium-card min-w-0 px-3 py-3.5 sm:py-4">
+              <div className="text-lg font-semibold sm:text-xl md:text-2xl">{s.k}</div>
+              <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground sm:text-[11px]">
+                {s.v}
+              </div>
             </div>
           ))}
         </div>
 
         <a
           href="#signin"
-                    className="animate-rise-in card-lift mt-10 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-5 py-2.5 text-sm text-muted-foreground backdrop-blur hover:text-foreground"
+          className="animate-rise-in card-lift mt-9 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-5 py-2.5 text-sm text-muted-foreground backdrop-blur hover:text-foreground sm:mt-10"
           style={{ animationDelay: "320ms" }}
         >
           Keşfet, sonra giriş yap
@@ -98,21 +105,26 @@ export function AuthShowcase() {
       </section>
 
       {/* ---------- What we do ---------- */}
-      <section className="py-14">
-        <h2 data-reveal className="animate-rise-in text-center text-2xl font-semibold md:text-3xl">
+      <section className="py-12 sm:py-14">
+        <h2 data-reveal className="text-center text-xl font-semibold sm:text-2xl md:text-3xl">
           Biz ne yapıyoruz?
         </h2>
-        <p data-reveal className="animate-rise-in mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
+        <p
+          data-reveal
+          className="mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground"
+          style={{ ["--reveal-delay" as string]: "80ms" }}
+        >
           Araştırmadan reklama kadar tüm e-ticaret zincirini tek panelde topluyoruz.
         </p>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:mt-10 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
-                            className="animate-rise-in premium-card card-lift p-5"
-              style={{ animationDelay: `${i * 70}ms` }}
+              data-reveal
+              className="premium-card card-lift p-4 sm:p-5"
+              style={{ ["--reveal-delay" as string]: `${(i % 3) * 90}ms` }}
             >
-              <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-card/60">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-card/60">
                 <f.icon className="h-5 w-5" />
               </span>
               <h3 className="mt-4 text-sm font-semibold">{f.title}</h3>
@@ -123,16 +135,17 @@ export function AuthShowcase() {
       </section>
 
       {/* ---------- How it works ---------- */}
-      <section className="py-14">
-        <h2 data-reveal className="animate-rise-in text-center text-2xl font-semibold md:text-3xl">
+      <section className="py-12 sm:py-14">
+        <h2 data-reveal className="text-center text-xl font-semibold sm:text-2xl md:text-3xl">
           Nasıl çalışır?
         </h2>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:mt-10 sm:gap-4 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <div
               key={s.n}
-                            className="animate-rise-in premium-card p-5"
-              style={{ animationDelay: `${i * 90}ms` }}
+              data-reveal
+              className="premium-card p-4 sm:p-5"
+              style={{ ["--reveal-delay" as string]: `${i * 110}ms` }}
             >
               <div className="text-[11px] font-semibold tracking-[0.3em] text-[var(--brand)]">{s.n}</div>
               <h3 className="mt-3 text-sm font-semibold">{s.t}</h3>
@@ -141,12 +154,18 @@ export function AuthShowcase() {
           ))}
         </div>
 
-        <div data-reveal className="animate-rise-in mt-10 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+        <div
+          data-reveal
+          className="mt-9 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground sm:mt-10 sm:gap-4"
+        >
           <span className="inline-flex items-center gap-1.5"><Cpu className="h-3.5 w-3.5" /> Hibrit AI motoru</span>
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Kaynaklı tahminler</span>
           <span className="inline-flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> 21 ülke ekonomisi</span>
         </div>
       </section>
+
+      {/* separator so the showcase never collides with the auth card */}
+      <div aria-hidden className="mx-auto h-px w-full max-w-3xl bg-border/70" />
     </div>
   );
 }
