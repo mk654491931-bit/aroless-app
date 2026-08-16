@@ -15,7 +15,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+
 import { useAuth } from "@/hooks/use-auth";
 import { getVisitorId } from "@/lib/fingerprint";
 import { TurnstileWidget } from "@/components/turnstile-widget";
