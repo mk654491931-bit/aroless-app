@@ -23,6 +23,7 @@ import { isDisposableEmail } from "@/lib/disposable-email";
 import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
 import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
+import { AuthShowcase } from "@/components/auth-showcase";
 
 
 export const Route = createFileRoute("/auth")({
@@ -356,7 +357,12 @@ function AuthPage() {
         }}
       />
 
-      <div className="relative mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-5 py-12 lg:grid-cols-2 lg:gap-16">
+      <AuthShowcase />
+
+      <div
+        id="signin"
+        className="relative mx-auto grid min-h-screen w-full max-w-6xl scroll-mt-8 items-center gap-10 px-5 py-12 lg:grid-cols-2 lg:gap-16"
+      >
         {/* ---------- Brand / value panel ---------- */}
         <section className="animate-rise-in hidden lg:block">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
