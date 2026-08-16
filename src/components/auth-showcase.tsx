@@ -42,14 +42,19 @@ function useReveal() {
     if (!el) return;
     const items = Array.from(el.querySelectorAll<HTMLElement>("[data-reveal]"));
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      items.forEach((i) => i.classList.add("is-revealed"));
+      items.forEach((i) => {
+        i.style.opacity = "1";
+        i.style.transform = "none";
+      });
       return;
     }
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) {
-            e.target.classList.add("is-revealed");
+            const t = e.target as HTMLElement;
+            t.style.opacity = "1";
+            t.style.transform = "none";
             io.unobserve(e.target);
           }
         });
