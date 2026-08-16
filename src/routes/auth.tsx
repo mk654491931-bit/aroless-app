@@ -15,7 +15,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+
 import { useAuth } from "@/hooks/use-auth";
 import { getVisitorId } from "@/lib/fingerprint";
 import { TurnstileWidget } from "@/components/turnstile-widget";
@@ -314,14 +314,21 @@ function AuthPage() {
 
   const google = async () => {
     setBusy("google");
-    const res = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    // Portable OAuth: works on any host (local, Codespaces, prod) as long as the
+    // Google provider is enabled in Supabase Auth and this origin is whitelisted.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { prompt: "select_account" },
+      },
     });
-    if (res.error) {
-      toast.error(res.error.message);
+    if (error) {
+      toast.error(error.message);
       setBusy(null);
     }
   };
+
 
   return (
     <div className="relative min-h-screen overflow-hidden">

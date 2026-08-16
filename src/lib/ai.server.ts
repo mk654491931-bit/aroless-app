@@ -63,20 +63,38 @@ export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<
 }
 
 /**
- * Built-in Lovable AI gateway (chat completions) — no user API key needed.
- * Uses the latest Gemini Flash generation first, then progressively cheaper /
- * different vendors, so a single model outage never breaks the app.
+ * Optional OpenAI-compatible AI gateway.
+ *
+ * Configure with `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY` (any OpenAI-compatible
+ * endpoint: OpenRouter, Groq, OpenAI, a self-hosted proxy, or the managed
+ * gateway). When no key is present the whole gateway path is skipped and the
+ * app falls back to the project's own provider key pools.
  */
 
+function gatewayConfig() {
+  const key =
+    process.env['AI_GATEWAY_API_KEY'] ||
+    process.env['LOVABLE_API_KEY'] ||
+    "";
+  const url =
+    process.env['AI_GATEWAY_URL'] ||
+    (process.env['LOVABLE_API_KEY'] ? "https://ai.gateway.lovable.dev/v1/chat/completions" : "");
+  const models = (process.env['AI_GATEWAY_MODELS'] || "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return { key, url, models };
+}
+
 async function callGatewayResponses(prompt: string, modelPreference?: string[]): Promise<string> {
-  const key = process.env['LOVABLE_API_KEY'];
-  if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const models = modelPreference?.length ? modelPreference : [
+  const { key, url, models: envModels } = gatewayConfig();
+  if (!key || !url) throw new Error("AI gateway not configured");
+  const models = modelPreference?.length ? modelPreference : (envModels.length ? envModels : [
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash",
     "google/gemini-2.5-flash",
     "openai/gpt-5.6-terra",
-  ];
+  ]);
 
   let lastErr: unknown = null;
   for (const model of models) {
@@ -88,11 +106,16 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
       };
       // GPT-5.6 rejects tool/completion requests unless reasoning is disabled.
       if (model.startsWith("openai/gpt-5.6")) body["reasoning_effort"] = "none";
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+          "Lovable-API-Key": key,
+        },
         body: JSON.stringify(body),
       });
+
       if (!resp.ok) {
         lastErr = new Error(`Gateway error: ${resp.status} ${(await resp.text()).slice(0, 180)}`);
         continue;

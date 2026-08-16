@@ -1,24 +1,58 @@
-# Perfect Zip Unpacker
+# Velora
 
-bu zip dosyasını kusursuzca aç , kusursuzca düzenle ve kusursuzca en iyi şekilde kodla.  Ek olarak da omnic.111111@gmail.com hesabı admindir ve o hesaba 250 kredi ekle
+E-ticaret büyüme paneli: ürün bulucu, kazanan ürün radarı, ROI takibi, mağaza denetçisi, reklam kreatif stüdyosu ve eğitim simülatörü.
 
-This project was built with [Lovable](https://lovable.dev).
+Teknoloji: TanStack Start (React 19) + Vite + Tailwind v4 + Supabase.
 
-## Build with Lovable
+## Hızlı kurulum (VS Code / Codespaces / herhangi bir makine)
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/2af5bbac-66bd-44b3-8e80-9d4c297b3630).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Gereken tek şey: bir Supabase projesi ve `.env` dosyası.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+# 1) Bağımlılıklar (bun veya npm)
+npm install          # ya da: bun install
+
+# 2) Ortam değişkenleri
+cp .env.example .env # değerleri doldur
+
+# 3) Veritabanı şeması (tek komut)
+npx supabase link --project-ref <PROJE_REF>
+npx supabase db push
+
+# 4) Geliştirme sunucusu
+npm run dev          # http://localhost:8080
 ```
+
+Üretim derlemesi: `npm run build` → `dist/` (Cloudflare/Nitro çıktısı).
+
+## Google ile giriş
+
+1. Supabase panelinde **Authentication → Providers → Google** açılır.
+2. Google Cloud Console'da OAuth istemcisi oluşturulur; **Authorized redirect URI** olarak
+   `https://<PROJE_REF>.supabase.co/auth/v1/callback` eklenir.
+3. Supabase **Site URL** ve **Redirect URLs** listesine uygulama adresleri eklenir:
+   `http://localhost:8080/auth/callback` ve üretim adresiniz.
+
+Uygulama `supabase.auth.signInWithOAuth` kullanır — hiçbir üçüncü parti köprü gerekmez.
+
+## Opsiyonel servisler
+
+Aşağıdakiler `.env`'de boş bırakılırsa özellik otomatik devre dışı kalır, uygulama çalışmaya devam eder:
+
+| Değişken | Etki |
+| --- | --- |
+| `GEMINI_*`, `GROQ_*`, `OPENROUTER_*`, `HUGGING_FACE_*` | AI motorları (havuz hâlinde sırayla döner, rate-limit'e takılmaz) |
+| `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY` | Ek OpenAI uyumlu ağ geçidi (yedek motor) |
+| `RESEND_API_KEY` | E-posta gönderimi |
+| `VITE_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | Bot koruması |
+
+En az bir AI anahtarı önerilir; hiçbiri yoksa AI özellikleri hata yerine "yapılandırılmadı" uyarısı verir.
+
+## Komutlar
+
+| Komut | Açıklama |
+| --- | --- |
+| `npm run dev` | Geliştirme sunucusu (8080) |
+| `npm run build` | Üretim derlemesi |
+| `npm run preview` | Derlemeyi yerelde çalıştır |
+| `npm run lint` | ESLint |
