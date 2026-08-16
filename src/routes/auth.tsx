@@ -23,6 +23,7 @@ import { isDisposableEmail } from "@/lib/disposable-email";
 import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
 import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
+import { AuthShowcase } from "@/components/auth-showcase";
 
 
 export const Route = createFileRoute("/auth")({
