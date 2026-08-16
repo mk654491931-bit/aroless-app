@@ -42,11 +42,13 @@ Yayınlama: proje Cloudflare Workers hedefine göre kurulu; `wrangler deploy` il
 
 ## Uygulama adımları (onaylarsan)
 
-1. `vite.config.ts`'i Lovable paketi olmadan yeniden yaz, `package.json`'dan `@lovable.dev/vite-tanstack-config`'i kaldır, gerekli eklentileri ekle.
-2. Google girişini `supabase.auth.signInWithOAuth`'a çevir, `src/integrations/lovable/` klasörünü ve `@lovable.dev/cloud-auth-js` paketini kaldır.
-3. `callLovableAI`'yi seçtiğin sağlayıcıya (A) yönlendir veya motoru (B) kaldır.
-4. `lovable-error-reporting.ts`'i güvenli bir no-op/console sürümüne indir.
-5. `.env.example` ve `README.md`'ye kurulum + tüm anahtar listesi ekle.
+1. `vite.config.ts`'i Lovable paketi olmadan standart eklentilerle yeniden yaz; `package.json`'dan `@lovable.dev/vite-tanstack-config`'i kaldır, gereken eklentileri ekle.
+2. Google girişini `supabase.auth.signInWithOAuth`'a çevir; `src/integrations/lovable/` klasörünü ve `@lovable.dev/cloud-auth-js` paketini kaldır.
+3. `callLovableAI`'yi `AI_GATEWAY_URL`/`AI_GATEWAY_API_KEY` ile çalışan genel OpenAI uyumlu istemciye çevir; anahtar yoksa motor otomatik devre dışı.
+4. `lovable-error-reporting.ts`'i ortamdan bağımsız güvenli sürüme çevir.
+5. `.env.example` ve `README.md`: kurulum adımları + tüm anahtarların listesi (Codespaces dahil).
 6. `bunfig.toml` içindeki Lovable'a özel paket istisnalarını temizle.
+7. Temiz kurulum testi: bağımlılıkları sıfırdan kurup dev + build çalıştırarak doğrula.
 
-Not: bu değişikliklerden sonra proje Lovable önizlemesinde de çalışmaya devam eder, ancak Lovable'ın tek tık Google girişi yerine kendi Google OAuth istemcin kullanılır.
+Not: değişikliklerden sonra proje burada da çalışmaya devam eder; tek fark Lovable'ın tek tık Google girişi yerine kendi Google OAuth istemcinin kullanılması.
+
