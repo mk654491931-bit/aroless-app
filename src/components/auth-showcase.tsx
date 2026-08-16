@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import {
   Search,
   Globe,
@@ -35,54 +34,19 @@ const STATS = [
   { k: "3x", v: "hibrit AI modeli" },
 ];
 
-function useReveal() {
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = root.current;
-    if (!el) return;
-    const items = Array.from(el.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      items.forEach((i) => {
-        i.style.opacity = "1";
-        i.style.transform = "none";
-      });
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            const t = e.target as HTMLElement;
-            t.style.opacity = "1";
-            t.style.transform = "none";
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" },
-    );
-    items.forEach((i) => io.observe(i));
-    return () => io.disconnect();
-  }, []);
-  return root;
-}
-
 export function AuthShowcase() {
-  const root = useReveal();
-
   return (
-    <div ref={root} className="relative mx-auto w-full max-w-6xl px-5">
+    <div className="relative mx-auto w-full max-w-6xl px-5">
       {/* ---------- Intro cover ---------- */}
       <section className="flex min-h-[86vh] flex-col items-center justify-center py-16 text-center">
         <div
-          data-reveal
-          className="reveal inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground backdrop-blur"
+                    className="animate-rise-in inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground backdrop-blur"
         >
           <Sparkles className="h-3.5 w-3.5 animate-pulse-soft" />
           AI Commerce OS
         </div>
 
-        <div data-reveal className="reveal mt-8 flex items-center justify-center gap-4" style={{ transitionDelay: "80ms" }}>
+        <div data-reveal className="animate-rise-in mt-8 flex items-center justify-center gap-4" style={{ animationDelay: "80ms" }}>
           <VeloraMark size={64} />
           <h1
             className="font-extralight uppercase leading-none tracking-[0.3em]"
@@ -103,9 +67,8 @@ export function AuthShowcase() {
         </div>
 
         <p
-          data-reveal
-          className="reveal mx-auto mt-7 max-w-2xl text-balance text-base text-muted-foreground md:text-xl"
-          style={{ transitionDelay: "160ms" }}
+                    className="animate-rise-in mx-auto mt-7 max-w-2xl text-balance text-base text-muted-foreground md:text-xl"
+          style={{ animationDelay: "160ms" }}
         >
           Kazandıran ürünü <span className="text-gradient font-semibold">tahminle değil, veriyle</span> buluyoruz.
           Velora; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
@@ -113,9 +76,8 @@ export function AuthShowcase() {
         </p>
 
         <div
-          data-reveal
-          className="reveal mt-9 grid w-full max-w-3xl grid-cols-2 gap-3 md:grid-cols-4"
-          style={{ transitionDelay: "240ms" }}
+                    className="animate-rise-in mt-9 grid w-full max-w-3xl grid-cols-2 gap-3 md:grid-cols-4"
+          style={{ animationDelay: "240ms" }}
         >
           {STATS.map((s) => (
             <div key={s.k} className="premium-card px-3 py-4">
@@ -127,9 +89,8 @@ export function AuthShowcase() {
 
         <a
           href="#signin"
-          data-reveal
-          className="reveal card-lift mt-10 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-5 py-2.5 text-sm text-muted-foreground backdrop-blur hover:text-foreground"
-          style={{ transitionDelay: "320ms" }}
+                    className="animate-rise-in card-lift mt-10 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-5 py-2.5 text-sm text-muted-foreground backdrop-blur hover:text-foreground"
+          style={{ animationDelay: "320ms" }}
         >
           Keşfet, sonra giriş yap
           <ArrowDown className="h-4 w-4 animate-bounce" />
@@ -138,19 +99,18 @@ export function AuthShowcase() {
 
       {/* ---------- What we do ---------- */}
       <section className="py-14">
-        <h2 data-reveal className="reveal text-center text-2xl font-semibold md:text-3xl">
+        <h2 data-reveal className="animate-rise-in text-center text-2xl font-semibold md:text-3xl">
           Biz ne yapıyoruz?
         </h2>
-        <p data-reveal className="reveal mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
+        <p data-reveal className="animate-rise-in mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
           Araştırmadan reklama kadar tüm e-ticaret zincirini tek panelde topluyoruz.
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
-              data-reveal
-              className="reveal premium-card card-lift p-5"
-              style={{ transitionDelay: `${i * 70}ms` }}
+                            className="animate-rise-in premium-card card-lift p-5"
+              style={{ animationDelay: `${i * 70}ms` }}
             >
               <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-card/60">
                 <f.icon className="h-5 w-5" />
@@ -164,16 +124,15 @@ export function AuthShowcase() {
 
       {/* ---------- How it works ---------- */}
       <section className="py-14">
-        <h2 data-reveal className="reveal text-center text-2xl font-semibold md:text-3xl">
+        <h2 data-reveal className="animate-rise-in text-center text-2xl font-semibold md:text-3xl">
           Nasıl çalışır?
         </h2>
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <div
               key={s.n}
-              data-reveal
-              className="reveal premium-card p-5"
-              style={{ transitionDelay: `${i * 90}ms` }}
+                            className="animate-rise-in premium-card p-5"
+              style={{ animationDelay: `${i * 90}ms` }}
             >
               <div className="text-[11px] font-semibold tracking-[0.3em] text-[var(--brand)]">{s.n}</div>
               <h3 className="mt-3 text-sm font-semibold">{s.t}</h3>
@@ -182,7 +141,7 @@ export function AuthShowcase() {
           ))}
         </div>
 
-        <div data-reveal className="reveal mt-10 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+        <div data-reveal className="animate-rise-in mt-10 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><Cpu className="h-3.5 w-3.5" /> Hibrit AI motoru</span>
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Kaynaklı tahminler</span>
           <span className="inline-flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> 21 ülke ekonomisi</span>
