@@ -78,7 +78,7 @@ export function AuthShowcase() {
         </div>
 
         <div data-reveal className="reveal mt-8 flex items-center justify-center gap-4" style={{ transitionDelay: "80ms" }}>
-          <VeloraMark className="h-12 w-12 md:h-16 md:w-16" />
+          <VeloraMark size={64} />
           <h1
             className="font-extralight uppercase leading-none tracking-[0.3em]"
             style={{ fontSize: "clamp(2rem,8vw,4.5rem)" }}
