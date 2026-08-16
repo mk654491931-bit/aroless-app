@@ -23,22 +23,32 @@ Yapılacak: bu motoru Lovable'a özel olmaktan çıkarıp **OpenAI uyumlu genel 
 Sadece Lovable önizlemesindeki `window.__lovableEvents`'a yazıyor. Dosya nötr bir isim ve güvenli davranışa çevrilir: Lovable ortamındaysa oraya, değilse `console.error`'a raporlar. Her yerde çalışır.
 
 
-## Lovable'a bağlı olmayan, ama senin doldurman gereken şeyler
+## Hedef: kurulumda tek iş = Supabase + `.env`
 
-- **`.env` dosyası:** repoya inmez. Kendi makinende `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` ve sunucu tarafı için aynı değerlerin `VITE_` önekisiz halleri gerekir.
-- **Sunucu tarafı gizli anahtarlar:** `GEMINI_1/2/3_API_KEY`, `GROQ_API_KEY(_2)`, `OPENROUTER_API_KEY1/2`, `HUGGING_FACE_API_KEY1/2`, `RESEND_API_KEY*`, LemonSqueezy webhook secret'ı ve Supabase **service role key** (admin işlemleri için). Bunlar şu an Lovable'ın gizli anahtar deposunda; kendi `.env`'ine kopyalaman gerekir. Service role key'i Lovable üzerinden alamazsın — kendi Supabase projene geçersen oradan alırsın.
-- **Veritabanı:** Supabase Lovable'ın bir parçası değil, kalabilir. İstersen aynı projeyi kullanmaya devam edersin; tamamen ayrılmak istersen şemayı + verileri yeni bir Supabase projesine taşırız (migration dosyaları zaten repoda).
+Değişiklikler bittiğinde projeyi herhangi bir yerde (Codespaces, VS Code, sunucu) açtığında yapman gereken tek şey şu olacak:
+
+1. Bir Supabase projesi bağlamak (URL + publishable key + service role key).
+2. `.env` dosyasına API anahtarlarını yazmak.
+
+Bunu garanti etmek için:
+
+- **`.env.example`** dosyası projeye eklenir; içinde tüm değişkenler adı adına listelenir: Supabase (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` + aynılarının `VITE_` öneksiz sunucu sürümleri, `SUPABASE_SERVICE_ROLE_KEY`), `GEMINI_1/2/3_API_KEY`, `GROQ_API_KEY(_2)`, `OPENROUTER_API_KEY1/2`, `HUGGING_FACE_API_KEY1/2`, `RESEND_API_KEY*`, `AI_GATEWAY_URL/KEY`, LemonSqueezy webhook secret'ı, `VITE_TURNSTILE_SITE_KEY`.
+- **Opsiyonel anahtarlar hiçbir yerde çökmeye yol açmaz:** eksik anahtar → o servis/motor sessizce devre dışı, uygulama çalışmaya devam eder (Resend, Turnstile, LemonSqueezy, AI gateway zaten böyle çalışacak şekilde düzenlenir).
+- **Veritabanı şeması tek komutla kurulur:** `supabase/migrations` klasöründeki dosyalar yeni bir Supabase projesine `supabase db push` ile uygulanır; README'de bu adım yazılı olur. Ekstra elle SQL yazman gerekmez.
+- **Kod içinde hiçbir Lovable servisi zorunlu değil:** Lovable yoksa da uygulama aynı çalışır (Google girişi Supabase'in kendi provider'ı üzerinden). Google girişi için Supabase panelinde Google provider'ını açman gerekir — bu da Supabase kurulumunun bir parçası.
 
 ## Nasıl çalıştıracaksın
 
 ```text
-bun install     (veya npm install)
-.env dosyasını doldur
-bun run dev  ->  http://localhost:8080
-bun run build ->  Cloudflare Workers çıktısı (Nitro)
+npm install    (veya bun install)
+cp .env.example .env  ->  değerleri doldur
+npx supabase db push  ->  şemayı kur (yeni Supabase projesi ise)
+npm run dev   ->  http://localhost:8080
+npm run build ->  Cloudflare Workers çıktısı (Nitro)
 ```
 
-Yayınlama: proje Cloudflare Workers hedefine göre kurulu; `wrangler deploy` ile kendi Cloudflare hesabına çıkarsın. Vercel/Netlify istersen Nitro preset'ini değiştiririz.
+Yayınlama: proje Cloudflare Workers hedefine göre kurulu; `wrangler deploy` ile kendi hesabına çıkarsın. Vercel/Netlify istersen Nitro preset'ini değiştiririz.
+
 
 ## Uygulama adımları (onaylarsan)
 
