@@ -1,28 +1,27 @@
-# Projeyi kendi VS Code ortamında çalıştırma
+# Projeyi Lovable'dan bağımsız hale getirme (VS Code / Codespaces)
 
-Amaç: projeyi kendi bilgisayarında (ve kendi hostunda) Lovable'a bağımlı olmadan, şu anki haliyle birebir çalışır tutmak. Aşağıda hangi bağımlılığın ne işe yaradığı ve yerine ne koyacağın var.
+Amaç: ZIP'i indirip Codespaces veya kendi VS Code'unda açtığında hatasız kurulup çalışması; aynı zamanda burada da çalışmaya devam etmesi. Codespaces'teki hataların kaynağı aşağıdaki Lovable'a özel paket ve servisler.
 
-## Kesilmesi gereken 4 Lovable bağımlılığı
+## Kaldırılacak 4 Lovable bağımlılığı
 
 ### 1. Build yapılandırması — `@lovable.dev/vite-tanstack-config`
-`vite.config.ts` tek satırda Lovable'ın hazır paketini kullanıyor; içinde TanStack Start, React, Tailwind, tsconfig-paths, Nitro (Cloudflare) ve Lovable'a özel sandbox/hata eklentileri var.
+`vite.config.ts` tek satırda Lovable'ın hazır paketini kullanıyor; içinde TanStack Start, React, Tailwind, tsconfig-paths, Nitro (Cloudflare) ve Lovable'a özel sandbox/hata eklentileri var. Codespaces'te bu paketin sandbox/port davranışı ve özel eklentileri en büyük hata kaynağı.
 
-Yapılacak: bu paketi kaldırıp `vite.config.ts` içinde eklentileri tek tek tanımlamak (`tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, `nitro` cloudflare preset). Sonuç aynı, ama paket Lovable'dan bağımsız.
+Yapılacak: paketi kaldırıp `vite.config.ts` içinde eklentileri tek tek, standart şekilde tanımlamak (`tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, `nitro` cloudflare preset). Port/host ayarı normal Vite `server` bloğuna taşınır, böylece her ortamda çalışır.
 
 ### 2. Tek tıkla Google girişi — `@lovable.dev/cloud-auth-js`
-`src/integrations/lovable/index.ts` ve `src/routes/auth.tsx` Google girişini Lovable'ın OAuth köprüsünden yapıyor. Kendi ortamında bu köprü yok.
+`src/integrations/lovable/index.ts` ve `src/routes/auth.tsx` Google girişini Lovable'ın OAuth köprüsünden yapıyor. Kendi ortamında bu köprü yok, giriş hata veriyor.
 
-Yapılacak: Google girişini doğrudan Supabase üzerinden yapmak (`supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })`). Bunun için Google Cloud Console'da bir OAuth Client ID/Secret oluşturup Supabase Auth > Providers > Google alanına girmen ve redirect URL'lerine `http://localhost:8080` + kendi domainini eklemen gerekiyor. Aksi halde "provider is not supported" hatası döner.
+Yapılacak: Google girişini doğrudan Supabase üzerinden yapmak (`supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })`). Bunun için Google Cloud Console'da bir OAuth Client ID/Secret oluşturup Supabase Auth > Providers > Google alanına girmen ve izinli redirect URL'lerine `http://localhost:8080`, Codespaces URL'in ve kendi domainini eklemen gerekiyor.
 
 ### 3. Yapay zekâ ağ geçidi — `LOVABLE_API_KEY` / `ai.gateway.lovable.dev`
 `src/lib/ai.server.ts` içindeki `callLovableAI`, hibrit motorlarda 4. sağlayıcı olarak kullanılıyor (`tools-ai.server.ts`, `trend-radar.server.ts`, growth ekranı).
 
-İki seçenek:
-- **A (önerilen):** "lovable" motorunu kendi bir OpenAI/OpenRouter anahtarına yönlendirmek — hibrit 4 motorlu kalır, ekranlar bozulmaz.
-- **B:** "lovable" motorunu tamamen çıkarmak — Gemini + Groq + OpenRouter ile 3 motorlu hibrit; ağırlıklar yeniden dağıtılır, growth ekranındaki 4. gösterge kaldırılır.
+Yapılacak: bu motoru Lovable'a özel olmaktan çıkarıp **OpenAI uyumlu genel bir sağlayıcıya** çevirmek — `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY` (yoksa OpenRouter'a düşer). Anahtar tanımlı değilse motor sessizce devre dışı kalır, hibrit 3 motorla çalışır ve hiçbir ekran hata vermez. Böylece Lovable'da da, dışarıda da çalışır.
 
 ### 4. Hata raporlama — `src/lib/lovable-error-reporting.ts`
-Sadece Lovable önizlemesindeki `window.__lovableEvents`'a yazıyor; kendi ortamında sessizce hiçbir şey yapmaz. Zararsız — istersen dosyayı Sentry'ye ya da basit `console.error`'a çevirebiliriz.
+Sadece Lovable önizlemesindeki `window.__lovableEvents`'a yazıyor. Dosya nötr bir isim ve güvenli davranışa çevrilir: Lovable ortamındaysa oraya, değilse `console.error`'a raporlar. Her yerde çalışır.
+
 
 ## Lovable'a bağlı olmayan, ama senin doldurman gereken şeyler
 
@@ -43,11 +42,13 @@ Yayınlama: proje Cloudflare Workers hedefine göre kurulu; `wrangler deploy` il
 
 ## Uygulama adımları (onaylarsan)
 
-1. `vite.config.ts`'i Lovable paketi olmadan yeniden yaz, `package.json`'dan `@lovable.dev/vite-tanstack-config`'i kaldır, gerekli eklentileri ekle.
-2. Google girişini `supabase.auth.signInWithOAuth`'a çevir, `src/integrations/lovable/` klasörünü ve `@lovable.dev/cloud-auth-js` paketini kaldır.
-3. `callLovableAI`'yi seçtiğin sağlayıcıya (A) yönlendir veya motoru (B) kaldır.
-4. `lovable-error-reporting.ts`'i güvenli bir no-op/console sürümüne indir.
-5. `.env.example` ve `README.md`'ye kurulum + tüm anahtar listesi ekle.
+1. `vite.config.ts`'i Lovable paketi olmadan standart eklentilerle yeniden yaz; `package.json`'dan `@lovable.dev/vite-tanstack-config`'i kaldır, gereken eklentileri ekle.
+2. Google girişini `supabase.auth.signInWithOAuth`'a çevir; `src/integrations/lovable/` klasörünü ve `@lovable.dev/cloud-auth-js` paketini kaldır.
+3. `callLovableAI`'yi `AI_GATEWAY_URL`/`AI_GATEWAY_API_KEY` ile çalışan genel OpenAI uyumlu istemciye çevir; anahtar yoksa motor otomatik devre dışı.
+4. `lovable-error-reporting.ts`'i ortamdan bağımsız güvenli sürüme çevir.
+5. `.env.example` ve `README.md`: kurulum adımları + tüm anahtarların listesi (Codespaces dahil).
 6. `bunfig.toml` içindeki Lovable'a özel paket istisnalarını temizle.
+7. Temiz kurulum testi: bağımlılıkları sıfırdan kurup dev + build çalıştırarak doğrula.
 
-Not: bu değişikliklerden sonra proje Lovable önizlemesinde de çalışmaya devam eder, ancak Lovable'ın tek tık Google girişi yerine kendi Google OAuth istemcin kullanılır.
+Not: değişikliklerden sonra proje burada da çalışmaya devam eder; tek fark Lovable'ın tek tık Google girişi yerine kendi Google OAuth istemcinin kullanılması.
+
