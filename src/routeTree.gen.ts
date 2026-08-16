@@ -28,6 +28,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
 import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
@@ -140,6 +141,11 @@ const ViralAdsRoute = ViralAdsRouteImport.update({
   path: '/viral-ads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthRoute,
+} as any)
 const HotIdRoute = HotIdRouteImport.update({
   id: '/hot/$id',
   path: '/hot/$id',
@@ -227,7 +233,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/audit': typeof AuditRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
   '/competitor-analysis': typeof CompetitorAnalysisRoute
@@ -243,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/tools/compliance': typeof ToolsComplianceRoute
@@ -264,7 +271,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/audit': typeof AuditRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
   '/competitor-analysis': typeof CompetitorAnalysisRoute
@@ -280,6 +287,7 @@ export interface FileRoutesByTo {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/tools/compliance': typeof ToolsComplianceRoute
@@ -302,7 +310,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/audit': typeof AuditRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
   '/compare': typeof CompareRoute
   '/competitor-analysis': typeof CompetitorAnalysisRoute
@@ -318,6 +326,7 @@ export interface FileRoutesById {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/tools/compliance': typeof ToolsComplianceRoute
@@ -357,6 +366,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
     | '/tools/compliance'
@@ -394,6 +404,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
     | '/tools/compliance'
@@ -431,6 +442,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
     | '/tools/compliance'
@@ -453,7 +465,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuditRoute: typeof AuditRoute
-  AuthRoute: typeof AuthRoute
+  AuthRoute: typeof AuthRouteWithChildren
   CommandCenterRoute: typeof CommandCenterRoute
   CompareRoute: typeof CompareRoute
   CompetitorAnalysisRoute: typeof CompetitorAnalysisRoute
@@ -622,6 +634,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ViralAdsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/hot/$id': {
       id: '/hot/$id'
       path: '/hot/$id'
@@ -737,11 +756,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthRouteChildren {
+  AuthCallbackRoute: typeof AuthCallbackRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthCallbackRoute: AuthCallbackRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuditRoute: AuditRoute,
-  AuthRoute: AuthRoute,
+  AuthRoute: AuthRouteWithChildren,
   CommandCenterRoute: CommandCenterRoute,
   CompareRoute: CompareRoute,
   CompetitorAnalysisRoute: CompetitorAnalysisRoute,
