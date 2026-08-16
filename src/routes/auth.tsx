@@ -361,8 +361,9 @@ function AuthPage() {
 
       <div
         id="signin"
-        className="relative mx-auto grid min-h-screen w-full max-w-6xl scroll-mt-8 items-center gap-10 px-5 py-12 lg:grid-cols-2 lg:gap-16"
+        className="relative mx-auto grid w-full max-w-6xl scroll-mt-6 items-center gap-8 px-4 pb-16 pt-10 sm:px-5 sm:gap-10 sm:pb-20 sm:pt-14 lg:min-h-screen lg:grid-cols-2 lg:gap-16 lg:py-12"
       >
+
         {/* ---------- Brand / value panel ---------- */}
         <section className="animate-rise-in hidden lg:block">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
