@@ -24,6 +24,8 @@ import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functi
 import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
+import { isManagedHost, oauthRedirectUrl } from "@/lib/runtime-env";
+
 
 
 export const Route = createFileRoute("/auth")({
