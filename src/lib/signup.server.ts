@@ -82,7 +82,7 @@ export async function sendOtpEmail(to: string, code: string): Promise<void> {
 /** Aynı cihazdan ikinci kez ücretsiz hak alınmasını engeller. */
 export async function applyFingerprintPolicy(
   admin: Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"],
-  args: { visitorId: string; userId: string; email: string | null; tier?: string | null; ipHash?: string },
+  args: { visitorId: string; userId: string; email: string | null; tier?: string | null; ipHash?: string; source?: string },
 ): Promise<boolean> {
   if (!args.visitorId && !args.ipHash) return false;
 
@@ -117,9 +117,41 @@ export async function applyFingerprintPolicy(
     free_tier_granted: !reused,
   });
 
-  if (reused && !paid) {
+  const blocked = reused && !paid;
+  if (blocked) {
     await admin.from("profiles").update({ credits: 0, sim_credits: 0 }).eq("id", args.userId);
   }
-  return reused && !paid;
+
+  // Denetim logu: ücretsiz kredinin kime, hangi cihaz/IP ile verildiği (ya da
+  // neden verilmediği) kalıcı olarak kaydedilir.
+  let credits = 0;
+  let simCredits = 0;
+  if (!blocked) {
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("credits, sim_credits")
+      .eq("id", args.userId)
+      .maybeSingle();
+    credits = prof?.credits ?? 0;
+    simCredits = prof?.sim_credits ?? 0;
+  }
+  await admin.from("free_credit_audit").insert({
+    user_id: args.userId,
+    email: args.email,
+    visitor_id: args.visitorId || null,
+    ip_hash: args.ipHash || null,
+    granted: !blocked,
+    credits,
+    sim_credits: simCredits,
+    reason: blocked
+      ? (byDevice.data?.length ?? 0) > 0
+        ? "duplicate_device"
+        : "duplicate_ip"
+      : "first_signup",
+    source: args.source ?? "unknown",
+    meta: { tier: args.tier ?? "Free", paid },
+  });
+
+  return blocked;
 }
 

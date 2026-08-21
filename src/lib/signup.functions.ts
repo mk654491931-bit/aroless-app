@@ -109,6 +109,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       email: data.email,
       tier: "Free",
       ipHash: await requestIpHash(),
+      source: "email_signup",
     });
 
     // Promosyon kodunu kalıcı olarak bağla ve kullanımı say.
@@ -169,6 +170,7 @@ export const registerDeviceFingerprint = createServerFn({ method: "POST" })
       email: profile?.email ?? null,
       tier: profile?.subscription_tier ?? "Free",
       ipHash: await requestIpHash(),
+      source: "oauth_or_session",
     });
     return { ok: true as const, freeTierBlocked: reused };
   });
