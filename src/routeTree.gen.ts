@@ -32,7 +32,6 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
 import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
-import { Route as ToolsComplianceRouteImport } from './routes/tools/compliance'
 import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
@@ -162,11 +161,6 @@ const LegalSlugRoute = LegalSlugRouteImport.update({
   path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ToolsComplianceRoute = ToolsComplianceRouteImport.update({
-  id: '/tools/compliance',
-  path: '/tools/compliance',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ToolsFinanceRoute = ToolsFinanceRouteImport.update({
   id: '/tools/finance',
   path: '/tools/finance',
@@ -258,7 +252,6 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
-  '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
   '/tools/listing': typeof ToolsListingRoute
@@ -297,7 +290,6 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
-  '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
   '/tools/listing': typeof ToolsListingRoute
@@ -337,7 +329,6 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
-  '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
   '/tools/listing': typeof ToolsListingRoute
@@ -378,7 +369,6 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
-    | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
     | '/tools/listing'
@@ -417,7 +407,6 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
-    | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
     | '/tools/listing'
@@ -456,7 +445,6 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
-    | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
     | '/tools/listing'
@@ -495,7 +483,6 @@ export interface RootRouteChildren {
   ViralAdsRoute: typeof ViralAdsRoute
   HotIdRoute: typeof HotIdRoute
   LegalSlugRoute: typeof LegalSlugRoute
-  ToolsComplianceRoute: typeof ToolsComplianceRoute
   ToolsFinanceRoute: typeof ToolsFinanceRoute
   ToolsGrowthRoute: typeof ToolsGrowthRoute
   ToolsListingRoute: typeof ToolsListingRoute
@@ -675,13 +662,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tools/compliance': {
-      id: '/tools/compliance'
-      path: '/tools/compliance'
-      fullPath: '/tools/compliance'
-      preLoaderRoute: typeof ToolsComplianceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/tools/finance': {
       id: '/tools/finance'
       path: '/tools/finance'
@@ -808,7 +788,6 @@ const rootRouteChildren: RootRouteChildren = {
   ViralAdsRoute: ViralAdsRoute,
   HotIdRoute: HotIdRoute,
   LegalSlugRoute: LegalSlugRoute,
-  ToolsComplianceRoute: ToolsComplianceRoute,
   ToolsFinanceRoute: ToolsFinanceRoute,
   ToolsGrowthRoute: ToolsGrowthRoute,
   ToolsListingRoute: ToolsListingRoute,
