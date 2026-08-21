@@ -113,19 +113,19 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
         <div className="grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => {
             const Icon = ICONS[p.id];
-            const launch = p.price * 0.5;
-            const final = launch * (1 - discount / 100);
+            const final = p.usd * (1 - discount / 100);
             return (
               <div key={p.id} className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-gradient-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}>
                 {p.highlight && <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] mb-2">Most popular</div>}
                 <div className="flex items-center gap-2 mb-1"><Icon size={18} className="text-[oklch(0.75_0.18_265)]" /><h3 className="text-lg font-bold">{p.label}</h3></div>
                 <div className="mb-1 flex items-baseline gap-2">
-                  <span className="text-lg text-muted-foreground line-through">${p.price}</span>
-                  <span className="text-4xl font-bold">${final.toFixed(discount > 0 ? 2 : 2)}</span>
+                  {discount > 0 && <span className="text-lg text-muted-foreground line-through">${p.usd}</span>}
+                  <span className="text-4xl font-bold">${final.toFixed(0)}</span>
                   <span className="text-sm text-muted-foreground">/ay</span>
                 </div>
-                <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">
-                  Lansmana özel · %50 indirim · 1 hafta geçerli
+                <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.credits} kredi / ay</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.moduleCount} modül grubu</span>
                 </div>
                 {currency !== "USD" && (
                   <div className="mb-4 text-xs text-muted-foreground">≈ {fmt(final * rate, currency)} / ay · güncel kur ile</div>
@@ -134,7 +134,8 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 <ul className="space-y-2 mb-6">
                   {p.features.map((f) => (<li key={f} className="text-sm flex gap-2"><Check size={16} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" /><span>{f}</span></li>))}
                 </ul>
-                <button onClick={() => subscribe(p.name)} disabled={loading !== null}
+                <button onClick={() => subscribe(p.id)} disabled={loading !== null}
+
                   className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}>
                   {loading === p.id
                     ? "Ödeme sayfası açılıyor…"
