@@ -65,3 +65,42 @@ ve 8080 portunu yönlendirir. Sonrasında tek yapman gereken `.env` içindeki
 Supabase ve AI anahtarlarını doldurup `npm run dev` demek.
 
 Ek komutlar: `npm run setup` (env + install), `npm run typecheck` (TypeScript kontrolü).
+
+## Üretime alma (canlı)
+
+Aynı kod tabanı lokal, preview ve canlıda değişiklik gerektirmeden çalışır; sadece
+ortam değişkenleri hedef platformun secret ekranına girilir. Sabit domain yazılı
+hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üzerinden
+üretilir.
+
+| Hedef | Adımlar |
+| --- | --- |
+| Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir) |
+| Node sunucu / VPS | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
+| Lovable | Publish butonu; env değerleri proje secret'larından okunur |
+
+Notlar:
+
+- `nitro` kurulu değilse `npm run build` düz Vite SSR çıktısı üretir; geliştirme ve
+  `npm run preview` için bu yeterlidir, Cloudflare dağıtımı için `nitro` gerekir.
+- Sunucu ilk isteği aldığında zorunlu değişkenleri kontrol eder ve eksikse konsola
+  tek satırlık uyarı basar (`[env] Eksik zorunlu değişken(ler): ...`).
+- `.env` asla depoya girmez; `.env.example` güncel şablon olarak tutulur.
+
+### Supabase Auth adresleri
+
+**Authentication → URL Configuration** altında hem yerel hem canlı adresler ekli olmalı:
+
+- Site URL: canlı adresiniz (örn. `https://app.example.com`)
+- Redirect URLs: `http://localhost:8080/auth/callback` **ve** `https://app.example.com/auth/callback`
+
+Google Cloud OAuth istemcisine de aynı iki origin ve
+`https://<PROJE_REF>.supabase.co/auth/v1/callback` redirect URI'si girilir.
+
+### Yayın öncesi doğrulama listesi
+
+```sh
+npm run typecheck
+npm run build
+npm run dev      # Google girişi, ürün bulucu, admin paneli akışlarını elle dene
+```

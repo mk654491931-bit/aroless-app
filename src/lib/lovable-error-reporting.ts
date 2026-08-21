@@ -1,4 +1,7 @@
+import { isManagedHost } from "@/lib/runtime-env";
+
 type LovableErrorOptions = {
+
   mechanism?: "manual" | "onerror" | "unhandledrejection" | "react_error_boundary";
   handled?: boolean;
   severity?: "error" | "warning" | "info";
@@ -25,6 +28,10 @@ declare global {
 
 export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
+  // Yönetilen host dışında (lokal / kendi sunucun) telemetri köprüsü yoktur:
+  // sessizce çık, konsolu kirletme.
+  if (!isManagedHost()) return;
+
   window.__lovableEvents?.captureException?.(
     error,
     {

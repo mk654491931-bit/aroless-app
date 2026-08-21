@@ -26,9 +26,9 @@ export const OPENROUTER_MODELS_LATEST = [
   "meta-llama/llama-3.3-70b-instruct",
 ];
 export async function callLovableAI(prompt: string, temperature = 0.4): Promise<string> {
-  // Managed gateway first (zero local setup, no per-provider rate limits), then
-  // the project's own rotating key pools as the safety net. Swapping the order
-  // later is all that's needed to run fully local/self-hosted.
+  // Ağ geçidi yapılandırılmışsa önce o (kota derdi yok); yoksa doğrudan
+  // projenin kendi anahtar havuzları. Lokalde gereksiz bekleme olmaz.
+  if (!hasGateway()) return directFallback(prompt, temperature);
   try {
     return await callGatewayResponses(prompt);
   } catch (e) {
@@ -41,11 +41,12 @@ export async function callLovableAI(prompt: string, temperature = 0.4): Promise<
 }
 
 /**
- * Premium yol: en güçlü modeller (dahili Lovable AI ağ geçidi) önce çalışır —
- * kritik sentez/rapor çıktılarının kalitesi için. Ağ geçidi başarısız olursa
- * kendi anahtar havuzlarına düşer, yani asla boş dönmez.
+ * Premium yol: en güçlü modeller (yapılandırılmış AI ağ geçidi) önce çalışır —
+ * kritik sentez/rapor çıktılarının kalitesi için. Ağ geçidi yoksa ya da
+ * başarısız olursa kendi anahtar havuzlarına düşer, yani asla boş dönmez.
  */
 export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<string> {
+  if (!hasGateway()) return directFallback(prompt, temperature);
   try {
     return await callGatewayResponses(prompt, [
       "google/gemini-3.1-pro-preview",
@@ -61,6 +62,23 @@ export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<
     }
   }
 }
+
+/** Ağ geçidi (LOVABLE_API_KEY veya AI_GATEWAY_*) tanımlı mı? */
+export function hasGateway(): boolean {
+  const { key, url } = gatewayConfig();
+  return Boolean(key && url);
+}
+
+/** Herhangi bir AI sağlayıcısı yapılandırıldı mı? */
+export function hasAnyAiProvider(): boolean {
+  return (
+    hasGateway() ||
+    geminiKeyPool().length > 0 ||
+    groqKeyPool().length > 0 ||
+    openRouterKeyPool().length > 0
+  );
+}
+
 
 /**
  * Optional OpenAI-compatible AI gateway.
@@ -135,7 +153,13 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
  * Groq → OpenRouter).
  */
 async function directFallback(prompt: string, temperature: number): Promise<string> {
+  if (geminiKeyPool().length === 0 && groqKeyPool().length === 0 && openRouterKeyPool().length === 0) {
+    throw new Error(
+      "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
+    );
+  }
   const geminiModels = GEMINI_MODELS_LATEST;
+
   for (const k of scheduleKeys(geminiKeyPool(), geminiCursor++)) {
     try {
       return await geminiOnce(prompt, k, temperature, false, geminiModels);
