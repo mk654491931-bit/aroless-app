@@ -441,8 +441,157 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   };
 
 
-  void base;
-  return [cfoAgent, cmoAgent, croAgent, trendAgent, intelAgent, uxAgent, supplyAgent];
+  /* 8 — Pricing Strategist: price ladder & markup headroom */
+  const markup = e.cogs > 0 ? e.retail / e.cogs : 0;
+  const pricing = clamp(markup > 0 ? 35 + (markup - 2) * 18 : 50);
+  const pricingAgent: AgentPayload = {
+    agent_id: "pricing_strategist",
+    name: "Pricing Strategist",
+    score: pricing,
+    confidence_level: e.retail > 0 && e.cogs > 0 ? 88 : 45,
+    primary_metric: { label: "Markup", value: markup > 0 ? `${markup.toFixed(2)}x` : NO_DATA },
+    metrics: [
+      { label: "Retail", value: e.retail > 0 ? `$${e.retail.toFixed(2)}` : NO_DATA },
+      { label: "Landed cost", value: e.cogs > 0 ? `$${(e.cogs + e.shipping).toFixed(2)}` : NO_DATA },
+      { label: "Target markup", value: "≥ 3.0x for paid traffic" },
+    ],
+    risk_factors: markup > 0 && markup < 2.5 ? [`Markup ${markup.toFixed(2)}x too thin to absorb ad costs.`] : [],
+    action_recommendation:
+      markup >= 3
+        ? "Price holds — test a $5-10 premium bundle tier."
+        : "Raise retail or renegotiate COGS until markup ≥ 3.0x.",
+    veto: false,
+  };
+
+  /* 9 — Logistics Cost: shipping share of revenue */
+  const shipShare = e.retail > 0 ? (e.shipping / e.retail) * 100 : 0;
+  const logistics = clamp(e.retail > 0 ? 100 - shipShare * 3.2 : 55);
+  const logisticsAgent: AgentPayload = {
+    agent_id: "logistics_cost",
+    name: "Logistics Cost Agent",
+    score: logistics,
+    confidence_level: e.retail > 0 ? 82 : 45,
+    primary_metric: { label: "Shipping / revenue", value: e.retail > 0 ? `${shipShare.toFixed(1)}%` : NO_DATA },
+    metrics: [
+      { label: "Ship cost / unit", value: `$${e.shipping.toFixed(2)}` },
+      { label: "Platform fee", value: `$${e.platform_fee.toFixed(2)}` },
+      { label: "Lead time", value: p.lead_time ?? (leadDays !== null ? `${Math.round(leadDays)} days` : NO_DATA) },
+    ],
+    risk_factors: shipShare > 20 ? [`Shipping eats ${shipShare.toFixed(1)}% of revenue — freight-sensitive SKU.`] : [],
+    action_recommendation:
+      shipShare > 20 ? "Move to sea freight + local 3PL stock to cut per-unit freight." : "Freight profile healthy for paid scaling.",
+    veto: false,
+  };
+
+  /* 10 — Compliance Officer: certification & category barriers */
+  const nameLc = p.name.toLowerCase();
+  const regulated = /(battery|lithium|cosmetic|serum|cream|supplement|food|baby|toy|laser|medical|electric|charger)/.test(nameLc);
+  const compliance = clamp(regulated ? 55 : 86);
+  const complianceAgent: AgentPayload = {
+    agent_id: "compliance_officer",
+    name: "Compliance Officer",
+    score: compliance,
+    confidence_level: 76,
+    primary_metric: { label: "Regulatory load", value: regulated ? "High — certification required" : "Standard" },
+    metrics: [
+      { label: "Category", value: regulated ? "Restricted / certified" : "General goods" },
+      { label: "Docs", value: regulated ? "CE / FDA / SDS likely" : "Commercial invoice only" },
+      { label: "Marketplace gate", value: p.marketplace ?? NO_DATA },
+    ],
+    risk_factors: regulated ? ["Certification barrier may block customs or marketplace listing."] : [],
+    action_recommendation: regulated
+      ? "Request supplier test reports and certificates before the first order."
+      : "No special certification barrier detected — standard import docs suffice.",
+    veto: false,
+  };
+
+  /* 11 — Retention Analyst: repeat-purchase & LTV potential */
+  const consumable = /(refill|cream|serum|coffee|tea|supplement|filter|pod|cartridge|skincare|patch|mask)/.test(nameLc);
+  const retention = clamp((consumable ? 82 : 58) + (material !== null ? (12 - material) * 0.8 : 0));
+  const retentionAgent: AgentPayload = {
+    agent_id: "retention_analyst",
+    name: "Retention & LTV Analyst",
+    score: retention,
+    confidence_level: reviews !== null ? 74 : 50,
+    primary_metric: { label: "Repeat potential", value: consumable ? "Consumable — high" : "One-off — medium" },
+    metrics: [
+      { label: "Est. LTV multiple", value: consumable ? "2.4x AOV" : "1.2x AOV" },
+      { label: "CAC / unit", value: `$${e.ad_spend.toFixed(2)}` },
+      { label: "Quality complaints", value: material !== null ? `${material.toFixed(1)}%` : NO_DATA },
+    ],
+    risk_factors: !consumable ? ["Single-purchase product — CAC must be recovered on the first order."] : [],
+    action_recommendation: consumable
+      ? "Launch a subscription/refill offer to lift LTV above 2x CAC."
+      : "Build a cross-sell bundle so the first order carries the CAC.",
+    veto: false,
+  };
+
+  /* 12 — Creative Director: hook & content-fit strength */
+  const velocityUp = viewsNow !== null && views7 !== null && viewsNow > views7;
+  const creative = clamp((velocityUp ? 84 : 62) + (cvr !== null ? (cvr - 1.4) * 8 : 0));
+  const creativeAgent: AgentPayload = {
+    agent_id: "creative_director",
+    name: "Creative Director",
+    score: creative,
+    confidence_level: viewsNow !== null ? 78 : 48,
+    primary_metric: { label: "Hook strength", value: velocityUp ? "Rising social proof" : "Needs a stronger angle" },
+    metrics: [
+      { label: "Views now", value: viewsNow !== null ? viewsNow.toLocaleString() : NO_DATA },
+      { label: "CVR", value: cvr !== null ? `${cvr.toFixed(2)}%` : NO_DATA },
+      { label: "Format", value: "UGC demo / before-after" },
+    ],
+    risk_factors: !velocityUp ? ["No measurable social momentum — creative must carry the demand."] : [],
+    action_recommendation: "Ship 5 UGC demo variants; kill any hook below a 25% 3-second hold rate.",
+    veto: false,
+  };
+
+  /* 13 — Channel Fit: marketplace vs. competition alignment */
+  const compPenalty = comp === "High" ? 24 : comp === "Medium" ? 10 : 0;
+  const channel = clamp(88 - compPenalty - (stores !== null ? Math.min(20, stores / 40) : 0));
+  const channelAgent: AgentPayload = {
+    agent_id: "channel_fit",
+    name: "Channel Fit Agent",
+    score: channel,
+    confidence_level: stores !== null ? 80 : 52,
+    primary_metric: { label: "Best channel", value: p.marketplace ?? NO_DATA },
+    metrics: [
+      { label: "Competition", value: String(comp) },
+      { label: "Active stores", value: stores !== null ? stores.toLocaleString() : NO_DATA },
+      { label: "Platform fee rate", value: e.retail > 0 ? `${((e.platform_fee / e.retail) * 100).toFixed(1)}%` : NO_DATA },
+    ],
+    risk_factors: comp === "High" ? ["High competition on this channel — CPC inflation likely."] : [],
+    action_recommendation:
+      comp === "High"
+        ? "Enter through a differentiated bundle or a lower-fee channel first."
+        : "Channel economics favourable — open with the primary marketplace.",
+    veto: false,
+  };
+
+  /* 14 — Data Auditor: evidence coverage across the council */
+  const fields = [volume, viewsNow, views7, stores, longRunners, amazonSellers, reviews, material, sizing, delays, onTime, stockStability, leadDays, cpc, cvr];
+  const covered = fields.filter((v) => v !== null).length;
+  const coverage = Math.round((covered / fields.length) * 100);
+  const auditAgent: AgentPayload = {
+    agent_id: "data_auditor",
+    name: "Independent Data Auditor",
+    score: clamp(30 + coverage * 0.7),
+    confidence_level: coverage,
+    primary_metric: { label: "Evidence coverage", value: `${coverage}%` },
+    metrics: [
+      { label: "Live fields", value: `${covered}/${fields.length}` },
+      { label: "Sources", value: (sig.sources?.length ?? 0) > 0 ? String(sig.sources?.length) : NO_DATA },
+      { label: "Base signal", value: String(base) },
+    ],
+    risk_factors: coverage < 50 ? [`Only ${coverage}% of council inputs are grounded — treat scores as directional.`] : [],
+    action_recommendation:
+      coverage < 50 ? "Re-run the scan with a narrower query to raise data coverage." : "Data coverage sufficient for a buy decision.",
+    veto: false,
+  };
+
+  return [
+    cfoAgent, cmoAgent, croAgent, trendAgent, intelAgent, uxAgent, supplyAgent,
+    pricingAgent, logisticsAgent, complianceAgent, retentionAgent, creativeAgent, channelAgent, auditAgent,
+  ];
 }
 
 /* --------------------------------------------------------------- hybrid math */
