@@ -282,48 +282,55 @@ export function CommandCenter() {
           </header>
 
           {selected && econ && verdict && (
-            <div className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_250px]">
-              {/* agents */}
-              <div className="space-y-2">
-                {agents.map((a, i) => {
-                  const st = statusOf(i, a);
-                  const Icon = AGENT_META[a.agent_id].icon;
-                  return (
-                    <button
-                      key={a.agent_id}
-                      onClick={() => setDrill(a.agent_id)}
-                      className={cn(
-                        "group flex w-full items-center gap-3 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[--ai]/50",
-                        st === "warning" && "border-destructive/40",
-                      )}
-                    >
-                      <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[--ai]/30 bg-[--ai]/10">
-                        <Icon className="size-4 text-[--ai]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-sm font-medium">{a.name}</span>
-                          <StatusPill status={st} />
-                          {a.veto && (
-                            <span className="rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive">
-                              HARD VETO
-                            </span>
-                          )}
+            <div className="flex flex-col gap-4 p-4 lg:flex-row">
+              {/* agents — two 7-agent columns side by side */}
+              <div className="min-w-0 flex-1">
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:grid-rows-7 lg:max-h-[calc(100vh-220px)]">
+                  {agents.map((a, i) => {
+                    const st = statusOf(i, a);
+                    const Icon = AGENT_META[a.agent_id].icon;
+                    return (
+                      <button
+                        key={a.agent_id}
+                        onClick={() => setDrill(a.agent_id)}
+                        className={cn(
+                          "group flex h-full flex-col justify-between gap-2 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
+                          st === "warning" && "border-destructive/40",
+                        )}
+                      >
+                        <div className="flex w-full items-center gap-3">
+                          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[--ai]/30 bg-[--ai]/10">
+                            <Icon className="size-4 text-[--ai]" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-medium">{a.name}</span>
+                              <StatusPill status={st} />
+                              {a.veto && (
+                                <span className="rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive">
+                                  HARD VETO
+                                </span>
+                              )}
+                            </div>
+                            <div className="truncate font-mono text-[11px] text-muted-foreground">
+                              {st === "processing" ? AGENT_META[a.agent_id].line : `${a.primary_metric.label}: ${a.primary_metric.value}`}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className={cn("font-mono text-sm", a.score < 40 ? "text-destructive" : "text-[--ai]")}>
+                              {st === "processing" ? "··" : `${a.score}/100`}
+                            </div>
+                            <div className="font-mono text-[10px] text-muted-foreground">conf {a.confidence_level}%</div>
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
-                        <div className="truncate font-mono text-[11px] text-muted-foreground">
-                          {st === "processing" ? AGENT_META[a.agent_id].line : `${a.primary_metric.label}: ${a.primary_metric.value}`}
+                        <div className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                          {AGENT_META[a.agent_id].desc}
                         </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className={cn("font-mono text-sm", a.score < 40 ? "text-destructive" : "text-[--ai]")}>
-                          {st === "processing" ? "··" : `${a.score}/100`}
-                        </div>
-                        <div className="font-mono text-[10px] text-muted-foreground">conf {a.confidence_level}%</div>
-                      </div>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* score column */}
