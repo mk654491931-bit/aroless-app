@@ -24,6 +24,7 @@ import { PaletteToggle } from "@/components/palette-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 import { AmbientBackground } from "@/components/ambient-background";
+import { DeviceGuard } from "@/components/device-guard";
 import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
@@ -156,6 +157,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AmbientBackground />
+      <DeviceGuard />
       {chromeless ? (
         <>
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-[var(--surface)]/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
