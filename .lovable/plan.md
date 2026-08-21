@@ -58,3 +58,16 @@ Bu ortamda `LOVABLE_API_KEY` platform tarafından veriliyor; lokalde yok. Bu yü
 - Vite config zaten taşınabilir: Lovable eklentileri sadece sandbox'ta yükleniyor, `command === "build"` dışında Nitro'ya dokunulmuyor.
 - Sunucu tarafı sırlar yalnızca `createServerFn` handler'ları içinde `process.env[...]` ile okunuyor; `.env` dosyası `vite dev` tarafından otomatik yükleniyor, ek dotenv paketi gerekmiyor.
 - Build çıktısı Cloudflare preset'i ile üretiliyor; lokalde `npm run dev` ve `npm run preview` için bu gerekli değil.
+
+## 5) Canlıya alırken sorun çıkmaması için (aynı kod, üç ortam)
+
+Hedef: aynı kod tabanı sandbox, lokal ve canlıda ortam değişkeni farkı dışında hiçbir değişiklik istemeden çalışsın.
+
+- **Ortam algılama tek noktada:** Lovable köprüsü, hata raporlama ve AI ağ geçidi için tek bir `src/lib/runtime-env.ts` yardımcı modülü (sandbox mı, lokal mi, prod mu). Tüm koşullar buradan okunsun; dağınık `typeof window`/`LOVABLE_*` kontrolleri kalksın.
+- **Origin bağımlı URL'ler sabit yazılmasın:** OAuth `redirect_uri`, paylaşım linkleri ve e-posta linkleri `window.location.origin` / istek host'undan türetilsin (localhost, preview ve canlı domain otomatik doğru olsun).
+- **Build doğrulaması:** `npm run build` + `npm run preview` ile production SSR çıktısı lokalde test edilebilir olsun. Cloudflare (Nitro) preset'i kurulu değilse build düz Vite SSR'a düşüyor — bu davranış README'de yazılı olacak.
+- **Prod dağıtım seçenekleri README'de:** (a) Cloudflare Workers — `npm run build` + `wrangler deploy`, (b) Node sunucu/VPS, (c) Lovable publish. Her biri için gereken env değişkeni listesi aynı; sadece `SUPABASE_*` ve AI anahtarları hedef platformun secret yönetimine girilir.
+- **Env doğrulayıcı:** uygulama açılışında sunucu tarafında zorunlu değişkenler (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_*`) eksikse konsola tek satırlık net bir uyarı; eksik anahtar yüzünden anlamsız 500'ler yerine anlaşılır mesaj.
+- **Supabase Auth ayarları:** Site URL ve Redirect URLs listesine hem `http://localhost:8080` hem canlı domain eklenir (adım README'de yazılı olacak). Google Cloud OAuth istemcisine de aynı iki origin girilir.
+- **Sırlar repoda olmasın:** `.env` `.gitignore` içinde kalır, `.env.example` güncel tutulur; canlıya alırken sadece platformun secret ekranı doldurulur.
+- **Doğrulama listesi:** değişiklikler sonrası `npm run typecheck`, `npm run build` ve lokal `npm run dev` üzerinden Google girişi + ürün bulucu + admin paneli akışları elle test edilir.
