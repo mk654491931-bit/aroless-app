@@ -9,9 +9,9 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Aroless Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri" },
-      { name: "description", content: "Aroless paketleri: aylık kredi, sınırsız araç erişimi, simülatör ve akademi. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
+      { name: "description", content: "Aroless paketleri: tüm modüller her pakette açık, fark yalnızca aylık kullanım miktarında. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
       { property: "og:title", content: "Aroless Fiyatlandırma — Paketler ve Krediler" },
-      { property: "og:description", content: "Aylık kredi paketleri, tek seferlik kredi alımı ve tüm premium araçlara erişim." },
+      { property: "og:description", content: "Tüm modüller açık; Starter, Pro ve Business paketleri aylık kullanım miktarında farklılaşır." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
