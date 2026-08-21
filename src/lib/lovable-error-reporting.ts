@@ -1,4 +1,7 @@
+import { isManagedHost } from "@/lib/runtime-env";
+
 type LovableErrorOptions = {
+
   mechanism?: "manual" | "onerror" | "unhandledrejection" | "react_error_boundary";
   handled?: boolean;
   severity?: "error" | "warning" | "info";
