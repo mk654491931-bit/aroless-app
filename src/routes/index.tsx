@@ -284,6 +284,7 @@ function Dashboard() {
     if (platforms.length === 0) return toast.error(t("ui.select_platform"));
     if ((profileQ.data?.credits ?? 0) <= 0) { setShowPricing(true); return; }
     pushRecent(nicheValue);
+    setRestoredRun(null);
     setResultQuery("");
     if (engine !== "default") { hfGen.mutate({ engine }); return; }
     gen.mutate({
@@ -1671,7 +1672,7 @@ function ResultsToolbar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `velora-winners-${stamp}.csv`;
+    a.download = `aroless-winners-${stamp}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -1684,7 +1685,7 @@ function ResultsToolbar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `velora-winners-${stamp}.json`;
+    a.download = `aroless-winners-${stamp}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2225,7 +2226,7 @@ function LibraryTab({
   const exportCsv = () => {
     if (favorites.length === 0) return toast.error("No products to export");
     const csv = buildShopifyCsv(favorites.map(f => f.product));
-    downloadFile(csv, "velora-shopify-products.csv", "text/csv;charset=utf-8;");
+    downloadFile(csv, "aroless-shopify-products.csv", "text/csv;charset=utf-8;");
     toast.success(`Exported ${favorites.length} product${favorites.length === 1 ? "" : "s"}`);
   };
 
