@@ -163,7 +163,7 @@ function RootComponent() {
             <PaletteToggle />
             <ThemeToggle />
           </div>
-          <div key={pathname} className="page-fade"><Outlet /></div>
+          <div key={`${pathname}|${lang}`} className="page-fade"><Outlet /></div>
         </>
 
       ) : (
@@ -178,7 +178,7 @@ function RootComponent() {
                   <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-[var(--surface)]/90 backdrop-blur hover:bg-white/10" />
                 </>
               )}
-              <div key={pathname} className="page-fade"><Outlet /></div>
+              <div key={`${pathname}|${lang}`} className="page-fade"><Outlet /></div>
               <SiteFooter />
             </div>
           </div>
