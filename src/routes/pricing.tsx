@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Check, Sparkles, Zap, Crown, ArrowRight, ShieldCheck, Lock } from "lucide-react";
-import { PLANS, MODULE_LEVEL } from "@/lib/plans";
+import { Check, Sparkles, Zap, Crown, ArrowRight, ShieldCheck } from "lucide-react";
+import { PLANS, USAGE_ROWS } from "@/lib/plans";
 import { BrandLogo } from "@/components/brand-logo";
 import { useFxRates } from "@/lib/currency";
 
@@ -9,9 +9,9 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Aroless Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri" },
-      { name: "description", content: "Aroless paketleri: aylık kredi, sınırsız araç erişimi, simülatör ve akademi. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
+      { name: "description", content: "Aroless paketleri: tüm modüller her pakette açık, fark yalnızca aylık kullanım miktarında. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
       { property: "og:title", content: "Aroless Fiyatlandırma — Paketler ve Krediler" },
-      { property: "og:description", content: "Aylık kredi paketleri, tek seferlik kredi alımı ve tüm premium araçlara erişim." },
+      { property: "og:description", content: "Tüm modüller açık; Starter, Pro ve Business paketleri aylık kullanım miktarında farklılaşır." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -24,18 +24,19 @@ type Cur = "USD" | "TRY";
 const PLAN_ICON = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
 const MODULE_ROWS = [
-  { id: "library", label: "📚 Library · Dashboard & Karşılaştırma" },
-  { id: "sourcing", label: "📦 Sourcing & Factory Hub" },
-  { id: "news", label: "📰 E-Com News Explainer" },
-  { id: "finance", label: "💰 Financial & Cost Engine" },
-  { id: "growth", label: "🚀 Growth & Market AI" },
-  { id: "radar", label: "📡 Multi-Platform Trend Radar" },
-  { id: "compliance", label: "🛡️ Compliance & Legal Guard" },
-  { id: "council", label: "🧠 14'lü AI Konsey" },
-  { id: "growth_suite", label: "📈 Büyüme Suite" },
+  "📚 Library · Dashboard & Karşılaştırma",
+  "📦 Sourcing & Factory Hub",
+  "📰 E-Com News Explainer",
+  "💰 Financial & Cost Engine",
+  "🚀 Growth & Market AI",
+  "📡 Multi-Platform Trend Radar",
+  "📝 Listing & Conversion Studio",
+  "🧠 14'lü AI Konsey",
+  "📈 Büyüme Suite",
 ];
 
 const FAQ = [
+  { q: "Modüller pakete göre kilitli mi?", a: "Hayır. Dokuz modülün tamamı her pakette açıktır; paketler yalnızca aylık kullanım miktarında (kredi ve araç çalıştırma hakkı) farklılaşır." },
   { q: "Kredi nedir?", a: "Her Ürün Bulucu araması veya derin analiz bir kredi harcar. Kalan kredini ayarlar sayfasındaki kullanım günlüğünden takip edebilirsin." },
   { q: "İstediğim zaman iptal edebilir miyim?", a: "Evet. Abonelik dönem sonuna kadar aktif kalır, otomatik yenileme durur." },
   { q: "TRY fiyatı nasıl hesaplanıyor?", a: "Tahsilat USD üzerinden yapılır; TRY tutarı güncel kur ile bilgilendirme amaçlı gösterilir." },
@@ -92,7 +93,7 @@ function PricingPage() {
         <div className="text-center">
           <h1 className="text-3xl font-extrabold md:text-5xl">Şeffaf <span className="text-gradient">fiyatlandırma</span></h1>
           <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground md:text-base">
-            Eğitim ve simülatör her pakete dahildir. Ne kadar kullandığını kredi günlüğünden görürsün.
+            Tüm modüller her pakette açıktır. Paketler sadece aylık kullanım miktarında farklılaşır.
           </p>
 
           <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-2">
@@ -129,7 +130,7 @@ function PricingPage() {
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.credits} kredi / ay</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.moduleCount} modül grubu</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">Tüm modüller açık</span>
               </div>
               <ul className="mt-4 space-y-2 text-sm">
                 {p.features.map((f) => (
@@ -148,31 +149,36 @@ function PricingPage() {
         </div>
 
         <div className="mt-12 glass rounded-2xl p-6">
-          <h2 className="font-semibold">Paket büyüdükçe açılan modüller</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Soldaki araç grupları paket seviyesine göre açılır.</p>
+          <h2 className="font-semibold">Paketlere göre aylık kullanım</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Modüllerin tamamı her pakette açık; değişen tek şey kullanım miktarı.</p>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2">Modül grubu</th>
+                  <th className="py-2">Kullanım</th>
                   {PLANS.map((p) => <th key={p.id} className="py-2 text-center">{p.label}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {MODULE_ROWS.map((row) => (
-                  <tr key={row.id} className="border-t border-white/10">
+                {USAGE_ROWS.map((row) => (
+                  <tr key={row.key} className="border-t border-white/10">
                     <td className="py-2 pr-3 text-muted-foreground">{row.label}</td>
                     {PLANS.map((p) => (
-                      <td key={p.id} className="py-2 text-center">
-                        {p.level >= (MODULE_LEVEL[row.id] ?? 1)
-                          ? <Check size={15} className="mx-auto text-emerald-400" />
-                          : <Lock size={13} className="mx-auto text-muted-foreground/50" />}
-                      </td>
+                      <td key={p.id} className="py-2 text-center font-semibold">{p[row.key]} <span className="text-[10px] font-normal text-muted-foreground">{row.unit}</span></td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <h3 className="mt-8 text-sm font-semibold">Her pakette açık modüller</h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {MODULE_ROWS.map((m) => (
+              <div key={m} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                <Check size={14} className="shrink-0 text-emerald-400" /> {m}
+              </div>
+            ))}
           </div>
         </div>
 

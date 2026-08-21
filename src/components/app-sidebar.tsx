@@ -7,14 +7,13 @@ import {
 } from "@/components/ui/sidebar";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { PricingModal } from "@/components/pricing-modal";
-import { requiredPlanFor } from "@/lib/plans";
 import {
   Package, Coins, Rocket, ShieldHalf, Newspaper,
   Handshake, FileSearch, ShieldQuestion, ClipboardList,
   Calculator, Ship, Wallet, Boxes, ShieldCheck,
   Gauge, PackagePlus, CalendarClock, Globe2, Megaphone,
-  Gavel, QrCode, Barcode, FlaskConical, Target, Radar,
-  LayoutDashboard, Scale, Bell, Lock,
+  Tags, ImagePlus, MessageSquareHeart, LineChart, Target, Radar,
+  LayoutDashboard, Scale, Bell, FileText,
 } from "lucide-react";
 
 
@@ -61,12 +60,12 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
     ],
   },
   {
-    id: "compliance", key: "g_compliance", label: "Compliance & Legal Guard", emoji: "🛡️", icon: ShieldHalf,
+    id: "listing", key: "g_listing", label: "Listing & Conversion Studio", emoji: "📝", icon: FileText,
     items: [
-      { key: "cease_desist", title: "Hijacker Cease & Desist", url: "/tools/compliance", icon: Gavel },
-      { key: "returns", title: "Return Mitigation Card", url: "/tools/compliance", icon: QrCode },
-      { key: "hs_code", title: "HS Code & Tariff Radar", url: "/tools/compliance", icon: Barcode },
-      { key: "lab_test", title: "Lab Test Budgeter", url: "/tools/compliance", icon: FlaskConical },
+      { key: "listing_seo", title: "Listing SEO Optimizer", url: "/tools/listing", icon: Tags },
+      { key: "listing_visual", title: "Görsel & A+ Brief", url: "/tools/listing", icon: ImagePlus },
+      { key: "review_sentiment", title: "Yorum Sentiment Radarı", url: "/tools/listing", icon: MessageSquareHeart },
+      { key: "price_strategy", title: "Fiyat & Buy Box Stratejisi", url: "/tools/listing", icon: LineChart },
     ],
   },
   {
@@ -97,43 +96,32 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { locked, isPaid, isAdmin, canUse, level } = useEntitlements();
+  const { isPaid, isAdmin, quota } = useEntitlements();
   const [showPricing, setShowPricing] = useState(false);
 
-  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean, groupId: string) => {
-    const need = requiredPlanFor(groupId);
-    const isLocked = locked || !canUse(groupId);
-    if (isLocked) {
-      return (
-        <SidebarMenuButton tooltip={`${tooltip} — ${need.label} paketi gerekli`} isActive={false} onClick={() => setShowPricing(true)}>
-          <item.icon className="h-4 w-4 text-muted-foreground/60" />
-          {!iconOnly && (
-            <span className="flex flex-1 items-center justify-between gap-2 text-xs text-muted-foreground/70">
-              {tooltip}
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
-                <Lock className="h-2.5 w-2.5" /> {need.label}
-              </span>
-            </span>
-          )}
-        </SidebarMenuButton>
-      );
-    }
-    return (
-      <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
-        <Link to={item.url} className="hover:bg-white/5">
-          <item.icon className="h-4 w-4 text-[var(--accent-active)]" />
-          {!iconOnly && <span className="text-xs">{tooltip}</span>}
-        </Link>
-      </SidebarMenuButton>
-    );
-  };
+  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean) => (
+    <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
+      <Link to={item.url} className="hover:bg-white/5">
+        <item.icon className="h-4 w-4 text-[var(--accent-active)]" />
+        {!iconOnly && <span className="text-xs">{tooltip}</span>}
+      </Link>
+    </SidebarMenuButton>
+  );
 
   return (
     <Sidebar collapsible="icon" className="border-r border-white/10">
       <SidebarContent className="pt-4">
+        {!collapsed && !isPaid && !isAdmin && (
+          <button
+            onClick={() => setShowPricing(true)}
+            className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
+          >
+            Tüm modüller açık · aylık kullanım için paket seç
+          </button>
+        )}
         {!collapsed && (isPaid || isAdmin) && (
           <div className="px-3 pb-1 text-[10px] text-emerald-300">
-            🔓 {isAdmin ? "Admin — tüm modüller açık" : level >= 3 ? "Business — tüm modüller açık" : level === 2 ? "Pro — 6 modül açık" : "Starter — 3 modül açık"}
+            🔓 Tüm modüller açık{isAdmin ? " · Admin" : ` · ${quota.toolRuns} araç çalıştırma / ay`}
           </div>
         )}
         {GROUPS.map((g) => (
@@ -152,7 +140,6 @@ export function AppSidebar() {
                       t(`nav.${g.key}`, { defaultValue: g.label }),
                       true,
                       pathname === g.items[0].url,
-                      g.id,
                     )}
                   </SidebarMenuItem>
                 ) : (
@@ -163,7 +150,6 @@ export function AppSidebar() {
                         t(`nav.${item.key}`, { defaultValue: item.title }),
                         false,
                         pathname === item.url,
-                        g.id,
                       )}
                     </SidebarMenuItem>
                   ))
