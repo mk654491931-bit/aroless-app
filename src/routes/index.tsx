@@ -302,32 +302,6 @@ function Dashboard() {
     runSearch(niche);
   };
 
-  // Son AI aramasını yerelde sakla: sayfa yenilenince kredi harcamadan geri gelsin.
-  const [restoredRun, setRestoredRun] = useState<string | null>(null);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("aroless.finder.last_run");
-      if (!raw) return;
-      const saved = JSON.parse(raw) as { niche?: string; at?: number; results?: WinningProduct[]; rejected?: RejectedCandidate[] };
-      if (!saved?.results?.length || Date.now() - (saved.at ?? 0) > 86_400_000) return;
-      setResults(saved.results);
-      setRejected(saved.rejected ?? []);
-      if (saved.niche) setNiche(saved.niche);
-      setRestoredRun(saved.niche ?? "");
-    } catch { /* bozuk kayıt — yoksay */ }
-  }, []);
-
-  useEffect(() => {
-    if (!results.length) return;
-    try {
-      localStorage.setItem(
-        "aroless.finder.last_run",
-        JSON.stringify({ niche, at: Date.now(), results, rejected }),
-      );
-    } catch { /* kota dolu — yoksay */ }
-  }, [results, rejected, niche]);
-
-
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
