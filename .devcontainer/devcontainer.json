@@ -1,0 +1,21 @@
+{
+  "name": "Velora",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "cp -n .env.example .env || true; npm install",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": { "label": "Velora dev", "onAutoForward": "openPreview" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

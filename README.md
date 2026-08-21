@@ -56,3 +56,12 @@ En az bir AI anahtarı önerilir; hiçbiri yoksa AI özellikleri hata yerine "ya
 | `npm run build` | Üretim derlemesi |
 | `npm run preview` | Derlemeyi yerelde çalıştır |
 | `npm run lint` | ESLint |
+
+## GitHub Codespaces
+
+Depo Codespaces'te açıldığında `.devcontainer/devcontainer.json` otomatik olarak
+Node 22 kurar, `.env` dosyasını `.env.example`'dan oluşturur, bağımlılıkları yükler
+ve 8080 portunu yönlendirir. Sonrasında tek yapman gereken `.env` içindeki
+Supabase ve AI anahtarlarını doldurup `npm run dev` demek.
+
+Ek komutlar: `npm run setup` (env + install), `npm run typecheck` (TypeScript kontrolü).
