@@ -128,14 +128,14 @@ export function AnalysisPipelineModal({
         </ul>
       </div>
 
-      {/* RIGHT — 7-Agent AI Council live status (70% weight) */}
+      {/* RIGHT — 14-Agent AI Council live status (70% weight) */}
       <div className="glass rounded-2xl w-full p-6 md:p-7">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[oklch(0.66_0.24_305)] flex items-center justify-center">
             <Users size={18} className="text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-bold text-sm">7-Agent AI Council Real-Time Status</div>
+            <div className="font-bold text-sm">14-Agent AI Council Real-Time Status</div>
             <div className="text-xs text-muted-foreground">
               Ağırlık %70 · {doneCount}/{COUNCIL_AGENTS.length} ajan tamamlandı
             </div>

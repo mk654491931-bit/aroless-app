@@ -1,5 +1,5 @@
 // ============================================================================
-// Unit economics + 7-Agent AI Council decision engine (client-safe, pure).
+// Unit economics + 14-Agent AI Council decision engine (client-safe, pure).
 //
 //   Net Profit / unit = Retail - (COGS + Shipping + Platform Fees + CAC/Ad Spend)
 //   Net Margin %      = Net Profit / Retail * 100
@@ -166,7 +166,7 @@ const IP_RISK_WORDS = [
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(n)));
 
-/** Runs all 7 agents against real/derived product data using strict rules. */
+/** Runs all 14 agents against real/derived product data using strict rules. */
 export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const base = p.base_score ?? 60;
   const comp = p.competition ?? "Medium";

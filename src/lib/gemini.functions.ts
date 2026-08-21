@@ -221,7 +221,7 @@ export type WinningProduct = {
   hybrid?: HybridScore;
   // GitHub public repo trend signal used as extra confidence input
   github_trends?: GitHubRepoTrend[];
-  // 7'li AI Konsey verdict (3 teams + referees + director synthesis)
+  // 14'lü AI Konsey verdict (3 teams + referees + director synthesis)
   council?: CouncilSummary;
   /** Ortak karar puanı: (hibrit skor + AI Konsey Aroless skoru) / 2 */
   unified_score?: number;

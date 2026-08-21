@@ -142,7 +142,7 @@ export function CommandCenter() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dual-Engine Command Center</h1>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            Product Finger stream + 7-Agent AI Council, weighted 30 / 70.
+            Product Finger stream + 14-Agent AI Council, weighted 30 / 70.
             {liveState && (
               <span className="inline-flex items-center gap-1 text-[11px] text-[--warning]">
                 <Loader2 className={cn("size-3", feed.isLoading && "animate-spin")} /> {liveState}
@@ -274,7 +274,7 @@ export function CommandCenter() {
         <section className={cn(glass, "lg:col-span-7 min-w-0 overflow-hidden")}>
           <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <Sparkles className="size-4 text-[--ai]" />
-            <h2 className="text-sm font-semibold text-[--ai]">7-Agent AI Council · Live Execution Hub</h2>
+            <h2 className="text-sm font-semibold text-[--ai]">14-Agent AI Council · Live Execution Hub</h2>
             <Badge variant="outline" className="border-[--ai]/40 text-[10px] text-[--ai]">70% weight</Badge>
             <span className="ml-auto truncate text-xs text-muted-foreground">
               {selected ? `Target: ${selected.name}` : "No target"}
