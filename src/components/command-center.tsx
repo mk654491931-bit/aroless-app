@@ -542,7 +542,7 @@ function useLogStream(product: HotProduct | null, finger: number, active: boolea
       () => `GET /api/public/hot-products 200 { "cache": "hour" }`,
       () => `econ.compute { "retail": ${e.retail.toFixed(2)}, "net": ${e.net_profit.toFixed(2)}, "net_margin_pct": ${e.net_margin_pct} }`,
       () => `filter.strict { "min_net_margin_pct": ${MIN_NET_MARGIN_PCT}, "pass": ${!e.disqualified} }`,
-      () => `agent.dispatch { "agents": 7, "weight": 0.70 }`,
+      () => `agent.dispatch { "agents": 14, "weight": 0.70 }`,
       () => `signals.read { "search_volume": ${product.signals?.search_volume_monthly ?? "null"}, "active_stores": ${product.signals?.active_stores ?? "null"} }`,
       () => `uspto.query { "mark": "${product.name.split(" ")[0]}", "hits": 0 }`,
       () => `score.merge { "finger": ${finger}, "formula": "council*0.70 + finger*0.30" }`,
