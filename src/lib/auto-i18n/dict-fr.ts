@@ -2581,7 +2581,7 @@ const dict: Record<string, string> = {
   "7'li AI Konsey — Aroless AI Ürün Analizi": "Conseil IA à 14 modèles — Analyse de produit Aroless AI",
   "Aroless'nın 7 modelli AI konseyi: trend, finans ve pazarlama ekipleri canlı veri hatlarını analiz eder ve tek sayfalık icra raporu ile Aroless Score üretir.": "Conseil IA à 14 modèles de Aroless : les équipes tendance, finance, marketing, opérations, conformité et créative analysent les flux de données en direct; le directeur et l'auditeur indépendant synthétisent le Aroless Score avec un rapport exécutif d'une page.",
   "7'li AI Konsey — Aroless AI": "Conseil IA à 14 modèles — Aroless AI",
- "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Aroless Score.": "Aroless Score via la synthèse des équipes tendance, finance, marketing + manager.",
+ "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Aroless Score.": "Aroless Score via la synthèse des équipes tendance, finance, marketing, opérations, conformité, créative + directeur + auditeur indépendant.",
  "Dashboard — Aroless": "Tableau de bord — Aroless",
  "Your analytics, saved products, and recent product research activity.": "Vos analyses, produits enregistrés et activités récentes de recherche de produits.",
  "Saved Items": "Éléments enregistrés",
