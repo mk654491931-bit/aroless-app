@@ -1249,7 +1249,7 @@ function ProductCard({
       {p.council && (
         <div className="mt-3 rounded-lg border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">🧠 7'li AI Konsey</span>
+            <span className="font-semibold">🧠 14'lü AI Konsey</span>
             <span className="font-extrabold text-foreground">Aroless Score {p.council.velora_score}/100</span>
           </div>
           <div className="text-muted-foreground">{p.council.verdict}</div>
