@@ -26,14 +26,14 @@ export const OPENROUTER_MODELS_LATEST = [
   "meta-llama/llama-3.3-70b-instruct",
 ];
 export async function callLovableAI(prompt: string, temperature = 0.4): Promise<string> {
-  // Direct provider keys first (rotating pools), then the built-in Lovable AI
-  // gateway as the final safety net. The gateway is called with a supported
-  // model id, so it can never produce `provider 'google' is not supported`.
+  // Managed gateway first (zero local setup, no per-provider rate limits), then
+  // the project's own rotating key pools as the safety net. Swapping the order
+  // later is all that's needed to run fully local/self-hosted.
   try {
-    return await directFallback(prompt, temperature);
+    return await callGatewayResponses(prompt);
   } catch (e) {
     try {
-      return await callGatewayResponses(prompt);
+      return await directFallback(prompt, temperature);
     } catch {
       throw e;
     }
