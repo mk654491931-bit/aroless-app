@@ -298,14 +298,14 @@ function CouncilPage() {
 export const Route = createFileRoute("/council")({
   head: () => ({
     meta: [
-      { title: "7'li AI Konsey — Aroless AI Ürün Analizi" },
+      { title: "14'lü AI Konsey — Aroless AI Ürün Analizi" },
       {
         name: "description",
         content:
-          "Aroless'nın 7 modelli AI konseyi: trend, finans ve pazarlama ekipleri canlı veri hatlarını analiz eder ve tek sayfalık icra raporu ile Aroless Score üretir.",
+          "Aroless'nın 14 modeli AI konseyi: trend, finans, pazarlama, operasyon, uyum ve yaratıcı ekipleri canlı veri hatlarını analiz eder; müdür ve bağımsız denetçi tek sayfalık icra raporu ile Aroless Score üretir.",
       },
-      { property: "og:title", content: "7'li AI Konsey — Aroless AI" },
-      { property: "og:description", content: "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Aroless Score." },
+      { property: "og:title", content: "14'lü AI Konsey — Aroless AI" },
+      { property: "og:description", content: "6 uzman ekip (üretici + hakem) + müdür + denetçi. Çoklu sağlayıcı, otomatik fallback, 24 saat cache." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
