@@ -153,7 +153,13 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
  * Groq → OpenRouter).
  */
 async function directFallback(prompt: string, temperature: number): Promise<string> {
+  if (geminiKeyPool().length === 0 && groqKeyPool().length === 0 && openRouterKeyPool().length === 0) {
+    throw new Error(
+      "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
+    );
+  }
   const geminiModels = GEMINI_MODELS_LATEST;
+
   for (const k of scheduleKeys(geminiKeyPool(), geminiCursor++)) {
     try {
       return await geminiOnce(prompt, k, temperature, false, geminiModels);
