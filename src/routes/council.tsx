@@ -65,7 +65,7 @@ function ScoreRing({ score }: { score: number }) {
       </div>
       <div>
         <div className="text-xs uppercase tracking-wide text-muted-foreground">Aroless Score</div>
-        <div className="text-sm text-muted-foreground">Pazar · Finans · Pazarlama ortalaması</div>
+        <div className="text-sm text-muted-foreground">6 ekip · 12 model · müdür · denetçi ortalaması</div>
       </div>
     </div>
   );
