@@ -137,9 +137,14 @@ function RootComponent() {
       <AmbientBackground />
       {chromeless ? (
         <>
-          <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2"><PaletteToggle /><ThemeToggle /></div>
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-[var(--surface)]/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
+            <LanguageSwitcher />
+            <PaletteToggle />
+            <ThemeToggle />
+          </div>
           <div key={pathname} className="page-fade"><Outlet /></div>
         </>
+
       ) : (
         <SidebarProvider defaultOpen={false}>
           <div className="flex min-h-screen w-full">
