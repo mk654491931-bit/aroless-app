@@ -38,8 +38,8 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           return new Response("ok", { status: 200 });
         }
 
-        const tier = plan === "Ultra" ? "Ultra" : "Pro";
-        const credits = tier === "Ultra" ? 25 : 10;
+        const tier = plan === "Business" ? "Business" : plan === "Pro" ? "Pro" : "Starter";
+        const credits = tier === "Business" ? 50 : tier === "Pro" ? 15 : 8;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { error } = await supabaseAdmin.rpc("apply_subscription_credits", {
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
         if (error) return new Response(error.message, { status: 500 });
 
         // Record transaction
-        const totalCents = Number(attrs.total ?? attrs.total_usd ?? 0) || (tier === "Ultra" ? 4900 : 2900);
+        const totalCents = Number(attrs.total ?? attrs.total_usd ?? 0) || (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900);
         const currency = String(attrs.currency ?? "USD");
         const paymentMethod = String(attrs.card_brand ?? attrs.payment_method ?? "card");
         const userEmail = String(attrs.user_email ?? attrs.email ?? "");
