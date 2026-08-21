@@ -36,6 +36,7 @@ const MODULE_ROWS = [
 ];
 
 const FAQ = [
+  { q: "Modüller pakete göre kilitli mi?", a: "Hayır. Dokuz modülün tamamı her pakette açıktır; paketler yalnızca aylık kullanım miktarında (kredi ve araç çalıştırma hakkı) farklılaşır." },
   { q: "Kredi nedir?", a: "Her Ürün Bulucu araması veya derin analiz bir kredi harcar. Kalan kredini ayarlar sayfasındaki kullanım günlüğünden takip edebilirsin." },
   { q: "İstediğim zaman iptal edebilir miyim?", a: "Evet. Abonelik dönem sonuna kadar aktif kalır, otomatik yenileme durur." },
   { q: "TRY fiyatı nasıl hesaplanıyor?", a: "Tahsilat USD üzerinden yapılır; TRY tutarı güncel kur ile bilgilendirme amaçlı gösterilir." },
