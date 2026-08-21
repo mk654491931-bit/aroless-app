@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { checkIsAdmin } from "@/lib/admin.functions";
-import { tierLevel, MODULE_LEVEL } from "@/lib/plans";
+import { tierLevel, quotaFor } from "@/lib/plans";
 
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
@@ -17,8 +17,10 @@ export type Entitlements = {
   locked: boolean;
   /** 0 = ücretsiz, 1 = Starter, 2 = Pro, 3 = Business (admin = 3). */
   level: 0 | 1 | 2 | 3;
-  /** Sidebar modül grubuna erişim var mı? */
+  /** Tüm modüller açık — her zaman true. */
   canUse: (groupId: string) => boolean;
+  /** Aylık kullanım kotaları. */
+  quota: { credits: number; toolRuns: number; councilRuns: number; radarScans: number };
 };
 
 export function useEntitlements(): Entitlements {
@@ -46,11 +48,14 @@ export function useEntitlements(): Entitlements {
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
-  const canUse = (groupId: string) => level >= (MODULE_LEVEL[groupId] ?? 1);
+  // Tüm modüller her pakette açık; fark aylık kullanım kotasında.
+  const canUse = (_groupId: string) => true;
+  const quota = quotaFor(level);
 
   return {
     level,
     canUse,
+    quota,
     loading: loading || profileQ.isLoading || adminQ.isLoading,
     tier,
     isAdmin,

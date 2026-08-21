@@ -82,7 +82,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
           <h2 className="text-2xl md:text-3xl font-bold">Upgrade your <span className="text-gradient">edge</span></h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Paket büyüdükçe soldaki modül grupları açılır. Eğitim ve simülatör her pakete dahildir.
+            Tüm modüller her pakette açık. Paket büyüdükçe aylık kullanım hakkın artar.
           </p>
           <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
@@ -125,7 +125,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.credits} kredi / ay</span>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.moduleCount} modül grubu</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">Tüm modüller açık</span>
                 </div>
                 {currency !== "USD" && (
                   <div className="mb-4 text-xs text-muted-foreground">≈ {fmt(final * rate, currency)} / ay · güncel kur ile</div>
