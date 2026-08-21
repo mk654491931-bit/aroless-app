@@ -22,6 +22,7 @@ export function AmbientBackground() {
     const el = rootRef.current;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
 
     let raf = 0;
     const target = { x: 0, y: 0, s: 0 };
@@ -42,19 +43,36 @@ export function AmbientBackground() {
       el.style.setProperty("--px", cur.x.toFixed(4));
       el.style.setProperty("--py", cur.y.toFixed(4));
       el.style.setProperty("--sy", cur.s.toFixed(4));
-      raf = requestAnimationFrame(tick);
+      // Hareket durduysa döngüyü uyut; ilk etkileşimde yeniden başlar.
+      const idle =
+        Math.abs(target.x - cur.x) < 0.0005 &&
+        Math.abs(target.y - cur.y) < 0.0005 &&
+        Math.abs(target.s - cur.s) < 0.0005;
+      raf = idle ? 0 : requestAnimationFrame(tick);
+    };
+
+    const wake = () => {
+      if (!raf && !document.hidden) raf = requestAnimationFrame(tick);
+    };
+    const onPointerWake = (e: PointerEvent) => { onPointer(e); wake(); };
+    const onScrollWake = () => { onScroll(); wake(); };
+    const onVisibility = () => {
+      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else wake();
     };
 
     onScroll();
-    window.addEventListener("pointermove", onPointer, { passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
-    raf = requestAnimationFrame(tick);
+    if (!coarse) window.addEventListener("pointermove", onPointerWake, { passive: true });
+    window.addEventListener("scroll", onScrollWake, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    wake();
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("pointermove", onPointer);
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onPointerWake);
+      window.removeEventListener("scroll", onScrollWake);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
 
   return (
     <div className="amb-root" aria-hidden="true" data-no-translate ref={rootRef}>
