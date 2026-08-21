@@ -10,6 +10,8 @@ import {
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
+import { AdminAbuseAlerts } from "@/components/admin-abuse-alerts";
+
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
