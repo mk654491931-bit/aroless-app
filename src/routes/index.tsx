@@ -782,8 +782,8 @@ function Dashboard() {
                 </div>
               )}
               {searching && (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[0, 1, 2, 3, 4, 5].map((i) => (<div key={i} className="glass rounded-xl p-5 h-72 animate-pulse" />))}
+                <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (<div key={i} className="glass rounded-xl p-5 h-60 sm:h-72 animate-pulse" />))}
                 </div>
               )}
               {!searching && results.length === 0 && (
@@ -894,7 +894,7 @@ function Dashboard() {
                     </button>
                   </div>
                 )}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {shown.map((p, i) => (
                     <ProductCard
                       key={i} p={p}
@@ -1140,7 +1140,7 @@ function ProductCard({
   const realImg = useRealProductImage(p.name);
   const modelImg = resolveProductImage(p);
   return (
-    <article className={`premium-card grain card-lift rounded-xl p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border flex flex-col animate-rise-in relative ${selected ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]" : "border-transparent"}`}>
+    <article className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border flex flex-col animate-rise-in relative ${selected ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]" : "border-transparent"}`}>
       {onToggleSelect && (
         <button
           type="button"
@@ -1157,7 +1157,7 @@ function ProductCard({
         </button>
       )}
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
-        className="mb-3 -mx-5 -mt-5 aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer">
+        className="mb-3 -mx-3 -mt-3 sm:-mx-5 sm:-mt-5 aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer">
 
         {realImg || modelImg ? (
           <img
@@ -2234,7 +2234,7 @@ function LibraryTab({
       </div>
 
       {loading && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {[0,1,2].map(i => <div key={i} className="glass rounded-xl h-56 animate-pulse" />)}
         </div>
       )}
@@ -2247,7 +2247,7 @@ function LibraryTab({
       )}
 
       {!loading && favorites.length > 0 && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {favorites.map((f) => {
             const p = f.product;
             return (
