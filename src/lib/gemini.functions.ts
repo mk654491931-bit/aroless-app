@@ -639,9 +639,10 @@ JSON shape:
       throw new Error("The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.");
     }
 
-    // ---- 7'li AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
+    // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
     const { runCouncil } = await import("@/lib/council.server");
-    const councilTargets = finalProducts.slice(0, 5);
+    const COUNCIL_LIMIT = 8;
+    const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
     const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
       try {
         const report = await runCouncil(p.name, country, data.category);
@@ -656,17 +657,29 @@ JSON shape:
             score: t.score,
             engine: t.engine,
             summary: t.summary,
+            review_score: t.review_score,
+            reviewer_engine: t.reviewer_engine,
+            review_note: t.review_note,
+            confidence: t.confidence,
+            weight: t.weight,
           })),
           action_plan: report.action_plan,
           risks: report.risks,
           cache_hit: report.cache_hit,
+          auditor_engine: report.auditor_engine,
+          auditor_score: report.auditor_score,
+          auditor_note: report.auditor_note,
+          confidence: report.confidence,
+          disagreement: report.disagreement,
+          data_coverage: report.data_coverage,
+          kill_criteria: report.kill_criteria,
         };
         return { ...p, council };
       } catch {
         return p;
       }
     });
-    finalProducts = [...withCouncil, ...finalProducts.slice(5)];
+    finalProducts = [...withCouncil, ...finalProducts.slice(COUNCIL_LIMIT)];
 
     // Ortak karar: hibrit motor puanı ile AI Konsey puanının ortalaması.
     finalProducts = finalProducts.map((p) => {
