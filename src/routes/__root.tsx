@@ -21,6 +21,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PaletteToggle } from "@/components/palette-toggle";
+import { LanguageSwitcher } from "@/components/language-switcher";
+
 import { AmbientBackground } from "@/components/ambient-background";
 import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
