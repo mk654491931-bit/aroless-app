@@ -107,7 +107,14 @@ export type AgentId =
   | "trend_hunter"
   | "competitor_intel"
   | "ux_specialist"
-  | "supply_chain";
+  | "supply_chain"
+  | "pricing_strategist"
+  | "logistics_cost"
+  | "compliance_officer"
+  | "retention_analyst"
+  | "creative_director"
+  | "channel_fit"
+  | "data_auditor";
 
 export type AgentPayload = {
   agent_id: AgentId;
