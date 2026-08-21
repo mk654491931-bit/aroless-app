@@ -35,6 +35,7 @@ import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
 import { Route as ToolsComplianceRouteImport } from './routes/tools/compliance'
 import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
+import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
@@ -176,6 +177,11 @@ const ToolsGrowthRoute = ToolsGrowthRouteImport.update({
   path: '/tools/growth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToolsListingRoute = ToolsListingRouteImport.update({
+  id: '/tools/listing',
+  path: '/tools/listing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   id: '/tools/sourcing',
   path: '/tools/sourcing',
@@ -255,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -293,6 +300,7 @@ export interface FileRoutesByTo {
   '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -332,6 +340,7 @@ export interface FileRoutesById {
   '/tools/compliance': typeof ToolsComplianceRoute
   '/tools/finance': typeof ToolsFinanceRoute
   '/tools/growth': typeof ToolsGrowthRoute
+  '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
+    | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
     | '/api/public/fx'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
+    | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
     | '/api/public/fx'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/tools/compliance'
     | '/tools/finance'
     | '/tools/growth'
+    | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
     | '/api/public/fx'
@@ -486,6 +498,7 @@ export interface RootRouteChildren {
   ToolsComplianceRoute: typeof ToolsComplianceRoute
   ToolsFinanceRoute: typeof ToolsFinanceRoute
   ToolsGrowthRoute: typeof ToolsGrowthRoute
+  ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
@@ -683,6 +696,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsGrowthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tools/listing': {
+      id: '/tools/listing'
+      path: '/tools/listing'
+      fullPath: '/tools/listing'
+      preLoaderRoute: typeof ToolsListingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tools/sourcing': {
       id: '/tools/sourcing'
       path: '/tools/sourcing'
@@ -791,6 +811,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsComplianceRoute: ToolsComplianceRoute,
   ToolsFinanceRoute: ToolsFinanceRoute,
   ToolsGrowthRoute: ToolsGrowthRoute,
+  ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,

@@ -5,7 +5,7 @@ export type ToolId =
   | "supplier-negotiator" | "offer-analyzer" | "legitimacy-detector" | "review-spec-sheet"
   | "reverse-cost" | "landed-cost" | "capital-planner" | "desi-optimizer" | "milestone-shield"
   | "consensus" | "bundle-booster" | "lead-time" | "arbitrage-matrix" | "ad-hook-extractor"
-  | "cease-desist" | "return-mitigation" | "hs-code" | "lab-budget"
+  | "listing-seo" | "listing-visual" | "review-sentiment" | "price-strategy"
   | "news";
 
 type Ctx = Record<string, string>;
@@ -35,10 +35,10 @@ export const TOOL_PROVIDER: Record<ToolId, Provider> = {
   "lead-time": "groq",
   "arbitrage-matrix": "gemini",
   "ad-hook-extractor": "openrouter",
-  "cease-desist": "gemini",
-  "return-mitigation": "openrouter",
-  "hs-code": "gemini",
-  "lab-budget": "gemini",
+  "listing-seo": "gemini",
+  "listing-visual": "openrouter",
+  "review-sentiment": "groq",
+  "price-strategy": "gemini",
   news: "gemini",
 };
 
@@ -131,25 +131,27 @@ Rakip reklam metni:
 """${f(c, "adCopy")}"""
 Kullanılan psikolojik kancaları (kıtlık, sosyal kanıt, kayıp korkusu, kimlik, öncesi/sonrası) çöz; hangi açıların doygun (saturated) olduğunu ve hangi kullanılmamış açıların denenmesi gerektiğini söyle. table: ["Kanca","Kullanım","Doygunluk"]. metrics: Tespit edilen kanca sayısı, Doygunluk skoru (tone warning), En güçlü kanca. bullets: 4 adet kullanılmamış yeni reklam açısı — her biri hazır bir hook cümlesiyle.`;
 
-    case "cease-desist":
+    case "listing-seo":
       return `${BASE}
-ASIN: ${f(c, "asin")} | Hijacker satıcı adı: ${f(c, "seller")} | Marka: ${f(c, "brand")} | Marka tescil no: ${f(c, "trademark", "belirtilmedi")}
-Listing hijacker'a gönderilecek resmî ihtarname üret. "document" alanına tam İngilizce Cease & Desist mektubu yaz (taraflar, hak dayanağı, ihlal tanımı, talepler, 72 saat süre, Amazon Brand Registry ve hukuki yollara başvuru uyarısı). metrics: İhlal tipi, Aciliyet (tone warning), Önerilen süre. bullets: mektup sonrası atılacak adımlar (test buy, Brand Registry report, transparency).`;
+Ürün: ${f(c, "product")} | Hedef anahtar kelimeler: ${f(c, "keywords")} | Kanal: ${f(c, "channel", "Amazon US")}
+Bu kanalın algoritmasına ve karakter limitlerine uygun tam bir listing üret. "document" alanına: SEO başlık (kanal limitine uygun), 5 bullet (fayda + teknik kanıt), ürün açıklaması ve backend/arama terimleri (250 karakter) yaz. metrics: Tahmini CTR etkisi (tone profit), Kapsanan ana anahtar kelime sayısı, Rekabet seviyesi (tone warning). table: ["Anahtar kelime","Arama hacmi tahmini","Rekabet","Nerede kullanıldı"]. bullets: yayına almadan önceki kontrol listesi.`;
 
-    case "return-mitigation":
+    case "listing-visual":
       return `${BASE}
-Ürün: ${f(c, "product")} | En sık iade nedenleri: ${f(c, "reasons")} | Dil: ${f(c, "lang", "EN")}
-Kutu içine konacak, QR kodlu kullanım/kurulum kartı metni üret. "document" alanına baskıya hazır kart metnini yaz (ön yüz başlığı, 3 adımlık kurulum, QR ile video kılavuz çağrısı, destek çağrısı — iade yerine bize yazın mesajı, garanti notu). metrics: Beklenen iade azalması % (tone profit), Baskı maliyeti/adet, Öncelikli neden. bullets: kart tasarımı ve QR yönlendirme kuralları.`;
+Ürün: ${f(c, "product")} | Hedef kitle: ${f(c, "audience")} | USP: ${f(c, "usp")}
+Dönüşüm odaklı 7 görsellik ana galeri seti + A+ / EBC modül planı hazırla. "document" alanına her görsel için: amaç, kompozisyon, üstteki metin (overlay), çekim/prop talimatı ve ölçülebilir iddia yaz. metrics: Öncelikli görsel, Tahmini dönüşüm etkisi (tone profit), Üretim maliyeti tahmini. table: ["Görsel #","Tip","Mesaj","Overlay metni"]. bullets: mobil okunabilirlik kuralları.`;
 
-    case "hs-code":
+    case "review-sentiment":
       return `${BASE}
-Ürün tanımı: ${f(c, "product")} | Hedef ülke: ${f(c, "country", "United States")} | Menşe: ${f(c, "origin", "China")}
-Doğru 6-10 haneli HS/HTS kodunu ver, vergi oranını ve varsa anti-damping / Section 301 / ek gümrük vergisi uyarılarını belirt. metrics: HS Kodu (tone action), Gümrük vergisi %, Ek vergi (tone warning), Toplam vergi yükü. table: ["Kod","Tanım","Vergi %","Not"]. bullets: yanlış sınıflandırma riskleri ve gerekli belgeler.`;
+Ürün: ${f(c, "product")}
+Yorumlar:
+"""${f(c, "reviews")}"""
+Yorumları temaya göre grupla; satın almayı engelleyen itirazları, memnuniyet tetikleyicilerini ve listingde kullanılacak sosyal kanıt cümlelerini çıkar. metrics: Genel sentiment skoru /100, En kritik itiraz (tone warning), En güçlü satın alma nedeni (tone profit), Tahmini iade tetikleyicisi. table: ["Tema","Frekans","Sentiment","Listing aksiyonu"]. bullets: bullet/A+ içinde doğrudan kullanılabilecek 4 cümle.`;
 
-    case "lab-budget":
+    case "price-strategy":
       return `${BASE}
-Ürün: ${f(c, "product")} | Kategoriler: ${f(c, "categories")} | Hedef pazarlar: ${f(c, "markets", "US, EU")}
-Zorunlu test ve sertifikaları (CPC, CPSIA, CE, UKCA, FCC, RoHS, REACH, FDA, LFGB, UN38.3) belirle ve gerçekçi laboratuvar maliyetlerini tahmin et. table: ["Test/Sertifika","Zorunlu mu","Süre","Tahmini maliyet $"]. metrics: Toplam test bütçesi (tone warning), Zorunlu test sayısı, En uzun süre, Sertifikasız satış cezası. bullets: maliyeti düşürme yolları (tedarikçi mevcut raporları, çoklu ürün grubu testi).`;
+Ürün: ${f(c, "product")} | Landed cost: $${f(c, "cost")} | Kanal: ${f(c, "channel", "Amazon US")} | Rakip fiyatları: ${f(c, "competitors")}
+Kâr koruyan bir fiyat bandı belirle: giriş fiyatı, hedef fiyat, taban fiyat (kupon/indirim sınırı). Kanal komisyonu, fulfillment, iade ve reklam payını hesaba kat. metrics: Önerilen fiyat (tone action), Net marj % (tone profit), Taban fiyat (tone warning), Başabaş dönüşüm oranı. table: ["Senaryo","Fiyat $","Net marj $","Net marj %","Not"]. bullets: lansman fiyatlama takvimi, kupon ve bundle hamleleri.`;
 
     case "consensus":
       return `${BASE}
