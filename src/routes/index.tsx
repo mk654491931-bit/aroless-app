@@ -830,20 +830,6 @@ function Dashboard() {
 
                 return (
                 <>
-                {restoredRun !== null && !searching && (
-                  <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/50 px-3 py-2 text-xs text-muted-foreground backdrop-blur">
-                    <span>
-                      Son arama geri yüklendi{restoredRun ? ` — “${restoredRun}”` : ""}. Kredi harcanmadı.
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-auto rounded-full border border-border px-2.5 py-1 font-medium text-foreground transition hover:bg-card"
-                      onClick={() => setRestoredRun(null)}
-                    >
-                      Tamam
-                    </button>
-                  </div>
-                )}
                 <FinderInsights products={filtered} />
 
                 <AdvancedFilters
