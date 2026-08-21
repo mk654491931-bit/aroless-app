@@ -25,9 +25,9 @@ export const Route = createFileRoute("/trend-radar")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Velora Trend Radar — Çok Platformlu AI Trend Keşfi" },
-      { name: "description", content: "Google, Amazon, TikTok ve Yandex açık verilerini kazıyan otomatik botlar + RSS akışları, Velora Deep AI ile tek bir talep skorunda birleşiyor." },
-      { property: "og:title", content: "Velora Trend Radar — Çok Platformlu AI Trend Keşfi" },
+      { title: "Aroless Trend Radar — Çok Platformlu AI Trend Keşfi" },
+      { name: "description", content: "Google, Amazon, TikTok ve Yandex açık verilerini kazıyan otomatik botlar + RSS akışları, Aroless Deep AI ile tek bir talep skorunda birleşiyor." },
+      { property: "og:title", content: "Aroless Trend Radar — Çok Platformlu AI Trend Keşfi" },
       { property: "og:description", content: "Kazınmış web verisi ve RSS akışlarından hibrit AI trend sentezi." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -162,7 +162,7 @@ function TrendRadar() {
     try {
       const j = await api({ action: "analyze", region, category, mode, trends: trends.slice(0, 70) });
       setSynth(j);
-      toast.success(`Velora Deep AI hazır — ${j.engines?.length ?? 0} motor birleştirildi`);
+      toast.success(`Aroless Deep AI hazır — ${j.engines?.length ?? 0} motor birleştirildi`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -221,8 +221,8 @@ function TrendRadar() {
   return (
     <HubShell
       emoji="📡"
-      title="Velora Trend Radar"
-      subtitle="Google, Amazon, TikTok ve Yandex'in halka açık sayfalarını kazıyan otomatik botlar + açık RSS/webhook akışları, Velora Deep AI Intelligence ile tek bir talep skorunda birleşiyor."
+      title="Aroless Trend Radar"
+      subtitle="Google, Amazon, TikTok ve Yandex'in halka açık sayfalarını kazıyan otomatik botlar + açık RSS/webhook akışları, Aroless Deep AI Intelligence ile tek bir talep skorunda birleşiyor."
     >
       {/* ------------------------------------------------ live control panel */}
       <Card className="lg:col-span-2 border-white/10 bg-slate-950/60">
@@ -498,7 +498,7 @@ function TrendRadar() {
           <DialogHeader><DialogTitle className="text-base">AI Ürün Brifingi — {brief?.trend}</DialogTitle></DialogHeader>
           {briefLoading || !brief?.data ? (
             <div className="flex items-center gap-2 py-10 text-sm text-slate-400">
-              <Loader2 className="animate-spin" size={16} /> Velora Deep AI brifingi hazırlıyor…
+              <Loader2 className="animate-spin" size={16} /> Aroless Deep AI brifingi hazırlıyor…
             </div>
           ) : <BriefBody data={brief.data} />}
         </DialogContent>

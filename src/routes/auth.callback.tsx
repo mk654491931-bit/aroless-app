@@ -7,10 +7,10 @@ export const Route = createFileRoute("/auth/callback")({
   component: AuthCallback,
   head: () => ({
     meta: [
-      { title: "Giriş doğrulanıyor | Velora" },
-      { name: "description", content: "Velora hesabınıza güvenli giriş doğrulanıyor." },
-      { property: "og:title", content: "Giriş doğrulanıyor | Velora" },
-      { property: "og:description", content: "Velora hesabınıza güvenli giriş doğrulanıyor." },
+      { title: "Giriş doğrulanıyor | Aroless" },
+      { name: "description", content: "Aroless hesabınıza güvenli giriş doğrulanıyor." },
+      { property: "og:title", content: "Giriş doğrulanıyor | Aroless" },
+      { property: "og:description", content: "Aroless hesabınıza güvenli giriş doğrulanıyor." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },

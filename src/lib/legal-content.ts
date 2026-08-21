@@ -15,25 +15,25 @@ export const TOS: LegalDoc = {
   title: "Kullanım Koşulları",
   short: "Kullanım Koşulları",
   summary:
-    "Velora B2B e-ticaret altyapı platformunun kullanımına ilişkin hak, yükümlülük ve sorumluluk sınırlarını düzenler.",
+    "Aroless B2B e-ticaret altyapı platformunun kullanımına ilişkin hak, yükümlülük ve sorumluluk sınırlarını düzenler.",
   updated: LAST_UPDATED,
   sections: [
     {
       id: "taraflar",
       heading: "1. Taraflar ve Kapsam",
       body: [
-        "İşbu Kullanım Koşulları (\"Sözleşme\"); Velora platformunu işleten hizmet sağlayıcı (\"Velora\") ile platforma kayıt olan gerçek veya tüzel kişi kullanıcı (\"Kullanıcı\" veya \"Üye\") arasında elektronik ortamda kurulur.",
+        "İşbu Kullanım Koşulları (\"Sözleşme\"); Aroless platformunu işleten hizmet sağlayıcı (\"Aroless\") ile platforma kayıt olan gerçek veya tüzel kişi kullanıcı (\"Kullanıcı\" veya \"Üye\") arasında elektronik ortamda kurulur.",
         "Platforma kayıt olarak, hesabınızı kullanarak veya hizmetlerin herhangi bir bileşenine erişerek işbu Sözleşme'yi, KVKK Aydınlatma Metni'ni, Veri İşleme Sözleşmesi'ni ve Çerez Politikası'nı okuduğunuzu ve kabul ettiğinizi beyan edersiniz.",
-        "Velora, işletmeler arası (B2B) bir yazılım hizmeti (SaaS) sunar; tüketiciye yönelik bir satış platformu değildir.",
+        "Aroless, işletmeler arası (B2B) bir yazılım hizmeti (SaaS) sunar; tüketiciye yönelik bir satış platformu değildir.",
       ],
     },
     {
       id: "hizmet",
       heading: "2. Hizmet Tanımı",
       body: [
-        "Velora; ürün araştırma, tedarikçi analizi, maliyet ve kâr simülasyonu, trend radarı, reklam istihbaratı ve uyum araçlarından oluşan bir yapay zekâ destekli e-ticaret altyapısıdır.",
+        "Aroless; ürün araştırma, tedarikçi analizi, maliyet ve kâr simülasyonu, trend radarı, reklam istihbaratı ve uyum araçlarından oluşan bir yapay zekâ destekli e-ticaret altyapısıdır.",
         "Platform üzerinde üretilen skorlar, tahminler ve öneriler karar destek amaçlıdır; yatırım, hukuki, vergisel veya gümrük danışmanlığı niteliği taşımaz.",
-        "Velora, hizmet kapsamındaki modülleri geliştirmek, değiştirmek veya sonlandırmak hakkını saklı tutar; esaslı değişiklikler makul süre önce Kullanıcı'ya bildirilir.",
+        "Aroless, hizmet kapsamındaki modülleri geliştirmek, değiştirmek veya sonlandırmak hakkını saklı tutar; esaslı değişiklikler makul süre önce Kullanıcı'ya bildirilir.",
       ],
     },
     {
@@ -41,7 +41,7 @@ export const TOS: LegalDoc = {
       heading: "3. Hesap Oluşturma ve Güvenlik",
       body: [
         "Kullanıcı, kayıt sırasında verdiği bilgilerin doğru, güncel ve eksiksiz olduğunu taahhüt eder.",
-        "Hesap kimlik bilgilerinin gizliliğinden ve hesap üzerinden gerçekleştirilen tüm işlemlerden Kullanıcı sorumludur. Yetkisiz erişim şüphesi derhâl Velora'ya bildirilmelidir.",
+        "Hesap kimlik bilgilerinin gizliliğinden ve hesap üzerinden gerçekleştirilen tüm işlemlerden Kullanıcı sorumludur. Yetkisiz erişim şüphesi derhâl Aroless'ya bildirilmelidir.",
         "18 yaşından küçük kişiler ve ticari faaliyet ehliyeti bulunmayanlar platforma üye olamaz.",
       ],
     },
@@ -60,15 +60,15 @@ export const TOS: LegalDoc = {
       body: [
         "Platformun tersine mühendisliğe tabi tutulması, otomatik araçlarla toplu veri çekilmesi (scraping), API anahtarlarının paylaşılması veya hizmetin yeniden satılması yasaktır.",
         "Yasa dışı, yanıltıcı, üçüncü kişilerin fikri mülkiyet haklarını ihlal eden veya rekabet hukukuna aykırı içerik üretilmesi amacıyla platform kullanılamaz.",
-        "İhlal hâlinde Velora, hesabı bildirimsiz askıya alabilir veya kapatabilir.",
+        "İhlal hâlinde Aroless, hesabı bildirimsiz askıya alabilir veya kapatabilir.",
       ],
     },
     {
       id: "fikri",
       heading: "6. Fikri Mülkiyet",
       body: [
-        "Platform yazılımı, arayüzü, modelleri, skorlama metodolojisi ve markası Velora'ya aittir.",
-        "Kullanıcı'nın platforma yüklediği veriler Kullanıcı'ya aittir; Velora bu verileri yalnızca hizmetin sunulması amacıyla işler.",
+        "Platform yazılımı, arayüzü, modelleri, skorlama metodolojisi ve markası Aroless'ya aittir.",
+        "Kullanıcı'nın platforma yüklediği veriler Kullanıcı'ya aittir; Aroless bu verileri yalnızca hizmetin sunulması amacıyla işler.",
         "Kullanıcı, platform çıktısı olan raporları kendi ticari faaliyetinde serbestçe kullanabilir.",
       ],
     },
@@ -76,8 +76,8 @@ export const TOS: LegalDoc = {
       id: "sorumluluk",
       heading: "7. Sorumluluğun Sınırlandırılması",
       body: [
-        "Hizmet \"olduğu gibi\" sunulur. Velora, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.",
-        "Velora'nın toplam sorumluluğu, ihlalin gerçekleştiği tarihten önceki 12 ay içinde Kullanıcı tarafından ödenen toplam hizmet bedeli ile sınırlıdır.",
+        "Hizmet \"olduğu gibi\" sunulur. Aroless, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.",
+        "Aroless'nın toplam sorumluluğu, ihlalin gerçekleştiği tarihten önceki 12 ay içinde Kullanıcı tarafından ödenen toplam hizmet bedeli ile sınırlıdır.",
         "Dolaylı zararlar, kâr kaybı ve veri kaybından doğan talepler kapsam dışıdır.",
       ],
     },
@@ -110,14 +110,14 @@ export const KVKK: LegalDoc = {
   title: "KVKK Aydınlatma Metni",
   short: "KVKK Aydınlatma Metni",
   summary:
-    "6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında, Velora üyelerinin kişisel verilerinin işlenmesine ilişkin aydınlatma metni.",
+    "6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında, Aroless üyelerinin kişisel verilerinin işlenmesine ilişkin aydınlatma metni.",
   updated: LAST_UPDATED,
   sections: [
     {
       id: "veri-sorumlusu",
       heading: "1. Veri Sorumlusunun Kimliği",
       body: [
-        "6698 sayılı Kişisel Verilerin Korunması Kanunu (\"KVKK\") uyarınca veri sorumlusu sıfatıyla Velora hareket etmektedir.",
+        "6698 sayılı Kişisel Verilerin Korunması Kanunu (\"KVKK\") uyarınca veri sorumlusu sıfatıyla Aroless hareket etmektedir.",
         "İletişim: mk65449191@gmail.com",
       ],
     },
@@ -199,7 +199,7 @@ export const DPA: LegalDoc = {
   title: "Veri İşleme Sözleşmesi (DPA)",
   short: "Veri İşleme Sözleşmesi",
   summary:
-    "Velora'nın veri işleyen sıfatıyla, müşterinin (veri sorumlusu) verilerini nasıl işlediğini düzenleyen kurumsal ek sözleşme.",
+    "Aroless'nın veri işleyen sıfatıyla, müşterinin (veri sorumlusu) verilerini nasıl işlediğini düzenleyen kurumsal ek sözleşme.",
   updated: LAST_UPDATED,
   sections: [
     {
@@ -207,8 +207,8 @@ export const DPA: LegalDoc = {
       heading: "1. Amaç ve Roller",
       body: [
         "İşbu Veri İşleme Sözleşmesi (\"DPA\"), Kullanım Koşulları'nın ayrılmaz ekidir.",
-        "Müşteri, platforma yüklediği son müşteri/tedarikçi verileri bakımından veri sorumlusu; Velora ise veri işleyen sıfatıyla hareket eder.",
-        "Velora, verileri yalnızca Müşteri'nin belgelenmiş talimatları ve hizmetin ifası doğrultusunda işler.",
+        "Müşteri, platforma yüklediği son müşteri/tedarikçi verileri bakımından veri sorumlusu; Aroless ise veri işleyen sıfatıyla hareket eder.",
+        "Aroless, verileri yalnızca Müşteri'nin belgelenmiş talimatları ve hizmetin ifası doğrultusunda işler.",
       ],
     },
     {
@@ -225,7 +225,7 @@ export const DPA: LegalDoc = {
       id: "altisleyen",
       heading: "3. Alt İşleyenler",
       body: [
-        "Velora, hizmetin sunulması için alt işleyenler kullanabilir (bulut barındırma, veritabanı, e-posta, ödeme ve yapay zekâ model sağlayıcıları).",
+        "Aroless, hizmetin sunulması için alt işleyenler kullanabilir (bulut barındırma, veritabanı, e-posta, ödeme ve yapay zekâ model sağlayıcıları).",
         "Her alt işleyen ile bu DPA ile eşdeğer güvence içeren yazılı sözleşme yapılır.",
         "Yeni bir alt işleyen eklenmesi hâlinde Müşteri en az 30 gün önce bilgilendirilir ve makul gerekçeyle itiraz hakkına sahiptir.",
       ],
@@ -244,17 +244,17 @@ export const DPA: LegalDoc = {
       id: "ihlal",
       heading: "5. Veri İhlali Bildirimi",
       body: [
-        "Velora, bir kişisel veri ihlalinden haberdar olmasını takiben gecikmeksizin ve en geç 24 saat içinde Müşteri'yi bilgilendirir.",
+        "Aroless, bir kişisel veri ihlalinden haberdar olmasını takiben gecikmeksizin ve en geç 24 saat içinde Müşteri'yi bilgilendirir.",
         "Bildirim; ihlalin niteliği, etkilenen veri kategorileri, olası sonuçları ve alınan önlemleri içerir.",
-        "Kurul'a ve ilgili kişilere bildirim yükümlülüğü veri sorumlusu sıfatıyla Müşteri'ye aittir; Velora makul desteği sağlar.",
+        "Kurul'a ve ilgili kişilere bildirim yükümlülüğü veri sorumlusu sıfatıyla Müşteri'ye aittir; Aroless makul desteği sağlar.",
       ],
     },
     {
       id: "ilgili-kisi-talep",
       heading: "6. İlgili Kişi Taleplerine Destek",
       body: [
-        "Velora'ya doğrudan ulaşan ilgili kişi talepleri, gecikmeksizin Müşteri'ye yönlendirilir.",
-        "Velora, talepleri karşılamak için gerekli teknik desteği (erişim, düzeltme, silme, taşınabilirlik) sağlar.",
+        "Aroless'ya doğrudan ulaşan ilgili kişi talepleri, gecikmeksizin Müşteri'ye yönlendirilir.",
+        "Aroless, talepleri karşılamak için gerekli teknik desteği (erişim, düzeltme, silme, taşınabilirlik) sağlar.",
       ],
     },
     {
@@ -269,7 +269,7 @@ export const DPA: LegalDoc = {
       id: "denetim",
       heading: "8. Denetim Hakkı",
       body: [
-        "Müşteri, yılda bir kez ve makul bildirimle Velora'nın bu DPA'ya uyumunu denetleyebilir veya denetim raporlarını talep edebilir.",
+        "Müşteri, yılda bir kez ve makul bildirimle Aroless'nın bu DPA'ya uyumunu denetleyebilir veya denetim raporlarını talep edebilir.",
         "Denetim, hizmetin işleyişini aksatmayacak şekilde ve gizlilik yükümlülükleri çerçevesinde yürütülür.",
       ],
     },
@@ -281,7 +281,7 @@ export const COOKIES: LegalDoc = {
   title: "Çerez Politikası",
   short: "Çerez Politikası",
   summary:
-    "Velora'nın kullandığı çerez türleri, amaçları, saklama süreleri ve tercihlerinizi nasıl yönetebileceğiniz.",
+    "Aroless'nın kullandığı çerez türleri, amaçları, saklama süreleri ve tercihlerinizi nasıl yönetebileceğiniz.",
   updated: LAST_UPDATED,
   sections: [
     {
@@ -289,7 +289,7 @@ export const COOKIES: LegalDoc = {
       heading: "1. Çerez Nedir?",
       body: [
         "Çerezler, ziyaret ettiğiniz web siteleri tarafından tarayıcınıza kaydedilen küçük metin dosyalarıdır.",
-        "Velora; oturumun sürdürülmesi, tercihlerin hatırlanması ve platform performansının ölçülmesi amacıyla çerez ve benzeri teknolojiler (localStorage, sessionStorage) kullanır.",
+        "Aroless; oturumun sürdürülmesi, tercihlerin hatırlanması ve platform performansının ölçülmesi amacıyla çerez ve benzeri teknolojiler (localStorage, sessionStorage) kullanır.",
       ],
     },
     {

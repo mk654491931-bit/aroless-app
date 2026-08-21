@@ -10,7 +10,7 @@ const TITLES = [
   "Performans Pazarlamacı",
   "Marka Kurucusu",
   "Ölçekleme Ustası",
-  "Velora Operatörü",
+  "Aroless Operatörü",
 ];
 
 /** XP is derived from the run state so it can never be faked by editing storage alone. */

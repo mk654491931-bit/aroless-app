@@ -5,9 +5,9 @@ import { LEGAL_DOCS, LAST_UPDATED } from "@/lib/legal-content";
 export const Route = createFileRoute("/legal/")({
   head: () => ({
     meta: [
-      { title: "Yasal & Uyum Merkezi — Velora" },
-      { name: "description", content: "Velora kullanım koşulları, KVKK aydınlatma metni, veri işleme sözleşmesi ve çerez politikası tek merkezde." },
-      { property: "og:title", content: "Yasal & Uyum Merkezi — Velora" },
+      { title: "Yasal & Uyum Merkezi — Aroless" },
+      { name: "description", content: "Aroless kullanım koşulları, KVKK aydınlatma metni, veri işleme sözleşmesi ve çerez politikası tek merkezde." },
+      { property: "og:title", content: "Yasal & Uyum Merkezi — Aroless" },
       { property: "og:description", content: "KVKK, DPA, ToS ve çerez politikası belgeleri." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -23,7 +23,7 @@ function LegalIndex() {
         <Shield className="h-6 w-6 text-[var(--brand,var(--primary))]" /> Yasal & Uyum Merkezi
       </h1>
       <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-        Velora'nın sözleşmeleri, KVKK dokümanları ve çerez politikası. Son güncelleme: {LAST_UPDATED}.
+        Aroless'nın sözleşmeleri, KVKK dokümanları ve çerez politikası. Son güncelleme: {LAST_UPDATED}.
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">

@@ -1,4 +1,4 @@
-import { VeloraCover } from "@/components/velora-cover";
+import { ArolessCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,7 +85,7 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Velora — Winning Product Finder" },
+      { title: "Aroless — Winning Product Finder" },
       { name: "description", content: "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports." },
     ],
   }),
@@ -428,7 +428,7 @@ function Dashboard() {
       )}
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
-       <VeloraCover className="mb-6" />
+       <ArolessCover className="mb-6" />
        <div className="mb-4">
 
          <ActivationChecklist
@@ -1249,7 +1249,7 @@ function ProductCard({
         <div className="mt-3 rounded-lg border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold">🧠 7'li AI Konsey</span>
-            <span className="font-extrabold text-foreground">Velora Score {p.council.velora_score}/100</span>
+            <span className="font-extrabold text-foreground">Aroless Score {p.council.velora_score}/100</span>
           </div>
           <div className="text-muted-foreground">{p.council.verdict}</div>
           <div className="flex flex-wrap gap-1.5">
@@ -1654,7 +1654,7 @@ function ResultsToolbar({
       return `${i + 1}. ${p.name} — AI ${e.ai_score} · ${p.selling_price_usd ?? "?"} · marj ${p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? "?"}% · ${e.recommendation}`;
     });
     await navigator.clipboard.writeText(
-      [`Velora — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"),
+      [`Aroless — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"),
     );
     toast.success("Özet panoya kopyalandı");
   };
@@ -2350,7 +2350,7 @@ function buildShopifyCsv(products: WinningProduct[]): string {
     const price = parsePriceNumber(p.selling_price_usd);
     const cost = parsePriceNumber(p.supplier_price_usd);
     const row = [
-      handle, p.name, bodyHtml, "Velora", "", "", tags, "TRUE",
+      handle, p.name, bodyHtml, "Aroless", "", "", tags, "TRUE",
       "Title", "Default Title", `OC-${handle}`.slice(0, 40), "0", "shopify",
       "10", "deny", "manual",
       price, cost, "TRUE", "TRUE",

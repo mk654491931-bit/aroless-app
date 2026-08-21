@@ -1,5 +1,5 @@
 // ============================================================================
-// Velora — Predictive Trend Data Pipeline (server only, $0 sources)
+// Aroless — Predictive Trend Data Pipeline (server only, $0 sources)
 //
 //   • Google Trends   — search volume / interest curve
 //   • Reddit JSON API — r/TikTokMadeMeBuyIt, r/amazonfinds, r/BuyItForLife

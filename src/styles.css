@@ -813,7 +813,7 @@ html, body, .premium-card, .glass {
   background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 40%, oklch(0 0 0 / 0.55) 100%);
 }
 
-/* Harf harf beliren VELORA yazısı */
+/* Harf harf beliren AROLESS yazısı */
 .velora-letter {
   display: inline-block;
   opacity: 0;
@@ -878,7 +878,7 @@ html, body, .premium-card, .glass {
 }
 
 
-/* Velora AI mark */
+/* Aroless AI mark */
 @keyframes vm-spin { to { transform: rotate(360deg); } }
 @keyframes vm-pulse { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.06); } }
 

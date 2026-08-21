@@ -10,10 +10,10 @@ export const Route = createFileRoute("/legal/$slug")({
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
-      return { meta: [{ title: "Belge bulunamadı — Velora" }, { name: "robots", content: "noindex" }] };
+      return { meta: [{ title: "Belge bulunamadı — Aroless" }, { name: "robots", content: "noindex" }] };
     }
     const { doc } = loaderData;
-    const title = `${doc.title} — Velora`;
+    const title = `${doc.title} — Aroless`;
     return {
       meta: [
         { title },

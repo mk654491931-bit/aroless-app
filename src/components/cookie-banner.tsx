@@ -69,7 +69,7 @@ export function CookieBanner() {
             <div className="flex items-start gap-3">
               <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand,var(--primary))]" />
               <p className="text-xs leading-relaxed text-muted-foreground md:text-sm">
-                Velora, platform deneyiminizi iyileştirmek ve analitik hizmetler sunmak için çerezler kullanır.{" "}
+                Aroless, platform deneyiminizi iyileştirmek ve analitik hizmetler sunmak için çerezler kullanır.{" "}
                 <Link to="/legal/$slug" params={{ slug: "cerez-politikasi" }} className="font-medium text-foreground underline underline-offset-4">
                   Çerez Politikası
                 </Link>

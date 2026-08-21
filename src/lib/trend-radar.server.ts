@@ -1,5 +1,5 @@
 // ============================================================================
-// Velora — Multi-Platform Automated Trend Discovery (server only)
+// Aroless — Multi-Platform Automated Trend Discovery (server only)
 //
 // Ingestion streams (no paid platform APIs):
 //   a) Web scraping  : Google Trends public pages, Amazon Best Sellers,
@@ -321,7 +321,7 @@ export async function runScrapeJob(opts: {
   return { trends, statuses, ran_at: new Date().toISOString() };
 }
 
-/* ------------------------------------------------- Velora Deep AI Intelligence */
+/* ------------------------------------------------- Aroless Deep AI Intelligence */
 
 export type AiMode = "fast" | "deep" | "strategy";
 
@@ -359,7 +359,7 @@ function buildPrompt(trends: ScrapedTrend[], mode: AiMode, region: string, categ
   const lines = trends.slice(0, 70).map((t) =>
     `${t.source}|${t.trend_name}|vol=${t.metrics.search_volume}|growth=${t.metrics.growth_rate}%|rank=${t.metrics.rank}`,
   ).join("\n");
-  return `You are VELORA DEEP AI INTELLIGENCE, a multi-platform e-commerce trend analyst.
+  return `You are AROLESS DEEP AI INTELLIGENCE, a multi-platform e-commerce trend analyst.
 ${MODE_BRIEF[mode]}
 Region: ${region} | Category: ${category}
 
@@ -486,7 +486,7 @@ export async function runDeepAnalysis(
 
 /** Deep product brief for one trend (modal). */
 export async function runProductBrief(trend: string, region: string, category: string): Promise<Record<string, unknown>> {
-  const prompt = `You are VELORA DEEP AI INTELLIGENCE. Write a full e-commerce product brief for the breakout trend below.
+  const prompt = `You are AROLESS DEEP AI INTELLIGENCE. Write a full e-commerce product brief for the breakout trend below.
 Trend: ${trend} | Region: ${region} | Category: ${category}
 
 Return ONLY minified JSON (all prose in Turkish):

@@ -29,7 +29,7 @@ export function SignupLegalConsent({
           className="mt-0.5"
         />
         <span>
-          Velora{" "}
+          Aroless{" "}
           <a href="/legal/kullanim-kosullari" onClick={openDoc(TOS)} className={linkCls}>Kullanım Koşulları</a>{" "}
           ve{" "}
           <a href="/legal/veri-isleme-sozlesmesi" onClick={openDoc(DPA)} className={linkCls}>Veri İşleme Sözleşmesi</a>
@@ -57,7 +57,7 @@ export function SignupLegalConsent({
           className="mt-0.5"
         />
         <span>
-          Velora ürün güncellemeleri, kampanya ve ticari elektronik iletiler almayı onaylıyorum.{" "}
+          Aroless ürün güncellemeleri, kampanya ve ticari elektronik iletiler almayı onaylıyorum.{" "}
           <span className="text-muted-foreground/70">(İsteğe bağlı)</span>
         </span>
       </label>

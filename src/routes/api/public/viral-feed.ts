@@ -45,7 +45,7 @@ async function pipedFetch(path: string): Promise<any | null> {
   for (const host of PIPED_HOSTS) {
     try {
       const res = await fetch(`${host}${path}`, {
-        headers: { Accept: "application/json", "User-Agent": "Velora/1.0" },
+        headers: { Accept: "application/json", "User-Agent": "Aroless/1.0" },
         signal: AbortSignal.timeout(7000),
       });
       if (res.ok) return await res.json();

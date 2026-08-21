@@ -14,7 +14,7 @@ export const Route = createFileRoute("/viral-ads")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Viral Ads Library — Velora" },
+      { title: "Viral Ads Library — Aroless" },
       { name: "description", content: "Live feed of trending real-world viral ad videos with hooks, thumbnails and playable previews." },
       { name: "robots", content: "noindex, nofollow" },
     ],

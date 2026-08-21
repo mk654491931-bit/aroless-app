@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * Velora — Multi-Platform Automated AI Trend Discovery endpoint.
+ * Aroless — Multi-Platform Automated AI Trend Discovery endpoint.
  * Actions:
  *   scrape   — runs the automated scraping/RSS ingestion job (and persists rows)
- *   analyze  — Velora Deep AI Intelligence synthesis over ingested signals
+ *   analyze  — Aroless Deep AI Intelligence synthesis over ingested signals
  *   brief    — deep AI product brief for a single trend
  *   webhook  — open ingestion endpoint for external scrapers / RSS bridges
  */

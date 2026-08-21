@@ -15,9 +15,9 @@ export const Route = createFileRoute("/radar")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Kazanan Ürün Radarı — Velora" },
+      { title: "Kazanan Ürün Radarı — Aroless" },
       { name: "description", content: "Her gün otomatik taranan yükselen ürünler: momentum, kazanan skoru, fiyat bandı ve satış kanalı önerisiyle." },
-      { property: "og:title", content: "Kazanan Ürün Radarı — Velora" },
+      { property: "og:title", content: "Kazanan Ürün Radarı — Aroless" },
       { property: "og:description", content: "Bugün yükselen ürünleri arama yapmadan gör." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

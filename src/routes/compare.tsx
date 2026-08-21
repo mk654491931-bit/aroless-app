@@ -11,7 +11,7 @@ export const Route = createFileRoute("/compare")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Compare Products — Velora" },
+      { title: "Compare Products — Aroless" },
       { name: "description", content: "Side-by-side comparison of your saved winning products." },
       { name: "robots", content: "noindex, nofollow" },
     ],

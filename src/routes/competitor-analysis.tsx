@@ -23,9 +23,9 @@ export const Route = createFileRoute("/competitor-analysis")({
   }),
   head: () => ({
     meta: [
-      { title: "Rakip Analizi — Velora" },
+      { title: "Rakip Analizi — Aroless" },
       { name: "description", content: "Bir ürün, ASIN veya mağaza URL'si gir; aktif satıcıları, fiyat trendlerini, müşteri şikâyetlerini ve AI karşı-strateji planını gör." },
-      { property: "og:title", content: "Rakip Analizi — Velora" },
+      { property: "og:title", content: "Rakip Analizi — Aroless" },
       { property: "og:description", content: "Aktif satıcı radarı, zayıflık analizi ve AI karşı-strateji playbook'u." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

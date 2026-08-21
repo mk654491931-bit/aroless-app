@@ -1,4 +1,4 @@
-// Server-only prompt builders for the 19 Velora tools.
+// Server-only prompt builders for the 19 Aroless tools.
 import type { Provider } from "./tools-ai.server";
 
 export type ToolId =
@@ -11,7 +11,7 @@ export type ToolId =
 type Ctx = Record<string, string>;
 const f = (c: Ctx, k: string, fb = "-") => (c[k]?.trim() ? c[k].trim().slice(0, 4000) : fb);
 
-const BASE = `You are Velora, a senior cross-border e-commerce operator with 10+ years of Amazon/TikTok Shop/Alibaba sourcing experience.
+const BASE = `You are Aroless, a senior cross-border e-commerce operator with 10+ years of Amazon/TikTok Shop/Alibaba sourcing experience.
 Method (do this internally, never print it):
 1) Restate the case in unit-economics terms and write down every cost line.
 2) Use real 2025/2026 benchmarks (Amazon referral %, FBA tiers, CN→US/EU freight rates, duty rates, CNY/USD/EUR volatility, typical MOQ and tooling costs).

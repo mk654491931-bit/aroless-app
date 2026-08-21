@@ -253,7 +253,7 @@ export function ExportReport({ p }: { p: WinningProduct }) {
 
   const exportPdf = () => {
     const rows = buildRows(p);
-    const html = `<!doctype html><meta charset="utf-8"><title>${p.name ?? "Rapor"} — Velora Raporu</title>
+    const html = `<!doctype html><meta charset="utf-8"><title>${p.name ?? "Rapor"} — Aroless Raporu</title>
 <style>body{font-family:system-ui,sans-serif;background:#0f1220;color:#e9e9f2;padding:32px}
 h1{font-size:20px;margin:0 0 4px}h2{font-size:12px;color:#a9a9c4;font-weight:500;margin:0 0 20px}
 table{width:100%;border-collapse:collapse;font-size:11px}
@@ -261,7 +261,7 @@ th{text-align:left;background:#1b1f38;color:#b9b9d8;padding:6px 8px}
 td{padding:6px 8px;border-top:1px solid #262a45;vertical-align:top}
 tr:nth-child(even) td{background:#14172a}</style>
 <h1>${p.name ?? "Ürün"} — 90 günlük strateji raporu</h1>
-<h2>Velora · ${new Date().toLocaleDateString("tr-TR")}</h2>
+<h2>Aroless · ${new Date().toLocaleDateString("tr-TR")}</h2>
 <table><thead><tr>${rows[0]!.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
 <tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td>${String(c).replace(/</g, "&lt;")}</td>`).join("")}</tr>`).join("")}</tbody></table>
 <script>window.onload=()=>window.print()<\/script>`;

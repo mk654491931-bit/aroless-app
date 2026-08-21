@@ -10,9 +10,9 @@ export const Route = createFileRoute("/news")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "E-Com News & AI Explainer — Velora" },
+      { title: "E-Com News & AI Explainer — Aroless" },
       { name: "description", content: "Daily e-commerce headlines with AI explainers: what changed, why it matters, and how to act on it as a seller." },
-      { property: "og:title", content: "E-Com News & AI Explainer — Velora" },
+      { property: "og:title", content: "E-Com News & AI Explainer — Aroless" },
       { property: "og:description", content: "Daily e-commerce headlines with AI explainers for sellers." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

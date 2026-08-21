@@ -20,7 +20,7 @@ export const Route = createFileRoute("/settings")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Settings — Velora" },
+      { title: "Settings — Aroless" },
       { name: "description", content: "Manage your language, currency, notifications, and subscription." },
       { name: "robots", content: "noindex, nofollow" },
     ],

@@ -4,7 +4,7 @@ import LanguageDetector from "i18next-browser-languagedetector";
 
 const en = {
   common: {
-    app_name: "Velora",
+    app_name: "Aroless",
     tagline: "Winning Product Finder",
     credits: "credits",
     upgrade: "Upgrade",
@@ -144,7 +144,7 @@ const en = {
 
 const tr = {
   common: {
-    app_name: "Velora",
+    app_name: "Aroless",
     tagline: "Kazanan Ürün Bulucu",
     credits: "kredi",
     upgrade: "Yükselt",
@@ -284,7 +284,7 @@ const tr = {
 
 const es = {
   common: {
-    app_name: "Velora",
+    app_name: "Aroless",
     tagline: "Buscador de productos ganadores",
     credits: "créditos",
     upgrade: "Mejorar",
@@ -351,7 +351,7 @@ const es = {
 
 const de = {
   common: {
-    app_name: "Velora",
+    app_name: "Aroless",
     tagline: "Winning Product Finder",
     credits: "Credits",
     upgrade: "Upgrade",
@@ -418,7 +418,7 @@ const de = {
 
 const fr = {
   common: {
-    app_name: "Velora",
+    app_name: "Aroless",
     tagline: "Chercheur de produits gagnants",
     credits: "crédits",
     upgrade: "Passer au premium",

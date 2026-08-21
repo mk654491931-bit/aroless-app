@@ -223,7 +223,7 @@ export type WinningProduct = {
   github_trends?: GitHubRepoTrend[];
   // 7'li AI Konsey verdict (3 teams + referees + director synthesis)
   council?: CouncilSummary;
-  /** Ortak karar puanı: (hibrit skor + AI Konsey Velora skoru) / 2 */
+  /** Ortak karar puanı: (hibrit skor + AI Konsey Aroless skoru) / 2 */
   unified_score?: number;
   /** Canlı kaynaklardan doğrulanmış piyasa kanıtı (Trends + tedarik + ilanlar). */
   market_evidence?: MarketEvidence;
