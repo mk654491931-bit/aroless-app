@@ -20,21 +20,21 @@ import {
 
 /* ------------------------------------------------------------------ helpers */
 
-const AGENT_META: Record<AgentId, { icon: typeof BarChart3; line: string; source: string }> = {
-  cfo_agent: { icon: BarChart3, line: "Computing landed cost, platform fees & CAC against retail price…", source: "Supplier quotes · 3PL rate cards · duty tables" },
-  cmo_agent: { icon: Users, line: "Solving CAC ceiling, break-even ROAS & channel saturation…", source: "Meta Ad Library · TikTok Creative Center" },
-  cro_agent: { icon: ShieldAlert, line: "Scanning USPTO trademark registry & design-patent overlap…", source: "USPTO TESS · EUIPO · design patents" },
-  trend_hunter: { icon: TrendingUp, line: "Deriving view velocity (now − 7d) / time and lifecycle phase…", source: "Google Trends · TikTok velocity index" },
-  competitor_intel: { icon: Radar, line: "Counting active stores running paid ads for >14 days…", source: "Shopify storefront crawl · Amazon BSR" },
-  ux_specialist: { icon: Eye, line: "Bucketing review sentiment: material, sizing, shipping delays…", source: "Review corpus · return-reason clusters" },
-  supply_chain: { icon: Boxes, line: "Verifying stock stability, lead times & on-time delivery SLA…", source: "Supplier stock API · lane transit history" },
-  pricing_strategist: { icon: Gauge, line: "Testing markup ladder & price elasticity against landed cost…", source: "Marketplace price bands · landed-cost model" },
-  logistics_cost: { icon: Boxes, line: "Modelling freight share of revenue & 3PL lane costs…", source: "3PL rate cards · lane transit history" },
-  compliance_officer: { icon: ShieldAlert, line: "Checking certification barriers (CE / FDA / SDS) & customs gates…", source: "Customs tariff tables · marketplace policy" },
-  retention_analyst: { icon: Activity, line: "Estimating repeat-purchase rate & LTV vs. CAC recovery…", source: "Cohort benchmarks · review corpus" },
-  creative_director: { icon: Sparkles, line: "Scoring hook strength, UGC angles & 3-second hold rate…", source: "TikTok Creative Center · Meta Ad Library" },
-  channel_fit: { icon: ScanLine, line: "Matching marketplace fee structure against competition density…", source: "Platform fee schedules · storefront crawl" },
-  data_auditor: { icon: Terminal, line: "Auditing evidence coverage across every council input…", source: "Live signal pipeline · source registry" },
+const AGENT_META: Record<AgentId, { icon: typeof BarChart3; line: string; source: string; desc: string }> = {
+  cfo_agent: { icon: BarChart3, line: "Computing landed cost, platform fees & CAC against retail price…", source: "Supplier quotes · 3PL rate cards · duty tables", desc: "Rebuilds the full landed cost stack—COGS, freight, platform fees and CAC—so you see the real per-unit profit before you spend a dollar." },
+  cmo_agent: { icon: Users, line: "Solving CAC ceiling, break-even ROAS & channel saturation…", source: "Meta Ad Library · TikTok Creative Center", desc: "Quantifies the marketing ceiling: maximum affordable CAC, break-even ROAS and how saturated ad channels are before you launch." },
+  cro_agent: { icon: ShieldAlert, line: "Scanning USPTO trademark registry & design-patent overlap…", source: "USPTO TESS · EUIPO · design patents", desc: "Scans for trademark conflicts, design-patent overlap and counterfeit flags that could shut down a listing overnight." },
+  trend_hunter: { icon: TrendingUp, line: "Deriving view velocity (now − 7d) / time and lifecycle phase…", source: "Google Trends · TikTok velocity index", desc: "Measures momentum by comparing current view velocity against the 7-day baseline and tags the product as early, peak or fading." },
+  competitor_intel: { icon: Radar, line: "Counting active stores running paid ads for >14 days…", source: "Shopify storefront crawl · Amazon BSR", desc: "Counts active stores running paid ads for the item longer than 14 days and weights opportunity by competitor strength." },
+  ux_specialist: { icon: Eye, line: "Bucketing review sentiment: material, sizing, shipping delays…", source: "Review corpus · return-reason clusters", desc: "Mines review and return-reason clusters for material, sizing, shipping and quality complaints before they become your support burden." },
+  supply_chain: { icon: Boxes, line: "Verifying stock stability, lead times & on-time delivery SLA…", source: "Supplier stock API · lane transit history", desc: "Checks supplier stock stability, realistic lead times and on-time delivery SLA to flag stockout or seasonal delay risks." },
+  pricing_strategist: { icon: Gauge, line: "Testing markup ladder & price elasticity against landed cost…", source: "Marketplace price bands · landed-cost model", desc: "Tests the markup ladder against landed cost and substitutes to find the price point that maximizes margin without killing demand." },
+  logistics_cost: { icon: Boxes, line: "Modelling freight share of revenue & 3PL lane costs…", source: "3PL rate cards · lane transit history", desc: "Models freight share of revenue, last-mile rates and 3PL lane costs so shipping does not silently erase the margin." },
+  compliance_officer: { icon: ShieldAlert, line: "Checking certification barriers (CE / FDA / SDS) & customs gates…", source: "Customs tariff tables · marketplace policy", desc: "Identifies certification barriers (CE, FDA, SDS, SABER) and customs restrictions that can block import or delist the product." },
+  retention_analyst: { icon: Activity, line: "Estimating repeat-purchase rate & LTV vs. CAC recovery…", source: "Cohort benchmarks · review corpus", desc: "Estimates repeat-purchase rate and lifetime value versus CAC recovery time to judge if the product can sustain a customer base." },
+  creative_director: { icon: Sparkles, line: "Scoring hook strength, UGC angles & 3-second hold rate…", source: "TikTok Creative Center · Meta Ad Library", desc: "Scores the hook, UGC angles, 3-second hold rate and headline variety to estimate the ad creative's viral potential." },
+  channel_fit: { icon: ScanLine, line: "Matching marketplace fee structure against competition density…", source: "Platform fee schedules · storefront crawl", desc: "Matches the product's margin, weight and return profile against each platform's fee structure and audience density." },
+  data_auditor: { icon: Terminal, line: "Auditing evidence coverage across every council input…", source: "Live signal pipeline · source registry", desc: "Cross-checks every council input for evidence coverage, consistency and confidence gaps to expose weak or assumed signals." },
 };
 
 type Status = "processing" | "done" | "warning";
@@ -282,48 +282,55 @@ export function CommandCenter() {
           </header>
 
           {selected && econ && verdict && (
-            <div className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_250px]">
-              {/* agents */}
-              <div className="space-y-2">
-                {agents.map((a, i) => {
-                  const st = statusOf(i, a);
-                  const Icon = AGENT_META[a.agent_id].icon;
-                  return (
-                    <button
-                      key={a.agent_id}
-                      onClick={() => setDrill(a.agent_id)}
-                      className={cn(
-                        "group flex w-full items-center gap-3 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[--ai]/50",
-                        st === "warning" && "border-destructive/40",
-                      )}
-                    >
-                      <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[--ai]/30 bg-[--ai]/10">
-                        <Icon className="size-4 text-[--ai]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-sm font-medium">{a.name}</span>
-                          <StatusPill status={st} />
-                          {a.veto && (
-                            <span className="rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive">
-                              HARD VETO
-                            </span>
-                          )}
+            <div className="flex flex-col gap-4 p-4 lg:flex-row">
+              {/* agents — two 7-agent columns side by side */}
+              <div className="min-w-0 flex-1">
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:grid-rows-7 lg:max-h-[calc(100vh-220px)]">
+                  {agents.map((a, i) => {
+                    const st = statusOf(i, a);
+                    const Icon = AGENT_META[a.agent_id].icon;
+                    return (
+                      <button
+                        key={a.agent_id}
+                        onClick={() => setDrill(a.agent_id)}
+                        className={cn(
+                          "group flex h-full flex-col justify-between gap-2 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
+                          st === "warning" && "border-destructive/40",
+                        )}
+                      >
+                        <div className="flex w-full items-center gap-3">
+                          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[--ai]/30 bg-[--ai]/10">
+                            <Icon className="size-4 text-[--ai]" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-medium">{a.name}</span>
+                              <StatusPill status={st} />
+                              {a.veto && (
+                                <span className="rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive">
+                                  HARD VETO
+                                </span>
+                              )}
+                            </div>
+                            <div className="truncate font-mono text-[11px] text-muted-foreground">
+                              {st === "processing" ? AGENT_META[a.agent_id].line : `${a.primary_metric.label}: ${a.primary_metric.value}`}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className={cn("font-mono text-sm", a.score < 40 ? "text-destructive" : "text-[--ai]")}>
+                              {st === "processing" ? "··" : `${a.score}/100`}
+                            </div>
+                            <div className="font-mono text-[10px] text-muted-foreground">conf {a.confidence_level}%</div>
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
-                        <div className="truncate font-mono text-[11px] text-muted-foreground">
-                          {st === "processing" ? AGENT_META[a.agent_id].line : `${a.primary_metric.label}: ${a.primary_metric.value}`}
+                        <div className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                          {AGENT_META[a.agent_id].desc}
                         </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className={cn("font-mono text-sm", a.score < 40 ? "text-destructive" : "text-[--ai]")}>
-                          {st === "processing" ? "··" : `${a.score}/100`}
-                        </div>
-                        <div className="font-mono text-[10px] text-muted-foreground">conf {a.confidence_level}%</div>
-                      </div>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* score column */}
@@ -535,7 +542,7 @@ function useLogStream(product: HotProduct | null, finger: number, active: boolea
       () => `GET /api/public/hot-products 200 { "cache": "hour" }`,
       () => `econ.compute { "retail": ${e.retail.toFixed(2)}, "net": ${e.net_profit.toFixed(2)}, "net_margin_pct": ${e.net_margin_pct} }`,
       () => `filter.strict { "min_net_margin_pct": ${MIN_NET_MARGIN_PCT}, "pass": ${!e.disqualified} }`,
-      () => `agent.dispatch { "agents": 7, "weight": 0.70 }`,
+      () => `agent.dispatch { "agents": 14, "weight": 0.70 }`,
       () => `signals.read { "search_volume": ${product.signals?.search_volume_monthly ?? "null"}, "active_stores": ${product.signals?.active_stores ?? "null"} }`,
       () => `uspto.query { "mark": "${product.name.split(" ")[0]}", "hits": 0 }`,
       () => `score.merge { "finger": ${finger}, "formula": "council*0.70 + finger*0.30" }`,
