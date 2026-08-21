@@ -152,6 +152,121 @@ export async function applyFingerprintPolicy(
     meta: { tier: args.tier ?? "Free", paid },
   });
 
+  // Kötüye kullanım kuralları: aynı cihaz/IP'den çoklu hesap veya kısa sürede
+  // tekrarlanan kayıt tespit edilirse adminlere otomatik uyarı gönderilir.
+  try {
+    await raiseAbuseAlert(admin, {
+      userId: args.userId,
+      email: args.email,
+      visitorId: args.visitorId || null,
+      ipHash: args.ipHash || null,
+      blocked,
+    });
+  } catch (e) {
+    console.error("[abuse-alert] failed", e);
+  }
+
   return blocked;
 }
+
+/** Kötüye kullanım eşikleri. */
+const ABUSE_RULES = {
+  accountsPerDevice: 2, // aynı cihazdan bu sayı ve üzeri hesap
+  accountsPerIp: 3, // aynı IP'den bu sayı ve üzeri hesap
+  rapidWindowMinutes: 60, // kısa süre penceresi
+  rapidCount: 2, // pencere içinde aynı cihaz/IP'den bu kadar kayıt
+} as const;
+
+type AbuseArgs = {
+  userId: string;
+  email: string | null;
+  visitorId: string | null;
+  ipHash: string | null;
+  blocked: boolean;
+};
+
+/**
+ * Ücretsiz kredi kötüye kullanımını değerlendirir; şüpheli ise tüm adminlere
+ * bildirim (notifications) kaydı düşer.
+ */
+export async function raiseAbuseAlert(
+  admin: Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"],
+  args: AbuseArgs,
+): Promise<{ flagged: boolean; reasons: string[]; severity: "low" | "high" }> {
+  const since = new Date(Date.now() - ABUSE_RULES.rapidWindowMinutes * 60_000).toISOString();
+  const reasons: string[] = [];
+
+  const uniqueUsers = (rows: { user_id: string | null }[] | null) =>
+    new Set((rows ?? []).map((r) => r.user_id).filter(Boolean) as string[]).size;
+
+  if (args.visitorId) {
+    const [{ data: all }, { data: recent }] = await Promise.all([
+      admin.from("free_credit_audit").select("user_id").eq("visitor_id", args.visitorId).limit(200),
+      admin
+        .from("free_credit_audit")
+        .select("user_id")
+        .eq("visitor_id", args.visitorId)
+        .gte("created_at", since)
+        .limit(200),
+    ]);
+    const accounts = uniqueUsers(all);
+    if (accounts >= ABUSE_RULES.accountsPerDevice) {
+      reasons.push(`Aynı cihazdan ${accounts} farklı hesap`);
+    }
+    if ((recent?.length ?? 0) >= ABUSE_RULES.rapidCount) {
+      reasons.push(`Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı cihaz)`);
+    }
+  }
+
+  if (args.ipHash) {
+    const [{ data: all }, { data: recent }] = await Promise.all([
+      admin.from("free_credit_audit").select("user_id").eq("ip_hash", args.ipHash).limit(200),
+      admin
+        .from("free_credit_audit")
+        .select("user_id")
+        .eq("ip_hash", args.ipHash)
+        .gte("created_at", since)
+        .limit(200),
+    ]);
+    const accounts = uniqueUsers(all);
+    if (accounts >= ABUSE_RULES.accountsPerIp) {
+      reasons.push(`Aynı IP'den ${accounts} farklı hesap`);
+    }
+    if ((recent?.length ?? 0) >= ABUSE_RULES.rapidCount) {
+      reasons.push(`Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı IP)`);
+    }
+  }
+
+  if (reasons.length === 0) return { flagged: false, reasons, severity: "low" };
+
+  const severity: "low" | "high" = reasons.length >= 2 || !args.blocked ? "high" : "low";
+
+  const { data: admins } = await admin.from("user_roles").select("user_id").eq("role", "admin");
+  const adminIds = [...new Set((admins ?? []).map((a) => a.user_id))];
+  if (adminIds.length === 0) return { flagged: true, reasons, severity };
+
+  const title = severity === "high" ? "Kritik: ücretsiz kredi kötüye kullanımı" : "Şüpheli ücretsiz kredi kaydı";
+  const body = `${args.email ?? args.userId} — ${reasons.join(" · ")}${args.blocked ? " (kredi engellendi)" : " (kredi verildi)"}`;
+
+  await admin.from("notifications").insert(
+    adminIds.map((id) => ({
+      user_id: id,
+      type: "free_credit_abuse",
+      title,
+      body,
+      data: {
+        severity,
+        reasons,
+        suspect_user_id: args.userId,
+        suspect_email: args.email,
+        visitor_id: args.visitorId,
+        ip_hash: args.ipHash,
+        blocked: args.blocked,
+      },
+    })),
+  );
+
+  return { flagged: true, reasons, severity };
+}
+
 
