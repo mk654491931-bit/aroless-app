@@ -334,7 +334,7 @@ export function CommandCenter() {
               </div>
 
               {/* score column */}
-              <div className="space-y-3">
+              <div className="w-full space-y-3 lg:w-64 lg:shrink-0">
                 <div className={cn(glass, "p-4 text-center")}>
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Final Hybrid Score</div>
                   <div
