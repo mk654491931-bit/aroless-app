@@ -284,7 +284,6 @@ function Dashboard() {
     if (platforms.length === 0) return toast.error(t("ui.select_platform"));
     if ((profileQ.data?.credits ?? 0) <= 0) { setShowPricing(true); return; }
     pushRecent(nicheValue);
-    setRestoredRun(null);
     setResultQuery("");
     if (engine !== "default") { hfGen.mutate({ engine }); return; }
     gen.mutate({
