@@ -26,10 +26,31 @@ export type CouncilSummary = {
   verdict: string;
   director_engine: string;
   executive_report: string;
-  teams: { team: "market" | "finance" | "marketing" | "operations" | "compliance" | "creative"; title: string; score: number; engine: string; summary: string }[];
+  teams: {
+    team: "market" | "finance" | "marketing" | "operations" | "compliance" | "creative";
+    title: string;
+    score: number;
+    engine: string;
+    summary: string;
+    /** Hakem modelin puanı ve motoru (14'lü konseyin 2. üyesi). */
+    review_score?: number;
+    reviewer_engine?: string;
+    review_note?: string;
+    confidence?: number;
+    weight?: number;
+  }[];
   action_plan: string[];
   risks: string[];
   cache_hit: boolean;
+  /** Bağımsız denetçi (14. üye). */
+  auditor_engine?: string;
+  auditor_score?: number;
+  auditor_note?: string;
+  /** Rapor güveni ve konsey içi fikir ayrılığı. */
+  confidence?: number;
+  disagreement?: number;
+  data_coverage?: number;
+  kill_criteria?: string[];
 };
 
 
