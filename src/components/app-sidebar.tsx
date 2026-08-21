@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { PricingModal } from "@/components/pricing-modal";
+import { requiredPlanFor } from "@/lib/plans";
 import {
   Package, Coins, Rocket, ShieldHalf, Newspaper,
   Handshake, FileSearch, ShieldQuestion, ClipboardList,
@@ -96,19 +97,21 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { locked, isPaid, isAdmin } = useEntitlements();
+  const { locked, isPaid, isAdmin, canUse, level } = useEntitlements();
   const [showPricing, setShowPricing] = useState(false);
 
-  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean) => {
-    if (locked) {
+  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean, groupId: string) => {
+    const need = requiredPlanFor(groupId);
+    const isLocked = locked || !canUse(groupId);
+    if (isLocked) {
       return (
-        <SidebarMenuButton tooltip={`${tooltip} — Locked`} isActive={false} onClick={() => setShowPricing(true)}>
+        <SidebarMenuButton tooltip={`${tooltip} — ${need.label} paketi gerekli`} isActive={false} onClick={() => setShowPricing(true)}>
           <item.icon className="h-4 w-4 text-muted-foreground/60" />
           {!iconOnly && (
             <span className="flex flex-1 items-center justify-between gap-2 text-xs text-muted-foreground/70">
               {tooltip}
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
-                <Lock className="h-2.5 w-2.5" /> Locked
+                <Lock className="h-2.5 w-2.5" /> {need.label}
               </span>
             </span>
           )}
@@ -130,7 +133,7 @@ export function AppSidebar() {
       <SidebarContent className="pt-4">
         {!collapsed && (isPaid || isAdmin) && (
           <div className="px-3 pb-1 text-[10px] text-emerald-300">
-            🔓 {isAdmin ? "Admin access — all features unlocked" : "All features unlocked"}
+            🔓 {isAdmin ? "Admin — tüm modüller açık" : level >= 3 ? "Business — tüm modüller açık" : level === 2 ? "Pro — 6 modül açık" : "Starter — 3 modül açık"}
           </div>
         )}
         {GROUPS.map((g) => (
@@ -149,6 +152,7 @@ export function AppSidebar() {
                       t(`nav.${g.key}`, { defaultValue: g.label }),
                       true,
                       pathname === g.items[0].url,
+                      g.id,
                     )}
                   </SidebarMenuItem>
                 ) : (
@@ -159,6 +163,7 @@ export function AppSidebar() {
                         t(`nav.${item.key}`, { defaultValue: item.title }),
                         false,
                         pathname === item.url,
+                        g.id,
                       )}
                     </SidebarMenuItem>
                   ))

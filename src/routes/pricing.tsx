@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Check, Sparkles, Zap, Coins, ArrowRight, ShieldCheck } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, ArrowRight, ShieldCheck, Lock } from "lucide-react";
+import { PLANS, MODULE_LEVEL } from "@/lib/plans";
 import { BrandLogo } from "@/components/brand-logo";
 import { useFxRates } from "@/lib/currency";
 
@@ -20,47 +21,26 @@ export const Route = createFileRoute("/pricing")({
 
 type Cur = "USD" | "TRY";
 
-const PLANS = [
-  {
-    name: "Free",
-    usd: 0,
-    icon: Sparkles,
-    badge: "Başlangıç",
-    features: ["Başlangıç kredisi", "Ürün Bulucu erişimi", "Akademi temel modüller", "Topluluk desteği"],
-    cta: "Ücretsiz başla",
-    highlight: false,
-  },
-  {
-    name: "Starter",
-    usd: 29,
-    icon: Sparkles,
-    badge: "Pro",
-    features: ["10 Ürün Bulucu kredisi / ay", "5 simülasyon kredisi / ay", "Tüm premium araçlar", "Reklam açıları & kitle analizi", "E-posta desteği"],
-    cta: "Starter'a geç",
-    highlight: false,
-  },
-  {
-    name: "Pro",
-    usd: 49,
-    icon: Zap,
-    badge: "Ultra",
-    features: ["20 Ürün Bulucu kredisi / ay", "10 simülasyon kredisi / ay", "Starter'daki her şey", "Öncelikli üretim kuyruğu", "Öncelikli destek"],
-    cta: "Pro'ya geç",
-    highlight: true,
-  },
-];
+const PLAN_ICON = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
-const PACKS = [
-  { credits: 5, usd: 9 },
-  { credits: 15, usd: 24 },
-  { credits: 40, usd: 55 },
+const MODULE_ROWS = [
+  { id: "library", label: "📚 Library · Dashboard & Karşılaştırma" },
+  { id: "sourcing", label: "📦 Sourcing & Factory Hub" },
+  { id: "news", label: "📰 E-Com News Explainer" },
+  { id: "finance", label: "💰 Financial & Cost Engine" },
+  { id: "growth", label: "🚀 Growth & Market AI" },
+  { id: "radar", label: "📡 Multi-Platform Trend Radar" },
+  { id: "compliance", label: "🛡️ Compliance & Legal Guard" },
+  { id: "council", label: "🧠 14'lü AI Konsey" },
+  { id: "growth_suite", label: "📈 Büyüme Suite" },
 ];
 
 const FAQ = [
   { q: "Kredi nedir?", a: "Her Ürün Bulucu araması veya derin analiz bir kredi harcar. Kalan kredini ayarlar sayfasındaki kullanım günlüğünden takip edebilirsin." },
   { q: "İstediğim zaman iptal edebilir miyim?", a: "Evet. Abonelik dönem sonuna kadar aktif kalır, otomatik yenileme durur." },
   { q: "TRY fiyatı nasıl hesaplanıyor?", a: "Tahsilat USD üzerinden yapılır; TRY tutarı güncel kur ile bilgilendirme amaçlı gösterilir." },
-  { q: "Krediler devrediyor mu?", a: "Aylık krediler dönem başında yenilenir. Tek seferlik kredi paketleri süresizdir." },
+  { q: "Krediler devrediyor mu?", a: "Aylık krediler dönem başında yenilenir; devretmez." },
+  { q: "Tek seferlik kredi satıyor musunuz?", a: "Hayır. Tek satış modelimiz Starter, Pro ve Business aylık paketleridir." },
 ];
 
 function PricingPage() {
@@ -90,9 +70,9 @@ function PricingPage() {
     "@type": "Product",
     name: "Aroless",
     description: "Yapay zekâ destekli kazandıran ürün bulucu ve e-ticaret araştırma platformu.",
-    offers: PLANS.filter((p) => p.usd > 0).map((p) => ({
+    offers: PLANS.map((p) => ({
       "@type": "Offer",
-      name: p.name,
+      name: p.label,
       price: p.usd,
       priceCurrency: "USD",
       category: "SaaS subscription",
@@ -135,15 +115,21 @@ function PricingPage() {
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {PLANS.map((p) => (
-            <div key={p.name} className={`glass rounded-2xl p-6 ${p.highlight ? "ring-2 ring-primary/50" : ""}`}>
+          {PLANS.map((p) => {
+            const Icon = PLAN_ICON[p.id];
+            return (
+            <div key={p.id} className={`glass rounded-2xl p-6 ${p.highlight ? "ring-2 ring-primary/50" : ""}`}>
               <div className="flex items-center justify-between">
-                <div className="inline-flex items-center gap-1.5 text-sm font-semibold"><p.icon size={16} className="text-[oklch(0.75_0.18_265)]" /> {p.name}</div>
+                <div className="inline-flex items-center gap-1.5 text-sm font-semibold"><Icon size={16} className="text-[oklch(0.75_0.18_265)]" /> {p.label}</div>
                 {p.highlight && <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-bold">En popüler</span>}
               </div>
               <div className="mt-4 text-3xl font-extrabold">
                 {price(p.usd)}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">/{yearly ? "yıl" : "ay"}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.credits} kredi / ay</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.moduleCount} modül grubu</span>
               </div>
               <ul className="mt-4 space-y-2 text-sm">
                 {p.features.map((f) => (
@@ -154,26 +140,39 @@ function PricingPage() {
                 to="/auth"
                 className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold ${p.highlight ? "bg-primary text-primary-foreground" : "border border-white/15 hover:bg-white/5"}`}
               >
-                {p.cta} <ArrowRight size={15} />
+                {p.label}'a geç <ArrowRight size={15} />
               </Link>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-12 glass rounded-2xl p-6">
-          <div className="flex items-center gap-2"><Coins size={18} className="text-[oklch(0.75_0.18_265)]" /><h2 className="font-semibold">Tek seferlik kredi paketleri</h2></div>
-          <p className="mt-1 text-sm text-muted-foreground">Abonelik istemiyorsan sadece ihtiyacın kadar kredi al. Süresi dolmaz.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {PACKS.map((pk) => (
-              <div key={pk.credits} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
-                <div className="text-2xl font-extrabold">{pk.credits}</div>
-                <div className="text-xs text-muted-foreground">kredi</div>
-                <div className="mt-2 text-sm font-semibold">{price(pk.usd)}</div>
-                <Link to="/auth" className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/10">
-                  Satın al
-                </Link>
-              </div>
-            ))}
+          <h2 className="font-semibold">Paket büyüdükçe açılan modüller</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Soldaki araç grupları paket seviyesine göre açılır.</p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="py-2">Modül grubu</th>
+                  {PLANS.map((p) => <th key={p.id} className="py-2 text-center">{p.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {MODULE_ROWS.map((row) => (
+                  <tr key={row.id} className="border-t border-white/10">
+                    <td className="py-2 pr-3 text-muted-foreground">{row.label}</td>
+                    {PLANS.map((p) => (
+                      <td key={p.id} className="py-2 text-center">
+                        {p.level >= (MODULE_LEVEL[row.id] ?? 1)
+                          ? <Check size={15} className="mx-auto text-emerald-400" />
+                          : <Lock size={13} className="mx-auto text-muted-foreground/50" />}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

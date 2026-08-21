@@ -4,14 +4,17 @@ import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/lemon.functions";
 import { validatePromoCode, getMyPromoCode } from "@/lib/promo.functions";
 import { useMoney } from "@/lib/currency";
-import { X, Check, Sparkles, Zap, Ticket, Loader2 } from "lucide-react";
+import { X, Check, Sparkles, Zap, Crown, Ticket, Loader2 } from "lucide-react";
+import { PLANS, type PlanId } from "@/lib/plans";
+
+const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
 export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const checkout = useServerFn(createCheckout);
   const validateFn = useServerFn(validatePromoCode);
   const myPromoFn = useServerFn(getMyPromoCode);
   const { currency, rate, fmt, isLive } = useMoney();
-  const [loading, setLoading] = useState<"Pro" | "Ultra" | null>(null);
+  const [loading, setLoading] = useState<PlanId | null>(null);
   const [promo, setPromo] = useState("");
   const [checking, setChecking] = useState(false);
   const [discount, setDiscount] = useState(0);
@@ -49,7 +52,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     } finally { setChecking(false); }
   };
 
-  const subscribe = async (plan: "Pro" | "Ultra") => {
+  const subscribe = async (plan: PlanId) => {
     setLoading(plan);
     try {
       const { url } = await checkout({ data: { plan } });
@@ -68,21 +71,6 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     } finally { setLoading(null); }
   };
 
-  const plans = [
-    {
-      name: "Pro" as const, price: 29, credits: 10, highlight: false,
-      label: "Starter",
-      icon: Sparkles,
-      features: ["10 Product Finder kredisi / ay", "5 simülasyon kredisi / ay", "Tüm premium araçlar kilitsiz", "Reklam açıları & kitle analizi", "E-posta desteği"],
-    },
-    {
-      name: "Ultra" as const, price: 49, credits: 20, highlight: true,
-      label: "Pro",
-      icon: Zap,
-      features: ["20 Product Finder kredisi / ay", "10 simülasyon kredisi / ay", "Starter'daki her şey", "Öncelikli üretim", "Öncelikli destek"],
-    },
-  ];
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -94,7 +82,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
           <h2 className="text-2xl md:text-3xl font-bold">Upgrade your <span className="text-gradient">edge</span></h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Daha fazla kredi, kilitsiz tüm araçlar. Eğitim ve simülatör her pakete dahildir.
+            Paket büyüdükçe soldaki modül grupları açılır. Eğitim ve simülatör her pakete dahildir.
           </p>
           <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
@@ -122,22 +110,22 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
             )}
           </div>
         </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          {plans.map((p) => {
-            const Icon = p.icon;
-            const launch = p.price * 0.5;
-            const final = launch * (1 - discount / 100);
+        <div className="grid gap-4 md:grid-cols-3">
+          {PLANS.map((p) => {
+            const Icon = ICONS[p.id];
+            const final = p.usd * (1 - discount / 100);
             return (
-              <div key={p.name} className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-gradient-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}>
+              <div key={p.id} className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-gradient-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}>
                 {p.highlight && <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] mb-2">Most popular</div>}
                 <div className="flex items-center gap-2 mb-1"><Icon size={18} className="text-[oklch(0.75_0.18_265)]" /><h3 className="text-lg font-bold">{p.label}</h3></div>
                 <div className="mb-1 flex items-baseline gap-2">
-                  <span className="text-lg text-muted-foreground line-through">${p.price}</span>
-                  <span className="text-4xl font-bold">${final.toFixed(discount > 0 ? 2 : 2)}</span>
+                  {discount > 0 && <span className="text-lg text-muted-foreground line-through">${p.usd}</span>}
+                  <span className="text-4xl font-bold">${final.toFixed(0)}</span>
                   <span className="text-sm text-muted-foreground">/ay</span>
                 </div>
-                <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">
-                  Lansmana özel · %50 indirim · 1 hafta geçerli
+                <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.credits} kredi / ay</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">{p.moduleCount} modül grubu</span>
                 </div>
                 {currency !== "USD" && (
                   <div className="mb-4 text-xs text-muted-foreground">≈ {fmt(final * rate, currency)} / ay · güncel kur ile</div>
@@ -146,9 +134,10 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 <ul className="space-y-2 mb-6">
                   {p.features.map((f) => (<li key={f} className="text-sm flex gap-2"><Check size={16} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" /><span>{f}</span></li>))}
                 </ul>
-                <button onClick={() => subscribe(p.name)} disabled={loading !== null}
+                <button onClick={() => subscribe(p.id)} disabled={loading !== null}
+
                   className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}>
-                  {loading === p.name
+                  {loading === p.id
                     ? "Ödeme sayfası açılıyor…"
                     : `Satın al — ${currency === "USD" ? `$${final.toFixed(2)}` : fmt(final * rate, currency)}/ay`}
                 </button>

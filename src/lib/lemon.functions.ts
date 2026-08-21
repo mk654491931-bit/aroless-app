@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const InputSchema = z.object({ plan: z.enum(["Pro", "Ultra"]) });
+const InputSchema = z.object({ plan: z.enum(["Starter", "Pro", "Business"]) });
 
 export const createCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -10,9 +10,10 @@ export const createCheckout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const apiKey = process.env.LEMONSQUEEZY_API_KEY;
     const storeId = process.env.LEMONSQUEEZY_STORE_ID;
-    const variantId = data.plan === "Pro"
-      ? process.env.LEMONSQUEEZY_PRO_VARIANT_ID
-      : process.env.LEMONSQUEEZY_ULTRA_VARIANT_ID;
+    const variantId =
+      data.plan === "Starter" ? process.env.LEMONSQUEEZY_STARTER_VARIANT_ID
+      : data.plan === "Pro" ? process.env.LEMONSQUEEZY_PRO_VARIANT_ID
+      : process.env.LEMONSQUEEZY_BUSINESS_VARIANT_ID;
     if (!apiKey || !storeId || !variantId) throw new Error("Lemon Squeezy not configured");
 
     // Get user email
