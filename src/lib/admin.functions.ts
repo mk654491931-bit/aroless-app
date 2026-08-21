@@ -142,3 +142,50 @@ export const listFreeCreditAudit = createServerFn({ method: "GET" })
       blocked: rows.filter((r) => !r.granted).length,
     };
   });
+
+export type AbuseAlertRow = {
+  id: string;
+  title: string;
+  body: string | null;
+  created_at: string;
+  read: boolean;
+  severity: "low" | "high";
+  reasons: string[];
+  suspect_email: string | null;
+  visitor_id: string | null;
+  ip_hash: string | null;
+  blocked: boolean;
+};
+
+/** Ücretsiz kredi kötüye kullanım uyarıları (yalnızca admin). */
+export const listAbuseAlerts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ rows: AbuseAlertRow[]; high: number }> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("notifications")
+      .select("id, title, body, data, read, created_at")
+      .eq("type", "free_credit_abuse")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw new Error(error.message);
+    const rows: AbuseAlertRow[] = (data ?? []).map((n) => {
+      const d = (n.data ?? {}) as Record<string, unknown>;
+      return {
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        created_at: n.created_at,
+        read: n.read,
+        severity: d["severity"] === "high" ? "high" : "low",
+        reasons: Array.isArray(d["reasons"]) ? (d["reasons"] as string[]) : [],
+        suspect_email: (d["suspect_email"] as string | null) ?? null,
+        visitor_id: (d["visitor_id"] as string | null) ?? null,
+        ip_hash: (d["ip_hash"] as string | null) ?? null,
+        blocked: !!d["blocked"],
+      };
+    });
+    return { rows, high: rows.filter((r) => r.severity === "high").length };
+  });
