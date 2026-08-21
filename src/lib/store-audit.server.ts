@@ -27,7 +27,7 @@ export async function fetchStorePage(url: string): Promise<{ html: string; statu
     const res = await fetch(url, {
       redirect: "follow",
       signal: controller.signal,
-      headers: { "user-agent": "Mozilla/5.0 (compatible; VeloraAudit/1.0)" },
+      headers: { "user-agent": "Mozilla/5.0 (compatible; ArolessAudit/1.0)" },
     });
     const html = (await res.text()).slice(0, 220000);
     return { html, status: res.status, ms: Date.now() - started };

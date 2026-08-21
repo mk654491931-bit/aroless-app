@@ -1,4 +1,4 @@
-# Velora
+# Aroless
 
 E-ticaret büyüme paneli: ürün bulucu, kazanan ürün radarı, ROI takibi, mağaza denetçisi, reklam kreatif stüdyosu ve eğitim simülatörü.
 

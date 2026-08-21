@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sparkles, TrendingUp, Zap, ShieldCheck, ArrowRight } from "lucide-react";
-import { VeloraMark } from "@/components/velora-mark";
+import { ArolessMark } from "@/components/velora-mark";
 
 const ROTATING = [
   "Kazanan ürünleri saniyeler içinde bulun.",
@@ -21,8 +21,8 @@ const STATS = [
   { v: "<25s", l: "arama süresi" },
 ];
 
-/** Giriş ekranındaki premium "VELORA" kapağı — ana sayfada da kullanılır. */
-export function VeloraCover({ className = "" }: { className?: string }) {
+/** Giriş ekranındaki premium "AROLESS" kapağı — ana sayfada da kullanılır. */
+export function ArolessCover({ className = "" }: { className?: string }) {
   const [rot, setRot] = useState(0);
 
   useEffect(() => {
@@ -63,8 +63,8 @@ export function VeloraCover({ className = "" }: { className?: string }) {
 
           <div className="mt-6 flex min-w-0 items-center gap-3 sm:gap-4">
             <span className="shrink-0">
-              <VeloraMark size={40} className="sm:hidden" />
-              <VeloraMark size={56} className="hidden sm:block" />
+              <ArolessMark size={40} className="sm:hidden" />
+              <ArolessMark size={56} className="hidden sm:block" />
             </span>
             <h1 className="relative min-w-0 flex-1 leading-none">
               <span aria-hidden className="velora-halo" />
@@ -74,9 +74,9 @@ export function VeloraCover({ className = "" }: { className?: string }) {
                   fontSize: "clamp(22px, 7vw, 46px)",
                   letterSpacing: "clamp(0.12em, 2.2vw, 0.32em)",
                 }}
-                aria-label="Velora"
+                aria-label="Aroless"
               >
-                {"VELORA".split("").map((ch, i) => (
+                {"AROLESS".split("").map((ch, i) => (
                   <span
                     key={`${ch}-${i}`}
                     aria-hidden

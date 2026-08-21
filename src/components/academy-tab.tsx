@@ -662,7 +662,7 @@ type Saved = {
 
 const XP_PER_TASK = 10;
 const XP_PER_QUIZ = 25;
-const LEVELS = ["Rookie", "Explorer", "Operator", "Merchant", "Strategist", "Velora Pro"];
+const LEVELS = ["Rookie", "Explorer", "Operator", "Merchant", "Strategist", "Aroless Pro"];
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 function levelFor(xp: number) {
@@ -778,7 +778,7 @@ export function AcademyTab() {
               <GraduationCap size={13} /> {DAYS.length} günlük interaktif program
             </div>
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Velora <span className="text-gradient">Academy</span>
+              Aroless <span className="text-gradient">Academy</span>
             </h1>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
               Her gün bir ders: yazılı anlatım, terimler, video, görevler, quiz ve kendi notların.
@@ -886,7 +886,7 @@ export function AcademyTab() {
             <div className="flex items-center gap-2 text-xs font-semibold"><MessageSquare size={13} /> Geri bildirim</div>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Ders önerin veya sorunun mu var?{" "}
-              <a href="mailto:mk65449191@gmail.com?subject=Velora%20Academy" className="font-semibold text-[var(--brand)] hover:underline">
+              <a href="mailto:mk65449191@gmail.com?subject=Aroless%20Academy" className="font-semibold text-[var(--brand)] hover:underline">
                 mk65449191@gmail.com
               </a>
             </p>

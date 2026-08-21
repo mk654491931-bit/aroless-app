@@ -1,8 +1,8 @@
 /**
- * Velora mark — bespoke animated sigil used instead of the generic robot/sparkle
+ * Aroless mark — bespoke animated sigil used instead of the generic robot/sparkle
  * "AI" icon. A rotating orbital ring, a breathing core and three neural nodes.
  */
-export function VeloraMark({ size = 22, className = "", animated = true }: { size?: number; className?: string; animated?: boolean }) {
+export function ArolessMark({ size = 22, className = "", animated = true }: { size?: number; className?: string; animated?: boolean }) {
   const id = `vm-${size}-${animated ? "a" : "s"}`;
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className} aria-hidden="true">

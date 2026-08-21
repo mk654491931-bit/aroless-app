@@ -17,9 +17,9 @@ export const Route = createFileRoute("/audit")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "AI Mağaza Denetçisi — Velora" },
+      { title: "AI Mağaza Denetçisi — Aroless" },
       { name: "description", content: "Mağaza adresini gir; güven sinyalleri, dönüşüm kırıcıları, hız ve hızlı kazanımlar için sağlık skorlu bir denetim raporu al." },
-      { property: "og:title", content: "AI Mağaza Denetçisi — Velora" },
+      { property: "og:title", content: "AI Mağaza Denetçisi — Aroless" },
       { property: "og:description", content: "Mağazanın dönüşüm kırıcılarını AI ile bul." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

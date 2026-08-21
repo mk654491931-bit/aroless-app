@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-/** Single AI endpoint powering all Velora tool cards. */
+/** Single AI endpoint powering all Aroless tool cards. */
 export const Route = createFileRoute("/api/public/tool")({
   server: {
     handlers: {

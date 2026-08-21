@@ -17,7 +17,7 @@ const STAGES = [
   { icon: TrendingUp, label: "Trend Ekibi veri topluyor…" },
   { icon: Coins, label: "Finans Ekibi maliyet hesaplıyor…" },
   { icon: Megaphone, label: "Pazarlama Ekibi reklam kancası üretiyor…" },
-  { icon: Gauge, label: "Müdür Velora Skorunu oluşturuyor…" },
+  { icon: Gauge, label: "Müdür Aroless Skorunu oluşturuyor…" },
 ];
 
 const TEAM_ICON = { market: TrendingUp, finance: Coins, marketing: Megaphone } as const;
@@ -53,7 +53,7 @@ function ScoreRing({ score }: { score: number }) {
         </div>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">Velora Score</div>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">Aroless Score</div>
         <div className="text-sm text-muted-foreground">Pazar · Finans · Pazarlama ortalaması</div>
       </div>
     </div>
@@ -287,14 +287,14 @@ function CouncilPage() {
 export const Route = createFileRoute("/council")({
   head: () => ({
     meta: [
-      { title: "7'li AI Konsey — Velora AI Ürün Analizi" },
+      { title: "7'li AI Konsey — Aroless AI Ürün Analizi" },
       {
         name: "description",
         content:
-          "Velora'nın 7 modelli AI konseyi: trend, finans ve pazarlama ekipleri canlı veri hatlarını analiz eder ve tek sayfalık icra raporu ile Velora Score üretir.",
+          "Aroless'nın 7 modelli AI konseyi: trend, finans ve pazarlama ekipleri canlı veri hatlarını analiz eder ve tek sayfalık icra raporu ile Aroless Score üretir.",
       },
-      { property: "og:title", content: "7'li AI Konsey — Velora AI" },
-      { property: "og:description", content: "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Velora Score." },
+      { property: "og:title", content: "7'li AI Konsey — Aroless AI" },
+      { property: "og:description", content: "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Aroless Score." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

@@ -11,9 +11,9 @@ export const Route = createFileRoute("/tools/compliance")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Compliance & Legal Guard — Velora" },
+      { title: "Compliance & Legal Guard — Aroless" },
       { name: "description", content: "Hijacker cease & desist generator, return mitigation inserts, HS code & tariff radar and lab test budgeting for sellers." },
-      { property: "og:title", content: "Compliance & Legal Guard — Velora" },
+      { property: "og:title", content: "Compliance & Legal Guard — Aroless" },
       { property: "og:description", content: "Protect your listing, your customs file and your certification budget." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

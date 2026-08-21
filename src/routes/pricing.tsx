@@ -7,9 +7,9 @@ import { useFxRates } from "@/lib/currency";
 export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
-      { title: "Velora Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri" },
-      { name: "description", content: "Velora paketleri: aylık kredi, sınırsız araç erişimi, simülatör ve akademi. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
-      { property: "og:title", content: "Velora Fiyatlandırma — Paketler ve Krediler" },
+      { title: "Aroless Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri" },
+      { name: "description", content: "Aroless paketleri: aylık kredi, sınırsız araç erişimi, simülatör ve akademi. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma." },
+      { property: "og:title", content: "Aroless Fiyatlandırma — Paketler ve Krediler" },
       { property: "og:description", content: "Aylık kredi paketleri, tek seferlik kredi alımı ve tüm premium araçlara erişim." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -88,7 +88,7 @@ function PricingPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: "Velora",
+    name: "Aroless",
     description: "Yapay zekâ destekli kazandıran ürün bulucu ve e-ticaret araştırma platformu.",
     offers: PLANS.filter((p) => p.usd > 0).map((p) => ({
       "@type": "Offer",

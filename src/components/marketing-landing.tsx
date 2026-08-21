@@ -21,7 +21,7 @@ const STEPS = [
 ];
 
 const FAQ = [
-  { q: "Velora ne yapar?", a: "E-ticaret satıcıları için kazandıran ürünleri bulur, ülke ve platform bazında kârlılığını hesaplar ve pazarlama materyallerini hazırlar." },
+  { q: "Aroless ne yapar?", a: "E-ticaret satıcıları için kazandıran ürünleri bulur, ülke ve platform bazında kârlılığını hesaplar ve pazarlama materyallerini hazırlar." },
   { q: "Ücretsiz deneyebilir miyim?", a: "Evet, kayıt olduğunda başlangıç kredin tanımlanır. Kredi bitince paketlerden birine geçebilirsin." },
   { q: "Veriler gerçek mi?", a: "Tahminler kaynaklarıyla birlikte gösterilir: doğrulanmış sinyaller ve tahmini sinyaller panelde ayrı ayrı listelenir." },
 ];
@@ -53,7 +53,7 @@ export function MarketingLanding() {
           Kazandıran ürünü <span className="text-gradient">tahminle değil</span>, veriyle bul
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground md:text-lg">
-          Velora; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
+          Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
           projeksiyonu çıkarır. Ürünü bulur, doğrular, satış materyalini hazırlar.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

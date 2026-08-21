@@ -18,7 +18,7 @@ export const Route = createFileRoute("/notifications")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Notifications — Velora" },
+      { title: "Notifications — Aroless" },
       { name: "description", content: "Your notifications and alert preferences." },
       { name: "robots", content: "noindex, nofollow" },
     ],

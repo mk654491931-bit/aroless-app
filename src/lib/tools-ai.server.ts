@@ -1,4 +1,4 @@
-// Server-only multi-provider AI router for the 19 Velora tools.
+// Server-only multi-provider AI router for the 19 Aroless tools.
 // Hybrid mode: several engines answer the same prompt in parallel and their
 // outputs are fused into one richer, cross-checked result.
 import { callGemini, callGroq, callLovableAI, extractJson, geminiKeyPool, isQuotaError } from "./ai.server";

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Admin Dashboard — Velora" },
+      { title: "Admin Dashboard — Aroless" },
       { name: "description", content: "Platform metrics, users, and payment history." },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -80,7 +80,7 @@ function AdminPage() {
               <div className="font-bold leading-tight flex items-center gap-2">
                 Admin Dashboard <Shield size={14} className="text-[oklch(0.75_0.18_265)]" />
               </div>
-              <div className="text-[10px] text-muted-foreground leading-tight">Velora · Platform Ops</div>
+              <div className="text-[10px] text-muted-foreground leading-tight">Aroless · Platform Ops</div>
             </div>
           </div>
           <Link to="/" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">

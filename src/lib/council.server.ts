@@ -1,5 +1,5 @@
 // ============================================================================
-// Velora — 7'li AI Konsey Mimarisi (server only, $0 API'ler)
+// Aroless — 7'li AI Konsey Mimarisi (server only, $0 API'ler)
 //
 //   Ekip 1 — Trend & Pazar     : Groq llama-3.3-70b   (yedek: Gemini Flash/Pro)
 //   Ekip 2 — Finans & Tedarik  : OpenRouter DeepSeek  (yedek: Groq DeepSeek-distill)
@@ -267,7 +267,7 @@ ${teams
       `- ${t.title} (${t.engine}, ağırlık %${t.weight}): ekip ${t.raw_score} → hakem ${t.review_score} → nihai ${t.score}/100 (güven ${t.confidence}) — ${t.summary}${t.review_note ? ` [hakem: ${t.review_note}]` : ""}`,
   )
   .join("\n")}
-VELORA SCORE (ağırlıklı): ${veloraScore}/100 | CANLI VERİ KAPSAMI: %${coverage}
+AROLESS SCORE (ağırlıklı): ${veloraScore}/100 | CANLI VERİ KAPSAMI: %${coverage}
 
 CANLI VERİ:
 ${block}
@@ -284,7 +284,7 @@ Return ONLY JSON:
  "alt_market": string (max 80 karakter: daha güçlü alternatif ülke + tek cümle gerekçe)}`;
   await stagger(6);
   const { engine, raw } = await withFallback([
-    { engine: "Velora Premium (Gemini 3.1 Pro / GPT-5.5)", run: () => callPremiumAI(prompt, 0.5) },
+    { engine: "Aroless Premium (Gemini 3.1 Pro / GPT-5.5)", run: () => callPremiumAI(prompt, 0.5) },
     { engine: "Gemini Pro (free)", run: () => callGemini(prompt, undefined, 0.5, false, ["gemini-1.5-pro", "gemini-flash-latest", "gemini-2.0-flash"]) },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.5) },
     { engine: "OpenRouter free", run: () => callOpenRouter(prompt, 0.5) },
@@ -349,7 +349,7 @@ async function build(query: string, country: string, category: string): Promise<
     };
   });
 
-  // Ağırlıklı Velora Score (pazar 40 / finans 35 / pazarlama 25).
+  // Ağırlıklı Aroless Score (pazar 40 / finans 35 / pazarlama 25).
   const weightSum = teams.reduce((s, t) => s + t.weight, 0) || 1;
   const velora = Math.round(teams.reduce((s, t) => s + t.score * t.weight, 0) / weightSum);
 

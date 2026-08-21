@@ -22,9 +22,9 @@ export const Route = createFileRoute("/studio")({
   validateSearch: (s: Record<string, unknown>) => ({ product: typeof s['product'] === "string" ? s['product'] : "" }),
   head: () => ({
     meta: [
-      { title: "Reklam Kreatif Stüdyosu — Velora" },
+      { title: "Reklam Kreatif Stüdyosu — Aroless" },
       { name: "description", content: "Ürünün için hook, UGC video senaryosu, reklam metinleri, görsel promptları ve A/B test planını tek ekranda üret." },
-      { property: "og:title", content: "Reklam Kreatif Stüdyosu — Velora" },
+      { property: "og:title", content: "Reklam Kreatif Stüdyosu — Aroless" },
       { property: "og:description", content: "Hook, UGC senaryo, reklam metni ve görsel promptu tek tıkla." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

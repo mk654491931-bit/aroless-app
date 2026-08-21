@@ -30,12 +30,12 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in — Velora" },
+      { title: "Sign in — Aroless" },
       {
         name: "description",
-        content: "Sign in to Velora to discover winning e-commerce products in seconds.",
+        content: "Sign in to Aroless to discover winning e-commerce products in seconds.",
       },
-      { property: "og:title", content: "Sign in — Velora" },
+      { property: "og:title", content: "Sign in — Aroless" },
       {
         property: "og:description",
         content: "AI-powered product research, trend radar and viral ad intelligence.",
@@ -381,16 +381,16 @@ function AuthPage() {
           <div className="mt-6 flex items-center gap-5">
             <img
               src={veloraV.url}
-              alt="Velora"
+              alt="Aroless"
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
             />
             <h1 className="relative leading-none">
               <span aria-hidden className="velora-halo" />
               <span
                 className="relative block text-[52px] font-extralight uppercase tracking-[0.34em]"
-                aria-label="Velora"
+                aria-label="Aroless"
               >
-                {"VELORA".split("").map((ch, i) => (
+                {"AROLESS".split("").map((ch, i) => (
                   <span
                     key={`${ch}-${i}`}
                     aria-hidden
@@ -478,9 +478,9 @@ function AuthPage() {
 
               <div className="relative">
                 <div className="flex items-center gap-2.5">
-                  <img src={veloraV.url} alt="Velora" className="h-9 w-9 object-contain" />
+                  <img src={veloraV.url} alt="Aroless" className="h-9 w-9 object-contain" />
                   <span className="text-base font-light uppercase tracking-[0.3em] text-foreground/95">
-                    Velora
+                    Aroless
                   </span>
                 </div>
 

@@ -10,7 +10,7 @@ import {
   Cpu,
   ShieldCheck,
 } from "lucide-react";
-import { VeloraMark } from "@/components/velora-mark";
+import { ArolessMark } from "@/components/velora-mark";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 const FEATURES = [
@@ -51,14 +51,14 @@ export function AuthShowcase() {
           className="animate-rise-in mt-6 flex w-full items-center justify-center gap-3 sm:mt-8 sm:gap-4"
           style={{ animationDelay: "80ms" }}
         >
-          <VeloraMark size={44} className="shrink-0 sm:hidden" />
-          <VeloraMark size={64} className="hidden shrink-0 sm:block" />
+          <ArolessMark size={44} className="shrink-0 sm:hidden" />
+          <ArolessMark size={64} className="hidden shrink-0 sm:block" />
           <h1
             className="min-w-0 font-extralight uppercase leading-none tracking-[0.18em] sm:tracking-[0.3em]"
             style={{ fontSize: "clamp(1.75rem,8vw,4.5rem)" }}
-            aria-label="Velora"
+            aria-label="Aroless"
           >
-            {"VELORA".split("").map((ch, i) => (
+            {"AROLESS".split("").map((ch, i) => (
               <span
                 key={`${ch}-${i}`}
                 aria-hidden
@@ -76,7 +76,7 @@ export function AuthShowcase() {
           style={{ animationDelay: "160ms" }}
         >
           Kazandıran ürünü <span className="text-gradient font-semibold">tahminle değil, veriyle</span> buluyoruz.
-          Velora; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
+          Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
           projeksiyonu çıkarır — ürünü bulur, doğrular, satış materyalini hazırlar.
         </p>
 

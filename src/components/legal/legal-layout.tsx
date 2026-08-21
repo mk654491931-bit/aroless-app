@@ -104,7 +104,7 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
         <main className="min-w-0 rounded-2xl border border-border bg-card/30 p-5 backdrop-blur md:p-8 print:border-0 print:bg-transparent print:p-0">
           <LegalDocBody doc={doc} />
           <p className="mt-10 border-t border-border pt-5 text-xs text-muted-foreground">
-            Bu belge bilgilendirme amaçlıdır ve Velora tarafından güncellenir. Sorularınız için mk65449191@gmail.com
+            Bu belge bilgilendirme amaçlıdır ve Aroless tarafından güncellenir. Sorularınız için mk65449191@gmail.com
           </p>
         </main>
       </div>

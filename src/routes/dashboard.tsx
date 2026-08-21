@@ -23,7 +23,7 @@ export const Route = createFileRoute("/dashboard")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Dashboard — Velora" },
+      { title: "Dashboard — Aroless" },
       { name: "description", content: "Your analytics, saved products, and recent product research activity." },
       { name: "robots", content: "noindex, nofollow" },
     ],

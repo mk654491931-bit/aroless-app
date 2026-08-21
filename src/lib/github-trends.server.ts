@@ -1,5 +1,5 @@
 // ============================================================================
-// GitHub public repository trend signal ingestion for Velora Product Finder
+// GitHub public repository trend signal ingestion for Aroless Product Finder
 //
 // Uses the unauthenticated GitHub Search API (60 req/hr) or an optional
 // GITHUB_PAT (5,000 req/hr).  Results are mapped into the same ScrapedTrend
@@ -29,7 +29,7 @@ export type GitHubSearchResult = {
 };
 
 const GITHUB_API = "https://api.github.com";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Velora/1.0";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Aroless/1.0";
 
 const cache = new Map<string, { at: number; data: GitHubRepoTrend[]; remaining: number; resetAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

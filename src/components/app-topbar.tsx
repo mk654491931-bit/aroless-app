@@ -40,7 +40,7 @@ export function AppTopbar() {
   const profileFn = useServerFn(getFullProfile);
   const profileQ = useQuery({ queryKey: ["profile", user?.id], queryFn: () => profileFn(), enabled: !!user });
   const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
-  const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Velora");
+  const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Aroless");
 
   return (
     <div className="topbar" data-no-translate>

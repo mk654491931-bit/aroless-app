@@ -6,7 +6,7 @@ import {
   Flag, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle, CalendarDays, Flame, RefreshCw,
   Rocket, Mail, Landmark, LineChart, Users, Swords, Headphones, FlaskConical, Gem, PieChart,
 } from "lucide-react";
-import { VeloraMark } from "@/components/velora-mark";
+import { ArolessMark } from "@/components/velora-mark";
 import { toast } from "sonner";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import {
@@ -27,7 +27,7 @@ import {
 type ViewId = "storefront" | "products" | "ads" | "analytics" | "market" | "ops" | "growth" | "missions" | "coach" | "log";
 
 const KEY = "omni-training-run-v1";
-const VeloraIcon = ({ size = 14 }: { size?: number }) => <VeloraMark size={size} />;
+const ArolessIcon = ({ size = 14 }: { size?: number }) => <ArolessMark size={size} />;
 
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -250,7 +250,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     { id: "ops", label: "Operasyon", icon: Headphones, badge: queue > 0 ? String(queue) : undefined },
     { id: "growth", label: "Büyüme", icon: Rocket, badge: (state.upgrades?.length ? String(state.upgrades.length) : undefined) },
     { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
-    { id: "coach", label: "Koç", icon: VeloraIcon, badge: alerts ? String(alerts) : undefined },
+    { id: "coach", label: "Koç", icon: ArolessIcon, badge: alerts ? String(alerts) : undefined },
     { id: "log", label: "Günlük", icon: ScrollText },
   ];
 
@@ -509,7 +509,7 @@ function CoachView({ tips, state, onGo }: {
   return (
     <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><VeloraMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Velora Koçu</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArolessMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Aroless Koçu</h3>
         {tips.map((t, i) => (
           <div key={i} className={`premium-card rounded-xl p-4 border ${
             t.kind === "warn" ? "border-rose-500/30 bg-rose-500/8"

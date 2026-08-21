@@ -19,9 +19,9 @@ export const Route = createFileRoute("/roi")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Kâr / ROI Takip Paneli — Velora" },
+      { title: "Kâr / ROI Takip Paneli — Aroless" },
       { name: "description", content: "Gerçek mağaza rakamlarını gir; ürün bazında net kâr, marj, ROAS, CAC ve başabaş ROAS'ı anlık hesapla." },
-      { property: "og:title", content: "Kâr / ROI Takip Paneli — Velora" },
+      { property: "og:title", content: "Kâr / ROI Takip Paneli — Aroless" },
       { property: "og:description", content: "Gerçek satış verinle ürün bazlı net kâr ve ROAS takibi." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
