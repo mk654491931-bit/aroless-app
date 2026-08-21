@@ -224,6 +224,51 @@ export type Database = {
         }
         Relationships: []
       }
+      free_credit_audit: {
+        Row: {
+          created_at: string
+          credits: number
+          email: string | null
+          granted: boolean
+          id: string
+          ip_hash: string | null
+          meta: Json
+          reason: string
+          sim_credits: number
+          source: string
+          user_id: string | null
+          visitor_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          credits?: number
+          email?: string | null
+          granted: boolean
+          id?: string
+          ip_hash?: string | null
+          meta?: Json
+          reason?: string
+          sim_credits?: number
+          source?: string
+          user_id?: string | null
+          visitor_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          email?: string | null
+          granted?: boolean
+          id?: string
+          ip_hash?: string | null
+          meta?: Json
+          reason?: string
+          sim_credits?: number
+          source?: string
+          user_id?: string | null
+          visitor_id?: string | null
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           created_at: string
