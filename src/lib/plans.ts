@@ -36,15 +36,15 @@ export const PLANS: Plan[] = [
     credits: 8,
     level: 1,
     highlight: false,
-    toolRuns: 60,
-    councilRuns: 3,
-    radarScans: 10,
+    toolRuns: 30,
+    councilRuns: 2,
+    radarScans: 6,
     features: [
       "Tüm 9 modül açık",
       "8 ürün bulucu kredisi / ay",
-      "60 AI araç çalıştırma / ay",
-      "3 AI Konsey oturumu / ay",
-      "10 trend radar taraması / ay",
+      "30 AI araç çalıştırma / ay",
+      "2 AI Konsey oturumu / ay",
+      "6 trend radar taraması / ay",
       "Akademi ve simülatör dahil",
     ],
   },
@@ -55,15 +55,15 @@ export const PLANS: Plan[] = [
     credits: 15,
     level: 2,
     highlight: true,
-    toolRuns: 200,
-    councilRuns: 12,
-    radarScans: 40,
+    toolRuns: 90,
+    councilRuns: 6,
+    radarScans: 20,
     features: [
       "Tüm 9 modül açık",
       "15 ürün bulucu kredisi / ay",
-      "200 AI araç çalıştırma / ay",
-      "12 AI Konsey oturumu / ay",
-      "40 trend radar taraması / ay",
+      "90 AI araç çalıştırma / ay",
+      "6 AI Konsey oturumu / ay",
+      "20 trend radar taraması / ay",
       "Öncelikli üretim kuyruğu",
     ],
   },
@@ -74,18 +74,19 @@ export const PLANS: Plan[] = [
     credits: 50,
     level: 3,
     highlight: false,
-    toolRuns: 1000,
-    councilRuns: 60,
-    radarScans: 200,
+    toolRuns: 300,
+    councilRuns: 20,
+    radarScans: 60,
     features: [
       "Tüm 9 modül açık",
       "50 ürün bulucu kredisi / ay",
-      "1000 AI araç çalıştırma / ay",
-      "60 AI Konsey oturumu / ay",
-      "200 trend radar taraması / ay",
+      "300 AI araç çalıştırma / ay",
+      "20 AI Konsey oturumu / ay",
+      "60 trend radar taraması / ay",
       "Öncelikli destek",
     ],
   },
+
 ];
 
 export const PLAN_BY_ID: Record<PlanId, Plan> = {
@@ -125,7 +126,7 @@ export function planForLevel(level: number): Plan {
 
 /** Aylık kullanım kotaları; ücretsiz hesap için küçük bir deneme kotası. */
 export function quotaFor(level: 0 | 1 | 2 | 3): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans"> {
-  if (level === 0) return { credits: 1, toolRuns: 5, councilRuns: 0, radarScans: 1 };
+  if (level === 0) return { credits: 1, toolRuns: 3, councilRuns: 0, radarScans: 1 };
   const p = planForLevel(level);
   return { credits: p.credits, toolRuns: p.toolRuns, councilRuns: p.councilRuns, radarScans: p.radarScans };
 }
