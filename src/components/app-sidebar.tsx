@@ -111,6 +111,14 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-white/10">
       <SidebarContent className="pt-4">
+        {!collapsed && !isPaid && !isAdmin && (
+          <button
+            onClick={() => setShowPricing(true)}
+            className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
+          >
+            Tüm modüller açık · aylık kullanım için paket seç
+          </button>
+        )}
         {!collapsed && (isPaid || isAdmin) && (
           <div className="px-3 pb-1 text-[10px] text-emerald-300">
             🔓 Tüm modüller açık{isAdmin ? " · Admin" : ` · ${quota.toolRuns} araç çalıştırma / ay`}
