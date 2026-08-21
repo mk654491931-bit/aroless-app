@@ -285,7 +285,7 @@ export function CommandCenter() {
             <div className="flex flex-col gap-4 p-4 lg:flex-row">
               {/* agents — two 7-agent columns side by side */}
               <div className="min-w-0 flex-1">
-                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:grid-rows-7 lg:max-h-[calc(100vh-220px)]">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {agents.map((a, i) => {
                     const st = statusOf(i, a);
                     const Icon = AGENT_META[a.agent_id].icon;
