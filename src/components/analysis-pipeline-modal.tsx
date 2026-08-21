@@ -10,6 +10,13 @@ const COUNCIL_AGENTS = [
   { name: "Competitor Intel", task: "Aktif Shopify/Amazon mağaza doygunluğu denetleniyor.", base: 79 },
   { name: "UX Specialist", task: "Müşteri yorum duygu skorları analiz ediliyor.", base: 86 },
   { name: "Supply Chain Agent", task: "Tedarikçi stok istikrarı & teslim SLA doğrulanıyor.", base: 83 },
+  { name: "Pricing Strategist", task: "Markup merdiveni & fiyat esnekliği test ediliyor.", base: 85 },
+  { name: "Logistics Cost Agent", task: "Navlun/ciro oranı ve 3PL hat maliyetleri modelleniyor.", base: 81 },
+  { name: "Compliance Officer", task: "Sertifika bariyerleri (CE / FDA / SDS) ve gümrük kapıları taranıyor.", base: 82 },
+  { name: "Retention & LTV Analyst", task: "Tekrar satın alma oranı & LTV/CAC geri kazanımı hesaplanıyor.", base: 80 },
+  { name: "Creative Director", task: "Kanca gücü, UGC açıları ve 3 saniye tutma oranı puanlanıyor.", base: 86 },
+  { name: "Channel Fit Agent", task: "Pazar yeri komisyonu ile rekabet yoğunluğu eşleştiriliyor.", base: 84 },
+  { name: "Independent Data Auditor", task: "Tüm konsey girdilerinin kanıt kapsamı denetleniyor.", base: 88 },
 ];
 
 
