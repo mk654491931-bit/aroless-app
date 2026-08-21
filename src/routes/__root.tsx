@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
@@ -110,13 +110,32 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const chromeless = pathname.startsWith("/auth");
+  const [lang, setLang] = useState<string>("en");
   useEffect(() => {
     initI18n();
+    setLang(i18n.language ?? "en");
     setAutoLanguage(i18n.language);
-    const onLang = (lng: string) => { setAutoLanguage(lng); };
+    // Dil değişince: DOM sözlüğünü değiştir, React ağacını tazele ve
+    // AI/sunucu kaynaklı içerikleri yeni dilde yeniden çek.
+    const onLang = (lng: string) => {
+      setAutoLanguage(lng);
+      setLang(lng);
+      queryClient.invalidateQueries();
+    };
     i18n.on("languageChanged", onLang);
-    return () => { i18n.off("languageChanged", onLang); };
-  }, []);
+    // Diğer sekmelerde yapılan dil değişikliğini de anında uygula.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "i18nextLng" && e.newValue && e.newValue !== i18n.language) {
+        i18n.changeLanguage(e.newValue);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      i18n.off("languageChanged", onLang);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [queryClient]);
+
   // Davet linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır.
   useEffect(() => {
     try {
@@ -144,7 +163,7 @@ function RootComponent() {
             <PaletteToggle />
             <ThemeToggle />
           </div>
-          <div key={pathname} className="page-fade"><Outlet /></div>
+          <div key={`${pathname}|${lang}`} className="page-fade"><Outlet /></div>
         </>
 
       ) : (
@@ -159,7 +178,7 @@ function RootComponent() {
                   <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-[var(--surface)]/90 backdrop-blur hover:bg-white/10" />
                 </>
               )}
-              <div key={pathname} className="page-fade"><Outlet /></div>
+              <div key={`${pathname}|${lang}`} className="page-fade"><Outlet /></div>
               <SiteFooter />
             </div>
           </div>
