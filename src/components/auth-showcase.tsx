@@ -75,10 +75,14 @@ export function AuthShowcase() {
           className="animate-rise-in mx-auto mt-6 max-w-2xl text-balance text-sm text-muted-foreground sm:mt-7 sm:text-base md:text-xl"
           style={{ animationDelay: "160ms" }}
         >
-          Kazandıran ürünü <span className="text-gradient font-semibold">tahminle değil, veriyle</span> buluyoruz.
-          Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr
-          projeksiyonu çıkarır — ürünü bulur, doğrular, satış materyalini hazırlar.
+          <span className="text-gradient block font-semibold">
+            Kazandıran ürünü tahminle değil, veriyle buluyoruz.
+          </span>
+          <span className="mt-2 block">
+            Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr projeksiyonu çıkarır — ürünü bulur, doğrular, satış materyalini hazırlar.
+          </span>
         </p>
+
 
         <div
           className="animate-rise-in mt-8 grid w-full max-w-3xl grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4"
