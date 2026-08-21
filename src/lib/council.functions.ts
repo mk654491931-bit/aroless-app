@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 type Input = { query: string; country?: string; category?: string; lang?: string };
 
 /**
- * 7'li AI Konsey çalıştırıcısı.
+ * 14'lü AI Konsey çalıştırıcısı.
  * - Aynı sorgu son 24 saatte yapıldıysa önbellekten döner ve KREDİ HARCAMAZ.
  * - Yeni sorguda 1 arama kredisi düşer, ardından konsey çalışır.
  */

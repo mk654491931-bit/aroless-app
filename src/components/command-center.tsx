@@ -28,6 +28,13 @@ const AGENT_META: Record<AgentId, { icon: typeof BarChart3; line: string; source
   competitor_intel: { icon: Radar, line: "Counting active stores running paid ads for >14 days…", source: "Shopify storefront crawl · Amazon BSR" },
   ux_specialist: { icon: Eye, line: "Bucketing review sentiment: material, sizing, shipping delays…", source: "Review corpus · return-reason clusters" },
   supply_chain: { icon: Boxes, line: "Verifying stock stability, lead times & on-time delivery SLA…", source: "Supplier stock API · lane transit history" },
+  pricing_strategist: { icon: Gauge, line: "Testing markup ladder & price elasticity against landed cost…", source: "Marketplace price bands · landed-cost model" },
+  logistics_cost: { icon: Boxes, line: "Modelling freight share of revenue & 3PL lane costs…", source: "3PL rate cards · lane transit history" },
+  compliance_officer: { icon: ShieldAlert, line: "Checking certification barriers (CE / FDA / SDS) & customs gates…", source: "Customs tariff tables · marketplace policy" },
+  retention_analyst: { icon: Activity, line: "Estimating repeat-purchase rate & LTV vs. CAC recovery…", source: "Cohort benchmarks · review corpus" },
+  creative_director: { icon: Sparkles, line: "Scoring hook strength, UGC angles & 3-second hold rate…", source: "TikTok Creative Center · Meta Ad Library" },
+  channel_fit: { icon: ScanLine, line: "Matching marketplace fee structure against competition density…", source: "Platform fee schedules · storefront crawl" },
+  data_auditor: { icon: Terminal, line: "Auditing evidence coverage across every council input…", source: "Live signal pipeline · source registry" },
 };
 
 type Status = "processing" | "done" | "warning";
@@ -135,7 +142,7 @@ export function CommandCenter() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dual-Engine Command Center</h1>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            Product Finger stream + 7-Agent AI Council, weighted 30 / 70.
+            Product Finger stream + 14-Agent AI Council, weighted 30 / 70.
             {liveState && (
               <span className="inline-flex items-center gap-1 text-[11px] text-[--warning]">
                 <Loader2 className={cn("size-3", feed.isLoading && "animate-spin")} /> {liveState}
@@ -267,7 +274,7 @@ export function CommandCenter() {
         <section className={cn(glass, "lg:col-span-7 min-w-0 overflow-hidden")}>
           <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <Sparkles className="size-4 text-[--ai]" />
-            <h2 className="text-sm font-semibold text-[--ai]">7-Agent AI Council · Live Execution Hub</h2>
+            <h2 className="text-sm font-semibold text-[--ai]">14-Agent AI Council · Live Execution Hub</h2>
             <Badge variant="outline" className="border-[--ai]/40 text-[10px] text-[--ai]">70% weight</Badge>
             <span className="ml-auto truncate text-xs text-muted-foreground">
               {selected ? `Target: ${selected.name}` : "No target"}
