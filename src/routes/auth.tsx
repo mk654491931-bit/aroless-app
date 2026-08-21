@@ -314,18 +314,30 @@ function AuthPage() {
 
   const google = async () => {
     setBusy("google");
-    // Portable OAuth: works on any host (local, Codespaces, prod) as long as the
-    // Google provider is enabled in Supabase Auth and this origin is whitelisted.
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { prompt: "select_account" },
-      },
-    });
-    if (error) {
-      toast.error(error.message);
-      setBusy(null);
+    try {
+      // Managed Google sign-in (iframe-safe). Falls back to direct Supabase
+      // OAuth when the app runs outside the managed host with its own
+      // Google client id/secret configured.
+      const { lovable } = await import("@/integrations/lovable");
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result?.error) throw result.error;
+      if (!("redirected" in (result ?? {})) || !result?.redirected) {
+        nav({ to: "/" });
+      }
+    } catch (err) {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) {
+        toast.error(err instanceof Error ? err.message : error.message);
+        setBusy(null);
+      }
     }
   };
 
