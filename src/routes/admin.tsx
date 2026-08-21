@@ -191,7 +191,7 @@ function KpiCard({ icon: Icon, label, value, sub, loading }: { icon: any; label:
 }
 
 function TierBadge({ tier }: { tier: string }) {
-  const isPaid = tier === "Pro" || tier === "Ultra";
+  const isPaid = tier === "Starter" || tier === "Pro" || tier === "Business";
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${isPaid ? "border-[oklch(0.68_0.20_265)]/50 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground"}`}>
       {tier}
