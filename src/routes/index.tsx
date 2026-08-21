@@ -1255,10 +1255,39 @@ function ProductCard({
           <div className="text-muted-foreground">{p.council.verdict}</div>
           <div className="flex flex-wrap gap-1.5">
             {p.council.teams.map((t) => (
-              <span key={t.team} className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5" title={`${t.engine} — ${t.summary}`}>
+              <span
+                key={t.team}
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+                title={`${t.engine}${t.reviewer_engine ? ` + hakem ${t.reviewer_engine}` : ""} — ${t.summary}${t.review_note ? ` | Hakem: ${t.review_note}` : ""}`}
+              >
                 {t.title}: <b>{t.score}</b>
+                {typeof t.review_score === "number" && (
+                  <span className="text-muted-foreground"> (hakem {t.review_score})</span>
+                )}
               </span>
             ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+              12 uzman + Müdür ({p.council.director_engine})
+            </span>
+            {typeof p.council.auditor_score === "number" && (
+              <span
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+                title={p.council.auditor_note ?? ""}
+              >
+                Denetçi {p.council.auditor_engine ?? "AI"}: <b className="text-foreground">{p.council.auditor_score}</b>
+              </span>
+            )}
+            {typeof p.council.confidence === "number" && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Güven %{p.council.confidence}</span>
+            )}
+            {typeof p.council.disagreement === "number" && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Fikir ayrılığı {p.council.disagreement}</span>
+            )}
+            {typeof p.council.data_coverage === "number" && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Veri %{p.council.data_coverage}</span>
+            )}
           </div>
           {p.council.action_plan.length > 0 && (
             <ul className="text-muted-foreground space-y-0.5">
