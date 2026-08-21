@@ -1,13 +1,20 @@
 // ============================================================================
-// Aroless — 7'li AI Konsey Mimarisi (server only, $0 API'ler)
+// Aroless — 14'lü AI Konsey Mimarisi (server only)
 //
-//   Ekip 1 — Trend & Pazar     : Groq llama-3.3-70b   (yedek: Gemini Flash/Pro)
-//   Ekip 2 — Finans & Tedarik  : OpenRouter DeepSeek  (yedek: Groq DeepSeek-distill)
-//   Ekip 3 — Pazarlama & Kanca : Hugging Face         (yedek: OpenRouter free)
-//   7. AI  — Müdür / Sentez    : Gemini Pro           (yedek: Groq llama-3.3)
+//   6 uzman ekip × 2 model (1 üretici + 1 hakem) = 12 üye
+//   + 1 Müdür / Sentez Motoru
+//   + 1 Bağımsız Denetçi / Final Auditor
+//   = 14 AI çağrısı
 //
-// Her ekipte bir üretici + bir hakem model çalışır (6 üye) + müdür = 7 çağrı.
-// Rate-limit koruması: staggered execution (150-200 ms), otomatik fallback,
+// Ekipler:
+//   1. Trend & Pazar       (Groq / Gemini)
+//   2. Finans & Tedarik    (OpenRouter / Groq)
+//   3. Pazarlama & Kanca   (Hugging Face / OpenRouter)
+//   4. Operasyon & Lojistik (Groq / Gemini)
+//   5. Uyum & Risk         (OpenRouter / Gemini)
+//   6. Yaratıcı & Viral    (Hugging Face / Groq)
+//
+// Rate-limit koruması: staggered execution (120-200 ms), otomatik fallback,
 // ve 24 saatlik smart cache.
 // ============================================================================
 import { callGemini, callGroq, callLovableAI, callPremiumAI, extractJson } from "./ai.server";
@@ -16,8 +23,18 @@ import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
 
+export const COUNCIL_TEAMS = [
+  "market",
+  "finance",
+  "marketing",
+  "operations",
+  "compliance",
+  "creative",
+] as const;
+export type CouncilTeam = (typeof COUNCIL_TEAMS)[number];
+
 export type TeamReport = {
-  team: "market" | "finance" | "marketing";
+  team: CouncilTeam;
   title: string;
   score: number;
   engine: string;
@@ -45,6 +62,9 @@ export type CouncilReport = {
   executive_report: string;
   teams: TeamReport[];
   director_engine: string;
+  auditor_engine: string;
+  auditor_score: number;
+  auditor_note: string;
   action_plan: string[];
   risks: string[];
   signals: PipelineSignals;
@@ -64,13 +84,19 @@ export type CouncilReport = {
   alt_market: string;
 };
 
-/** Konsey ağırlıkları — pazar sinyali finans ve pazarlamadan baskın. */
-const TEAM_WEIGHTS: Record<TeamReport["team"], number> = { market: 40, finance: 35, marketing: 25 };
-
+/** Konsey ağırlıkları — toplam 100. */
+const TEAM_WEIGHTS: Record<CouncilTeam, number> = {
+  market: 30,
+  finance: 25,
+  marketing: 20,
+  operations: 10,
+  compliance: 8,
+  creative: 7,
+};
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Staggered execution: 150-200 ms micro-delay so 7 models never burst. */
-const stagger = (slot: number) => sleep(150 + slot * 25 + Math.floor(Math.random() * 50));
+/** Staggered execution: 120-200 ms micro-delay so 14 models never burst. */
+const stagger = (slot: number) => sleep(120 + slot * 20 + Math.floor(Math.random() * 60));
 
 function clamp100(n: unknown, fb = 55): number {
   const v = Number(n);
@@ -100,8 +126,6 @@ async function withFallback(runners: Runner[], prompt?: string) {
   return { engine: "unavailable", raw: {} as Record<string, unknown> };
 }
 
-
-
 const SHAPE = `Return ONLY minified JSON:
 {"score": number 1-100,
  "summary": string (2-3 Turkish sentences),
@@ -122,7 +146,7 @@ function teamPrompt(role: string, task: string, block: string): string {
 }
 
 function baseTeam(
-  team: TeamReport["team"],
+  team: CouncilTeam,
   title: string,
   engine: string,
   raw: Record<string, unknown>,
@@ -148,7 +172,6 @@ function baseTeam(
   };
 }
 
-/** Ekip 1 — Trend & Pazar Analizi (Groq primary, Gemini fallback). */
 async function runMarketTeam(block: string): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 1 — TREND & PAZAR ANALİZİ ekibisin.",
@@ -164,7 +187,6 @@ async function runMarketTeam(block: string): Promise<TeamReport> {
   return baseTeam("market", "Trend & Pazar Analizi", engine, raw);
 }
 
-/** Ekip 2 — Finans & Tedarik (OpenRouter DeepSeek primary, Groq fallback). */
 async function runFinanceTeam(block: string): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 2 — FİNANS & TEDARİK ekibisin.",
@@ -181,7 +203,6 @@ async function runFinanceTeam(block: string): Promise<TeamReport> {
   return baseTeam("finance", "Finans & Tedarik", engine, raw);
 }
 
-/** Ekip 3 — Pazarlama & Reklam Kancası (Hugging Face primary, OpenRouter fallback). */
 async function runMarketingTeam(block: string): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 3 — PAZARLAMA & REKLAM KANCASI ekibisin.",
@@ -198,7 +219,54 @@ async function runMarketingTeam(block: string): Promise<TeamReport> {
   return baseTeam("marketing", "Pazarlama & Reklam Kancası", engine, raw);
 }
 
-/** Peer-review pass: her ekibin çıktısını farklı bir motor denetler (üye 4-6). */
+async function runOperationsTeam(block: string): Promise<TeamReport> {
+  const prompt = teamPrompt(
+    "Sen EKİP 4 — OPERASYON & LOJİSTİK ekibisin.",
+    "Teslimat süresi, envanter yönetimi, 3PL/depolama, iade oranı, kırılganlık ve kargo maliyetini değerlendir. Puan = operasyonel ölçeklenebilirlik (1-100).",
+    block,
+  );
+  await stagger(3);
+  const { engine, raw } = await withFallback([
+    { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
+    { engine: "Gemini Flash", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
+    { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
+  ]);
+  return baseTeam("operations", "Operasyon & Lojistik", engine, raw);
+}
+
+async function runComplianceTeam(block: string): Promise<TeamReport> {
+  const prompt = teamPrompt(
+    "Sen EKİP 5 — UYUM & RİSK ekibisin.",
+    "Fikri mülkiyet, sertifikalar (CE/FCC/RoHS), platform politikaları, ithalat yasakları, vergi/vergisi ve yasal riskleri incele. Puan = risk-adjusted uygunluk (1-100).",
+    block,
+  );
+  await stagger(4);
+  const { engine, raw } = await withFallback([
+    { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
+    { engine: "Gemini Flash", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
+    { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
+  ]);
+  return baseTeam("compliance", "Uyum & Risk", engine, raw);
+}
+
+async function runCreativeTeam(block: string): Promise<TeamReport> {
+  const prompt = teamPrompt(
+    "Sen EKİP 6 — YARATICI & VİRAL İÇERİK ekibisin.",
+    "Ürünün viral kancasını, TikTok/Reels/Shorts açılarını, hashtag potansiyelini, influencer uygunluğunu ve kreatif farklılaşmasını değerlendir. Puan = viral / kreatif potansiyel (1-100).",
+    block,
+  );
+  await stagger(5);
+  const { engine, raw } = await withFallback([
+    { engine: "Hugging Face Mistral/Qwen", run: () => callHuggingFace(prompt, "qwen", { temperature: 0.7 }) },
+    { engine: "OpenRouter free Llama/Qwen", run: () => callOpenRouter(prompt, 0.65) },
+    { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.65) },
+    { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.65) },
+  ]);
+  return baseTeam("creative", "Yaratıcı & Viral İçerik", engine, raw);
+}
+
 async function reviewTeam(
   team: TeamReport,
   block: string,
@@ -214,21 +282,24 @@ ${block}
 
 Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${langDirective()}`;
   await stagger(slot);
-  const runners: Runner[] =
+  const primaryEngine =
     team.team === "market"
-      ? [
-          { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
-          { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) },
-        ]
+      ? { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) }
       : team.team === "finance"
-        ? [
-            { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) },
-            { engine: "Hakem: OpenRouter", run: () => callOpenRouter(prompt, 0.2) },
-          ]
-        : [
-            { engine: "Hakem: OpenRouter", run: () => callOpenRouter(prompt, 0.2) },
-            { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) },
-          ];
+        ? { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) }
+        : team.team === "marketing"
+          ? { engine: "Hakem: OpenRouter", run: () => callOpenRouter(prompt, 0.2) }
+          : team.team === "operations"
+            ? { engine: "Hakem: OpenRouter", run: () => callOpenRouter(prompt, 0.2) }
+            : team.team === "compliance"
+              ? { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) }
+              : { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) };
+  const runners: Runner[] = [
+    primaryEngine,
+    team.team === "creative" || team.team === "marketing"
+      ? { engine: "Hakem: Hugging Face", run: () => callHuggingFace(prompt, "qwen", { temperature: 0.2 }) }
+      : { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+  ];
   const { engine, raw } = await withFallback(runners, prompt);
   const s = Number(raw["score"]);
   return {
@@ -238,8 +309,6 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${
   };
 }
 
-
-/** 7. AI — Müdür / Sentezleme Motoru. */
 async function runDirector(
   query: string,
   country: string,
@@ -258,7 +327,7 @@ async function runDirector(
   alt: string;
 }> {
   const prompt = `Sen 7. YAPAY ZEKA — MÜDÜR / SENTEZLEME MOTORU'sun.
-Üç ekibin raporunu ve hakem düzeltmelerini birleştirip tek sayfalık temiz bir "İCRA RAPORU" yaz.
+Altı uzman ekibin raporunu ve hakem düzeltmelerini birleştirip tek sayfalık temiz bir "İCRA RAPORU" yaz.
 
 ÜRÜN/NİŞ: ${query} | HEDEF ÜLKE: ${country}
 ${teams
@@ -282,7 +351,7 @@ Return ONLY JSON:
  "kill_criteria": [string] (3 ölçülebilir durdurma kriteri, örn. "CPA > 25$ ise durdur"),
  "opportunity_window": string (max 40 karakter, örn. "6-8 hafta"),
  "alt_market": string (max 80 karakter: daha güçlü alternatif ülke + tek cümle gerekçe)}`;
-  await stagger(6);
+  await stagger(12);
   const { engine, raw } = await withFallback([
     { engine: "Aroless Premium (Gemini 3.1 Pro / GPT-5.5)", run: () => callPremiumAI(prompt, 0.5) },
     { engine: "Gemini Pro (free)", run: () => callGemini(prompt, undefined, 0.5, false, ["gemini-1.5-pro", "gemini-flash-latest", "gemini-2.0-flash"]) },
@@ -303,32 +372,71 @@ Return ONLY JSON:
   };
 }
 
+async function runAuditor(
+  query: string,
+  country: string,
+  teams: TeamReport[],
+  directorVerdict: string,
+  veloraScore: number,
+  coverage: number,
+): Promise<{ engine: string; score: number; note: string }> {
+  const prompt = `Sen 14. YAPAY ZEKA — BAĞIMSIZ DENETÇİ'sin. Müdürün kararını ve altı ekibin puanlarını eleştirel gözle teyit et.
+Eğer ekipler arası fikir ayrılığı yüksekse, canlı veri kapsamı düşükse veya müdürün puanı hakem notlarıyla çelişiyorsa, puanı aşağı çek.
+
+ÜRÜN/NİŞ: ${query} | HEDEF ÜLKE: ${country}
+${teams.map((t) => `- ${t.title}: ${t.score}/100 (güven ${t.confidence}) [${t.engine}]`).join("\n")}
+MÜDÜR KARARI: ${directorVerdict}
+AROLESS SCORE (müdür): ${veloraScore}/100 | CANLI VERİ KAPSAMI: %${coverage}
+
+Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, neden düzelttiğin veya onayladığın)}${langDirective()}`;
+  await stagger(13);
+  const { engine, raw } = await withFallback([
+    { engine: "Gemini Pro (auditor)", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-1.5-pro", "gemini-flash-latest"]) },
+    { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.4) },
+    { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.4) },
+    { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
+  ]);
+  const s = clamp100(raw["score"], veloraScore);
+  return {
+    engine,
+    score: s,
+    note: String(raw["note"] ?? "").slice(0, 200),
+  };
+}
+
 async function build(query: string, country: string, category: string): Promise<CouncilReport> {
   const { data: signals } = await collectSignals(query, country, category);
   const block = signalsBlock(signals);
 
-  // Canlı veri kapsamı: aktif hatların oranı.
   const total = signals.sources.length || 1;
   const active = signals.sources.filter((s) => s.status === "active" && s.items > 0).length;
   const coverage = Math.round((active / total) * 100);
 
-  // Ekipler sıralı-asenkron: her biri 150-200 ms arayla tetiklenir.
-  const [market, finance, marketing] = await Promise.all([
+  // 6 üretici ekip paralel başlar.
+  const [market, finance, marketing, operations, compliance, creative] = await Promise.all([
     runMarketTeam(block),
     runFinanceTeam(block),
     runMarketingTeam(block),
+    runOperationsTeam(block),
+    runComplianceTeam(block),
+    runCreativeTeam(block),
   ]);
 
+  const rawTeams = [market, finance, marketing, operations, compliance, creative];
+
+  // 6 hakem ekip, slot 6-11.
   const reviewed = await Promise.all([
-    reviewTeam(market, block, 3),
-    reviewTeam(finance, block, 4),
-    reviewTeam(marketing, block, 5),
+    reviewTeam(market, block, 6),
+    reviewTeam(finance, block, 7),
+    reviewTeam(marketing, block, 8),
+    reviewTeam(operations, block, 9),
+    reviewTeam(compliance, block, 10),
+    reviewTeam(creative, block, 11),
   ]);
 
-  const teams: TeamReport[] = [market, finance, marketing].map((t, i) => {
+  const teams: TeamReport[] = rawTeams.map((t, i) => {
     const rev = reviewed[i];
     const reviewScore = rev?.score ?? t.raw_score;
-    // Hakem ağırlığı %40: üretici model tek başına karar vermez.
     const finalScore = Math.round(t.raw_score * 0.6 + reviewScore * 0.4);
     const gap = Math.abs(t.raw_score - reviewScore);
     const hasBody = t.summary.length > 20 && t.bullets.length >= 3;
@@ -349,27 +457,40 @@ async function build(query: string, country: string, category: string): Promise<
     };
   });
 
-  // Ağırlıklı Aroless Score (pazar 40 / finans 35 / pazarlama 25).
   const weightSum = teams.reduce((s, t) => s + t.weight, 0) || 1;
-  const velora = Math.round(teams.reduce((s, t) => s + t.score * t.weight, 0) / weightSum);
+  const directorVelora = Math.round(teams.reduce((s, t) => s + t.score * t.weight, 0) / weightSum);
+
+  const director = await runDirector(query, country, teams, block, directorVelora, coverage);
+
+  // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
+  const auditor = await runAuditor(query, country, teams, director.verdict, directorVelora, coverage);
+  const finalVelora = Math.round((directorVelora + auditor.score) / 2);
 
   const scores = teams.map((t) => t.score);
   const disagreement = Math.max(...scores) - Math.min(...scores);
   const confidence = Math.max(
     5,
-    Math.min(99, Math.round(teams.reduce((s, t) => s + t.confidence, 0) / teams.length - disagreement * 0.25)),
+    Math.min(
+      99,
+      Math.round(
+        (teams.reduce((s, t) => s + t.confidence, 0) / teams.length) * 0.6 +
+          (auditor.score >= 60 ? 20 : 5) -
+          disagreement * 0.2,
+      ),
+    ),
   );
-
-  const director = await runDirector(query, country, teams, block, velora, coverage);
 
   return {
     query,
     country,
-    velora_score: velora,
+    velora_score: finalVelora,
     verdict: director.verdict,
     executive_report: director.report,
     teams,
     director_engine: director.engine,
+    auditor_engine: auditor.engine,
+    auditor_score: auditor.score,
+    auditor_note: auditor.note,
     action_plan: director.actions,
     risks: director.risks,
     signals,
@@ -383,7 +504,6 @@ async function build(query: string, country: string, category: string): Promise<
     alt_market: director.alt,
   };
 }
-
 
 /** Cache-first council run (24h). */
 export async function runCouncil(

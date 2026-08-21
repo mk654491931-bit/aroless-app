@@ -284,7 +284,6 @@ function Dashboard() {
     if (platforms.length === 0) return toast.error(t("ui.select_platform"));
     if ((profileQ.data?.credits ?? 0) <= 0) { setShowPricing(true); return; }
     pushRecent(nicheValue);
-    setRestoredRun(null);
     setResultQuery("");
     if (engine !== "default") { hfGen.mutate({ engine }); return; }
     gen.mutate({
@@ -302,32 +301,6 @@ function Dashboard() {
     e.preventDefault();
     runSearch(niche);
   };
-
-  // Son AI aramasını yerelde sakla: sayfa yenilenince kredi harcamadan geri gelsin.
-  const [restoredRun, setRestoredRun] = useState<string | null>(null);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("aroless.finder.last_run");
-      if (!raw) return;
-      const saved = JSON.parse(raw) as { niche?: string; at?: number; results?: WinningProduct[]; rejected?: RejectedCandidate[] };
-      if (!saved?.results?.length || Date.now() - (saved.at ?? 0) > 86_400_000) return;
-      setResults(saved.results);
-      setRejected(saved.rejected ?? []);
-      if (saved.niche) setNiche(saved.niche);
-      setRestoredRun(saved.niche ?? "");
-    } catch { /* bozuk kayıt — yoksay */ }
-  }, []);
-
-  useEffect(() => {
-    if (!results.length) return;
-    try {
-      localStorage.setItem(
-        "aroless.finder.last_run",
-        JSON.stringify({ niche, at: Date.now(), results, rejected }),
-      );
-    } catch { /* kota dolu — yoksay */ }
-  }, [results, rejected, niche]);
-
 
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
   useEffect(() => {
@@ -857,20 +830,6 @@ function Dashboard() {
 
                 return (
                 <>
-                {restoredRun !== null && !searching && (
-                  <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/50 px-3 py-2 text-xs text-muted-foreground backdrop-blur">
-                    <span>
-                      Son arama geri yüklendi{restoredRun ? ` — “${restoredRun}”` : ""}. Kredi harcanmadı.
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-auto rounded-full border border-border px-2.5 py-1 font-medium text-foreground transition hover:bg-card"
-                      onClick={() => setRestoredRun(null)}
-                    >
-                      Tamam
-                    </button>
-                  </div>
-                )}
                 <FinderInsights products={filtered} />
 
                 <AdvancedFilters
@@ -1290,7 +1249,7 @@ function ProductCard({
       {p.council && (
         <div className="mt-3 rounded-lg border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">🧠 7'li AI Konsey</span>
+            <span className="font-semibold">🧠 14'lü AI Konsey</span>
             <span className="font-extrabold text-foreground">Aroless Score {p.council.velora_score}/100</span>
           </div>
           <div className="text-muted-foreground">{p.council.verdict}</div>

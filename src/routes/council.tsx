@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Brain, Search, ShieldCheck, TrendingUp, Coins, Megaphone, Gauge, Database, Loader2, Check } from "lucide-react";
+import { Brain, Search, ShieldCheck, TrendingUp, Coins, Megaphone, Gauge, Database, Loader2, Check, Truck, ShieldAlert, Palette } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
 import { runCouncilAnalysis } from "@/lib/council.functions";
@@ -17,10 +17,21 @@ const STAGES = [
   { icon: TrendingUp, label: "Trend Ekibi veri topluyor…" },
   { icon: Coins, label: "Finans Ekibi maliyet hesaplıyor…" },
   { icon: Megaphone, label: "Pazarlama Ekibi reklam kancası üretiyor…" },
+  { icon: Truck, label: "Operasyon Ekibi lojistik analizi yapıyor…" },
+  { icon: ShieldAlert, label: "Uyum Ekibi risk & sertifikaları inceliyor…" },
+  { icon: Palette, label: "Yaratıcı Ekibi viral kancaları değerlendiriyor…" },
   { icon: Gauge, label: "Müdür Aroless Skorunu oluşturuyor…" },
+  { icon: ShieldCheck, label: "Bağımsız Denetçi final puanı teyit ediyor…" },
 ];
 
-const TEAM_ICON = { market: TrendingUp, finance: Coins, marketing: Megaphone } as const;
+const TEAM_ICON = {
+  market: TrendingUp,
+  finance: Coins,
+  marketing: Megaphone,
+  operations: Truck,
+  compliance: ShieldAlert,
+  creative: Palette,
+} as const;
 
 function StageList({ active }: { active: number }) {
   return (
@@ -54,7 +65,7 @@ function ScoreRing({ score }: { score: number }) {
       </div>
       <div>
         <div className="text-xs uppercase tracking-wide text-muted-foreground">Aroless Score</div>
-        <div className="text-sm text-muted-foreground">Pazar · Finans · Pazarlama ortalaması</div>
+        <div className="text-sm text-muted-foreground">6 ekip · 12 model · müdür · denetçi ortalaması</div>
       </div>
     </div>
   );
@@ -92,8 +103,8 @@ function CouncilPage() {
   return (
     <HubShell
       emoji="🧠"
-      title="7'li AI Konsey"
-      subtitle="Üç uzman ekip + hakem modeller + müdür sentezi. Çoklu sağlayıcı altyapısı, otomatik yedekleme ve 24 saatlik akıllı önbellek ile çalışır."
+      title="14'lü AI Konsey"
+      subtitle="Altı uzman ekip (üretici + hakem) + müdür sentezi + bağımsız denetçi. Çoklu sağlayıcı altyapısı, otomatik yedekleme ve 24 saatlik akıllı önbellek ile çalışır."
     >
       <div className="mx-auto w-full max-w-4xl space-y-6 py-6">
         <div className="flex items-center gap-2">
@@ -287,14 +298,14 @@ function CouncilPage() {
 export const Route = createFileRoute("/council")({
   head: () => ({
     meta: [
-      { title: "7'li AI Konsey — Aroless AI Ürün Analizi" },
+      { title: "14'lü AI Konsey — Aroless AI Ürün Analizi" },
       {
         name: "description",
         content:
-          "Aroless'nın 7 modelli AI konseyi: trend, finans ve pazarlama ekipleri canlı veri hatlarını analiz eder ve tek sayfalık icra raporu ile Aroless Score üretir.",
+          "Aroless'nın 14 modeli AI konseyi: trend, finans, pazarlama, operasyon, uyum ve yaratıcı ekipleri canlı veri hatlarını analiz eder; müdür ve bağımsız denetçi tek sayfalık icra raporu ile Aroless Score üretir.",
       },
-      { property: "og:title", content: "7'li AI Konsey — Aroless AI" },
-      { property: "og:description", content: "Trend, finans ve pazarlama ekipleri + müdür sentezi ile Aroless Score." },
+      { property: "og:title", content: "14'lü AI Konsey — Aroless AI" },
+      { property: "og:description", content: "6 uzman ekip (üretici + hakem) + müdür + denetçi. Çoklu sağlayıcı, otomatik fallback, 24 saat cache." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

@@ -70,7 +70,7 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
   },
   {
     id: "council", key: "g_council", label: "AI Konsey", emoji: "🧠", icon: Gauge,
-    items: [{ key: "council", title: "7'li AI Konsey", url: "/council", icon: Gauge }],
+    items: [{ key: "council", title: "14'lü AI Konsey", url: "/council", icon: Gauge }],
   },
   {
     id: "radar", key: "g_radar", label: "Trend Radar", emoji: "📡", icon: Radar,
