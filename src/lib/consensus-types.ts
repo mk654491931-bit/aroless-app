@@ -20,13 +20,13 @@ export type ConsensusResult = {
   risk_flags: string[];
 };
 
-/** Compact 7'li AI Konsey verdict attached to a product in the finder. */
+/** Compact 14'lü AI Konsey verdict attached to a product in the finder. */
 export type CouncilSummary = {
   velora_score: number;
   verdict: string;
   director_engine: string;
   executive_report: string;
-  teams: { team: "market" | "finance" | "marketing"; title: string; score: number; engine: string; summary: string }[];
+  teams: { team: "market" | "finance" | "marketing" | "operations" | "compliance" | "creative"; title: string; score: number; engine: string; summary: string }[];
   action_plan: string[];
   risks: string[];
   cache_hit: boolean;
