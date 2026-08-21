@@ -907,7 +907,7 @@ function Dashboard() {
                       onReport={() => setReportProduct(p)}
                       onOpen={() => setDeepDiveProduct(p)}
 
-                      locked={locked}
+                      locked={false}
                       onUpgrade={() => setShowPricing(true)}
 
 
