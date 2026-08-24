@@ -426,7 +426,7 @@ export function CommandCenter() {
                         key={a.agent_id}
                         onClick={() => setDrill(a.agent_id)}
                         className={cn(
-                          "group flex h-full flex-col gap-2 rounded-xl border border-border bg-background/40 p-2.5 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
+                          "group relative flex h-full flex-col gap-2 rounded-xl border border-border bg-background/40 p-2.5 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
                           st === "warning" && "border-destructive/40",
                         )}
                       >
