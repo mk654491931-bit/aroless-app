@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardPublic } from "@/lib/api-guard.server";
 
 /**
  * Public viral ads feed backed by YouTube (via the Piped public API).
@@ -118,7 +119,9 @@ async function enrichAll(items: FeedItem[], concurrency = 6): Promise<void> {
 export const Route = createFileRoute("/api/public/viral-feed")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const limited = await guardPublic(request, "viral-feed", 20, 60);
+        if (limited) return limited;
         try {
           const results = await Promise.allSettled(
             QUERIES.map((q) => fetchQuery(q.q, q.niche, q.country, q.platform)),

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { HubShell } from "@/components/tools/hub-shell";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-client";
 
 export const Route = createFileRoute("/trend-radar")({
   ssr: false,
@@ -71,7 +72,7 @@ const MODES = [
 ];
 
 async function api(body: Record<string, unknown>) {
-  const r = await fetch("/api/public/trend-radar", {
+  const r = await apiFetch("/api/public/trend-radar", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
   const j = await r.json();

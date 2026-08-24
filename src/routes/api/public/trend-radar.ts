@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardAuthed, guardPublic, jsonError, readJsonBody } from "@/lib/api-guard.server";
 
 /**
  * Aroless — Multi-Platform Automated AI Trend Discovery endpoint.
@@ -13,11 +14,26 @@ export const Route = createFileRoute("/api/public/trend-radar")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const body = (await request.json()) as Record<string, unknown>;
+          const body = await readJsonBody<Record<string, unknown>>(request, 256 * 1024);
+          if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
           const action = String(body["action"] ?? "scrape");
           const region = String(body["region"] ?? "GLOBAL").toUpperCase().slice(0, 8);
           const category = String(body["category"] ?? "General").slice(0, 40);
+
+          if (action === "webhook") {
+            // Dış kaynaklı besleme: yalnızca paylaşılan gizli anahtarla.
+            const secret = process.env["TREND_WEBHOOK_SECRET"];
+            const provided = request.headers.get("x-webhook-secret") ?? "";
+            if (!secret || provided !== secret) return jsonError(401, "Yetkisiz istek.");
+            const ipLimited = await guardPublic(request, "trend-radar-webhook", 60, 60);
+            if (ipLimited) return ipLimited;
+          } else {
+            const guard = await guardAuthed(request, "trend-radar", 12, 60);
+            if ("response" in guard) return guard.response;
+          }
+
           const mod = await import("@/lib/trend-radar.server");
+
 
           if (action === "scrape") {
             const sources = (Array.isArray(body["sources"]) ? body["sources"] : [])
@@ -88,9 +104,7 @@ export const Route = createFileRoute("/api/public/trend-radar")({
 
           return new Response(JSON.stringify({ error: "unknown action" }), { status: 400 });
         } catch (e) {
-          return new Response(JSON.stringify({ error: (e as Error).message }), {
-            status: 500, headers: { "Content-Type": "application/json" },
-          });
+          return jsonError(500, "İşlem tamamlanamadı. Lütfen tekrar deneyin.", e);
         }
       },
     },

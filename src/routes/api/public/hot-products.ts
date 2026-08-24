@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardPublic } from "@/lib/api-guard.server";
 import type { HotProduct, ProductSignals } from "@/lib/hot-products";
 
 /**
@@ -161,6 +162,8 @@ export const Route = createFileRoute("/api/public/hot-products")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const limited = await guardPublic(request, "hot-products", 40, 60);
+        if (limited) return limited;
         const niche = (new URL(request.url).searchParams.get("niche") ?? "").slice(0, 60).trim();
         try {
           const payload = await getPayload(niche);

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardPublic } from "@/lib/api-guard.server";
 
 // Simple in-memory cache (per worker instance). Key: normalized query.
 const cache = new Map<string, { url: string; at: number }>();
@@ -88,6 +89,8 @@ export const Route = createFileRoute("/api/public/product-image")({
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
       GET: async ({ request }) => {
+        const limited = await guardPublic(request, "product-image", 240, 60);
+        if (limited) return limited;
         const url = new URL(request.url);
         const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
         if (!q) {

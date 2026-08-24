@@ -4,9 +4,10 @@ import { Sparkline } from "@/components/sparkline";
 import { hybridBadge } from "@/lib/consensus-types";
 import type { TrendItem } from "@/routes/api/public/predictive-trends";
 import type { TrendAnalysis } from "@/routes/api/public/trend-analysis";
+import { apiFetch } from "@/lib/api-client";
 
 async function fetchAnalysis(p: TrendItem, country: string): Promise<TrendAnalysis> {
-  const res = await fetch("/api/public/trend-analysis", {
+  const res = await apiFetch("/api/public/trend-analysis", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...p, country }),

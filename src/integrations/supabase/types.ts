@@ -65,6 +65,30 @@ export type Database = {
         }
         Relationships: []
       }
+      api_rate_limits: {
+        Row: {
+          bucket: string
+          count: number
+          created_at: string
+          id: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          created_at?: string
+          id?: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          created_at?: string
+          id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       creative_assets: {
         Row: {
           created_at: string
@@ -406,6 +430,7 @@ export type Database = {
           notifications_enabled: boolean
           onboarding_completed: boolean
           promo_code: string | null
+          public_id: string | null
           referral_code: string | null
           referred_by: string | null
           sim_credits: number
@@ -425,6 +450,7 @@ export type Database = {
           notifications_enabled?: boolean
           onboarding_completed?: boolean
           promo_code?: string | null
+          public_id?: string | null
           referral_code?: string | null
           referred_by?: string | null
           sim_credits?: number
@@ -444,6 +470,7 @@ export type Database = {
           notifications_enabled?: boolean
           onboarding_completed?: boolean
           promo_code?: string | null
+          public_id?: string | null
           referral_code?: string | null
           referred_by?: string | null
           sim_credits?: number
@@ -1008,8 +1035,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      bump_rate_limit: {
+        Args: { _bucket: string; _limit: number; _window_seconds: number }
+        Returns: boolean
+      }
       deduct_credit: { Args: never; Returns: number }
       deduct_sim_credit: { Args: never; Returns: number }
+      gen_public_id: { Args: never; Returns: string }
       gen_referral_code: { Args: never; Returns: string }
       get_sim_leaderboard: {
         Args: never
@@ -1032,6 +1064,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_email: { Args: { _email: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"

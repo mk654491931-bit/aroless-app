@@ -40,6 +40,7 @@ export function AppTopbar() {
   const profileFn = useServerFn(getFullProfile);
   const profileQ = useQuery({ queryKey: ["profile", user?.id], queryFn: () => profileFn(), enabled: !!user });
   const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
+  const publicId = (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null;
   const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Aroless");
 
   return (
@@ -55,6 +56,14 @@ export function AppTopbar() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {publicId ? (
+            <span
+              className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[11px] text-muted-foreground lg:inline-flex"
+              title="Kullanıcı kimliğiniz"
+            >
+              ID {publicId}
+            </span>
+          ) : null}
           <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:inline-flex">
             <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
             <span className="font-semibold">{credits}</span>
@@ -62,6 +71,7 @@ export function AppTopbar() {
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] md:inline-flex">
             <Zap size={11} /> {tier}
           </span>
+
           <Link to="/notifications" className="topbar-btn" title="Notifications"><Bell size={14} /></Link>
           <Link to="/dashboard" className="topbar-btn" title="Dashboard"><LayoutDashboard size={14} /></Link>
           <Link to="/settings" className="topbar-btn" title="Settings"><SettingsIcon size={14} /></Link>

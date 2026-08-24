@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
 import type { HybridScore } from "@/lib/consensus-types";
 
 /**
@@ -113,10 +114,13 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const guard = await guardAuthed(request, "trend-analysis", 20, 60);
+        if ("response" in guard) return guard.response;
         try {
-          const body = (await request.json()) as Record<string, unknown>;
+          const body = await readJsonBody<Record<string, unknown>>(request);
+          if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
           const name = String(body["name"] ?? "").trim().slice(0, 120);
-          if (!name) return new Response(JSON.stringify({ error: "name required" }), { status: 400 });
+          if (!name) return jsonError(400, "Ürün adı gerekli.");
           const input = {
             name,
             keyword: String(body["keyword"] ?? name).slice(0, 90),
@@ -139,11 +143,10 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
           cache.set(ck, { at: Date.now(), data });
           return Response.json(data);
         } catch (e) {
-          return new Response(JSON.stringify({ error: (e as Error).message }), {
-            status: 500, headers: { "Content-Type": "application/json" },
-          });
+          return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.", e);
         }
       },
+
     },
   },
 });

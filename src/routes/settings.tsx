@@ -78,6 +78,32 @@ function SettingsPage() {
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-5">
         <section className="glass rounded-2xl p-5">
+          <h2 className="font-semibold mb-1">Kullanıcı kimliğiniz</h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Destek taleplerinde bu 8 haneli kimliği paylaşın. E-posta adresinizi paylaşmanız gerekmez.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-lg tracking-[0.3em]">
+              {(profQ.data as { public_id?: string | null } | undefined)?.public_id ?? "--------"}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                const id = (profQ.data as { public_id?: string | null } | undefined)?.public_id;
+                if (!id) return;
+                navigator.clipboard.writeText(id).then(
+                  () => toast.success("Kimlik kopyalandı"),
+                  () => toast.error("Kopyalanamadı"),
+                );
+              }}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+            >
+              Kopyala
+            </button>
+          </div>
+        </section>
+
+        <section className="glass rounded-2xl p-5">
           <h2 className="font-semibold mb-3">{t("language")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {LANGUAGES.map((l) => {
