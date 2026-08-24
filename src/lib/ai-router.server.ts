@@ -6,6 +6,11 @@
  */
 import { callGemini, callGroq, extractJson, geminiKeyPool, groqKeyPool, openRouterKeyPool } from "./ai.server";
 
+/** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
+export const FAST_CHAIN: ProviderId[] = ["cerebras", "sambanova", "groq", "gemini", "openrouter", "huggingface"];
+/** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
+export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
+
 export type ProviderId =
   | "cerebras"
   | "sambanova"
@@ -91,6 +96,7 @@ const OPENROUTER_FREE = [
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "google/gemma-2-9b-it:free",
 ];
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"];
 
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
@@ -104,14 +110,22 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
       openAICompatible({ url: "https://api.sambanova.ai/v1/chat/completions", key, model, prompt, temperature, signal }),
     ),
 
-  groq: (prompt, temperature) => callGroq(prompt, temperature),
-
-  gemini: (prompt, temperature) => {
-    const keys = geminiKeyPool();
-    if (!keys.length) throw new Error("no gemini key");
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    return callGemini(prompt, key, temperature, true);
+  groq: async (prompt, temperature, signal) => {
+    const keys = groqKeyPool();
+    if (!keys.length) return callGroq(prompt, temperature);
+    try {
+      // Birincil → ikincil anahtar rotasyonu (429/401/402'de anında 2. anahtar).
+      return await rotate(keys, GROQ_MODELS, (key, model) =>
+        openAICompatible({ url: "https://api.groq.com/openai/v1/chat/completions", key, model, prompt, temperature, signal }),
+      );
+    } catch {
+      return callGroq(prompt, temperature);
+    }
   },
+
+  gemini: (prompt, temperature) =>
+    // Sıradaki anahtar 429/401/402 alırsa otomatik olarak 2./3. anahtara geçer.
+    rotate(geminiKeyPool(), ["gemini"], (key) => callGemini(prompt, key, temperature, true)),
 
   openrouter: (prompt, temperature, signal) =>
     rotate(openRouterKeyPool(), OPENROUTER_FREE, (key, model) =>
@@ -127,7 +141,7 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   huggingface: (prompt, temperature, signal) =>
-    rotate(pool("HF_TOKEN", "HUGGING_FACE_API_KEY1", "HUGGING_FACE_API_KEY2"), HF_MODELS, (key, model) =>
+    rotate(pool("HF_TOKEN_1", "HF_TOKEN", "HUGGING_FACE_API_KEY1", "HF_TOKEN_2", "HUGGING_FACE_API_KEY2"), HF_MODELS, (key, model) =>
       openAICompatible({
         url: "https://router.huggingface.co/v1/chat/completions",
         key,
@@ -145,6 +159,8 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
 // ---------------------------------------------------------------- bedrock (SigV4, SDK'sız)
 
 const BEDROCK_MODELS = [
+  "anthropic.claude-opus-4-1-20250805-v1:0",
+  "anthropic.claude-3-opus-20240229-v1:0",
   "anthropic.claude-3-5-sonnet-20240620-v1:0",
   "anthropic.claude-3-haiku-20240307-v1:0",
 ];

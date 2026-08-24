@@ -7,6 +7,12 @@ import { tierLevel, quotaFor } from "@/lib/plans";
 
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
+/** Ücretsiz kullanıcıya açık modül grupları. */
+export const FREE_GROUPS = ["library", "growth_suite"];
+/** Ücretsiz kullanıcıya açık tekil araçlar (Kazanan Ürün Radarı + temel sayfalar). */
+export const FREE_ITEMS = ["dashboard", "command_center", "compare", "notifications", "win_radar"];
+/** Ücretsiz kullanıcı günlük ürün arama kredisi. */
+export const FREE_DAILY_CREDITS = 2;
 
 export type Entitlements = {
   loading: boolean;
@@ -48,8 +54,9 @@ export function useEntitlements(): Entitlements {
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
-  // Tüm modüller her pakette açık; fark aylık kullanım kotasında.
-  const canUse = (_groupId: string) => true;
+  // Ücretsiz kullanıcı: sadece Kazanan Ürün Radarı (ürün arama). Ücretli: tüm modüller.
+  const canUse = (groupId: string) =>
+    isAdmin || isPaid || FREE_GROUPS.includes(groupId);
   const quota = quotaFor(level);
 
   return {
