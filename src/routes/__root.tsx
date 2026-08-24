@@ -220,7 +220,11 @@ function RootComponent() {
               <div key={`${pathname}|${lang}`} className="page-fade">
                 <Outlet />
               </div>
+              <div className="mx-auto w-full max-w-6xl px-4 md:px-6">
+                <AiDisclaimer />
+              </div>
               <SiteFooter />
+
             </div>
           </div>
         </SidebarProvider>
