@@ -104,14 +104,22 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
       openAICompatible({ url: "https://api.sambanova.ai/v1/chat/completions", key, model, prompt, temperature, signal }),
     ),
 
-  groq: (prompt, temperature) => callGroq(prompt, temperature),
-
-  gemini: (prompt, temperature) => {
-    const keys = geminiKeyPool();
-    if (!keys.length) throw new Error("no gemini key");
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    return callGemini(prompt, key, temperature, true);
+  groq: async (prompt, temperature, signal) => {
+    const keys = groqKeyPool();
+    if (!keys.length) return callGroq(prompt, temperature);
+    try {
+      // Birincil → ikincil anahtar rotasyonu (429/401/402'de anında 2. anahtar).
+      return await rotate(keys, GROQ_MODELS, (key, model) =>
+        openAICompatible({ url: "https://api.groq.com/openai/v1/chat/completions", key, model, prompt, temperature, signal }),
+      );
+    } catch {
+      return callGroq(prompt, temperature);
+    }
   },
+
+  gemini: (prompt, temperature) =>
+    // Sıradaki anahtar 429/401/402 alırsa otomatik olarak 2./3. anahtara geçer.
+    rotate(geminiKeyPool(), ["gemini"], (key) => callGemini(prompt, key, temperature, true)),
 
   openrouter: (prompt, temperature, signal) =>
     rotate(openRouterKeyPool(), OPENROUTER_FREE, (key, model) =>
