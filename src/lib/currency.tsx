@@ -19,7 +19,7 @@ export function useFxRates() {
     },
     staleTime: 60 * 60 * 1000,
     retry: 1,
-    placeholderData: FALLBACK,
+    placeholderData: USD_ONLY,
   });
 }
 
@@ -59,7 +59,7 @@ export function useMoney() {
   const country = ctx?.country ?? storedCountry();
   const { i18n } = useTranslation();
   const { data } = useFxRates();
-  const rates = data?.rates ?? FALLBACK.rates;
+  const rates = data?.rates ?? USD_ONLY.rates;
   const currency = countryByCode(country).currency || "USD";
   const rate = rates[currency] ?? 1;
   const locale = i18n.language || "en";
