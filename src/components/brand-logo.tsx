@@ -15,9 +15,11 @@ export function BrandLogo({ subtitle = "AI Commerce OS", linkTo = "/", size = "m
   return (
     <Link to={linkTo} className="group flex select-none items-center gap-2.5">
       <img
-        src={veloraV.url}
+        src="/logo-mark.png"
         alt="Aroless"
-        className="shrink-0 object-contain drop-shadow-[0_4px_18px_oklch(0.62_0.19_250/0.45)] transition-transform duration-500 group-hover:scale-[1.06]"
+        width={72}
+        height={72}
+        className="shrink-0 object-contain drop-shadow-[0_4px_18px_oklch(0.62_0.19_290/0.5)] transition-transform duration-500 group-hover:scale-[1.06]"
         style={{ height: h, width: h }}
       />
       <span className="leading-none">
