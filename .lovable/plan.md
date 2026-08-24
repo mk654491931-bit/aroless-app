@@ -23,15 +23,44 @@ Ayrıca:
 - `promo_redemptions`: kullanım kaydının sunucu tarafından yazıldığının doğrulanması.
 - Signed-in kullanıcıların çağırabildiği `SECURITY DEFINER` fonksiyonlarının gözden geçirilmesi; gereksiz olanlarda EXECUTE yetkisinin geri alınması.
 
-## 3. Genel güvenlik sertleştirmesi
+## 3. Yetkili (admin) listesinin kilitlenmesi
+
+Şu anda veritabanı tetikleyicisi yalnızca `omnic.111111@gmail.com` adresine admin veriyor. Yeni kural:
+
+Sabit admin listesi (yalnızca bu 4 adres):
+- mryetenek@gmail.com
+- mk654491931@gmail.com
+- omnic.111111@gmail.com
+- mk65449199@gmail.com
+
+Ek olarak `@aroless.com` uzantılı adreslerden kayıt sırasına göre **yalnızca ilk 2 tanesi** otomatik admin olur; sonrakiler normal kullanıcı kalır. Bu sayım veritabanında yapılır, yarış durumuna karşı kilitlenir, yani üçüncü bir `@aroless.com` adresi hiçbir koşulda admin olamaz.
+
+Ayrıca:
+- Listede olmayan mevcut tüm admin kayıtları temizlenir.
+- Admin rolü yalnızca bu kuralla verilir; kullanıcı arayüzünden veya API'den rol yazımı tamamen kapatılır.
+- E-posta karşılaştırması küçük harfe indirgenip kırpılarak yapılır (büyük/küçük harf veya boşlukla atlatma engellenir).
+- Admin rotası ve admin sunucu fonksiyonları her istekte rol denetiminden geçirilir.
+
+## 4. Kullanıcı kimlik numarası (8 haneli)
+
+Her kullanıcıya rastgele, benzersiz 8 haneli bir numara atanır (örn. `48210736`).
+
+- Kayıt anında otomatik üretilir, çakışma olursa yeniden denenir.
+- Mevcut tüm kullanıcılara geriye dönük atanır.
+- Kullanıcı kendi numarasını Ayarlar ve profil/topbar alanında görür, tek tıkla kopyalayabilir.
+- Destek taleplerinde ve admin panelinde bu numara gösterilir, böylece destek e-posta yerine numarayla çalışır.
+- Numara tahmin edilebilir sıra içermez ve tek başına hiçbir yetki vermez; sadece kimliklendirme amaçlıdır.
+
+## 5. Genel güvenlik sertleştirmesi
 
 - Güvenlik başlıkları: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors`, temel bir Content-Security-Policy.
 - Webhook uçlarında imza doğrulamasının ve tekrar saldırısına (replay) karşı korumanın teyidi.
 - Hata mesajlarının kullanıcıya ham şekilde dönmemesi (şu an bazı uçlar iç hata metnini aynen döndürüyor).
 - Sunucu loglarında e-posta/IP gibi kişisel verilerin maskelenmesi.
-- Admin rotasının hem arayüz hem sunucu tarafında rol denetimi ile korunduğunun testi.
+- Kredi düşümü, promosyon kodu ve abonelik yükseltmelerinin yalnızca sunucu tarafında yapılabilmesi.
 
-## 4. Mobil uyum ve kullanıcı deneyimi
+
+## 6. Mobil uyum ve kullanıcı deneyimi
 
 Öncelikli ekranlar 390px, 768px ve 1280px genişliklerde tek tek kontrol edilip düzeltilecek:
 - Ürün bulucu (kart ızgarası, filtre çubuğu, karşılaştırma tepsisi)
@@ -47,17 +76,18 @@ Kullanıcı dostuluk:
 - Hata durumlarında anlaşılır Türkçe/çok dilli mesaj ve "tekrar dene" aksiyonu.
 - Boş durum ekranlarının netleştirilmesi.
 
-## 5. Performans optimizasyonu
+## 7. Performans optimizasyonu
 
 - Ağır bileşenlerin (simülatör, stüdyo, admin panelleri, grafikler) tembel yüklenmesi.
 - Görsellerde `loading="lazy"` ve boyut niteliklerinin tamamlanması.
 - Arka plan animasyonlarının `prefers-reduced-motion` ve düşük güçlü cihazlarda hafifletilmesi.
 - Üretim derlemesinde paket boyutu kontrolü ve gereksiz bağımlılıkların ayıklanması.
 
-## 6. Canlı öncesi son kontrol
+## 8. Canlı öncesi son kontrol
 
 - Tip kontrolü ve üretim derlemesi.
 - Google ile giriş, kayıt, kredi düşümü, ödeme akışı ve webhook'un uçtan uca testi.
+- Admin listesinin doğrulanması (4 adres + en fazla 2 `@aroless.com`) ve başka kimsenin admin olamadığının test edilmesi.
 - Güvenlik taramasının yeniden çalıştırılıp bulguların temizlendiğinin doğrulanması.
 
 ## Teknik notlar
@@ -65,4 +95,6 @@ Kullanıcı dostuluk:
 - Korumalı uçlar `requireSupabaseAuth` middleware'i ile oturumlu sunucu fonksiyonlarına taşınacak; dışarıdan çağrılması gereken uçlar `src/routes/api/public/*` altında kalıp kendi doğrulamasını yapacak.
 - Oran sınırı, kalıcı olması için veritabanı tabanlı bir sayaçla uygulanacak (worker'lar durumsuzdur).
 - RLS düzeltmeleri tek bir migration ile, her tablo için GRANT'leriyle birlikte yazılacak.
+- Admin kuralı `grant_admin_for_designated_email` fonksiyonu yeniden yazılarak uygulanacak: sabit 4 adres + `@aroless.com` için `count < 2` kontrolü (satır kilidiyle). Rol tablosuna yazma yalnızca bu tetikleyici ve servis rolü üzerinden mümkün olacak.
+- 8 haneli kimlik `profiles` tablosuna benzersiz `public_id` sütunu olarak eklenecek; çakışmada yeniden üreten bir tetikleyici ile doldurulacak ve mevcut satırlar geriye dönük güncellenecek.
 - Mevcut özelliklerde eksiltme yapılmayacak; yalnızca erişim kontrolü, düzen ve performans iyileştirilecek.
