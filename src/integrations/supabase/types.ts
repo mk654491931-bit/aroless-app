@@ -406,6 +406,7 @@ export type Database = {
           notifications_enabled: boolean
           onboarding_completed: boolean
           promo_code: string | null
+          public_id: string | null
           referral_code: string | null
           referred_by: string | null
           sim_credits: number
@@ -425,6 +426,7 @@ export type Database = {
           notifications_enabled?: boolean
           onboarding_completed?: boolean
           promo_code?: string | null
+          public_id?: string | null
           referral_code?: string | null
           referred_by?: string | null
           sim_credits?: number
@@ -444,6 +446,7 @@ export type Database = {
           notifications_enabled?: boolean
           onboarding_completed?: boolean
           promo_code?: string | null
+          public_id?: string | null
           referral_code?: string | null
           referred_by?: string | null
           sim_credits?: number
@@ -1010,6 +1013,7 @@ export type Database = {
       }
       deduct_credit: { Args: never; Returns: number }
       deduct_sim_credit: { Args: never; Returns: number }
+      gen_public_id: { Args: never; Returns: string }
       gen_referral_code: { Args: never; Returns: string }
       get_sim_leaderboard: {
         Args: never
@@ -1032,6 +1036,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_email: { Args: { _email: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"
