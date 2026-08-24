@@ -65,6 +65,30 @@ export type Database = {
         }
         Relationships: []
       }
+      api_rate_limits: {
+        Row: {
+          bucket: string
+          count: number
+          created_at: string
+          id: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          created_at?: string
+          id?: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          created_at?: string
+          id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       creative_assets: {
         Row: {
           created_at: string
@@ -1010,6 +1034,10 @@ export type Database = {
           _user_id: string
         }
         Returns: undefined
+      }
+      bump_rate_limit: {
+        Args: { _bucket: string; _limit: number; _window_seconds: number }
+        Returns: boolean
       }
       deduct_credit: { Args: never; Returns: number }
       deduct_sim_credit: { Args: never; Returns: number }
