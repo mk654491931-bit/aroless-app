@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -46,7 +47,7 @@ export const Route = createFileRoute("/competitor-analysis")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: CompetitorAnalysisPage,
+  component: withProGate(CompetitorAnalysisPage),
 });
 
 function CompetitorAnalysisPage() {

@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,7 +48,7 @@ export const Route = createFileRoute("/roi")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: RoiPage,
+  component: withProGate(RoiPage),
 });
 
 const PLATFORMS = [

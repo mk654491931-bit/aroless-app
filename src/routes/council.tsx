@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
@@ -354,5 +355,5 @@ export const Route = createFileRoute("/council")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: CouncilPage,
+  component: withProGate(CouncilPage),
 });

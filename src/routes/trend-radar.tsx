@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -74,7 +75,7 @@ export const Route = createFileRoute("/trend-radar")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: TrendRadar,
+  component: withProGate(TrendRadar),
 });
 
 type TrendSource = "Google" | "Amazon" | "TikTok" | "Yandex" | "RSS" | "GitHub";

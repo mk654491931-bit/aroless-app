@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Calculator, Ship, Wallet, Boxes, ShieldCheck } from "lucide-react";
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/tools/finance")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: FinanceHub,
+  component: withProGate(FinanceHub),
 });
 
 function Stat({
