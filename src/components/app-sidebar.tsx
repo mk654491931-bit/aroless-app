@@ -133,6 +133,18 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-white/10">
       <SidebarContent className="pt-4">
+        <Link to="/" className="mx-3 mb-3 flex items-center gap-2">
+          <img
+            src="/logo-mark.png"
+            alt="Aroless"
+            width={28}
+            height={28}
+            className="h-7 w-7 shrink-0 object-contain"
+          />
+          {!collapsed && (
+            <span className="text-[13px] font-light uppercase tracking-[0.3em] text-foreground">Aroless</span>
+          )}
+        </Link>
         {!collapsed && !isPaid && !isAdmin && (
           <button
             onClick={() => setShowPricing(true)}
