@@ -28,6 +28,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
+import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
@@ -46,6 +47,7 @@ import { Route as ApiPublicToolRouteImport } from './routes/api/public/tool'
 import { Route as ApiPublicTrendAnalysisRouteImport } from './routes/api/public/trend-analysis'
 import { Route as ApiPublicTrendRadarRouteImport } from './routes/api/public/trend-radar'
 import { Route as ApiPublicViralFeedRouteImport } from './routes/api/public/viral-feed'
+import { Route as ApiPublicWebhookLemonSqueezyRouteImport } from './routes/api/public/webhook/lemon-squeezy'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -142,6 +144,11 @@ const ViralAdsRoute = ViralAdsRouteImport.update({
   path: '/viral-ads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
+  id: '/api/checkout',
+  path: '/api/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -234,6 +241,12 @@ const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
   path: '/api/public/viral-feed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWebhookLemonSqueezyRoute =
+  ApiPublicWebhookLemonSqueezyRouteImport.update({
+    id: '/api/public/webhook/lemon-squeezy',
+    path: '/api/public/webhook/lemon-squeezy',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -255,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -273,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -294,6 +309,7 @@ export interface FileRoutesByTo {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -312,6 +328,7 @@ export interface FileRoutesByTo {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -334,6 +351,7 @@ export interface FileRoutesById {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -352,6 +370,7 @@ export interface FileRoutesById {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -375,6 +394,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -393,6 +413,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -414,6 +435,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -432,6 +454,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   id:
     | '__root__'
     | '/'
@@ -453,6 +476,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -471,6 +495,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -493,6 +518,7 @@ export interface RootRouteChildren {
   StudioRoute: typeof StudioRoute
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
+  ApiCheckoutRoute: typeof ApiCheckoutRoute
   HotIdRoute: typeof HotIdRoute
   LegalSlugRoute: typeof LegalSlugRoute
   ToolsFinanceRoute: typeof ToolsFinanceRoute
@@ -510,6 +536,7 @@ export interface RootRouteChildren {
   ApiPublicTrendAnalysisRoute: typeof ApiPublicTrendAnalysisRoute
   ApiPublicTrendRadarRoute: typeof ApiPublicTrendRadarRoute
   ApiPublicViralFeedRoute: typeof ApiPublicViralFeedRoute
+  ApiPublicWebhookLemonSqueezyRoute: typeof ApiPublicWebhookLemonSqueezyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -647,6 +674,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ViralAdsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/checkout': {
+      id: '/api/checkout'
+      path: '/api/checkout'
+      fullPath: '/api/checkout'
+      preLoaderRoute: typeof ApiCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/callback'
@@ -773,6 +807,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicViralFeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/webhook/lemon-squeezy': {
+      id: '/api/public/webhook/lemon-squeezy'
+      path: '/api/public/webhook/lemon-squeezy'
+      fullPath: '/api/public/webhook/lemon-squeezy'
+      preLoaderRoute: typeof ApiPublicWebhookLemonSqueezyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -806,6 +847,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudioRoute: StudioRoute,
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
+  ApiCheckoutRoute: ApiCheckoutRoute,
   HotIdRoute: HotIdRoute,
   LegalSlugRoute: LegalSlugRoute,
   ToolsFinanceRoute: ToolsFinanceRoute,
@@ -823,6 +865,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicTrendAnalysisRoute: ApiPublicTrendAnalysisRoute,
   ApiPublicTrendRadarRoute: ApiPublicTrendRadarRoute,
   ApiPublicViralFeedRoute: ApiPublicViralFeedRoute,
+  ApiPublicWebhookLemonSqueezyRoute: ApiPublicWebhookLemonSqueezyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
