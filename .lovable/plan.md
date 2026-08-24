@@ -60,7 +60,7 @@ Her kullanıcıya rastgele, benzersiz 8 haneli bir numara atanır (örn. `482107
 - Kredi düşümü, promosyon kodu ve abonelik yükseltmelerinin yalnızca sunucu tarafında yapılabilmesi.
 
 
-## 4. Mobil uyum ve kullanıcı deneyimi
+## 6. Mobil uyum ve kullanıcı deneyimi
 
 Öncelikli ekranlar 390px, 768px ve 1280px genişliklerde tek tek kontrol edilip düzeltilecek:
 - Ürün bulucu (kart ızgarası, filtre çubuğu, karşılaştırma tepsisi)
@@ -76,17 +76,18 @@ Kullanıcı dostuluk:
 - Hata durumlarında anlaşılır Türkçe/çok dilli mesaj ve "tekrar dene" aksiyonu.
 - Boş durum ekranlarının netleştirilmesi.
 
-## 5. Performans optimizasyonu
+## 7. Performans optimizasyonu
 
 - Ağır bileşenlerin (simülatör, stüdyo, admin panelleri, grafikler) tembel yüklenmesi.
 - Görsellerde `loading="lazy"` ve boyut niteliklerinin tamamlanması.
 - Arka plan animasyonlarının `prefers-reduced-motion` ve düşük güçlü cihazlarda hafifletilmesi.
 - Üretim derlemesinde paket boyutu kontrolü ve gereksiz bağımlılıkların ayıklanması.
 
-## 6. Canlı öncesi son kontrol
+## 8. Canlı öncesi son kontrol
 
 - Tip kontrolü ve üretim derlemesi.
 - Google ile giriş, kayıt, kredi düşümü, ödeme akışı ve webhook'un uçtan uca testi.
+- Admin listesinin doğrulanması (4 adres + en fazla 2 `@aroless.com`) ve başka kimsenin admin olamadığının test edilmesi.
 - Güvenlik taramasının yeniden çalıştırılıp bulguların temizlendiğinin doğrulanması.
 
 ## Teknik notlar
