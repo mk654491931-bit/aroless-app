@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/tools/growth")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: GrowthHub,
+  component: withProGate(GrowthHub),
 });
 
 type Engine = { score: number; note: string };

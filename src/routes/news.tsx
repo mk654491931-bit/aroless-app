@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -35,7 +36,7 @@ export const Route = createFileRoute("/news")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: NewsPage,
+  component: withProGate(NewsPage),
 });
 
 type NewsItem = {

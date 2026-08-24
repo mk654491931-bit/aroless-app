@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { createFileRoute } from "@tanstack/react-router";
 import { CommandCenter } from "@/components/command-center";
 
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/command-center")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: CommandCenterPage,
+  component: withProGate(CommandCenterPage),
 });
 
 function CommandCenterPage() {

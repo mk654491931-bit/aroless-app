@@ -8,9 +8,9 @@ import { tierLevel, quotaFor } from "@/lib/plans";
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 /** Ücretsiz kullanıcıya açık modül grupları. */
-export const FREE_GROUPS = ["library", "growth_suite"];
-/** Ücretsiz kullanıcıya açık tekil araçlar (Kazanan Ürün Radarı + temel sayfalar). */
-export const FREE_ITEMS = ["dashboard", "command_center", "compare", "notifications", "win_radar"];
+export const FREE_GROUPS = ["library"];
+/** Ücretsiz kullanıcıya açık tekil araçlar (Ürün Bulucu + temel sayfalar). */
+export const FREE_ITEMS = ["product_finder", "dashboard", "compare", "notifications"];
 /** Ücretsiz kullanıcıya kayıt anında bir kez verilen toplam kredi (yenilenmez). */
 export const FREE_WELCOME_CREDITS = 2;
 

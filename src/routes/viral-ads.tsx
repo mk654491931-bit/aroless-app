@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/viral-ads")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  component: ViralAdsPage,
+  component: withProGate(ViralAdsPage),
 });
 
 type LiveAd = {

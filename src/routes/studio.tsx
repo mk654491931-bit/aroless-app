@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,7 +59,7 @@ export const Route = createFileRoute("/studio")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: StudioPage,
+  component: withProGate(StudioPage),
 });
 
 const CHANNELS = ["TikTok", "Instagram Reels", "Meta", "Google", "YouTube Shorts", "Pinterest"];

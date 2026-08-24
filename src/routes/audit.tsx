@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,7 +44,7 @@ export const Route = createFileRoute("/audit")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: AuditPage,
+  component: withProGate(AuditPage),
 });
 
 const SEV: Record<string, string> = {

@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Handshake, FileSearch, ShieldQuestion, ClipboardList } from "lucide-react";
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/tools/sourcing")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: SourcingHub,
+  component: withProGate(SourcingHub),
 });
 
 function SourcingHub() {

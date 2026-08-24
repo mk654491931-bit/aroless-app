@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Tags, ImagePlus, MessageSquareHeart, LineChart } from "lucide-react";
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/tools/listing")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: ListingHub,
+  component: withProGate(ListingHub),
 });
 
 function ListingHub() {

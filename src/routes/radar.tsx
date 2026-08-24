@@ -1,3 +1,4 @@
+import { withProGate } from "@/components/pro-route-gate";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/radar")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: RadarPage,
+  component: withProGate(RadarPage),
 });
 
 const COUNTRIES = [
