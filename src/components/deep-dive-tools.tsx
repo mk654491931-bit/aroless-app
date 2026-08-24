@@ -264,7 +264,7 @@ tr:nth-child(even) td{background:#14172a}</style>
 <h2>Aroless · ${new Date().toLocaleDateString("tr-TR")}</h2>
 <table><thead><tr>${rows[0]!.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
 <tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td>${String(c).replace(/</g, "&lt;")}</td>`).join("")}</tr>`).join("")}</tbody></table>
-<script>window.onload=()=>window.print()<\/script>`;
+<script>window.onload=()=>window.print()</${"s"}cript>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); }
   };

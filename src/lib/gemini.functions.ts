@@ -453,7 +453,7 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
           .from("profiles")
           .update({ credits: (remaining as number) + 1 })
           .eq("id", context.userId);
-      } catch {}
+      } catch { /* kredi iadesi başarısız olsa da akış bozulmaz */ }
     };
 
     // Run parallel Gemini calls with DIFFERENT angles to (a) multiply the

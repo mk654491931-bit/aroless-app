@@ -94,7 +94,7 @@ export function ReportModal({ product, onClose }: { product: WinningProduct | nu
     y += 6;
     line(t("report.hooks"), 14, true);
     (product.ad_angles || []).forEach((a, i) => line(`${i + 1}. ${a}`));
-    doc.save(`${product.name.replace(/[^\w\-]+/g, "_")}.pdf`);
+    doc.save(`${product.name.replace(/[^\w-]+/g, "_")}.pdf`);
   };
 
   return (
