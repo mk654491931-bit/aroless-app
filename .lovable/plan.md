@@ -23,13 +23,42 @@ Ayrıca:
 - `promo_redemptions`: kullanım kaydının sunucu tarafından yazıldığının doğrulanması.
 - Signed-in kullanıcıların çağırabildiği `SECURITY DEFINER` fonksiyonlarının gözden geçirilmesi; gereksiz olanlarda EXECUTE yetkisinin geri alınması.
 
-## 3. Genel güvenlik sertleştirmesi
+## 3. Yetkili (admin) listesinin kilitlenmesi
+
+Şu anda veritabanı tetikleyicisi yalnızca `omnic.111111@gmail.com` adresine admin veriyor. Yeni kural:
+
+Sabit admin listesi (yalnızca bu 4 adres):
+- mryetenek@gmail.com
+- mk654491931@gmail.com
+- omnic.111111@gmail.com
+- mk65449199@gmail.com
+
+Ek olarak `@aroless.com` uzantılı adreslerden kayıt sırasına göre **yalnızca ilk 2 tanesi** otomatik admin olur; sonrakiler normal kullanıcı kalır. Bu sayım veritabanında yapılır, yarış durumuna karşı kilitlenir, yani üçüncü bir `@aroless.com` adresi hiçbir koşulda admin olamaz.
+
+Ayrıca:
+- Listede olmayan mevcut tüm admin kayıtları temizlenir.
+- Admin rolü yalnızca bu kuralla verilir; kullanıcı arayüzünden veya API'den rol yazımı tamamen kapatılır.
+- E-posta karşılaştırması küçük harfe indirgenip kırpılarak yapılır (büyük/küçük harf veya boşlukla atlatma engellenir).
+- Admin rotası ve admin sunucu fonksiyonları her istekte rol denetiminden geçirilir.
+
+## 4. Kullanıcı kimlik numarası (8 haneli)
+
+Her kullanıcıya rastgele, benzersiz 8 haneli bir numara atanır (örn. `48210736`).
+
+- Kayıt anında otomatik üretilir, çakışma olursa yeniden denenir.
+- Mevcut tüm kullanıcılara geriye dönük atanır.
+- Kullanıcı kendi numarasını Ayarlar ve profil/topbar alanında görür, tek tıkla kopyalayabilir.
+- Destek taleplerinde ve admin panelinde bu numara gösterilir, böylece destek e-posta yerine numarayla çalışır.
+- Numara tahmin edilebilir sıra içermez ve tek başına hiçbir yetki vermez; sadece kimliklendirme amaçlıdır.
+
+## 5. Genel güvenlik sertleştirmesi
 
 - Güvenlik başlıkları: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors`, temel bir Content-Security-Policy.
 - Webhook uçlarında imza doğrulamasının ve tekrar saldırısına (replay) karşı korumanın teyidi.
 - Hata mesajlarının kullanıcıya ham şekilde dönmemesi (şu an bazı uçlar iç hata metnini aynen döndürüyor).
 - Sunucu loglarında e-posta/IP gibi kişisel verilerin maskelenmesi.
-- Admin rotasının hem arayüz hem sunucu tarafında rol denetimi ile korunduğunun testi.
+- Kredi düşümü, promosyon kodu ve abonelik yükseltmelerinin yalnızca sunucu tarafında yapılabilmesi.
+
 
 ## 4. Mobil uyum ve kullanıcı deneyimi
 
