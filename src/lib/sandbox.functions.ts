@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini, extractJson } from "./ai.server";
 import { baselinePrompt, crisisPrompt, reviewsPrompt, coachPrompt, num, str, clamp, type CoachAdvice } from "./sandbox.server";
-import { FALLBACK_BASELINE, type MarketBaseline, type Crisis } from "./sandbox-engine";
+import { type MarketBaseline, type Crisis } from "./sandbox-engine";
 
 const StartInput = z.object({
   platform: z.string().min(1),
