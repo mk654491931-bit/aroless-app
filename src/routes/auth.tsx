@@ -21,7 +21,6 @@ import { getVisitorId } from "@/lib/fingerprint";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { isDisposableEmail } from "@/lib/disposable-email";
 import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
-import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
@@ -401,7 +400,7 @@ function AuthPage() {
 
           <div className="mt-6 flex items-center gap-5">
             <img
-              src={veloraV.url}
+              src="/logo-mark.png"
               alt="Aroless"
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
             />
@@ -499,7 +498,7 @@ function AuthPage() {
 
               <div className="relative">
                 <div className="flex items-center gap-2.5">
-                  <img src={veloraV.url} alt="Aroless" className="h-9 w-9 object-contain" />
+                  <img src="/logo-mark.png" alt="Aroless" className="h-9 w-9 object-contain" />
                   <span className="text-base font-light uppercase tracking-[0.3em] text-foreground/95">
                     Aroless
                   </span>
