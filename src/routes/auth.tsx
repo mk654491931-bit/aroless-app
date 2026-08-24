@@ -24,7 +24,7 @@ import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functi
 import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
-import { isManagedHost, oauthRedirectUrl } from "@/lib/runtime-env";
+import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 
 
@@ -333,15 +333,9 @@ function AuthPage() {
   const google = async () => {
     setBusy("google");
 
-    // Lovable dışındaki her ortamda (localhost, kendi domainin) doğrudan
-    // Supabase OAuth kullanılır; köprü paketi olmasa bile giriş çalışır.
-    if (!isManagedHost()) {
-      await googleDirect();
-      return;
-    }
-
     try {
-      // Managed Google sign-in (iframe-safe) — yalnızca Lovable host'unda.
+      // Lovable köprüsü ile tek tıkla Google girişi (iframe uyumlu).
+
       const { lovable } = await import("@/integrations/lovable");
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
