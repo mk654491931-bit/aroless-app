@@ -76,7 +76,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Aroless — Find Winning Products" },
       { property: "og:description", content: "AI-powered winning product research for e-commerce." },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://aroless.tech/og-image.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://aroless.tech/og-image.jpg" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
