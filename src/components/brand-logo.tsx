@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import veloraV from "@/assets/velora-v.png.asset.json";
 
 type Props = {
   subtitle?: string;
