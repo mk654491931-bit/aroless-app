@@ -4,9 +4,7 @@ import type { LegalDoc } from "@/lib/legal-content";
 export function LegalDocBody({ doc, compact = false }: { doc: LegalDoc; compact?: boolean }) {
   return (
     <article className={compact ? "space-y-6" : "space-y-9"}>
-      {!compact && (
-        <p className="text-sm leading-relaxed text-muted-foreground">{doc.summary}</p>
-      )}
+      {!compact && <p className="text-sm leading-relaxed text-muted-foreground">{doc.summary}</p>}
       {doc.sections.map((s) => (
         <section key={s.id} id={s.id} className="scroll-mt-28">
           <h2 className="flex items-start gap-2 text-base font-semibold tracking-tight text-foreground md:text-lg">

@@ -85,7 +85,9 @@ export function PricingCard({ className }: { className?: string }) {
               <Sparkles className="size-3" /> Önerilen
             </span>
           )}
-          <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">{tier.name}</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            {tier.name}
+          </h3>
           <div className="mt-2 flex items-baseline gap-1">
             <span className="text-4xl font-bold tracking-tight">{tier.price}</span>
             <span className="text-sm text-muted-foreground">/ay</span>
@@ -95,7 +97,12 @@ export function PricingCard({ className }: { className?: string }) {
           <ul className="mt-5 flex-1 space-y-2.5 text-sm">
             {tier.features.map((f) => (
               <li key={f} className="flex gap-2">
-                <Check className={cn("mt-0.5 size-4 shrink-0", tier.highlight ? "text-primary" : "text-muted-foreground")} />
+                <Check
+                  className={cn(
+                    "mt-0.5 size-4 shrink-0",
+                    tier.highlight ? "text-primary" : "text-muted-foreground",
+                  )}
+                />
                 <span>{f}</span>
               </li>
             ))}

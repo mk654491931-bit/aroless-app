@@ -34,7 +34,11 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       title={theme === "dark" ? "Gündüz teması" : "Karanlık tema"}
       className={`inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card/70 px-3 text-xs font-semibold text-foreground backdrop-blur transition-colors hover:bg-accent/40 ${className}`}
     >
-      {theme === "dark" ? <Sun size={14} className="text-[var(--warning)]" /> : <Moon size={14} className="text-[var(--brand)]" />}
+      {theme === "dark" ? (
+        <Sun size={14} className="text-[var(--warning)]" />
+      ) : (
+        <Moon size={14} className="text-[var(--brand)]" />
+      )}
       <span className="hidden sm:inline">{theme === "dark" ? "Gündüz" : "Karanlık"}</span>
     </button>
   );

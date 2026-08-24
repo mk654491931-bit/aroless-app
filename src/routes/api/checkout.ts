@@ -18,8 +18,8 @@ export const Route = createFileRoute("/api/checkout")({
           if (!token) return json({ error: "Unauthorized" }, 401);
 
           const supabase = createClient<Database>(
-            process.env['SUPABASE_URL']!,
-            process.env['SUPABASE_PUBLISHABLE_KEY']!,
+            process.env["SUPABASE_URL"]!,
+            process.env["SUPABASE_PUBLISHABLE_KEY"]!,
             { auth: { persistSession: false, autoRefreshToken: false } },
           );
           const { data: userData, error } = await supabase.auth.getUser(token);

@@ -4,23 +4,35 @@
  * Ağır bir dış gateway servisi yok: saf TypeScript try/catch + switch/case ile
  * sağlayıcı zinciri, 429/timeout durumunda anında fallback, üstel geri çekilme.
  */
-import { callGemini, callGroq, extractJson, geminiKeyPool, groqKeyPool, openRouterKeyPool } from "./ai.server";
+import {
+  callGemini,
+  callGroq,
+  extractJson,
+  geminiKeyPool,
+  groqKeyPool,
+  openRouterKeyPool,
+} from "./ai.server";
 
 /** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
-export const FAST_CHAIN: ProviderId[] = ["cerebras", "sambanova", "groq", "gemini", "openrouter", "huggingface"];
+export const FAST_CHAIN: ProviderId[] = [
+  "cerebras",
+  "sambanova",
+  "groq",
+  "gemini",
+  "openrouter",
+  "huggingface",
+];
 /** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
 export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 export type ProviderId =
-  | "cerebras"
-  | "sambanova"
-  | "groq"
-  | "gemini"
-  | "openrouter"
-  | "huggingface"
-  | "bedrock";
+  "cerebras" | "sambanova" | "groq" | "gemini" | "openrouter" | "huggingface" | "bedrock";
 
-export type ProviderCall = (prompt: string, temperature: number, signal: AbortSignal) => Promise<string>;
+export type ProviderCall = (
+  prompt: string,
+  temperature: number,
+  signal: AbortSignal,
+) => Promise<string>;
 
 const TIMEOUT_MS = 45_000;
 
@@ -57,7 +69,9 @@ async function openAICompatible(opts: {
   });
   if (!resp.ok) {
     const body = (await resp.text()).slice(0, 200);
-    const err = new Error(`${new URL(opts.url).hostname} ${resp.status}: ${body}`) as Error & { status?: number };
+    const err = new Error(`${new URL(opts.url).hostname} ${resp.status}: ${body}`) as Error & {
+      status?: number;
+    };
     err.status = resp.status;
     throw err;
   }
@@ -102,12 +116,26 @@ const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Ins
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   cerebras: (prompt, temperature, signal) =>
     rotate(pool("CEREBRAS_API_KEY", "CEREBRAS_API_KEY_2"), CEREBRAS_MODELS, (key, model) =>
-      openAICompatible({ url: "https://api.cerebras.ai/v1/chat/completions", key, model, prompt, temperature, signal }),
+      openAICompatible({
+        url: "https://api.cerebras.ai/v1/chat/completions",
+        key,
+        model,
+        prompt,
+        temperature,
+        signal,
+      }),
     ),
 
   sambanova: (prompt, temperature, signal) =>
     rotate(pool("SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_2"), SAMBANOVA_MODELS, (key, model) =>
-      openAICompatible({ url: "https://api.sambanova.ai/v1/chat/completions", key, model, prompt, temperature, signal }),
+      openAICompatible({
+        url: "https://api.sambanova.ai/v1/chat/completions",
+        key,
+        model,
+        prompt,
+        temperature,
+        signal,
+      }),
     ),
 
   groq: async (prompt, temperature, signal) => {
@@ -116,7 +144,14 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     try {
       // Birincil → ikincil anahtar rotasyonu (429/401/402'de anında 2. anahtar).
       return await rotate(keys, GROQ_MODELS, (key, model) =>
-        openAICompatible({ url: "https://api.groq.com/openai/v1/chat/completions", key, model, prompt, temperature, signal }),
+        openAICompatible({
+          url: "https://api.groq.com/openai/v1/chat/completions",
+          key,
+          model,
+          prompt,
+          temperature,
+          signal,
+        }),
       );
     } catch {
       return callGroq(prompt, temperature);
@@ -141,16 +176,25 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   huggingface: (prompt, temperature, signal) =>
-    rotate(pool("HF_TOKEN_1", "HF_TOKEN", "HUGGING_FACE_API_KEY1", "HF_TOKEN_2", "HUGGING_FACE_API_KEY2"), HF_MODELS, (key, model) =>
-      openAICompatible({
-        url: "https://router.huggingface.co/v1/chat/completions",
-        key,
-        model,
-        prompt,
-        temperature,
-        signal,
-        json: false,
-      }),
+    rotate(
+      pool(
+        "HF_TOKEN_1",
+        "HF_TOKEN",
+        "HUGGING_FACE_API_KEY1",
+        "HF_TOKEN_2",
+        "HUGGING_FACE_API_KEY2",
+      ),
+      HF_MODELS,
+      (key, model) =>
+        openAICompatible({
+          url: "https://router.huggingface.co/v1/chat/completions",
+          key,
+          model,
+          prompt,
+          temperature,
+          signal,
+          json: false,
+        }),
     ),
 
   bedrock: (prompt, temperature, signal) => callBedrockClaude(prompt, temperature, signal),
@@ -166,21 +210,33 @@ const BEDROCK_MODELS = [
 ];
 
 async function hmac(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
-  const k = await crypto.subtle.importKey("raw", key as BufferSource, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const k = await crypto.subtle.importKey(
+    "raw",
+    key as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
   return crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data));
 }
 function hex(buf: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 async function sha256Hex(text: string): Promise<string> {
   return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
 }
 
 /** AWS Bedrock Claude çağrısı — @aws-sdk yerine Worker uyumlu SigV4 imzası. */
-export async function callBedrockClaude(prompt: string, temperature = 0.3, signal?: AbortSignal): Promise<string> {
-  const accessKey = process.env['AWS_ACCESS_KEY_ID'];
-  const secretKey = process.env['AWS_SECRET_ACCESS_KEY'];
-  const region = process.env['AWS_REGION'] || "us-east-1";
+export async function callBedrockClaude(
+  prompt: string,
+  temperature = 0.3,
+  signal?: AbortSignal,
+): Promise<string> {
+  const accessKey = process.env["AWS_ACCESS_KEY_ID"];
+  const secretKey = process.env["AWS_SECRET_ACCESS_KEY"];
+  const region = process.env["AWS_REGION"] || "us-east-1";
   if (!accessKey || !secretKey) throw new Error("no aws credentials");
 
   let last: unknown = null;
@@ -208,7 +264,8 @@ export async function callBedrockClaude(prompt: string, temperature = 0.3, signa
       const scope = `${dateStamp}/${region}/bedrock/aws4_request`;
       const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, await sha256Hex(canonical)].join("\n");
       let signingKey: ArrayBuffer | Uint8Array = new TextEncoder().encode(`AWS4${secretKey}`);
-      for (const part of [dateStamp, region, "bedrock", "aws4_request"]) signingKey = await hmac(signingKey, part);
+      for (const part of [dateStamp, region, "bedrock", "aws4_request"])
+        signingKey = await hmac(signingKey, part);
       const signature = hex(await hmac(signingKey, toSign));
 
       const resp = await fetch(`https://${host}${path}`, {

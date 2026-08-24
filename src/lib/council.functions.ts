@@ -11,11 +11,15 @@ type Input = { query: string; country?: string; category?: string; lang?: string
 export const runCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: Input) => {
-    const query = String(input?.query ?? "").trim().slice(0, 140);
+    const query = String(input?.query ?? "")
+      .trim()
+      .slice(0, 140);
     if (query.length < 2) throw new Error("Lütfen bir ürün veya niş girin.");
     return {
       query,
-      country: String(input?.country ?? "GLOBAL").toUpperCase().slice(0, 8),
+      country: String(input?.country ?? "GLOBAL")
+        .toUpperCase()
+        .slice(0, 8),
       category: String(input?.category ?? "General").slice(0, 60),
       lang: String(input?.lang ?? "tr").slice(0, 5),
     };

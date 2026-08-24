@@ -42,7 +42,10 @@ export function ArolessCover({ className = "" }: { className?: string }) {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 -left-20 h-56 w-56 rounded-full blur-3xl animate-float-slow sm:h-80 sm:w-80"
-        style={{ background: "radial-gradient(circle, var(--color-brand), transparent 65%)", opacity: 0.22 }}
+        style={{
+          background: "radial-gradient(circle, var(--color-brand), transparent 65%)",
+          opacity: 0.22,
+        }}
       />
       <div
         aria-hidden
@@ -90,7 +93,10 @@ export function ArolessCover({ className = "" }: { className?: string }) {
               <span className="velora-underline mt-3 block w-full max-w-[14rem] sm:max-w-[16rem]" />
               <span
                 className="mt-3 block font-medium uppercase text-[var(--brand)]"
-                style={{ fontSize: "clamp(9px, 1.6vw, 10px)", letterSpacing: "clamp(0.18em, 1.4vw, 0.4em)" }}
+                style={{
+                  fontSize: "clamp(9px, 1.6vw, 10px)",
+                  letterSpacing: "clamp(0.18em, 1.4vw, 0.4em)",
+                }}
               >
                 AI Ticaret İşletim Sistemi
               </span>
@@ -98,7 +104,10 @@ export function ArolessCover({ className = "" }: { className?: string }) {
           </div>
 
           <div className="mt-5 min-h-[3.25rem] sm:min-h-[1.75rem]">
-            <p key={rot} className="animate-rise-in text-sm text-muted-foreground sm:text-base lg:text-lg">
+            <p
+              key={rot}
+              className="animate-rise-in text-sm text-muted-foreground sm:text-base lg:text-lg"
+            >
               {ROTATING[rot]}
             </p>
           </div>
@@ -118,7 +127,9 @@ export function ArolessCover({ className = "" }: { className?: string }) {
             <li
               key={p.label}
               className="premium-card card-lift group flex min-w-0 items-center gap-3 p-3 hover:-translate-y-0.5 sm:gap-4 sm:p-4"
-              style={{ animation: `rise-in 0.6s cubic-bezier(0.22,1,0.36,1) ${0.1 + i * 0.09}s both` }}
+              style={{
+                animation: `rise-in 0.6s cubic-bezier(0.22,1,0.36,1) ${0.1 + i * 0.09}s both`,
+              }}
             >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-card/60 text-foreground transition-transform group-hover:scale-110">
                 <p.icon className="h-5 w-5" />
@@ -133,6 +144,5 @@ export function ArolessCover({ className = "" }: { className?: string }) {
         </ul>
       </div>
     </section>
-
   );
 }

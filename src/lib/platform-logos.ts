@@ -54,7 +54,8 @@ export function logoForStore(store: string): string {
   if (s.includes("alibaba")) return "https://logo.clearbit.com/alibaba.com";
   if (s.includes("target")) return "https://logo.clearbit.com/target.com";
   if (s.includes("wayfair")) return "https://logo.clearbit.com/wayfair.com";
-  if (s.includes("best buy") || s.includes("bestbuy")) return "https://logo.clearbit.com/bestbuy.com";
+  if (s.includes("best buy") || s.includes("bestbuy"))
+    return "https://logo.clearbit.com/bestbuy.com";
   if (s.includes("flipkart")) return "https://logo.clearbit.com/flipkart.com";
   if (s.includes("wildberries")) return "https://logo.clearbit.com/wildberries.ru";
   if (s.includes("coupang")) return "https://logo.clearbit.com/coupang.com";

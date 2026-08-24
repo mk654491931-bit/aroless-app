@@ -3,7 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { countryByCode } from "@/lib/countries";
 
-export type FxPayload = { base: "USD"; rates: Record<string, number>; updated: string; source: string };
+export type FxPayload = {
+  base: "USD";
+  rates: Record<string, number>;
+  updated: string;
+  source: string;
+};
 
 /** Kur verisi yüklenene kadar yalnızca USD gösterilir — statik/mock kur kullanılmaz. */
 const USD_ONLY: FxPayload = { base: "USD", rates: { USD: 1 }, updated: "", source: "pending" };
@@ -27,7 +32,9 @@ export function useFxRates() {
 export function parseUsd(v: string | number | undefined | null): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (!v) return 0;
-  const m = String(v).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  const m = String(v)
+    .replace(/,/g, "")
+    .match(/-?\d+(\.\d+)?/);
   return m ? Number(m[0]) : 0;
 }
 
@@ -68,8 +75,10 @@ export function useMoney() {
     const digits = ZERO_DECIMAL.has(cur) ? 0 : opts?.compact ? 0 : Math.abs(amount) >= 1000 ? 0 : 2;
     try {
       return new Intl.NumberFormat(locale, {
-        style: "currency", currency: cur,
-        minimumFractionDigits: digits, maximumFractionDigits: digits,
+        style: "currency",
+        currency: cur,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
       }).format(amount);
     } catch {
       return `${cur} ${amount.toFixed(digits)}`;
@@ -77,12 +86,23 @@ export function useMoney() {
   };
 
   /** USD amount → local currency (with the USD original in parentheses). */
-  const money = (usd: number | string | undefined, opts?: { compact?: boolean; showUsd?: boolean }) => {
+  const money = (
+    usd: number | string | undefined,
+    opts?: { compact?: boolean; showUsd?: boolean },
+  ) => {
     const value = parseUsd(usd);
     if (currency === "USD" || rate === 1) return fmt(value, "USD", opts);
     const local = fmt(value * rate, currency, opts);
     return opts?.showUsd === false ? local : `${local} · ${fmt(value, "USD", opts)}`;
   };
 
-  return { currency, rate, locale, money, fmt, isLive: (data?.source ?? "fallback") !== "fallback", updated: data?.updated ?? "" };
+  return {
+    currency,
+    rate,
+    locale,
+    money,
+    fmt,
+    isLive: (data?.source ?? "fallback") !== "fallback",
+    updated: data?.updated ?? "",
+  };
 }

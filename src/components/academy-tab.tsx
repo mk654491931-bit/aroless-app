@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  GraduationCap, Check, CircleDashed, Trophy, Lightbulb,
-  RotateCcw, PlayCircle, ExternalLink, ListChecks, BookOpen, AlertTriangle, MessageSquare,
-  Flame, Zap, Brain, Target, Sparkles, Search, PenLine, ChevronLeft, ChevronRight,
+  GraduationCap,
+  Check,
+  CircleDashed,
+  Trophy,
+  Lightbulb,
+  RotateCcw,
+  PlayCircle,
+  ExternalLink,
+  ListChecks,
+  BookOpen,
+  AlertTriangle,
+  MessageSquare,
+  Flame,
+  Zap,
+  Brain,
+  Target,
+  Sparkles,
+  Search,
+  PenLine,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 type Quiz = { q: string; options: string[]; answer: number; why: string };
@@ -44,17 +62,30 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "SKU", meaning: "Stock Keeping Unit — one specific product variant (e.g. blue, size M)." },
-      { term: "Margin", meaning: "What is left of the sale price after product, shipping and fees." },
-      { term: "Fulfilment", meaning: "The process of getting the product from warehouse to customer." },
+      {
+        term: "SKU",
+        meaning: "Stock Keeping Unit — one specific product variant (e.g. blue, size M).",
+      },
+      {
+        term: "Margin",
+        meaning: "What is left of the sale price after product, shipping and fees.",
+      },
+      {
+        term: "Fulfilment",
+        meaning: "The process of getting the product from warehouse to customer.",
+      },
     ],
     tasks: [
       "Write one sentence: “I will sell ___ to ___ using the ___ model.”",
       "Decide your starting budget and write it down (a realistic first test is $300-600).",
       "Pick one model for the next 90 days and commit — no switching mid-way.",
     ],
-    mistake: "Trying dropshipping, print-on-demand and Amazon FBA at the same time. Three half-built businesses beat by one finished one.",
-    video: { title: "E-commerce business models explained for beginners", query: "ecommerce business models explained beginners dropshipping private label" },
+    mistake:
+      "Trying dropshipping, print-on-demand and Amazon FBA at the same time. Three half-built businesses beat by one finished one.",
+    video: {
+      title: "E-commerce business models explained for beginners",
+      query: "ecommerce business models explained beginners dropshipping private label",
+    },
     quiz: {
       q: "Which model lets you start without buying inventory up front?",
       options: ["Private label", "Dropshipping", "Stocked reselling", "Wholesale"],
@@ -83,7 +114,10 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "ROAS", meaning: "Return On Ad Spend — revenue ÷ ad spend. 3.0 means $3 back per $1 spent." },
+      {
+        term: "ROAS",
+        meaning: "Return On Ad Spend — revenue ÷ ad spend. 3.0 means $3 back per $1 spent.",
+      },
       { term: "CPA / CAC", meaning: "Cost to acquire one paying customer." },
       { term: "AOV", meaning: "Average Order Value — average money per checkout." },
       { term: "Break-even ROAS", meaning: "The ROAS at which you make exactly zero profit." },
@@ -93,8 +127,12 @@ const DAYS: Day[] = [
       "Fill it in for one candidate product with real supplier numbers.",
       "Calculate and memorise your break-even ROAS.",
     ],
-    mistake: "Pricing 'competitively' at a 30% margin, then discovering ads eat 100% of that margin.",
-    video: { title: "Unit economics, margin and break-even ROAS", query: "ecommerce unit economics margin break even ROAS explained" },
+    mistake:
+      "Pricing 'competitively' at a 30% margin, then discovering ads eat 100% of that margin.",
+    video: {
+      title: "Unit economics, margin and break-even ROAS",
+      query: "ecommerce unit economics margin break even ROAS explained",
+    },
     quiz: {
       q: "Your gross margin is 50%. What is your break-even ROAS?",
       options: ["1.0", "1.5", "2.0", "4.0"],
@@ -125,7 +163,10 @@ const DAYS: Day[] = [
     terms: [
       { term: "Niche", meaning: "A defined segment of the market with shared identity and needs." },
       { term: "Avatar / persona", meaning: "A written portrait of one specific ideal customer." },
-      { term: "Positioning", meaning: "The reason a customer should choose you over the alternative." },
+      {
+        term: "Positioning",
+        meaning: "The reason a customer should choose you over the alternative.",
+      },
     ],
     tasks: [
       "Shortlist 3 niches and score each on passion / pain / payment power.",
@@ -133,7 +174,10 @@ const DAYS: Day[] = [
       "Find 3 communities where that person already hangs out (subreddit, FB group, hashtag).",
     ],
     mistake: "Choosing a niche you find boring. You will produce content about it for months.",
-    video: { title: "How to choose a profitable e-commerce niche", query: "how to choose profitable ecommerce niche 2024 beginners" },
+    video: {
+      title: "How to choose a profitable e-commerce niche",
+      query: "how to choose profitable ecommerce niche 2024 beginners",
+    },
     quiz: {
       q: "Which niche description is strong enough to build a store around?",
       options: [
@@ -177,10 +221,18 @@ const DAYS: Day[] = [
       "Save your top 3 to My Library in this app.",
     ],
     mistake: "Falling in love with the first product. Always compare at least ten.",
-    video: { title: "How to find winning products", query: "how to find winning dropshipping products research method" },
+    video: {
+      title: "How to find winning products",
+      query: "how to find winning dropshipping products research method",
+    },
     quiz: {
       q: "Which attribute matters most for keeping advertising costs low?",
-      options: ["Bright packaging", "A 3-second visual wow moment", "Many colour options", "A long product description"],
+      options: [
+        "Bright packaging",
+        "A 3-second visual wow moment",
+        "Many colour options",
+        "A long product description",
+      ],
       answer: 1,
       why: "Paid social is won or lost in the first three seconds. A product that demonstrates itself visually gets cheap attention.",
     },
@@ -206,7 +258,10 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "Meta Ad Library", meaning: "Free public archive of ads currently running on Facebook/Instagram." },
+      {
+        term: "Meta Ad Library",
+        meaning: "Free public archive of ads currently running on Facebook/Instagram.",
+      },
       { term: "Validation", meaning: "Evidence from strangers' behaviour, not friends' opinions." },
       { term: "Seasonality", meaning: "Predictable rise and fall of demand across the year." },
     ],
@@ -216,10 +271,18 @@ const DAYS: Day[] = [
       "Open the Viral Ads tab in this app and study the top-performing formats.",
     ],
     mistake: "Asking friends and family. They are polite; strangers with credit cards are honest.",
-    video: { title: "Validating product demand with the Meta Ad Library", query: "how to use facebook meta ad library product research validation" },
+    video: {
+      title: "Validating product demand with the Meta Ad Library",
+      query: "how to use facebook meta ad library product research validation",
+    },
     quiz: {
       q: "A competitor has run the same ad for six weeks. What does that most likely mean?",
-      options: ["They forgot to turn it off", "The ad is profitable", "The product is out of stock", "They are new"],
+      options: [
+        "They forgot to turn it off",
+        "The ad is profitable",
+        "The product is out of stock",
+        "They are new",
+      ],
       answer: 1,
       why: "Ad accounts bleed money fast. Long-running ads are almost always ones that make more than they cost.",
     },
@@ -247,7 +310,10 @@ const DAYS: Day[] = [
     terms: [
       { term: "MOQ", meaning: "Minimum Order Quantity a supplier will accept." },
       { term: "Lead time", meaning: "Days from order to dispatch (processing) plus transit." },
-      { term: "Chargeback", meaning: "A customer reversing a payment through their bank — expensive." },
+      {
+        term: "Chargeback",
+        meaning: "A customer reversing a payment through their bank — expensive.",
+      },
     ],
     tasks: [
       "Message 5 suppliers with the same question list; compare replies.",
@@ -255,7 +321,10 @@ const DAYS: Day[] = [
       "Write your real delivery window in plain language for the product page.",
     ],
     mistake: "Picking the cheapest supplier. A $1 saving on unit cost is erased by one refund.",
-    video: { title: "Finding and vetting suppliers", query: "how to find reliable dropshipping suppliers aliexpress alibaba vetting" },
+    video: {
+      title: "Finding and vetting suppliers",
+      query: "how to find reliable dropshipping suppliers aliexpress alibaba vetting",
+    },
     quiz: {
       q: "What is the single best reason to order a sample?",
       options: [
@@ -291,15 +360,22 @@ const DAYS: Day[] = [
     terms: [
       { term: "Sole trader", meaning: "The simplest legal form for a one-person business." },
       { term: "VAT / sales tax", meaning: "Consumption tax you may need to collect and remit." },
-      { term: "Rolling reserve", meaning: "Money the payment processor holds back against refunds." },
+      {
+        term: "Rolling reserve",
+        meaning: "Money the payment processor holds back against refunds.",
+      },
     ],
     tasks: [
       "Check your country's threshold for registering a business.",
       "Draft the four required policy pages.",
       "Open or verify a payment processor account.",
     ],
-    mistake: "Launching ads with no refund policy page — processors flag the store and freeze payouts.",
-    video: { title: "Legal and tax basics for online stores", query: "ecommerce legal requirements tax basics online store beginners" },
+    mistake:
+      "Launching ads with no refund policy page — processors flag the store and freeze payouts.",
+    video: {
+      title: "Legal and tax basics for online stores",
+      query: "ecommerce legal requirements tax basics online store beginners",
+    },
     quiz: {
       q: "Why should you not spend all incoming revenue on ads immediately?",
       options: [
@@ -334,16 +410,26 @@ const DAYS: Day[] = [
     ],
     terms: [
       { term: "Theme", meaning: "The template controlling your store's layout and design." },
-      { term: "Checkout", meaning: "The payment flow — the most conversion-sensitive part of the store." },
-      { term: "MVP", meaning: "Minimum Viable Product — the smallest version that can make a sale." },
+      {
+        term: "Checkout",
+        meaning: "The payment flow — the most conversion-sensitive part of the store.",
+      },
+      {
+        term: "MVP",
+        meaning: "Minimum Viable Product — the smallest version that can make a sale.",
+      },
     ],
     tasks: [
       "Register a domain and create the store account.",
       "Install a clean free theme; set brand colour and logo.",
       "Publish the four policy pages and one product page.",
     ],
-    mistake: "Spending three weeks on theme customisation before ever testing whether anyone wants the product.",
-    video: { title: "Shopify store setup step by step", query: "shopify store setup tutorial step by step beginners full" },
+    mistake:
+      "Spending three weeks on theme customisation before ever testing whether anyone wants the product.",
+    video: {
+      title: "Shopify store setup step by step",
+      query: "shopify store setup tutorial step by step beginners full",
+    },
     quiz: {
       q: "What is the biggest risk of selling only on a marketplace?",
       options: [
@@ -377,7 +463,10 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "Risk reversal", meaning: "Shifting purchase risk from the buyer to you (guarantee)." },
+      {
+        term: "Risk reversal",
+        meaning: "Shifting purchase risk from the buyer to you (guarantee).",
+      },
       { term: "Bundle", meaning: "Multiple units or complementary items sold together." },
       { term: "Anchor price", meaning: "A reference price that makes your price look reasonable." },
     ],
@@ -387,10 +476,18 @@ const DAYS: Day[] = [
       "Create one bundle option (2-pack or product + accessory).",
     ],
     mistake: "Using a fake 'only 3 left' timer. Customers recognise it instantly and bounce.",
-    video: { title: "How to build an irresistible offer", query: "how to create irresistible offer ecommerce value stack guarantee" },
+    video: {
+      title: "How to build an irresistible offer",
+      query: "how to create irresistible offer ecommerce value stack guarantee",
+    },
     quiz: {
       q: "Which change usually raises average order value with no extra ad spend?",
-      options: ["Lowering the price", "A bundle plus a free-shipping threshold", "Adding more product photos", "Changing the logo"],
+      options: [
+        "Lowering the price",
+        "A bundle plus a free-shipping threshold",
+        "Adding more product photos",
+        "Changing the logo",
+      ],
       answer: 1,
       why: "Bundles and thresholds get each existing buyer to spend more, which improves profitability without new traffic.",
     },
@@ -425,11 +522,20 @@ const DAYS: Day[] = [
       "Use the SEO & Marketing tab here to generate title, description and FAQ drafts.",
       "Test the page on your phone and time the load speed.",
     ],
-    mistake: "A beautiful desktop page that is unusable on mobile, where nearly all of your traffic lives.",
-    video: { title: "High-converting product page anatomy", query: "high converting shopify product page structure copywriting tutorial" },
+    mistake:
+      "A beautiful desktop page that is unusable on mobile, where nearly all of your traffic lives.",
+    video: {
+      title: "High-converting product page anatomy",
+      query: "high converting shopify product page structure copywriting tutorial",
+    },
     quiz: {
       q: "Which is a benefit rather than a feature?",
-      options: ["Stainless steel body", "Works all weekend without a charger", "5000mAh battery", "IP67 rated"],
+      options: [
+        "Stainless steel body",
+        "Works all weekend without a charger",
+        "5000mAh battery",
+        "IP67 rated",
+      ],
       answer: 1,
       why: "A benefit describes the improvement in the customer's life; features are the technical means to that end.",
     },
@@ -465,7 +571,10 @@ const DAYS: Day[] = [
       "Log views, watch time and saves in your spreadsheet.",
     ],
     mistake: "Posting one video, getting 200 views, and concluding organic 'does not work'.",
-    video: { title: "Short-form video hooks that stop the scroll", query: "tiktok hooks first 3 seconds ecommerce product video tutorial" },
+    video: {
+      title: "Short-form video hooks that stop the scroll",
+      query: "tiktok hooks first 3 seconds ecommerce product video tutorial",
+    },
     quiz: {
       q: "What is the main strategic value of organic short-form video for a new store?",
       options: [
@@ -499,9 +608,18 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "Pixel", meaning: "Tracking code that reports visitor actions back to the ad platform." },
-      { term: "Learning phase", meaning: "Period where the algorithm gathers data; edits reset it." },
-      { term: "CTR", meaning: "Click-Through Rate — clicks ÷ impressions. Above ~1.5% is healthy." },
+      {
+        term: "Pixel",
+        meaning: "Tracking code that reports visitor actions back to the ad platform.",
+      },
+      {
+        term: "Learning phase",
+        meaning: "Period where the algorithm gathers data; edits reset it.",
+      },
+      {
+        term: "CTR",
+        meaning: "Click-Through Rate — clicks ÷ impressions. Above ~1.5% is healthy.",
+      },
       { term: "CPM", meaning: "Cost per 1000 impressions — a proxy for audience competition." },
     ],
     tasks: [
@@ -509,8 +627,12 @@ const DAYS: Day[] = [
       "Launch one campaign with 3-5 creatives at $20-30/day.",
       "Do not touch it for 72 hours; then record CTR, CPC, ATC and ROAS.",
     ],
-    mistake: "Turning ads off after 6 hours because there were no sales yet. You bought data — read it first.",
-    video: { title: "Facebook ads for beginners: first campaign setup", query: "facebook ads beginners tutorial first campaign shopify setup testing" },
+    mistake:
+      "Turning ads off after 6 hours because there were no sales yet. You bought data — read it first.",
+    video: {
+      title: "Facebook ads for beginners: first campaign setup",
+      query: "facebook ads beginners tutorial first campaign shopify setup testing",
+    },
     quiz: {
       q: "Why should you avoid editing an ad set during its first 3 days?",
       options: [
@@ -553,11 +675,20 @@ const DAYS: Day[] = [
       "Identify the single weakest step versus the benchmark.",
       "Make one change to fix it and schedule a re-check in 72 hours.",
     ],
-    mistake: "Changing the creative, the price and the page on the same day — now you cannot tell what helped.",
-    video: { title: "Diagnosing your e-commerce conversion funnel", query: "ecommerce conversion funnel analysis fix low conversion rate shopify" },
+    mistake:
+      "Changing the creative, the price and the page on the same day — now you cannot tell what helped.",
+    video: {
+      title: "Diagnosing your e-commerce conversion funnel",
+      query: "ecommerce conversion funnel analysis fix low conversion rate shopify",
+    },
     quiz: {
       q: "High CTR but almost no add-to-carts. Where do you look first?",
-      options: ["The ad creative", "The product page, price and offer", "The pixel", "The supplier"],
+      options: [
+        "The ad creative",
+        "The product page, price and offer",
+        "The pixel",
+        "The supplier",
+      ],
       answer: 1,
       why: "The creative already did its job by earning clicks; the disconnect is what visitors find after arriving.",
     },
@@ -583,7 +714,10 @@ const DAYS: Day[] = [
       },
     ],
     terms: [
-      { term: "Flow / automation", meaning: "A pre-built message sequence triggered by behaviour." },
+      {
+        term: "Flow / automation",
+        meaning: "A pre-built message sequence triggered by behaviour.",
+      },
       { term: "LTV", meaning: "Lifetime Value — total profit from one customer over time." },
       { term: "Win-back", meaning: "A campaign targeting customers who stopped buying." },
     ],
@@ -593,10 +727,18 @@ const DAYS: Day[] = [
       "Set an automatic review request 10 days after delivery.",
     ],
     mistake: "Collecting emails for months and never sending anything. An unused list decays fast.",
-    video: { title: "Email marketing flows for e-commerce", query: "klaviyo email flows ecommerce abandoned cart welcome series tutorial" },
+    video: {
+      title: "Email marketing flows for e-commerce",
+      query: "klaviyo email flows ecommerce abandoned cart welcome series tutorial",
+    },
     quiz: {
       q: "Which automation typically recovers the most revenue for a new store?",
-      options: ["Birthday email", "Abandoned cart sequence", "Monthly newsletter", "Win-back campaign"],
+      options: [
+        "Birthday email",
+        "Abandoned cart sequence",
+        "Monthly newsletter",
+        "Win-back campaign",
+      ],
       answer: 1,
       why: "Abandoned-cart messages reach people who already chose the product, so intent is highest.",
     },
@@ -624,7 +766,10 @@ const DAYS: Day[] = [
     terms: [
       { term: "Vertical scaling", meaning: "Raising budget on an existing winning ad set." },
       { term: "Horizontal scaling", meaning: "Duplicating winners into new audiences or markets." },
-      { term: "Creative fatigue", meaning: "Performance decay as an audience sees the same ad repeatedly." },
+      {
+        term: "Creative fatigue",
+        meaning: "Performance decay as an audience sees the same ad repeatedly.",
+      },
     ],
     tasks: [
       "Define your scaling rule in writing (e.g. '+25% budget if 3-day ROAS > 2.2').",
@@ -632,10 +777,18 @@ const DAYS: Day[] = [
       "Set a weekly 30-minute review of your five core metrics.",
     ],
     mistake: "Multiplying budget 10× overnight. The learning phase resets and costs explode.",
-    video: { title: "Scaling e-commerce ads profitably", query: "how to scale facebook ads profitably ecommerce vertical horizontal scaling" },
+    video: {
+      title: "Scaling e-commerce ads profitably",
+      query: "how to scale facebook ads profitably ecommerce vertical horizontal scaling",
+    },
     quiz: {
       q: "What most often causes a winning ad to stop performing after a few weeks?",
-      options: ["The product expires", "Creative fatigue", "The pixel breaks", "Competitors report you"],
+      options: [
+        "The product expires",
+        "Creative fatigue",
+        "The pixel breaks",
+        "Competitors report you",
+      ],
       answer: 1,
       why: "The same audience keeps seeing the same creative, engagement falls and costs rise — so you refresh creative continuously.",
     },
@@ -643,9 +796,21 @@ const DAYS: Day[] = [
 ];
 
 const WEEKS: { id: 1 | 2 | 3; title: string; blurb: string }[] = [
-  { id: 1, title: "Week 1 — Foundations & Product", blurb: "Days 1-7: how the business works, the maths, your niche, product and suppliers." },
-  { id: 2, title: "Week 2 — Store, Offer & Traffic", blurb: "Days 8-13: build the store, craft the offer, create content and run your first ads." },
-  { id: 3, title: "Week 3 — Keep & Grow", blurb: "Days 14-15: retention systems and profitable scaling." },
+  {
+    id: 1,
+    title: "Week 1 — Foundations & Product",
+    blurb: "Days 1-7: how the business works, the maths, your niche, product and suppliers.",
+  },
+  {
+    id: 2,
+    title: "Week 2 — Store, Offer & Traffic",
+    blurb: "Days 8-13: build the store, craft the offer, create content and run your first ads.",
+  },
+  {
+    id: 3,
+    title: "Week 3 — Keep & Grow",
+    blurb: "Days 14-15: retention systems and profitable scaling.",
+  },
 ];
 
 const TOTAL_TASKS = DAYS.reduce((n, d) => n + d.tasks.length, 0);
@@ -670,7 +835,12 @@ function levelFor(xp: number) {
   const step = Math.max(1, Math.round(totalXp / LEVELS.length));
   const idx = Math.min(LEVELS.length - 1, Math.floor(xp / step));
   const nextAt = Math.min(totalXp, (idx + 1) * step);
-  return { name: LEVELS[idx], idx, nextAt, pct: Math.min(100, Math.round(((xp % step) / step) * 100)) };
+  return {
+    name: LEVELS[idx],
+    idx,
+    nextAt,
+    pct: Math.min(100, Math.round(((xp % step) / step) * 100)),
+  };
 }
 
 export function AcademyTab() {
@@ -704,7 +874,9 @@ export function AcademyTab() {
       }
       lastDayRef.v = today;
       setStreak(Math.max(1, s));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setHydrated(true);
   }, [lastDayRef]);
 
@@ -713,9 +885,18 @@ export function AcademyTab() {
     try {
       localStorage.setItem(
         STORE_KEY,
-        JSON.stringify({ tasks: tasksDone, answers, notes, streak, lastDay: lastDayRef.v, active: activeDay }),
+        JSON.stringify({
+          tasks: tasksDone,
+          answers,
+          notes,
+          streak,
+          lastDay: lastDayRef.v,
+          active: activeDay,
+        }),
       );
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [tasksDone, answers, notes, streak, activeDay, hydrated, lastDayRef]);
 
   const doneCount = useMemo(() => Object.values(tasksDone).filter(Boolean).length, [tasksDone]);
@@ -738,13 +919,29 @@ export function AcademyTab() {
   const badges = [
     { id: "start", label: "İlk adım", icon: Sparkles, got: doneCount > 0 },
     { id: "quiz3", label: "3 quiz", icon: Brain, got: quizzesPassed >= 3 },
-    { id: "week1", label: "1. hafta", icon: Flame, got: DAYS.filter((d) => d.week === 1).every(dayComplete) },
-    { id: "half", label: "Yarı yol", icon: Target, got: completedDays >= Math.ceil(DAYS.length / 2) },
+    {
+      id: "week1",
+      label: "1. hafta",
+      icon: Flame,
+      got: DAYS.filter((d) => d.week === 1).every(dayComplete),
+    },
+    {
+      id: "half",
+      label: "Yarı yol",
+      icon: Target,
+      got: completedDays >= Math.ceil(DAYS.length / 2),
+    },
     { id: "all", label: "Mezun", icon: Trophy, got: completedDays === DAYS.length },
   ];
 
   const toggleTask = (key: string) => setTasksDone((p) => ({ ...p, [key]: !p[key] }));
-  const reset = () => { setTasksDone({}); setAnswers({}); setNotes({}); setActiveDay(1); setVideoOpen(false); };
+  const reset = () => {
+    setTasksDone({});
+    setAnswers({});
+    setNotes({});
+    setActiveDay(1);
+    setVideoOpen(false);
+  };
 
   const goTo = (n: number) => {
     setActiveDay(Math.min(DAYS.length, Math.max(1, n)));
@@ -760,9 +957,10 @@ export function AcademyTab() {
     }
   }, [finished, activeDay]);
 
-  const filtered = DAYS.filter((d) =>
-    !search.trim() ||
-    `${d.day} ${d.title} ${d.goal}`.toLowerCase().includes(search.toLowerCase()),
+  const filtered = DAYS.filter(
+    (d) =>
+      !search.trim() ||
+      `${d.day} ${d.title} ${d.goal}`.toLowerCase().includes(search.toLowerCase()),
   );
 
   const nextUnfinished = DAYS.find((d) => !dayComplete(d));
@@ -790,10 +988,15 @@ export function AcademyTab() {
                   onClick={() => goTo(nextUnfinished.day)}
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white shadow-lg"
                 >
-                  <PlayCircle size={15} /> {doneCount ? "Kaldığın yerden devam et" : "Programa başla"} · Gün {nextUnfinished.day}
+                  <PlayCircle size={15} />{" "}
+                  {doneCount ? "Kaldığın yerden devam et" : "Programa başla"} · Gün{" "}
+                  {nextUnfinished.day}
                 </button>
               )}
-              <button onClick={reset} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
+              <button
+                onClick={reset}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+              >
                 <RotateCcw size={12} /> Sıfırla
               </button>
             </div>
@@ -810,10 +1013,15 @@ export function AcademyTab() {
         <div className="relative mt-6">
           <div className="mb-1.5 flex items-center justify-between text-xs">
             <span className="font-semibold">{level.name}</span>
-            <span className="text-muted-foreground">{pct}% · {doneCount}/{TOTAL_TASKS} görev</span>
+            <span className="text-muted-foreground">
+              {pct}% · {doneCount}/{TOTAL_TASKS} görev
+            </span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-700" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-700"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
 
@@ -839,7 +1047,10 @@ export function AcademyTab() {
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <div className="glass rounded-2xl p-3">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -854,7 +1065,9 @@ export function AcademyTab() {
                 if (!days.length) return null;
                 return (
                   <div key={w.id}>
-                    <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{w.title}</p>
+                    <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {w.title}
+                    </p>
                     <div className="mt-1.5 space-y-1">
                       {days.map((d) => {
                         const done = dayComplete(d);
@@ -864,14 +1077,20 @@ export function AcademyTab() {
                             key={d.day}
                             onClick={() => goTo(d.day)}
                             className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition ${
-                              on ? "bg-[var(--brand)]/15 border border-[var(--brand)]/40" : "border border-transparent hover:bg-white/5"
+                              on
+                                ? "bg-[var(--brand)]/15 border border-[var(--brand)]/40"
+                                : "border border-transparent hover:bg-white/5"
                             }`}
                           >
-                            <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-bold ${done ? "bg-[oklch(0.75_0.19_150)]/20 text-[oklch(0.75_0.19_150)]" : "bg-white/10"}`}>
+                            <span
+                              className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-bold ${done ? "bg-[oklch(0.75_0.19_150)]/20 text-[oklch(0.75_0.19_150)]" : "bg-white/10"}`}
+                            >
                               {done ? <Check size={12} /> : d.day}
                             </span>
                             <span className="min-w-0 flex-1 truncate font-medium">{d.title}</span>
-                            <span className="shrink-0 text-[10px] text-muted-foreground">{d.minutes}′</span>
+                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                              {d.minutes}′
+                            </span>
                           </button>
                         );
                       })}
@@ -883,10 +1102,15 @@ export function AcademyTab() {
           </div>
 
           <div className="glass mt-3 rounded-2xl border border-[var(--brand)]/25 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold"><MessageSquare size={13} /> Geri bildirim</div>
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <MessageSquare size={13} /> Geri bildirim
+            </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Ders önerin veya sorunun mu var?{" "}
-              <a href="mailto:mk65449191@gmail.com?subject=Aroless%20Academy" className="font-semibold text-[var(--brand)] hover:underline">
+              <a
+                href="mailto:mk65449191@gmail.com?subject=Aroless%20Academy"
+                className="font-semibold text-[var(--brand)] hover:underline"
+              >
                 mk65449191@gmail.com
               </a>
             </p>
@@ -895,7 +1119,9 @@ export function AcademyTab() {
 
         {/* Lesson pane */}
         <div className="space-y-4">
-          <div className={`glass relative overflow-hidden rounded-2xl p-5 ${celebrate ? "ring-2 ring-[oklch(0.75_0.19_150)]/60" : ""}`}>
+          <div
+            className={`glass relative overflow-hidden rounded-2xl p-5 ${celebrate ? "ring-2 ring-[oklch(0.75_0.19_150)]/60" : ""}`}
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -911,7 +1137,10 @@ export function AcademyTab() {
               )}
             </div>
             <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-500" style={{ width: `${dayPct}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-500"
+                style={{ width: `${dayPct}%` }}
+              />
             </div>
           </div>
 
@@ -922,7 +1151,10 @@ export function AcademyTab() {
             </p>
             <div className="mt-3 space-y-4">
               {day.sections.map((s) => (
-                <div key={s.heading} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div
+                  key={s.heading}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                >
                   <p className="text-sm font-semibold">{s.heading}</p>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
                 </div>
@@ -932,7 +1164,9 @@ export function AcademyTab() {
 
           {/* Terms */}
           <div className="glass rounded-2xl p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anahtar terimler</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Anahtar terimler
+            </p>
             <dl className="grid gap-2.5 sm:grid-cols-2">
               {day.terms.map((t) => (
                 <div key={t.term} className="rounded-lg border border-white/10 bg-white/5 p-2.5">
@@ -961,7 +1195,8 @@ export function AcademyTab() {
                 </button>
                 <a
                   href={`https://www.youtube.com/results?search_query=${encodeURIComponent(day.video.query)}`}
-                  target="_blank" rel="noreferrer"
+                  target="_blank"
+                  rel="noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
                 >
                   YouTube <ExternalLink size={11} />
@@ -997,18 +1232,27 @@ export function AcademyTab() {
                     onClick={() => toggleTask(key)}
                     className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${on ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10" : "border-white/10 hover:bg-white/5"}`}
                   >
-                    {on
-                      ? <Check size={16} className="mt-0.5 shrink-0 text-[oklch(0.75_0.19_150)]" />
-                      : <CircleDashed size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
-                    <span className={`text-sm ${on ? "text-muted-foreground line-through" : ""}`}>{task}</span>
-                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">+{XP_PER_TASK} XP</span>
+                    {on ? (
+                      <Check size={16} className="mt-0.5 shrink-0 text-[oklch(0.75_0.19_150)]" />
+                    ) : (
+                      <CircleDashed size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className={`text-sm ${on ? "text-muted-foreground line-through" : ""}`}>
+                      {task}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                      +{XP_PER_TASK} XP
+                    </span>
                   </button>
                 );
               })}
             </div>
             <p className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 p-2.5 text-xs">
               <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[oklch(0.80_0.16_60)]" />
-              <span><span className="font-semibold">Sık yapılan hata: </span>{day.mistake}</span>
+              <span>
+                <span className="font-semibold">Sık yapılan hata: </span>
+                {day.mistake}
+              </span>
             </p>
           </div>
 
@@ -1035,13 +1279,14 @@ export function AcademyTab() {
             <div className="grid gap-2">
               {day.quiz.options.map((opt, i) => {
                 const chosen = answered === i;
-                const state = answered === undefined
-                  ? "border-white/10 hover:bg-white/5"
-                  : i === day.quiz.answer
-                    ? "border-[oklch(0.75_0.19_150)]/50 bg-[oklch(0.75_0.19_150)]/10"
-                    : chosen
-                      ? "border-[oklch(0.68_0.20_25)]/50 bg-[oklch(0.68_0.20_25)]/10"
-                      : "border-white/10 opacity-60";
+                const state =
+                  answered === undefined
+                    ? "border-white/10 hover:bg-white/5"
+                    : i === day.quiz.answer
+                      ? "border-[oklch(0.75_0.19_150)]/50 bg-[oklch(0.75_0.19_150)]/10"
+                      : chosen
+                        ? "border-[oklch(0.68_0.20_25)]/50 bg-[oklch(0.68_0.20_25)]/10"
+                        : "border-white/10 opacity-60";
                 return (
                   <button
                     key={i}
@@ -1055,13 +1300,21 @@ export function AcademyTab() {
             </div>
             {answered !== undefined && (
               <div className="mt-3 text-xs text-muted-foreground">
-                <span className={`font-semibold ${correct ? "text-[oklch(0.75_0.19_150)]" : "text-[oklch(0.72_0.19_25)]"}`}>
+                <span
+                  className={`font-semibold ${correct ? "text-[oklch(0.75_0.19_150)]" : "text-[oklch(0.72_0.19_25)]"}`}
+                >
                   {correct ? "Doğru. " : "Tam değil. "}
                 </span>
                 {day.quiz.why}
                 {!correct && (
                   <button
-                    onClick={() => setAnswers((p) => { const n = { ...p }; delete n[day.day]; return n; })}
+                    onClick={() =>
+                      setAnswers((p) => {
+                        const n = { ...p };
+                        delete n[day.day];
+                        return n;
+                      })
+                    }
                     className="ml-2 underline hover:text-foreground"
                   >
                     tekrar dene
@@ -1095,7 +1348,9 @@ export function AcademyTab() {
               <Trophy size={22} className="text-[oklch(0.85_0.18_90)]" />
               <div>
                 <p className="text-sm font-semibold">Program tamamlandı 🎓</p>
-                <p className="text-xs text-muted-foreground">Tüm döngüyü öğrendin. Şimdi bir sonraki ürününle baştan çalıştır.</p>
+                <p className="text-xs text-muted-foreground">
+                  Tüm döngüyü öğrendin. Şimdi bir sonraki ürününle baştan çalıştır.
+                </p>
               </div>
             </div>
           )}
@@ -1105,7 +1360,15 @@ export function AcademyTab() {
   );
 }
 
-function Stat({ icon: Icon, label, value }: { icon: typeof Flame; label: string; value: string | number }) {
+function Stat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Flame;
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">

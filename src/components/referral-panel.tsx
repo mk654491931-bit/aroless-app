@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Gift, Copy, Check, Users, Coins, Loader2 } from "lucide-react";
-import { getMyReferral, claimReferral, REFERRED_BONUS, REFERRER_BONUS } from "@/lib/referral.functions";
+import {
+  getMyReferral,
+  claimReferral,
+  REFERRED_BONUS,
+  REFERRER_BONUS,
+} from "@/lib/referral.functions";
 
 export function ReferralPanel() {
   const summaryFn = useServerFn(getMyReferral);
@@ -48,27 +53,39 @@ export function ReferralPanel() {
         <h2 className="font-semibold">Arkadaşını davet et</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Davet linkinle kayıt olan her kullanıcı için sana <b>+{REFERRER_BONUS} kredi</b>, ona <b>+{REFERRED_BONUS} kredi</b>.
+        Davet linkinle kayıt olan her kullanıcı için sana <b>+{REFERRER_BONUS} kredi</b>, ona{" "}
+        <b>+{REFERRED_BONUS} kredi</b>.
       </p>
 
       {q.isLoading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={14} className="animate-spin" /> Yükleniyor…</div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" /> Yükleniyor…
+        </div>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm break-all flex-1 min-w-[200px]">{link || "—"}</code>
-            <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+            <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm break-all flex-1 min-w-[200px]">
+              {link || "—"}
+            </code>
+            <button
+              onClick={copy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
               {copied ? <Check size={14} /> : <Copy size={14} />} Kopyala
             </button>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users size={13} /> Davet edilen</div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Users size={13} /> Davet edilen
+              </div>
               <div className="text-2xl font-bold">{q.data?.invited ?? 0}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Coins size={13} /> Kazanılan kredi</div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Coins size={13} /> Kazanılan kredi
+              </div>
               <div className="text-2xl font-bold">{q.data?.credits_earned ?? 0}</div>
             </div>
           </div>
@@ -94,7 +111,9 @@ export function ReferralPanel() {
             </div>
           )}
           {q.data?.referred_by_code && (
-            <p className="mt-3 text-xs text-muted-foreground">Davet kodu kullanıldı: <b>{q.data.referred_by_code}</b></p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Davet kodu kullanıldı: <b>{q.data.referred_by_code}</b>
+            </p>
           )}
         </>
       )}

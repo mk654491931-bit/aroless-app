@@ -32,7 +32,9 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
             <ThumbsUp size={11} /> Kolaylıklar
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {c.strengths.map((s) => <li key={s}>🟢 {s}</li>)}
+            {c.strengths.map((s) => (
+              <li key={s}>🟢 {s}</li>
+            ))}
           </ul>
         </div>
         <div>
@@ -40,7 +42,9 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
             <ShieldAlert size={11} /> Zorluklar &amp; Engeller
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {c.challenges.map((s) => <li key={s}>🔴 {s}</li>)}
+            {c.challenges.map((s) => (
+              <li key={s}>🔴 {s}</li>
+            ))}
           </ul>
         </div>
       </div>
@@ -56,12 +60,17 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
             disabled={mut.isPending}
             className="text-[11px] rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1 font-semibold inline-flex items-center gap-1.5 disabled:opacity-60"
           >
-            {mut.isPending ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+            {mut.isPending ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Sparkles size={11} />
+            )}
             {strategy ? "Yenile" : "Strateji üret"}
           </button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          {strategy || "Bu ülke + niş kombinasyonu için Gemini destekli özel strateji üretmek üzere butona bas."}
+          {strategy ||
+            "Bu ülke + niş kombinasyonu için Gemini destekli özel strateji üretmek üzere butona bas."}
         </p>
       </div>
     </div>

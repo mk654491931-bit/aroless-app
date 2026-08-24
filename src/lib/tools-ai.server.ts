@@ -1,7 +1,14 @@
 // Server-only multi-provider AI router for the 19 Aroless tools.
 // Hybrid mode: several engines answer the same prompt in parallel and their
 // outputs are fused into one richer, cross-checked result.
-import { callGemini, callGroq, callLovableAI, extractJson, geminiKeyPool, isQuotaError } from "./ai.server";
+import {
+  callGemini,
+  callGroq,
+  callLovableAI,
+  extractJson,
+  geminiKeyPool,
+  isQuotaError,
+} from "./ai.server";
 
 export type ToolResult = {
   headline: string;
@@ -51,14 +58,17 @@ export const SCHEMA_HINT = `Think step by step internally (unit economics, bench
  "table": {"columns": [string], "rows": [[string]]} | null,
  "document": string | null (full ready-to-send text when the task asks for a letter/pitch/sheet, markdown allowed)}`;
 
-
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 function openRouterKeyPool(): string[] {
   const raw = [
-    process.env['OPENROUTER_API_KEY'], process.env['OPENROUTER_API_KEY1'],
-    process.env['OPENROUTER_API_KEY_1'], process.env['OPENROUTER_API_KEY2'],
-    process.env['OPENROUTER_API_KEY_2'], process.env['OPENROUTER_2_API_KEY'],
-    process.env['OPENROUTER_API_KEY_3'], process.env['OPENROUTER_API_KEY3'],
+    process.env["OPENROUTER_API_KEY"],
+    process.env["OPENROUTER_API_KEY1"],
+    process.env["OPENROUTER_API_KEY_1"],
+    process.env["OPENROUTER_API_KEY2"],
+    process.env["OPENROUTER_API_KEY_2"],
+    process.env["OPENROUTER_2_API_KEY"],
+    process.env["OPENROUTER_API_KEY_3"],
+    process.env["OPENROUTER_API_KEY3"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
 }
@@ -108,7 +118,6 @@ export async function callGroq2(prompt: string, temperature = 0.3): Promise<stri
   return callGroq(prompt, temperature);
 }
 
-
 export type Provider = "gemini" | "groq" | "openrouter" | "lovable";
 
 const ALL_PROVIDERS: Provider[] = ["gemini", "groq", "openrouter", "lovable"];
@@ -122,7 +131,6 @@ function geminiKey(slot: 1 | 2 = 1) {
   return pool[idx];
 }
 
-
 function buildRunners(full: string, temperature: number): Record<Provider, () => Promise<string>> {
   return {
     gemini: () => callGemini(full, geminiKey(1), temperature, true),
@@ -135,7 +143,8 @@ function buildRunners(full: string, temperature: number): Record<Provider, () =>
 function parseResult(text: string): Partial<ToolResult> | null {
   const parsed = extractJson<Partial<ToolResult>>(text, {});
   if (!parsed) return null;
-  const empty = !parsed.headline && !parsed.bullets?.length && !parsed.document && !parsed.metrics?.length;
+  const empty =
+    !parsed.headline && !parsed.bullets?.length && !parsed.document && !parsed.metrics?.length;
   return empty ? null : parsed;
 }
 
@@ -147,7 +156,11 @@ function parseResult(text: string): Partial<ToolResult> | null {
  *     single sharper answer. Falls back to a mechanical fusion when the critic
  *     is unavailable.
  */
-export async function runTool(prompt: string, preferred: Provider = "gemini", temperature = 0.5): Promise<ToolResult> {
+export async function runTool(
+  prompt: string,
+  preferred: Provider = "gemini",
+  temperature = 0.5,
+): Promise<ToolResult> {
   const full = `${prompt}\n\n${SCHEMA_HINT}`;
   const runners = buildRunners(full, temperature);
   const order: Provider[] = [preferred, ...ALL_PROVIDERS.filter((p) => p !== preferred)];
@@ -170,7 +183,9 @@ export async function runTool(prompt: string, preferred: Provider = "gemini", te
         const data = parseResult(await runners[p]());
         if (data) good.push({ provider: p, data });
         if (good.length) break;
-      } catch (e) { lastErr = e; }
+      } catch (e) {
+        lastErr = e;
+      }
     }
   }
   if (!good.length) {
@@ -178,7 +193,9 @@ export async function runTool(prompt: string, preferred: Provider = "gemini", te
     try {
       const data = parseResult(await callLovableAI(full, temperature));
       if (data) good.push({ provider: "lovable", data });
-    } catch (e) { lastErr = e; }
+    } catch (e) {
+      lastErr = e;
+    }
   }
   if (!good.length) {
     // Kısa nefes molası + tam tur yeniden deneme: bir motorun limiti dolduysa
@@ -187,15 +204,19 @@ export async function runTool(prompt: string, preferred: Provider = "gemini", te
     for (const p of order) {
       try {
         const data = parseResult(await runners[p]());
-        if (data) { good.push({ provider: p, data }); break; }
-      } catch (e) { lastErr = e; }
+        if (data) {
+          good.push({ provider: p, data });
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+      }
     }
   }
   if (!good.length) {
     void lastErr;
     throw new Error("Tüm motorlar şu anda yoğun. Birkaç saniye içinde tekrar deneyin.");
   }
-
 
   const fused = fuse(good);
   if (good.length < 2) return fused;
@@ -224,9 +245,12 @@ async function synthesize(
 ): Promise<ToolResult | null> {
   const used = new Set(drafts.map((d) => d.provider));
   const editor = order.find((p) => !used.has(p)) ?? order[0];
-  
+
   const body = drafts
-    .map((d, i) => `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 6000)}`)
+    .map(
+      (d, i) =>
+        `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 6000)}`,
+    )
     .join("\n\n");
 
   const criticPrompt = `${prompt}
@@ -249,13 +273,14 @@ ${SCHEMA_HINT}`;
     openrouter: () => callOpenRouter(criticPrompt, 0.25),
     lovable: () => callLovableAI(criticPrompt, 0.25),
   };
-  
 
   for (const p of [editor, ...order.filter((o) => o !== editor)]) {
     try {
       const data = parseResult(await runnerFor[p]());
       if (data) return normalize(data, p);
-    } catch { /* try next editor */ }
+    } catch {
+      /* try next editor */
+    }
   }
   return null;
 }
@@ -273,7 +298,7 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
   const normalized = parts.map((p) => normalize(p.data, p.provider));
   const providers = parts.map((p) => p.provider);
   const base = [...normalized].sort(
-    (a, b) => (b.bullets.length + b.metrics.length) - (a.bullets.length + a.metrics.length),
+    (a, b) => b.bullets.length + b.metrics.length - (a.bullets.length + a.metrics.length),
   )[0];
 
   const metrics: ToolResult["metrics"] = [];
@@ -281,7 +306,10 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
   for (const r of normalized) {
     for (const m of r.metrics) {
       const k = m.label.toLowerCase().trim();
-      if (k && !seenLabel.has(k)) { seenLabel.add(k); metrics.push(m); }
+      if (k && !seenLabel.has(k)) {
+        seenLabel.add(k);
+        metrics.push(m);
+      }
     }
   }
 
@@ -290,21 +318,29 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
     const seen = new Set<string>();
     for (const list of lists) {
       for (const item of list ?? []) {
-        const k = item.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 60);
-        if (k && !seen.has(k)) { seen.add(k); out.push(item); }
+        const k = item
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, "")
+          .slice(0, 60);
+        if (k && !seen.has(k)) {
+          seen.add(k);
+          out.push(item);
+        }
       }
     }
     return out.slice(0, limit);
   };
 
-  const table = normalized
-    .map((r) => r.table)
-    .filter(Boolean)
-    .sort((a, b) => (b!.rows.length - a!.rows.length))[0] ?? null;
-  const document = normalized
-    .map((r) => r.document)
-    .filter(Boolean)
-    .sort((a, b) => b!.length - a!.length)[0] ?? null;
+  const table =
+    normalized
+      .map((r) => r.table)
+      .filter(Boolean)
+      .sort((a, b) => b!.rows.length - a!.rows.length)[0] ?? null;
+  const document =
+    normalized
+      .map((r) => r.document)
+      .filter(Boolean)
+      .sort((a, b) => b!.length - a!.length)[0] ?? null;
   const scores = normalized.map((r) => r.score ?? 0).filter((n) => n > 0);
 
   return {
@@ -312,10 +348,22 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
     verdict: base.verdict || normalized.find((r) => r.verdict)?.verdict || "",
     score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0,
     metrics: metrics.slice(0, 8),
-    bullets: uniq(normalized.map((r) => r.bullets), 10),
-    risks: uniq(normalized.map((r) => r.risks), 6),
-    actions: uniq(normalized.map((r) => r.actions), 6),
-    assumptions: uniq(normalized.map((r) => r.assumptions), 4),
+    bullets: uniq(
+      normalized.map((r) => r.bullets),
+      10,
+    ),
+    risks: uniq(
+      normalized.map((r) => r.risks),
+      6,
+    ),
+    actions: uniq(
+      normalized.map((r) => r.actions),
+      6,
+    ),
+    assumptions: uniq(
+      normalized.map((r) => r.assumptions),
+      4,
+    ),
     table,
     document,
     provider: providers.length > 1 ? `hibrit: ${providers.join(" + ")}` : providers[0],
@@ -324,16 +372,22 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
   };
 }
 
-
 /** Multi-AI consensus: four engines score the same product independently. */
 export async function runConsensus(prompt: string) {
   const ask = async (fn: () => Promise<string>) => {
     const parsed = extractJson<{ score?: number; note?: string }>(await fn(), {});
-    return { score: clampNum(parsed.score, 0, 100, 0), note: String(parsed.note ?? "").slice(0, 400) };
+    return {
+      score: clampNum(parsed.score, 0, 100, 0),
+      note: String(parsed.note ?? "").slice(0, 400),
+    };
   };
   const scoring = `${prompt}\n\nReturn ONLY JSON: {"score": number 0-100, "note": string (max 2 sentences, concrete)}`;
   const settle = async (fn: () => Promise<string>) => {
-    try { return await ask(fn); } catch { return { score: 0, note: "Bu motor şu anda yanıt vermedi." }; }
+    try {
+      return await ask(fn);
+    } catch {
+      return { score: 0, note: "Bu motor şu anda yanıt vermedi." };
+    }
   };
   const [gemini, groq, openrouter, lovable] = await Promise.all([
     settle(() => callGemini(scoring, geminiKey(1), 0.4, true)),
@@ -343,8 +397,15 @@ export async function runConsensus(prompt: string) {
   ]);
 
   // Weighted hybrid — grounded/search-capable engines carry more weight.
-  const weights: Record<string, number> = { gemini: 0.34, groq: 0.24, openrouter: 0.22, lovable: 0.2 };
-  const entries = Object.entries({ gemini, groq, openrouter, lovable }).filter(([, r]) => r.score > 0);
+  const weights: Record<string, number> = {
+    gemini: 0.34,
+    groq: 0.24,
+    openrouter: 0.22,
+    lovable: 0.2,
+  };
+  const entries = Object.entries({ gemini, groq, openrouter, lovable }).filter(
+    ([, r]) => r.score > 0,
+  );
   const wSum = entries.reduce((s, [k]) => s + (weights[k] ?? 0), 0);
   const hybrid = wSum
     ? Math.round(entries.reduce((s, [k, r]) => s + r.score * (weights[k] ?? 0), 0) / wSum)
@@ -363,9 +424,13 @@ function clampNum(v: unknown, min: number, max: number, fb: number) {
 }
 
 function strList(v: unknown, limit: number): string[] {
-  return Array.isArray(v) ? v.slice(0, limit).map((x) => String(x).slice(0, 400)).filter(Boolean) : [];
+  return Array.isArray(v)
+    ? v
+        .slice(0, limit)
+        .map((x) => String(x).slice(0, 400))
+        .filter(Boolean)
+    : [];
 }
-
 
 function normalize(p: Partial<ToolResult>, provider: string): ToolResult {
   const tones = new Set(["profit", "warning", "action", "neutral"]);
@@ -378,7 +443,9 @@ function normalize(p: Partial<ToolResult>, provider: string): ToolResult {
       ? p.metrics.slice(0, 6).map((m) => ({
           label: String((m as { label?: string })?.label ?? "").slice(0, 40),
           value: String((m as { value?: string })?.value ?? "").slice(0, 40),
-          tone: tones.has(String((m as { tone?: string })?.tone)) ? (m as ToolResult["metrics"][number]).tone : "neutral",
+          tone: tones.has(String((m as { tone?: string })?.tone))
+            ? (m as ToolResult["metrics"][number]).tone
+            : "neutral",
         }))
       : [],
     bullets: strList(p.bullets, 8),
@@ -390,7 +457,9 @@ function normalize(p: Partial<ToolResult>, provider: string): ToolResult {
       p.table && Array.isArray(p.table.columns) && Array.isArray(p.table.rows)
         ? {
             columns: p.table.columns.slice(0, 8).map(String),
-            rows: p.table.rows.slice(0, 20).map((r) => (Array.isArray(r) ? r.slice(0, 8).map(String) : [])),
+            rows: p.table.rows
+              .slice(0, 20)
+              .map((r) => (Array.isArray(r) ? r.slice(0, 8).map(String) : [])),
           }
         : null,
     document: p.document ? String(p.document).slice(0, 8000) : null,

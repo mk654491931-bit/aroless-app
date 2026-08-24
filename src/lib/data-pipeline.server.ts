@@ -44,7 +44,10 @@ async function timed(url: string, ms = 8000): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    return await fetch(url, { signal: ctrl.signal, headers: { "user-agent": UA, accept: "application/json" } });
+    return await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "user-agent": UA, accept: "application/json" },
+    });
   } finally {
     clearTimeout(t);
   }
@@ -85,13 +88,22 @@ export async function fetchRedditSignals(keyword: string): Promise<RedditSignal[
   return out.sort((a, b) => b.score - a.score).slice(0, 12);
 }
 
-async function collect(keyword: string, country: string, category: string): Promise<PipelineSignals> {
+async function collect(
+  keyword: string,
+  country: string,
+  category: string,
+): Promise<PipelineSignals> {
   const sources: PipelineSignals["sources"] = [];
 
   const [trendsRes, redditRes, scrapeRes, ghRes] = await Promise.allSettled([
     getGoogleTrends(keyword, country),
     fetchRedditSignals(keyword),
-    runScrapeJob({ region: country, category, sources: ["Google", "Amazon", "TikTok"], niche: keyword }),
+    runScrapeJob({
+      region: country,
+      category,
+      sources: ["Google", "Amazon", "TikTok"],
+      niche: keyword,
+    }),
     fetchGitHubTrendsForNiche(keyword),
   ]);
 
@@ -111,19 +123,30 @@ async function collect(keyword: string, country: string, category: string): Prom
   });
 
   const reddit = redditRes.status === "fulfilled" ? redditRes.value : [];
-  sources.push({ name: "Reddit", status: redditRes.status === "fulfilled" ? "active" : "error", items: reddit.length });
+  sources.push({
+    name: "Reddit",
+    status: redditRes.status === "fulfilled" ? "active" : "error",
+    items: reddit.length,
+  });
 
   let tiktok: string[] = [];
   let amazon: string[] = [];
   let google_rising: string[] = [];
   if (scrapeRes.status === "fulfilled") {
     const byName = (s: string) =>
-      scrapeRes.value.trends.filter((t) => t.source === s).map((t) => t.trend_name).slice(0, 10);
+      scrapeRes.value.trends
+        .filter((t) => t.source === s)
+        .map((t) => t.trend_name)
+        .slice(0, 10);
     tiktok = byName("TikTok");
     amazon = byName("Amazon");
     google_rising = byName("Google");
     for (const st of scrapeRes.value.statuses) {
-      sources.push({ name: st.source === "Amazon" ? "Amazon Movers & Shakers" : `${st.source} Creative/Public`, status: st.status, items: st.items });
+      sources.push({
+        name: st.source === "Amazon" ? "Amazon Movers & Shakers" : `${st.source} Creative/Public`,
+        status: st.status,
+        items: st.items,
+      });
     }
   } else {
     sources.push({ name: "TikTok / Amazon scrape", status: "error", items: 0 });
@@ -138,7 +161,11 @@ async function collect(keyword: string, country: string, category: string): Prom
           topics: r.topics.slice(0, 4),
         }))
       : [];
-  sources.push({ name: "GitHub scrapers", status: ghRes.status === "fulfilled" ? "active" : "error", items: github.length });
+  sources.push({
+    name: "GitHub scrapers",
+    status: ghRes.status === "fulfilled" ? "active" : "error",
+    items: github.length,
+  });
 
   return {
     keyword,

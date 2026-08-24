@@ -1,8 +1,23 @@
-import { ShieldCheck, ShieldAlert, X, TrendingUp, Gavel, AlertTriangle, Percent, Swords } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  X,
+  TrendingUp,
+  Gavel,
+  AlertTriangle,
+  Percent,
+  Swords,
+} from "lucide-react";
 import type { ConsensusResult } from "@/lib/consensus-types";
 import type { ValidationReport } from "@/lib/gemini.functions";
 
-export function ConsensusBadge({ consensus, compact }: { consensus?: ConsensusResult; compact?: boolean }) {
+export function ConsensusBadge({
+  consensus,
+  compact,
+}: {
+  consensus?: ConsensusResult;
+  compact?: boolean;
+}) {
   if (!consensus) return null;
   const ok = consensus.approved;
   return (
@@ -15,7 +30,11 @@ export function ConsensusBadge({ consensus, compact }: { consensus?: ConsensusRe
       }`}
     >
       {ok ? <ShieldCheck size={11} /> : <ShieldAlert size={11} />}
-      {compact ? consensus.average_score : ok ? `Multi-Agent Approved · ${consensus.average_score}` : `High Risk · ${consensus.average_score}`}
+      {compact
+        ? consensus.average_score
+        : ok
+          ? `Multi-Agent Approved · ${consensus.average_score}`
+          : `High Risk · ${consensus.average_score}`}
     </span>
   );
 }
@@ -100,7 +119,6 @@ export function ConsensusPanel({ consensus }: { consensus: ConsensusResult }) {
         )}
       </div>
 
-
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
@@ -115,7 +133,9 @@ export function ConsensusPanel({ consensus }: { consensus: ConsensusResult }) {
           <div className="text-sm font-semibold mt-1">{consensus.competition_level}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Consensus score</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Consensus score
+          </div>
           <div className="text-sm font-semibold mt-1">{consensus.average_score}/100</div>
         </div>
       </div>
@@ -139,11 +159,20 @@ export function ConsensusPanel({ consensus }: { consensus: ConsensusResult }) {
   );
 }
 
-export function ConsensusReportModal({ report, onClose }: { report: ValidationReport | null; onClose: () => void }) {
+export function ConsensusReportModal({
+  report,
+  onClose,
+}: {
+  report: ValidationReport | null;
+  onClose: () => void;
+}) {
   if (!report) return null;
   const c = report.consensus;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
       <div
         className="premium-card grain w-full max-w-3xl max-h-[88vh] overflow-y-auto rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -154,9 +183,14 @@ export function ConsensusReportModal({ report, onClose }: { report: ValidationRe
               Multi-Agent Consensus Report
             </div>
             <h2 className="text-2xl font-bold mt-1">{report.product_name}</h2>
-            {report.market_note && <p className="text-xs text-muted-foreground mt-1">{report.market_note}</p>}
+            {report.market_note && (
+              <p className="text-xs text-muted-foreground mt-1">{report.market_note}</p>
+            )}
           </div>
-          <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-1.5 hover:bg-white/10">
+          <button
+            onClick={onClose}
+            className="rounded-full border border-white/10 bg-white/5 p-1.5 hover:bg-white/10"
+          >
             <X size={14} />
           </button>
         </div>
@@ -173,7 +207,9 @@ export function ConsensusReportModal({ report, onClose }: { report: ValidationRe
             {c.approved ? "DUAL-APPROVED" : "HIGH RISK / REJECTED"}
           </span>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Average consensus score</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Average consensus score
+            </div>
             <div className="text-2xl font-extrabold">{c.average_score}/100</div>
           </div>
         </div>

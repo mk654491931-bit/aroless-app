@@ -31,7 +31,10 @@ export type GitHubSearchResult = {
 const GITHUB_API = "https://api.github.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Aroless/1.0";
 
-const cache = new Map<string, { at: number; data: GitHubRepoTrend[]; remaining: number; resetAt: number }>();
+const cache = new Map<
+  string,
+  { at: number; data: GitHubRepoTrend[]; remaining: number; resetAt: number }
+>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function authHeaders(): Record<string, string> {
@@ -71,7 +74,12 @@ export async function searchGitHubRepos(query: string, perPage = 10): Promise<Gi
 
     if (r.status === 403 && remaining === 0) {
       // Rate limited — store empty result briefly so we don't hammer the API.
-      cache.set(key, { at: Date.now(), data: [], remaining: 0, resetAt: reset || Date.now() + 3_600_000 });
+      cache.set(key, {
+        at: Date.now(),
+        data: [],
+        remaining: 0,
+        resetAt: reset || Date.now() + 3_600_000,
+      });
       return [];
     }
     if (!r.ok) {
@@ -110,7 +118,12 @@ export async function searchGitHubRepos(query: string, perPage = 10): Promise<Gi
  * - topic-based searches
  */
 export function buildGitHubQueries(niche: string): string[] {
-  const base = niche.replace(/[^\w\s-]/g, "").trim().split(/\s+/).slice(0, 4).join(" ");
+  const base = niche
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(" ");
   if (!base) return [];
   const dateCutoff = new Date();
   dateCutoff.setMonth(dateCutoff.getMonth() - 12);
@@ -170,7 +183,10 @@ ${lines}
 
 Return STRICT JSON only: {"summary": string}`;
 
-  const text = await callGemini(prompt, undefined, 0.5, false, ["gemini-flash-latest", "gemini-2.0-flash"]).catch(async () => {
+  const text = await callGemini(prompt, undefined, 0.5, false, [
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+  ]).catch(async () => {
     return callGroq(prompt, 0.5);
   });
 

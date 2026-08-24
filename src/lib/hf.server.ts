@@ -15,10 +15,14 @@ const HF_URL = "https://router.huggingface.co/v1/chat/completions";
 export function hfTokenPool(override?: string): string[] {
   const raw = [
     override,
-    process.env['HUGGING_FACE_API_KEY1'], process.env['HUGGING_FACE_API_KEY_1'],
-    process.env['HUGGING_FACE_API_KEY2'], process.env['HUGGING_FACE_API_KEY_2'],
-    process.env['HUGGING_FACE_API_KEY3'], process.env['HUGGING_FACE_API_KEY'],
-    process.env['HF_TOKEN'], process.env['HUGGING_FACE_TOKEN'],
+    process.env["HUGGING_FACE_API_KEY1"],
+    process.env["HUGGING_FACE_API_KEY_1"],
+    process.env["HUGGING_FACE_API_KEY2"],
+    process.env["HUGGING_FACE_API_KEY_2"],
+    process.env["HUGGING_FACE_API_KEY3"],
+    process.env["HUGGING_FACE_API_KEY"],
+    process.env["HF_TOKEN"],
+    process.env["HUGGING_FACE_TOKEN"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw.map((k) => k.trim())));
 }
@@ -28,8 +32,13 @@ export function hfToken(override?: string): string | null {
 }
 
 function hfIsQuota(status: number, body: string): boolean {
-  return status === 429 || status === 402 || status === 403 || status === 401
-    || /quota|rate limit|exceeded|credits|invalid/i.test(body);
+  return (
+    status === 429 ||
+    status === 402 ||
+    status === 403 ||
+    status === 401 ||
+    /quota|rate limit|exceeded|credits|invalid/i.test(body)
+  );
 }
 
 /**
@@ -48,7 +57,6 @@ export async function callHuggingFace(
     if (opts.noFallback) throw new Error("HF_TOKEN_MISSING");
     return hfCrossProviderFallback(prompt, opts.temperature);
   }
-
 
   let lastErr: unknown = null;
   for (const token of tokens) {
@@ -110,15 +118,19 @@ async function hfCrossProviderFallback(prompt: string, temperature = 0.5): Promi
       lastErr = e;
     }
   }
-  throw lastErr instanceof Error ? lastErr : new Error("AI motorları şu anda meşgul, birazdan tekrar deneyin.");
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("AI motorları şu anda meşgul, birazdan tekrar deneyin.");
 }
-
-
 
 /** Lightweight connectivity probe used by the settings panel. */
 export async function pingHuggingFace(token?: string): Promise<{ ok: boolean; message: string }> {
   try {
-    const out = await callHuggingFace('Reply with {"ok":true} only.', "llama", { token, temperature: 0, noFallback: true });
+    const out = await callHuggingFace('Reply with {"ok":true} only.', "llama", {
+      token,
+      temperature: 0,
+      noFallback: true,
+    });
     return { ok: true, message: out.slice(0, 80) };
   } catch (e) {
     const msg = (e as Error).message;
@@ -169,7 +181,12 @@ export type HfProductRaw = {
 };
 
 const LANG_NAMES: Record<string, string> = {
-  en: "English", tr: "Turkish", es: "Spanish", de: "German", fr: "French", ar: "Arabic",
+  en: "English",
+  tr: "Turkish",
+  es: "Spanish",
+  de: "German",
+  fr: "French",
+  ar: "Arabic",
 };
 
 export function buildHfPrompt(input: {
@@ -251,8 +268,6 @@ Return STRICT JSON only, exactly this shape:
 }]}`;
 }
 
-
-
 const money = (v: unknown): string => {
   const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) && n > 0 ? `$${n.toFixed(2)}` : "$0.00";
@@ -263,10 +278,10 @@ const num = (v: unknown, fallback = 0): number => {
 };
 
 /** Keeps a model-provided array only when it really is a non-empty array. */
-const arr = <T,>(v: unknown, max = 8): T[] | undefined =>
+const arr = <T>(v: unknown, max = 8): T[] | undefined =>
   Array.isArray(v) && v.length ? (v.slice(0, max) as T[]) : undefined;
 /** Keeps a model-provided object only when it really is an object. */
-const obj = <T,>(v: unknown): T | undefined =>
+const obj = <T>(v: unknown): T | undefined =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as T) : undefined;
 
 /** Maps the forced HF JSON schema onto the app's full product dossier shape. */
@@ -289,15 +304,20 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
     return {
       name: String(r.productName ?? "Unnamed product"),
       description: String(r.description ?? ""),
-      why_winning: String(r.whyWinning ?? angles[0] ?? "High demand signal detected by the Hugging Face engine."),
+      why_winning: String(
+        r.whyWinning ?? angles[0] ?? "High demand signal detected by the Hugging Face engine.",
+      ),
       target_audience: String(r.targetAudience ?? "General shoppers"),
-      ad_angles: angles.length ? angles : ["Problem/solution hook", "Before-after demo", "Social proof"],
+      ad_angles: angles.length
+        ? angles
+        : ["Problem/solution hook", "Before-after demo", "Social proof"],
       supplier_price_usd: money(supplier),
       selling_price_usd: money(selling),
       profit_margin_pct: Math.round(margin),
       startup_cost_usd: money(supplier * 25),
       platform_fit: platforms.length ? platforms : ["Shopify"],
-      platform_strategy: engine === "qwen" ? "Deep-research backed rollout" : "Fast-launch creative testing",
+      platform_strategy:
+        engine === "qwen" ? "Deep-research backed rollout" : "Fast-launch creative testing",
       competitor_examples: (arr<string>(r.competitor_examples, 3) ?? []).map(String),
       supplier_links: (arr<string>(r.supplier_links, 2) ?? []).map(String),
       alibaba_links: (arr<string>(r.alibaba_links, 2) ?? []).map(String),
@@ -316,7 +336,10 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       ai_insight: `Generated by ${HF_MODELS[engine]} via Hugging Face.`,
       data_sources: [`Hugging Face · ${HF_MODELS[engine]}`],
       health_score: Math.max(0, Math.min(100, Math.round(num(r.health_score, 70)))),
-      viral_probability_90d: Math.max(0, Math.min(100, Math.round(num(r.viral_probability_90d, 55)))),
+      viral_probability_90d: Math.max(
+        0,
+        Math.min(100, Math.round(num(r.viral_probability_90d, 55))),
+      ),
       sellability_verdict: (["Highly Sellable", "Moderate Risk", "Do Not Sell"].includes(verdict)
         ? verdict
         : "Moderate Risk") as "Highly Sellable" | "Moderate Risk" | "Do Not Sell",
@@ -345,20 +368,24 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
   });
 }
 
-
 /** Synthesizes parallel engine outputs: dedupes by product name, averages scores, unions angles. */
 export function mergeHfProducts(lists: ReturnType<typeof mapHfProducts>[]) {
   const byKey = new Map<string, ReturnType<typeof mapHfProducts>[number] & { _n: number }>();
   for (const list of lists) {
     for (const p of list) {
-      const key = p.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      const key = p.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
       const prev = byKey.get(key);
       if (!prev) {
         byKey.set(key, { ...p, _n: 1 });
         continue;
       }
       prev.trend_score = Math.round((prev.trend_score * prev._n + p.trend_score) / (prev._n + 1));
-      prev.profit_margin_pct = Math.round((prev.profit_margin_pct * prev._n + p.profit_margin_pct) / (prev._n + 1));
+      prev.profit_margin_pct = Math.round(
+        (prev.profit_margin_pct * prev._n + p.profit_margin_pct) / (prev._n + 1),
+      );
       prev.ad_angles = Array.from(new Set([...prev.ad_angles, ...p.ad_angles])).slice(0, 5);
       prev.data_sources = Array.from(new Set([...prev.data_sources, ...p.data_sources]));
       prev.ai_insight = `Cross-validated by ${prev.data_sources.length} Hugging Face engines.`;

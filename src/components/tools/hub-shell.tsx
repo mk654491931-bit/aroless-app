@@ -4,14 +4,25 @@ import { ArrowLeft, Cpu, Layers, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
 export function HubShell({
-  emoji, title, subtitle, children,
-}: { emoji: string; title: string; subtitle: string; children: ReactNode }) {
+  emoji,
+  title,
+  subtitle,
+  children,
+}: {
+  emoji: string;
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
   return (
     <div className="min-h-screen">
       <header className="glass top-light sticky top-0 z-40 border-b border-white/10">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3">
           <BrandLogo subtitle={title} />
-          <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10"
+          >
             <ArrowLeft size={13} /> Product Finder
           </Link>
         </div>

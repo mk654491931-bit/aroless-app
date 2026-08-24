@@ -35,7 +35,7 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         const userId = payload.meta?.custom_data?.user_id;
         const plan = payload.meta?.custom_data?.plan ?? "Pro";
         const attrs = payload.data?.attributes ?? {};
-        const status = String(attrs['status'] ?? "");
+        const status = String(attrs["status"] ?? "");
         if (!userId) return new Response("ok", { status: 200 });
 
         let tier: string | null = null;
@@ -61,7 +61,7 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
           .update({
             subscription_tier: tier,
             lemon_subscription_id: payload.data?.id ? String(payload.data.id) : null,
-            lemon_customer_id: attrs['customer_id'] ? String(attrs['customer_id']) : null,
+            lemon_customer_id: attrs["customer_id"] ? String(attrs["customer_id"]) : null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", userId);

@@ -19,16 +19,26 @@ export function DeviceGuard() {
       const key = `aroless.fp.${userId}`;
       try {
         if (window.sessionStorage.getItem(key)) return;
-      } catch { /* yoksay */ }
+      } catch {
+        /* yoksay */
+      }
       try {
         const visitorId = await getVisitorId();
         if (!visitorId || cancelled) return;
         const res = await registerFn({ data: { visitorId } });
-        try { window.sessionStorage.setItem(key, "1"); } catch { /* yoksay */ }
-        if (res?.freeTierBlocked && !cancelled) {
-          toast.warning("Bu cihazda ücretsiz başlangıç kredisi daha önce kullanıldı, tekrar verilmedi.");
+        try {
+          window.sessionStorage.setItem(key, "1");
+        } catch {
+          /* yoksay */
         }
-      } catch { /* parmak izi kaydı akışı engellemez */ }
+        if (res?.freeTierBlocked && !cancelled) {
+          toast.warning(
+            "Bu cihazda ücretsiz başlangıç kredisi daha önce kullanıldı, tekrar verilmedi.",
+          );
+        }
+      } catch {
+        /* parmak izi kaydı akışı engellemez */
+      }
     };
 
     void supabase.auth.getUser().then(({ data }) => {

@@ -7,7 +7,13 @@ export type CreativeKit = {
   audience: string;
   hooks: CreativeHook[];
   ugc_script: { title: string; duration_seconds: number; scenes: UgcScene[]; cta: string };
-  ad_copies: { platform: string; primary: string; headline: string; description: string; cta: string }[];
+  ad_copies: {
+    platform: string;
+    primary: string;
+    headline: string;
+    description: string;
+    cta: string;
+  }[];
   image_prompts: { label: string; prompt: string }[];
   hashtags: string[];
   ab_tests: { hypothesis: string; variant_a: string; variant_b: string; metric: string }[];

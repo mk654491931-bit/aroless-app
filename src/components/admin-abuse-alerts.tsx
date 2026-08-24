@@ -28,7 +28,9 @@ export function AdminAbuseAlerts() {
 
       <div className="p-4 space-y-3">
         {q.isLoading && (
-          <div className="py-8 text-center text-muted-foreground"><Loader2 className="inline animate-spin" /></div>
+          <div className="py-8 text-center text-muted-foreground">
+            <Loader2 className="inline animate-spin" />
+          </div>
         )}
         {q.isError && (
           <div className="py-8 text-center text-rose-400 text-xs">
@@ -37,25 +39,32 @@ export function AdminAbuseAlerts() {
         )}
         {!q.isLoading && !q.isError && rows.length === 0 && (
           <p className="py-8 text-center text-xs text-muted-foreground">
-            Şüpheli ücretsiz kredi hareketi yok. Kural: aynı cihazdan 2+, aynı IP'den 3+ hesap veya 60 dakikada tekrarlanan kayıt.
+            Şüpheli ücretsiz kredi hareketi yok. Kural: aynı cihazdan 2+, aynı IP'den 3+ hesap veya
+            60 dakikada tekrarlanan kayıt.
           </p>
         )}
         {rows.map((r) => (
           <article
             key={r.id}
             className={`rounded-xl border p-3 ${
-              r.severity === "high" ? "border-rose-500/30 bg-rose-500/[0.06]" : "border-amber-500/25 bg-amber-500/[0.05]"
+              r.severity === "high"
+                ? "border-rose-500/30 bg-rose-500/[0.06]"
+                : "border-amber-500/25 bg-amber-500/[0.05]"
             }`}
           >
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                  r.severity === "high" ? "bg-rose-500/20 text-rose-300" : "bg-amber-500/20 text-amber-300"
+                  r.severity === "high"
+                    ? "bg-rose-500/20 text-rose-300"
+                    : "bg-amber-500/20 text-amber-300"
                 }`}
               >
                 {r.severity === "high" ? "Kritik" : "Şüpheli"}
               </span>
-              <span className="min-w-0 truncate text-sm font-medium">{r.suspect_email ?? r.title}</span>
+              <span className="min-w-0 truncate text-sm font-medium">
+                {r.suspect_email ?? r.title}
+              </span>
               <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">
                 {new Date(r.created_at).toLocaleString()}
               </span>

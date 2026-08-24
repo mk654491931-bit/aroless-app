@@ -16,7 +16,12 @@ export type TrendAnalysis = {
   name: string;
   country: string;
   hybrid: HybridScore;
-  sourcing: { supplier_price_usd: number; shipping_usd: number; source: string; sample_title: string };
+  sourcing: {
+    supplier_price_usd: number;
+    shipping_usd: number;
+    source: string;
+    sample_title: string;
+  };
   trends: { yearly: number[]; monthly: number[]; momentum_pct: number; source: string };
   verdict: string;
   ai_comment: string;
@@ -29,11 +34,20 @@ const cache = new Map<string, { at: number; data: TrendAnalysis }>();
 const TTL = 60 * 60 * 1000;
 
 async function build(input: {
-  name: string; keyword: string; country: string; category: string;
-  peak_month: string; spike_window: string; why: string; marketplace: string;
-  audience: string; competition: string; score: number;
+  name: string;
+  keyword: string;
+  country: string;
+  category: string;
+  peak_month: string;
+  spike_window: string;
+  why: string;
+  marketplace: string;
+  audience: string;
+  competition: string;
+  score: number;
 }): Promise<TrendAnalysis> {
-  const { scoreProductForCountry, runCountryCrossMatch } = await import("@/lib/hybrid-scoring.server");
+  const { scoreProductForCountry, runCountryCrossMatch } =
+    await import("@/lib/hybrid-scoring.server");
   const { getGoogleTrends, getSourcingEstimate } = await import("@/lib/market-data.server");
   const { callGemini, extractJson } = await import("@/lib/ai.server");
 
@@ -83,12 +97,21 @@ Return ONLY JSON (all text in Turkish):
  "action_plan": string[4] (bu ürünü bu ülkede satmak için sıralı somut adımlar, tarih/sezon farkındalıklı),
  "risks": string[3] (gerçekçi riskler)}`;
 
-  const key3 = process.env['GEMINI_API_KEY_3'] || process.env['GEMINI_3_API_KEY'] || process.env['GEMINI_API_KEY'];
+  const key3 =
+    process.env["GEMINI_API_KEY_3"] ||
+    process.env["GEMINI_3_API_KEY"] ||
+    process.env["GEMINI_API_KEY"];
   let synth: Record<string, unknown> = {};
   try {
-    const text = await callGemini(synthPrompt, key3, 0.6, false, ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]);
+    const text = await callGemini(synthPrompt, key3, 0.6, false, [
+      "gemini-flash-latest",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+    ]);
     synth = extractJson<Record<string, unknown>>(text, {});
-  } catch { /* fall through to defaults */ }
+  } catch {
+    /* fall through to defaults */
+  }
 
   const arr = (v: unknown, n: number) =>
     Array.isArray(v) ? v.slice(0, n).map((x) => String(x)) : [];
@@ -99,10 +122,15 @@ Return ONLY JSON (all text in Turkish):
     hybrid,
     sourcing,
     trends: {
-      yearly: trends.yearly, monthly: trends.monthly,
-      momentum_pct: trends.momentum_pct, source: trends.source,
+      yearly: trends.yearly,
+      monthly: trends.monthly,
+      momentum_pct: trends.momentum_pct,
+      source: trends.source,
     },
-    verdict: String(synth["verdict"] ?? (hybrid.calculated_score >= 70 ? "Girilebilir fırsat" : "Temkinli yaklaş")).slice(0, 120),
+    verdict: String(
+      synth["verdict"] ??
+        (hybrid.calculated_score >= 70 ? "Girilebilir fırsat" : "Temkinli yaklaş"),
+    ).slice(0, 120),
     ai_comment: String(synth["ai_comment"] ?? hybrid.tooltip ?? "").slice(0, 1200),
     action_plan: arr(synth["action_plan"], 5),
     risks: arr(synth["risks"], 4),
@@ -119,12 +147,16 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
         try {
           const body = await readJsonBody<Record<string, unknown>>(request);
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
-          const name = String(body["name"] ?? "").trim().slice(0, 120);
+          const name = String(body["name"] ?? "")
+            .trim()
+            .slice(0, 120);
           if (!name) return jsonError(400, "Ürün adı gerekli.");
           const input = {
             name,
             keyword: String(body["keyword"] ?? name).slice(0, 90),
-            country: String(body["country"] ?? "GLOBAL").toUpperCase().slice(0, 8),
+            country: String(body["country"] ?? "GLOBAL")
+              .toUpperCase()
+              .slice(0, 8),
             category: String(body["category"] ?? "").slice(0, 80),
             peak_month: String(body["peak_month"] ?? "").slice(0, 20),
             spike_window: String(body["spike_window"] ?? "").slice(0, 40),
@@ -146,7 +178,6 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
           return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.", e);
         }
       },
-
     },
   },
 });

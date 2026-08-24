@@ -2,10 +2,23 @@ import { useCountryMeta, currencySymbol } from "@/lib/rest-countries";
 import { countryByCode } from "@/lib/countries";
 
 /** Flag rendered from the free RestCountries SVG, with emoji fallback. */
-export function CountryFlag({ code, size = 16, className = "" }: { code: string; size?: number; className?: string }) {
+export function CountryFlag({
+  code,
+  size = 16,
+  className = "",
+}: {
+  code: string;
+  size?: number;
+  className?: string;
+}) {
   const meta = useCountryMeta(code);
   const c = countryByCode(code);
-  if (!meta.flagSvg) return <span className={className} style={{ fontSize: size }}>{c.flag}</span>;
+  if (!meta.flagSvg)
+    return (
+      <span className={className} style={{ fontSize: size }}>
+        {c.flag}
+      </span>
+    );
   return (
     <img
       src={meta.flagSvg}

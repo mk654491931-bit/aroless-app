@@ -71,11 +71,15 @@ export const insertProductsFromAnalysis = createServerFn({ method: "POST" })
 
 export const listProducts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ limit: z.number().int().min(1).max(100).default(20) }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ limit: z.number().int().min(1).max(100).default(20) }).parse(input),
+  )
   .handler(async ({ data, context }): Promise<ProductRow[]> => {
     const { data: rows, error } = await context.supabase
       .from("products")
-      .select("id, title, category, cost_price, selling_price, target_country, trend_score, competition_level, profit_margin, viral_probability_90d, health_score, sellability_verdict, status_message, created_at, updated_at")
+      .select(
+        "id, title, category, cost_price, selling_price, target_country, trend_score, competition_level, profit_margin, viral_probability_90d, health_score, sellability_verdict, status_message, created_at, updated_at",
+      )
       .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(data.limit);

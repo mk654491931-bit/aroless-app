@@ -1,7 +1,7 @@
 /** AI Mağaza Denetçisi — sayfa çekme ve prompt üretimi (sunucu tarafı). */
 
 export type AuditIssue = {
-  area: string;          // Trust, Speed, Copy, Product page, Checkout, Mobile, SEO
+  area: string; // Trust, Speed, Copy, Product page, Checkout, Mobile, SEO
   severity: "critical" | "high" | "medium" | "low";
   finding: string;
   impact: string;
@@ -19,7 +19,9 @@ export type AuditReport = {
   estimated_cr_gain_pct: number;
 };
 
-export async function fetchStorePage(url: string): Promise<{ html: string; status: number; ms: number }> {
+export async function fetchStorePage(
+  url: string,
+): Promise<{ html: string; status: number; ms: number }> {
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
@@ -48,7 +50,9 @@ export function extractSignals(html: string) {
   return {
     text: text.slice(0, 12000),
     title: (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").trim().slice(0, 200),
-    description: (html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1] ?? "").slice(0, 300),
+    description: (
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1] ?? ""
+    ).slice(0, 300),
     images: (html.match(/<img\b/gi) ?? []).length,
     imagesWithoutAlt: (html.match(/<img(?![^>]*\balt=)[^>]*>/gi) ?? []).length,
     scripts: (html.match(/<script\b/gi) ?? []).length,
@@ -68,7 +72,13 @@ export function extractSignals(html: string) {
   };
 }
 
-export function auditPrompt(url: string, signals: ReturnType<typeof extractSignals>, status: number, ms: number, lang: string) {
+export function auditPrompt(
+  url: string,
+  signals: ReturnType<typeof extractSignals>,
+  status: number,
+  ms: number,
+  lang: string,
+) {
   return `You are a CRO (conversion rate optimization) auditor with 10+ years in DTC e-commerce.
 Audit this online store and write everything in language code "${lang}".
 

@@ -11,7 +11,6 @@ import type { ProductSignals } from "@/lib/hot-products";
 
 export const MIN_NET_MARGIN_PCT = 15;
 
-
 export type UnitEconomics = {
   retail: number;
   cogs: number;
@@ -26,7 +25,12 @@ export type UnitEconomics = {
 
 export function parseMoney(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = parseFloat(String(v ?? "").replace(/[^0-9.,-]/g, "").replace(/,(?=\d{3}\b)/g, "").replace(",", "."));
+  const n = parseFloat(
+    String(v ?? "")
+      .replace(/[^0-9.,-]/g, "")
+      .replace(/,(?=\d{3}\b)/g, "")
+      .replace(",", "."),
+  );
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -54,12 +58,16 @@ export type EconomicsInput = {
 export function computeUnitEconomics(input: EconomicsInput): UnitEconomics {
   const retail = Math.max(0, parseMoney(input.retail_price));
   const cogs = Math.max(0, parseMoney(input.supplier_cost));
-  const shipping = input.shipping == null ? Math.max(1.5, cogs * 0.35) : Math.max(0, parseMoney(input.shipping));
+  const shipping =
+    input.shipping == null ? Math.max(1.5, cogs * 0.35) : Math.max(0, parseMoney(input.shipping));
   const platform_fee =
-    input.platform_fee == null ? retail * platformRate(input.marketplace) : Math.max(0, parseMoney(input.platform_fee));
+    input.platform_fee == null
+      ? retail * platformRate(input.marketplace)
+      : Math.max(0, parseMoney(input.platform_fee));
   // CAC scales with competition — the single biggest killer of paper margins.
   const cacRate = input.competition === "High" ? 0.32 : input.competition === "Low" ? 0.16 : 0.24;
-  const ad_spend = input.ad_spend == null ? retail * cacRate : Math.max(0, parseMoney(input.ad_spend));
+  const ad_spend =
+    input.ad_spend == null ? retail * cacRate : Math.max(0, parseMoney(input.ad_spend));
 
   const net_profit = retail - (cogs + shipping + platform_fee + ad_spend);
   const net_margin_pct = retail > 0 ? (net_profit / retail) * 100 : 0;
@@ -78,7 +86,11 @@ export function computeUnitEconomics(input: EconomicsInput): UnitEconomics {
 }
 
 /** Top badge copy for the MARGIN pill — never shows a paper margin. */
-export function marginBadge(e: UnitEconomics): { text: string; unprofitable: boolean; cls: string } {
+export function marginBadge(e: UnitEconomics): {
+  text: string;
+  unprofitable: boolean;
+  cls: string;
+} {
   if (e.unprofitable || e.net_margin_pct <= 0)
     return {
       text: "0% (UNPROFITABLE)",
@@ -158,10 +170,24 @@ const real = (v: unknown): number | null => {
 /** Maps a monthly search volume onto a 0-100 demand index (log scale). */
 const volumeIndex = (v: number) => clamp((Math.log10(Math.max(1, v)) / 6) * 100);
 
-
 const IP_RISK_WORDS = [
-  "disney", "marvel", "pokemon", "nike", "adidas", "apple", "airpods", "dyson", "stanley",
-  "lego", "barbie", "hello kitty", "gucci", "louis", "harry potter", "nintendo", "yeti",
+  "disney",
+  "marvel",
+  "pokemon",
+  "nike",
+  "adidas",
+  "apple",
+  "airpods",
+  "dyson",
+  "stanley",
+  "lego",
+  "barbie",
+  "hello kitty",
+  "gucci",
+  "louis",
+  "harry potter",
+  "nintendo",
+  "yeti",
 ];
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(n)));
@@ -189,16 +215,20 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       { label: "Estimated CAC", value: e.ad_spend.toFixed(2) },
       { label: "Net profit / unit", value: e.net_profit.toFixed(2) },
     ],
-    risk_factors: e.net_profit <= 0
-      ? ["Net profit per unit is zero or negative — unsellable at this price stack."]
-      : e.net_margin_pct < 30
-        ? [`Net margin ${e.net_margin_pct.toFixed(1)}% under the 30% scale threshold — score capped at 60.`]
-        : [],
-    action_recommendation: e.net_profit <= 0
-      ? "Reject. Re-source COGS or raise retail by 25%+ before re-testing."
-      : e.net_margin_pct < 30
-        ? "Negotiate supplier tiers or bundle to push net margin above 30%."
-        : "Scale-ready unit economics. Lock supplier pricing for 90 days.",
+    risk_factors:
+      e.net_profit <= 0
+        ? ["Net profit per unit is zero or negative — unsellable at this price stack."]
+        : e.net_margin_pct < 30
+          ? [
+              `Net margin ${e.net_margin_pct.toFixed(1)}% under the 30% scale threshold — score capped at 60.`,
+            ]
+          : [],
+    action_recommendation:
+      e.net_profit <= 0
+        ? "Reject. Re-source COGS or raise retail by 25%+ before re-testing."
+        : e.net_margin_pct < 30
+          ? "Negotiate supplier tiers or bundle to push net margin above 30%."
+          : "Scale-ready unit economics. Lock supplier pricing for 90 days.",
     veto: e.net_profit <= 0,
   };
 
@@ -222,7 +252,7 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const economicsPart = cacLimit > e.ad_spend ? 80 : 25;
   const cmo = clamp(
     cmoParts.length
-      ? cmoParts.reduce((a, b) => a + b, 0) / cmoParts.length * 0.75 + economicsPart * 0.25
+      ? (cmoParts.reduce((a, b) => a + b, 0) / cmoParts.length) * 0.75 + economicsPart * 0.25
       : base * 0.6 + economicsPart * 0.4,
   );
   const cmoAgent: AgentPayload = {
@@ -235,13 +265,23 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       { label: "Max allowable CAC", value: cacLimit.toFixed(2) },
       { label: "Measured CPC", value: cpc !== null ? cpc.toFixed(2) : NO_DATA },
       { label: "Reported CVR", value: cvr !== null ? `${cvr.toFixed(1)}%` : NO_DATA },
-      { label: "Monthly search volume", value: volume !== null ? Math.round(volume).toLocaleString() : NO_DATA },
-      { label: "Social momentum index", value: socialIdx !== null ? socialIdx.toFixed(0) : NO_DATA },
+      {
+        label: "Monthly search volume",
+        value: volume !== null ? Math.round(volume).toLocaleString() : NO_DATA,
+      },
+      {
+        label: "Social momentum index",
+        value: socialIdx !== null ? socialIdx.toFixed(0) : NO_DATA,
+      },
     ],
     risk_factors: [
       cacLimit <= e.ad_spend ? "Allowable CAC is below realistic acquisition cost." : "",
-      searchIdx !== null && searchIdx < 35 ? "Low search intent — paid social must carry all demand." : "",
-      cmoParts.length === 0 ? "No grounded demand data returned for this product — treat the score as provisional." : "",
+      searchIdx !== null && searchIdx < 35
+        ? "Low search intent — paid social must carry all demand."
+        : "",
+      cmoParts.length === 0
+        ? "No grounded demand data returned for this product — treat the score as provisional."
+        : "",
     ].filter(Boolean),
     action_recommendation:
       socialIdx !== null && searchIdx !== null && socialIdx > 65 && searchIdx < 45
@@ -251,7 +291,6 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
           : "Balanced channel mix; test Meta advantage+ against TikTok Spark ads.",
     veto: false,
   };
-
 
   /* 3 — CRO: IP & trademark risk (hard veto) */
   const lower = p.name.toLowerCase();
@@ -272,7 +311,9 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     ],
     risk_factors: ipRisk
       ? [
-          hits.length ? `Protected brand keywords detected: ${hits.join(", ")}.` : "Design-patent overlap flagged in the niche.",
+          hits.length
+            ? `Protected brand keywords detected: ${hits.join(", ")}.`
+            : "Design-patent overlap flagged in the niche.",
           "Marketplace takedown and ad-account ban exposure.",
         ]
       : [],
@@ -289,7 +330,9 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const late = growthPct !== null ? growthPct < 5 : null;
   const trend = clamp(
     growthPct !== null
-      ? (growthPct < 5 ? 34 + growthPct : 55 + Math.min(45, growthPct * 0.6))
+      ? growthPct < 5
+        ? 34 + growthPct
+        : 55 + Math.min(45, growthPct * 0.6)
       : base,
   );
   const trendAgent: AgentPayload = {
@@ -302,12 +345,19 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       value: velocity !== null ? Math.round(velocity).toLocaleString() : NO_DATA,
     },
     metrics: [
-      { label: "Views now", value: viewsNow !== null ? Math.round(viewsNow).toLocaleString() : NO_DATA },
-      { label: "Views 7d ago", value: views7 !== null ? Math.round(views7).toLocaleString() : NO_DATA },
+      {
+        label: "Views now",
+        value: viewsNow !== null ? Math.round(viewsNow).toLocaleString() : NO_DATA,
+      },
+      {
+        label: "Views 7d ago",
+        value: views7 !== null ? Math.round(views7).toLocaleString() : NO_DATA,
+      },
       { label: "7-day growth", value: growthPct !== null ? `${growthPct.toFixed(1)}%` : NO_DATA },
       {
         label: "Lifecycle phase",
-        value: late === null ? NO_DATA : late ? "late peak / saturating" : "early momentum / scaling",
+        value:
+          late === null ? NO_DATA : late ? "late peak / saturating" : "early momentum / scaling",
       },
     ],
     risk_factors: [
@@ -329,8 +379,14 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const amazonSellers = real(sig.amazon_sellers);
   const intel = clamp(
     stores !== null
-      ? (stores > 30 ? 55 - (stores - 30) * 0.9 : 88 - stores * 0.5)
-      : comp === "High" ? 40 : comp === "Low" ? 82 : 60,
+      ? stores > 30
+        ? 55 - (stores - 30) * 0.9
+        : 88 - stores * 0.5
+      : comp === "High"
+        ? 40
+        : comp === "Low"
+          ? 82
+          : 60,
   );
   const intelAgent: AgentPayload = {
     agent_id: "competitor_intel",
@@ -342,15 +398,23 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       value: stores !== null ? String(Math.round(stores)) : NO_DATA,
     },
     metrics: [
-      { label: "Ads running >14 days", value: longRunners !== null ? String(Math.round(longRunners)) : NO_DATA },
-      { label: "Amazon sellers", value: amazonSellers !== null ? String(Math.round(amazonSellers)) : NO_DATA },
+      {
+        label: "Ads running >14 days",
+        value: longRunners !== null ? String(Math.round(longRunners)) : NO_DATA,
+      },
+      {
+        label: "Amazon sellers",
+        value: amazonSellers !== null ? String(Math.round(amazonSellers)) : NO_DATA,
+      },
       { label: "Declared competition", value: String(comp) },
     ],
     risk_factors:
       stores !== null && stores > 30
         ? [`${Math.round(stores)} active stores detected — heavy saturation penalty applied.`]
         : stores === null
-          ? ["Store count not measurable from live sources — saturation scored from declared competition only."]
+          ? [
+              "Store count not measurable from live sources — saturation scored from declared competition only.",
+            ]
           : [],
     action_recommendation:
       stores !== null && stores > 30
@@ -366,7 +430,9 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const reviews = real(sig.review_count);
   const ux = clamp(
     material !== null
-      ? (material > 15 ? 70 - (material - 15) * 2.2 : 82 + (15 - material) * 0.7)
+      ? material > 15
+        ? 70 - (material - 15) * 2.2
+        : 82 + (15 - material) * 0.7
       : 65,
   );
   const uxAgent: AgentPayload = {
@@ -379,10 +445,19 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       value: material !== null ? `${material.toFixed(1)}%` : NO_DATA,
     },
     metrics: [
-      { label: "Material quality complaints", value: material !== null ? `${material.toFixed(1)}%` : NO_DATA },
+      {
+        label: "Material quality complaints",
+        value: material !== null ? `${material.toFixed(1)}%` : NO_DATA,
+      },
       { label: "Sizing complaints", value: sizing !== null ? `${sizing.toFixed(1)}%` : NO_DATA },
-      { label: "Shipping-delay complaints", value: delays !== null ? `${delays.toFixed(1)}%` : NO_DATA },
-      { label: "Reviews analysed", value: reviews !== null ? Math.round(reviews).toLocaleString() : NO_DATA },
+      {
+        label: "Shipping-delay complaints",
+        value: delays !== null ? `${delays.toFixed(1)}%` : NO_DATA,
+      },
+      {
+        label: "Reviews analysed",
+        value: reviews !== null ? Math.round(reviews).toLocaleString() : NO_DATA,
+      },
     ],
     risk_factors:
       material !== null && material > 15
@@ -405,9 +480,9 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   const leadDays = real(sig.lead_time_days);
   const supply = clamp(
     onTime !== null
-      ? (onTime >= 95
-          ? 80 + (onTime - 95) * 4 + ((stockStability ?? 70) - 55) * 0.1
-          : 45 + (onTime - 82) * 2.5)
+      ? onTime >= 95
+        ? 80 + (onTime - 95) * 4 + ((stockStability ?? 70) - 55) * 0.1
+        : 45 + (onTime - 82) * 2.5
       : 62,
   );
   const supplyAgent: AgentPayload = {
@@ -420,7 +495,10 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
       value: onTime !== null ? `${onTime.toFixed(1)}%` : NO_DATA,
     },
     metrics: [
-      { label: "Stock stability", value: stockStability !== null ? `${stockStability.toFixed(0)}%` : NO_DATA },
+      {
+        label: "Stock stability",
+        value: stockStability !== null ? `${stockStability.toFixed(0)}%` : NO_DATA,
+      },
       {
         label: "Lead time",
         value: p.lead_time ?? (leadDays !== null ? `${Math.round(leadDays)} days` : NO_DATA),
@@ -440,7 +518,6 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     veto: false,
   };
 
-
   /* 8 — Pricing Strategist: price ladder & markup headroom */
   const markup = e.cogs > 0 ? e.retail / e.cogs : 0;
   const pricing = clamp(markup > 0 ? 35 + (markup - 2) * 18 : 50);
@@ -452,10 +529,16 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     primary_metric: { label: "Markup", value: markup > 0 ? `${markup.toFixed(2)}x` : NO_DATA },
     metrics: [
       { label: "Retail", value: e.retail > 0 ? `$${e.retail.toFixed(2)}` : NO_DATA },
-      { label: "Landed cost", value: e.cogs > 0 ? `$${(e.cogs + e.shipping).toFixed(2)}` : NO_DATA },
+      {
+        label: "Landed cost",
+        value: e.cogs > 0 ? `$${(e.cogs + e.shipping).toFixed(2)}` : NO_DATA,
+      },
       { label: "Target markup", value: "≥ 3.0x for paid traffic" },
     ],
-    risk_factors: markup > 0 && markup < 2.5 ? [`Markup ${markup.toFixed(2)}x too thin to absorb ad costs.`] : [],
+    risk_factors:
+      markup > 0 && markup < 2.5
+        ? [`Markup ${markup.toFixed(2)}x too thin to absorb ad costs.`]
+        : [],
     action_recommendation:
       markup >= 3
         ? "Price holds — test a $5-10 premium bundle tier."
@@ -471,34 +554,53 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     name: "Logistics Cost Agent",
     score: logistics,
     confidence_level: e.retail > 0 ? 82 : 45,
-    primary_metric: { label: "Shipping / revenue", value: e.retail > 0 ? `${shipShare.toFixed(1)}%` : NO_DATA },
+    primary_metric: {
+      label: "Shipping / revenue",
+      value: e.retail > 0 ? `${shipShare.toFixed(1)}%` : NO_DATA,
+    },
     metrics: [
       { label: "Ship cost / unit", value: `$${e.shipping.toFixed(2)}` },
       { label: "Platform fee", value: `$${e.platform_fee.toFixed(2)}` },
-      { label: "Lead time", value: p.lead_time ?? (leadDays !== null ? `${Math.round(leadDays)} days` : NO_DATA) },
+      {
+        label: "Lead time",
+        value: p.lead_time ?? (leadDays !== null ? `${Math.round(leadDays)} days` : NO_DATA),
+      },
     ],
-    risk_factors: shipShare > 20 ? [`Shipping eats ${shipShare.toFixed(1)}% of revenue — freight-sensitive SKU.`] : [],
+    risk_factors:
+      shipShare > 20
+        ? [`Shipping eats ${shipShare.toFixed(1)}% of revenue — freight-sensitive SKU.`]
+        : [],
     action_recommendation:
-      shipShare > 20 ? "Move to sea freight + local 3PL stock to cut per-unit freight." : "Freight profile healthy for paid scaling.",
+      shipShare > 20
+        ? "Move to sea freight + local 3PL stock to cut per-unit freight."
+        : "Freight profile healthy for paid scaling.",
     veto: false,
   };
 
   /* 10 — Compliance Officer: certification & category barriers */
   const nameLc = p.name.toLowerCase();
-  const regulated = /(battery|lithium|cosmetic|serum|cream|supplement|food|baby|toy|laser|medical|electric|charger)/.test(nameLc);
+  const regulated =
+    /(battery|lithium|cosmetic|serum|cream|supplement|food|baby|toy|laser|medical|electric|charger)/.test(
+      nameLc,
+    );
   const compliance = clamp(regulated ? 55 : 86);
   const complianceAgent: AgentPayload = {
     agent_id: "compliance_officer",
     name: "Compliance Officer",
     score: compliance,
     confidence_level: 76,
-    primary_metric: { label: "Regulatory load", value: regulated ? "High — certification required" : "Standard" },
+    primary_metric: {
+      label: "Regulatory load",
+      value: regulated ? "High — certification required" : "Standard",
+    },
     metrics: [
       { label: "Category", value: regulated ? "Restricted / certified" : "General goods" },
       { label: "Docs", value: regulated ? "CE / FDA / SDS likely" : "Commercial invoice only" },
       { label: "Marketplace gate", value: p.marketplace ?? NO_DATA },
     ],
-    risk_factors: regulated ? ["Certification barrier may block customs or marketplace listing."] : [],
+    risk_factors: regulated
+      ? ["Certification barrier may block customs or marketplace listing."]
+      : [],
     action_recommendation: regulated
       ? "Request supplier test reports and certificates before the first order."
       : "No special certification barrier detected — standard import docs suffice.",
@@ -506,20 +608,31 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   };
 
   /* 11 — Retention Analyst: repeat-purchase & LTV potential */
-  const consumable = /(refill|cream|serum|coffee|tea|supplement|filter|pod|cartridge|skincare|patch|mask)/.test(nameLc);
+  const consumable =
+    /(refill|cream|serum|coffee|tea|supplement|filter|pod|cartridge|skincare|patch|mask)/.test(
+      nameLc,
+    );
   const retention = clamp((consumable ? 82 : 58) + (material !== null ? (12 - material) * 0.8 : 0));
   const retentionAgent: AgentPayload = {
     agent_id: "retention_analyst",
     name: "Retention & LTV Analyst",
     score: retention,
     confidence_level: reviews !== null ? 74 : 50,
-    primary_metric: { label: "Repeat potential", value: consumable ? "Consumable — high" : "One-off — medium" },
+    primary_metric: {
+      label: "Repeat potential",
+      value: consumable ? "Consumable — high" : "One-off — medium",
+    },
     metrics: [
       { label: "Est. LTV multiple", value: consumable ? "2.4x AOV" : "1.2x AOV" },
       { label: "CAC / unit", value: `$${e.ad_spend.toFixed(2)}` },
-      { label: "Quality complaints", value: material !== null ? `${material.toFixed(1)}%` : NO_DATA },
+      {
+        label: "Quality complaints",
+        value: material !== null ? `${material.toFixed(1)}%` : NO_DATA,
+      },
     ],
-    risk_factors: !consumable ? ["Single-purchase product — CAC must be recovered on the first order."] : [],
+    risk_factors: !consumable
+      ? ["Single-purchase product — CAC must be recovered on the first order."]
+      : [],
     action_recommendation: consumable
       ? "Launch a subscription/refill offer to lift LTV above 2x CAC."
       : "Build a cross-sell bundle so the first order carries the CAC.",
@@ -534,14 +647,20 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     name: "Creative Director",
     score: creative,
     confidence_level: viewsNow !== null ? 78 : 48,
-    primary_metric: { label: "Hook strength", value: velocityUp ? "Rising social proof" : "Needs a stronger angle" },
+    primary_metric: {
+      label: "Hook strength",
+      value: velocityUp ? "Rising social proof" : "Needs a stronger angle",
+    },
     metrics: [
       { label: "Views now", value: viewsNow !== null ? viewsNow.toLocaleString() : NO_DATA },
       { label: "CVR", value: cvr !== null ? `${cvr.toFixed(2)}%` : NO_DATA },
       { label: "Format", value: "UGC demo / before-after" },
     ],
-    risk_factors: !velocityUp ? ["No measurable social momentum — creative must carry the demand."] : [],
-    action_recommendation: "Ship 5 UGC demo variants; kill any hook below a 25% 3-second hold rate.",
+    risk_factors: !velocityUp
+      ? ["No measurable social momentum — creative must carry the demand."]
+      : [],
+    action_recommendation:
+      "Ship 5 UGC demo variants; kill any hook below a 25% 3-second hold rate.",
     veto: false,
   };
 
@@ -557,9 +676,13 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     metrics: [
       { label: "Competition", value: String(comp) },
       { label: "Active stores", value: stores !== null ? stores.toLocaleString() : NO_DATA },
-      { label: "Platform fee rate", value: e.retail > 0 ? `${((e.platform_fee / e.retail) * 100).toFixed(1)}%` : NO_DATA },
+      {
+        label: "Platform fee rate",
+        value: e.retail > 0 ? `${((e.platform_fee / e.retail) * 100).toFixed(1)}%` : NO_DATA,
+      },
     ],
-    risk_factors: comp === "High" ? ["High competition on this channel — CPC inflation likely."] : [],
+    risk_factors:
+      comp === "High" ? ["High competition on this channel — CPC inflation likely."] : [],
     action_recommendation:
       comp === "High"
         ? "Enter through a differentiated bundle or a lower-fee channel first."
@@ -568,7 +691,23 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
   };
 
   /* 14 — Data Auditor: evidence coverage across the council */
-  const fields = [volume, viewsNow, views7, stores, longRunners, amazonSellers, reviews, material, sizing, delays, onTime, stockStability, leadDays, cpc, cvr];
+  const fields = [
+    volume,
+    viewsNow,
+    views7,
+    stores,
+    longRunners,
+    amazonSellers,
+    reviews,
+    material,
+    sizing,
+    delays,
+    onTime,
+    stockStability,
+    leadDays,
+    cpc,
+    cvr,
+  ];
   const covered = fields.filter((v) => v !== null).length;
   const coverage = Math.round((covered / fields.length) * 100);
   const auditAgent: AgentPayload = {
@@ -579,18 +718,38 @@ export function runCouncil(p: AgentInput, e: UnitEconomics): AgentPayload[] {
     primary_metric: { label: "Evidence coverage", value: `${coverage}%` },
     metrics: [
       { label: "Live fields", value: `${covered}/${fields.length}` },
-      { label: "Sources", value: (sig.sources?.length ?? 0) > 0 ? String(sig.sources?.length) : NO_DATA },
+      {
+        label: "Sources",
+        value: (sig.sources?.length ?? 0) > 0 ? String(sig.sources?.length) : NO_DATA,
+      },
       { label: "Base signal", value: String(base) },
     ],
-    risk_factors: coverage < 50 ? [`Only ${coverage}% of council inputs are grounded — treat scores as directional.`] : [],
+    risk_factors:
+      coverage < 50
+        ? [`Only ${coverage}% of council inputs are grounded — treat scores as directional.`]
+        : [],
     action_recommendation:
-      coverage < 50 ? "Re-run the scan with a narrower query to raise data coverage." : "Data coverage sufficient for a buy decision.",
+      coverage < 50
+        ? "Re-run the scan with a narrower query to raise data coverage."
+        : "Data coverage sufficient for a buy decision.",
     veto: false,
   };
 
   return [
-    cfoAgent, cmoAgent, croAgent, trendAgent, intelAgent, uxAgent, supplyAgent,
-    pricingAgent, logisticsAgent, complianceAgent, retentionAgent, creativeAgent, channelAgent, auditAgent,
+    cfoAgent,
+    cmoAgent,
+    croAgent,
+    trendAgent,
+    intelAgent,
+    uxAgent,
+    supplyAgent,
+    pricingAgent,
+    logisticsAgent,
+    complianceAgent,
+    retentionAgent,
+    creativeAgent,
+    channelAgent,
+    auditAgent,
   ];
 }
 
@@ -612,12 +771,22 @@ export function statusBadge(score: number) {
       cls: "border-[--profit]/50 bg-[--profit]/15 text-[--profit] shadow-[0_0_26px_-4px_var(--profit)]",
     };
   if (score >= 70)
-    return { label: "📈 Solid Margin Opportunity", cls: "border-[--warning]/45 bg-[--warning]/12 text-[--warning]" };
-  return { label: "⚠️ High Risk / Low Efficiency", cls: "border-destructive/40 bg-destructive/10 text-destructive/90" };
+    return {
+      label: "📈 Solid Margin Opportunity",
+      cls: "border-[--warning]/45 bg-[--warning]/12 text-[--warning]",
+    };
+  return {
+    label: "⚠️ High Risk / Low Efficiency",
+    cls: "border-destructive/40 bg-destructive/10 text-destructive/90",
+  };
 }
 
 /** Final Score = (Council avg * 0.70) + (Finger * 0.30), with cross-agent vetoes. */
-export function hybridVerdict(agents: AgentPayload[], finger: number, e: UnitEconomics): HybridVerdict {
+export function hybridVerdict(
+  agents: AgentPayload[],
+  finger: number,
+  e: UnitEconomics,
+): HybridVerdict {
   const council = agents.length ? agents.reduce((s, a) => s + a.score, 0) / agents.length : 0;
   const cro = agents.find((a) => a.agent_id === "cro_agent")?.score ?? 100;
   const reasons: string[] = [];
@@ -625,7 +794,9 @@ export function hybridVerdict(agents: AgentPayload[], finger: number, e: UnitEco
   let councilWeight = 0.7;
   if (e.net_margin_pct < MIN_NET_MARGIN_PCT) {
     councilWeight = 0.35; // CFO margin veto — halve the council contribution
-    reasons.push(`Net margin ${e.net_margin_pct.toFixed(1)}% < ${MIN_NET_MARGIN_PCT}% — council weight halved.`);
+    reasons.push(
+      `Net margin ${e.net_margin_pct.toFixed(1)}% < ${MIN_NET_MARGIN_PCT}% — council weight halved.`,
+    );
   }
 
   let final = Math.round(council * councilWeight + finger * 0.3);

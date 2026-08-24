@@ -79,7 +79,6 @@ export function hasAnyAiProvider(): boolean {
   );
 }
 
-
 /**
  * Optional OpenAI-compatible AI gateway.
  *
@@ -90,14 +89,11 @@ export function hasAnyAiProvider(): boolean {
  */
 
 function gatewayConfig() {
-  const key =
-    process.env['AI_GATEWAY_API_KEY'] ||
-    process.env['LOVABLE_API_KEY'] ||
-    "";
+  const key = process.env["AI_GATEWAY_API_KEY"] || process.env["LOVABLE_API_KEY"] || "";
   const url =
-    process.env['AI_GATEWAY_URL'] ||
-    (process.env['LOVABLE_API_KEY'] ? "https://ai.gateway.lovable.dev/v1/chat/completions" : "");
-  const models = (process.env['AI_GATEWAY_MODELS'] || "")
+    process.env["AI_GATEWAY_URL"] ||
+    (process.env["LOVABLE_API_KEY"] ? "https://ai.gateway.lovable.dev/v1/chat/completions" : "");
+  const models = (process.env["AI_GATEWAY_MODELS"] || "")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);
@@ -107,12 +103,16 @@ function gatewayConfig() {
 async function callGatewayResponses(prompt: string, modelPreference?: string[]): Promise<string> {
   const { key, url, models: envModels } = gatewayConfig();
   if (!key || !url) throw new Error("AI gateway not configured");
-  const models = modelPreference?.length ? modelPreference : (envModels.length ? envModels : [
-    "google/gemini-3.6-flash",
-    "google/gemini-3.5-flash",
-    "google/gemini-2.5-flash",
-    "openai/gpt-5.6-terra",
-  ]);
+  const models = modelPreference?.length
+    ? modelPreference
+    : envModels.length
+      ? envModels
+      : [
+          "google/gemini-3.6-flash",
+          "google/gemini-3.5-flash",
+          "google/gemini-2.5-flash",
+          "openai/gpt-5.6-terra",
+        ];
 
   let lastErr: unknown = null;
   for (const model of models) {
@@ -153,7 +153,11 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
  * Groq → OpenRouter).
  */
 async function directFallback(prompt: string, temperature: number): Promise<string> {
-  if (geminiKeyPool().length === 0 && groqKeyPool().length === 0 && openRouterKeyPool().length === 0) {
+  if (
+    geminiKeyPool().length === 0 &&
+    groqKeyPool().length === 0 &&
+    openRouterKeyPool().length === 0
+  ) {
     throw new Error(
       "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
     );
@@ -168,7 +172,6 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
     }
   }
   for (const k of scheduleKeys(groqKeyPool(), groqCursor++)) {
-
     for (const model of GROQ_MODELS_LATEST) {
       try {
         const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -183,7 +186,10 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
         });
         if (!resp.ok) {
           const body = (await resp.text()).slice(0, 180);
-          if (isQuotaError(resp.status, body)) { parkKey(k); break; }
+          if (isQuotaError(resp.status, body)) {
+            parkKey(k);
+            break;
+          }
           continue;
         }
         const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -207,7 +213,10 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
         });
         if (!resp.ok) {
           const body = (await resp.text()).slice(0, 180);
-          if (isQuotaError(resp.status, body)) { parkKey(k); break; }
+          if (isQuotaError(resp.status, body)) {
+            parkKey(k);
+            break;
+          }
           continue;
         }
         const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -218,20 +227,22 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
       }
     }
   }
-  throw new Error("Yapay zeka motorları şu anda meşgul, lütfen birkaç saniye sonra tekrar deneyin.");
+  throw new Error(
+    "Yapay zeka motorları şu anda meşgul, lütfen birkaç saniye sonra tekrar deneyin.",
+  );
 }
 
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 export function openRouterKeyPool(): string[] {
   const raw = [
-    process.env['OPENROUTER_API_KEY'], process.env['OPENROUTER_API_KEY1'],
-    process.env['OPENROUTER_API_KEY_1'], process.env['OPENROUTER_API_KEY2'],
-    process.env['OPENROUTER_API_KEY_2'],
+    process.env["OPENROUTER_API_KEY"],
+    process.env["OPENROUTER_API_KEY1"],
+    process.env["OPENROUTER_API_KEY_1"],
+    process.env["OPENROUTER_API_KEY2"],
+    process.env["OPENROUTER_API_KEY_2"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
 }
-
-
 
 /** Pull a JSON object out of a model response that may be fenced or prefixed. */
 export function extractJson<T>(text: string, fallback: T): T {
@@ -245,13 +256,18 @@ export function extractJson<T>(text: string, fallback: T): T {
   const last = raw.lastIndexOf("}");
   if (first !== -1 && last > first) candidates.push(raw.slice(first, last + 1));
   for (const c of candidates) {
-    try { return JSON.parse(c.trim()) as T; } catch { /* next */ }
+    try {
+      return JSON.parse(c.trim()) as T;
+    } catch {
+      /* next */
+    }
   }
   // Best-effort recovery from truncated JSON: close any open strings, arrays, objects.
   const start = raw.indexOf("{");
   if (start !== -1) {
     const tail = raw.slice(start);
-    let inStr = false, esc = false;
+    let inStr = false,
+      esc = false;
     const stack: string[] = [];
     for (let i = 0; i < tail.length; i++) {
       const ch = tail[i];
@@ -273,7 +289,11 @@ export function extractJson<T>(text: string, fallback: T): T {
       const open = stack.pop();
       repaired += open === "{" ? "}" : "]";
     }
-    try { return JSON.parse(repaired) as T; } catch { /* give up */ }
+    try {
+      return JSON.parse(repaired) as T;
+    } catch {
+      /* give up */
+    }
   }
   return fallback;
 }
@@ -281,16 +301,23 @@ export function extractJson<T>(text: string, fallback: T): T {
 /** All configured Gemini keys, de-duplicated, in rotation order. */
 export function geminiKeyPool(): string[] {
   const raw = [
-    process.env['GEMINI_API_KEY_1'], process.env['GEMINI_1_API_KEY'],
-    process.env['GEMINI_API_KEY_2'], process.env['GEMINI_2_API_KEY'],
-    process.env['GEMINI_API_KEY_3'], process.env['GEMINI_3_API_KEY'],
-    process.env['GEMINI_API_KEY'],
+    process.env["GEMINI_API_KEY_1"],
+    process.env["GEMINI_1_API_KEY"],
+    process.env["GEMINI_API_KEY_2"],
+    process.env["GEMINI_2_API_KEY"],
+    process.env["GEMINI_API_KEY_3"],
+    process.env["GEMINI_3_API_KEY"],
+    process.env["GEMINI_API_KEY"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
 }
 
 function isQuotaError(status: number, body: string): boolean {
-  return status === 429 || status === 403 || /quota|RESOURCE_EXHAUSTED|exceeded|expired|invalid.*key|API key not valid/i.test(body);
+  return (
+    status === 429 ||
+    status === 403 ||
+    /quota|RESOURCE_EXHAUSTED|exceeded|expired|invalid.*key|API key not valid/i.test(body)
+  );
 }
 
 /** Single-key Gemini attempt. Throws with a QUOTA: prefix when the key is spent. */
@@ -340,7 +367,10 @@ async function geminiOnce(
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
       };
       const parts = json.candidates?.[0]?.content?.parts ?? [];
-      const text = parts.map((p) => p.text ?? "").join("").trim();
+      const text = parts
+        .map((p) => p.text ?? "")
+        .join("")
+        .trim();
       return text || "{}";
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("QUOTA:")) throw e;
@@ -411,9 +441,7 @@ export async function callGemini(
   grounded = true,
   modelPreference?: string[],
 ): Promise<string> {
-  const models = modelPreference?.length
-    ? modelPreference
-    : GEMINI_MODELS_LATEST;
+  const models = modelPreference?.length ? modelPreference : GEMINI_MODELS_LATEST;
   const pool = geminiKeyPool();
   const cursor = geminiCursor++;
   const preferred = apiKey && isCool(apiKey) ? [apiKey] : [];
@@ -436,15 +464,17 @@ export async function callGemini(
   }
 }
 
-
-
 /** All configured Groq keys, de-duplicated, in rotation order. */
 export function groqKeyPool(): string[] {
   const raw = [
-    process.env['GROQ_API_KEY'], process.env['GROQ_API_KEY_1'],
-    process.env['GROQ_API_KEY1'], process.env['GROQ_API_KEY_2'],
-    process.env['GROQ_API_KEY2'], process.env['GROQ_2_API_KEY'],
-    process.env['GROQ_API_KEY_3'], process.env['GROQ_API_KEY3'],
+    process.env["GROQ_API_KEY"],
+    process.env["GROQ_API_KEY_1"],
+    process.env["GROQ_API_KEY1"],
+    process.env["GROQ_API_KEY_2"],
+    process.env["GROQ_API_KEY2"],
+    process.env["GROQ_2_API_KEY"],
+    process.env["GROQ_API_KEY_3"],
+    process.env["GROQ_API_KEY3"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
 }
@@ -476,7 +506,10 @@ export async function callGroq(prompt: string, temperature = 0.3): Promise<strin
         if (!resp.ok) {
           const body = (await resp.text()).slice(0, 180);
           lastErr = new Error(`Groq error: ${resp.status} ${body}`);
-          if (isQuotaError(resp.status, body)) { parkKey(key); break; } // key spent — rotate
+          if (isQuotaError(resp.status, body)) {
+            parkKey(key);
+            break;
+          } // key spent — rotate
           await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
           continue;
         }
@@ -496,4 +529,3 @@ export async function callGroq(prompt: string, temperature = 0.3): Promise<strin
 }
 
 export { isQuotaError };
-

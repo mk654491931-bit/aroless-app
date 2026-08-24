@@ -36,12 +36,18 @@ export function HotTicker() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw !== null) setOpen(raw === "1");
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const toggle = () => {
     setOpen((o) => {
-      try { localStorage.setItem(KEY, o ? "0" : "1"); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(KEY, o ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
       return !o;
     });
   };
@@ -70,7 +76,10 @@ export function HotTicker() {
   }
 
   return (
-    <aside className="pointer-events-none fixed right-3 top-24 z-20 hidden w-56 xl:block" style={{ maxHeight: "calc(100dvh - 8rem)" }}>
+    <aside
+      className="pointer-events-none fixed right-3 top-24 z-20 hidden w-56 xl:block"
+      style={{ maxHeight: "calc(100dvh - 8rem)" }}
+    >
       <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/70 backdrop-blur-md">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/60 px-3 py-2">
           <span className="flex min-w-0 items-center gap-2">
@@ -79,7 +88,11 @@ export function HotTicker() {
               Şu an satılmaya en müsait
             </span>
           </span>
-          <button onClick={toggle} className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label="Paneli kapat">
+          <button
+            onClick={toggle}
+            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            aria-label="Paneli kapat"
+          >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>

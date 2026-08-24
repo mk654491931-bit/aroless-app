@@ -3,7 +3,11 @@
 // market-accurate results. Every step degrades gracefully — if a source is
 // unavailable the product is still returned, just with a lower realism score.
 
-import { getGoogleTrends, getSourcingEstimate, scrapeMarketplaceSellers } from "@/lib/market-data.server";
+import {
+  getGoogleTrends,
+  getSourcingEstimate,
+  scrapeMarketplaceSellers,
+} from "@/lib/market-data.server";
 import { median, type MarketEvidence } from "@/lib/market-evidence";
 import { parseMoney } from "@/lib/unit-economics";
 
@@ -37,7 +41,10 @@ export async function buildLiveEvidenceBlock(niche: string, country: string): Pr
         .join("; ")}.`,
     );
     const m = median(sellers.map((s) => s.price_usd));
-    if (m > 0) lines.push(`- Real observed retail median in this niche: ~$${m.toFixed(2)}. Keep selling prices within a defensible range of this figure.`);
+    if (m > 0)
+      lines.push(
+        `- Real observed retail median in this niche: ~$${m.toFixed(2)}. Keep selling prices within a defensible range of this figure.`,
+      );
   }
   if (!lines.length) return "";
   return `\nLIVE MARKET EVIDENCE (retrieved seconds ago from real sources — treat as ground truth and stay consistent with it):\n${lines.join("\n")}\n`;
@@ -60,9 +67,10 @@ export async function verifyProduct(
   ]);
 
   const marketPrice = median(sellers.map((s) => s.price_usd));
-  const priceDelta = marketPrice > 0 && sellingPrice > 0
-    ? Math.round(((sellingPrice - marketPrice) / marketPrice) * 100)
-    : 0;
+  const priceDelta =
+    marketPrice > 0 && sellingPrice > 0
+      ? Math.round(((sellingPrice - marketPrice) / marketPrice) * 100)
+      : 0;
 
   const verified: string[] = [];
   const unverified: string[] = [];

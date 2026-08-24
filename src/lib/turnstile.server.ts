@@ -45,5 +45,8 @@ export function clientIp(request: Request): string {
 export async function hashIp(ip: string): Promise<string> {
   if (!ip) return "";
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`velora::${ip}`));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 40);
 }

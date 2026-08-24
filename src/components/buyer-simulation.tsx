@@ -7,7 +7,10 @@ import type { WinningProduct } from "@/lib/gemini.functions";
 function Bar({ pct, className = "" }: { pct: number; className?: string }) {
   return (
     <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-      <div className={`h-full rounded-full ${className}`} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+      <div
+        className={`h-full rounded-full ${className}`}
+        style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+      />
     </div>
   );
 }
@@ -73,18 +76,27 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
               <div className="flex items-center gap-1.5 text-emerald-300 text-[10px] uppercase tracking-wider">
                 <ThumbsUp size={11} /> Would buy
               </div>
-              <div className="text-2xl font-bold text-emerald-200">{sim.buyers}<span className="text-sm font-medium opacity-70">/100</span></div>
+              <div className="text-2xl font-bold text-emerald-200">
+                {sim.buyers}
+                <span className="text-sm font-medium opacity-70">/100</span>
+              </div>
             </div>
             <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5">
               <div className="flex items-center gap-1.5 text-rose-300 text-[10px] uppercase tracking-wider">
                 <ThumbsDown size={11} /> Would not buy
               </div>
-              <div className="text-2xl font-bold text-rose-200">{sim.non_buyers}<span className="text-sm font-medium opacity-70">/100</span></div>
+              <div className="text-2xl font-bold text-rose-200">
+                {sim.non_buyers}
+                <span className="text-sm font-medium opacity-70">/100</span>
+              </div>
             </div>
           </div>
 
           {/* 100 dots */}
-          <div className="grid grid-cols-20 gap-1" style={{ gridTemplateColumns: "repeat(20, minmax(0, 1fr))" }}>
+          <div
+            className="grid grid-cols-20 gap-1"
+            style={{ gridTemplateColumns: "repeat(20, minmax(0, 1fr))" }}
+          >
             {dots.slice(0, 100).map((d, i) => (
               <span
                 key={i}
@@ -99,7 +111,9 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
 
           {/* Segments */}
           <div className="space-y-1.5">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Personality segments</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Personality segments
+            </div>
             {sim.segments.map((s, i) => (
               <div key={i} className="rounded-md border border-white/10 bg-white/[0.02] p-2">
                 <div className="flex items-center justify-between gap-2">
@@ -108,7 +122,12 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
                     <span className="text-emerald-300 font-semibold">{s.buyers}</span>/{s.count} buy
                   </span>
                 </div>
-                <div className="mt-1"><Bar pct={s.count ? (s.buyers / s.count) * 100 : 0} className="bg-emerald-400/80" /></div>
+                <div className="mt-1">
+                  <Bar
+                    pct={s.count ? (s.buyers / s.count) * 100 : 0}
+                    className="bg-emerald-400/80"
+                  />
+                </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">{s.profile}</p>
                 <p className="text-[11px] text-muted-foreground/80">{s.reason}</p>
               </div>
@@ -118,15 +137,21 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
           {/* Reasons / objections */}
           {!!sim.top_buy_reasons?.length && (
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Why they buy</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                Why they buy
+              </div>
               <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
-                {sim.top_buy_reasons.map((r, i) => <li key={i}>{r}</li>)}
+                {sim.top_buy_reasons.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
               </ul>
             </div>
           )}
           {!!sim.top_objections?.length && (
             <div className="space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Top objections</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Top objections
+              </div>
               {sim.top_objections.map((o, i) => (
                 <div key={i} className="rounded-md border border-amber-500/25 bg-amber-500/5 p-2">
                   <div className="flex items-center justify-between gap-2">
@@ -142,7 +167,9 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
           {/* A/B test */}
           {sim.ab_test?.variants?.length === 2 && (
             <div className="space-y-2">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">A/B test</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                A/B test
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {sim.ab_test.variants.map((v) => {
                   const win = v.id === sim.ab_test.winner;
@@ -163,20 +190,29 @@ export function BuyerSimulation({ p }: { p: WinningProduct }) {
                       <p className="text-[11px] text-muted-foreground">{v.angle}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">{v.creative}</p>
                       <div className="mt-2 grid grid-cols-2 gap-1 text-[11px]">
-                        <span className="text-muted-foreground">Price</span><span className="text-right font-medium">{v.price_usd}</span>
-                        <span className="text-muted-foreground">CVR</span><span className="text-right font-medium">{v.predicted_cvr_pct}%</span>
-                        <span className="text-muted-foreground">CTR</span><span className="text-right font-medium">{v.predicted_ctr_pct}%</span>
-                        <span className="text-muted-foreground">AOV</span><span className="text-right font-medium">{v.predicted_aov_usd}</span>
-                        <span className="text-muted-foreground">Buyers</span><span className="text-right font-medium">{v.buyers_of_100}/100</span>
+                        <span className="text-muted-foreground">Price</span>
+                        <span className="text-right font-medium">{v.price_usd}</span>
+                        <span className="text-muted-foreground">CVR</span>
+                        <span className="text-right font-medium">{v.predicted_cvr_pct}%</span>
+                        <span className="text-muted-foreground">CTR</span>
+                        <span className="text-right font-medium">{v.predicted_ctr_pct}%</span>
+                        <span className="text-muted-foreground">AOV</span>
+                        <span className="text-right font-medium">{v.predicted_aov_usd}</span>
+                        <span className="text-muted-foreground">Buyers</span>
+                        <span className="text-right font-medium">{v.buyers_of_100}/100</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Expected lift: <span className="text-emerald-300 font-semibold">+{sim.ab_test.lift_pct}%</span> — {sim.ab_test.significance_note}
+                Expected lift:{" "}
+                <span className="text-emerald-300 font-semibold">+{sim.ab_test.lift_pct}%</span> —{" "}
+                {sim.ab_test.significance_note}
               </p>
-              <p className="text-[11px] text-muted-foreground">{sim.ab_test.recommended_test_plan}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {sim.ab_test.recommended_test_plan}
+              </p>
             </div>
           )}
         </div>

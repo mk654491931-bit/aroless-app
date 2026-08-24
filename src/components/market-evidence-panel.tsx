@@ -24,7 +24,11 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">🔎 Canlı piyasa kanıtı</span>
         <span className={up ? "text-emerald-300" : "text-rose-300"}>
-          {up ? <TrendingUp size={11} className="inline -mt-0.5" /> : <TrendingDown size={11} className="inline -mt-0.5" />}{" "}
+          {up ? (
+            <TrendingUp size={11} className="inline -mt-0.5" />
+          ) : (
+            <TrendingDown size={11} className="inline -mt-0.5" />
+          )}{" "}
           {up ? "+" : ""}
           {ev.trend_momentum_pct}% / 30g
         </span>
@@ -37,27 +41,36 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
         <span>
           Tedarik ~<b className="text-foreground">${ev.supplier_price_usd.toFixed(2)}</b>
-          <span className="opacity-60"> ({ev.supplier_source === "aliexpress" ? "AliExpress" : "tahmini"})</span>
+          <span className="opacity-60">
+            {" "}
+            ({ev.supplier_source === "aliexpress" ? "AliExpress" : "tahmini"})
+          </span>
         </span>
         {ev.market_price_usd > 0 && (
           <span>
             Piyasa medyanı <b className="text-foreground">${ev.market_price_usd.toFixed(2)}</b>
             {ev.price_delta_pct !== 0 && (
               <span className={Math.abs(ev.price_delta_pct) > 45 ? "text-amber-300" : "opacity-60"}>
-                {" "}({ev.price_delta_pct > 0 ? "+" : ""}{ev.price_delta_pct}% fark)
+                {" "}
+                ({ev.price_delta_pct > 0 ? "+" : ""}
+                {ev.price_delta_pct}% fark)
               </span>
             )}
           </span>
         )}
         <span>
           Talep kaynağı{" "}
-          <b className="text-foreground">{ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}</b>
+          <b className="text-foreground">
+            {ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}
+          </b>
         </span>
       </div>
 
       {ev.sellers.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Canlı satıcı ilanları</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Canlı satıcı ilanları
+          </div>
           <div className="max-h-24 space-y-1 overflow-y-auto pr-1">
             {ev.sellers.map((s) => (
               <a
@@ -71,7 +84,8 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
                   <b className="text-foreground">{s.platform}</b> · {s.domain}
                 </span>
                 <span className="shrink-0 text-muted-foreground">
-                  {s.price_usd > 0 ? `$${s.price_usd.toFixed(2)}` : "—"} <ExternalLink size={10} className="inline -mt-0.5" />
+                  {s.price_usd > 0 ? `$${s.price_usd.toFixed(2)}` : "—"}{" "}
+                  <ExternalLink size={10} className="inline -mt-0.5" />
                 </span>
               </a>
             ))}
@@ -82,12 +96,18 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
       {(ev.verified_signals.length > 0 || ev.unverified_signals.length > 0) && (
         <div className="flex flex-wrap gap-1">
           {ev.verified_signals.map((s) => (
-            <span key={s} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+            <span
+              key={s}
+              className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300"
+            >
               ✓ {s}
             </span>
           ))}
           {ev.unverified_signals.map((s) => (
-            <span key={s} className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground">
+            <span
+              key={s}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground"
+            >
               ~ {s}
             </span>
           ))}

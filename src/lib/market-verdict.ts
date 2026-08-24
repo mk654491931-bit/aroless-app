@@ -5,7 +5,14 @@
 // ============================================================================
 import type { Platform } from "@/lib/gemini.functions";
 import { countryByCode } from "@/lib/countries";
-import { PLATFORM_MARKETS, commissionRange, countryFit, fitLabel, shipDays, type CountryFit } from "@/lib/platform-market";
+import {
+  PLATFORM_MARKETS,
+  commissionRange,
+  countryFit,
+  fitLabel,
+  shipDays,
+  type CountryFit,
+} from "@/lib/platform-market";
 
 export type ChannelVerdict = {
   platform: string;
@@ -71,7 +78,8 @@ export function buildVerdict(input: {
   const country = countryByCode(code);
   const channels = channelVerdicts(input.platforms, code);
   const blocked = channels.filter((c) => c.fit === "unavailable").map((c) => c.platform);
-  const best = channels.find((c) => c.fit === "native") ?? channels.find((c) => c.fit === "cross-border");
+  const best =
+    channels.find((c) => c.fit === "native") ?? channels.find((c) => c.fit === "cross-border");
 
   let summary: string;
   if (input.decision === "rejected") {

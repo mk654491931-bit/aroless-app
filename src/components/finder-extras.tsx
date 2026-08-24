@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { History, Lightbulb, X } from "lucide-react";
 
 /** Persist any finder setting in localStorage so a search survives reloads. */
-export function usePersistentState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
+export function usePersistentState<T>(
+  key: string,
+  initial: T,
+): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [hydrated, setHydrated] = useState(false);
 
@@ -37,11 +40,16 @@ export function useRecentSearches() {
     (q: string) => {
       const v = q.trim();
       if (!v) return;
-      setRecent((prev) => [v, ...prev.filter((x) => x.toLowerCase() !== v.toLowerCase())].slice(0, MAX_RECENT));
+      setRecent((prev) =>
+        [v, ...prev.filter((x) => x.toLowerCase() !== v.toLowerCase())].slice(0, MAX_RECENT),
+      );
     },
     [setRecent],
   );
-  const remove = useCallback((q: string) => setRecent((prev) => prev.filter((x) => x !== q)), [setRecent]);
+  const remove = useCallback(
+    (q: string) => setRecent((prev) => prev.filter((x) => x !== q)),
+    [setRecent],
+  );
   const clear = useCallback(() => setRecent([]), [setRecent]);
   return { recent, push, remove, clear };
 }
@@ -96,7 +104,11 @@ export function FinderMemoryBar({
               </button>
             </span>
           ))}
-          <button type="button" onClick={onClear} className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
             temizle
           </button>
         </div>

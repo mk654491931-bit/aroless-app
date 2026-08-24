@@ -3,8 +3,7 @@ import { Check, Download, FileDown, FileText, RotateCcw, SlidersHorizontal } fro
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { num } from "@/lib/deep-dive-complete";
 
-const usd = (n: number) =>
-  `$${Math.round(n).toLocaleString("en-US")}`;
+const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
 /* ------------------------------------------------------------------ */
 /* Aksiyon planı ilerleme durumu (checklist)                           */
@@ -18,13 +17,19 @@ export function useChecklist(scope: string) {
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) setDone(JSON.parse(raw) as Record<string, boolean>);
-    } catch { /* yoksay */ }
+    } catch {
+      /* yoksay */
+    }
   }, [storageKey]);
 
   const toggle = (id: string) =>
     setDone((prev) => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* yoksay */ }
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* yoksay */
+      }
       return next;
     });
 
@@ -32,8 +37,16 @@ export function useChecklist(scope: string) {
 }
 
 export function CheckItem({
-  id, label, done, onToggle,
-}: { id: string; label: string; done: boolean; onToggle: (id: string) => void }) {
+  id,
+  label,
+  done,
+  onToggle,
+}: {
+  id: string;
+  label: string;
+  done: boolean;
+  onToggle: (id: string) => void;
+}) {
   return (
     <li>
       <button
@@ -50,7 +63,9 @@ export function CheckItem({
         >
           <Check size={10} strokeWidth={3} />
         </span>
-        <span className={done ? "line-through text-muted-foreground/60" : "text-muted-foreground"}>{label}</span>
+        <span className={done ? "line-through text-muted-foreground/60" : "text-muted-foreground"}>
+          {label}
+        </span>
       </button>
     </li>
   );
@@ -66,7 +81,9 @@ export function ChecklistProgress({ total, completed }: { total: number; complet
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-[10px] tabular-nums text-muted-foreground">{completed}/{total} · %{pct}</span>
+      <span className="text-[10px] tabular-nums text-muted-foreground">
+        {completed}/{total} · %{pct}
+      </span>
     </div>
   );
 }
@@ -115,7 +132,12 @@ export function useScenario(p: WinningProduct) {
 export function ScenarioSimulator({ p }: { p: WinningProduct }) {
   const { rows, priceMul, setPriceMul, adMul, setAdMul, basePrice } = useScenario(p);
   const totals = rows.reduce(
-    (a, r) => ({ units: a.units + r.units, revenue: a.revenue + r.revenue, ad: a.ad + r.ad, net: a.net + r.net }),
+    (a, r) => ({
+      units: a.units + r.units,
+      revenue: a.revenue + r.revenue,
+      ad: a.ad + r.ad,
+      net: a.net + r.net,
+    }),
     { units: 0, revenue: 0, ad: 0, net: 0 },
   );
   const marginPct = totals.revenue > 0 ? Math.round((totals.net / totals.revenue) * 100) : 0;
@@ -151,7 +173,12 @@ export function ScenarioSimulator({ p }: { p: WinningProduct }) {
       <div className="max-h-40 overflow-y-auto rounded border border-white/10">
         <table className="w-full text-[11px]">
           <thead className="sticky top-0 bg-[oklch(0.19_0.03_265)] text-[10px] text-muted-foreground">
-            <tr><th className="px-2 py-1 text-left font-normal">Ay</th><th className="px-2 py-1 text-right font-normal">Adet</th><th className="px-2 py-1 text-right font-normal">Ciro</th><th className="px-2 py-1 text-right font-normal">Net</th></tr>
+            <tr>
+              <th className="px-2 py-1 text-left font-normal">Ay</th>
+              <th className="px-2 py-1 text-right font-normal">Adet</th>
+              <th className="px-2 py-1 text-right font-normal">Ciro</th>
+              <th className="px-2 py-1 text-right font-normal">Net</th>
+            </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
@@ -159,7 +186,11 @@ export function ScenarioSimulator({ p }: { p: WinningProduct }) {
                 <td className="px-2 py-1">{r.month}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{r.units}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{usd(r.revenue)}</td>
-                <td className={`px-2 py-1 text-right tabular-nums ${r.net >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{usd(r.net)}</td>
+                <td
+                  className={`px-2 py-1 text-right tabular-nums ${r.net >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                >
+                  {usd(r.net)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -168,22 +199,34 @@ export function ScenarioSimulator({ p }: { p: WinningProduct }) {
 
       <button
         type="button"
-        onClick={() => { setPriceMul(1); setAdMul(1); }}
+        onClick={() => {
+          setPriceMul(1);
+          setAdMul(1);
+        }}
         className="inline-flex items-center gap-1.5 rounded border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-white/10 transition"
       >
         <RotateCcw size={11} /> Varsayılana dön
       </button>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         <SlidersHorizontal size={10} className="inline mr-1" />
-        Simülasyon; reklam bütçesinde azalan getiri (üs 0.7) ve fiyat esnekliği (üs 1.3) varsayımıyla hesaplanır.
+        Simülasyon; reklam bütçesinde azalan getiri (üs 0.7) ve fiyat esnekliği (üs 1.3)
+        varsayımıyla hesaplanır.
       </p>
     </div>
   );
 }
 
 function SimSlider({
-  label, value, onChange, display,
-}: { label: string; value: number; onChange: (v: number) => void; display: string }) {
+  label,
+  value,
+  onChange,
+  display,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  display: string;
+}) {
   return (
     <div>
       <div className="flex items-center justify-between text-[10px]">
@@ -191,7 +234,11 @@ function SimSlider({
         <span className="font-medium text-[oklch(0.85_0.15_265)]">{display}</span>
       </div>
       <input
-        type="range" min={0.5} max={2} step={0.05} value={value}
+        type="range"
+        min={0.5}
+        max={2}
+        step={0.05}
+        value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[oklch(0.68_0.20_265)]"
         aria-label={label}
@@ -200,11 +247,25 @@ function SimSlider({
   );
 }
 
-function SimStat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
+function SimStat({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "good" | "bad";
+}) {
   return (
     <div className="rounded border border-white/10 bg-white/[0.03] p-2">
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`text-sm font-semibold ${tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-rose-300" : ""}`}>{value}</div>
+      <div
+        className={`text-sm font-semibold ${tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-rose-300" : ""}`}
+      >
+        {value}
+      </div>
       {sub && <div className="text-[9px] text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -218,16 +279,31 @@ function buildRows(p: WinningProduct): string[][] {
   const rows: string[][] = [["Bölüm", "Başlık", "Detay", "Ek"]];
   rows.push(["Ürün", p.name ?? "", p.target_audience ?? "", p.selling_price_usd ?? ""]);
   (p.financial_projection ?? []).forEach((f) =>
-    rows.push(["Finansal projeksiyon", String(f.month ?? ""), `Adet: ${f.units} | Ciro: ${f.revenue_usd}`, `Reklam: ${f.ad_spend_usd} | Net: ${f.net_profit_usd}`]),
+    rows.push([
+      "Finansal projeksiyon",
+      String(f.month ?? ""),
+      `Adet: ${f.units} | Ciro: ${f.revenue_usd}`,
+      `Reklam: ${f.ad_spend_usd} | Net: ${f.net_profit_usd}`,
+    ]),
   );
   (p.launch_roadmap ?? []).forEach((ph) =>
-    rows.push(["Lansman planı", `${ph.phase} (${ph.days})`, (ph.actions ?? []).join(" • "), `Bütçe: ${ph.budget_usd} | KPI: ${ph.kpi}`]),
+    rows.push([
+      "Lansman planı",
+      `${ph.phase} (${ph.days})`,
+      (ph.actions ?? []).join(" • "),
+      `Bütçe: ${ph.budget_usd} | KPI: ${ph.kpi}`,
+    ]),
   );
   (p.content_calendar ?? []).forEach((w) =>
     rows.push(["İçerik takvimi", `${w.week} — ${w.theme}`, (w.posts ?? []).join(" • "), ""]),
   );
   (p.supplier_shortlist ?? []).forEach((s) =>
-    rows.push(["Tedarikçi", s.name ?? "", `${s.region ?? ""} | MOQ ${s.moq ?? ""} | ${s.lead_time ?? ""}`, s.unit_price_usd ?? ""]),
+    rows.push([
+      "Tedarikçi",
+      s.name ?? "",
+      `${s.region ?? ""} | MOQ ${s.moq ?? ""} | ${s.lead_time ?? ""}`,
+      s.unit_price_usd ?? "",
+    ]),
   );
   return rows;
 }
@@ -235,12 +311,17 @@ function buildRows(p: WinningProduct): string[][] {
 function download(name: string, mime: string, content: string) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement("a");
-  a.href = url; a.download = name; a.click();
+  a.href = url;
+  a.download = name;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
 export function ExportReport({ p }: { p: WinningProduct }) {
-  const slug = (p.name ?? "urun").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+  const slug = (p.name ?? "urun")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 40);
 
   const exportCsv = () => {
     const csv = buildRows(p)
@@ -249,7 +330,8 @@ export function ExportReport({ p }: { p: WinningProduct }) {
     download(`${slug}-rapor.csv`, "text/csv;charset=utf-8", "\uFEFF" + csv);
   };
 
-  const exportJson = () => download(`${slug}-rapor.json`, "application/json", JSON.stringify(p, null, 2));
+  const exportJson = () =>
+    download(`${slug}-rapor.json`, "application/json", JSON.stringify(p, null, 2));
 
   const exportPdf = () => {
     const rows = buildRows(p);
@@ -263,10 +345,18 @@ tr:nth-child(even) td{background:#14172a}</style>
 <h1>${p.name ?? "Ürün"} — 90 günlük strateji raporu</h1>
 <h2>Aroless · ${new Date().toLocaleDateString("tr-TR")}</h2>
 <table><thead><tr>${rows[0]!.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-<tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td>${String(c).replace(/</g, "&lt;")}</td>`).join("")}</tr>`).join("")}</tbody></table>
+<tbody>${rows
+      .slice(1)
+      .map(
+        (r) => `<tr>${r.map((c) => `<td>${String(c).replace(/</g, "&lt;")}</td>`).join("")}</tr>`,
+      )
+      .join("")}</tbody></table>
 <script>window.onload=()=>window.print()</${"s"}cript>`;
     const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); }
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    }
   };
 
   return (
@@ -279,8 +369,16 @@ tr:nth-child(even) td{background:#14172a}</style>
 }
 
 function ExportBtn({
-  icon, label, onClick, primary,
-}: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean }) {
+  icon,
+  label,
+  onClick,
+  primary,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
   return (
     <button
       type="button"

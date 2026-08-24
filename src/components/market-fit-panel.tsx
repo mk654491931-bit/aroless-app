@@ -20,7 +20,13 @@ const decisionLabel = (d: MarketVerdict["decision"]) =>
   d === "kept" ? "Seçildi" : d === "rescued" ? "Sınırda kaldı" : "Elendi";
 
 /** Ülke + platform karar gerekçesi: komisyon, teslimat, bariyer, eşik kontrolleri. */
-export function MarketFitPanel({ verdict, defaultOpen = false }: { verdict?: MarketVerdict; defaultOpen?: boolean }) {
+export function MarketFitPanel({
+  verdict,
+  defaultOpen = false,
+}: {
+  verdict?: MarketVerdict;
+  defaultOpen?: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   if (!verdict) return null;
 
@@ -36,7 +42,9 @@ export function MarketFitPanel({ verdict, defaultOpen = false }: { verdict?: Mar
           Ülke &amp; platform uyumu · {verdict.country_name}
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${decisionTone(verdict.decision)}`}>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${decisionTone(verdict.decision)}`}
+          >
             {decisionLabel(verdict.decision)}
           </span>
           <ChevronDown size={13} className={`transition ${open ? "rotate-180" : ""}`} />
@@ -72,10 +80,18 @@ export function MarketFitPanel({ verdict, defaultOpen = false }: { verdict?: Mar
                     <tr key={c.platform} className="border-t border-white/5 align-top">
                       <td className="px-2 py-1.5 font-medium text-foreground">
                         {c.platform}
-                        {c.note && <div className="mt-0.5 text-[9.5px] font-normal text-muted-foreground">{c.note}</div>}
+                        {c.note && (
+                          <div className="mt-0.5 text-[9.5px] font-normal text-muted-foreground">
+                            {c.note}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
-                        <span className={`rounded-full border px-1.5 py-0.5 text-[9.5px] ${fitTone(c.fit)}`}>{c.fit_label}</span>
+                        <span
+                          className={`rounded-full border px-1.5 py-0.5 text-[9.5px] ${fitTone(c.fit)}`}
+                        >
+                          {c.fit_label}
+                        </span>
                       </td>
                       <td className="px-2 py-1.5 text-muted-foreground">
                         %{c.commission[0]}–%{c.commission[1]}
@@ -95,7 +111,8 @@ export function MarketFitPanel({ verdict, defaultOpen = false }: { verdict?: Mar
 
           {verdict.blocked_channels.length > 0 && (
             <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-[10.5px] text-rose-200">
-              {verdict.blocked_channels.join(", ")} → {verdict.country_name} pazarında satış kanalı olarak kullanılamıyor.
+              {verdict.blocked_channels.join(", ")} → {verdict.country_name} pazarında satış kanalı
+              olarak kullanılamıyor.
             </p>
           )}
 
@@ -126,8 +143,14 @@ export function MarketFitPanel({ verdict, defaultOpen = false }: { verdict?: Mar
                   </span>
                 </span>
                 <span className="shrink-0 text-right text-muted-foreground">
-                  {c.value && <span className={c.passed ? "text-emerald-300" : "text-rose-300"}>{c.value}</span>}
-                  {c.threshold && <span className="block text-[9.5px] opacity-70">{c.threshold}</span>}
+                  {c.value && (
+                    <span className={c.passed ? "text-emerald-300" : "text-rose-300"}>
+                      {c.value}
+                    </span>
+                  )}
+                  {c.threshold && (
+                    <span className="block text-[9.5px] opacity-70">{c.threshold}</span>
+                  )}
                 </span>
               </li>
             ))}

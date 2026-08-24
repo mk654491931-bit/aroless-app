@@ -39,7 +39,9 @@ async function ddgFirstImage(q: string): Promise<string | null> {
     },
   });
   if (!r.ok) return null;
-  const data = (await r.json().catch(() => null)) as { results?: Array<{ image?: string; thumbnail?: string }> } | null;
+  const data = (await r.json().catch(() => null)) as {
+    results?: Array<{ image?: string; thumbnail?: string }>;
+  } | null;
   const first = data?.results?.find((x) => x.image || x.thumbnail);
   return first?.image || first?.thumbnail || null;
 }

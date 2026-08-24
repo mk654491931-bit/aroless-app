@@ -4,7 +4,21 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Brain, Search, ShieldCheck, TrendingUp, Coins, Megaphone, Gauge, Database, Loader2, Check, Truck, ShieldAlert, Palette } from "lucide-react";
+import {
+  Brain,
+  Search,
+  ShieldCheck,
+  TrendingUp,
+  Coins,
+  Megaphone,
+  Gauge,
+  Database,
+  Loader2,
+  Check,
+  Truck,
+  ShieldAlert,
+  Palette,
+} from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
 import { runCouncilAnalysis } from "@/lib/council.functions";
@@ -13,7 +27,10 @@ import type { CouncilReport } from "@/lib/council.server";
 
 const STAGES = [
   { icon: ShieldCheck, label: "Fingerprint & Turnstile doğrulanıyor…" },
-  { icon: Database, label: "Veri hatları taranıyor (Google Trends · Reddit · TikTok · Amazon · GitHub)…" },
+  {
+    icon: Database,
+    label: "Veri hatları taranıyor (Google Trends · Reddit · TikTok · Amazon · GitHub)…",
+  },
   { icon: TrendingUp, label: "Trend Ekibi veri topluyor…" },
   { icon: Coins, label: "Finans Ekibi maliyet hesaplıyor…" },
   { icon: Megaphone, label: "Pazarlama Ekibi reklam kancası üretiyor…" },
@@ -40,9 +57,18 @@ function StageList({ active }: { active: number }) {
         const Icon = s.icon;
         const done = i < active;
         return (
-          <div key={s.label} className={`flex items-center gap-3 text-sm ${i > active ? "opacity-40" : ""}`}>
+          <div
+            key={s.label}
+            className={`flex items-center gap-3 text-sm ${i > active ? "opacity-40" : ""}`}
+          >
             <span className="h-7 w-7 shrink-0 rounded-lg bg-[oklch(0.68_0.20_265)]/15 flex items-center justify-center">
-              {done ? <Check size={14} className="text-emerald-400" /> : i === active ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+              {done ? (
+                <Check size={14} className="text-emerald-400" />
+              ) : i === active ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Icon size={14} />
+              )}
             </span>
             <span>{s.label}</span>
           </div>
@@ -65,7 +91,9 @@ function ScoreRing({ score }: { score: number }) {
       </div>
       <div>
         <div className="text-xs uppercase tracking-wide text-muted-foreground">Aroless Score</div>
-        <div className="text-sm text-muted-foreground">6 ekip · 12 model · müdür · denetçi ortalaması</div>
+        <div className="text-sm text-muted-foreground">
+          6 ekip · 12 model · müdür · denetçi ortalaması
+        </div>
       </div>
     </div>
   );
@@ -82,7 +110,10 @@ function CouncilPage() {
     mutationFn: async () => {
       setReport(null);
       setStage(0);
-      const timer = window.setInterval(() => setStage((s) => Math.min(STAGES.length - 1, s + 1)), 4500);
+      const timer = window.setInterval(
+        () => setStage((s) => Math.min(STAGES.length - 1, s + 1)),
+        4500,
+      );
       try {
         return (await runFn({ data: { query, country, lang: getUiLang() } })) as CouncilReport;
       } finally {
@@ -154,16 +185,26 @@ function CouncilPage() {
                 <div className="font-bold">{report.verdict}</div>
                 <div className="text-xs text-muted-foreground">Müdür: {report.director_engine}</div>
                 <div className="flex flex-wrap justify-end gap-2 pt-1 text-[11px]">
-                  <span className="rounded-full border border-border/60 px-2 py-0.5">Güven %{report.confidence}</span>
-                  <span className="rounded-full border border-border/60 px-2 py-0.5">Veri kapsamı %{report.data_coverage}</span>
-                  <span className="rounded-full border border-border/60 px-2 py-0.5">Görüş ayrılığı {report.disagreement} puan</span>
+                  <span className="rounded-full border border-border/60 px-2 py-0.5">
+                    Güven %{report.confidence}
+                  </span>
+                  <span className="rounded-full border border-border/60 px-2 py-0.5">
+                    Veri kapsamı %{report.data_coverage}
+                  </span>
+                  <span className="rounded-full border border-border/60 px-2 py-0.5">
+                    Görüş ayrılığı {report.disagreement} puan
+                  </span>
                   {report.opportunity_window && (
                     <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
                       Fırsat penceresi: {report.opportunity_window}
                     </span>
                   )}
                 </div>
-                {report.cache_hit && <div className="text-xs text-emerald-400">Önbellekten (24s) · kredi harcanmadı</div>}
+                {report.cache_hit && (
+                  <div className="text-xs text-emerald-400">
+                    Önbellekten (24s) · kredi harcanmadı
+                  </div>
+                )}
               </div>
             </div>
 
@@ -211,14 +252,14 @@ function CouncilPage() {
                       </div>
                     )}
                     <div className="rounded-lg border border-border/50 p-2 text-[11px] text-muted-foreground">
-                      <span className="font-semibold">{t.reviewer_engine}</span> · ekip {t.raw_score} → hakem {t.review_score}
+                      <span className="font-semibold">{t.reviewer_engine}</span> · ekip{" "}
+                      {t.raw_score} → hakem {t.review_score}
                       {t.review_note && <div className="mt-1">{t.review_note}</div>}
                     </div>
                   </div>
                 );
               })}
             </div>
-
 
             {report.executive_report && (
               <div className="glass rounded-2xl p-5">
@@ -258,7 +299,6 @@ function CouncilPage() {
                 </ul>
               </div>
             )}
-
 
             <div className="glass rounded-2xl p-5">
               <h3 className="font-semibold mb-3">Veri Hatları</h3>
@@ -305,7 +345,11 @@ export const Route = createFileRoute("/council")({
           "Aroless'nın 14 modeli AI konseyi: trend, finans, pazarlama, operasyon, uyum ve yaratıcı ekipleri canlı veri hatlarını analiz eder; müdür ve bağımsız denetçi tek sayfalık icra raporu ile Aroless Score üretir.",
       },
       { property: "og:title", content: "14'lü AI Konsey — Aroless AI" },
-      { property: "og:description", content: "6 uzman ekip (üretici + hakem) + müdür + denetçi. Çoklu sağlayıcı, otomatik fallback, 24 saat cache." },
+      {
+        property: "og:description",
+        content:
+          "6 uzman ekip (üretici + hakem) + müdür + denetçi. Çoklu sağlayıcı, otomatik fallback, 24 saat cache.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

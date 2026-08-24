@@ -4,15 +4,17 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { RealEconomics } from "@/lib/real-economics";
-import { HYBRID_RELAXED_MIN_SCORE, type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
+import {
+  HYBRID_RELAXED_MIN_SCORE,
+  type ConsensusResult,
+  type CouncilSummary,
+  type HybridScore,
+} from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles, countryFit } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { MarketEvidence } from "@/lib/market-evidence";
 import type { WinnerBreakdown } from "@/lib/winner-score";
-
-
-
 
 export const PLATFORMS = [
   "Amazon",
@@ -40,12 +42,7 @@ export const PLATFORMS = [
 ] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
-export const BUDGETS = [
-  "$0 - $500",
-  "$500 - $2,000",
-  "$2,000 - $10,000",
-  "$10,000+",
-] as const;
+export const BUDGETS = ["$0 - $500", "$500 - $2,000", "$2,000 - $10,000", "$10,000+"] as const;
 export type Budget = (typeof BUDGETS)[number];
 
 export const TARGET_COUNTRY_CODES = ["GLOBAL", "US", "DE", "UK", "FR", "CA", "AU"] as const;
@@ -67,12 +64,14 @@ const InputSchema = z.object({
   exclude_keywords: z.string().max(200).optional().default(""),
   price_target_min: z.number().min(0).max(100000).optional().default(0),
   price_target_max: z.number().min(0).max(100000).optional().default(0),
-  sourcing: z.enum(["any", "aliexpress", "alibaba", "local", "print_on_demand"]).optional().default("any"),
+  sourcing: z
+    .enum(["any", "aliexpress", "alibaba", "local", "print_on_demand"])
+    .optional()
+    .default("any"),
   season: z.string().max(80).optional().default(""),
   competition_pref: z.enum(["any", "low"]).optional().default("any"),
   novelty: z.enum(["any", "fresh", "proven"]).optional().default("any"),
 });
-
 
 export type CostBreakdown = {
   supplier_cost: string;
@@ -162,13 +161,30 @@ export type WinningProduct = {
     shipping_method: string;
     customs_notes: string;
   };
-  personas?: Array<{ name: string; age_range: string; pain: string; trigger: string; where_to_find: string }>;
-  keyword_opportunities?: Array<{ keyword: string; monthly_volume: string; difficulty: "Low" | "Medium" | "High"; intent: string }>;
+  personas?: Array<{
+    name: string;
+    age_range: string;
+    pain: string;
+    trigger: string;
+    where_to_find: string;
+  }>;
+  keyword_opportunities?: Array<{
+    keyword: string;
+    monthly_volume: string;
+    difficulty: "Low" | "Medium" | "High";
+    intent: string;
+  }>;
   differentiation?: string[];
   review_pain_points?: Array<{ complaint: string; fix: string }>;
   bundles?: Array<{ name: string; contents: string; price_usd: string; why: string }>;
   risks?: Array<{ risk: string; severity: "Low" | "Medium" | "High"; mitigation: string }>;
-  launch_roadmap?: Array<{ phase: string; days: string; actions: string[]; budget_usd: string; kpi: string }>;
+  launch_roadmap?: Array<{
+    phase: string;
+    days: string;
+    actions: string[];
+    budget_usd: string;
+    kpi: string;
+  }>;
   scaling_playbook?: string;
   exit_criteria?: string[];
   // ---- Deeper product-finder analysis ----
@@ -239,7 +255,6 @@ export type WinningProduct = {
   rejection_reason?: string;
 };
 
-
 /** Compact, model-friendly summary of a product used as debate context. */
 export function productDebateContext(p: WinningProduct): string {
   return [
@@ -273,10 +288,15 @@ export const generateProducts = createServerFn({ method: "POST" })
     let githubTrends: GitHubRepoTrend[] = [];
     if (data.use_github_trends) {
       try {
-        const { fetchGitHubTrendsForNiche, summarizeGitHubTrends, formatGitHubTrendsBlock } = await import("@/lib/github-trends.server");
+        const { fetchGitHubTrendsForNiche, summarizeGitHubTrends, formatGitHubTrendsBlock } =
+          await import("@/lib/github-trends.server");
         githubTrends = await fetchGitHubTrendsForNiche(data.niche);
         if (githubTrends.length) {
-          const { summary } = await summarizeGitHubTrends(data.niche, githubTrends, data.lang).catch(() => ({ summary: "" }));
+          const { summary } = await summarizeGitHubTrends(
+            data.niche,
+            githubTrends,
+            data.lang,
+          ).catch(() => ({ summary: "" }));
           githubBlock = formatGitHubTrendsBlock(summary, githubTrends);
         }
       } catch {
@@ -293,43 +313,78 @@ export const generateProducts = createServerFn({ method: "POST" })
       (data.target_country || "GLOBAL").toUpperCase(),
     ).catch(() => "");
 
-
-
     // ---- Deep-search refinement constraints (only what the user actually set) ----
-    const listify = (s: string) => s.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 10);
+    const listify = (s: string) =>
+      s
+        .split(/[,;\n]/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .slice(0, 10);
     const deepLines: string[] = [];
     const inc = listify(data.include_keywords);
     const exc = listify(data.exclude_keywords);
-    if (inc.length) deepLines.push(`- MUST-HAVE ATTRIBUTES: every product must genuinely match ALL of: ${inc.join(", ")}. Drop candidates that do not.`);
-    if (exc.length) deepLines.push(`- HARD EXCLUSIONS: never return products matching any of: ${exc.join(", ")}.`);
+    if (inc.length)
+      deepLines.push(
+        `- MUST-HAVE ATTRIBUTES: every product must genuinely match ALL of: ${inc.join(", ")}. Drop candidates that do not.`,
+      );
+    if (exc.length)
+      deepLines.push(
+        `- HARD EXCLUSIONS: never return products matching any of: ${exc.join(", ")}.`,
+      );
     if (data.price_target_min > 0 || data.price_target_max > 0) {
       const lo = data.price_target_min > 0 ? `$${data.price_target_min}` : "no minimum";
       const hi = data.price_target_max > 0 ? `$${data.price_target_max}` : "no maximum";
-      deepLines.push(`- TARGET RETAIL PRICE BAND: ${lo} to ${hi}. The realistic selling price must sit inside this band.`);
+      deepLines.push(
+        `- TARGET RETAIL PRICE BAND: ${lo} to ${hi}. The realistic selling price must sit inside this band.`,
+      );
     }
     if (data.sourcing !== "any") {
       const map: Record<string, string> = {
         aliexpress: "AliExpress / CJ Dropshipping single-unit dropshipping (no bulk MOQ).",
-        alibaba: "Alibaba / 1688 bulk sourcing — respect real MOQs and give per-unit landed cost at MOQ.",
-        local: "Local / domestic suppliers or 3PL stock with 1-4 day delivery in the target country.",
-        print_on_demand: "Print-on-demand / custom-printed products (Printful, Printify style) only.",
+        alibaba:
+          "Alibaba / 1688 bulk sourcing — respect real MOQs and give per-unit landed cost at MOQ.",
+        local:
+          "Local / domestic suppliers or 3PL stock with 1-4 day delivery in the target country.",
+        print_on_demand:
+          "Print-on-demand / custom-printed products (Printful, Printify style) only.",
       };
       deepLines.push(`- SOURCING MODEL (mandatory): ${map[data.sourcing]}`);
     }
-    if (data.season.trim()) deepLines.push(`- SEASON / TIMING: optimise for "${data.season.trim()}" — demand must be rising or peaking in that window, and say why in why_winning.`);
-    if (data.competition_pref === "low") deepLines.push(`- COMPETITION FILTER: only products where competition_level is genuinely "Low" (few established sellers, low ad saturation). Do not label a saturated product as Low.`);
-    if (data.novelty === "fresh") deepLines.push(`- MATURITY: only products whose demand started rising within the last 30-60 days (early window, not yet saturated).`);
-    if (data.novelty === "proven") deepLines.push(`- MATURITY: only products with a proven, sustained sales track record (consistent demand for 6+ months, verifiable review counts).`);
-    if (data.depth !== "standard") deepLines.push(`- RESEARCH DEPTH: ${data.depth === "ultra" ? "exhaustive" : "deep"} — run multiple distinct searches per claim, cross-check at least 2 independent sources per key number, and be explicit in confidence_reason about which source backs which figure.`);
-    const deepBrief = deepLines.length ? `\nDEEP SEARCH CONSTRAINTS (mandatory, applied before ranking):\n${deepLines.join("\n")}\n` : "";
-
+    if (data.season.trim())
+      deepLines.push(
+        `- SEASON / TIMING: optimise for "${data.season.trim()}" — demand must be rising or peaking in that window, and say why in why_winning.`,
+      );
+    if (data.competition_pref === "low")
+      deepLines.push(
+        `- COMPETITION FILTER: only products where competition_level is genuinely "Low" (few established sellers, low ad saturation). Do not label a saturated product as Low.`,
+      );
+    if (data.novelty === "fresh")
+      deepLines.push(
+        `- MATURITY: only products whose demand started rising within the last 30-60 days (early window, not yet saturated).`,
+      );
+    if (data.novelty === "proven")
+      deepLines.push(
+        `- MATURITY: only products with a proven, sustained sales track record (consistent demand for 6+ months, verifiable review counts).`,
+      );
+    if (data.depth !== "standard")
+      deepLines.push(
+        `- RESEARCH DEPTH: ${data.depth === "ultra" ? "exhaustive" : "deep"} — run multiple distinct searches per claim, cross-check at least 2 independent sources per key number, and be explicit in confidence_reason about which source backs which figure.`,
+      );
+    const deepBrief = deepLines.length
+      ? `\nDEEP SEARCH CONSTRAINTS (mandatory, applied before ranking):\n${deepLines.join("\n")}\n`
+      : "";
 
     // ---- Country + platform reality (commissions, shipping, tax, barriers) ----
-    const targetCode = (data.target_country || (data.marketplace === "turkey" ? "TR" : "GLOBAL")).toUpperCase();
+    const targetCode = (
+      data.target_country || (data.marketplace === "turkey" ? "TR" : "GLOBAL")
+    ).toUpperCase();
     const marketBrief = marketBriefBlock(data.platforms, targetCode);
     const localAngles = countryAngles(targetCode, data.platforms);
 
-    const buildPrompt = (angle: string, extra = "") => `You are an elite e-commerce product research analyst with LIVE Google Search access.
+    const buildPrompt = (
+      angle: string,
+      extra = "",
+    ) => `You are an elite e-commerce product research analyst with LIVE Google Search access.
 CRITICAL: Use the Google Search tool before answering. Base every number, price, competitor, link and trend claim on real, current search results you actually retrieved. Never invent, estimate blindly, or simulate data. If a figure cannot be verified, give the closest verified real-world figure and say so in "confidence_reason".
 ANGLE FOR THIS BATCH: ${angle}
 VIRAL-ONLY RULE (MANDATORY): Every product you return MUST currently have a REAL, verifiable viral form on TikTok, Instagram Reels, YouTube Shorts, or a similar short-form platform — a specific video, hashtag, or creator post with real view counts you actually found via search. If a candidate product does NOT have a currently-viral form you can prove with a URL and view count, DROP IT ENTIRELY. It is better to return 1 product with rock-solid viral proof than 2 without.
@@ -453,7 +508,9 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
           .from("profiles")
           .update({ credits: (remaining as number) + 1 })
           .eq("id", context.userId);
-      } catch { /* kredi iadesi başarısız olsa da akış bozulmaz */ }
+      } catch {
+        /* kredi iadesi başarısız olsa da akış bozulmaz */
+      }
     };
 
     // Run parallel Gemini calls with DIFFERENT angles to (a) multiply the
@@ -493,7 +550,9 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     // Keep only products with real viral proof (URL + views).
     const hasViralProof = (p: WinningProduct) =>
       Array.isArray(p?.viral_proof) &&
-      p.viral_proof.some((v) => v && /^https?:\/\//i.test(v.url ?? "") && String(v.views ?? "").trim().length > 0);
+      p.viral_proof.some(
+        (v) => v && /^https?:\/\//i.test(v.url ?? "") && String(v.views ?? "").trim().length > 0,
+      );
 
     // Fuzzy de-duplication: aynı ürünün farklı isimleri tek adaya iner.
     const { dedupeCandidates, winnerGate } = await import("@/lib/winner-gate.server");
@@ -505,8 +564,6 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     // Aday havuzu geniş tutulur; asıl eleme Winner Gate + skorlamada yapılır.
     const cap = Math.max(10, angleCount * 2);
     if (products.length > cap) products = products.slice(0, cap);
-
-
 
     // If nothing came back, retry the first angle without grounding (strict JSON)
     if (products.length === 0) {
@@ -549,7 +606,9 @@ JSON shape:
     }
     if (products.length === 0) {
       await refund();
-      throw new Error("The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.");
+      throw new Error(
+        "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
+      );
     }
     const normalized = products.map((prod) =>
       normalizeProduct(prod, {
@@ -580,14 +639,13 @@ JSON shape:
     const deepLimit = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
     const gated = gate.survivors.slice(0, deepLimit);
 
-
-
     // ---- Hybrid scoring: AI1 Groq (55%) + AI2 Gemini logistics (45%) ----
     const country = (data.target_country || "GLOBAL").toUpperCase();
     const minScore = Math.max(0, Math.min(100, Math.round(data.min_score ?? 65)));
 
     const { runConsensus } = await import("@/lib/agents.server");
-    const { scoreProductForCountry, runCountryCrossMatch } = await import("@/lib/hybrid-scoring.server");
+    const { scoreProductForCountry, runCountryCrossMatch } =
+      await import("@/lib/hybrid-scoring.server");
 
     // Judge at most 2 products at a time: each product fans out into several
     // agent calls, so an unbounded Promise.all is what trips rate limits.
@@ -605,7 +663,6 @@ JSON shape:
       return { ...p, hybrid, consensus };
     });
 
-
     // Rank by the weighted hybrid score — no strict AND gate, so the engine
     // never deadlocks into an empty result set.
     const ranked = [...judged].sort(
@@ -617,7 +674,9 @@ JSON shape:
 
     if (finalProducts.length === 0) {
       // Fallback A — relax the threshold and show the best available.
-      finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= HYBRID_RELAXED_MIN_SCORE).slice(0, 3);
+      finalProducts = ranked
+        .filter((p) => (p.hybrid?.calculated_score ?? 0) >= HYBRID_RELAXED_MIN_SCORE)
+        .slice(0, 3);
       if (finalProducts.length === 0) finalProducts = ranked.slice(0, Math.min(3, ranked.length));
       fallback = {
         type: "relaxed",
@@ -636,7 +695,9 @@ JSON shape:
 
     if (finalProducts.length === 0) {
       await refund();
-      throw new Error("The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.");
+      throw new Error(
+        "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
+      );
     }
 
     // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
@@ -685,9 +746,10 @@ JSON shape:
     finalProducts = finalProducts.map((p) => {
       const hybridScore = p.hybrid?.calculated_score ?? p.consensus?.average_score ?? 0;
       const velora = p.council?.velora_score;
-      const unified = typeof velora === "number" && velora > 0
-        ? Math.round((hybridScore + velora) / 2)
-        : Math.round(hybridScore);
+      const unified =
+        typeof velora === "number" && velora > 0
+          ? Math.round((hybridScore + velora) / 2)
+          : Math.round(hybridScore);
       return { ...p, unified_score: unified };
     });
     // En iyi özellikteki ürünler ortak puana göre en üstte.
@@ -753,9 +815,6 @@ JSON shape:
       min_score: minScore,
       fallback,
     };
-
-
-
   });
 
 // ---------- Product Validator: "Will it sell?" ----------
@@ -775,35 +834,46 @@ export type ValidationReport = {
 export const validateProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ValidateInput.parse(input))
-  .handler(async ({ data, context }): Promise<{ report: ValidationReport; creditsRemaining: number }> => {
-    const { data: remaining, error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+  .handler(
+    async ({ data, context }): Promise<{ report: ValidationReport; creditsRemaining: number }> => {
+      const { data: remaining, error: deductErr } = await context.supabase.rpc("deduct_credit");
+      if (deductErr) {
+        if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
+        throw new Error(deductErr.message);
+      }
 
-    const { runMarketAgent, runConsensus } = await import("@/lib/agents.server");
-    const scan = await runMarketAgent({ query: data.query, platforms: data.platforms });
-    const candidate = scan.candidates[0];
-    const productName = candidate?.name || data.query;
-    const ctx = [
-      `User input (link / name / niche): ${data.query}`,
-      `Resolved product: ${productName}`,
-      candidate ? `Why now: ${candidate.why_now}` : "",
-      candidate ? `Retail price band: ${candidate.price_band_usd} | Supplier cost: ${candidate.supplier_cost_usd}` : "",
-      candidate ? `Demand signal: ${candidate.demand_signal} | Best channel: ${candidate.channel}` : "",
-      scan.market_note ? `Market note: ${scan.market_note}` : "",
-      data.platforms.length ? `Seller channels: ${data.platforms.join(", ")}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      const { runMarketAgent, runConsensus } = await import("@/lib/agents.server");
+      const scan = await runMarketAgent({ query: data.query, platforms: data.platforms });
+      const candidate = scan.candidates[0];
+      const productName = candidate?.name || data.query;
+      const ctx = [
+        `User input (link / name / niche): ${data.query}`,
+        `Resolved product: ${productName}`,
+        candidate ? `Why now: ${candidate.why_now}` : "",
+        candidate
+          ? `Retail price band: ${candidate.price_band_usd} | Supplier cost: ${candidate.supplier_cost_usd}`
+          : "",
+        candidate
+          ? `Demand signal: ${candidate.demand_signal} | Best channel: ${candidate.channel}`
+          : "",
+        scan.market_note ? `Market note: ${scan.market_note}` : "",
+        data.platforms.length ? `Seller channels: ${data.platforms.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
 
-    const consensus = await runConsensus({ context: ctx });
-    return {
-      report: { query: data.query, product_name: productName, market_note: scan.market_note, consensus },
-      creditsRemaining: remaining as number,
-    };
-  });
+      const consensus = await runConsensus({ context: ctx });
+      return {
+        report: {
+          query: data.query,
+          product_name: productName,
+          market_note: scan.market_note,
+          consensus,
+        },
+        creditsRemaining: remaining as number,
+      };
+    },
+  );
 
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -817,7 +887,8 @@ export const getProfile = createServerFn({ method: "GET" })
       // Token/clock-skew issues ("JWT issued at future", expired JWT) must not
       // blank the app — surface a recoverable signal the client can retry on.
       const msg = String(error.message);
-      if (/jwt/i.test(msg)) return { email: null, credits: 0, subscription_tier: "Free", stale_token: true };
+      if (/jwt/i.test(msg))
+        return { email: null, credits: 0, subscription_tier: "Free", stale_token: true };
       throw new Error(msg);
     }
     return data ?? { email: null, credits: 0, subscription_tier: "Free" };
@@ -835,9 +906,9 @@ const SeoInput = z.object({
 });
 
 export type SeoKit = {
-  titles: string[];              // 5 SEO product titles
-  meta_descriptions: string[];   // 3 meta descriptions <=160 chars
-  keywords: string[];            // 15 keywords/tags
+  titles: string[]; // 5 SEO product titles
+  meta_descriptions: string[]; // 3 meta descriptions <=160 chars
+  keywords: string[]; // 15 keywords/tags
   ad_copy: { platform: AdPlatform; hook: string; primary: string; cta: string }[];
 };
 
@@ -990,14 +1061,12 @@ export const saveFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => SaveInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("favorites")
-      .insert({
-        user_id: context.userId,
-        name: data.name,
-        collection_name: data.collection_name,
-        product: data.product,
-      });
+    const { error } = await context.supabase.from("favorites").insert({
+      user_id: context.userId,
+      name: data.name,
+      collection_name: data.collection_name,
+      product: data.product,
+    });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -1040,7 +1109,11 @@ export const deleteFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => DeleteInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("favorites").delete().eq("id", data.id).eq("user_id", context.userId);
+    const { error } = await context.supabase
+      .from("favorites")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -1079,10 +1152,10 @@ const SimInput = z.object({
 
 export type SimSegment = {
   label: string;
-  count: number;          // people out of 100
-  buyers: number;         // of that segment
-  profile: string;        // who they are
-  reason: string;         // why they buy / don't
+  count: number; // people out of 100
+  buyers: number; // of that segment
+  profile: string; // who they are
+  reason: string; // why they buy / don't
 };
 
 export type AbVariant = {
@@ -1173,8 +1246,13 @@ Return STRICT JSON only:
       if (segs[segs.length - 1].count < 0) segs[segs.length - 1].count = 0;
       total = segs.reduce((a, s) => a + s.count, 0);
     }
-    segs.forEach((s) => { if (s.buyers > s.count) s.buyers = s.count; });
-    const buyers = Math.min(100, segs.reduce((a, s) => a + s.buyers, 0));
+    segs.forEach((s) => {
+      if (s.buyers > s.count) s.buyers = s.count;
+    });
+    const buyers = Math.min(
+      100,
+      segs.reduce((a, s) => a + s.buyers, 0),
+    );
     parsed.segments = segs;
     parsed.buyers = buyers;
     parsed.non_buyers = 100 - buyers;

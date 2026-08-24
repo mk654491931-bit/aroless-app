@@ -55,8 +55,7 @@ export function useEntitlements(): Entitlements {
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
   // Ücretsiz kullanıcı: sadece Kazanan Ürün Radarı (ürün arama). Ücretli: tüm modüller.
-  const canUse = (groupId: string) =>
-    isAdmin || isPaid || FREE_GROUPS.includes(groupId);
+  const canUse = (groupId: string) => isAdmin || isPaid || FREE_GROUPS.includes(groupId);
   const quota = quotaFor(level);
 
   return {

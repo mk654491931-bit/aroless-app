@@ -1,35 +1,121 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Store, Play, FastForward, RotateCcw, Plus, Package, Megaphone, BarChart3, ScrollText,
-  Star, ShoppingCart, TrendingUp, TrendingDown, Wallet, Search, Truck, AlertTriangle,
-  Trophy, Trash2, ShieldCheck, Coins, Target, Sparkles,
-  Flag, Crown, Pause, Zap, Lightbulb, CheckCircle2, Circle, CalendarDays, Flame, RefreshCw,
-  Rocket, Mail, Landmark, LineChart, Users, Swords, Headphones, FlaskConical, Gem, PieChart,
+  Store,
+  Play,
+  FastForward,
+  RotateCcw,
+  Plus,
+  Package,
+  Megaphone,
+  BarChart3,
+  ScrollText,
+  Star,
+  ShoppingCart,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Search,
+  Truck,
+  AlertTriangle,
+  Trophy,
+  Trash2,
+  ShieldCheck,
+  Coins,
+  Target,
+  Sparkles,
+  Flag,
+  Crown,
+  Pause,
+  Zap,
+  Lightbulb,
+  CheckCircle2,
+  Circle,
+  CalendarDays,
+  Flame,
+  RefreshCw,
+  Rocket,
+  Mail,
+  Landmark,
+  LineChart,
+  Users,
+  Swords,
+  Headphones,
+  FlaskConical,
+  Gem,
+  PieChart,
 } from "lucide-react";
 import { ArolessMark } from "@/components/velora-mark";
 import { toast } from "sonner";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import {
-  DIFFICULTIES, RUN_LENGTH, newRun, productFromWinner, restock, simulateDay,
-  netMarginPct, unitProfit, applyDecision, refreshCreative,
-  CHANNELS, DECISIONS, CREATIVE_COST, WEEKDAYS, weekdayOf, weekdayDemand,
-  UPGRADES, hasUpgrade, buyUpgrade, takeLoan, repayLoan, sendCampaign,
-  LOAN_MAX, LOAN_DAILY_RATE, CAMPAIGN_COOLDOWN,
-  CALENDAR, calendarFor, seasonDayOf, marketShare, SEGMENTS,
-  startAbTest, setSupportBudget, continueSeason,
-  AB_TEST_COST, AB_TEST_DAYS, SUPPORT_TICKET_COST,
-  type AdChannel, type Difficulty, type SimState, type StoreProduct,
+  DIFFICULTIES,
+  RUN_LENGTH,
+  newRun,
+  productFromWinner,
+  restock,
+  simulateDay,
+  netMarginPct,
+  unitProfit,
+  applyDecision,
+  refreshCreative,
+  CHANNELS,
+  DECISIONS,
+  CREATIVE_COST,
+  WEEKDAYS,
+  weekdayOf,
+  weekdayDemand,
+  UPGRADES,
+  hasUpgrade,
+  buyUpgrade,
+  takeLoan,
+  repayLoan,
+  sendCampaign,
+  LOAN_MAX,
+  LOAN_DAILY_RATE,
+  CAMPAIGN_COOLDOWN,
+  CALENDAR,
+  calendarFor,
+  seasonDayOf,
+  marketShare,
+  SEGMENTS,
+  startAbTest,
+  setSupportBudget,
+  continueSeason,
+  AB_TEST_COST,
+  AB_TEST_DAYS,
+  SUPPORT_TICKET_COST,
+  type AdChannel,
+  type Difficulty,
+  type SimState,
+  type StoreProduct,
 } from "@/lib/training-sim";
 import {
-  computeXp, levelFromXp, missionState, coachTips, loadHof, saveHof, type RunResult,
+  computeXp,
+  levelFromXp,
+  missionState,
+  coachTips,
+  loadHof,
+  saveHof,
+  type RunResult,
 } from "@/lib/training-meta";
 
-type ViewId = "storefront" | "products" | "ads" | "analytics" | "market" | "ops" | "growth" | "missions" | "coach" | "log";
+type ViewId =
+  | "storefront"
+  | "products"
+  | "ads"
+  | "analytics"
+  | "market"
+  | "ops"
+  | "growth"
+  | "missions"
+  | "coach"
+  | "log";
 
 const KEY = "omni-training-run-v1";
 const ArolessIcon = ({ size = 14 }: { size?: number }) => <ArolessMark size={size} />;
 
-const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number) =>
+  `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
 function load(): SimState | null {
@@ -39,7 +125,9 @@ function load(): SimState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SimState;
     return parsed?.version === 1 ? parsed : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
@@ -54,7 +142,11 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const doneMissions = useRef<Set<string>>(new Set());
   const savedRun = useRef(false);
 
-  useEffect(() => { setState(load()); setHof(loadHof()); setHydrated(true); }, []);
+  useEffect(() => {
+    setState(load());
+    setHof(loadHof());
+    setHydrated(true);
+  }, []);
   useEffect(() => {
     if (!hydrated) return;
     if (state) window.localStorage.setItem(KEY, JSON.stringify(state));
@@ -76,8 +168,14 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
   // autoplay the season day by day
   useEffect(() => {
-    if (state?.pendingDecision && autoplay) { setAutoplay(false); return; }
-    if (!autoplay || !state || state.status !== "running") { if (autoplay && state && state.status !== "running") setAutoplay(false); return; }
+    if (state?.pendingDecision && autoplay) {
+      setAutoplay(false);
+      return;
+    }
+    if (!autoplay || !state || state.status !== "running") {
+      if (autoplay && state && state.status !== "running") setAutoplay(false);
+      return;
+    }
     const t = setTimeout(() => {
       setState((prev) => (prev && prev.status === "running" ? simulateDay(prev).state : prev));
     }, 550);
@@ -89,10 +187,15 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     if (!state || state.status === "running" || savedRun.current) return;
     savedRun.current = true;
     const r: RunResult = {
-      storeName: state.storeName, difficulty: DIFFICULTIES[state.difficulty].label,
-      profit: Math.round(state.totalProfit), revenue: Math.round(state.totalRevenue),
-      orders: state.totalOrders, days: state.history.length, xp: computeXp(state),
-      status: state.status, at: Date.now(),
+      storeName: state.storeName,
+      difficulty: DIFFICULTIES[state.difficulty].label,
+      profit: Math.round(state.totalProfit),
+      revenue: Math.round(state.totalRevenue),
+      orders: state.totalOrders,
+      days: state.history.length,
+      xp: computeXp(state),
+      status: state.status,
+      at: Date.now(),
     };
     saveHof(r);
     setHof(loadHof());
@@ -100,12 +203,13 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
   if (!hydrated) return <div className="h-40" />;
 
-
   if (!state) {
     return (
       <SetupScreen
-        storeName={storeName} setStoreName={setStoreName}
-        difficulty={difficulty} setDifficulty={setDifficulty}
+        storeName={storeName}
+        setStoreName={setStoreName}
+        difficulty={difficulty}
+        setDifficulty={setDifficulty}
         catalogCount={catalog.length}
         hof={hof}
         onStart={() => {
@@ -116,7 +220,6 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
       />
     );
   }
-
 
   const cfg = DIFFICULTIES[state.difficulty];
   const over = state.status !== "running";
@@ -138,14 +241,21 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const addProduct = (p: WinningProduct) => {
     setState((prev) => {
       if (!prev) return prev;
-      if (prev.products.some((x) => x.name === p.name)) { toast.error("Already listed in your store"); return prev; }
+      if (prev.products.some((x) => x.name === p.name)) {
+        toast.error("Already listed in your store");
+        return prev;
+      }
       toast.success(`${p.name} listed. Order stock before you run ads.`);
       return { ...prev, products: [...prev.products, productFromWinner(p)] };
     });
   };
 
   const patch = (id: string, fields: Partial<StoreProduct>) =>
-    setState((prev) => prev ? { ...prev, products: prev.products.map((p) => (p.id === id ? { ...p, ...fields } : p)) } : prev);
+    setState((prev) =>
+      prev
+        ? { ...prev, products: prev.products.map((p) => (p.id === id ? { ...p, ...fields } : p)) }
+        : prev,
+    );
 
   const doRestock = (id: string, qty: number) =>
     setState((prev) => {
@@ -169,7 +279,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => {
       if (!prev) return prev;
       const r = buyUpgrade(prev, id);
-      if (r.error) toast.error(r.error); else toast.success("Yükseltme aktif!");
+      if (r.error) toast.error(r.error);
+      else toast.success("Yükseltme aktif!");
       return r.state;
     });
 
@@ -177,7 +288,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => {
       if (!prev) return prev;
       const r = takeLoan(prev, amount);
-      if (r.error) toast.error(r.error); else toast.success("Kredi hesabına geçti — faiz her gün işler.");
+      if (r.error) toast.error(r.error);
+      else toast.success("Kredi hesabına geçti — faiz her gün işler.");
       return r.state;
     });
 
@@ -185,7 +297,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => {
       if (!prev) return prev;
       const r = repayLoan(prev, amount);
-      if (r.error) toast.error(r.error); else toast.success("Kredi ödemesi yapıldı.");
+      if (r.error) toast.error(r.error);
+      else toast.success("Kredi ödemesi yapıldı.");
       return r.state;
     });
 
@@ -193,7 +306,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => {
       if (!prev) return prev;
       const r = sendCampaign(prev);
-      if (r.error) toast.error(r.error); else toast.success("Kampanya gönderildi!");
+      if (r.error) toast.error(r.error);
+      else toast.success("Kampanya gönderildi!");
       return r.state;
     });
 
@@ -201,7 +315,8 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => {
       if (!prev) return prev;
       const r = startAbTest(prev, id);
-      if (r.error) toast.error(r.error); else toast.success(`A/B testi başladı — ${AB_TEST_DAYS} gün sonra kazanan uygulanacak.`);
+      if (r.error) toast.error(r.error);
+      else toast.success(`A/B testi başladı — ${AB_TEST_DAYS} gün sonra kazanan uygulanacak.`);
       return r.state;
     });
 
@@ -220,7 +335,9 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
     setState((prev) => (prev ? applyDecision(prev, idx) : prev));
 
   const removeProduct = (id: string) =>
-    setState((prev) => prev ? { ...prev, products: prev.products.filter((p) => p.id !== id) } : prev);
+    setState((prev) =>
+      prev ? { ...prev, products: prev.products.filter((p) => p.id !== id) } : prev,
+    );
 
   const totalAds = state.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
   const inventoryValue = state.products.reduce((a, p) => a + p.stock * p.unitCost, 0);
@@ -241,20 +358,33 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
   const nextMission = missions.find((m) => !m.done);
   const queue = Math.round(state.supportQueue ?? 0);
 
-  const views: { id: ViewId; label: string; icon: React.ComponentType<{ size?: number }>; badge?: string }[] = [
+  const views: {
+    id: ViewId;
+    label: string;
+    icon: React.ComponentType<{ size?: number }>;
+    badge?: string;
+  }[] = [
     { id: "storefront", label: "Vitrin", icon: Store },
     { id: "products", label: "Katalog & Stok", icon: Package },
     { id: "ads", label: "Reklam & Fiyat", icon: Megaphone },
     { id: "analytics", label: "Analitik", icon: BarChart3 },
     { id: "market", label: "Rakipler", icon: Swords, badge: `%${Math.round(share.you * 100)}` },
-    { id: "ops", label: "Operasyon", icon: Headphones, badge: queue > 0 ? String(queue) : undefined },
-    { id: "growth", label: "Büyüme", icon: Rocket, badge: (state.upgrades?.length ? String(state.upgrades.length) : undefined) },
+    {
+      id: "ops",
+      label: "Operasyon",
+      icon: Headphones,
+      badge: queue > 0 ? String(queue) : undefined,
+    },
+    {
+      id: "growth",
+      label: "Büyüme",
+      icon: Rocket,
+      badge: state.upgrades?.length ? String(state.upgrades.length) : undefined,
+    },
     { id: "missions", label: "Görevler", icon: Flag, badge: `${missionsDone}/${missions.length}` },
     { id: "coach", label: "Koç", icon: ArolessIcon, badge: alerts ? String(alerts) : undefined },
     { id: "log", label: "Günlük", icon: ScrollText },
   ];
-
-
 
   return (
     <section className="space-y-5">
@@ -263,26 +393,40 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5"><Store size={15} /></span>
+              <span className="rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5">
+                <Store size={15} />
+              </span>
               <h2 className="text-lg font-bold">{state.storeName}</h2>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{cfg.label}</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">Sezon {season}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {cfg.label}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Sezon {season}
+              </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Gün {sDay} / {RUN_LENGTH} · Gerçek mekanik, sıfır risk.
             </p>
             <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground">
-              <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(state.day)]} · talep ×{weekdayDemand(state.day).toFixed(2)}
+              <CalendarDays size={11} /> {WEEKDAYS[weekdayOf(state.day)]} · talep ×
+              {weekdayDemand(state.day).toFixed(2)}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
-                (state.marketIndex ?? 1) < 0.95 ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                : (state.marketIndex ?? 1) > 1.05 ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                : "border-white/10 bg-white/5 text-muted-foreground"}`}>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
+                  (state.marketIndex ?? 1) < 0.95
+                    ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                    : (state.marketIndex ?? 1) > 1.05
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                      : "border-white/10 bg-white/5 text-muted-foreground"
+                }`}
+              >
                 <LineChart size={11} /> Rakip fiyat endeksi {(state.marketIndex ?? 1).toFixed(2)}
               </span>
-              <button onClick={() => setView("market")}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground hover:bg-white/10">
+              <button
+                onClick={() => setView("market")}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground hover:bg-white/10"
+              >
                 <Swords size={11} /> Pazar payın %{Math.round(share.you * 100)}
               </button>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
@@ -292,8 +436,10 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
                 <Users size={11} /> {Math.floor(state.subscribers ?? 0)} abone
               </span>
               {queue > 0 && (
-                <button onClick={() => setView("ops")}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${queue > 12 ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-white/10 bg-white/5 text-muted-foreground"} hover:bg-white/10`}>
+                <button
+                  onClick={() => setView("ops")}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${queue > 12 ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-white/10 bg-white/5 text-muted-foreground"} hover:bg-white/10`}
+                >
                   <Headphones size={11} /> {queue} destek bileti
                 </button>
               )}
@@ -308,33 +454,67 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
                 </span>
               )}
             </div>
-
           </div>
           <div className="flex items-center gap-2">
-            <button disabled={over || busy || autoplay} onClick={() => advance(1)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40">
+            <button
+              disabled={over || busy || autoplay}
+              onClick={() => advance(1)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40"
+            >
               <Play size={13} /> 1 gün
             </button>
-            <button disabled={over || busy || autoplay} onClick={() => advance(7)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40">
+            <button
+              disabled={over || busy || autoplay}
+              onClick={() => advance(7)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40"
+            >
               <FastForward size={13} /> 7 gün
             </button>
-            <button disabled={over} onClick={() => setAutoplay((a) => !a)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition disabled:opacity-40 ${autoplay ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
-              {autoplay ? <><Pause size={13} /> Duraklat</> : <><Zap size={13} /> Sezonu oynat</>}
+            <button
+              disabled={over}
+              onClick={() => setAutoplay((a) => !a)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition disabled:opacity-40 ${autoplay ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+            >
+              {autoplay ? (
+                <>
+                  <Pause size={13} /> Duraklat
+                </>
+              ) : (
+                <>
+                  <Zap size={13} /> Sezonu oynat
+                </>
+              )}
             </button>
-            <button onClick={() => { if (confirm("Bu eğitim koşusu sıfırlansın mı?")) { setAutoplay(false); doneMissions.current = new Set(); savedRun.current = false; setState(null); } }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
+            <button
+              onClick={() => {
+                if (confirm("Bu eğitim koşusu sıfırlansın mı?")) {
+                  setAutoplay(false);
+                  doneMissions.current = new Set();
+                  savedRun.current = false;
+                  setState(null);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+            >
               <RotateCcw size={13} /> Sıfırla
             </button>
           </div>
-
         </div>
 
         <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
-          <Kpi icon={Wallet} label="Nakit" value={money(state.cash)} tone={state.cash < 100 ? "bad" : "good"} />
+          <Kpi
+            icon={Wallet}
+            label="Nakit"
+            value={money(state.cash)}
+            tone={state.cash < 100 ? "bad" : "good"}
+          />
           <Kpi icon={Coins} label="Ciro" value={compact(state.totalRevenue)} />
-          <Kpi icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown} label="Net kâr" value={compact(state.totalProfit)} tone={state.totalProfit >= 0 ? "good" : "bad"} />
+          <Kpi
+            icon={state.totalProfit >= 0 ? TrendingUp : TrendingDown}
+            label="Net kâr"
+            value={compact(state.totalProfit)}
+            tone={state.totalProfit >= 0 ? "good" : "bad"}
+          />
           <Kpi icon={ShoppingCart} label="Sipariş" value={String(state.totalOrders)} />
           <Kpi icon={Package} label="Stok değeri" value={compact(inventoryValue)} />
           <Kpi icon={Megaphone} label="Günlük reklam" value={money(totalAds)} />
@@ -343,11 +523,16 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         <div className="mt-4 grid md:grid-cols-2 gap-4">
           <div>
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Target size={12} /> Kâr hedefi {compact(seasonTarget)}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Target size={12} /> Kâr hedefi {compact(seasonTarget)}
+              </span>
               <span>{progress.toFixed(0)}%</span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
           <div>
@@ -355,59 +540,94 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
               <span className="inline-flex items-center gap-1.5">
                 <Crown size={12} className="text-amber-300" /> Seviye {lvl.level} · {lvl.title}
               </span>
-              <span>{lvl.into}/{lvl.need} XP</span>
+              <span>
+                {lvl.into}/{lvl.need} XP
+              </span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all" style={{ width: `${lvl.pct}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all"
+                style={{ width: `${lvl.pct}%` }}
+              />
             </div>
           </div>
         </div>
 
         {nextMission && !over && (
-          <button onClick={() => setView("missions")}
-            className="mt-3 w-full text-left flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 transition">
+          <button
+            onClick={() => setView("missions")}
+            className="mt-3 w-full text-left flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 transition"
+          >
             <Flag size={14} className="mt-0.5 shrink-0 text-[oklch(0.72_0.18_265)]" />
-            <span><b>Sıradaki görev:</b> {nextMission.title} — <span className="text-muted-foreground">{nextMission.hint}</span></span>
+            <span>
+              <b>Sıradaki görev:</b> {nextMission.title} —{" "}
+              <span className="text-muted-foreground">{nextMission.hint}</span>
+            </span>
           </button>
         )}
 
         {state.activeEvent && (
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <Sparkles size={14} className="mt-0.5 shrink-0" />
-            <span>{state.activeEvent.text} <span className="opacity-70">({state.activeEvent.daysLeft} gün kaldı)</span></span>
+            <span>
+              {state.activeEvent.text}{" "}
+              <span className="opacity-70">({state.activeEvent.daysLeft} gün kaldı)</span>
+            </span>
           </div>
         )}
 
         {over && (
-          <div className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${
-            state.status === "bankrupt" || state.totalProfit < seasonTarget
-              ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
-              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
-            {state.status === "bankrupt"
-              ? <><AlertTriangle size={15} className="mt-0.5" /> {state.day - 1}. günde nakit bitti. Reklam harcaması marjı aştı — yeniden başla ve ölçeklemeden önce stok al.</>
-              : <><Trophy size={15} className="mt-0.5" /> Sezon tamam: {compact(state.totalRevenue)} ciro, {compact(state.totalProfit)} net kâr, {state.totalOrders} sipariş, {missionsDone} görev.</>}
+          <div
+            className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${
+              state.status === "bankrupt" || state.totalProfit < seasonTarget
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+            }`}
+          >
+            {state.status === "bankrupt" ? (
+              <>
+                <AlertTriangle size={15} className="mt-0.5" /> {state.day - 1}. günde nakit bitti.
+                Reklam harcaması marjı aştı — yeniden başla ve ölçeklemeden önce stok al.
+              </>
+            ) : (
+              <>
+                <Trophy size={15} className="mt-0.5" /> Sezon tamam: {compact(state.totalRevenue)}{" "}
+                ciro, {compact(state.totalProfit)} net kâr, {state.totalOrders} sipariş,{" "}
+                {missionsDone} görev.
+              </>
+            )}
           </div>
         )}
 
         {state.status === "finished" && (
-          <button onClick={doContinueSeason}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2.5 text-xs font-semibold glow">
-            <RefreshCw size={13} /> Sezon {season + 1}'e devam et — mağazan, markan ve stokun korunur
+          <button
+            onClick={doContinueSeason}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2.5 text-xs font-semibold glow"
+          >
+            <RefreshCw size={13} /> Sezon {season + 1}'e devam et — mağazan, markan ve stokun
+            korunur
           </button>
         )}
-
       </div>
 
       {/* View switch */}
       <div className="flex justify-center">
         <div className="premium-card rounded-full p-1 inline-flex text-xs flex-wrap justify-center">
           {views.map((v) => {
-            const Icon = v.icon; const on = view === v.id;
+            const Icon = v.icon;
+            const on = view === v.id;
             return (
-              <button key={v.id} onClick={() => setView(v.id)}
-                className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition ${on ? "bg-white/12 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition ${on ? "bg-white/12 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
                 <Icon size={13} /> {v.label}
-                {v.badge && <span className="rounded-full bg-white/12 px-1.5 py-0.5 text-[9px] font-semibold">{v.badge}</span>}
+                {v.badge && (
+                  <span className="rounded-full bg-white/12 px-1.5 py-0.5 text-[9px] font-semibold">
+                    {v.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -416,29 +636,51 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
 
       {view === "storefront" && <Storefront state={state} />}
       {view === "products" && (
-        <CatalogView state={state} catalog={catalog} onAdd={addProduct} onRestock={doRestock} onRemove={removeProduct} onPatch={patch} />
+        <CatalogView
+          state={state}
+          catalog={catalog}
+          onAdd={addProduct}
+          onRestock={doRestock}
+          onRemove={removeProduct}
+          onPatch={patch}
+        />
       )}
-      {view === "ads" && <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} onAbTest={doAbTest} />}
+      {view === "ads" && (
+        <AdsView state={state} onPatch={patch} onRefresh={doRefreshCreative} onAbTest={doAbTest} />
+      )}
       {view === "analytics" && <Analytics state={state} />}
       {view === "market" && <MarketView state={state} />}
       {view === "ops" && <OpsView state={state} onSupportBudget={doSupportBudget} />}
 
       {view === "growth" && (
-        <GrowthView state={state} onUpgrade={doUpgrade} onLoan={doLoan} onRepay={doRepay} onCampaign={doCampaign} />
+        <GrowthView
+          state={state}
+          onUpgrade={doUpgrade}
+          onLoan={doLoan}
+          onRepay={doRepay}
+          onCampaign={doCampaign}
+        />
       )}
       {view === "missions" && <MissionsView missions={missions} lvl={lvl} />}
       {view === "coach" && <CoachView tips={tips} state={state} onGo={setView} />}
       {view === "log" && <ActivityLog state={state} />}
 
-      {state.pendingDecision && <DecisionModal id={state.pendingDecision.id} onChoose={chooseDecision} />}
-
+      {state.pendingDecision && (
+        <DecisionModal id={state.pendingDecision.id} onChoose={chooseDecision} />
+      )}
     </section>
   );
 }
 
 /* ---------------- Missions ---------------- */
 
-function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionState>; lvl: ReturnType<typeof levelFromXp> }) {
+function MissionsView({
+  missions,
+  lvl,
+}: {
+  missions: ReturnType<typeof missionState>;
+  lvl: ReturnType<typeof levelFromXp>;
+}) {
   const tiers: { t: 1 | 2 | 3 | 4; label: string }[] = [
     { t: 1, label: "Temel operasyon" },
     { t: 2, label: "Kârlılık" },
@@ -450,10 +692,14 @@ function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionSt
     <div className="space-y-4">
       <div className="premium-card rounded-2xl p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] font-bold">{lvl.level}</span>
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] font-bold">
+            {lvl.level}
+          </span>
           <div>
             <div className="text-sm font-semibold">{lvl.title}</div>
-            <div className="text-[11px] text-muted-foreground">{lvl.xp.toLocaleString("tr-TR")} XP toplandı</div>
+            <div className="text-[11px] text-muted-foreground">
+              {lvl.xp.toLocaleString("tr-TR")} XP toplandı
+            </div>
           </div>
         </div>
         <div className="ml-auto text-xs text-muted-foreground">
@@ -465,26 +711,45 @@ function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionSt
         <div key={t} className="space-y-2">
           <h3 className="text-xs uppercase tracking-wider text-muted-foreground">{label}</h3>
           <div className="grid md:grid-cols-2 gap-3">
-            {missions.filter((m) => m.tier === t).map((m) => (
-              <div key={m.id} className={`premium-card rounded-xl p-4 transition ${m.done ? "border-emerald-400/30 bg-emerald-500/8" : ""}`}>
-                <div className="flex items-start gap-2.5">
-                  {m.done ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-300" /> : <Circle size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold">{m.title}</div>
-                      <span className="shrink-0 rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-amber-200">+{m.reward} XP</span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{m.hint}</p>
-                    <div className="mt-2.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"}`} style={{ width: `${m.pct}%` }} />
-                    </div>
-                    <div className="mt-1 text-[10px] text-muted-foreground">
-                      {m.value < 10 ? m.value.toFixed(1).replace(/\.0$/, "") : Math.round(m.value)} / {m.goal}
+            {missions
+              .filter((m) => m.tier === t)
+              .map((m) => (
+                <div
+                  key={m.id}
+                  className={`premium-card rounded-xl p-4 transition ${m.done ? "border-emerald-400/30 bg-emerald-500/8" : ""}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {m.done ? (
+                      <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-300" />
+                    ) : (
+                      <Circle size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold">{m.title}</div>
+                        <span className="shrink-0 rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                          +{m.reward} XP
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        {m.hint}
+                      </p>
+                      <div className="mt-2.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"}`}
+                          style={{ width: `${m.pct}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        {m.value < 10
+                          ? m.value.toFixed(1).replace(/\.0$/, "")
+                          : Math.round(m.value)}{" "}
+                        / {m.goal}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       ))}
@@ -494,30 +759,53 @@ function MissionsView({ missions, lvl }: { missions: ReturnType<typeof missionSt
 
 /* ---------------- Coach ---------------- */
 
-function CoachView({ tips, state, onGo }: {
+function CoachView({
+  tips,
+  state,
+  onGo,
+}: {
   tips: ReturnType<typeof coachTips>;
   state: SimState;
   onGo: (v: ViewId) => void;
 }) {
   const cfg = DIFFICULTIES[state.difficulty];
   const week = state.history.slice(-7);
-  const sum = week.reduce((a, d) => ({
-    revenue: a.revenue + d.revenue, adSpend: a.adSpend + d.adSpend, profit: a.profit + d.profit,
-    orders: a.orders + d.orders, visitors: a.visitors + d.visitors,
-  }), { revenue: 0, adSpend: 0, profit: 0, orders: 0, visitors: 0 });
+  const sum = week.reduce(
+    (a, d) => ({
+      revenue: a.revenue + d.revenue,
+      adSpend: a.adSpend + d.adSpend,
+      profit: a.profit + d.profit,
+      orders: a.orders + d.orders,
+      visitors: a.visitors + d.visitors,
+    }),
+    { revenue: 0, adSpend: 0, profit: 0, orders: 0, visitors: 0 },
+  );
 
   return (
     <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><ArolessMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Aroless Koçu</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <ArolessMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Aroless Koçu
+        </h3>
         {tips.map((t, i) => (
-          <div key={i} className={`premium-card rounded-xl p-4 border ${
-            t.kind === "warn" ? "border-rose-500/30 bg-rose-500/8"
-              : t.kind === "good" ? "border-emerald-500/30 bg-emerald-500/8" : "border-white/10"}`}>
+          <div
+            key={i}
+            className={`premium-card rounded-xl p-4 border ${
+              t.kind === "warn"
+                ? "border-rose-500/30 bg-rose-500/8"
+                : t.kind === "good"
+                  ? "border-emerald-500/30 bg-emerald-500/8"
+                  : "border-white/10"
+            }`}
+          >
             <div className="flex items-start gap-2.5">
-              {t.kind === "warn" ? <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-300" />
-                : t.kind === "good" ? <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-300" />
-                : <Lightbulb size={15} className="mt-0.5 shrink-0 text-amber-300" />}
+              {t.kind === "warn" ? (
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-300" />
+              ) : t.kind === "good" ? (
+                <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+              ) : (
+                <Lightbulb size={15} className="mt-0.5 shrink-0 text-amber-300" />
+              )}
               <div>
                 <div className="text-sm font-semibold">{t.title}</div>
                 <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{t.body}</p>
@@ -526,21 +814,48 @@ function CoachView({ tips, state, onGo }: {
           </div>
         ))}
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => onGo("ads")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Reklam & fiyatı düzenle</button>
-          <button onClick={() => onGo("products")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Stok siparişi ver</button>
-          <button onClick={() => onGo("analytics")} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">Analitiği aç</button>
+          <button
+            onClick={() => onGo("ads")}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+          >
+            Reklam & fiyatı düzenle
+          </button>
+          <button
+            onClick={() => onGo("products")}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+          >
+            Stok siparişi ver
+          </button>
+          <button
+            onClick={() => onGo("analytics")}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
+          >
+            Analitiği aç
+          </button>
         </div>
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={15} /> Son 7 gün</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <BarChart3 size={15} /> Son 7 gün
+        </h3>
         <div className="premium-card rounded-xl p-4 grid grid-cols-2 gap-2 text-[11px]">
           <Stat label="Ciro" value={compact(sum.revenue)} />
           <Stat label="Reklam" value={compact(sum.adSpend)} />
-          <Stat label="Net kâr" value={compact(sum.profit)} tone={sum.profit >= 0 ? "good" : "bad"} />
-          <Stat label="ROAS" value={sum.adSpend > 0 ? `${(sum.revenue / sum.adSpend).toFixed(2)}x` : "—"} />
+          <Stat
+            label="Net kâr"
+            value={compact(sum.profit)}
+            tone={sum.profit >= 0 ? "good" : "bad"}
+          />
+          <Stat
+            label="ROAS"
+            value={sum.adSpend > 0 ? `${(sum.revenue / sum.adSpend).toFixed(2)}x` : "—"}
+          />
           <Stat label="Sipariş" value={String(sum.orders)} />
-          <Stat label="Dönüşüm" value={sum.visitors > 0 ? `${((sum.orders / sum.visitors) * 100).toFixed(2)}%` : "—"} />
+          <Stat
+            label="Dönüşüm"
+            value={sum.visitors > 0 ? `${((sum.orders / sum.visitors) * 100).toFixed(2)}%` : "—"}
+          />
         </div>
         <div className="premium-card rounded-xl p-4 text-[11px] text-muted-foreground space-y-2">
           <div className="text-xs font-semibold text-foreground">Bu zorlukta oyunun kuralları</div>
@@ -559,42 +874,54 @@ function CoachView({ tips, state, onGo }: {
 /* ---------------- Setup ---------------- */
 
 function SetupScreen(props: {
-  storeName: string; setStoreName: (v: string) => void;
-  difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  catalogCount: number; onStart: () => void; hof: RunResult[];
+  storeName: string;
+  setStoreName: (v: string) => void;
+  difficulty: Difficulty;
+  setDifficulty: (d: Difficulty) => void;
+  catalogCount: number;
+  onStart: () => void;
+  hof: RunResult[];
 }) {
-
   return (
     <section className="max-w-3xl mx-auto space-y-6">
       <div className="text-center animate-rise-in">
         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" /> Risk-free practice
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" /> Risk-free
+          practice
         </span>
         <h2 className="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">Training Store</h2>
         <p className="mt-3 text-sm text-muted-foreground max-w-xl mx-auto">
-          Run a real storefront loop: list products from your research, buy inventory, price them, spend on ads,
-          then watch traffic, conversion, refunds and cash flow play out day by day.
+          Run a real storefront loop: list products from your research, buy inventory, price them,
+          spend on ads, then watch traffic, conversion, refunds and cash flow play out day by day.
         </p>
       </div>
 
       <div className="premium-card rounded-2xl p-5 space-y-5">
         <div>
           <label className="text-xs text-muted-foreground">Store name</label>
-          <input value={props.storeName} onChange={(e) => props.setStoreName(e.target.value)}
+          <input
+            value={props.storeName}
+            onChange={(e) => props.setStoreName(e.target.value)}
             placeholder="Nova Home Goods"
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]/60" />
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]/60"
+          />
         </div>
 
         <div>
           <label className="text-xs text-muted-foreground">Difficulty</label>
           <div className="mt-2 grid md:grid-cols-3 gap-3">
-            {(Object.values(DIFFICULTIES)).map((d) => {
+            {Object.values(DIFFICULTIES).map((d) => {
               const on = props.difficulty === d.id;
               return (
-                <button key={d.id} onClick={() => props.setDifficulty(d.id)}
-                  className={`text-left rounded-xl border p-3.5 transition card-lift ${on ? "border-[oklch(0.68_0.20_265)]/60 bg-[oklch(0.68_0.20_265)]/12" : "border-white/10 bg-white/5 hover:bg-white/8"}`}>
+                <button
+                  key={d.id}
+                  onClick={() => props.setDifficulty(d.id)}
+                  className={`text-left rounded-xl border p-3.5 transition card-lift ${on ? "border-[oklch(0.68_0.20_265)]/60 bg-[oklch(0.68_0.20_265)]/12" : "border-white/10 bg-white/5 hover:bg-white/8"}`}
+                >
                   <div className="font-semibold text-sm">{d.label}</div>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{d.blurb}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                    {d.blurb}
+                  </p>
                   <dl className="mt-3 space-y-1 text-[11px]">
                     <Row k="Starting cash" v={compact(d.startCash)} />
                     <Row k="Avg CPC" v={money(d.cpc)} />
@@ -609,8 +936,10 @@ function SetupScreen(props: {
           </div>
         </div>
 
-        <button onClick={props.onStart}
-          className="w-full rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold glow">
+        <button
+          onClick={props.onStart}
+          className="w-full rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold glow"
+        >
           Eğitim mağazamı aç
         </button>
         <p className="text-[11px] text-muted-foreground text-center">
@@ -622,15 +951,30 @@ function SetupScreen(props: {
 
       {props.hof.length > 0 && (
         <div className="premium-card rounded-2xl p-5">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Trophy size={15} className="text-amber-300" /> Şeref listesi</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Trophy size={15} className="text-amber-300" /> Şeref listesi
+          </h3>
           <div className="mt-3 space-y-2">
             {props.hof.map((r, i) => (
-              <div key={r.at} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i === 0 ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-muted-foreground"}`}>{i + 1}</span>
+              <div
+                key={r.at}
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs"
+              >
+                <span
+                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i === 0 ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-muted-foreground"}`}
+                >
+                  {i + 1}
+                </span>
                 <span className="font-medium truncate">{r.storeName}</span>
-                <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-muted-foreground">{r.difficulty}</span>
-                <span className="ml-auto shrink-0 text-muted-foreground">{r.days} gün · {r.orders} sipariş</span>
-                <b className={r.profit >= 0 ? "text-emerald-300" : "text-rose-300"}>{compact(r.profit)}</b>
+                <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {r.difficulty}
+                </span>
+                <span className="ml-auto shrink-0 text-muted-foreground">
+                  {r.days} gün · {r.orders} sipariş
+                </span>
+                <b className={r.profit >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                  {compact(r.profit)}
+                </b>
               </div>
             ))}
           </div>
@@ -640,18 +984,34 @@ function SetupScreen(props: {
   );
 }
 
-
 const Row = ({ k, v }: { k: string; v: string }) => (
-  <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>
+  <div className="flex justify-between gap-2">
+    <dt className="text-muted-foreground">{k}</dt>
+    <dd className="font-medium">{v}</dd>
+  </div>
 );
 
-function Kpi({ icon: Icon, label, value, tone }: { icon: typeof Store; label: string; value: string; tone?: "good" | "bad" }) {
+function Kpi({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof Store;
+  label: string;
+  value: string;
+  tone?: "good" | "bad";
+}) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
         <Icon size={11} /> {label}
       </div>
-      <div className={`mt-1 text-sm font-bold ${tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : ""}`}>{value}</div>
+      <div
+        className={`mt-1 text-sm font-bold ${tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : ""}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -662,7 +1022,11 @@ function Stars({ rating }: { rating: number }) {
   return (
     <span className="inline-flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((i) => (
-        <Star key={i} size={11} className={i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-white/20"} />
+        <Star
+          key={i}
+          size={11}
+          className={i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-white/20"}
+        />
       ))}
     </span>
   );
@@ -678,7 +1042,9 @@ function Storefront({ state }: { state: SimState }) {
       {/* fake shop chrome */}
       <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-3 py-2">
         <span className="flex gap-1.5">
-          <i className="h-2.5 w-2.5 rounded-full bg-rose-400/70" /><i className="h-2.5 w-2.5 rounded-full bg-amber-400/70" /><i className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+          <i className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
+          <i className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+          <i className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
         </span>
         <div className="mx-auto rounded-md bg-black/30 px-3 py-0.5 text-[10px] text-muted-foreground">
           {state.storeName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.myshop.com
@@ -689,18 +1055,28 @@ function Storefront({ state }: { state: SimState }) {
         <div className="font-extrabold tracking-tight">{state.storeName}</div>
         <div className="hidden md:flex flex-1 max-w-sm items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
           <Search size={13} className="text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products"
-            className="w-full bg-transparent text-xs outline-none" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search products"
+            className="w-full bg-transparent text-xs outline-none"
+          />
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="hidden sm:inline">Shop</span><span className="hidden sm:inline">Support</span>
-          <span className="inline-flex items-center gap-1"><ShoppingCart size={14} /> 0</span>
+          <span className="hidden sm:inline">Shop</span>
+          <span className="hidden sm:inline">Support</span>
+          <span className="inline-flex items-center gap-1">
+            <ShoppingCart size={14} /> 0
+          </span>
         </div>
       </div>
 
       <div className="border-b border-white/10 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/15 px-4 py-5">
         <div className="text-lg font-bold">Free shipping over $50 · 30-day returns</div>
-        <p className="text-xs text-muted-foreground mt-1">This is exactly what your customers would see. Stock, price and ratings update as you trade.</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          This is exactly what your customers would see. Stock, price and ratings update as you
+          trade.
+        </p>
       </div>
 
       {shown.length === 0 ? (
@@ -712,14 +1088,30 @@ function Storefront({ state }: { state: SimState }) {
           {shown.map((p) => {
             const soldOut = p.stock <= 0;
             return (
-              <article key={p.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden card-lift">
+              <article
+                key={p.id}
+                className="rounded-xl border border-white/10 bg-white/5 overflow-hidden card-lift"
+              >
                 <div className="relative h-36 flex items-center justify-center bg-gradient-to-br from-white/10 to-transparent text-4xl">
-                  {p.image_url
-                    ? <img src={p.image_url} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
-                    : <span>{p.emoji}</span>}
-                  {soldOut && <span className="absolute inset-0 grid place-items-center bg-black/60 text-xs font-semibold">Sold out</span>}
+                  {p.image_url ? (
+                    <img
+                      src={p.image_url}
+                      alt={p.name}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{p.emoji}</span>
+                  )}
+                  {soldOut && (
+                    <span className="absolute inset-0 grid place-items-center bg-black/60 text-xs font-semibold">
+                      Sold out
+                    </span>
+                  )}
                   {!soldOut && p.stock < 10 && (
-                    <span className="absolute top-2 left-2 rounded-full bg-amber-500/85 px-2 py-0.5 text-[10px] font-semibold text-black">Only {p.stock} left</span>
+                    <span className="absolute top-2 left-2 rounded-full bg-amber-500/85 px-2 py-0.5 text-[10px] font-semibold text-black">
+                      Only {p.stock} left
+                    </span>
                   )}
                 </div>
                 <div className="p-3">
@@ -731,10 +1123,15 @@ function Storefront({ state }: { state: SimState }) {
                     <div>
                       <div className="text-lg font-bold">{money(p.price)}</div>
                       {p.price < p.recommendedPrice && (
-                        <div className="text-[11px] text-muted-foreground line-through">{money(p.recommendedPrice)}</div>
+                        <div className="text-[11px] text-muted-foreground line-through">
+                          {money(p.recommendedPrice)}
+                        </div>
                       )}
                     </div>
-                    <button disabled className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium opacity-80">
+                    <button
+                      disabled
+                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium opacity-80"
+                    >
                       {soldOut ? "Notify me" : "Add to cart"}
                     </button>
                   </div>
@@ -753,8 +1150,16 @@ function Storefront({ state }: { state: SimState }) {
 
 /* ---------------- Catalog & stock ---------------- */
 
-function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
-  state: SimState; catalog: WinningProduct[];
+function CatalogView({
+  state,
+  catalog,
+  onAdd,
+  onRestock,
+  onRemove,
+  onPatch,
+}: {
+  state: SimState;
+  catalog: WinningProduct[];
   onAdd: (p: WinningProduct) => void;
   onRestock: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
@@ -767,9 +1172,13 @@ function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
   return (
     <div className="grid lg:grid-cols-[1.4fr_1fr] gap-4">
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Package size={15} /> Your shelves</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Package size={15} /> Your shelves
+        </h3>
         {state.products.length === 0 && (
-          <div className="premium-card rounded-xl p-6 text-sm text-muted-foreground text-center">Nothing listed yet.</div>
+          <div className="premium-card rounded-xl p-6 text-sm text-muted-foreground text-center">
+            Nothing listed yet.
+          </div>
         )}
         {state.products.map((p) => {
           const up = unitProfit(p, cfg);
@@ -778,39 +1187,66 @@ function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
             <div key={p.id} className="premium-card rounded-xl p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/8 text-xl">{p.emoji}</span>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/8 text-xl">
+                    {p.emoji}
+                  </span>
                   <div className="min-w-0">
                     <div className="font-semibold text-sm truncate">{p.name}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      Cost {money(p.unitCost)} · Base CVR {p.baseCvrPct.toFixed(1)}% · {p.competition} competition
+                      Cost {money(p.unitCost)} · Base CVR {p.baseCvrPct.toFixed(1)}% ·{" "}
+                      {p.competition} competition
                     </div>
                   </div>
                 </div>
-                <button onClick={() => onRemove(p.id)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/10 hover:text-rose-300" aria-label="Delist">
+                <button
+                  onClick={() => onRemove(p.id)}
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/10 hover:text-rose-300"
+                  aria-label="Delist"
+                >
                   <Trash2 size={14} />
                 </button>
               </div>
 
               <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
-                <Stat label="In stock" value={String(p.stock)} tone={p.stock === 0 ? "bad" : undefined} />
-                <Stat label="Incoming" value={incoming ? `${incoming} (d${p.incoming[0].arrivesDay})` : "—"} />
+                <Stat
+                  label="In stock"
+                  value={String(p.stock)}
+                  tone={p.stock === 0 ? "bad" : undefined}
+                />
+                <Stat
+                  label="Incoming"
+                  value={incoming ? `${incoming} (d${p.incoming[0].arrivesDay})` : "—"}
+                />
                 <Stat label="Unit profit" value={money(up)} tone={up <= 0 ? "bad" : "good"} />
-                <Stat label="Margin" value={`${netMarginPct(p, cfg).toFixed(0)}%`} tone={netMarginPct(p, cfg) < 15 ? "bad" : undefined} />
+                <Stat
+                  label="Margin"
+                  value={`${netMarginPct(p, cfg).toFixed(0)}%`}
+                  tone={netMarginPct(p, cfg) < 15 ? "bad" : undefined}
+                />
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">Restock:</span>
                 {[10, 25, 50, 100].map((q) => (
-                  <button key={q} onClick={() => onRestock(p.id, q)}
-                    className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10">
+                  <button
+                    key={q}
+                    onClick={() => onRestock(p.id, q)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10"
+                  >
                     {q} · {money(p.unitCost * q * (q >= 100 ? 0.85 : q >= 50 ? 0.92 : 1))}
                   </button>
                 ))}
-                <span className="text-[10px] text-muted-foreground">arrives in {cfg.leadTimeDays}d · 50+ = 8% off, 100+ = 15% off</span>
+                <span className="text-[10px] text-muted-foreground">
+                  arrives in {cfg.leadTimeDays}d · 50+ = 8% off, 100+ = 15% off
+                </span>
               </div>
 
               <label className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <input type="checkbox" checked={p.listed} onChange={(e) => onPatch(p.id, { listed: e.target.checked })} />
+                <input
+                  type="checkbox"
+                  checked={p.listed}
+                  onChange={(e) => onPatch(p.id, { listed: e.target.checked })}
+                />
                 Visible on storefront
               </label>
             </div>
@@ -819,7 +1255,9 @@ function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Plus size={15} /> Add from your research</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Plus size={15} /> Add from your research
+        </h3>
         {available.length === 0 ? (
           <div className="premium-card rounded-xl p-6 text-sm text-muted-foreground text-center">
             No unlisted products. Run a search in Product Finder or save favourites first.
@@ -827,10 +1265,15 @@ function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
         ) : (
           <div className="space-y-2 max-h-[70vh] overflow-auto pr-1">
             {available.map((p) => (
-              <button key={p.name} onClick={() => onAdd(p)}
-                className="w-full text-left premium-card rounded-xl p-3 hover:bg-white/8 card-lift">
+              <button
+                key={p.name}
+                onClick={() => onAdd(p)}
+                className="w-full text-left premium-card rounded-xl p-3 hover:bg-white/8 card-lift"
+              >
                 <div className="flex items-center gap-2.5">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/8 text-lg">{p.emoji || "📦"}</span>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/8 text-lg">
+                    {p.emoji || "📦"}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{p.name}</div>
                     <div className="text-[11px] text-muted-foreground truncate">
@@ -851,33 +1294,53 @@ function CatalogView({ state, catalog, onAdd, onRestock, onRemove, onPatch }: {
 const Stat = ({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) => (
   <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-    <div className={`font-semibold ${tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : ""}`}>{value}</div>
+    <div
+      className={`font-semibold ${tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : ""}`}
+    >
+      {value}
+    </div>
   </div>
 );
 
 /* ---------------- Ads & pricing ---------------- */
 
-function AdsView({ state, onPatch, onRefresh, onAbTest }: {
+function AdsView({
+  state,
+  onPatch,
+  onRefresh,
+  onAbTest,
+}: {
   state: SimState;
   onPatch: (id: string, f: Partial<StoreProduct>) => void;
   onRefresh: (id: string) => void;
   onAbTest: (id: string) => void;
 }) {
-
   const cfg = DIFFICULTIES[state.difficulty];
   const total = state.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
   const runway = total > 0 ? state.cash / total : Infinity;
 
   if (state.products.length === 0) {
-    return <div className="premium-card rounded-xl p-8 text-center text-sm text-muted-foreground">List a product first.</div>;
+    return (
+      <div className="premium-card rounded-xl p-8 text-center text-sm text-muted-foreground">
+        List a product first.
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="premium-card rounded-xl p-4 flex flex-wrap items-center gap-4 text-xs">
-        <span className="inline-flex items-center gap-1.5"><Megaphone size={13} /> Daily ad spend <b className="ml-1">{money(total)}</b></span>
-        <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Wallet size={13} /> Cash runway ≈ {Number.isFinite(runway) ? `${runway.toFixed(1)} days` : "∞"}</span>
-        <span className="inline-flex items-center gap-1.5 text-muted-foreground"><ShieldCheck size={13} /> Avg CPC {money(cfg.cpc)} · fees {(cfg.platformFeePct * 100).toFixed(1)}% · ship {money(cfg.shippingPerUnit)}/order</span>
+        <span className="inline-flex items-center gap-1.5">
+          <Megaphone size={13} /> Daily ad spend <b className="ml-1">{money(total)}</b>
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <Wallet size={13} /> Cash runway ≈{" "}
+          {Number.isFinite(runway) ? `${runway.toFixed(1)} days` : "∞"}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <ShieldCheck size={13} /> Avg CPC {money(cfg.cpc)} · fees{" "}
+          {(cfg.platformFeePct * 100).toFixed(1)}% · ship {money(cfg.shippingPerUnit)}/order
+        </span>
       </div>
 
       {state.products.map((p) => {
@@ -886,41 +1349,72 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
         const fatigue = p.fatigue ?? 0;
         const effCpc = cfg.cpc * ch.cpcMult * (1 + fatigue * 0.65);
         const clicks = p.adBudget / effCpc;
-        const expected = clicks * (p.baseCvrPct / 100) * ch.cvrMult * (1 - fatigue * 0.5) *
+        const expected =
+          clicks *
+          (p.baseCvrPct / 100) *
+          ch.cvrMult *
+          (1 - fatigue * 0.5) *
           Math.max(0.1, Math.min(2, 1.75 - 0.78 * (p.price / p.recommendedPrice)));
         const breakEvenRoas = p.price > 0 ? p.price / Math.max(0.01, up) : 0;
         return (
           <div key={p.id} className="premium-card rounded-xl p-4">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/8 text-lg">{p.emoji}</span>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/8 text-lg">
+                {p.emoji}
+              </span>
               <div className="font-semibold text-sm">{p.name}</div>
               <div className="ml-auto inline-flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px]">
                 {(Object.keys(CHANNELS) as AdChannel[]).map((c) => (
-                  <button key={c} title={CHANNELS[c].blurb}
+                  <button
+                    key={c}
+                    title={CHANNELS[c].blurb}
                     onClick={() => onPatch(p.id, { channel: c })}
-                    className={`rounded-full px-2.5 py-1 transition ${(p.channel ?? "meta") === c ? "bg-white/14 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    className={`rounded-full px-2.5 py-1 transition ${(p.channel ?? "meta") === c ? "bg-white/14 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
                     {CHANNELS[c].label}
                   </button>
                 ))}
               </div>
             </div>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">{ch.blurb} · efektif TBM {money(effCpc)}</p>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              {ch.blurb} · efektif TBM {money(effCpc)}
+            </p>
 
             <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                  <Flame size={12} className={fatigue > 0.6 ? "text-rose-300" : fatigue > 0.3 ? "text-amber-300" : "text-emerald-300"} />
+                  <Flame
+                    size={12}
+                    className={
+                      fatigue > 0.6
+                        ? "text-rose-300"
+                        : fatigue > 0.3
+                          ? "text-amber-300"
+                          : "text-emerald-300"
+                    }
+                  />
                   Kreatif yorgunluğu
                 </span>
-                <span className={fatigue > 0.6 ? "text-rose-300" : ""}>{Math.round(fatigue * 100)}%</span>
+                <span className={fatigue > 0.6 ? "text-rose-300" : ""}>
+                  {Math.round(fatigue * 100)}%
+                </span>
               </div>
               <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${fatigue > 0.6 ? "bg-rose-400" : fatigue > 0.3 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${fatigue * 100}%` }} />
+                <div
+                  className={`h-full rounded-full transition-all ${fatigue > 0.6 ? "bg-rose-400" : fatigue > 0.3 ? "bg-amber-400" : "bg-emerald-400"}`}
+                  style={{ width: `${fatigue * 100}%` }}
+                />
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                <span>Yorulan kreatif TBM'yi artırır, dönüşümü düşürür. Reklamı durdurursan yavaşça soğur.</span>
-                <button onClick={() => onRefresh(p.id)} disabled={fatigue < 0.02}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10 disabled:opacity-40">
+                <span>
+                  Yorulan kreatif TBM'yi artırır, dönüşümü düşürür. Reklamı durdurursan yavaşça
+                  soğur.
+                </span>
+                <button
+                  onClick={() => onRefresh(p.id)}
+                  disabled={fatigue < 0.02}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10 disabled:opacity-40"
+                >
                   <RefreshCw size={11} /> Yeni kreatif · {money(CREATIVE_COST)}
                 </button>
               </div>
@@ -929,26 +1423,34 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
             <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                  <FlaskConical size={12} className="text-[oklch(0.72_0.18_265)]" /> Kreatif A/B testi
-                  {!!(p.cvrBonus ?? 0) && <b className="text-emerald-300">+{Math.round((p.cvrBonus ?? 0) * 100)}% kalıcı dönüşüm</b>}
+                  <FlaskConical size={12} className="text-[oklch(0.72_0.18_265)]" /> Kreatif A/B
+                  testi
+                  {!!(p.cvrBonus ?? 0) && (
+                    <b className="text-emerald-300">
+                      +{Math.round((p.cvrBonus ?? 0) * 100)}% kalıcı dönüşüm
+                    </b>
+                  )}
                 </span>
                 {p.abTest ? (
                   <span className="rounded-full border border-white/10 bg-white/8 px-2.5 py-1">
-                    Test yayında · {Math.max(0, p.abTest.startDay + AB_TEST_DAYS - state.day)} gün kaldı
+                    Test yayında · {Math.max(0, p.abTest.startDay + AB_TEST_DAYS - state.day)} gün
+                    kaldı
                   </span>
                 ) : (
-                  <button onClick={() => onAbTest(p.id)} disabled={p.adBudget <= 0 || state.cash < AB_TEST_COST}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 hover:bg-white/10 disabled:opacity-40">
+                  <button
+                    onClick={() => onAbTest(p.id)}
+                    disabled={p.adBudget <= 0 || state.cash < AB_TEST_COST}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 hover:bg-white/10 disabled:opacity-40"
+                  >
                     <FlaskConical size={11} /> Test başlat · {money(AB_TEST_COST)}
                   </button>
                 )}
               </div>
               <p className="mt-1.5 text-[10px] text-muted-foreground">
-                İki varyant {AB_TEST_DAYS} gün yarışır; trafiğin bir kısmı teste gider. Kazanan varyant kalıcı dönüşüm artışı olarak kalır.
+                İki varyant {AB_TEST_DAYS} gün yarışır; trafiğin bir kısmı teste gider. Kazanan
+                varyant kalıcı dönüşüm artışı olarak kalır.
               </p>
             </div>
-
-
 
             <div className="mt-4 grid md:grid-cols-2 gap-5">
               <div>
@@ -956,15 +1458,23 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
                   <span className="text-muted-foreground">Selling price</span>
                   <b>{money(p.price)}</b>
                 </div>
-                <input type="range" min={Math.max(1, p.unitCost)} max={Math.max(p.unitCost * 2, p.recommendedPrice * 2)} step={0.5}
-                  value={p.price} onChange={(e) => onPatch(p.id, { price: Number(e.target.value) })}
-                  className="mt-2 w-full accent-[oklch(0.68_0.20_265)]" />
+                <input
+                  type="range"
+                  min={Math.max(1, p.unitCost)}
+                  max={Math.max(p.unitCost * 2, p.recommendedPrice * 2)}
+                  step={0.5}
+                  value={p.price}
+                  onChange={(e) => onPatch(p.id, { price: Number(e.target.value) })}
+                  className="mt-2 w-full accent-[oklch(0.68_0.20_265)]"
+                />
                 <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
                   <span>cost {money(p.unitCost)}</span>
                   <span>AI price {money(p.recommendedPrice)}</span>
                 </div>
                 <div className="mt-2 text-[11px] text-muted-foreground">
-                  Unit profit <b className={up <= 0 ? "text-rose-300" : "text-emerald-300"}>{money(up)}</b> · break-even ROAS {breakEvenRoas > 0 ? breakEvenRoas.toFixed(2) : "—"}x
+                  Unit profit{" "}
+                  <b className={up <= 0 ? "text-rose-300" : "text-emerald-300"}>{money(up)}</b> ·
+                  break-even ROAS {breakEvenRoas > 0 ? breakEvenRoas.toFixed(2) : "—"}x
                 </div>
               </div>
 
@@ -973,12 +1483,23 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
                   <span className="text-muted-foreground">Daily ad budget</span>
                   <b>{money(p.adBudget)}</b>
                 </div>
-                <input type="range" min={0} max={300} step={5}
-                  value={p.adBudget} onChange={(e) => onPatch(p.id, { adBudget: Number(e.target.value) })}
-                  className="mt-2 w-full accent-[oklch(0.66_0.24_305)]" />
+                <input
+                  type="range"
+                  min={0}
+                  max={300}
+                  step={5}
+                  value={p.adBudget}
+                  onChange={(e) => onPatch(p.id, { adBudget: Number(e.target.value) })}
+                  className="mt-2 w-full accent-[oklch(0.66_0.24_305)]"
+                />
                 <div className="mt-2 text-[11px] text-muted-foreground">
-                  ≈ {clicks.toFixed(0)} clicks/day → ≈ {expected.toFixed(1)} orders/day → est. daily profit{" "}
-                  <b className={expected * up - p.adBudget >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                  ≈ {clicks.toFixed(0)} clicks/day → ≈ {expected.toFixed(1)} orders/day → est. daily
+                  profit{" "}
+                  <b
+                    className={
+                      expected * up - p.adBudget >= 0 ? "text-emerald-300" : "text-rose-300"
+                    }
+                  >
                     {money(expected * up - p.adBudget)}
                   </b>
                 </div>
@@ -1001,13 +1522,29 @@ function AdsView({ state, onPatch, onRefresh, onAbTest }: {
 function Analytics({ state }: { state: SimState }) {
   const h = state.history;
   const max = Math.max(1, ...h.map((d) => Math.max(d.revenue, Math.abs(d.profit))));
-  const totals = useMemo(() => h.reduce((a, d) => ({
-    visitors: a.visitors + d.visitors, orders: a.orders + d.orders, revenue: a.revenue + d.revenue,
-    adSpend: a.adSpend + d.adSpend, fees: a.fees + d.fees, refunds: a.refunds + d.refunds, profit: a.profit + d.profit,
-  }), { visitors: 0, orders: 0, revenue: 0, adSpend: 0, fees: 0, refunds: 0, profit: 0 }), [h]);
+  const totals = useMemo(
+    () =>
+      h.reduce(
+        (a, d) => ({
+          visitors: a.visitors + d.visitors,
+          orders: a.orders + d.orders,
+          revenue: a.revenue + d.revenue,
+          adSpend: a.adSpend + d.adSpend,
+          fees: a.fees + d.fees,
+          refunds: a.refunds + d.refunds,
+          profit: a.profit + d.profit,
+        }),
+        { visitors: 0, orders: 0, revenue: 0, adSpend: 0, fees: 0, refunds: 0, profit: 0 },
+      ),
+    [h],
+  );
 
   if (h.length === 0) {
-    return <div className="premium-card rounded-xl p-8 text-center text-sm text-muted-foreground">Run your first day to generate analytics.</div>;
+    return (
+      <div className="premium-card rounded-xl p-8 text-center text-sm text-muted-foreground">
+        Run your first day to generate analytics.
+      </div>
+    );
   }
   const cvr = totals.visitors > 0 ? (totals.orders / totals.visitors) * 100 : 0;
   const roas = totals.adSpend > 0 ? totals.revenue / totals.adSpend : 0;
@@ -1027,10 +1564,18 @@ function Analytics({ state }: { state: SimState }) {
         <h3 className="text-sm font-semibold mb-3">Daily revenue vs net profit</h3>
         <div className="flex items-end gap-1 h-40">
           {h.map((d) => (
-            <div key={d.day} className="flex-1 flex flex-col justify-end items-center gap-0.5 group relative">
-              <div className="w-full rounded-t bg-[oklch(0.68_0.20_265)]/70" style={{ height: `${(d.revenue / max) * 100}%` }} />
-              <div className={`w-full rounded-b ${d.profit >= 0 ? "bg-emerald-400/70" : "bg-rose-400/70"}`}
-                style={{ height: `${(Math.abs(d.profit) / max) * 60}%` }} />
+            <div
+              key={d.day}
+              className="flex-1 flex flex-col justify-end items-center gap-0.5 group relative"
+            >
+              <div
+                className="w-full rounded-t bg-[oklch(0.68_0.20_265)]/70"
+                style={{ height: `${(d.revenue / max) * 100}%` }}
+              />
+              <div
+                className={`w-full rounded-b ${d.profit >= 0 ? "bg-emerald-400/70" : "bg-rose-400/70"}`}
+                style={{ height: `${(Math.abs(d.profit) / max) * 60}%` }}
+              />
               <span className="absolute -top-6 hidden group-hover:block whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[10px]">
                 D{d.day}: {money(d.revenue)} / {money(d.profit)}
               </span>
@@ -1042,8 +1587,23 @@ function Analytics({ state }: { state: SimState }) {
       <div className="premium-card rounded-xl p-4 overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-muted-foreground">
-            <tr>{["Day", "Visitors", "Orders", "Revenue", "Ads", "Fees", "Refunds", "Profit", "Cash"].map((c) => (
-              <th key={c} className="text-left font-medium py-1.5 pr-3">{c}</th>))}</tr>
+            <tr>
+              {[
+                "Day",
+                "Visitors",
+                "Orders",
+                "Revenue",
+                "Ads",
+                "Fees",
+                "Refunds",
+                "Profit",
+                "Cash",
+              ].map((c) => (
+                <th key={c} className="text-left font-medium py-1.5 pr-3">
+                  {c}
+                </th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {[...h].reverse().map((d) => (
@@ -1055,7 +1615,11 @@ function Analytics({ state }: { state: SimState }) {
                 <td className="pr-3">{money(d.adSpend)}</td>
                 <td className="pr-3">{money(d.fees)}</td>
                 <td className="pr-3">{money(d.refunds)}</td>
-                <td className={`pr-3 font-semibold ${d.profit >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{money(d.profit)}</td>
+                <td
+                  className={`pr-3 font-semibold ${d.profit >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                >
+                  {money(d.profit)}
+                </td>
                 <td className="pr-3">{money(d.cash)}</td>
               </tr>
             ))}
@@ -1072,15 +1636,23 @@ function ActivityLog({ state }: { state: SimState }) {
   return (
     <div className="premium-card rounded-xl p-4 space-y-2 max-h-[60vh] overflow-auto">
       {[...state.log].reverse().map((l, i) => (
-        <div key={i} className="flex items-start gap-2 text-xs border-b border-white/6 pb-2 last:border-0">
+        <div
+          key={i}
+          className="flex items-start gap-2 text-xs border-b border-white/6 pb-2 last:border-0"
+        >
           <span className="mt-0.5 w-10 shrink-0 text-muted-foreground">D{l.day}</span>
-          <span className={l.kind === "good" ? "text-emerald-300" : l.kind === "bad" ? "text-rose-300" : ""}>{l.text}</span>
+          <span
+            className={
+              l.kind === "good" ? "text-emerald-300" : l.kind === "bad" ? "text-rose-300" : ""
+            }
+          >
+            {l.text}
+          </span>
         </div>
       ))}
     </div>
   );
 }
-
 
 /* ---------------- Strategic decision card ---------------- */
 
@@ -1097,14 +1669,19 @@ function DecisionModal({ id, onChoose }: { id: string; onChoose: (i: number) => 
         <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{card.body}</p>
         <div className="mt-4 space-y-2">
           {card.options.map((o, i) => (
-            <button key={i} onClick={() => onChoose(i)}
-              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 hover:bg-white/10 hover:border-[oklch(0.68_0.20_265)]/50 transition card-lift">
+            <button
+              key={i}
+              onClick={() => onChoose(i)}
+              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 hover:bg-white/10 hover:border-[oklch(0.68_0.20_265)]/50 transition card-lift"
+            >
               <div className="text-sm font-semibold">{o.label}</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">{o.detail}</div>
             </button>
           ))}
         </div>
-        <p className="mt-3 text-[10px] text-muted-foreground text-center">Kararın anında mağazanı etkiler — gün ilerlemeden seçmelisin.</p>
+        <p className="mt-3 text-[10px] text-muted-foreground text-center">
+          Kararın anında mağazanı etkiler — gün ilerlemeden seçmelisin.
+        </p>
       </div>
     </div>
   );
@@ -1112,7 +1689,13 @@ function DecisionModal({ id, onChoose }: { id: string; onChoose: (i: number) => 
 
 /* ---------------- Growth: upgrades, financing, CRM ---------------- */
 
-function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
+function GrowthView({
+  state,
+  onUpgrade,
+  onLoan,
+  onRepay,
+  onCampaign,
+}: {
   state: SimState;
   onUpgrade: (id: (typeof UPGRADES)[number]["id"]) => void;
   onLoan: (n: number) => void;
@@ -1131,14 +1714,19 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
         <div className="flex items-center gap-2">
           <Rocket size={15} className="text-[oklch(0.72_0.18_265)]" />
           <h3 className="text-sm font-bold">Mağaza yükseltmeleri</h3>
-          <span className="text-[11px] text-muted-foreground">Kalıcı etki — bir kez alınır, sezon boyunca çalışır.</span>
+          <span className="text-[11px] text-muted-foreground">
+            Kalıcı etki — bir kez alınır, sezon boyunca çalışır.
+          </span>
         </div>
         <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {UPGRADES.map((u) => {
             const owned = hasUpgrade(state, u.id);
             const afford = state.cash >= u.cost;
             return (
-              <div key={u.id} className={`rounded-xl border p-3 transition ${owned ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/5"}`}>
+              <div
+                key={u.id}
+                className={`rounded-xl border p-3 transition ${owned ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/5"}`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{u.icon}</span>
@@ -1146,7 +1734,9 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
                   </div>
                   {owned && <CheckCircle2 size={14} className="shrink-0 text-emerald-300" />}
                 </div>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{u.blurb}</p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  {u.blurb}
+                </p>
                 <button
                   disabled={owned || !afford || state.status !== "running"}
                   onClick={() => onUpgrade(u.id)}
@@ -1167,8 +1757,9 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
             <h3 className="text-sm font-bold">İşletme kredisi</h3>
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            Stok almak için nakit sıkışırsan kredi çekebilirsin. Günlük %{(LOAN_DAILY_RATE * 100).toFixed(1)} faiz
-            her gün kârından düşer — hızlı kapatmak marjını korur.
+            Stok almak için nakit sıkışırsan kredi çekebilirsin. Günlük %
+            {(LOAN_DAILY_RATE * 100).toFixed(1)} faiz her gün kârından düşer — hızlı kapatmak
+            marjını korur.
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-white/10 bg-white/5 p-2">
@@ -1181,18 +1772,27 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-2">
               <div className="text-[10px] text-muted-foreground">Ödenen faiz</div>
-              <div className="text-sm font-bold text-rose-300">{money(state.loan?.paidInterest ?? 0)}</div>
+              <div className="text-sm font-bold text-rose-300">
+                {money(state.loan?.paidInterest ?? 0)}
+              </div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {[250, 500, 1000].map((n) => (
-              <button key={n} disabled={room < n || state.status !== "running"} onClick={() => onLoan(n)}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              <button
+                key={n}
+                disabled={room < n || state.status !== "running"}
+                onClick={() => onLoan(n)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-40"
+              >
                 +{money(n)} çek
               </button>
             ))}
-            <button disabled={owed <= 0 || state.cash <= 0} onClick={() => onRepay(Math.min(owed, state.cash))}
-              className="rounded-lg border border-emerald-400/30 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40">
+            <button
+              disabled={owed <= 0 || state.cash <= 0}
+              onClick={() => onRepay(Math.min(owed, state.cash))}
+              className="rounded-lg border border-emerald-400/30 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
+            >
               Elden geldiğince öde
             </button>
           </div>
@@ -1204,8 +1804,8 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
             <h3 className="text-sm font-bold">E-posta listesi & kampanya</h3>
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            Her sipariş listeni büyütür. Kampanya reklam maliyeti olmadan sipariş getirir ama listeyi yorar —
-            {CAMPAIGN_COOLDOWN} günde birden sık gönderemezsin.
+            Her sipariş listeni büyütür. Kampanya reklam maliyeti olmadan sipariş getirir ama
+            listeyi yorar —{CAMPAIGN_COOLDOWN} günde birden sık gönderemezsin.
           </p>
           <div className="mt-3 flex items-end gap-3">
             <div>
@@ -1214,15 +1814,26 @@ function GrowthView({ state, onUpgrade, onLoan, onRepay, onCampaign }: {
             </div>
             <div className="flex-1">
               <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
-                  style={{ width: `${Math.min(100, (subs / 400) * 100)}%` }} />
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                  style={{ width: `${Math.min(100, (subs / 400) * 100)}%` }}
+                />
               </div>
-              <div className="mt-1 text-[10px] text-muted-foreground">Tahmini sipariş: ~{Math.round(subs * 0.06)}</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                Tahmini sipariş: ~{Math.round(subs * 0.06)}
+              </div>
             </div>
           </div>
-          <button disabled={!canCampaign} onClick={onCampaign}
-            className="mt-3 w-full rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold glow disabled:opacity-40">
-            {cd > 0 ? `${cd} gün sonra gönderilebilir` : subs < 25 ? "Liste çok küçük" : "Kampanyayı gönder"}
+          <button
+            disabled={!canCampaign}
+            onClick={onCampaign}
+            className="mt-3 w-full rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold glow disabled:opacity-40"
+          >
+            {cd > 0
+              ? `${cd} gün sonra gönderilebilir`
+              : subs < 25
+                ? "Liste çok küçük"
+                : "Kampanyayı gönder"}
           </button>
         </div>
       </div>
@@ -1237,32 +1848,69 @@ function MarketView({ state }: { state: SimState }) {
   const mix = state.segmentMix ?? { bargain: 0.34, mainstream: 0.44, premium: 0.22 };
   const brand = Math.round(state.brand ?? 0);
   const rows = [
-    { key: "you", name: state.storeName, emoji: "🏪", share: share.you, price: state.marketIndex ?? 1, rating: state.products.length ? state.products.reduce((a, p) => a + p.rating, 0) / state.products.length : 4.6, you: true },
-    ...share.rivals.map((r) => ({ key: r.c.id, name: r.c.name, emoji: r.c.emoji, share: r.share, price: r.c.price, rating: r.c.rating, you: false })),
+    {
+      key: "you",
+      name: state.storeName,
+      emoji: "🏪",
+      share: share.you,
+      price: state.marketIndex ?? 1,
+      rating: state.products.length
+        ? state.products.reduce((a, p) => a + p.rating, 0) / state.products.length
+        : 4.6,
+      you: true,
+    },
+    ...share.rivals.map((r) => ({
+      key: r.c.id,
+      name: r.c.name,
+      emoji: r.c.emoji,
+      share: r.share,
+      price: r.c.price,
+      rating: r.c.rating,
+      you: false,
+    })),
   ].sort((a, b) => b.share - a.share);
 
   return (
     <div className="space-y-4">
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Swords size={14} /> Pazar payı</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <Swords size={14} /> Pazar payı
+        </h3>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Rakipler her gün fiyatlarını ve reklam güçlerini senin performansına göre günceller. Pay; fiyat, puan, marka ve reklam bütçesinin bileşimi.
+          Rakipler her gün fiyatlarını ve reklam güçlerini senin performansına göre günceller. Pay;
+          fiyat, puan, marka ve reklam bütçesinin bileşimi.
         </p>
         <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-white/8">
           {rows.map((r) => (
-            <div key={r.key} title={`${r.name} %${(r.share * 100).toFixed(0)}`}
-              className={r.you ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]" : "bg-white/18 border-l border-black/30"}
-              style={{ width: `${r.share * 100}%` }} />
+            <div
+              key={r.key}
+              title={`${r.name} %${(r.share * 100).toFixed(0)}`}
+              className={
+                r.you
+                  ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                  : "bg-white/18 border-l border-black/30"
+              }
+              style={{ width: `${r.share * 100}%` }}
+            />
           ))}
         </div>
         <div className="mt-3 space-y-2">
           {rows.map((r) => (
-            <div key={r.key} className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${r.you ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : "border-white/10 bg-white/5"}`}>
+            <div
+              key={r.key}
+              className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${r.you ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : "border-white/10 bg-white/5"}`}
+            >
               <span className="text-base">{r.emoji}</span>
               <b>{r.name}</b>
-              {r.you && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">sen</span>}
-              <span className="ml-auto text-muted-foreground">fiyat endeksi {r.price.toFixed(2)}</span>
-              <span className="inline-flex items-center gap-1 text-muted-foreground"><Star size={11} className="text-amber-300" /> {r.rating.toFixed(1)}</span>
+              {r.you && (
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">sen</span>
+              )}
+              <span className="ml-auto text-muted-foreground">
+                fiyat endeksi {r.price.toFixed(2)}
+              </span>
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <Star size={11} className="text-amber-300" /> {r.rating.toFixed(1)}
+              </span>
               <b className="w-14 text-right">%{(r.share * 100).toFixed(0)}</b>
             </div>
           ))}
@@ -1270,31 +1918,43 @@ function MarketView({ state }: { state: SimState }) {
       </div>
 
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Gem size={14} className="text-[oklch(0.78_0.16_265)]" /> Marka değeri {brand}/100</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <Gem size={14} className="text-[oklch(0.78_0.16_265)]" /> Marka değeri {brand}/100
+        </h3>
         <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
-          <div className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all" style={{ width: `${brand}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all"
+            style={{ width: `${brand}%` }}
+          />
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Marka; yüksek puan, tekrar alan müşteriler ve premium fiyatlamayla büyür; stoksuzluk, iade ve yanıtlanmayan destek bileti düşürür.
-          Güçlü marka organik trafik getirir ve fiyat hassasiyetini azaltır.
+          Marka; yüksek puan, tekrar alan müşteriler ve premium fiyatlamayla büyür; stoksuzluk, iade
+          ve yanıtlanmayan destek bileti düşürür. Güçlü marka organik trafik getirir ve fiyat
+          hassasiyetini azaltır.
         </p>
       </div>
 
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><PieChart size={14} /> Müşteri segmentleri</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <PieChart size={14} /> Müşteri segmentleri
+        </h3>
         <div className="mt-3 grid md:grid-cols-3 gap-3">
           {(Object.keys(SEGMENTS) as (keyof typeof SEGMENTS)[]).map((k) => {
             const seg = SEGMENTS[k];
             const pct = Math.round((mix[k] ?? 0) * 100);
             return (
               <div key={k} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center justify-between text-xs"><b>{seg.label}</b><span>%{pct}</span></div>
+                <div className="flex items-center justify-between text-xs">
+                  <b>{seg.label}</b>
+                  <span>%{pct}</span>
+                </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
                   <div className="h-full rounded-full bg-white/40" style={{ width: `${pct}%` }} />
                 </div>
                 <p className="mt-2 text-[10px] text-muted-foreground">{seg.blurb}</p>
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Fiyat hassasiyeti ×{seg.elasticity} · iade ×{seg.refundBias} · sepet ×{seg.aovMult}
+                  Fiyat hassasiyeti ×{seg.elasticity} · iade ×{seg.refundBias} · sepet ×
+                  {seg.aovMult}
                 </p>
               </div>
             );
@@ -1303,18 +1963,27 @@ function MarketView({ state }: { state: SimState }) {
       </div>
 
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={14} /> Sezon takvimi</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <CalendarDays size={14} /> Sezon takvimi
+        </h3>
         <div className="mt-3 space-y-2">
           {CALENDAR.map((c) => {
             const sd = seasonDayOf(state.day);
             const active = sd >= c.day && sd < c.day + c.days;
             const past = sd >= c.day + c.days;
             return (
-              <div key={c.title} className={`rounded-xl border px-3 py-2 text-xs ${active ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : past ? "border-white/10 bg-white/5 opacity-50" : "border-white/10 bg-white/5"}`}>
+              <div
+                key={c.title}
+                className={`rounded-xl border px-3 py-2 text-xs ${active ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : past ? "border-white/10 bg-white/5 opacity-50" : "border-white/10 bg-white/5"}`}
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <b>{c.title}</b>
-                  <span className="text-muted-foreground">Gün {c.day}-{c.day + c.days - 1}</span>
-                  {active && <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px]">aktif</span>}
+                  <span className="text-muted-foreground">
+                    Gün {c.day}-{c.day + c.days - 1}
+                  </span>
+                  {active && (
+                    <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px]">aktif</span>
+                  )}
                 </div>
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   {c.blurb}
@@ -1333,24 +2002,45 @@ function MarketView({ state }: { state: SimState }) {
 
 /* ---------------- Operations / support ---------------- */
 
-function OpsView({ state, onSupportBudget }: { state: SimState; onSupportBudget: (n: number) => void }) {
+function OpsView({
+  state,
+  onSupportBudget,
+}: {
+  state: SimState;
+  onSupportBudget: (n: number) => void;
+}) {
   const queue = state.supportQueue ?? 0;
   const budget = state.supportBudget ?? 0;
   const capacity = Math.floor(budget / SUPPORT_TICKET_COST);
-  const orders = state.history.slice(-3).reduce((a, d) => a + d.orders, 0) / Math.max(1, Math.min(3, state.history.length));
+  const orders =
+    state.history.slice(-3).reduce((a, d) => a + d.orders, 0) /
+    Math.max(1, Math.min(3, state.history.length));
   const suggested = Math.ceil((orders * 0.55 * SUPPORT_TICKET_COST) / 5) * 5;
 
   return (
     <div className="space-y-4">
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Headphones size={14} /> Müşteri destek merkezi</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <Headphones size={14} /> Müşteri destek merkezi
+        </h3>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Her sipariş destek bileti üretir. Kuyruk 15 bileti aşarsa SLA ihlali başlar: puanlar düşer, iadeler artar, marka erir.
+          Her sipariş destek bileti üretir. Kuyruk 15 bileti aşarsa SLA ihlali başlar: puanlar
+          düşer, iadeler artar, marka erir.
         </p>
         <div className="mt-3 grid sm:grid-cols-4 gap-3 text-xs">
-          <Kpi icon={Headphones} label="Bekleyen bilet" value={String(Math.round(queue))} tone={queue > 12 ? "bad" : queue > 0 ? undefined : "good"} />
+          <Kpi
+            icon={Headphones}
+            label="Bekleyen bilet"
+            value={String(Math.round(queue))}
+            tone={queue > 12 ? "bad" : queue > 0 ? undefined : "good"}
+          />
           <Kpi icon={CheckCircle2} label="Çözülen" value={String(state.supportResolved ?? 0)} />
-          <Kpi icon={AlertTriangle} label="SLA ihlali" value={String(state.slaBreaches ?? 0)} tone={(state.slaBreaches ?? 0) > 0 ? "bad" : "good"} />
+          <Kpi
+            icon={AlertTriangle}
+            label="SLA ihlali"
+            value={String(state.slaBreaches ?? 0)}
+            tone={(state.slaBreaches ?? 0) > 0 ? "bad" : "good"}
+          />
           <Kpi icon={Zap} label="Günlük kapasite" value={`${capacity} bilet`} />
         </div>
 
@@ -1359,34 +2049,59 @@ function OpsView({ state, onSupportBudget }: { state: SimState; onSupportBudget:
             <span className="text-muted-foreground">Günlük destek bütçesi</span>
             <b>{money(budget)}</b>
           </div>
-          <input type="range" min={0} max={150} step={5} value={budget}
+          <input
+            type="range"
+            min={0}
+            max={150}
+            step={5}
+            value={budget}
             onChange={(e) => onSupportBudget(Number(e.target.value))}
-            className="mt-2 w-full accent-[oklch(0.68_0.20_265)]" />
+            className="mt-2 w-full accent-[oklch(0.68_0.20_265)]"
+          />
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>Bilet başına {money(SUPPORT_TICKET_COST)} · sipariş hacmine göre önerilen ≈ {money(suggested)}</span>
-            <button onClick={() => onSupportBudget(suggested)} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10">
+            <span>
+              Bilet başına {money(SUPPORT_TICKET_COST)} · sipariş hacmine göre önerilen ≈{" "}
+              {money(suggested)}
+            </span>
+            <button
+              onClick={() => onSupportBudget(suggested)}
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10"
+            >
               Önerilen bütçeyi uygula
             </button>
           </div>
         </div>
 
         <div className="mt-3 h-2 rounded-full bg-white/8 overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${queue > 15 ? "bg-rose-400" : queue > 8 ? "bg-amber-400" : "bg-emerald-400"}`}
-            style={{ width: `${Math.min(100, (queue / 20) * 100)}%` }} />
+          <div
+            className={`h-full rounded-full transition-all ${queue > 15 ? "bg-rose-400" : queue > 8 ? "bg-amber-400" : "bg-emerald-400"}`}
+            style={{ width: `${Math.min(100, (queue / 20) * 100)}%` }}
+          />
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">Kuyruk / SLA eşiği (15 bilet)</p>
       </div>
 
       <div className="premium-card rounded-xl p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><FlaskConical size={14} /> Kreatif test performansı</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <FlaskConical size={14} /> Kreatif test performansı
+        </h3>
         <div className="mt-3 grid sm:grid-cols-3 gap-3 text-xs">
           <Kpi icon={Trophy} label="Kazanılan test" value={String(state.abWins ?? 0)} />
-          <Kpi icon={Sparkles} label="Aktif test" value={String(state.products.filter((p) => p.abTest).length)} />
-          <Kpi icon={TrendingUp} label="Toplam dönüşüm artışı"
-            value={`+${Math.round(state.products.reduce((a, p) => a + (p.cvrBonus ?? 0), 0) * 100)}%`} tone="good" />
+          <Kpi
+            icon={Sparkles}
+            label="Aktif test"
+            value={String(state.products.filter((p) => p.abTest).length)}
+          />
+          <Kpi
+            icon={TrendingUp}
+            label="Toplam dönüşüm artışı"
+            value={`+${Math.round(state.products.reduce((a, p) => a + (p.cvrBonus ?? 0), 0) * 100)}%`}
+            tone="good"
+          />
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Testler Reklam & Fiyat sekmesinden başlatılır. Kazanan varyantın etkisi ürün ömrü boyunca kalıcıdır.
+          Testler Reklam & Fiyat sekmesinden başlatılır. Kazanan varyantın etkisi ürün ömrü boyunca
+          kalıcıdır.
         </p>
       </div>
     </div>

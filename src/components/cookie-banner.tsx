@@ -3,7 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { Cookie, Shield, BarChart3, Megaphone } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 
 export const COOKIE_KEY = "velora_cookie_consent";
@@ -69,8 +74,13 @@ export function CookieBanner() {
             <div className="flex items-start gap-3">
               <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand,var(--primary))]" />
               <p className="text-xs leading-relaxed text-muted-foreground md:text-sm">
-                Aroless, platform deneyiminizi iyileştirmek ve analitik hizmetler sunmak için çerezler kullanır.{" "}
-                <Link to="/legal/$slug" params={{ slug: "cerez-politikasi" }} className="font-medium text-foreground underline underline-offset-4">
+                Aroless, platform deneyiminizi iyileştirmek ve analitik hizmetler sunmak için
+                çerezler kullanır.{" "}
+                <Link
+                  to="/legal/$slug"
+                  params={{ slug: "cerez-politikasi" }}
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
                   Çerez Politikası
                 </Link>
               </p>
@@ -109,7 +119,8 @@ export function CookieBanner() {
               <Cookie className="h-4 w-4" /> Çerez Tercihleri
             </DialogTitle>
             <DialogDescription>
-              Hangi çerez kategorilerine izin verdiğinizi seçin. Tercihleriniz tarayıcınızda saklanır.
+              Hangi çerez kategorilerine izin verdiğinizi seçin. Tercihleriniz tarayıcınızda
+              saklanır.
             </DialogDescription>
           </DialogHeader>
 
@@ -160,7 +171,12 @@ export function CookieBanner() {
 }
 
 function PrefRow({
-  icon: Icon, title, desc, checked, onChange, disabled,
+  icon: Icon,
+  title,
+  desc,
+  checked,
+  onChange,
+  disabled,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;

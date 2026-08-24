@@ -71,7 +71,11 @@ export function DeepSearchPanel({
           <ChevronDown size={14} className={`ml-auto transition ${open ? "rotate-180" : ""}`} />
         </button>
         {dirty && (
-          <button type="button" onClick={onReset} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10">
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10"
+          >
             <RotateCcw size={11} /> Sıfırla
           </button>
         )}
@@ -80,7 +84,9 @@ export function DeepSearchPanel({
       {open && (
         <div className="space-y-3 border-t border-white/10 px-4 py-4">
           <div>
-            <Label icon><Layers size={12} /> Analiz derinliği</Label>
+            <Label icon>
+              <Layers size={12} /> Analiz derinliği
+            </Label>
             <div className="grid grid-cols-3 gap-2">
               {DEPTHS.map((d) => (
                 <button
@@ -98,52 +104,111 @@ export function DeepSearchPanel({
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">Derinlik arttıkça daha fazla farklı açı taranır — kredi maliyeti aynı kalır, süre uzar.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Derinlik arttıkça daha fazla farklı açı taranır — kredi maliyeti aynı kalır, süre
+              uzar.
+            </p>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Mutlaka içersin (virgülle)">
-              <input value={value.include_keywords} onChange={(e) => set("include_keywords", e.target.value.slice(0, 160))}
-                placeholder="örn. taşınabilir, şarjlı" className={inputCls} />
+              <input
+                value={value.include_keywords}
+                onChange={(e) => set("include_keywords", e.target.value.slice(0, 160))}
+                placeholder="örn. taşınabilir, şarjlı"
+                className={inputCls}
+              />
             </Field>
             <Field label="Hariç tut (virgülle)">
-              <input value={value.exclude_keywords} onChange={(e) => set("exclude_keywords", e.target.value.slice(0, 160))}
-                placeholder="örn. kırılgan, pil, marka lisanslı" className={inputCls} />
+              <input
+                value={value.exclude_keywords}
+                onChange={(e) => set("exclude_keywords", e.target.value.slice(0, 160))}
+                placeholder="örn. kırılgan, pil, marka lisanslı"
+                className={inputCls}
+              />
             </Field>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Hedef satış fiyatı ($)">
               <div className="flex gap-2">
-                <input type="number" min={0} value={value.price_target_min || ""} placeholder="min"
-                  onChange={(e) => set("price_target_min", Math.max(0, Number(e.target.value) || 0))} className={inputCls} />
-                <input type="number" min={0} value={value.price_target_max || ""} placeholder="max"
-                  onChange={(e) => set("price_target_max", Math.max(0, Number(e.target.value) || 0))} className={inputCls} />
+                <input
+                  type="number"
+                  min={0}
+                  value={value.price_target_min || ""}
+                  placeholder="min"
+                  onChange={(e) =>
+                    set("price_target_min", Math.max(0, Number(e.target.value) || 0))
+                  }
+                  className={inputCls}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={value.price_target_max || ""}
+                  placeholder="max"
+                  onChange={(e) =>
+                    set("price_target_max", Math.max(0, Number(e.target.value) || 0))
+                  }
+                  className={inputCls}
+                />
               </div>
             </Field>
             <Field label="Tedarik modeli">
-              <select value={value.sourcing} onChange={(e) => set("sourcing", e.target.value as DeepSearchOptions["sourcing"])} className={inputCls}>
-                {SOURCING.map((s) => <option key={s.id} value={s.id} className="bg-[oklch(0.20_0.035_265)]">{s.label}</option>)}
+              <select
+                value={value.sourcing}
+                onChange={(e) => set("sourcing", e.target.value as DeepSearchOptions["sourcing"])}
+                className={inputCls}
+              >
+                {SOURCING.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-[oklch(0.20_0.035_265)]">
+                    {s.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Sezon / zamanlama">
-              <input value={value.season} onChange={(e) => set("season", e.target.value.slice(0, 60))}
-                placeholder="örn. yaz, okula dönüş, Q4" className={inputCls} />
+              <input
+                value={value.season}
+                onChange={(e) => set("season", e.target.value.slice(0, 60))}
+                placeholder="örn. yaz, okula dönüş, Q4"
+                className={inputCls}
+              />
             </Field>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Rekabet tercihi">
-              <select value={value.competition_pref} onChange={(e) => set("competition_pref", e.target.value as DeepSearchOptions["competition_pref"])} className={inputCls}>
-                <option value="any" className="bg-[oklch(0.20_0.035_265)]">Farketmez</option>
-                <option value="low" className="bg-[oklch(0.20_0.035_265)]">Sadece düşük rekabet</option>
+              <select
+                value={value.competition_pref}
+                onChange={(e) =>
+                  set("competition_pref", e.target.value as DeepSearchOptions["competition_pref"])
+                }
+                className={inputCls}
+              >
+                <option value="any" className="bg-[oklch(0.20_0.035_265)]">
+                  Farketmez
+                </option>
+                <option value="low" className="bg-[oklch(0.20_0.035_265)]">
+                  Sadece düşük rekabet
+                </option>
               </select>
             </Field>
             <Field label="Ürün olgunluğu">
-              <select value={value.novelty} onChange={(e) => set("novelty", e.target.value as DeepSearchOptions["novelty"])} className={inputCls}>
-                <option value="any" className="bg-[oklch(0.20_0.035_265)]">Farketmez</option>
-                <option value="fresh" className="bg-[oklch(0.20_0.035_265)]">Yeni yükselen (son 30-60 gün)</option>
-                <option value="proven" className="bg-[oklch(0.20_0.035_265)]">Kanıtlanmış satıcı</option>
+              <select
+                value={value.novelty}
+                onChange={(e) => set("novelty", e.target.value as DeepSearchOptions["novelty"])}
+                className={inputCls}
+              >
+                <option value="any" className="bg-[oklch(0.20_0.035_265)]">
+                  Farketmez
+                </option>
+                <option value="fresh" className="bg-[oklch(0.20_0.035_265)]">
+                  Yeni yükselen (son 30-60 gün)
+                </option>
+                <option value="proven" className="bg-[oklch(0.20_0.035_265)]">
+                  Kanıtlanmış satıcı
+                </option>
               </select>
             </Field>
           </div>
@@ -157,13 +222,19 @@ const inputCls =
   "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]";
 
 function Label({ children }: { children: React.ReactNode; icon?: boolean }) {
-  return <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">{children}</div>;
+  return (
+    <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      <div className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </div>
       {children}
     </label>
   );

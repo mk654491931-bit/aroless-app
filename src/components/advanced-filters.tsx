@@ -49,9 +49,11 @@ export function applyFilters(list: WinningProduct[], f: FinderFilters): WinningP
   });
 }
 
-
 export function AdvancedFilters({
-  products, filters, onChange, onReset,
+  products,
+  filters,
+  onChange,
+  onReset,
 }: {
   products: WinningProduct[];
   filters: FinderFilters;
@@ -81,63 +83,179 @@ export function AdvancedFilters({
           </span>
         </div>
         {isDirty && (
-          <button onClick={onReset} className="text-[11px] inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1">
+          <button
+            onClick={onReset}
+            className="text-[11px] inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1"
+          >
             <X size={11} /> Reset
           </button>
         )}
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <RangePair label="Price ($)" min={filters.priceMin} max={filters.priceMax}
-          onMin={(v) => set("priceMin", v)} onMax={(v) => set("priceMax", v)} maxCap={100000} />
+        <RangePair
+          label="Price ($)"
+          min={filters.priceMin}
+          max={filters.priceMax}
+          onMin={(v) => set("priceMin", v)}
+          onMax={(v) => set("priceMax", v)}
+          maxCap={100000}
+        />
 
-        <SliderRow label="Min margin %" value={filters.marginMin} onChange={(v) => set("marginMin", v)} min={0} max={90} />
-        <SliderRow label="Min AI score" value={filters.aiMin} onChange={(v) => set("aiMin", v)} min={0} max={100} />
-        <SliderRow label="Min buyers / 1k" value={filters.buyersMin} onChange={(v) => set("buyersMin", v)} min={0} max={60} />
-        <SliderRow label="Min health" value={filters.healthMin} onChange={(v) => set("healthMin", v)} min={0} max={100} />
-        <SliderRow label="Min viral 90d" value={filters.viralMin} onChange={(v) => set("viralMin", v)} min={0} max={100} />
-        <SelectRow label="Competition" value={filters.competition} onChange={(v) => set("competition", v as FinderFilters["competition"])}
-          options={["Any", "Low", "Medium", "High"]} />
-        <SelectRow label="Country" value={filters.country} onChange={(v) => set("country", v)} options={countries} />
+        <SliderRow
+          label="Min margin %"
+          value={filters.marginMin}
+          onChange={(v) => set("marginMin", v)}
+          min={0}
+          max={90}
+        />
+        <SliderRow
+          label="Min AI score"
+          value={filters.aiMin}
+          onChange={(v) => set("aiMin", v)}
+          min={0}
+          max={100}
+        />
+        <SliderRow
+          label="Min buyers / 1k"
+          value={filters.buyersMin}
+          onChange={(v) => set("buyersMin", v)}
+          min={0}
+          max={60}
+        />
+        <SliderRow
+          label="Min health"
+          value={filters.healthMin}
+          onChange={(v) => set("healthMin", v)}
+          min={0}
+          max={100}
+        />
+        <SliderRow
+          label="Min viral 90d"
+          value={filters.viralMin}
+          onChange={(v) => set("viralMin", v)}
+          min={0}
+          max={100}
+        />
+        <SelectRow
+          label="Competition"
+          value={filters.competition}
+          onChange={(v) => set("competition", v as FinderFilters["competition"])}
+          options={["Any", "Low", "Medium", "High"]}
+        />
+        <SelectRow
+          label="Country"
+          value={filters.country}
+          onChange={(v) => set("country", v)}
+          options={countries}
+        />
       </div>
     </div>
   );
 }
 
-function SliderRow({ label, value, onChange, min, max }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number }) {
+function SliderRow({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+}) {
   return (
     <label className="block">
       <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
         <span>{label}</span>
         <span className="tabular-nums font-semibold text-foreground">{value}</span>
       </div>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[oklch(0.68_0.20_265)]" />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-[oklch(0.68_0.20_265)]"
+      />
     </label>
   );
 }
 
-function RangePair({ label, min, max, onMin, onMax, maxCap }: { label: string; min: number; max: number; onMin: (v: number) => void; onMax: (v: number) => void; maxCap: number }) {
+function RangePair({
+  label,
+  min,
+  max,
+  onMin,
+  onMax,
+  maxCap,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  onMin: (v: number) => void;
+  onMax: (v: number) => void;
+  maxCap: number;
+}) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">{label} <span className="text-foreground font-semibold tabular-nums">{min}–{max}</span></div>
+      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
+        {label}{" "}
+        <span className="text-foreground font-semibold tabular-nums">
+          {min}–{max}
+        </span>
+      </div>
       <div className="flex gap-2">
-        <input type="number" min={0} max={maxCap} value={min} onChange={(e) => onMin(Math.max(0, Number(e.target.value) || 0))}
-          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]" />
-        <input type="number" min={0} max={maxCap} value={max} onChange={(e) => onMax(Math.max(min, Number(e.target.value) || 0))}
-          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]" />
+        <input
+          type="number"
+          min={0}
+          max={maxCap}
+          value={min}
+          onChange={(e) => onMin(Math.max(0, Number(e.target.value) || 0))}
+          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+        />
+        <input
+          type="number"
+          min={0}
+          max={maxCap}
+          value={max}
+          onChange={(e) => onMax(Math.max(min, Number(e.target.value) || 0))}
+          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+        />
       </div>
     </div>
   );
 }
 
-function SelectRow({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function SelectRow({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
   return (
     <label className="block">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">{label}</div>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]">
-        {options.map((o) => <option key={o} value={o} className="bg-[#0b0d16]">{o}</option>)}
+      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
+        {label}
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+      >
+        {options.map((o) => (
+          <option key={o} value={o} className="bg-[#0b0d16]">
+            {o}
+          </option>
+        ))}
       </select>
     </label>
   );

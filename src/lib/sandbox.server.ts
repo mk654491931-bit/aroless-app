@@ -2,7 +2,12 @@
 import type { MarketBaseline, Crisis, Review } from "./sandbox-engine";
 
 export function baselinePrompt(input: {
-  product: string; platform: string; capital: number; price: number; cogs: number; country?: string;
+  product: string;
+  platform: string;
+  capital: number;
+  price: number;
+  cogs: number;
+  country?: string;
 }) {
   return `You are a senior e-commerce market analyst. Use LIVE web knowledge and real 2024/2025 benchmarks.
 
@@ -31,8 +36,14 @@ Return ONLY JSON:
 }
 
 export function crisisPrompt(input: {
-  product: string; platform: string; day: number; capital: number; rating: number;
-  price: number; adBudget: number; recent: string;
+  product: string;
+  platform: string;
+  day: number;
+  capital: number;
+  rating: number;
+  price: number;
+  adBudget: number;
+  recent: string;
 }) {
   return `You run a realistic e-commerce simulator. Generate ONE realistic day-${input.day} event for a seller on ${input.platform}.
 
@@ -52,7 +63,13 @@ Return ONLY JSON:
 }
 
 export function reviewsPrompt(input: {
-  product: string; platform: string; price: number; marketPrice: number; shippingDays: number; rating: number; orders: number;
+  product: string;
+  platform: string;
+  price: number;
+  marketPrice: number;
+  shippingDays: number;
+  rating: number;
+  orders: number;
 }) {
   return `Write ${input.orders >= 12 ? 3 : 2} authentic customer reviews for "${input.product}" sold on ${input.platform}.
 Price paid: $${input.price} (market average $${input.marketPrice}) · delivery took ${input.shippingDays} days · current store rating ${input.rating.toFixed(0)}/100 · ${input.orders} orders yesterday.
@@ -62,7 +79,11 @@ Return ONLY JSON: { "reviews": [ { "stars": number 1-5, "author": string (first 
 }
 
 export function coachPrompt(input: {
-  product: string; platform: string; day: number; summary: string; state: string;
+  product: string;
+  platform: string;
+  day: number;
+  summary: string;
+  state: string;
 }) {
   return `You are an elite e-commerce mentor coaching a seller inside a training simulator on ${input.platform}.
 

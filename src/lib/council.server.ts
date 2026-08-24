@@ -133,7 +133,12 @@ const SHAPE = `Return ONLY minified JSON:
  "metrics": [{"label": string, "value": string}] (3-4 items)}`;
 
 const COUNCIL_LANG_NAMES: Record<string, string> = {
-  tr: "Turkish", en: "English", es: "Spanish", de: "German", fr: "French", ar: "Arabic",
+  tr: "Turkish",
+  en: "English",
+  es: "Spanish",
+  de: "German",
+  fr: "French",
+  ar: "Arabic",
 };
 let activeCouncilLang = "tr";
 function langDirective(): string {
@@ -181,7 +186,11 @@ async function runMarketTeam(block: string): Promise<TeamReport> {
   await stagger(0);
   const { engine, raw } = await withFallback([
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.3) },
-    { engine: "Gemini Flash (grounded)", run: () => callGemini(prompt, undefined, 0.4, true, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    {
+      engine: "Gemini Flash (grounded)",
+      run: () =>
+        callGemini(prompt, undefined, 0.4, true, ["gemini-flash-latest", "gemini-2.0-flash"]),
+    },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
   ]);
   return baseTeam("market", "Trend & Pazar Analizi", engine, raw);
@@ -197,7 +206,11 @@ async function runFinanceTeam(block: string): Promise<TeamReport> {
   const { engine, raw } = await withFallback([
     { engine: "OpenRouter DeepSeek (free)", run: () => callOpenRouter(prompt, 0.35) },
     { engine: "Groq DeepSeek-distill", run: () => callGroq(prompt, 0.35) },
-    { engine: "Gemini Flash", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    {
+      engine: "Gemini Flash",
+      run: () =>
+        callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
+    },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
   ]);
   return baseTeam("finance", "Finans & Tedarik", engine, raw);
@@ -211,7 +224,10 @@ async function runMarketingTeam(block: string): Promise<TeamReport> {
   );
   await stagger(2);
   const { engine, raw } = await withFallback([
-    { engine: "Hugging Face Mistral/Qwen", run: () => callHuggingFace(prompt, "qwen", { temperature: 0.6 }) },
+    {
+      engine: "Hugging Face Mistral/Qwen",
+      run: () => callHuggingFace(prompt, "qwen", { temperature: 0.6 }),
+    },
     { engine: "OpenRouter free Llama/Qwen", run: () => callOpenRouter(prompt, 0.6) },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.6) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.6) },
@@ -228,7 +244,11 @@ async function runOperationsTeam(block: string): Promise<TeamReport> {
   await stagger(3);
   const { engine, raw } = await withFallback([
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
-    { engine: "Gemini Flash", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    {
+      engine: "Gemini Flash",
+      run: () =>
+        callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
+    },
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
   ]);
@@ -244,7 +264,11 @@ async function runComplianceTeam(block: string): Promise<TeamReport> {
   await stagger(4);
   const { engine, raw } = await withFallback([
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
-    { engine: "Gemini Flash", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+    {
+      engine: "Gemini Flash",
+      run: () =>
+        callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
+    },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
   ]);
@@ -259,7 +283,10 @@ async function runCreativeTeam(block: string): Promise<TeamReport> {
   );
   await stagger(5);
   const { engine, raw } = await withFallback([
-    { engine: "Hugging Face Mistral/Qwen", run: () => callHuggingFace(prompt, "qwen", { temperature: 0.7 }) },
+    {
+      engine: "Hugging Face Mistral/Qwen",
+      run: () => callHuggingFace(prompt, "qwen", { temperature: 0.7 }),
+    },
     { engine: "OpenRouter free Llama/Qwen", run: () => callOpenRouter(prompt, 0.65) },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.65) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.65) },
@@ -284,7 +311,11 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${
   await stagger(slot);
   const primaryEngine =
     team.team === "market"
-      ? { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) }
+      ? {
+          engine: "Hakem: Gemini Flash",
+          run: () =>
+            callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
+        }
       : team.team === "finance"
         ? { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) }
         : team.team === "marketing"
@@ -292,13 +323,27 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${
           : team.team === "operations"
             ? { engine: "Hakem: OpenRouter", run: () => callOpenRouter(prompt, 0.2) }
             : team.team === "compliance"
-              ? { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) }
+              ? {
+                  engine: "Hakem: Gemini Flash",
+                  run: () =>
+                    callGemini(prompt, undefined, 0.2, false, [
+                      "gemini-flash-latest",
+                      "gemini-2.0-flash",
+                    ]),
+                }
               : { engine: "Hakem: Groq", run: () => callGroq(prompt, 0.2) };
   const runners: Runner[] = [
     primaryEngine,
     team.team === "creative" || team.team === "marketing"
-      ? { engine: "Hakem: Hugging Face", run: () => callHuggingFace(prompt, "qwen", { temperature: 0.2 }) }
-      : { engine: "Hakem: Gemini Flash", run: () => callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]) },
+      ? {
+          engine: "Hakem: Hugging Face",
+          run: () => callHuggingFace(prompt, "qwen", { temperature: 0.2 }),
+        }
+      : {
+          engine: "Hakem: Gemini Flash",
+          run: () =>
+            callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
+        },
   ];
   const { engine, raw } = await withFallback(runners, prompt);
   const s = Number(raw["score"]);
@@ -354,7 +399,15 @@ Return ONLY JSON:
   await stagger(12);
   const { engine, raw } = await withFallback([
     { engine: "Aroless Premium (Gemini 3.1 Pro / GPT-5.5)", run: () => callPremiumAI(prompt, 0.5) },
-    { engine: "Gemini Pro (free)", run: () => callGemini(prompt, undefined, 0.5, false, ["gemini-1.5-pro", "gemini-flash-latest", "gemini-2.0-flash"]) },
+    {
+      engine: "Gemini Pro (free)",
+      run: () =>
+        callGemini(prompt, undefined, 0.5, false, [
+          "gemini-1.5-pro",
+          "gemini-flash-latest",
+          "gemini-2.0-flash",
+        ]),
+    },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.5) },
     { engine: "OpenRouter free", run: () => callOpenRouter(prompt, 0.5) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.5) },
@@ -362,7 +415,9 @@ Return ONLY JSON:
 
   return {
     engine,
-    verdict: String(raw["verdict"] ?? (veloraScore >= 70 ? "GİR — güçlü fırsat" : "BEKLE — sinyal zayıf")).slice(0, 120),
+    verdict: String(
+      raw["verdict"] ?? (veloraScore >= 70 ? "GİR — güçlü fırsat" : "BEKLE — sinyal zayıf"),
+    ).slice(0, 120),
     report: String(raw["executive_report"] ?? "").slice(0, 6000),
     actions: strArr(raw["action_plan"], 5),
     risks: strArr(raw["risks"], 4),
@@ -391,7 +446,11 @@ AROLESS SCORE (müdür): ${veloraScore}/100 | CANLI VERİ KAPSAMI: %${coverage}
 Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, neden düzelttiğin veya onayladığın)}${langDirective()}`;
   await stagger(13);
   const { engine, raw } = await withFallback([
-    { engine: "Gemini Pro (auditor)", run: () => callGemini(prompt, undefined, 0.4, false, ["gemini-1.5-pro", "gemini-flash-latest"]) },
+    {
+      engine: "Gemini Pro (auditor)",
+      run: () =>
+        callGemini(prompt, undefined, 0.4, false, ["gemini-1.5-pro", "gemini-flash-latest"]),
+    },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.4) },
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.4) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
@@ -444,7 +503,12 @@ async function build(query: string, country: string, category: string): Promise<
       5,
       Math.min(
         99,
-        Math.round(coverage * 0.5 + (100 - gap * 2) * 0.35 + (hasBody ? 15 : 0) + (t.engine === "unavailable" ? -40 : 0)),
+        Math.round(
+          coverage * 0.5 +
+            (100 - gap * 2) * 0.35 +
+            (hasBody ? 15 : 0) +
+            (t.engine === "unavailable" ? -40 : 0),
+        ),
       ),
     );
     return {
@@ -463,7 +527,14 @@ async function build(query: string, country: string, category: string): Promise<
   const director = await runDirector(query, country, teams, block, directorVelora, coverage);
 
   // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
-  const auditor = await runAuditor(query, country, teams, director.verdict, directorVelora, coverage);
+  const auditor = await runAuditor(
+    query,
+    country,
+    teams,
+    director.verdict,
+    directorVelora,
+    coverage,
+  );
   const finalVelora = Math.round((directorVelora + auditor.score) / 2);
 
   const scores = teams.map((t) => t.score);
@@ -520,7 +591,12 @@ export async function runCouncil(
 }
 
 /** Cache lookup only — used to skip credit spend on a repeat query. */
-export async function peekCouncil(query: string, country: string, category: string, lang = "tr"): Promise<CouncilReport | null> {
+export async function peekCouncil(
+  query: string,
+  country: string,
+  category: string,
+  lang = "tr",
+): Promise<CouncilReport | null> {
   const { cacheGet, cacheKey } = await import("./ai-cache.server");
   const key = await cacheKey("council", [query, country, category, lang]);
   const hit = await cacheGet<CouncilReport>(key);

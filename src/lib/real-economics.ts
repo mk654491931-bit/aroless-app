@@ -79,10 +79,11 @@ export type RealEconomicsInput = {
   category?: string;
 };
 
-
 export function money(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const m = String(v ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  const m = String(v ?? "")
+    .replace(/,/g, "")
+    .match(/-?\d+(\.\d+)?/);
   const n = m ? Number(m[0]) : NaN;
   return Number.isFinite(n) ? n : 0;
 }
@@ -97,7 +98,8 @@ function platformRate(platform?: string): { rate: number; label: string } {
   if (p.includes("etsy")) return { rate: 0.115, label: "Etsy %6.5 + işlem/liste ≈ %11.5" };
   if (p.includes("ebay")) return { rate: 0.132, label: "eBay final value ≈ %13.2" };
   if (p.includes("tiktok")) return { rate: 0.08, label: "TikTok Shop ≈ %8" };
-  if (p.includes("trendyol") || p.includes("hepsi") || p.includes("n11")) return { rate: 0.19, label: "TR pazaryeri komisyon ≈ %19" };
+  if (p.includes("trendyol") || p.includes("hepsi") || p.includes("n11"))
+    return { rate: 0.19, label: "TR pazaryeri komisyon ≈ %19" };
   if (p.includes("walmart")) return { rate: 0.13, label: "Walmart referral ≈ %13" };
   return { rate: 0, label: "Kendi mağazan (komisyon yok)" };
 }
@@ -149,34 +151,158 @@ type CountryBench = {
 };
 
 const COUNTRY_BENCH: Record<string, CountryBench> = {
-  US: { label: "ABD", cpc: 1.15, cvr: 2.3, ship: 5.5, tax: "Eyalet satış vergisi %0-9.5 (fiyata dahil değil)", source: "Statista – US e-commerce & CPC benchmarks", url: "https://www.statista.com/topics/2443/us-ecommerce/" },
-  DE: { label: "Almanya", cpc: 0.85, cvr: 2.6, ship: 4.9, tax: "KDV %19 (fiyata dahil)", source: "Eurostat – E-commerce statistics", url: "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=E-commerce_statistics" },
-  UK: { label: "Birleşik Krallık", cpc: 0.95, cvr: 2.9, ship: 4.5, tax: "KDV %20 (fiyata dahil)", source: "ONS – Retail sales, internet sales", url: "https://www.ons.gov.uk/businessindustryandtrade/retailindustry" },
-  FR: { label: "Fransa", cpc: 0.8, cvr: 2.4, ship: 5.2, tax: "KDV %20 (fiyata dahil)", source: "FEVAD – Bilan du e-commerce", url: "https://www.fevad.com/" },
-  CA: { label: "Kanada", cpc: 0.95, cvr: 2.2, ship: 6.5, tax: "GST/HST %5-15", source: "Statistics Canada – Retail e-commerce", url: "https://www150.statcan.gc.ca/n1/en/subjects/business_performance_and_ownership/retail_and_wholesale" },
-  AU: { label: "Avustralya", cpc: 0.9, cvr: 2.5, ship: 7.5, tax: "GST %10", source: "Australia Post – eCommerce Industry Report", url: "https://auspost.com.au/business/marketing-and-communications/access-data-and-insights/ecommerce-industry-report" },
-  TR: { label: "Türkiye", cpc: 0.35, cvr: 1.9, ship: 2.2, tax: "KDV %20 (fiyata dahil)", source: "TÜİK / TOBB E-Ticaret Bilgi Sistemi", url: "https://www.eticaret.gov.tr/istatistikler" },
-  GLOBAL: { label: "Global", cpc: 1, cvr: 2.1, ship: 5, tax: "Pazara göre değişken KDV/satış vergisi", source: "Statista – Global e-commerce benchmarks", url: "https://www.statista.com/markets/413/e-commerce/" },
+  US: {
+    label: "ABD",
+    cpc: 1.15,
+    cvr: 2.3,
+    ship: 5.5,
+    tax: "Eyalet satış vergisi %0-9.5 (fiyata dahil değil)",
+    source: "Statista – US e-commerce & CPC benchmarks",
+    url: "https://www.statista.com/topics/2443/us-ecommerce/",
+  },
+  DE: {
+    label: "Almanya",
+    cpc: 0.85,
+    cvr: 2.6,
+    ship: 4.9,
+    tax: "KDV %19 (fiyata dahil)",
+    source: "Eurostat – E-commerce statistics",
+    url: "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=E-commerce_statistics",
+  },
+  UK: {
+    label: "Birleşik Krallık",
+    cpc: 0.95,
+    cvr: 2.9,
+    ship: 4.5,
+    tax: "KDV %20 (fiyata dahil)",
+    source: "ONS – Retail sales, internet sales",
+    url: "https://www.ons.gov.uk/businessindustryandtrade/retailindustry",
+  },
+  FR: {
+    label: "Fransa",
+    cpc: 0.8,
+    cvr: 2.4,
+    ship: 5.2,
+    tax: "KDV %20 (fiyata dahil)",
+    source: "FEVAD – Bilan du e-commerce",
+    url: "https://www.fevad.com/",
+  },
+  CA: {
+    label: "Kanada",
+    cpc: 0.95,
+    cvr: 2.2,
+    ship: 6.5,
+    tax: "GST/HST %5-15",
+    source: "Statistics Canada – Retail e-commerce",
+    url: "https://www150.statcan.gc.ca/n1/en/subjects/business_performance_and_ownership/retail_and_wholesale",
+  },
+  AU: {
+    label: "Avustralya",
+    cpc: 0.9,
+    cvr: 2.5,
+    ship: 7.5,
+    tax: "GST %10",
+    source: "Australia Post – eCommerce Industry Report",
+    url: "https://auspost.com.au/business/marketing-and-communications/access-data-and-insights/ecommerce-industry-report",
+  },
+  TR: {
+    label: "Türkiye",
+    cpc: 0.35,
+    cvr: 1.9,
+    ship: 2.2,
+    tax: "KDV %20 (fiyata dahil)",
+    source: "TÜİK / TOBB E-Ticaret Bilgi Sistemi",
+    url: "https://www.eticaret.gov.tr/istatistikler",
+  },
+  GLOBAL: {
+    label: "Global",
+    cpc: 1,
+    cvr: 2.1,
+    ship: 5,
+    tax: "Pazara göre değişken KDV/satış vergisi",
+    source: "Statista – Global e-commerce benchmarks",
+    url: "https://www.statista.com/markets/413/e-commerce/",
+  },
 };
 
 function countryBench(code?: string): CountryBench {
   const c = (code ?? "GLOBAL").toUpperCase();
-  const alias: Record<string, string> = { GB: "UK", TUR: "TR", USA: "US", TURKEY: "TR", TÜRKIYE: "TR" };
+  const alias: Record<string, string> = {
+    GB: "UK",
+    TUR: "TR",
+    USA: "US",
+    TURKEY: "TR",
+    TÜRKIYE: "TR",
+  };
   return COUNTRY_BENCH[alias[c] ?? c] ?? COUNTRY_BENCH.GLOBAL;
 }
 
 type SectorBench = { label: string; returns: number; cvr: number; source: string; url: string };
 
 const SECTOR_BENCH: SectorBench[] = [
-  { label: "Moda & Giyim", returns: 0.24, cvr: 1.9, source: "NRF & Appriss – Consumer Returns in Retail", url: "https://nrf.com/research/2024-consumer-returns-retail-industry" },
-  { label: "Elektronik & Aksesuar", returns: 0.12, cvr: 1.6, source: "NRF – Returns by category", url: "https://nrf.com/research/2024-consumer-returns-retail-industry" },
-  { label: "Ev & Yaşam", returns: 0.09, cvr: 1.8, source: "Statista – Home & living e-commerce", url: "https://www.statista.com/outlook/emo/furniture/worldwide" },
-  { label: "Güzellik & Kişisel Bakım", returns: 0.07, cvr: 3.0, source: "Statista – Beauty & personal care", url: "https://www.statista.com/outlook/cmo/beauty-personal-care/worldwide" },
-  { label: "Spor & Outdoor", returns: 0.13, cvr: 2.0, source: "Statista – Sports e-commerce", url: "https://www.statista.com/outlook/cmo/eyewear/worldwide" },
-  { label: "Bebek & Çocuk", returns: 0.08, cvr: 2.4, source: "Statista – Baby products market", url: "https://www.statista.com/outlook/cmo/toys-hobby/worldwide" },
-  { label: "Evcil Hayvan", returns: 0.06, cvr: 2.8, source: "Statista – Pet care market", url: "https://www.statista.com/outlook/cmo/pet-care/worldwide" },
-  { label: "Sağlık & Wellness", returns: 0.07, cvr: 2.5, source: "Statista – Health & wellness", url: "https://www.statista.com/outlook/hmo/worldwide" },
-  { label: "Genel perakende", returns: 0.10, cvr: 2.1, source: "IRP / Statista – Average online return rate", url: "https://www.statista.com/statistics/1263954/return-rate-by-product-category/" },
+  {
+    label: "Moda & Giyim",
+    returns: 0.24,
+    cvr: 1.9,
+    source: "NRF & Appriss – Consumer Returns in Retail",
+    url: "https://nrf.com/research/2024-consumer-returns-retail-industry",
+  },
+  {
+    label: "Elektronik & Aksesuar",
+    returns: 0.12,
+    cvr: 1.6,
+    source: "NRF – Returns by category",
+    url: "https://nrf.com/research/2024-consumer-returns-retail-industry",
+  },
+  {
+    label: "Ev & Yaşam",
+    returns: 0.09,
+    cvr: 1.8,
+    source: "Statista – Home & living e-commerce",
+    url: "https://www.statista.com/outlook/emo/furniture/worldwide",
+  },
+  {
+    label: "Güzellik & Kişisel Bakım",
+    returns: 0.07,
+    cvr: 3.0,
+    source: "Statista – Beauty & personal care",
+    url: "https://www.statista.com/outlook/cmo/beauty-personal-care/worldwide",
+  },
+  {
+    label: "Spor & Outdoor",
+    returns: 0.13,
+    cvr: 2.0,
+    source: "Statista – Sports e-commerce",
+    url: "https://www.statista.com/outlook/cmo/eyewear/worldwide",
+  },
+  {
+    label: "Bebek & Çocuk",
+    returns: 0.08,
+    cvr: 2.4,
+    source: "Statista – Baby products market",
+    url: "https://www.statista.com/outlook/cmo/toys-hobby/worldwide",
+  },
+  {
+    label: "Evcil Hayvan",
+    returns: 0.06,
+    cvr: 2.8,
+    source: "Statista – Pet care market",
+    url: "https://www.statista.com/outlook/cmo/pet-care/worldwide",
+  },
+  {
+    label: "Sağlık & Wellness",
+    returns: 0.07,
+    cvr: 2.5,
+    source: "Statista – Health & wellness",
+    url: "https://www.statista.com/outlook/hmo/worldwide",
+  },
+  {
+    label: "Genel perakende",
+    returns: 0.1,
+    cvr: 2.1,
+    source: "IRP / Statista – Average online return rate",
+    url: "https://www.statista.com/statistics/1263954/return-rate-by-product-category/",
+  },
 ];
 
 function sectorBench(category?: string): SectorBench {
@@ -198,31 +324,58 @@ function sectorBench(category?: string): SectorBench {
 /** Published rate-card link for the selected sales channel. */
 function platformSource(platform?: string): { source: string; url: string } {
   const p = (platform ?? "").toLowerCase();
-  if (p.includes("amazon")) return { source: "Amazon Seller Central – Referral fee schedule", url: "https://sellercentral.amazon.com/help/hub/reference/GTG4BAWSY39Z98Z9" };
-  if (p.includes("etsy")) return { source: "Etsy – Fees & payments policy", url: "https://www.etsy.com/legal/fees" };
-  if (p.includes("ebay")) return { source: "eBay – Selling fees", url: "https://www.ebay.com/help/selling/fees-credits-invoices/store-selling-fees" };
-  if (p.includes("tiktok")) return { source: "TikTok Shop – Seller commission", url: "https://seller-us.tiktok.com/university/essay?knowledge_id=10000103" };
-  if (p.includes("trendyol")) return { source: "Trendyol – Komisyon oranları", url: "https://partner.trendyol.com/" };
-  if (p.includes("hepsi")) return { source: "Hepsiburada – Komisyon oranları", url: "https://www.hepsiburada.com/satici-ol" };
-  if (p.includes("walmart")) return { source: "Walmart Marketplace – Referral fees", url: "https://marketplace.walmart.com/referral-fees/" };
+  if (p.includes("amazon"))
+    return {
+      source: "Amazon Seller Central – Referral fee schedule",
+      url: "https://sellercentral.amazon.com/help/hub/reference/GTG4BAWSY39Z98Z9",
+    };
+  if (p.includes("etsy"))
+    return { source: "Etsy – Fees & payments policy", url: "https://www.etsy.com/legal/fees" };
+  if (p.includes("ebay"))
+    return {
+      source: "eBay – Selling fees",
+      url: "https://www.ebay.com/help/selling/fees-credits-invoices/store-selling-fees",
+    };
+  if (p.includes("tiktok"))
+    return {
+      source: "TikTok Shop – Seller commission",
+      url: "https://seller-us.tiktok.com/university/essay?knowledge_id=10000103",
+    };
+  if (p.includes("trendyol"))
+    return { source: "Trendyol – Komisyon oranları", url: "https://partner.trendyol.com/" };
+  if (p.includes("hepsi"))
+    return {
+      source: "Hepsiburada – Komisyon oranları",
+      url: "https://www.hepsiburada.com/satici-ol",
+    };
+  if (p.includes("walmart"))
+    return {
+      source: "Walmart Marketplace – Referral fees",
+      url: "https://marketplace.walmart.com/referral-fees/",
+    };
   return { source: "Shopify – Pricing & payment rates", url: "https://www.shopify.com/pricing" };
 }
-
 
 /**
  * Grounded unit + monthly economics for an AVERAGE small seller.
  * Never returns fantasy numbers: sourcing, fees, CAC and volume are all bounded.
  */
 export function realEconomics(input: RealEconomicsInput): RealEconomics {
-  const competition = input.competition_level === "High" || input.competition_level === "Low"
-    ? input.competition_level : "Medium";
+  const competition =
+    input.competition_level === "High" || input.competition_level === "Low"
+      ? input.competition_level
+      : "Medium";
   const trend = clamp(Number(input.trend_score ?? 60) || 60, 0, 100);
 
   const retail = clamp(money(input.selling_price_usd) || 29.9, 3, 5000);
 
   // Sourcing sanity: real dropship/private-label COGS is 20-40% of retail.
   let supplier = money(input.supplier_price_usd);
-  const sourcingOutOfBand = !(supplier > 0 && supplier >= retail * 0.12 && supplier <= retail * 0.55);
+  const sourcingOutOfBand = !(
+    supplier > 0 &&
+    supplier >= retail * 0.12 &&
+    supplier <= retail * 0.55
+  );
   if (sourcingOutOfBand) supplier = retail * 0.3;
   supplier = clamp(supplier, retail * 0.12, retail * 0.55);
 
@@ -231,9 +384,10 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
 
   // Inbound + last-mile shipping, weight-proxied from unit cost + country last-mile.
   const shipInput = money(input.shipping_cost);
-  const shipping = shipInput > 0 && shipInput < retail * 0.5
-    ? shipInput
-    : clamp(cb.ship * 0.55 + supplier * 0.4, 2.2, Math.max(4, retail * 0.28));
+  const shipping =
+    shipInput > 0 && shipInput < retail * 0.5
+      ? shipInput
+      : clamp(cb.ship * 0.55 + supplier * 0.4, 2.2, Math.max(4, retail * 0.28));
 
   const { rate, label } = platformRate(input.platform);
   const platform_fee = retail * rate;
@@ -241,9 +395,10 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
   const payment_fee = retail * 0.029 + 0.3;
 
   const cpc = r2(cpcFor(competition, retail) * cb.cpc);
-  const cvr = input.cvr_pct && input.cvr_pct > 0.2 && input.cvr_pct < 12
-    ? Number(input.cvr_pct)
-    : clamp(r2((cvrFor(retail, competition, trend) + cb.cvr + sb.cvr) / 3 * 1.02), 0.4, 4.5);
+  const cvr =
+    input.cvr_pct && input.cvr_pct > 0.2 && input.cvr_pct < 12
+      ? Number(input.cvr_pct)
+      : clamp(r2(((cvrFor(retail, competition, trend) + cb.cvr + sb.cvr) / 3) * 1.02), 0.4, 4.5);
   // CAC from real ad math; ~25% of orders arrive organic/repeat, lowering blended CAC.
   // Pazaryerlerinde trafiğin çoğu platform içi organik: reklam gideri TACoS
   // (satışın %10-15'i) olarak gerçekleşir. Kendi mağazanda ise CAC = CPC / CVR.
@@ -259,7 +414,8 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
 
   const misc = 0.45; // packaging insert, app/tool cost per order, support time
 
-  const gross_per_unit = retail - (supplier + shipping + platform_fee + payment_fee + returns_cost + misc);
+  const gross_per_unit =
+    retail - (supplier + shipping + platform_fee + payment_fee + returns_cost + misc);
   const net_per_unit = gross_per_unit - cac;
   const net_margin_pct = r2((net_per_unit / retail) * 100);
   const breakeven_roas = gross_per_unit > 0 ? r2(retail / gross_per_unit) : 0;
@@ -271,7 +427,10 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
   // reklam tıklama maliyeti geçerlidir), böylece "ayda 5.000 adet" çıkmaz.
   const acquisitionCost = Math.max(cac, (cpc / (cvr / 100)) * 0.5, 2.5);
   const paid_units = Math.round(ad_budget / acquisitionCost);
-  const organic_units = Math.round(clamp((trend - 45) / 5, 0, 14) * (competition === "Low" ? 1.4 : competition === "High" ? 0.6 : 1));
+  const organic_units = Math.round(
+    clamp((trend - 45) / 5, 0, 14) *
+      (competition === "Low" ? 1.4 : competition === "High" ? 0.6 : 1),
+  );
   const units = Math.max(5, paid_units + organic_units);
   const overhead = 120; // Shopify + apps + domain + basic tooling
   const monthlyNet = Math.round(units * net_per_unit + organic_units * cac - overhead);
@@ -391,7 +550,6 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
       },
     ],
   };
-
 }
 
 /** Formats a USD amount the same way the cards do. */

@@ -8,21 +8,21 @@ export type LemonEnv = {
 
 /** Yeni (LEMON_SQUEEZY_*) ve eski (LEMONSQUEEZY_*) isimlendirmeyi birlikte destekler. */
 export function lemonEnv(plan: "Pro" | "Starter" | "Business" = "Pro"): LemonEnv | null {
-  const apiKey = process.env['LEMON_SQUEEZY_API_KEY'] || process.env['LEMONSQUEEZY_API_KEY'];
-  const storeId = process.env['LEMON_SQUEEZY_STORE_ID'] || process.env['LEMONSQUEEZY_STORE_ID'];
+  const apiKey = process.env["LEMON_SQUEEZY_API_KEY"] || process.env["LEMONSQUEEZY_API_KEY"];
+  const storeId = process.env["LEMON_SQUEEZY_STORE_ID"] || process.env["LEMONSQUEEZY_STORE_ID"];
   const perPlan =
     plan === "Starter"
-      ? process.env['LEMONSQUEEZY_STARTER_VARIANT_ID']
+      ? process.env["LEMONSQUEEZY_STARTER_VARIANT_ID"]
       : plan === "Business"
-        ? process.env['LEMONSQUEEZY_BUSINESS_VARIANT_ID']
-        : process.env['LEMONSQUEEZY_PRO_VARIANT_ID'];
-  const variantId = perPlan || process.env['LEMON_SQUEEZY_VARIANT_ID'];
+        ? process.env["LEMONSQUEEZY_BUSINESS_VARIANT_ID"]
+        : process.env["LEMONSQUEEZY_PRO_VARIANT_ID"];
+  const variantId = perPlan || process.env["LEMON_SQUEEZY_VARIANT_ID"];
   if (!apiKey || !storeId || !variantId) return null;
   return { apiKey, storeId, variantId };
 }
 
 export function lemonWebhookSecret(): string | undefined {
-  return process.env['LEMON_SQUEEZY_WEBHOOK_SECRET'] || process.env['LEMONSQUEEZY_WEBHOOK_SECRET'];
+  return process.env["LEMON_SQUEEZY_WEBHOOK_SECRET"] || process.env["LEMONSQUEEZY_WEBHOOK_SECRET"];
 }
 
 /** Kullanıcıya bağlı bir Lemon Squeezy ödeme bağlantısı üretir. */

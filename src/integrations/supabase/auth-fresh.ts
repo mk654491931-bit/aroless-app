@@ -4,7 +4,10 @@ import { supabase } from "./client";
 /** Returns the token only if it is currently valid (not expired, not future-issued). */
 function tokenIssues(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? "e30")) as { iat?: number; exp?: number };
+    const payload = JSON.parse(atob(token.split(".")[1] ?? "e30")) as {
+      iat?: number;
+      exp?: number;
+    };
     const now = Date.now();
     if ((payload.exp ?? 0) * 1000 < now + 30_000) return true;
     // Client clock ahead of the auth server => "JWT issued at future".

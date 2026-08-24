@@ -22,7 +22,7 @@ export const TOS: LegalDoc = {
       id: "taraflar",
       heading: "1. Taraflar ve Kapsam",
       body: [
-        "İşbu Kullanım Koşulları (\"Sözleşme\"); Aroless platformunu işleten hizmet sağlayıcı (\"Aroless\") ile platforma kayıt olan gerçek veya tüzel kişi kullanıcı (\"Kullanıcı\" veya \"Üye\") arasında elektronik ortamda kurulur.",
+        'İşbu Kullanım Koşulları ("Sözleşme"); Aroless platformunu işleten hizmet sağlayıcı ("Aroless") ile platforma kayıt olan gerçek veya tüzel kişi kullanıcı ("Kullanıcı" veya "Üye") arasında elektronik ortamda kurulur.',
         "Platforma kayıt olarak, hesabınızı kullanarak veya hizmetlerin herhangi bir bileşenine erişerek işbu Sözleşme'yi, KVKK Aydınlatma Metni'ni, Veri İşleme Sözleşmesi'ni ve Çerez Politikası'nı okuduğunuzu ve kabul ettiğinizi beyan edersiniz.",
         "Aroless, işletmeler arası (B2B) bir yazılım hizmeti (SaaS) sunar; tüketiciye yönelik bir satış platformu değildir.",
       ],
@@ -76,7 +76,7 @@ export const TOS: LegalDoc = {
       id: "sorumluluk",
       heading: "7. Sorumluluğun Sınırlandırılması",
       body: [
-        "Hizmet \"olduğu gibi\" sunulur. Aroless, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.",
+        'Hizmet "olduğu gibi" sunulur. Aroless, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.',
         "Aroless'nın toplam sorumluluğu, ihlalin gerçekleştiği tarihten önceki 12 ay içinde Kullanıcı tarafından ödenen toplam hizmet bedeli ile sınırlıdır.",
         "Dolaylı zararlar, kâr kaybı ve veri kaybından doğan talepler kapsam dışıdır.",
       ],
@@ -117,7 +117,7 @@ export const KVKK: LegalDoc = {
       id: "veri-sorumlusu",
       heading: "1. Veri Sorumlusunun Kimliği",
       body: [
-        "6698 sayılı Kişisel Verilerin Korunması Kanunu (\"KVKK\") uyarınca veri sorumlusu sıfatıyla Aroless hareket etmektedir.",
+        '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca veri sorumlusu sıfatıyla Aroless hareket etmektedir.',
         "İletişim: mk65449191@gmail.com",
       ],
     },
@@ -206,7 +206,7 @@ export const DPA: LegalDoc = {
       id: "amac-dpa",
       heading: "1. Amaç ve Roller",
       body: [
-        "İşbu Veri İşleme Sözleşmesi (\"DPA\"), Kullanım Koşulları'nın ayrılmaz ekidir.",
+        'İşbu Veri İşleme Sözleşmesi ("DPA"), Kullanım Koşulları\'nın ayrılmaz ekidir.',
         "Müşteri, platforma yüklediği son müşteri/tedarikçi verileri bakımından veri sorumlusu; Aroless ise veri işleyen sıfatıyla hareket eder.",
         "Aroless, verileri yalnızca Müşteri'nin belgelenmiş talimatları ve hizmetin ifası doğrultusunda işler.",
       ],
@@ -315,7 +315,7 @@ export const COOKIES: LegalDoc = {
       id: "yonetim",
       heading: "4. Tercihlerinizi Yönetme",
       body: [
-        "Sayfa alt bilgisindeki \"Çerez Tercihleri\" bağlantısı ile dilediğiniz zaman seçiminizi değiştirebilirsiniz.",
+        'Sayfa alt bilgisindeki "Çerez Tercihleri" bağlantısı ile dilediğiniz zaman seçiminizi değiştirebilirsiniz.',
         "Tarayıcı ayarlarınızdan da çerezleri silebilir veya engelleyebilirsiniz; zorunlu çerezlerin engellenmesi platformun çalışmasını bozabilir.",
       ],
     },

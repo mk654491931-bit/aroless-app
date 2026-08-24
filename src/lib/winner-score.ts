@@ -36,7 +36,6 @@ export type ScoreComponent = {
   evidence?: ScoreEvidence[];
 };
 
-
 export type EvidenceLevel = "verified" | "partial" | "ai_only";
 
 export type WinnerBreakdown = {
@@ -75,9 +74,11 @@ type ScorableProduct = {
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(n)));
 
 /** Kargo/lojistik dostu mu? Ürün adı + fiyat + tedarik verisinden türetilir. */
-const BULKY = /(koltuk|kanepe|masa|treadmill|koşu bandı|buzdolabı|fridge|mattress|yatak|sofa|desk|bisiklet|bicycle|tv |televizyon|akvaryum|aquarium|piyano|piano)/i;
+const BULKY =
+  /(koltuk|kanepe|masa|treadmill|koşu bandı|buzdolabı|fridge|mattress|yatak|sofa|desk|bisiklet|bicycle|tv |televizyon|akvaryum|aquarium|piyano|piano)/i;
 const FRAGILE = /(cam |glass|seramik|ceramic|ayna|mirror|porselen|porcelain)/i;
-const REGULATED = /(pil|battery|lityum|lithium|vape|elektronik sigara|kozmetik|cosmetic|serum|krem|cream|supplement|takviye|ilaç|drug|lazer|laser|drone|silah|knife|bıçak)/i;
+const REGULATED =
+  /(pil|battery|lityum|lithium|vape|elektronik sigara|kozmetik|cosmetic|serum|krem|cream|supplement|takviye|ilaç|drug|lazer|laser|drone|silah|knife|bıçak)/i;
 
 export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
   const name = `${p.name ?? ""} ${p.description ?? ""}`;
@@ -94,18 +95,26 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
   demand = clamp(demand);
   const demandReason = [
     `Trend skoru ${trend}`,
-    ev?.trend_source === "google-trends" ? `Google Trends momentumu ${momentum > 0 ? "+" : ""}${momentum}%` : "trend verisi tahmini",
+    ev?.trend_source === "google-trends"
+      ? `Google Trends momentumu ${momentum > 0 ? "+" : ""}${momentum}%`
+      : "trend verisi tahmini",
     viral ? "canlı viral kanıt var" : "viral kanıt yok",
   ].join(" · ");
 
   // ---- 2. Rekabet / doygunluk --------------------------------------------
   const compRaw = String(p.competition_level ?? "Medium").toLowerCase();
-  const compBase = compRaw.startsWith("low") || compRaw.startsWith("dü") ? 88 : compRaw.startsWith("high") || compRaw.startsWith("yük") ? 34 : 62;
+  const compBase =
+    compRaw.startsWith("low") || compRaw.startsWith("dü")
+      ? 88
+      : compRaw.startsWith("high") || compRaw.startsWith("yük")
+        ? 34
+        : 62;
   const satScore = Number(p.market_saturation?.score);
   const sellerCount = ev?.sellers?.length ?? 0;
   const sellerPenalty = sellerCount >= 8 ? 18 : sellerCount >= 5 ? 10 : 0;
   const competition = clamp(
-    (Number.isFinite(satScore) ? (compBase + (100 - clamp(satScore))) / 2 : compBase) - sellerPenalty,
+    (Number.isFinite(satScore) ? (compBase + (100 - clamp(satScore))) / 2 : compBase) -
+      sellerPenalty,
   );
   const competitionReason = [
     `Rekabet: ${p.competition_level ?? "Orta"}`,
@@ -158,16 +167,27 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
   const verifiedSignals = ev?.verified_signals?.length ?? 0;
   const evidenceScore = clamp(realism * 0.7 + Math.min(verifiedSignals, 5) * 6);
   const evidence_level: EvidenceLevel =
-    realism >= 75 && verifiedSignals >= 2 ? "verified" : realism >= 45 || verifiedSignals >= 1 ? "partial" : "ai_only";
+    realism >= 75 && verifiedSignals >= 2
+      ? "verified"
+      : realism >= 45 || verifiedSignals >= 1
+        ? "partial"
+        : "ai_only";
   const evidenceReason = `Gerçeklik puanı ${realism} · ${verifiedSignals} doğrulanmış sinyal`;
 
   // ---- Risk cezaları ------------------------------------------------------
   if (REGULATED.test(name)) penalties.push("Mevzuat/onay riski (pil, kozmetik, takviye vb.).");
   for (const r of p.risks ?? []) {
-    if (String(r?.severity ?? "").toLowerCase().startsWith("high")) penalties.push(`Yüksek risk: ${r.risk}`);
+    if (
+      String(r?.severity ?? "")
+        .toLowerCase()
+        .startsWith("high")
+    )
+      penalties.push(`Yüksek risk: ${r.risk}`);
   }
   if (ev && ev.market_price_usd > 0 && Math.abs(ev.price_delta_pct) > 45) {
-    penalties.push(`Fiyat piyasa medyanından %${Math.round(Math.abs(ev.price_delta_pct))} sapıyor.`);
+    penalties.push(
+      `Fiyat piyasa medyanından %${Math.round(Math.abs(ev.price_delta_pct))} sapıyor.`,
+    );
   }
 
   const trendLive = ev?.trend_source === "google-trends";
@@ -184,7 +204,13 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       reason: demandReason,
       formula: "0.55 × trend skoru + 0.35 × momentum endeksi + 0.10 × viral kanıt",
       evidence: [
-        { metric: "Trend skoru", value: `${trend}/100`, source: trendLive ? "Google Trends (canlı)" : "AI tahmini", weight: 0.55, verified: trendLive },
+        {
+          metric: "Trend skoru",
+          value: `${trend}/100`,
+          source: trendLive ? "Google Trends (canlı)" : "AI tahmini",
+          weight: 0.55,
+          verified: trendLive,
+        },
         {
           metric: "30 günlük momentum",
           value: `${momentum > 0 ? "+" : ""}${momentum}%`,
@@ -210,11 +236,25 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       reason: marginReason,
       formula: "net marj % × 2.2 (≥%45 net marj = 100 puan)",
       evidence: [
-        { metric: "Net marj", value: `%${Math.round(netMargin)}`, source: "Birim ekonomi hesabı", weight: 0.7, verified: true },
-        { metric: "Satış fiyatı", value: price > 0 ? `$${price.toFixed(2)}` : "belirsiz", source: "AI fiyat önerisi", weight: 0.15, verified: false },
+        {
+          metric: "Net marj",
+          value: `%${Math.round(netMargin)}`,
+          source: "Birim ekonomi hesabı",
+          weight: 0.7,
+          verified: true,
+        },
+        {
+          metric: "Satış fiyatı",
+          value: price > 0 ? `$${price.toFixed(2)}` : "belirsiz",
+          source: "AI fiyat önerisi",
+          weight: 0.15,
+          verified: false,
+        },
         {
           metric: "Tedarik fiyatı",
-          value: ev?.supplier_price_usd ? `$${ev.supplier_price_usd.toFixed(2)}` : (p.supplier_price_usd ?? "belirsiz"),
+          value: ev?.supplier_price_usd
+            ? `$${ev.supplier_price_usd.toFixed(2)}`
+            : (p.supplier_price_usd ?? "belirsiz"),
           source: supplierLive ? "AliExpress (canlı)" : "AI tahmini",
           weight: 0.15,
           verified: !!supplierLive,
@@ -229,7 +269,13 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       reason: competitionReason,
       formula: "(rekabet tabanı + (100 − doygunluk)) / 2 − canlı satıcı cezası",
       evidence: [
-        { metric: "Rekabet seviyesi", value: String(p.competition_level ?? "Orta"), source: "AI + konsey değerlendirmesi", weight: 0.5, verified: false },
+        {
+          metric: "Rekabet seviyesi",
+          value: String(p.competition_level ?? "Orta"),
+          source: "AI + konsey değerlendirmesi",
+          weight: 0.5,
+          verified: false,
+        },
         {
           metric: "Doygunluk skoru",
           value: Number.isFinite(satScore) ? `${clamp(satScore)}/100` : "yok",
@@ -255,7 +301,13 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       reason: evidenceReason,
       formula: "0.7 × gerçekçilik puanı + 6 × doğrulanmış sinyal (maks. 5)",
       evidence: [
-        { metric: "Gerçekçilik puanı", value: `${realism}/100`, source: "Canlı piyasa çapraz kontrolü", weight: 0.7, verified: realism >= 45 },
+        {
+          metric: "Gerçekçilik puanı",
+          value: `${realism}/100`,
+          source: "Canlı piyasa çapraz kontrolü",
+          weight: 0.7,
+          verified: realism >= 45,
+        },
         {
           metric: "Doğrulanmış sinyaller",
           value: verifiedSignals ? (ev?.verified_signals ?? []).slice(0, 3).join(", ") : "yok",
@@ -265,7 +317,10 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
         },
         {
           metric: "Piyasa medyanı sapması",
-          value: ev && ev.market_price_usd > 0 ? `${ev.price_delta_pct > 0 ? "+" : ""}${ev.price_delta_pct}%` : "ölçülemedi",
+          value:
+            ev && ev.market_price_usd > 0
+              ? `${ev.price_delta_pct > 0 ? "+" : ""}${ev.price_delta_pct}%`
+              : "ölçülemedi",
           source: ev && ev.market_price_usd > 0 ? `Medyan $${ev.market_price_usd.toFixed(2)}` : "—",
           verified: !!(ev && ev.market_price_usd > 0),
         },
@@ -279,7 +334,13 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       reason: differentiationReason,
       formula: "35 + 14 × farklılaşma açısı + 9 × rakip şikâyeti + 6 × paket fikri",
       evidence: [
-        { metric: "Farklılaşma açısı", value: `${diffCount} adet`, source: "Ürün analiz ajanı", weight: 0.5, verified: diffCount > 0 },
+        {
+          metric: "Farklılaşma açısı",
+          value: `${diffCount} adet`,
+          source: "Ürün analiz ajanı",
+          weight: 0.5,
+          verified: diffCount > 0,
+        },
         {
           metric: "Rakip yorum şikâyeti",
           value: painCount ? `${painCount} şikâyet → fırsat` : "yok",
@@ -287,7 +348,13 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
           weight: 0.3,
           verified: painCount > 0,
         },
-        { metric: "Paket/bundle fikri", value: `${bundleCount} adet`, source: "Teklif tasarımı ajanı", weight: 0.2, verified: bundleCount > 0 },
+        {
+          metric: "Paket/bundle fikri",
+          value: `${bundleCount} adet`,
+          source: "Teklif tasarımı ajanı",
+          weight: 0.2,
+          verified: bundleCount > 0,
+        },
       ],
     },
     {
@@ -304,11 +371,18 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
           source: "Ürün adı & kategori analizi",
           verified: false,
         },
-        { metric: "Kırılganlık", value: FRAGILE.test(name) ? "kırılgan (−18)" : "dayanıklı", source: "Malzeme analizi", verified: false },
+        {
+          metric: "Kırılganlık",
+          value: FRAGILE.test(name) ? "kırılgan (−18)" : "dayanıklı",
+          source: "Malzeme analizi",
+          verified: false,
+        },
         {
           metric: "Tedarik süresi",
           value: lead ? `${lead} gün${lead > 25 ? " (−15)" : ""}` : "bilinmiyor",
-          source: p.sourcing?.shipping_method ? `Tedarikçi verisi · ${p.sourcing.shipping_method}` : "Tedarikçi verisi",
+          source: p.sourcing?.shipping_method
+            ? `Tedarikçi verisi · ${p.sourcing.shipping_method}`
+            : "Tedarikçi verisi",
           verified: lead > 0,
         },
         {
@@ -321,20 +395,29 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
     },
   ];
 
-
   const weighted = components.reduce((s, c) => s + c.score * c.weight, 0);
   const penalty = Math.min(24, penalties.length * 6);
   const evidencePenalty = evidence_level === "ai_only" ? 10 : evidence_level === "partial" ? 3 : 0;
   const winner_score = clamp(weighted - penalty - evidencePenalty);
 
   const verdict: WinnerBreakdown["verdict"] =
-    winner_score >= 80 ? "Kazanan" : winner_score >= 65 ? "Güçlü aday" : winner_score >= 50 ? "Riskli" : "Zayıf";
+    winner_score >= 80
+      ? "Kazanan"
+      : winner_score >= 65
+        ? "Güçlü aday"
+        : winner_score >= 50
+          ? "Riskli"
+          : "Zayıf";
 
   return { winner_score, components, evidence_level, penalties, flags, verdict };
 }
 
 export function evidenceLabel(level: EvidenceLevel): string {
-  return level === "verified" ? "Doğrulanmış" : level === "partial" ? "Kısmen doğrulanmış" : "Yalnızca AI tahmini";
+  return level === "verified"
+    ? "Doğrulanmış"
+    : level === "partial"
+      ? "Kısmen doğrulanmış"
+      : "Yalnızca AI tahmini";
 }
 
 export function evidenceStyle(level: EvidenceLevel): string {
@@ -349,12 +432,21 @@ export function evidenceStyle(level: EvidenceLevel): string {
  * Sunucudan Winner Score gelmeyen yollar (ör. Hugging Face motoru) için
  * istemci tarafında aynı puanı hesaplar. Zaten puanlı ürünler dokunulmaz.
  */
-export function attachWinnerScores<T extends ScorableProduct & { winner_score?: number; score_breakdown?: WinnerBreakdown; evidence_level?: EvidenceLevel }>(
-  products: T[],
-): T[] {
+export function attachWinnerScores<
+  T extends ScorableProduct & {
+    winner_score?: number;
+    score_breakdown?: WinnerBreakdown;
+    evidence_level?: EvidenceLevel;
+  },
+>(products: T[]): T[] {
   return products.map((p) => {
     if (typeof p.winner_score === "number" && p.score_breakdown) return p;
     const breakdown = computeWinnerScore(p);
-    return { ...p, winner_score: breakdown.winner_score, score_breakdown: breakdown, evidence_level: breakdown.evidence_level };
+    return {
+      ...p,
+      winner_score: breakdown.winner_score,
+      score_breakdown: breakdown,
+      evidence_level: breakdown.evidence_level,
+    };
   });
 }

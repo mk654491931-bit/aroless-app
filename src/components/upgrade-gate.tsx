@@ -35,11 +35,16 @@ export function LockedGate({
       role="button"
       tabIndex={0}
       onClick={onUpgrade}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onUpgrade(); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onUpgrade();
+      }}
       className="relative mt-3 cursor-pointer overflow-hidden rounded-xl border border-white/10"
       title="Locked — click to upgrade"
     >
-      <div aria-hidden className="pointer-events-none select-none blur-[6px] opacity-35 max-h-56 overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none select-none blur-[6px] opacity-35 max-h-56 overflow-hidden"
+      >
         {children}
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-b from-black/50 to-black/75 px-4 text-center">

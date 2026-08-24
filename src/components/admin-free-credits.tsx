@@ -42,29 +42,55 @@ export function AdminFreeCredits() {
           </thead>
           <tbody>
             {q.isLoading && (
-              <tr><td colSpan={7} className="py-10 text-center text-muted-foreground"><Loader2 className="inline animate-spin" /></td></tr>
+              <tr>
+                <td colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <Loader2 className="inline animate-spin" />
+                </td>
+              </tr>
             )}
             {q.isError && (
-              <tr><td colSpan={7} className="py-10 text-center text-rose-400 text-xs">
-                <ShieldAlert size={14} className="inline mr-1" /> Log okunamadı.
-              </td></tr>
+              <tr>
+                <td colSpan={7} className="py-10 text-center text-rose-400 text-xs">
+                  <ShieldAlert size={14} className="inline mr-1" /> Log okunamadı.
+                </td>
+              </tr>
             )}
             {!q.isLoading && !q.isError && rows.length === 0 && (
-              <tr><td colSpan={7} className="py-10 text-center text-muted-foreground text-xs">Henüz kayıt yok.</td></tr>
+              <tr>
+                <td colSpan={7} className="py-10 text-center text-muted-foreground text-xs">
+                  Henüz kayıt yok.
+                </td>
+              </tr>
             )}
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-white/5">
                 <td className="px-4 py-3 max-w-[220px] truncate">{r.email ?? r.user_id ?? "—"}</td>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground" title={r.visitor_id ?? ""}>{short(r.visitor_id)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground" title={r.ip_hash ?? ""}>{short(r.ip_hash)}</td>
+                <td
+                  className="px-4 py-3 font-mono text-xs text-muted-foreground"
+                  title={r.visitor_id ?? ""}
+                >
+                  {short(r.visitor_id)}
+                </td>
+                <td
+                  className="px-4 py-3 font-mono text-xs text-muted-foreground"
+                  title={r.ip_hash ?? ""}
+                >
+                  {short(r.ip_hash)}
+                </td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.granted ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.granted ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}
+                  >
                     {REASON_LABEL[r.reason] ?? r.reason}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">{r.credits} / {r.sim_credits}</td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {r.credits} / {r.sim_credits}
+                </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{r.source}</td>
-                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                  {new Date(r.created_at).toLocaleString()}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -2,11 +2,25 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Radar as RadarIcon, TrendingUp, Loader2, Flame, RefreshCw, Star, Search } from "lucide-react";
+import {
+  Radar as RadarIcon,
+  TrendingUp,
+  Loader2,
+  Flame,
+  RefreshCw,
+  Star,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHero } from "@/components/page-hero";
 import { useAuth } from "@/hooks/use-auth";
 import { getRadar, radarWatchlist, type RadarItem } from "@/lib/radar.functions";
@@ -16,7 +30,11 @@ export const Route = createFileRoute("/radar")({
   head: () => ({
     meta: [
       { title: "Kazanan Ürün Radarı — Aroless" },
-      { name: "description", content: "Her gün otomatik taranan yükselen ürünler: momentum, kazanan skoru, fiyat bandı ve satış kanalı önerisiyle." },
+      {
+        name: "description",
+        content:
+          "Her gün otomatik taranan yükselen ürünler: momentum, kazanan skoru, fiyat bandı ve satış kanalı önerisiyle.",
+      },
       { property: "og:title", content: "Kazanan Ürün Radarı — Aroless" },
       { property: "og:description", content: "Bugün yükselen ürünleri arama yapmadan gör." },
       { property: "og:type", content: "website" },
@@ -57,26 +75,40 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
               <h3 className="truncate text-sm font-bold">{item.title}</h3>
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-              <Badge variant="outline" className="border-white/10">{item.niche}</Badge>
-              <Badge variant="outline" className="border-white/10">{item.category}</Badge>
-              <Badge variant="outline" className="border-white/10">{item.platform}</Badge>
+              <Badge variant="outline" className="border-white/10">
+                {item.niche}
+              </Badge>
+              <Badge variant="outline" className="border-white/10">
+                {item.category}
+              </Badge>
+              <Badge variant="outline" className="border-white/10">
+                {item.platform}
+              </Badge>
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-2xl font-black leading-none" style={{ color }}>{item.winner_score}</div>
+            <div className="text-2xl font-black leading-none" style={{ color }}>
+              {item.winner_score}
+            </div>
             <div className="text-[9px] uppercase tracking-wider text-muted-foreground">score</div>
           </div>
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="flex items-center justify-center gap-1 text-sm font-bold" style={{ color: item.momentum >= 0 ? "var(--profit)" : "var(--loss, #f87171)" }}>
-              <TrendingUp size={12} /> {item.momentum >= 0 ? "+" : ""}{item.momentum}%
+            <div
+              className="flex items-center justify-center gap-1 text-sm font-bold"
+              style={{ color: item.momentum >= 0 ? "var(--profit)" : "var(--loss, #f87171)" }}
+            >
+              <TrendingUp size={12} /> {item.momentum >= 0 ? "+" : ""}
+              {item.momentum}%
             </div>
             <div className="text-[9px] uppercase text-muted-foreground">momentum</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-sm font-bold">${item.price_min}-{item.price_max}</div>
+            <div className="text-sm font-bold">
+              ${item.price_min}-{item.price_max}
+            </div>
             <div className="text-[9px] uppercase text-muted-foreground">fiyat bandı</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
@@ -85,7 +117,9 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
           </div>
         </div>
 
-        {item.reason && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{item.reason}</p>}
+        {item.reason && (
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{item.reason}</p>
+        )}
 
         <div className="mt-3 flex gap-2">
           <Button
@@ -117,7 +151,9 @@ function RadarPage() {
   const radarFn = useServerFn(getRadar);
   const watchFn = useServerFn(radarWatchlist);
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  useEffect(() => {
+    if (!loading && !user) nav({ to: "/auth" });
+  }, [user, loading, nav]);
 
   const q = useQuery({
     queryKey: ["radar", country],
@@ -134,11 +170,17 @@ function RadarPage() {
   });
 
   const items = useMemo(() => (q.data?.items ?? []) as RadarItem[], [q.data]);
-  const avg = items.length ? Math.round(items.reduce((s, i) => s + i.winner_score, 0) / items.length) : 0;
+  const avg = items.length
+    ? Math.round(items.reduce((s, i) => s + i.winner_score, 0) / items.length)
+    : 0;
   const top = items.length ? Math.max(...items.map((i) => i.momentum)) : 0;
 
   if (loading || !user) {
-    return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="animate-spin" /></div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -150,12 +192,24 @@ function RadarPage() {
         actions={
           <div className="flex items-center gap-2">
             <Select value={country} onValueChange={setCountry}>
-              <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-[150px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code} className="text-xs">{c.label}</SelectItem>)}
+                {COUNTRIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code} className="text-xs">
+                    {c.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button size="sm" variant="outline" className="h-9" onClick={() => q.refetch()} disabled={q.isFetching}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              onClick={() => q.refetch()}
+              disabled={q.isFetching}
+            >
               <RefreshCw size={13} className={q.isFetching ? "animate-spin" : ""} />
             </Button>
           </div>
@@ -171,7 +225,9 @@ function RadarPage() {
         ].map((s) => (
           <div key={s.label} className="premium-card p-3 text-center">
             <div className="text-xl font-black text-[var(--accent-active)]">{s.value}</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {s.label}
+            </div>
           </div>
         ))}
       </div>
@@ -184,7 +240,8 @@ function RadarPage() {
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {watch.data!.matches.slice(0, 5).map((m, i) => (
               <li key={i}>
-                <span className="text-foreground">{m.favorite}</span> → radarda <span className="text-foreground">{m.radar}</span> (+{m.momentum}%)
+                <span className="text-foreground">{m.favorite}</span> → radarda{" "}
+                <span className="text-foreground">{m.radar}</span> (+{m.momentum}%)
               </li>
             ))}
           </ul>
@@ -201,7 +258,9 @@ function RadarPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {items.map((it, i) => <RadarCard key={it.id} item={it} rank={i + 1} />)}
+          {items.map((it, i) => (
+            <RadarCard key={it.id} item={it} rank={i + 1} />
+          ))}
         </div>
       )}
     </div>

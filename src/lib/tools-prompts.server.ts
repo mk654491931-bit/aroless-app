@@ -2,10 +2,24 @@
 import type { Provider } from "./tools-ai.server";
 
 export type ToolId =
-  | "supplier-negotiator" | "offer-analyzer" | "legitimacy-detector" | "review-spec-sheet"
-  | "reverse-cost" | "landed-cost" | "capital-planner" | "desi-optimizer" | "milestone-shield"
-  | "consensus" | "bundle-booster" | "lead-time" | "arbitrage-matrix" | "ad-hook-extractor"
-  | "listing-seo" | "listing-visual" | "review-sentiment" | "price-strategy"
+  | "supplier-negotiator"
+  | "offer-analyzer"
+  | "legitimacy-detector"
+  | "review-spec-sheet"
+  | "reverse-cost"
+  | "landed-cost"
+  | "capital-planner"
+  | "desi-optimizer"
+  | "milestone-shield"
+  | "consensus"
+  | "bundle-booster"
+  | "lead-time"
+  | "arbitrage-matrix"
+  | "ad-hook-extractor"
+  | "listing-seo"
+  | "listing-visual"
+  | "review-sentiment"
+  | "price-strategy"
   | "news";
 
 type Ctx = Record<string, string>;
@@ -18,7 +32,6 @@ Method (do this internally, never print it):
 3) Run a base case AND a pessimistic case; report the conservative number.
 4) Sanity-check every calculation before answering; if an input is missing, state the assumption you used instead of inventing precision.
 Style: blunt, numeric, case-specific. No generic advice, no filler, no hedging. Every claim carries a number, a range or a date. Write all prose in Turkish.`;
-
 
 export const TOOL_PROVIDER: Record<ToolId, Provider> = {
   "supplier-negotiator": "gemini",
@@ -43,7 +56,12 @@ export const TOOL_PROVIDER: Record<ToolId, Provider> = {
 };
 
 const LANG_NAMES: Record<string, string> = {
-  tr: "Turkish", en: "English", es: "Spanish", de: "German", fr: "French", ar: "Arabic",
+  tr: "Turkish",
+  en: "English",
+  es: "Spanish",
+  de: "German",
+  fr: "French",
+  ar: "Arabic",
 };
 
 /** Appends the "answer in the user's language" directive to any built prompt. */
@@ -168,6 +186,5 @@ Return ONLY minified JSON:
 Bugünün tarihi: ${f(c, "today")}. Amazon, TikTok Shop, Shopify, Etsy, gümrük/tarife, navlun, ödeme sistemleri ve reklam platformları tarafındaki EN GÜNCEL 6 gelişmeyi getir. Sadece gerçek, doğrulanabilir haberler.
 Return ONLY minified JSON:
 {"items":[{"title": string, "source": string, "date": string (YYYY-MM-DD), "category": string, "summary": string (2 cümle, Türkçe), "impact": "high"|"medium"|"low", "explainer": {"means": string (bu makro olay senin için ne demek, 1-2 cümle), "actions": string[3] (bu hafta atılacak somut satıcı adımları), "risk": string (1 cümle)}}]}`;
-
   }
 }

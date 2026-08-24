@@ -21,7 +21,8 @@ const en = {
     uses_credit: "Uses 1 credit. You have",
     hero_1: "Find your next",
     hero_2: "winning product",
-    hero_sub: "Real trending SKUs with supplier prices, profit margins, and platform-tailored strategy.",
+    hero_sub:
+      "Real trending SKUs with supplier prices, profit margins, and platform-tailored strategy.",
     niche_placeholder: "Niche or idea (e.g. eco-friendly kitchen)",
     audience_placeholder: "Audience (optional)",
     sales_platforms: "Sales Platforms",
@@ -60,7 +61,8 @@ const en = {
     },
     ui: {
       live_research: "Live web-grounded research",
-      hero_sub2: "Real SKUs, real supplier prices, real competitors — pulled from live market data, never simulated.",
+      hero_sub2:
+        "Real SKUs, real supplier prices, real competitors — pulled from live market data, never simulated.",
       f1: "Cross-checked numbers",
       f2: "Verified supplier links",
       f3: "Buyers per 1,000 viewers",
@@ -82,7 +84,8 @@ const en = {
       eta_done: "Completed in",
       empty_hint: "Pick your platform + budget and hit Find Winners.",
       validate_title: "Validate My Product — “Will it sell?”",
-      validate_sub: "Paste a product link, product name or niche. Our 3-agent engine returns a consensus report. Uses 1 credit.",
+      validate_sub:
+        "Paste a product link, product name or niche. Our 3-agent engine returns a consensus report. Uses 1 credit.",
       validate_placeholder: "https://… or “LED sunset projector lamp”",
       validate_btn: "Validate",
       validating: "Agents debating…",
@@ -97,7 +100,6 @@ const en = {
       select_platform: "Select at least one sales platform",
     },
     report: {
-
       executive_summary: "Executive Summary",
       target_audience: "Target Audience Insights",
       market_demand: "Market Demand & Ad Angles",
@@ -139,7 +141,6 @@ const en = {
       note: "Prices are converted to the target country currency with a live USD rate.",
     },
   },
-
 };
 
 const tr = {
@@ -200,7 +201,8 @@ const tr = {
     },
     ui: {
       live_research: "Canlı web tabanlı araştırma",
-      hero_sub2: "Gerçek ürünler, gerçek tedarikçi fiyatları, gerçek rakipler — canlı pazar verisinden, asla simüle değil.",
+      hero_sub2:
+        "Gerçek ürünler, gerçek tedarikçi fiyatları, gerçek rakipler — canlı pazar verisinden, asla simüle değil.",
       f1: "Çapraz doğrulanmış veriler",
       f2: "Doğrulanmış tedarikçi linkleri",
       f3: "1.000 izleyicide alıcı",
@@ -222,7 +224,8 @@ const tr = {
       eta_done: "Tamamlandı:",
       empty_hint: "Platform ve bütçeni seç, ardından Kazananları Bul'a bas.",
       validate_title: "Ürünümü Doğrula — “Satar mı?”",
-      validate_sub: "Ürün linki, ürün adı veya niş yapıştır. 3 ajanlı motorumuz konsensüs raporu döner. 1 kredi kullanır.",
+      validate_sub:
+        "Ürün linki, ürün adı veya niş yapıştır. 3 ajanlı motorumuz konsensüs raporu döner. 1 kredi kullanır.",
       validate_placeholder: "https://… veya “LED gün batımı projeksiyon lambası”",
       validate_btn: "Doğrula",
       validating: "Ajanlar tartışıyor…",
@@ -237,7 +240,6 @@ const tr = {
       select_platform: "En az bir satış platformu seç",
     },
     report: {
-
       executive_summary: "Yönetici Özeti",
       target_audience: "Hedef Kitle Analizi",
       market_demand: "Pazar Talebi ve Reklam Açıları",
@@ -279,7 +281,6 @@ const tr = {
       note: "Fiyatlar canlı dolar kuruyla hedef ülke para birimine çevrilir.",
     },
   },
-
 };
 
 const es = {
@@ -368,7 +369,8 @@ const de = {
     uses_credit: "Benötigt 1 Credit. Verfügbar:",
     hero_1: "Finde dein nächstes",
     hero_2: "Winning Product",
-    hero_sub: "Echte Trend-SKUs mit Lieferanten­preisen, Margen und plattform­spezifischer Strategie.",
+    hero_sub:
+      "Echte Trend-SKUs mit Lieferanten­preisen, Margen und plattform­spezifischer Strategie.",
     niche_placeholder: "Nische oder Idee (z.B. Öko-Küche)",
     audience_placeholder: "Zielgruppe (optional)",
     sales_platforms: "Verkaufsplattformen",

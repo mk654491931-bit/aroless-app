@@ -86,7 +86,6 @@ export const PLANS: Plan[] = [
       "Öncelikli destek",
     ],
   },
-
 ];
 
 export const PLAN_BY_ID: Record<PlanId, Plan> = {
@@ -96,7 +95,11 @@ export const PLAN_BY_ID: Record<PlanId, Plan> = {
 };
 
 /** Kullanım karşılaştırma tablosu satırları. */
-export const USAGE_ROWS: { key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">; label: string; unit: string }[] = [
+export const USAGE_ROWS: {
+  key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
+  label: string;
+  unit: string;
+}[] = [
   { key: "credits", label: "Ürün Bulucu kredisi", unit: "/ ay" },
   { key: "toolRuns", label: "AI araç çalıştırma", unit: "/ ay" },
   { key: "councilRuns", label: "14'lü AI Konsey oturumu", unit: "/ ay" },
@@ -125,8 +128,15 @@ export function planForLevel(level: number): Plan {
 }
 
 /** Aylık kullanım kotaları; ücretsiz hesap için küçük bir deneme kotası. */
-export function quotaFor(level: 0 | 1 | 2 | 3): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans"> {
+export function quotaFor(
+  level: 0 | 1 | 2 | 3,
+): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans"> {
   if (level === 0) return { credits: 1, toolRuns: 3, councilRuns: 0, radarScans: 1 };
   const p = planForLevel(level);
-  return { credits: p.credits, toolRuns: p.toolRuns, councilRuns: p.councilRuns, radarScans: p.radarScans };
+  return {
+    credits: p.credits,
+    toolRuns: p.toolRuns,
+    councilRuns: p.councilRuns,
+    radarScans: p.radarScans,
+  };
 }

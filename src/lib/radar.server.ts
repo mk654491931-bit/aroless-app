@@ -50,22 +50,24 @@ export function sanitizeRadar(items: unknown, country: string): RadarSeed[] {
   return items
     .map((raw) => {
       const it = raw as Record<string, unknown>;
-      const title = String(it['title'] ?? "").trim().slice(0, 80);
+      const title = String(it["title"] ?? "")
+        .trim()
+        .slice(0, 80);
       if (title.length < 3) return null;
-      const min = num(it['price_min'], 1, 5000, 19);
-      const max = Math.max(min + 1, num(it['price_max'], 1, 6000, min + 20));
+      const min = num(it["price_min"], 1, 5000, 19);
+      const max = Math.max(min + 1, num(it["price_max"], 1, 6000, min + 20));
       return {
         title,
-        niche: String(it['niche'] ?? "General").slice(0, 40),
-        category: String(it['category'] ?? "General").slice(0, 40),
+        niche: String(it["niche"] ?? "General").slice(0, 40),
+        category: String(it["category"] ?? "General").slice(0, 40),
         country,
-        platform: String(it['platform'] ?? "Shopify").slice(0, 30),
-        winner_score: num(it['winner_score'], 0, 100, 60),
-        momentum: num(it['momentum'], -50, 200, 10),
+        platform: String(it["platform"] ?? "Shopify").slice(0, 30),
+        winner_score: num(it["winner_score"], 0, 100, 60),
+        momentum: num(it["momentum"], -50, 200, 10),
         price_min: min,
         price_max: max,
-        est_margin_pct: num(it['est_margin_pct'], 0, 90, 35),
-        reason: String(it['reason'] ?? "").slice(0, 240),
+        est_margin_pct: num(it["est_margin_pct"], 0, 90, 35),
+        reason: String(it["reason"] ?? "").slice(0, 240),
       } satisfies RadarSeed;
     })
     .filter((x): x is RadarSeed => x !== null)

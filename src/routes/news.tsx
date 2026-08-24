@@ -1,7 +1,16 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Newspaper, Target, ArrowLeft, Loader2, AlertTriangle, RefreshCw, Clock, Zap } from "lucide-react";
+import {
+  Newspaper,
+  Target,
+  ArrowLeft,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  Clock,
+  Zap,
+} from "lucide-react";
 import { PageHero } from "@/components/page-hero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +21,16 @@ export const Route = createFileRoute("/news")({
   head: () => ({
     meta: [
       { title: "E-Com News & AI Explainer — Aroless" },
-      { name: "description", content: "Daily e-commerce headlines with AI explainers: what changed, why it matters, and how to act on it as a seller." },
+      {
+        name: "description",
+        content:
+          "Daily e-commerce headlines with AI explainers: what changed, why it matters, and how to act on it as a seller.",
+      },
       { property: "og:title", content: "E-Com News & AI Explainer — Aroless" },
-      { property: "og:description", content: "Daily e-commerce headlines with AI explainers for sellers." },
+      {
+        property: "og:description",
+        content: "Daily e-commerce headlines with AI explainers for sellers.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -23,14 +39,24 @@ export const Route = createFileRoute("/news")({
 });
 
 type NewsItem = {
-  title: string; source: string; date: string; category: string; summary: string;
+  title: string;
+  source: string;
+  date: string;
+  category: string;
+  summary: string;
   impact: "high" | "medium" | "low";
   explainer: { means: string; actions: string[]; risk: string };
 };
 
 type LiveItem = {
-  title: string; source: string; date: string; time_ago?: string; category: string;
-  summary: string; impact: "high" | "medium" | "low"; action?: string;
+  title: string;
+  source: string;
+  date: string;
+  time_ago?: string;
+  category: string;
+  summary: string;
+  impact: "high" | "medium" | "low";
+  action?: string;
 };
 
 async function callNews<T>(input: Record<string, string>): Promise<T[]> {
@@ -55,10 +81,10 @@ const fetchLive = () =>
 
 const impactTone: Record<string, string> = {
   high: "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]",
-  medium: "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/10 text-[var(--accent-active)]",
+  medium:
+    "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/10 text-[var(--accent-active)]",
   low: "border-white/15 bg-white/5 text-muted-foreground",
 };
-
 
 function SkeletonCard() {
   return (
@@ -76,10 +102,19 @@ function NewsCard({ item }: { item: NewsItem }) {
   return (
     <article className="premium-card flex flex-col p-4">
       <div className="flex items-center justify-between gap-2">
-        <Badge variant="outline" className={`text-[10px] ${impactTone[item.impact] ?? impactTone['low']}`}>
-          {item.impact === "high" ? "Yüksek etki" : item.impact === "medium" ? "Orta etki" : "Düşük etki"}
+        <Badge
+          variant="outline"
+          className={`text-[10px] ${impactTone[item.impact] ?? impactTone["low"]}`}
+        >
+          {item.impact === "high"
+            ? "Yüksek etki"
+            : item.impact === "medium"
+              ? "Orta etki"
+              : "Düşük etki"}
         </Badge>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.category} · {item.date}</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {item.category} · {item.date}
+        </span>
       </div>
 
       <h3 className="mt-2.5 text-sm font-bold leading-snug">{item.title}</h3>
@@ -135,13 +170,24 @@ function LiveFeed() {
             </span>
             Canlı Akış
           </h2>
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-[11px]" onClick={() => q.refetch()} disabled={q.isFetching}>
-            {q.isFetching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-[11px]"
+            onClick={() => q.refetch()}
+            disabled={q.isFetching}
+          >
+            {q.isFetching ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
           </Button>
         </div>
         <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
           <Clock size={10} /> Saat başı güncellenir
-          {updated && ` · son: ${updated.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}
+          {updated &&
+            ` · son: ${updated.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}
         </p>
 
         {q.isError && (
@@ -153,7 +199,10 @@ function LiveFeed() {
         <div className="mt-3 space-y-2 lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pr-1">
           {q.isLoading &&
             [0, 1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <div
+                key={i}
+                className="animate-pulse rounded-lg border border-white/10 bg-white/[0.03] p-3"
+              >
                 <div className="h-3 w-3/4 rounded bg-white/10" />
                 <div className="mt-2 h-2.5 w-full rounded bg-white/[0.06]" />
               </div>
@@ -161,23 +210,37 @@ function LiveFeed() {
 
           {!q.isLoading &&
             (q.data ?? []).map((item, i) => (
-              <article key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/[0.06]">
+              <article
+                key={i}
+                className="rounded-lg border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/[0.06]"
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge variant="outline" className={`text-[9px] ${impactTone[item.impact] ?? impactTone['low']}`}>
-                    {item.impact === "high" ? "Yüksek" : item.impact === "medium" ? "Orta" : "Düşük"}
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] ${impactTone[item.impact] ?? impactTone["low"]}`}
+                  >
+                    {item.impact === "high"
+                      ? "Yüksek"
+                      : item.impact === "medium"
+                        ? "Orta"
+                        : "Düşük"}
                   </Badge>
                   <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
                     {item.time_ago || item.date}
                   </span>
                 </div>
                 <h3 className="mt-1.5 text-xs font-bold leading-snug">{item.title}</h3>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{item.summary}</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {item.summary}
+                </p>
                 {item.action && (
                   <p className="mt-1.5 flex gap-1.5 text-[10px] text-[var(--profit)]">
                     <Zap size={10} className="mt-0.5 shrink-0" /> {item.action}
                   </p>
                 )}
-                <span className="mt-1.5 block text-[9px] text-muted-foreground/70">{item.source} · {item.category}</span>
+                <span className="mt-1.5 block text-[9px] text-muted-foreground/70">
+                  {item.source} · {item.category}
+                </span>
               </article>
             ))}
 
@@ -191,7 +254,12 @@ function LiveFeed() {
 }
 
 function NewsPage() {
-  const q = useQuery({ queryKey: ["ecom-news"], queryFn: fetchNews, staleTime: 30 * 60 * 1000, retry: 1 });
+  const q = useQuery({
+    queryKey: ["ecom-news"],
+    queryFn: fetchNews,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  });
 
   return (
     <div className="min-h-screen">
@@ -202,16 +270,29 @@ function NewsPage() {
           description='Pazar yerleri, lojistik, vergi ve reklam tarafındaki güncel gelişmeler — her başlığın altında "bu senin için ne anlama geliyor?" kutusuyla.'
           actions={
             <>
-              <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => q.refetch()} disabled={q.isFetching}>
-                {q.isFetching ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Yenile
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => q.refetch()}
+                disabled={q.isFetching}
+              >
+                {q.isFetching ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}{" "}
+                Yenile
               </Button>
-              <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10">
+              <Link
+                to="/"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10"
+              >
                 <ArrowLeft size={13} /> Product Finder
               </Link>
             </>
           }
         />
-
 
         <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section>
@@ -226,7 +307,13 @@ function NewsPage() {
             )}
 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {q.isLoading && <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>}
+              {q.isLoading && (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              )}
               {!q.isLoading && (q.data ?? []).map((item, i) => <NewsCard key={i} item={item} />)}
             </div>
           </section>
@@ -234,7 +321,6 @@ function NewsPage() {
           <LiveFeed />
         </div>
       </main>
-
     </div>
   );
 }
