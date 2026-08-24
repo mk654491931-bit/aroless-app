@@ -6,6 +6,11 @@
  */
 import { callGemini, callGroq, extractJson, geminiKeyPool, groqKeyPool, openRouterKeyPool } from "./ai.server";
 
+/** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
+export const FAST_CHAIN: ProviderId[] = ["cerebras", "sambanova", "groq", "gemini", "openrouter", "huggingface"];
+/** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
+export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
+
 export type ProviderId =
   | "cerebras"
   | "sambanova"
@@ -91,6 +96,7 @@ const OPENROUTER_FREE = [
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "google/gemma-2-9b-it:free",
 ];
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"];
 
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
@@ -135,7 +141,7 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   huggingface: (prompt, temperature, signal) =>
-    rotate(pool("HF_TOKEN", "HUGGING_FACE_API_KEY1", "HUGGING_FACE_API_KEY2"), HF_MODELS, (key, model) =>
+    rotate(pool("HF_TOKEN_1", "HF_TOKEN", "HUGGING_FACE_API_KEY1", "HF_TOKEN_2", "HUGGING_FACE_API_KEY2"), HF_MODELS, (key, model) =>
       openAICompatible({
         url: "https://router.huggingface.co/v1/chat/completions",
         key,
