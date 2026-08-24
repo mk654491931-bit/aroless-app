@@ -487,6 +487,7 @@ export function groqKeyPool(): string[] {
  * hits its rate limit the next configured key takes over, then Lovable AI.
  */
 export async function callGroq(prompt: string, temperature = 0.3): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const pool = groqKeyPool();
   if (!pool.length) return callLovableAI(prompt, temperature);
   const keys = scheduleKeys(pool, groqCursor++);
