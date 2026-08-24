@@ -47,6 +47,7 @@ import { Route as ApiPublicToolRouteImport } from './routes/api/public/tool'
 import { Route as ApiPublicTrendAnalysisRouteImport } from './routes/api/public/trend-analysis'
 import { Route as ApiPublicTrendRadarRouteImport } from './routes/api/public/trend-radar'
 import { Route as ApiPublicViralFeedRouteImport } from './routes/api/public/viral-feed'
+import { Route as ApiPublicWebhookLemonSqueezyRouteImport } from './routes/api/public/webhook/lemon-squeezy'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -240,6 +241,12 @@ const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
   path: '/api/public/viral-feed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWebhookLemonSqueezyRoute =
+  ApiPublicWebhookLemonSqueezyRouteImport.update({
+    id: '/api/public/webhook/lemon-squeezy',
+    path: '/api/public/webhook/lemon-squeezy',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -280,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -320,6 +328,7 @@ export interface FileRoutesByTo {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -361,6 +370,7 @@ export interface FileRoutesById {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/public/webhook/lemon-squeezy': typeof ApiPublicWebhookLemonSqueezyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -443,6 +454,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   id:
     | '__root__'
     | '/'
@@ -483,6 +495,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/public/webhook/lemon-squeezy'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -523,6 +536,7 @@ export interface RootRouteChildren {
   ApiPublicTrendAnalysisRoute: typeof ApiPublicTrendAnalysisRoute
   ApiPublicTrendRadarRoute: typeof ApiPublicTrendRadarRoute
   ApiPublicViralFeedRoute: typeof ApiPublicViralFeedRoute
+  ApiPublicWebhookLemonSqueezyRoute: typeof ApiPublicWebhookLemonSqueezyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -793,6 +807,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicViralFeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/webhook/lemon-squeezy': {
+      id: '/api/public/webhook/lemon-squeezy'
+      path: '/api/public/webhook/lemon-squeezy'
+      fullPath: '/api/public/webhook/lemon-squeezy'
+      preLoaderRoute: typeof ApiPublicWebhookLemonSqueezyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -844,6 +865,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicTrendAnalysisRoute: ApiPublicTrendAnalysisRoute,
   ApiPublicTrendRadarRoute: ApiPublicTrendRadarRoute,
   ApiPublicViralFeedRoute: ApiPublicViralFeedRoute,
+  ApiPublicWebhookLemonSqueezyRoute: ApiPublicWebhookLemonSqueezyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
