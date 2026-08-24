@@ -150,7 +150,7 @@ export function AppSidebar() {
             onClick={() => setShowPricing(true)}
             className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
           >
-🔒 Ücretsiz plan: günde 2 kredi · sadece Kazanan Ürün Radarı · PRO ile tüm modüller
+🔒 Ücretsiz plan: tek seferlik 2 hoş geldin kredisi · sadece Kazanan Ürün Radarı · PRO ile tüm modüller
           </button>
         )}
         {!collapsed && (isPaid || isAdmin) && (
