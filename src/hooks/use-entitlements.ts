@@ -48,8 +48,9 @@ export function useEntitlements(): Entitlements {
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
-  // Tüm modüller her pakette açık; fark aylık kullanım kotasında.
-  const canUse = (_groupId: string) => true;
+  // Ücretsiz kullanıcı: sadece Kazanan Ürün Radarı (ürün arama). Ücretli: tüm modüller.
+  const canUse = (groupId: string) =>
+    isAdmin || isPaid || FREE_GROUPS.includes(groupId);
   const quota = quotaFor(level);
 
   return {
