@@ -9,6 +9,7 @@ import {
   geminiKeyPool,
   isQuotaError,
 } from "./ai.server";
+import { withEstimationRules } from "./ai-guidance";
 
 export type ToolResult = {
   headline: string;
@@ -75,6 +76,7 @@ function openRouterKeyPool(): string[] {
 
 /** OpenAI-compatible OpenRouter call with key rotation and gateway fallback. */
 export async function callOpenRouter(prompt: string, temperature = 0.4): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const keys = openRouterKeyPool();
   if (!keys.length) return callLovableAI(prompt, temperature);
   // Keep only OpenRouter-native providers here; Google models are served through
@@ -115,6 +117,7 @@ export async function callOpenRouter(prompt: string, temperature = 0.4): Promise
 }
 
 export async function callGroq2(prompt: string, temperature = 0.3): Promise<string> {
+  prompt = withEstimationRules(prompt);
   return callGroq(prompt, temperature);
 }
 

@@ -12,6 +12,7 @@ import {
   groqKeyPool,
   openRouterKeyPool,
 } from "./ai.server";
+import { withEstimationRules } from "./ai-guidance";
 
 /** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
 export const FAST_CHAIN: ProviderId[] = [
@@ -319,6 +320,7 @@ export async function executeAgentWithFallback(
   chain: ProviderId[],
   opts: { temperature?: number; retries?: number } = {},
 ): Promise<FallbackResult> {
+  prompt = withEstimationRules(prompt);
   const temperature = opts.temperature ?? 0.3;
   const retries = opts.retries ?? 2; // zincir üzerinden tam tur sayısı
   const started = Date.now();

@@ -1,3 +1,4 @@
+import { withEstimationRules } from "./ai-guidance";
 // Server-only AI helpers. Kept out of *.functions.ts so server-function
 // splitting never strips them.
 
@@ -101,6 +102,7 @@ function gatewayConfig() {
 }
 
 async function callGatewayResponses(prompt: string, modelPreference?: string[]): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const { key, url, models: envModels } = gatewayConfig();
   if (!key || !url) throw new Error("AI gateway not configured");
   const models = modelPreference?.length
@@ -328,6 +330,7 @@ async function geminiOnce(
   grounded: boolean,
   models: string[],
 ): Promise<string> {
+  prompt = withEstimationRules(prompt);
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[Math.min(attempt, models.length - 1)];
