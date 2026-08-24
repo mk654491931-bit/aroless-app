@@ -1,14 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
 
-/** Single AI endpoint powering all Aroless tool cards. */
+/** Single AI endpoint powering all Aroless tool cards. Requires a signed-in user. */
 export const Route = createFileRoute("/api/public/tool")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const guard = await guardAuthed(request, "tool", 20, 60);
+        if ("response" in guard) return guard.response;
+
         try {
-          const body = (await request.json()) as { tool?: string; input?: Record<string, string> };
+          const body = await readJsonBody<{ tool?: string; input?: Record<string, string> }>(request);
+          if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
           const tool = String(body.tool ?? "") as import("@/lib/tools-prompts.server").ToolId;
-          if (!tool) return new Response(JSON.stringify({ error: "tool required" }), { status: 400 });
+          if (!tool) return jsonError(400, "Araç seçilmedi.");
 
           const raw = body.input ?? {};
           const input: Record<string, string> = {};
@@ -32,10 +37,7 @@ export const Route = createFileRoute("/api/public/tool")({
           }
           return Response.json(await runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini"));
         } catch (e) {
-          return new Response(JSON.stringify({ error: (e as Error).message }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
+          return jsonError(500, "İşlem tamamlanamadı. Lütfen tekrar deneyin.", e);
         }
       },
     },
