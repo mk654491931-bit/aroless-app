@@ -437,6 +437,7 @@ export type Database = {
           sim_credits: number
           subscription_tier: string
           updated_at: string
+          welcome_credits_granted_at: string | null
         }
         Insert: {
           created_at?: string
@@ -458,6 +459,7 @@ export type Database = {
           sim_credits?: number
           subscription_tier?: string
           updated_at?: string
+          welcome_credits_granted_at?: string | null
         }
         Update: {
           created_at?: string
@@ -479,6 +481,7 @@ export type Database = {
           sim_credits?: number
           subscription_tier?: string
           updated_at?: string
+          welcome_credits_granted_at?: string | null
         }
         Relationships: []
       }
