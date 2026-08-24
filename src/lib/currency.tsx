@@ -5,12 +5,8 @@ import { countryByCode } from "@/lib/countries";
 
 export type FxPayload = { base: "USD"; rates: Record<string, number>; updated: string; source: string };
 
-const FALLBACK: FxPayload = {
-  base: "USD",
-  rates: { USD: 1, EUR: 0.92, GBP: 0.79, TRY: 34.2, CAD: 1.36, AUD: 1.52, JPY: 152, AED: 3.67, SAR: 3.75, PLN: 4, MXN: 18.5, BRL: 5.5, INR: 83.5, KRW: 1350, SEK: 10.6, SGD: 1.34 },
-  updated: "",
-  source: "fallback",
-};
+/** Kur verisi yüklenene kadar yalnızca USD gösterilir — statik/mock kur kullanılmaz. */
+const USD_ONLY: FxPayload = { base: "USD", rates: { USD: 1 }, updated: "", source: "pending" };
 
 /** Live USD→X rates, cached for the session (server caches 6h). */
 export function useFxRates() {
