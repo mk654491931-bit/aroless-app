@@ -104,9 +104,7 @@ export const Route = createFileRoute("/api/public/trend-radar")({
 
           return new Response(JSON.stringify({ error: "unknown action" }), { status: 400 });
         } catch (e) {
-          return new Response(JSON.stringify({ error: (e as Error).message }), {
-            status: 500, headers: { "Content-Type": "application/json" },
-          });
+          return jsonError(500, "İşlem tamamlanamadı. Lütfen tekrar deneyin.", e);
         }
       },
     },
