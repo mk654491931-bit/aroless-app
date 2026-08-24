@@ -136,6 +136,22 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       }
     }
 
+    // Hoş geldiniz e-postası — 8 haneli Aroless kimliği ile (kritik değil).
+    try {
+      const { data: prof } = await supabaseAdmin
+        .from("profiles")
+        .select("public_id")
+        .eq("id", userId)
+        .maybeSingle();
+      const publicId = String((prof as { public_id?: string } | null)?.public_id ?? "");
+      if (publicId) {
+        const { sendWelcomeEmail } = await import("@/lib/email-service");
+        await sendWelcomeEmail(data.email, publicId);
+      }
+    } catch (e) {
+      console.error("[email] welcome send failed", e);
+    }
+
     return { ok: true as const, email: data.email, creditsBlocked: reused, promoDiscount };
   });
 
