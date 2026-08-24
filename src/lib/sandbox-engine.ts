@@ -56,13 +56,6 @@ export type MarketBaseline = {
   benchmark_note: string;
 };
 
-export const FALLBACK_BASELINE: MarketBaseline = {
-  cvr_pct: 1.8, ctr_pct: 1.3, cpc_usd: 0.9, cac_usd: 18, avg_market_price_usd: 29.99,
-  refund_rate_pct: 5, shipping_days: 6, organic_daily_visitors: 12,
-  seasonality: "No strong seasonal signal.",
-  risks: ["Ad costs rise as you scale", "Late delivery hurts ratings"],
-  benchmark_note: "Industry averages (Shopify 2024 ~1.4% CVR).",
-};
 
 export type ShippingMode = "economy" | "standard" | "express";
 export const SHIPPING_MODES: Record<ShippingMode, { label: string; days: number; cost: number; cvrMult: number; ratingDelta: number }> = {
