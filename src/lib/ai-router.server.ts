@@ -159,6 +159,8 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
 // ---------------------------------------------------------------- bedrock (SigV4, SDK'sız)
 
 const BEDROCK_MODELS = [
+  "anthropic.claude-opus-4-1-20250805-v1:0",
+  "anthropic.claude-3-opus-20240229-v1:0",
   "anthropic.claude-3-5-sonnet-20240620-v1:0",
   "anthropic.claude-3-haiku-20240307-v1:0",
 ];
