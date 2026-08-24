@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 
-async function assertAdmin(context: { supabase: SupabaseLike; userId: string; claims: Record<string, unknown> | null }) {
+async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
   const email = String(context.claims?.email ?? "").toLowerCase();
   if (email === ADMIN_EMAIL) return;
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -44,7 +44,7 @@ export const getAdminStats = createServerFn({ method: "GET" })
     const monthStart = new Date();
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
-    const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: { amount_cents?: number | null; created_at?: string | null }) => {
+    const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: any) => {
       return new Date(r.created_at) >= monthStart ? s + (r.amount_cents ?? 0) : s;
     }, 0);
     const totalCreditsSpent = (creditsRes.data ?? []).reduce(

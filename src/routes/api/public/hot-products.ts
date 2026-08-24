@@ -63,7 +63,7 @@ function pnum(v: unknown, max = Number.MAX_SAFE_INTEGER): number | undefined {
   return Math.min(n, max);
 }
 
-function normalizeSignals(raw: Record<string, unknown> | null | undefined): ProductSignals | undefined {
+function normalizeSignals(raw: any): ProductSignals | undefined {
   const s = raw ?? {};
   const out: ProductSignals = {
     search_volume_monthly: pnum(s.search_volume_monthly),
@@ -89,7 +89,7 @@ function normalizeSignals(raw: Record<string, unknown> | null | undefined): Prod
   return Object.keys(out).length ? out : undefined;
 }
 
-function normalize(raw: Record<string, unknown>, i: number): HotProduct | null {
+function normalize(raw: any, i: number): HotProduct | null {
   const name = String(raw?.name ?? "").trim();
   if (!name) return null;
   const country = String(raw?.country ?? "US")
@@ -150,7 +150,7 @@ Return ONLY JSON:
     "gemini-2.0-flash",
     "gemini-1.5-flash",
   ]);
-  const parsed = extractJson<{ items?: Record<string, unknown>[] }>(text, { items: [] });
+  const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
   const items = (parsed.items ?? [])
     .map((r, i) => normalize(r, i))
     .filter((x): x is HotProduct => !!x)

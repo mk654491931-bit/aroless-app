@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           return new Response("Invalid signature", { status: 401 });
         }
 
-        let payload: Record<string, unknown>;
+        let payload: any;
         try {
           payload = JSON.parse(raw);
         } catch {
