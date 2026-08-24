@@ -4,6 +4,7 @@ import { CalendarClock, Flame, Loader2, Snowflake, Sparkles, TrendingDown, Trend
 import { Sparkline } from "@/components/sparkline";
 import { TrendAnalysisModal } from "@/components/trend-analysis-modal";
 import type { TrendItem, TrendPayload, TrendView } from "@/routes/api/public/predictive-trends";
+import { apiFetch } from "@/lib/api-client";
 
 const VIEWS: { id: TrendView; label: string; icon: typeof Flame; hint: string }[] = [
   { id: "now", label: "🔥 Trending Right Now", icon: Flame, hint: "Son 7-14 günde arama hacmi patlayan ürünler" },
@@ -12,7 +13,7 @@ const VIEWS: { id: TrendView; label: string; icon: typeof Flame; hint: string }[
 ];
 
 async function fetchTrends(view: TrendView, country: string): Promise<TrendPayload> {
-  const res = await fetch(`/api/public/predictive-trends?view=${view}&country=${encodeURIComponent(country)}`);
+  const res = await apiFetch(`/api/public/predictive-trends?view=${view}&country=${encodeURIComponent(country)}`);
   if (!res.ok) throw new Error("Trend verisi alınamadı");
   return (await res.json()) as TrendPayload;
 }

@@ -5,6 +5,7 @@ import { Newspaper, Target, ArrowLeft, Loader2, AlertTriangle, RefreshCw, Clock,
 import { PageHero } from "@/components/page-hero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { apiFetch } from "@/lib/api-client";
 
 export const Route = createFileRoute("/news")({
   ssr: false,
@@ -33,7 +34,7 @@ type LiveItem = {
 };
 
 async function callNews<T>(input: Record<string, string>): Promise<T[]> {
-  const res = await fetch("/api/public/tool", {
+  const res = await apiFetch("/api/public/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool: "news", input: { ...input, uiLang: getUiLang() } }),

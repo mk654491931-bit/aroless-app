@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-client";
 
 export const Route = createFileRoute("/tools/growth")({
   ssr: false,
@@ -61,7 +62,7 @@ function ConsensusCard() {
   const run = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/public/tool", {
+      const res = await apiFetch("/api/public/tool", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool: "consensus", input: { ...input, uiLang: getUiLang() } }),

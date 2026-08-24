@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiFetch } from "@/lib/api-client";
 
 export type ToolResult = {
   headline: string;
@@ -27,7 +28,7 @@ export type ToolResult = {
 };
 
 export async function callTool(tool: string, input: Record<string, string>): Promise<ToolResult> {
-  const res = await fetch("/api/public/tool", {
+  const res = await apiFetch("/api/public/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool, input: { ...input, uiLang: getUiLang() } }),
