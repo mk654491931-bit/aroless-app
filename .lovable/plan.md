@@ -95,4 +95,6 @@ Kullanıcı dostuluk:
 - Korumalı uçlar `requireSupabaseAuth` middleware'i ile oturumlu sunucu fonksiyonlarına taşınacak; dışarıdan çağrılması gereken uçlar `src/routes/api/public/*` altında kalıp kendi doğrulamasını yapacak.
 - Oran sınırı, kalıcı olması için veritabanı tabanlı bir sayaçla uygulanacak (worker'lar durumsuzdur).
 - RLS düzeltmeleri tek bir migration ile, her tablo için GRANT'leriyle birlikte yazılacak.
+- Admin kuralı `grant_admin_for_designated_email` fonksiyonu yeniden yazılarak uygulanacak: sabit 4 adres + `@aroless.com` için `count < 2` kontrolü (satır kilidiyle). Rol tablosuna yazma yalnızca bu tetikleyici ve servis rolü üzerinden mümkün olacak.
+- 8 haneli kimlik `profiles` tablosuna benzersiz `public_id` sütunu olarak eklenecek; çakışmada yeniden üreten bir tetikleyici ile doldurulacak ve mevcut satırlar geriye dönük güncellenecek.
 - Mevcut özelliklerde eksiltme yapılmayacak; yalnızca erişim kontrolü, düzen ve performans iyileştirilecek.
