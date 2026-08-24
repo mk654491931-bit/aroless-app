@@ -1,7 +1,7 @@
 {
-  "name": "Velora",
-  "short_name": "Velora",
-  "description": "AI-powered winning product research for e-commerce.",
+  "name": "Aroless — AI Commerce Automation",
+  "short_name": "Aroless",
+  "description": "AI-powered winning product research and commerce automation.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0f1a",
