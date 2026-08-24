@@ -28,6 +28,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
+import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
@@ -140,6 +141,11 @@ const TrendRadarRoute = TrendRadarRouteImport.update({
 const ViralAdsRoute = ViralAdsRouteImport.update({
   id: '/viral-ads',
   path: '/viral-ads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
+  id: '/api/checkout',
+  path: '/api/checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -255,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -294,6 +301,7 @@ export interface FileRoutesByTo {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -334,6 +342,7 @@ export interface FileRoutesById {
   '/studio': typeof StudioRoute
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -375,6 +384,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -453,6 +464,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/trend-radar'
     | '/viral-ads'
+    | '/api/checkout'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -493,6 +505,7 @@ export interface RootRouteChildren {
   StudioRoute: typeof StudioRoute
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
+  ApiCheckoutRoute: typeof ApiCheckoutRoute
   HotIdRoute: typeof HotIdRoute
   LegalSlugRoute: typeof LegalSlugRoute
   ToolsFinanceRoute: typeof ToolsFinanceRoute
@@ -645,6 +658,13 @@ declare module '@tanstack/react-router' {
       path: '/viral-ads'
       fullPath: '/viral-ads'
       preLoaderRoute: typeof ViralAdsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/checkout': {
+      id: '/api/checkout'
+      path: '/api/checkout'
+      fullPath: '/api/checkout'
+      preLoaderRoute: typeof ApiCheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -806,6 +826,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudioRoute: StudioRoute,
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
+  ApiCheckoutRoute: ApiCheckoutRoute,
   HotIdRoute: HotIdRoute,
   LegalSlugRoute: LegalSlugRoute,
   ToolsFinanceRoute: ToolsFinanceRoute,
