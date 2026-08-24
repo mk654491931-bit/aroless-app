@@ -45,6 +45,13 @@ function resendKeys(): { key: string; from: string }[] {
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
+  // Önce AWS SES; yapılandırılmamışsa Resend havuzuna düş.
+  const { isEmailConfigured, sendOtpCodeEmail } = await import("@/lib/email-service");
+  if (isEmailConfigured()) {
+    await sendOtpCodeEmail(to, code);
+    return;
+  }
+
   const pool = resendKeys();
   if (pool.length === 0) throw new Error("E-posta servisi yapılandırılmamış.");
 
