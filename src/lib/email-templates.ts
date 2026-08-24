@@ -20,6 +20,7 @@ function shell(opts: { title: string; preview: string; body: string }): string {
 <tr><td align="center">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${CARD};border:1px solid rgba(122,162,255,0.18);border-radius:18px;overflow:hidden;">
     <tr><td style="padding:28px 28px 8px;">
+      <img src="${APP_URL}/logo-mark.png" width="44" height="44" alt="Aroless" style="display:block;margin:0 0 12px;border:0;outline:none;" />
       <div style="font-size:19px;font-weight:300;letter-spacing:0.3em;text-transform:uppercase;color:${TEXT};">Aroless</div>
       <div style="margin-top:6px;font-size:9px;font-weight:600;letter-spacing:0.34em;text-transform:uppercase;color:${BRAND};">AI Commerce OS</div>
     </td></tr>
