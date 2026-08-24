@@ -36,6 +36,7 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
 import { Route as ApiPublicLemonsqueezyWebhookRouteImport } from './routes/api/public/lemonsqueezy-webhook'
@@ -181,6 +182,11 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
+  id: '/api/public/agent',
+  path: '/api/public/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicFxRoute = ApiPublicFxRouteImport.update({
   id: '/api/public/fx',
   path: '/api/public/fx',
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
@@ -295,6 +302,7 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
@@ -334,6 +342,7 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
@@ -374,6 +383,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
@@ -412,6 +422,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
@@ -450,6 +461,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
@@ -488,6 +500,7 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiPublicAgentRoute: typeof ApiPublicAgentRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
   ApiPublicLemonsqueezyWebhookRoute: typeof ApiPublicLemonsqueezyWebhookRoute
@@ -690,6 +703,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/agent': {
+      id: '/api/public/agent'
+      path: '/api/public/agent'
+      fullPath: '/api/public/agent'
+      preLoaderRoute: typeof ApiPublicAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/fx': {
       id: '/api/public/fx'
       path: '/api/public/fx'
@@ -793,6 +813,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiPublicAgentRoute: ApiPublicAgentRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
   ApiPublicLemonsqueezyWebhookRoute: ApiPublicLemonsqueezyWebhookRoute,
