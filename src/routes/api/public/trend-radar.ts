@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardAuthed, guardPublic, jsonError, readJsonBody } from "@/lib/api-guard.server";
 
 /**
  * Aroless — Multi-Platform Automated AI Trend Discovery endpoint.
