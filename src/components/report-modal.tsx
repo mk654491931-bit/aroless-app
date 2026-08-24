@@ -16,6 +16,8 @@ import {
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, recommendationStyle, formatCurrency } from "@/lib/recommendation";
 import jsPDF from "jspdf";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
 export function ReportModal({
   product,
@@ -118,6 +120,8 @@ export function ReportModal({
     y += 6;
     line(t("report.hooks"), 14, true);
     (product.ad_angles || []).forEach((a, i) => line(`${i + 1}. ${a}`));
+    y += 12;
+    line(AI_DISCLAIMER_TR, 8);
     doc.save(`${product.name.replace(/[^\w-]+/g, "_")}.pdf`);
   };
 
@@ -200,6 +204,8 @@ export function ReportModal({
             </ol>
           </Section>
         </div>
+
+        <AiDisclaimer />
 
         <div className="mt-6 flex flex-wrap gap-2 sticky bottom-0 -mx-6 md:-mx-8 px-6 md:px-8 pt-4 pb-1 border-t border-white/10 bg-gradient-to-t from-[oklch(0.17_0.03_265)] to-transparent">
           <button

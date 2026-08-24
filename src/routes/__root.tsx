@@ -28,6 +28,7 @@ import { DeviceGuard } from "@/components/device-guard";
 import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 function NotFoundComponent() {
   return (
@@ -220,7 +221,11 @@ function RootComponent() {
               <div key={`${pathname}|${lang}`} className="page-fade">
                 <Outlet />
               </div>
+              <div className="mx-auto w-full max-w-6xl px-4 md:px-6">
+                <AiDisclaimer />
+              </div>
               <SiteFooter />
+
             </div>
           </div>
         </SidebarProvider>

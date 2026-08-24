@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ConsensusResult } from "@/lib/consensus-types";
 import type { ValidationReport } from "@/lib/gemini.functions";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 export function ConsensusBadge({
   consensus,
@@ -217,6 +218,7 @@ export function ConsensusReportModal({
         <div className="mt-5">
           <ConsensusPanel consensus={c} />
         </div>
+        <AiDisclaimer />
       </div>
     </div>
   );

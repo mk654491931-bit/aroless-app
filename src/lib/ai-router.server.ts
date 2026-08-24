@@ -12,6 +12,7 @@ import {
   groqKeyPool,
   openRouterKeyPool,
 } from "./ai.server";
+import { withEstimationRules } from "./ai-guidance";
 
 /** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
 export const FAST_CHAIN: ProviderId[] = [
@@ -234,6 +235,7 @@ export async function callBedrockClaude(
   temperature = 0.3,
   signal?: AbortSignal,
 ): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const accessKey = process.env["AWS_ACCESS_KEY_ID"];
   const secretKey = process.env["AWS_SECRET_ACCESS_KEY"];
   const region = process.env["AWS_REGION"] || "us-east-1";
@@ -319,6 +321,7 @@ export async function executeAgentWithFallback(
   chain: ProviderId[],
   opts: { temperature?: number; retries?: number } = {},
 ): Promise<FallbackResult> {
+  prompt = withEstimationRules(prompt);
   const temperature = opts.temperature ?? 0.3;
   const retries = opts.retries ?? 2; // zincir üzerinden tam tur sayısı
   const started = Date.now();

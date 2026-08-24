@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiFetch } from "@/lib/api-client";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 export type ToolResult = {
   headline: string;
@@ -369,6 +370,7 @@ export function ToolCard({
             </div>
           </div>
         )}
+        <AiDisclaimer />
       </CardContent>
     </Card>
   );

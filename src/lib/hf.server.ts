@@ -1,6 +1,7 @@
 // Server-only Hugging Face Inference helpers (kept out of *.functions.ts so
 // server-function splitting never strips them).
 import { extractJson } from "@/lib/ai.server";
+import { withEstimationRules } from "./ai-guidance";
 
 export const HF_MODELS = {
   qwen: "Qwen/Qwen2.5-7B-Instruct",
@@ -52,6 +53,7 @@ export async function callHuggingFace(
   engine: HfEngine,
   opts: { token?: string; temperature?: number; system?: string; noFallback?: boolean } = {},
 ): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const tokens = hfTokenPool(opts.token);
   if (!tokens.length) {
     if (opts.noFallback) throw new Error("HF_TOKEN_MISSING");

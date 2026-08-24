@@ -9,6 +9,7 @@ import {
   geminiKeyPool,
   isQuotaError,
 } from "./ai.server";
+import { withEstimationRules } from "./ai-guidance";
 
 export type ToolResult = {
   headline: string;
@@ -50,8 +51,8 @@ export const SCHEMA_HINT = `Think step by step internally (unit economics, bench
 {"headline": string (max 120 chars, contains at least one number),
  "verdict": string (max 60 chars, e.g. "GİRİLİR — marj %31" / "DİKKAT — kur riski"),
  "score": number 0-100 (opportunity/quality score for this specific case),
- "metrics": [{"label": string, "value": string, "tone": "profit"|"warning"|"action"|"neutral"}] (3-6 items, always numeric values with units),
- "bullets": [string] (3-6 concrete, numeric insights — no generic advice),
+ "metrics": [{"label": string, "value": string, "tone": "profit"|"warning"|"action"|"neutral"}] (3-6 items; every value is a realistic ESTIMATION RANGE with units, e.g. "$1,200 - $1,800" / "%18 - %24"),
+ "bullets": [string] (3-6 concrete insights; all forecasts written as ranges — no generic advice),
  "risks": [string] (2-4 specific failure modes with the number that triggers them),
  "actions": [string] (3-5 prioritised next steps, each starting with a verb and a deadline/quantity),
  "assumptions": [string] (1-3 assumptions the numbers depend on),
@@ -75,6 +76,7 @@ function openRouterKeyPool(): string[] {
 
 /** OpenAI-compatible OpenRouter call with key rotation and gateway fallback. */
 export async function callOpenRouter(prompt: string, temperature = 0.4): Promise<string> {
+  prompt = withEstimationRules(prompt);
   const keys = openRouterKeyPool();
   if (!keys.length) return callLovableAI(prompt, temperature);
   // Keep only OpenRouter-native providers here; Google models are served through
@@ -115,6 +117,7 @@ export async function callOpenRouter(prompt: string, temperature = 0.4): Promise
 }
 
 export async function callGroq2(prompt: string, temperature = 0.3): Promise<string> {
+  prompt = withEstimationRules(prompt);
   return callGroq(prompt, temperature);
 }
 
