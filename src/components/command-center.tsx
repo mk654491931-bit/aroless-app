@@ -417,7 +417,7 @@ export function CommandCenter() {
             <div className="flex flex-col gap-4 p-4 lg:flex-row">
               {/* agents — two 7-agent columns side by side */}
               <div className="min-w-0 flex-1">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 2xl:grid-cols-7">
                   {agents.map((a, i) => {
                     const st = statusOf(i, a);
                     const Icon = AGENT_META[a.agent_id].icon;
@@ -426,48 +426,40 @@ export function CommandCenter() {
                         key={a.agent_id}
                         onClick={() => setDrill(a.agent_id)}
                         className={cn(
-                          "group flex h-full flex-col justify-between gap-2 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
+                          "group flex h-full flex-col gap-2 rounded-xl border border-border bg-background/40 p-2.5 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
                           st === "warning" && "border-destructive/40",
                         )}
                       >
-                        <div className="flex w-full items-center gap-3">
-                          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[--ai]/30 bg-[--ai]/10">
-                            <Icon className="size-4 text-[--ai]" />
+                        <div className="flex items-start gap-2">
+                          <div className="grid size-7 shrink-0 place-items-center rounded-md border border-[--ai]/30 bg-[--ai]/10">
+                            <Icon className="size-3.5 text-[--ai]" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="truncate text-sm font-medium">{a.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-xs font-medium">{a.name}</span>
                               <StatusPill status={st} />
-                              {a.veto && (
-                                <span className="rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive">
-                                  HARD VETO
-                                </span>
-                              )}
                             </div>
-                            <div className="truncate font-mono text-[11px] text-muted-foreground">
-                              {st === "processing"
-                                ? AGENT_META[a.agent_id].line
-                                : `${a.primary_metric.label}: ${a.primary_metric.value}`}
-                            </div>
+                            {a.veto && (
+                              <span className="mt-1 inline-block rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[9px] text-destructive">
+                                VETO
+                              </span>
+                            )}
                           </div>
-                          <div className="shrink-0 text-right">
-                            <div
-                              className={cn(
-                                "font-mono text-sm",
-                                a.score < 40 ? "text-destructive" : "text-[--ai]",
-                              )}
-                            >
-                              {st === "processing" ? "··" : `${a.score}/100`}
-                            </div>
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              conf {a.confidence_level}%
-                            </div>
-                          </div>
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
-                        <div className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        <div className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
                           {AGENT_META[a.agent_id].desc}
                         </div>
+                        <div className="mt-auto flex items-center justify-between gap-1 border-t border-border/40 pt-1.5 font-mono text-[10px]">
+                          <span
+                            className={cn(
+                              a.score < 40 ? "text-destructive" : "text-[--ai]",
+                            )}
+                          >
+                            {st === "processing" ? "··" : `${a.score}/100`}
+                          </span>
+                          <span className="text-muted-foreground">conf {a.confidence_level}%</span>
+                        </div>
+                        <ChevronRight className="absolute right-2 top-2 size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                       </button>
                     );
                   })}
