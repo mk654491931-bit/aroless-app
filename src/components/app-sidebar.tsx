@@ -5,7 +5,7 @@ import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar,
 } from "@/components/ui/sidebar";
-import { useEntitlements } from "@/hooks/use-entitlements";
+import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
 import { PricingModal } from "@/components/pricing-modal";
 import {
   Package, Coins, Rocket, ShieldHalf, Newspaper,
@@ -13,7 +13,7 @@ import {
   Calculator, Ship, Wallet, Boxes, ShieldCheck,
   Gauge, PackagePlus, CalendarClock, Globe2, Megaphone,
   Tags, ImagePlus, MessageSquareHeart, LineChart, Target, Radar,
-  LayoutDashboard, Scale, Bell, FileText,
+  LayoutDashboard, Scale, Bell, FileText, Lock,
 } from "lucide-react";
 
 
@@ -99,14 +99,36 @@ export function AppSidebar() {
   const { isPaid, isAdmin, quota } = useEntitlements();
   const [showPricing, setShowPricing] = useState(false);
 
-  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean) => (
-    <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
-      <Link to={item.url} className="hover:bg-white/5">
-        <item.icon className="h-4 w-4 text-[var(--accent-active)]" />
-        {!iconOnly && <span className="text-xs">{tooltip}</span>}
-      </Link>
-    </SidebarMenuButton>
-  );
+  const unlocked = isPaid || isAdmin;
+  const itemLocked = (item: Item) => !unlocked && !FREE_ITEMS.includes(item.key);
+
+  const renderItem = (item: Item, tooltip: string, iconOnly: boolean, isActive: boolean) => {
+    if (itemLocked(item)) {
+      return (
+        <SidebarMenuButton
+          tooltip={`${tooltip} — PRO`}
+          onClick={() => setShowPricing(true)}
+          className="opacity-60 hover:opacity-100"
+        >
+          <item.icon className="h-4 w-4 text-muted-foreground" />
+          {!iconOnly && (
+            <span className="flex w-full items-center justify-between gap-2 text-xs">
+              <span className="truncate">{tooltip}</span>
+              <Lock className="h-3 w-3 shrink-0 text-amber-300" />
+            </span>
+          )}
+        </SidebarMenuButton>
+      );
+    }
+    return (
+      <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
+        <Link to={item.url} className="hover:bg-white/5">
+          <item.icon className="h-4 w-4 text-[var(--accent-active)]" />
+          {!iconOnly && <span className="text-xs">{tooltip}</span>}
+        </Link>
+      </SidebarMenuButton>
+    );
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-white/10">
@@ -116,7 +138,7 @@ export function AppSidebar() {
             onClick={() => setShowPricing(true)}
             className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
           >
-            Tüm modüller açık · aylık kullanım için paket seç
+🔒 Ücretsiz plan: günde 2 kredi · sadece Kazanan Ürün Radarı · PRO ile tüm modüller
           </button>
         )}
         {!collapsed && (isPaid || isAdmin) && (
