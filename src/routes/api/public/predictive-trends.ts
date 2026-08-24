@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardAuthed } from "@/lib/api-guard.server";
 
 /**
  * Predictive Trends & Seasonality engine.
@@ -141,6 +142,8 @@ export const Route = createFileRoute("/api/public/predictive-trends")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const guard = await guardAuthed(request, "predictive-trends", 30, 60);
+        if ("response" in guard) return guard.response;
         const url = new URL(request.url);
         const rawView = url.searchParams.get("view") ?? "now";
         const view: TrendView = rawView === "next" || rawView === "season" ? rawView : "now";
@@ -148,10 +151,11 @@ export const Route = createFileRoute("/api/public/predictive-trends")({
         try {
           const payload = await getPayload(view, country);
           return new Response(JSON.stringify(payload), {
-            headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600, s-maxage=3600" },
+            headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=600" },
           });
         } catch (e) {
-          return new Response(JSON.stringify({ view, country, items: [], error: (e as Error).message }), {
+          console.error("[predictive-trends]", e);
+          return new Response(JSON.stringify({ view, country, items: [], error: "Trend verisi alınamadı." }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
