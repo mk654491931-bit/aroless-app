@@ -42,7 +42,7 @@ const QUERIES: Array<{ q: string; niche: string; country: string; platform: stri
   { q: "outdoor gear commercial short", niche: "Outdoor", country: "US", platform: "YouTube" },
 ];
 
-async function pipedFetch(path: string): Promise<any | null> {
+async function pipedFetch(path: string): Promise<Record<string, unknown> | null> {
   for (const host of PIPED_HOSTS) {
     try {
       const res = await fetch(`${host}${path}`, {
@@ -64,7 +64,7 @@ async function fetchQuery(
   platform: string,
 ): Promise<FeedItem[]> {
   const data = await pipedFetch(`/search?q=${encodeURIComponent(q)}&filter=videos`);
-  const items = (data?.items ?? []) as any[];
+  const items = (data?.items ?? []) as Record<string, unknown>[];
   const out: FeedItem[] = [];
   for (const it of items) {
     if (it.type !== "stream") continue;

@@ -90,11 +90,11 @@ Return ONLY JSON:
 {"items":[{"name":string,"keyword":string,"category":string,"why":string,"peak_month":string,"spike_window":string,"season":string,"competition":"Low"|"Medium"|"High","marketplace":string,"audience":string,"ad_angle":string,"score":number 1-100}]}`;
 
   const text = await callGroq(prompt, 0.5);
-  const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
+  const parsed = extractJson<{ items?: Record<string, unknown>[] }>(text, { items: [] });
   const raws = (parsed.items ?? []).slice(0, 8);
 
   const items: TrendItem[] = await Promise.all(
-    raws.map(async (raw: any, i: number): Promise<TrendItem | null> => {
+    raws.map(async (raw: Record<string, unknown>, i: number): Promise<TrendItem | null> => {
       const name = String(raw?.name ?? "").trim();
       if (!name) return null;
       const keyword = String(raw?.keyword ?? name)

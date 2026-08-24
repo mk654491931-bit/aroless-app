@@ -77,8 +77,8 @@ async function wikimediaFirstImage(q: string): Promise<string | null> {
       { headers: { "user-agent": UA } },
     );
     if (!r.ok) return null;
-    const data = (await r.json().catch(() => null)) as any;
-    const pages = data?.query?.pages ? Object.values<any>(data.query.pages) : [];
+    const data = (await r.json().catch(() => null)) as { query?: { pages?: Record<string, unknown> } } | null;
+    const pages = data?.query?.pages ? Object.values<Record<string, unknown>>(data.query.pages) : [];
     const info = pages[0]?.imageinfo?.[0];
     return info?.thumburl || info?.url || null;
   } catch {

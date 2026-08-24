@@ -40,7 +40,7 @@ export const Route = createFileRoute("/hot/$id")({
   component: HotProductPage,
 });
 
-function Stat({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function Stat({ icon: Icon, label, value }: { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/60 p-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">

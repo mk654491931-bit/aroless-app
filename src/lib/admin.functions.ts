@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 
-async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
+async function assertAdmin(context: { supabase: SupabaseLike; userId: string; claims: Record<string, unknown> | null }) {
   const email = String(context.claims?.email ?? "").toLowerCase();
   if (email === ADMIN_EMAIL) return;
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -38,17 +38,17 @@ export const getAdminStats = createServerFn({ method: "GET" })
     const totalUsers = usersRes.count ?? 0;
     const totalTransactions = txCountRes.count ?? 0;
     const totalRevenueCents = (txAllRes.data ?? []).reduce(
-      (s, r: any) => s + (r.amount_cents ?? 0),
+      (s, r: { amount_cents?: number | null }) => s + (r.amount_cents ?? 0),
       0,
     );
     const monthStart = new Date();
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
-    const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: any) => {
+    const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: { amount_cents?: number | null; created_at?: string | null }) => {
       return new Date(r.created_at) >= monthStart ? s + (r.amount_cents ?? 0) : s;
     }, 0);
     const totalCreditsSpent = (creditsRes.data ?? []).reduce(
-      (s, r: any) => s + (r.credits_spent ?? 0),
+      (s, r: { credits_spent?: number | null }) => s + (r.credits_spent ?? 0),
       0,
     );
 

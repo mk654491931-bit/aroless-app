@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const ADMIN_EMAIL = "omnic.111111@gmail.com";
 
-async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
+async function assertAdmin(context: { supabase: { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }> }; userId: string; claims: Record<string, unknown> | null }) {
   const email = String(context.claims?.email ?? "").toLowerCase();
   if (email === ADMIN_EMAIL) return;
   const { data, error } = await context.supabase.rpc("has_role", {

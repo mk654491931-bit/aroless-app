@@ -286,7 +286,7 @@ function KpiCard({
   sub,
   loading,
 }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
   label: string;
   value: string;
   sub?: string;
