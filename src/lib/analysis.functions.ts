@@ -51,9 +51,13 @@ export const updateProfilePrefs = createServerFn({ method: "POST" })
     const update: { language?: string; currency?: string; notifications_enabled?: boolean } = {};
     if (data.language !== undefined) update.language = data.language;
     if (data.currency !== undefined) update.currency = data.currency;
-    if (data.notifications_enabled !== undefined) update.notifications_enabled = data.notifications_enabled;
+    if (data.notifications_enabled !== undefined)
+      update.notifications_enabled = data.notifications_enabled;
     if (Object.keys(update).length === 0) return { ok: true };
-    const { error } = await context.supabase.from("profiles").update(update).eq("id", context.userId);
+    const { error } = await context.supabase
+      .from("profiles")
+      .update(update)
+      .eq("id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -63,7 +67,9 @@ export const getFullProfile = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("profiles")
-      .select("email, public_id, credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at")
+      .select(
+        "email, public_id, credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
+      )
       .eq("id", context.userId)
       .maybeSingle();
     if (error) throw new Error(error.message);

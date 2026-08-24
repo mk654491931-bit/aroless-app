@@ -5,15 +5,20 @@ import { callGemini } from "@/lib/ai.server";
 import type { WinningProduct } from "@/lib/gemini.functions";
 
 const SummarizeInput = z.object({
-  products: z.array(z.object({
-    name: z.string(),
-    trend_score: z.number().optional(),
-    profit_margin_pct: z.number().optional(),
-    competition_level: z.string().optional(),
-    sellability_verdict: z.string().optional(),
-    why_winning: z.string().optional(),
-    platform_fit: z.array(z.string()).optional(),
-  })).min(2).max(4),
+  products: z
+    .array(
+      z.object({
+        name: z.string(),
+        trend_score: z.number().optional(),
+        profit_margin_pct: z.number().optional(),
+        competition_level: z.string().optional(),
+        sellability_verdict: z.string().optional(),
+        why_winning: z.string().optional(),
+        platform_fit: z.array(z.string()).optional(),
+      }),
+    )
+    .min(2)
+    .max(4),
 });
 
 export const summarizeComparison = createServerFn({ method: "POST" })

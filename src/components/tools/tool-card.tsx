@@ -1,14 +1,29 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState, type ReactNode } from "react";
 import {
-  Loader2, Sparkles, AlertTriangle, Copy, Check, ShieldAlert, ListChecks,
-  Info, Cpu, TrendingUp,
+  Loader2,
+  Sparkles,
+  AlertTriangle,
+  Copy,
+  Check,
+  ShieldAlert,
+  ListChecks,
+  Info,
+  Cpu,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { apiFetch } from "@/lib/api-client";
 
 export type ToolResult = {
@@ -40,7 +55,8 @@ export async function callTool(tool: string, input: Record<string, string>): Pro
 const toneClass: Record<string, string> = {
   profit: "text-[var(--profit)] border-[var(--profit)]/30 bg-[var(--profit)]/10",
   warning: "text-[var(--warning)] border-[var(--warning)]/30 bg-[var(--warning)]/10",
-  action: "text-[var(--accent-active)] border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10",
+  action:
+    "text-[var(--accent-active)] border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10",
   neutral: "text-foreground/80 border-white/10 bg-white/5",
 };
 
@@ -58,7 +74,9 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
     <div className="flex items-center gap-2">
       <div
         className="relative flex h-12 w-12 items-center justify-center rounded-full"
-        style={{ background: `conic-gradient(${color} ${pct * 3.6}deg, color-mix(in oklab, var(--foreground) 12%, transparent) 0deg)` }}
+        style={{
+          background: `conic-gradient(${color} ${pct * 3.6}deg, color-mix(in oklab, var(--foreground) 12%, transparent) 0deg)`,
+        }}
       >
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface)] text-[11px] font-bold">
           {pct}
@@ -70,7 +88,10 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
 }
 
 function ListBlock({
-  icon: Icon, title, items, tone,
+  icon: Icon,
+  title,
+  items,
+  tone,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   title: string;
@@ -78,10 +99,24 @@ function ListBlock({
   tone: "profit" | "warning" | "action";
 }) {
   if (!items.length) return null;
-  const c = tone === "warning" ? "var(--warning)" : tone === "profit" ? "var(--profit)" : "var(--accent-active)";
+  const c =
+    tone === "warning"
+      ? "var(--warning)"
+      : tone === "profit"
+        ? "var(--profit)"
+        : "var(--accent-active)";
   return (
-    <div className="rounded-lg border p-2.5" style={{ borderColor: `color-mix(in oklab, ${c} 25%, transparent)`, background: `color-mix(in oklab, ${c} 8%, transparent)` }}>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: c }}>
+    <div
+      className="rounded-lg border p-2.5"
+      style={{
+        borderColor: `color-mix(in oklab, ${c} 25%, transparent)`,
+        background: `color-mix(in oklab, ${c} 8%, transparent)`,
+      }}
+    >
+      <div
+        className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider"
+        style={{ color: c }}
+      >
         <Icon size={12} /> {title}
       </div>
       <ul className="space-y-1">
@@ -97,7 +132,13 @@ function ListBlock({
 }
 
 export function ToolCard({
-  icon: Icon, title, description, children, onRun, runLabel = "AI ile Analiz Et", disabled,
+  icon: Icon,
+  title,
+  description,
+  children,
+  onRun,
+  runLabel = "AI ile Analiz Et",
+  disabled,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   title: string;
@@ -114,7 +155,9 @@ export function ToolCard({
   const [copied, setCopied] = useState(false);
 
   const run = async () => {
-    setLoading(true); setError(null); setStage(0);
+    setLoading(true);
+    setError(null);
+    setStage(0);
     const timer = setInterval(() => setStage((s) => (s + 1) % STAGES.length), 2600);
     try {
       setResult(await onRun());
@@ -130,7 +173,8 @@ export function ToolCard({
   const copyDoc = async () => {
     if (!result?.document) return;
     await navigator.clipboard.writeText(result.document);
-    setCopied(true); setTimeout(() => setCopied(false), 1600);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
     toast.success("Panoya kopyalandı");
   };
 
@@ -145,7 +189,9 @@ export function ToolCard({
   };
 
   return (
-    <Card className={`group premium-card live-card relative overflow-hidden border-transparent bg-transparent transition-colors ${loading ? "card-shimmer" : ""}`}>
+    <Card
+      className={`group premium-card live-card relative overflow-hidden border-transparent bg-transparent transition-colors ${loading ? "card-shimmer" : ""}`}
+    >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-active)]/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
@@ -158,7 +204,11 @@ export function ToolCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {children}
-        <Button onClick={run} disabled={loading || disabled} className={`press w-full gap-2 ${loading || disabled ? "" : "edge-light"}`}>
+        <Button
+          onClick={run}
+          disabled={loading || disabled}
+          className={`press w-full gap-2 ${loading || disabled ? "" : "edge-light"}`}
+        >
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
           {loading ? "Hibrit AI çalışıyor…" : runLabel}
         </Button>
@@ -173,7 +223,11 @@ export function ToolCard({
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-10 rounded-lg border border-white/5 bg-white/5" style={{ opacity: 0.5 + (i % 2) * 0.2 }} />
+                <div
+                  key={i}
+                  className="h-10 rounded-lg border border-white/5 bg-white/5"
+                  style={{ opacity: 0.5 + (i % 2) * 0.2 }}
+                />
               ))}
             </div>
           </div>
@@ -194,7 +248,9 @@ export function ToolCard({
                     {result.verdict}
                   </Badge>
                 )}
-                {result.headline && <p className="text-sm font-semibold leading-snug">{result.headline}</p>}
+                {result.headline && (
+                  <p className="text-sm font-semibold leading-snug">{result.headline}</p>
+                )}
               </div>
               {(result.score ?? 0) > 0 && <ScoreRing value={result.score ?? 0} label="skor" />}
             </div>
@@ -202,7 +258,10 @@ export function ToolCard({
             {result.metrics.length > 0 && (
               <div className="grid grid-cols-2 gap-2">
                 {result.metrics.map((m, i) => (
-                  <div key={i} className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m.tone ?? "neutral"]}`}>
+                  <div
+                    key={i}
+                    className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m.tone ?? "neutral"]}`}
+                  >
                     <div className="text-[10px] uppercase tracking-wider opacity-70">{m.label}</div>
                     <div className="mt-0.5 text-sm font-bold">{m.value}</div>
                   </div>
@@ -216,7 +275,9 @@ export function ToolCard({
                   <TableHeader>
                     <TableRow className="border-white/10 hover:bg-transparent">
                       {result.table.columns.map((c, i) => (
-                        <TableHead key={i} className="text-[11px] whitespace-nowrap">{c}</TableHead>
+                        <TableHead key={i} className="text-[11px] whitespace-nowrap">
+                          {c}
+                        </TableHead>
                       ))}
                     </TableRow>
                   </TableHeader>
@@ -224,7 +285,9 @@ export function ToolCard({
                     {result.table.rows.map((r, i) => (
                       <TableRow key={i} className="border-white/5">
                         {r.map((cell, j) => (
-                          <TableCell key={j} className="text-xs">{cell}</TableCell>
+                          <TableCell key={j} className="text-xs">
+                            {cell}
+                          </TableCell>
                         ))}
                       </TableRow>
                     ))}
@@ -244,9 +307,24 @@ export function ToolCard({
               </ul>
             )}
 
-            <ListBlock icon={ShieldAlert} title="Riskler" items={result.risks ?? []} tone="warning" />
-            <ListBlock icon={ListChecks} title="Aksiyon planı" items={result.actions ?? []} tone="profit" />
-            <ListBlock icon={Info} title="Varsayımlar" items={result.assumptions ?? []} tone="action" />
+            <ListBlock
+              icon={ShieldAlert}
+              title="Riskler"
+              items={result.risks ?? []}
+              tone="warning"
+            />
+            <ListBlock
+              icon={ListChecks}
+              title="Aksiyon planı"
+              items={result.actions ?? []}
+              tone="profit"
+            />
+            <ListBlock
+              icon={Info}
+              title="Varsayımlar"
+              items={result.assumptions ?? []}
+              tone="action"
+            />
 
             {result.document && (
               <div className="space-y-2">
@@ -257,22 +335,34 @@ export function ToolCard({
                   <Button size="sm" variant="secondary" className="gap-1.5" onClick={copyDoc}>
                     {copied ? <Check size={13} /> : <Copy size={13} />} Kopyala
                   </Button>
-                  <Button size="sm" variant="outline" onClick={download}>İndir</Button>
+                  <Button size="sm" variant="outline" onClick={download}>
+                    İndir
+                  </Button>
                 </div>
               </div>
             )}
 
             <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
               {(result.providers ?? []).map((p) => (
-                <Badge key={p} variant="outline" className="border-white/10 text-[10px] text-muted-foreground">
+                <Badge
+                  key={p}
+                  variant="outline"
+                  className="border-white/10 text-[10px] text-muted-foreground"
+                >
                   <Cpu size={10} className="mr-1" /> {p}
                 </Badge>
               ))}
-              <Badge variant="outline" className="border-white/10 text-[10px] text-muted-foreground">
+              <Badge
+                variant="outline"
+                className="border-white/10 text-[10px] text-muted-foreground"
+              >
                 {result.provider}
               </Badge>
               {typeof result.confidence === "number" && result.confidence > 0 && (
-                <Badge variant="outline" className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]">
+                <Badge
+                  variant="outline"
+                  className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
+                >
                   <TrendingUp size={10} className="mr-1" /> güven %{result.confidence}
                 </Badge>
               )}
@@ -287,7 +377,9 @@ export function ToolCard({
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
       {children}
     </label>
   );

@@ -1,8 +1,22 @@
-import { DIFFICULTIES, RUN_LENGTH, netMarginPct, unitProfit, marketShare, type SimState } from "./training-sim";
+import {
+  DIFFICULTIES,
+  RUN_LENGTH,
+  netMarginPct,
+  unitProfit,
+  marketShare,
+  type SimState,
+} from "./training-sim";
 
 /* ---------------- XP & levels ---------------- */
 
-export type LevelInfo = { xp: number; level: number; title: string; into: number; need: number; pct: number };
+export type LevelInfo = {
+  xp: number;
+  level: number;
+  title: string;
+  into: number;
+  need: number;
+  pct: number;
+};
 
 const TITLES = [
   "Çırak Satıcı",
@@ -27,11 +41,23 @@ export function computeXp(s: SimState): number {
   const supportXp = (s.supportResolved ?? 0) * 1.2 - (s.slaBreaches ?? 0) * 15;
   const seasonXp = ((s.season ?? 1) - 1) * 500;
   const targetXp = s.totalProfit >= cfg.targetProfit ? 600 : 0;
-  return Math.round(Math.max(0,
-    (profitXp + orderXp + dayXp + reviewXp + brandXp + shareXp + abXp + supportXp + seasonXp + targetXp) * diffMult,
-  ));
+  return Math.round(
+    Math.max(
+      0,
+      (profitXp +
+        orderXp +
+        dayXp +
+        reviewXp +
+        brandXp +
+        shareXp +
+        abXp +
+        supportXp +
+        seasonXp +
+        targetXp) *
+        diffMult,
+    ),
+  );
 }
-
 
 export function levelFromXp(xp: number): LevelInfo {
   let level = 1;
@@ -65,25 +91,39 @@ export type Mission = {
 
 export const MISSIONS: Mission[] = [
   {
-    id: "list", tier: 1, reward: 60,
+    id: "list",
+    tier: 1,
+    reward: 60,
     title: "İlk ürününü vitrine koy",
     hint: "Katalog & Stok sekmesinden araştırdığın ürünlerden birini mağazana ekle.",
     progress: (s) => ({ value: s.products.length, goal: 1 }),
   },
   {
-    id: "stock", tier: 1, reward: 80,
+    id: "stock",
+    tier: 1,
+    reward: 80,
     title: "Reklamdan önce stok al",
     hint: "Tedarikçiye sipariş ver; stok yokken reklam harcaması nakit yakar.",
-    progress: (s) => ({ value: s.products.reduce((a, p) => a + p.stock + p.incoming.reduce((b, i) => b + i.qty, 0), 0), goal: 25 }),
+    progress: (s) => ({
+      value: s.products.reduce(
+        (a, p) => a + p.stock + p.incoming.reduce((b, i) => b + i.qty, 0),
+        0,
+      ),
+      goal: 25,
+    }),
   },
   {
-    id: "firstsale", tier: 1, reward: 100,
+    id: "firstsale",
+    tier: 1,
+    reward: 100,
     title: "İlk 10 siparişini al",
     hint: "Bütçe aç, günleri ilerlet ve dönüşüm oranını izle.",
     progress: (s) => ({ value: s.totalOrders, goal: 10 }),
   },
   {
-    id: "margin", tier: 2, reward: 140,
+    id: "margin",
+    tier: 2,
+    reward: 140,
     title: "Sağlıklı marj kur",
     hint: "En az 2 üründe net marj %25'in üzerinde olsun (fiyat + tedarik maliyeti dengesi).",
     progress: (s) => {
@@ -92,7 +132,9 @@ export const MISSIONS: Mission[] = [
     },
   },
   {
-    id: "roas", tier: 2, reward: 180,
+    id: "roas",
+    tier: 2,
+    reward: 180,
     title: "3x ROAS'a ulaş",
     hint: "Toplam ciro / toplam reklam harcaması ≥ 3 olsun.",
     progress: (s) => {
@@ -102,83 +144,126 @@ export const MISSIONS: Mission[] = [
     },
   },
   {
-    id: "reviews", tier: 2, reward: 150,
+    id: "reviews",
+    tier: 2,
+    reward: 150,
     title: "Sosyal kanıt biriktir",
     hint: "Toplam 40 değerlendirme topla — organik trafiği besler.",
     progress: (s) => ({ value: s.products.reduce((a, p) => a + p.reviews, 0), goal: 40 }),
   },
   {
-    id: "nostockout", tier: 3, reward: 200,
+    id: "nostockout",
+    tier: 3,
+    reward: 200,
     title: "Stoksuz kalma",
     hint: "10 gün boyunca hiçbir üründe stok tükenmesi yaşamadan ilerle.",
     progress: (s) => ({
-      value: s.products.reduce((a, p) => a + p.stockouts, 0) === 0 ? Math.min(10, s.history.length) : 0,
+      value:
+        s.products.reduce((a, p) => a + p.stockouts, 0) === 0 ? Math.min(10, s.history.length) : 0,
       goal: 10,
     }),
   },
   {
-    id: "scale", tier: 3, reward: 260,
+    id: "scale",
+    tier: 3,
+    reward: 260,
     title: "Kârlı ölçeklendir",
     hint: "Günlük reklam bütçesi 100$ üzerindeyken 3 gün üst üste kâr et.",
     progress: (s) => {
-      let best = 0, cur = 0;
-      for (const d of s.history) { if (d.adSpend >= 100 && d.profit > 0) { cur++; best = Math.max(best, cur); } else cur = 0; }
+      let best = 0,
+        cur = 0;
+      for (const d of s.history) {
+        if (d.adSpend >= 100 && d.profit > 0) {
+          cur++;
+          best = Math.max(best, cur);
+        } else cur = 0;
+      }
       return { value: best, goal: 3 };
     },
   },
   {
-    id: "target", tier: 3, reward: 400,
+    id: "target",
+    tier: 3,
+    reward: 400,
     title: "Kâr hedefini geç",
     hint: "Seçtiğin zorluk seviyesinin net kâr hedefine ulaş.",
-    progress: (s) => ({ value: Math.max(0, s.totalProfit), goal: DIFFICULTIES[s.difficulty].targetProfit }),
+    progress: (s) => ({
+      value: Math.max(0, s.totalProfit),
+      goal: DIFFICULTIES[s.difficulty].targetProfit,
+    }),
   },
   {
-    id: "survive", tier: 3, reward: 320,
+    id: "survive",
+    tier: 3,
+    reward: 320,
     title: `${RUN_LENGTH} günü tamamla`,
     hint: "İflas etmeden sezonu bitir.",
     progress: (s) => ({ value: Math.min(RUN_LENGTH, s.history.length), goal: RUN_LENGTH }),
   },
   {
-    id: "brand", tier: 4, reward: 300,
+    id: "brand",
+    tier: 4,
+    reward: 300,
     title: "Marka değerini 60'a çıkar",
     hint: "Yüksek puan, tekrar alım ve premium segment marka değerini büyütür; stoksuzluk ve iade düşürür.",
     progress: (s) => ({ value: Math.round(s.brand ?? 0), goal: 60 }),
   },
   {
-    id: "share", tier: 4, reward: 340,
+    id: "share",
+    tier: 4,
+    reward: 340,
     title: "Pazarın %35'ini al",
     hint: "Rakipler sekmesinden paylarını izle: fiyat, puan ve reklam gücü payını belirler.",
     progress: (s) => ({ value: Math.round((s.share ?? 0) * 100), goal: 35 }),
   },
   {
-    id: "abwin", tier: 4, reward: 220,
+    id: "abwin",
+    tier: 4,
+    reward: 220,
     title: "2 A/B testi kazan",
     hint: "Reklam sekmesinde iki kreatif varyantını yarıştır; kazanan kalıcı dönüşüm artışı verir.",
     progress: (s) => ({ value: s.abWins ?? 0, goal: 2 }),
   },
   {
-    id: "sla", tier: 4, reward: 260,
+    id: "sla",
+    tier: 4,
+    reward: 260,
     title: "Destek SLA'sını koru",
     hint: "Kuyruk 15 bileti aşmadan 120 destek talebini kapat (Operasyon sekmesi).",
-    progress: (s) => ({ value: (s.slaBreaches ?? 0) > 3 ? 0 : Math.min(120, s.supportResolved ?? 0), goal: 120 }),
+    progress: (s) => ({
+      value: (s.slaBreaches ?? 0) > 3 ? 0 : Math.min(120, s.supportResolved ?? 0),
+      goal: 120,
+    }),
   },
   {
-    id: "bf", tier: 4, reward: 380,
+    id: "bf",
+    tier: 4,
+    reward: 380,
     title: "Black Friday'i kârlı kapat",
     hint: "24-25. günlerde toplam 400$ net kâr yap; öncesinde stok ve kreatif hazır olsun.",
     progress: (s) => {
-      const bf = s.history.filter((d) => { const sd = ((d.day - 1) % RUN_LENGTH) + 1; return sd >= 24 && sd < 26; });
-      return { value: Math.max(0, bf.reduce((a, d) => a + d.profit, 0)), goal: 400 };
+      const bf = s.history.filter((d) => {
+        const sd = ((d.day - 1) % RUN_LENGTH) + 1;
+        return sd >= 24 && sd < 26;
+      });
+      return {
+        value: Math.max(
+          0,
+          bf.reduce((a, d) => a + d.profit, 0),
+        ),
+        goal: 400,
+      };
     },
   },
   {
-    id: "season2", tier: 4, reward: 500,
+    id: "season2",
+    tier: 4,
+    reward: 500,
     title: "2. sezona geç",
     hint: "Sezonu bitirdikten sonra 'Sezona devam et' ile sonsuz modu aç.",
     progress: (s) => ({ value: (s.season ?? 1) >= 2 ? 1 : 0, goal: 1 }),
   },
 ];
-
 
 export function missionState(s: SimState) {
   return MISSIONS.map((m) => {
@@ -200,109 +285,228 @@ export function coachTips(s: SimState): Tip[] {
   const dailyAds = s.products.reduce((a, p) => a + (p.listed ? p.adBudget : 0), 0);
 
   if (s.products.length === 0) {
-    tips.push({ kind: "idea", title: "Vitrin boş", body: "Önce Katalog & Stok sekmesinden ürün ekle. Ürün olmadan trafik satın almanın anlamı yok." });
+    tips.push({
+      kind: "idea",
+      title: "Vitrin boş",
+      body: "Önce Katalog & Stok sekmesinden ürün ekle. Ürün olmadan trafik satın almanın anlamı yok.",
+    });
   }
   for (const p of s.products) {
     if (p.listed && p.adBudget > 0 && p.stock <= 0) {
-      tips.push({ kind: "warn", title: `${p.name}: stoksuz reklam`, body: "Stok sıfırken tıklama satın alıyorsun. Bütçeyi durdur veya acil sipariş ver." });
+      tips.push({
+        kind: "warn",
+        title: `${p.name}: stoksuz reklam`,
+        body: "Stok sıfırken tıklama satın alıyorsun. Bütçeyi durdur veya acil sipariş ver.",
+      });
     }
     if (unitProfit(p, cfg) <= 0) {
-      tips.push({ kind: "warn", title: `${p.name}: negatif birim kâr`, body: `Fiyat ${p.price.toFixed(2)}$ iken komisyon + kargo sonrası zarardasın. Fiyatı yükselt ya da ürünü çıkar.` });
+      tips.push({
+        kind: "warn",
+        title: `${p.name}: negatif birim kâr`,
+        body: `Fiyat ${p.price.toFixed(2)}$ iken komisyon + kargo sonrası zarardasın. Fiyatı yükselt ya da ürünü çıkar.`,
+      });
     } else if (netMarginPct(p, cfg) < 15) {
-      tips.push({ kind: "idea", title: `${p.name}: marj dar`, body: "Net marj %15'in altında. Küçük bir iade dalgası bile bu ürünü zarara çevirir." });
+      tips.push({
+        kind: "idea",
+        title: `${p.name}: marj dar`,
+        body: "Net marj %15'in altında. Küçük bir iade dalgası bile bu ürünü zarara çevirir.",
+      });
     }
     if (p.rating < 4 && p.reviews > 5) {
-      tips.push({ kind: "warn", title: `${p.name}: puan düşüyor`, body: "Düşük puan iade oranını ve dönüşümü doğrudan bozar. Fiyatı değeriyle hizala." });
+      tips.push({
+        kind: "warn",
+        title: `${p.name}: puan düşüyor`,
+        body: "Düşük puan iade oranını ve dönüşümü doğrudan bozar. Fiyatı değeriyle hizala.",
+      });
     }
     if ((p.fatigue ?? 0) > 0.55 && p.adBudget > 0) {
-      tips.push({ kind: "warn", title: `${p.name}: kreatif yorgun`, body: `Yorgunluk %${Math.round((p.fatigue ?? 0) * 100)}. Aynı reklam tıklama başına daha pahalı ve daha az satıyor — yeni kreatif çek ya da bütçeyi birkaç gün dinlendir.` });
+      tips.push({
+        kind: "warn",
+        title: `${p.name}: kreatif yorgun`,
+        body: `Yorgunluk %${Math.round((p.fatigue ?? 0) * 100)}. Aynı reklam tıklama başına daha pahalı ve daha az satıyor — yeni kreatif çek ya da bütçeyi birkaç gün dinlendir.`,
+      });
     }
     if ((p.returnPool ?? 0) > 25) {
-      tips.push({ kind: "good", title: `${p.name}: sadık kitle oluştu`, body: "Geri dönen müşteri havuzun büyüyor; bu trafiği bedava alıyorsun. Stoğu boş bırakma." });
+      tips.push({
+        kind: "good",
+        title: `${p.name}: sadık kitle oluştu`,
+        body: "Geri dönen müşteri havuzun büyüyor; bu trafiği bedava alıyorsun. Stoğu boş bırakma.",
+      });
     }
     if ((p.channel ?? "meta") === "tiktok" && p.price > p.recommendedPrice) {
-      tips.push({ kind: "idea", title: `${p.name}: kanal-fiyat uyumsuz`, body: "TikTok kitlesi düşük niyetli ve fiyat hassas. Premium fiyat için Google, agresif fiyat için TikTok daha uygun." });
+      tips.push({
+        kind: "idea",
+        title: `${p.name}: kanal-fiyat uyumsuz`,
+        body: "TikTok kitlesi düşük niyetli ve fiyat hassas. Premium fiyat için Google, agresif fiyat için TikTok daha uygun.",
+      });
     }
     if (p.stock > 0 && p.listed && p.adBudget === 0 && p.unitsSold < 5) {
-      tips.push({ kind: "idea", title: `${p.name}: trafik yok`, body: "Stok var ama bütçe 0. Küçük bir test bütçesiyle (10-25$/gün) veri toplamaya başla." });
+      tips.push({
+        kind: "idea",
+        title: `${p.name}: trafik yok`,
+        body: "Stok var ama bütçe 0. Küçük bir test bütçesiyle (10-25$/gün) veri toplamaya başla.",
+      });
     }
   }
   if (dailyAds > 0 && s.cash / dailyAds < 5) {
-    tips.push({ kind: "warn", title: "Nakit pisti kısa", body: "Mevcut nakit 5 günlük reklam harcamasını zor karşılıyor. Bütçeyi kıs veya stok alımını ertele." });
+    tips.push({
+      kind: "warn",
+      title: "Nakit pisti kısa",
+      body: "Mevcut nakit 5 günlük reklam harcamasını zor karşılıyor. Bütçeyi kıs veya stok alımını ertele.",
+    });
   }
   if (last3.length === 3 && last3.every((d) => d.profit < 0)) {
-    tips.push({ kind: "warn", title: "3 gündür zarar", body: "Fiyat/bütçe kombinasyonu çalışmıyor. Bütçeyi yarıya indir, fiyatı önerilen fiyata yaklaştır." });
+    tips.push({
+      kind: "warn",
+      title: "3 gündür zarar",
+      body: "Fiyat/bütçe kombinasyonu çalışmıyor. Bütçeyi yarıya indir, fiyatı önerilen fiyata yaklaştır.",
+    });
   }
   if (last && last.visitors > 300 && last.orders === 0) {
-    tips.push({ kind: "warn", title: "Trafik var, satış yok", body: "Dönüşüm sorunu: fiyat çok yüksek ya da puan düşük. Önce fiyatı test et." });
+    tips.push({
+      kind: "warn",
+      title: "Trafik var, satış yok",
+      body: "Dönüşüm sorunu: fiyat çok yüksek ya da puan düşük. Önce fiyatı test et.",
+    });
   }
   const ad = s.history.reduce((a, d) => a + d.adSpend, 0);
   const rev = s.history.reduce((a, d) => a + d.revenue, 0);
   if (ad > 50 && rev / ad >= 3) {
-    tips.push({ kind: "good", title: "ROAS güçlü", body: "3x üzeri getiri yakaladın. Stok yetiyorsa bütçeyi %20-30 adımlarla artır." });
+    tips.push({
+      kind: "good",
+      title: "ROAS güçlü",
+      body: "3x üzeri getiri yakaladın. Stok yetiyorsa bütçeyi %20-30 adımlarla artır.",
+    });
   }
   const mi = s.marketIndex ?? 1;
   if (mi < 0.93 && s.products.some((p) => p.price > p.recommendedPrice * mi * 1.05)) {
-    tips.push({ kind: "warn", title: "Rakipler fiyat kırdı", body: `Piyasa endeksi ${mi.toFixed(2)}. Fiyatların referansın üzerinde kaldı; dönüşüm düşer. Fiyatı endekse yaklaştır ya da paketle değer yarat.` });
+    tips.push({
+      kind: "warn",
+      title: "Rakipler fiyat kırdı",
+      body: `Piyasa endeksi ${mi.toFixed(2)}. Fiyatların referansın üzerinde kaldı; dönüşüm düşer. Fiyatı endekse yaklaştır ya da paketle değer yarat.`,
+    });
   }
   if (mi > 1.07 && s.products.some((p) => p.price < p.recommendedPrice * mi * 0.98)) {
-    tips.push({ kind: "idea", title: "Zam penceresi açık", body: `Piyasa endeksi ${mi.toFixed(2)}; rakipler pahalı. Fiyatı yükselterek marjı büyütebilirsin.` });
+    tips.push({
+      kind: "idea",
+      title: "Zam penceresi açık",
+      body: `Piyasa endeksi ${mi.toFixed(2)}; rakipler pahalı. Fiyatı yükselterek marjı büyütebilirsin.`,
+    });
   }
   if ((s.loan?.balance ?? 0) > 0) {
-    tips.push({ kind: "warn", title: "Kredi faizi işliyor", body: `Borç $${(s.loan?.balance ?? 0).toFixed(0)}, bugüne kadar $${(s.loan?.paidInterest ?? 0).toFixed(2)} faiz ödedin. Nakit rahatladıkça kapat.` });
+    tips.push({
+      kind: "warn",
+      title: "Kredi faizi işliyor",
+      body: `Borç $${(s.loan?.balance ?? 0).toFixed(0)}, bugüne kadar $${(s.loan?.paidInterest ?? 0).toFixed(2)} faiz ödedin. Nakit rahatladıkça kapat.`,
+    });
   }
-  if ((s.subscribers ?? 0) >= 60 && (s.day - (s.lastCampaignDay ?? -99)) >= 4) {
-    tips.push({ kind: "good", title: "Liste kampanyaya hazır", body: `${Math.floor(s.subscribers ?? 0)} abonen var. Büyüme sekmesinden bedava trafikle sipariş al.` });
+  if ((s.subscribers ?? 0) >= 60 && s.day - (s.lastCampaignDay ?? -99) >= 4) {
+    tips.push({
+      kind: "good",
+      title: "Liste kampanyaya hazır",
+      body: `${Math.floor(s.subscribers ?? 0)} abonen var. Büyüme sekmesinden bedava trafikle sipariş al.`,
+    });
   }
   if ((s.upgrades?.length ?? 0) === 0 && s.cash > 400) {
-    tips.push({ kind: "idea", title: "Yükseltme almadın", body: "Nakit yeterli. Tek tık ödeme veya 3PL anlaşması her siparişte kalıcı kazanç sağlar." });
+    tips.push({
+      kind: "idea",
+      title: "Yükseltme almadın",
+      body: "Nakit yeterli. Tek tık ödeme veya 3PL anlaşması her siparişte kalıcı kazanç sağlar.",
+    });
   }
   if (s.activeEvent) {
-    tips.push({ kind: "idea", title: "Piyasa olayı aktif", body: `${s.activeEvent.text} Bu pencerede bütçeni buna göre ayarla.` });
+    tips.push({
+      kind: "idea",
+      title: "Piyasa olayı aktif",
+      body: `${s.activeEvent.text} Bu pencerede bütçeni buna göre ayarla.`,
+    });
   }
 
   /* --- layer 4 --- */
   const queue = s.supportQueue ?? 0;
   if (queue > 12) {
-    tips.push({ kind: "warn", title: "Destek kuyruğu birikti", body: `${Math.round(queue)} bilet bekliyor. Yanıtsız talepler puanı düşürüp iadeleri artırıyor — Operasyon sekmesinden günlük destek bütçesini yükselt ya da destek ekibini işe al.` });
+    tips.push({
+      kind: "warn",
+      title: "Destek kuyruğu birikti",
+      body: `${Math.round(queue)} bilet bekliyor. Yanıtsız talepler puanı düşürüp iadeleri artırıyor — Operasyon sekmesinden günlük destek bütçesini yükselt ya da destek ekibini işe al.`,
+    });
   } else if ((s.totalOrders ?? 0) > 20 && (s.supportBudget ?? 0) === 0) {
-    tips.push({ kind: "idea", title: "Destek bütçesi sıfır", body: "Sipariş sayın arttı ama hiç destek bütçen yok. Günde 15-30$ ayırmak puanını korur." });
+    tips.push({
+      kind: "idea",
+      title: "Destek bütçesi sıfır",
+      body: "Sipariş sayın arttı ama hiç destek bütçen yok. Günde 15-30$ ayırmak puanını korur.",
+    });
   }
   const share = s.share ?? 0;
   const rivals = marketShare(s).rivals;
   const leader = [...rivals].sort((a, b) => b.share - a.share)[0];
   if (leader && leader.share > share + 0.08) {
-    tips.push({ kind: "warn", title: `${leader.c.name} pazarı domine ediyor`, body: `Payı %${(leader.share * 100).toFixed(0)}, seninki %${(share * 100).toFixed(0)}. Fiyatını endekse yaklaştır, bütçeyi kademeli artır ya da puanını yükselt.` });
+    tips.push({
+      kind: "warn",
+      title: `${leader.c.name} pazarı domine ediyor`,
+      body: `Payı %${(leader.share * 100).toFixed(0)}, seninki %${(share * 100).toFixed(0)}. Fiyatını endekse yaklaştır, bütçeyi kademeli artır ya da puanını yükselt.`,
+    });
   } else if (share > 0.4) {
-    tips.push({ kind: "good", title: "Pazar liderisin", body: `Payın %${(share * 100).toFixed(0)}. Bu momentumda fiyatı biraz yükseltip marj toplayabilirsin.` });
+    tips.push({
+      kind: "good",
+      title: "Pazar liderisin",
+      body: `Payın %${(share * 100).toFixed(0)}. Bu momentumda fiyatı biraz yükseltip marj toplayabilirsin.`,
+    });
   }
   const brand = s.brand ?? 0;
   if (brand < 15 && s.history.length > 8) {
-    tips.push({ kind: "idea", title: "Marka değeri zayıf", body: "Marka düşükken organik trafik gelmez ve fiyat esnekliğin yüksek olur. Puanı yüksek tut, stoksuz kalma, aşırı indirimden kaçın." });
+    tips.push({
+      kind: "idea",
+      title: "Marka değeri zayıf",
+      body: "Marka düşükken organik trafik gelmez ve fiyat esnekliğin yüksek olur. Puanı yüksek tut, stoksuz kalma, aşırı indirimden kaçın.",
+    });
   } else if (brand >= 55) {
-    tips.push({ kind: "good", title: "Marka güçlü", body: `Marka değerin ${Math.round(brand)}. Premium segment payın büyüyor — fiyatı yukarı test etmenin tam zamanı.` });
+    tips.push({
+      kind: "good",
+      title: "Marka güçlü",
+      body: `Marka değerin ${Math.round(brand)}. Premium segment payın büyüyor — fiyatı yukarı test etmenin tam zamanı.`,
+    });
   }
   const mix = s.segmentMix;
   if (mix && mix.bargain > 0.55) {
-    tips.push({ kind: "idea", title: "Fiyat avcısı ağırlıklı kitle", body: "Müşterinin yarıdan fazlası fiyat avcısı: iade oranı yüksek, sadakat düşük. Fiyatı biraz yükselt ya da Google kanalını dene." });
+    tips.push({
+      kind: "idea",
+      title: "Fiyat avcısı ağırlıklı kitle",
+      body: "Müşterinin yarıdan fazlası fiyat avcısı: iade oranı yüksek, sadakat düşük. Fiyatı biraz yükselt ya da Google kanalını dene.",
+    });
   }
   const sd = ((s.day - 1) % RUN_LENGTH) + 1;
   if (sd >= 20 && sd < 24) {
     const stock = s.products.reduce((a, p) => a + p.stock, 0);
-    tips.push({ kind: sd >= 22 && stock < 60 ? "warn" : "idea", title: "Black Friday yaklaşıyor", body: `${24 - sd} gün kaldı. Talep ×2.2 olacak; stok (${stock} birim) ve taze kreatif şimdiden hazır olsun, tedarik süresini unutma.` });
+    tips.push({
+      kind: sd >= 22 && stock < 60 ? "warn" : "idea",
+      title: "Black Friday yaklaşıyor",
+      body: `${24 - sd} gün kaldı. Talep ×2.2 olacak; stok (${stock} birim) ve taze kreatif şimdiden hazır olsun, tedarik süresini unutma.`,
+    });
   }
   if (s.products.some((p) => p.adBudget > 40 && !p.abTest && !(p.cvrBonus ?? 0))) {
-    tips.push({ kind: "idea", title: "A/B testi yapmadın", body: "Bütçe akarken kreatif testi yapmamak kalıcı dönüşüm kazancını kaçırmak demek. Reklam sekmesinden varyant testi başlat." });
+    tips.push({
+      kind: "idea",
+      title: "A/B testi yapmadın",
+      body: "Bütçe akarken kreatif testi yapmamak kalıcı dönüşüm kazancını kaçırmak demek. Reklam sekmesinden varyant testi başlat.",
+    });
   }
   if (s.status === "finished" && !(s.endless ?? false)) {
-    tips.push({ kind: "good", title: "Sonsuz mod açılabilir", body: "Sezonu bitirdin. 'Sezona devam et' ile takvim baştan işler, skorun ve mağazan korunur." });
+    tips.push({
+      kind: "good",
+      title: "Sonsuz mod açılabilir",
+      body: "Sezonu bitirdin. 'Sezona devam et' ile takvim baştan işler, skorun ve mağazan korunur.",
+    });
   }
 
   if (tips.length === 0) {
-    tips.push({ kind: "good", title: "Panel temiz", body: "Kritik bir uyarı yok. Günleri ilerlet ve analitikte dönüşüm eğilimini izle." });
+    tips.push({
+      kind: "good",
+      title: "Panel temiz",
+      body: "Kritik bir uyarı yok. Günleri ilerlet ve analitikte dönüşüm eğilimini izle.",
+    });
   }
   return tips.slice(0, 8);
-
 }
 
 /* ---------------- Hall of fame ---------------- */
@@ -323,7 +527,11 @@ const HOF_KEY = "omni-training-hof-v1";
 
 export function loadHof(): RunResult[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(window.localStorage.getItem(HOF_KEY) || "[]") as RunResult[]; } catch { return []; }
+  try {
+    return JSON.parse(window.localStorage.getItem(HOF_KEY) || "[]") as RunResult[];
+  } catch {
+    return [];
+  }
 }
 
 export function saveHof(r: RunResult) {

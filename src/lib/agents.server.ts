@@ -27,9 +27,18 @@ export type MarketScan = {
 
 // Agent -> preferred key. Both naming styles are accepted; when a key is spent
 // callGemini rotates to the next one in the shared pool automatically.
-const AGENT3_KEY = () => process.env['GEMINI_API_KEY_3'] || process.env['GEMINI_3_API_KEY'] || process.env['GEMINI_API_KEY'];
-const AGENT1_KEY = () => process.env['GEMINI_API_KEY_1'] || process.env['GEMINI_1_API_KEY'] || process.env['GEMINI_API_KEY'];
-const AGENT2_KEY = () => process.env['GEMINI_API_KEY_2'] || process.env['GEMINI_2_API_KEY'] || process.env['GEMINI_API_KEY'];
+const AGENT3_KEY = () =>
+  process.env["GEMINI_API_KEY_3"] ||
+  process.env["GEMINI_3_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
+const AGENT1_KEY = () =>
+  process.env["GEMINI_API_KEY_1"] ||
+  process.env["GEMINI_1_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
+const AGENT2_KEY = () =>
+  process.env["GEMINI_API_KEY_2"] ||
+  process.env["GEMINI_2_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
 
 const FLASH = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 const PRO = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-flash-latest"];
@@ -103,11 +112,19 @@ Return ONLY JSON:
       /* retry */
     }
   }
-  return { score: 0, decision: "REJECTED", summary: "Agent 1 could not evaluate this product.", points: [] };
+  return {
+    score: 0,
+    decision: "REJECTED",
+    summary: "Agent 1 could not evaluate this product.",
+    points: [],
+  };
 }
 
 /** AGENT 2 — Risk & Audit Agent. Ruthless auditor cross-examining Agent 1. */
-export async function runAuditAgent(context: string, finder: AgentVerdict): Promise<AgentVerdict & { risk_flags: string[] }> {
+export async function runAuditAgent(
+  context: string,
+  finder: AgentVerdict,
+): Promise<AgentVerdict & { risk_flags: string[] }> {
   const prompt = `You are AGENT 2 — the RISK & AUDIT AGENT, a ruthless e-commerce auditor.
 Cross-examine Agent 1's bullish case below. Hunt for supply-chain bottlenecks, ad saturation, margin squeeze,
 return rates, IP/patent exposure, compliance and shipping/customs risk, platform policy risk. Be brutally honest.
@@ -133,14 +150,22 @@ Return ONLY JSON:
         const v = toVerdict(raw, "No audit returned.");
         return {
           ...v,
-          risk_flags: Array.isArray(raw.risk_flags) ? raw.risk_flags.slice(0, 3).map(String) : v.points.slice(0, 3),
+          risk_flags: Array.isArray(raw.risk_flags)
+            ? raw.risk_flags.slice(0, 3).map(String)
+            : v.points.slice(0, 3),
         };
       }
     } catch {
       /* retry */
     }
   }
-  return { score: 0, decision: "REJECTED", summary: "Agent 2 could not audit this product.", points: [], risk_flags: [] };
+  return {
+    score: 0,
+    decision: "REJECTED",
+    summary: "Agent 2 could not audit this product.",
+    points: [],
+    risk_flags: [],
+  };
 }
 
 /** AGENT 4 — Independent Verifier, powered by Groq (different model family). */
@@ -194,7 +219,12 @@ export async function runConsensus(input: {
     approved,
     average_score: average,
     agent1,
-    agent2: { score: audit.score, decision: audit.decision, summary: audit.summary, points: audit.points },
+    agent2: {
+      score: audit.score,
+      decision: audit.decision,
+      summary: audit.summary,
+      points: audit.points,
+    },
     ...(agent4 ? { agent4 } : {}),
     profit_margin_pct: Number(input.profit_margin_pct ?? 0) || 0,
     competition_level: input.competition_level ?? "Medium",

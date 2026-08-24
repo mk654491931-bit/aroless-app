@@ -1,14 +1,39 @@
 import { useState } from "react";
-import { AlertTriangle, BadgeCheck, ChevronDown, CircleDashed, ExternalLink, ShieldCheck, Sigma, Trophy } from "lucide-react";
-import { evidenceLabel, evidenceStyle, type ScoreComponent, type WinnerBreakdown } from "@/lib/winner-score";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  ChevronDown,
+  CircleDashed,
+  ExternalLink,
+  ShieldCheck,
+  Sigma,
+  Trophy,
+} from "lucide-react";
+import {
+  evidenceLabel,
+  evidenceStyle,
+  type ScoreComponent,
+  type WinnerBreakdown,
+} from "@/lib/winner-score";
 import { MarketFitPanel } from "@/components/market-fit-panel";
 import type { MarketVerdict } from "@/lib/market-verdict";
 
-
 const barColor = (v: number) =>
-  v >= 75 ? "bg-emerald-400" : v >= 55 ? "bg-[var(--brand,oklch(0.68_0.20_265))]" : v >= 40 ? "bg-amber-400" : "bg-rose-400";
+  v >= 75
+    ? "bg-emerald-400"
+    : v >= 55
+      ? "bg-[var(--brand,oklch(0.68_0.20_265))]"
+      : v >= 40
+        ? "bg-amber-400"
+        : "bg-rose-400";
 
-export function WinnerBadge({ score, level }: { score?: number; level?: WinnerBreakdown["evidence_level"] }) {
+export function WinnerBadge({
+  score,
+  level,
+}: {
+  score?: number;
+  level?: WinnerBreakdown["evidence_level"];
+}) {
   if (typeof score !== "number") return null;
   const tone =
     score >= 80
@@ -20,11 +45,15 @@ export function WinnerBadge({ score, level }: { score?: number; level?: WinnerBr
           : "border-rose-500/40 bg-rose-500/10 text-rose-300";
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
+      >
         <Trophy size={10} /> Winner {score}
       </span>
       {level && (
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${evidenceStyle(level)}`}>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${evidenceStyle(level)}`}
+        >
           <ShieldCheck size={10} /> {evidenceLabel(level)}
         </span>
       )}
@@ -47,7 +76,12 @@ function ComponentRow({ c }: { c: ScoreComponent }) {
       >
         <div className="flex items-center justify-between text-[11px]">
           <span className="inline-flex items-center gap-1 text-muted-foreground">
-            {(ev.length > 0 || c.formula) && <ChevronDown size={11} className={`transition ${open ? "rotate-180" : "-rotate-90"}`} />}
+            {(ev.length > 0 || c.formula) && (
+              <ChevronDown
+                size={11}
+                className={`transition ${open ? "rotate-180" : "-rotate-90"}`}
+              />
+            )}
             {c.label} <span className="opacity-60">· ağırlık %{Math.round(c.weight * 100)}</span>
           </span>
           <span className="inline-flex items-center gap-2">
@@ -137,7 +171,11 @@ export function WinnerScorePanel({ breakdown }: { breakdown?: WinnerBreakdown })
 
       <div className="mt-2 flex gap-1">
         {breakdown.components.map((c) => (
-          <div key={c.key} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10" title={`${c.label}: ${c.score}`}>
+          <div
+            key={c.key}
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"
+            title={`${c.label}: ${c.score}`}
+          >
             <div className={`h-full ${barColor(c.score)}`} style={{ width: `${c.score}%` }} />
           </div>
         ))}
@@ -148,7 +186,6 @@ export function WinnerScorePanel({ breakdown }: { breakdown?: WinnerBreakdown })
           {breakdown.components.map((c) => (
             <ComponentRow key={c.key} c={c} />
           ))}
-
 
           {(breakdown.penalties.length > 0 || breakdown.flags.length > 0) && (
             <ul className="mt-2 space-y-1">
@@ -196,9 +233,12 @@ export function RejectedPanel({ items }: { items: RejectedCandidate[] }) {
             <li key={i} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-foreground">
-                  {r.emoji ? `${r.emoji} ` : ""}{r.name ?? "Adsız aday"}
+                  {r.emoji ? `${r.emoji} ` : ""}
+                  {r.name ?? "Adsız aday"}
                 </span>
-                {r.selling_price_usd && <span className="text-[10px] text-muted-foreground">{r.selling_price_usd}</span>}
+                {r.selling_price_usd && (
+                  <span className="text-[10px] text-muted-foreground">{r.selling_price_usd}</span>
+                )}
               </div>
               <p className="mt-1 text-[11px] text-rose-300/90">{r.rejection_reason}</p>
               <MarketFitPanel verdict={r.market_verdict} />

@@ -18,16 +18,26 @@ import {
   type LocalCompetition,
 } from "./consensus-types";
 
-const GEMINI_1 = () => process.env['GEMINI_API_KEY_1'] || process.env['GEMINI_1_API_KEY'] || process.env['GEMINI_API_KEY'];
-const GEMINI_2 = () => process.env['GEMINI_API_KEY_2'] || process.env['GEMINI_2_API_KEY'] || process.env['GEMINI_API_KEY'];
-const GEMINI_3 = () => process.env['GEMINI_API_KEY_3'] || process.env['GEMINI_3_API_KEY'] || process.env['GEMINI_API_KEY'];
-const ALT_CODES = TARGET_COUNTRIES.filter((c) => c.code !== "GLOBAL").map((c) => c.code).join(", ");
+const GEMINI_1 = () =>
+  process.env["GEMINI_API_KEY_1"] ||
+  process.env["GEMINI_1_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
+const GEMINI_2 = () =>
+  process.env["GEMINI_API_KEY_2"] ||
+  process.env["GEMINI_2_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
+const GEMINI_3 = () =>
+  process.env["GEMINI_API_KEY_3"] ||
+  process.env["GEMINI_3_API_KEY"] ||
+  process.env["GEMINI_API_KEY"];
+const ALT_CODES = TARGET_COUNTRIES.filter((c) => c.code !== "GLOBAL")
+  .map((c) => c.code)
+  .join(", ");
 const FLASH = GEMINI_MODELS_LATEST;
 
 export function countryLabel(code: string): string {
   return countryName(code);
 }
-
 
 function clamp100(n: unknown, fb = 50): number {
   const v = Number(n);
@@ -106,7 +116,9 @@ Return ONLY JSON:
     const days = Number(raw["estimated_shipping_days"]);
     return {
       ai_2_score: clamp100(raw["ai_2_score"]),
-      estimated_shipping_days: Number.isFinite(days) ? Math.max(1, Math.min(90, Math.round(days))) : 12,
+      estimated_shipping_days: Number.isFinite(days)
+        ? Math.max(1, Math.min(90, Math.round(days)))
+        : 12,
       logistics_note: String(raw["logistics_note"] ?? ""),
     };
   } catch {

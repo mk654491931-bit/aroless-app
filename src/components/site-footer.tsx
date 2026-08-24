@@ -10,7 +10,8 @@ export function SiteFooter() {
         <div>
           <p className="text-sm font-light uppercase tracking-[0.3em] text-foreground">Aroless</p>
           <p className="mt-3 max-w-xs text-xs leading-relaxed text-muted-foreground">
-            B2B e-ticaret altyapısı: ürün istihbaratı, tedarikçi analizi ve uyum araçları tek bir platformda.
+            B2B e-ticaret altyapısı: ürün istihbaratı, tedarikçi analizi ve uyum araçları tek bir
+            platformda.
           </p>
           <p className="mt-4 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <CheckCircle className="h-3.5 w-3.5 text-[var(--profit,var(--primary))]" />
@@ -24,17 +25,29 @@ export function SiteFooter() {
           </p>
           <ul className="mt-3 space-y-2 text-sm">
             <li>
-              <Link to="/legal/$slug" params={{ slug: "kullanim-kosullari" }} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "kullanim-kosullari" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <FileText className="h-3.5 w-3.5" /> Kullanım Koşulları
               </Link>
             </li>
             <li>
-              <Link to="/legal/$slug" params={{ slug: "kvkk-aydinlatma-metni" }} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "kvkk-aydinlatma-metni" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <FileText className="h-3.5 w-3.5" /> KVKK Aydınlatma Metni
               </Link>
             </li>
             <li>
-              <Link to="/legal/$slug" params={{ slug: "veri-isleme-sozlesmesi" }} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "veri-isleme-sozlesmesi" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <FileText className="h-3.5 w-3.5" /> Veri İşleme Sözleşmesi (DPA)
               </Link>
             </li>
@@ -48,7 +61,11 @@ export function SiteFooter() {
               </button>
             </li>
             <li>
-              <Link to="/legal/$slug" params={{ slug: "cerez-politikasi" }} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "cerez-politikasi" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <Shield className="h-3.5 w-3.5" /> Güvenlik & SLA
               </Link>
             </li>
@@ -56,7 +73,9 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">İletişim</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            İletişim
+          </p>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
             <li>
               <a
@@ -66,7 +85,6 @@ export function SiteFooter() {
                 <ExternalLink className="h-3.5 w-3.5" /> mk65449191@gmail.com
               </a>
             </li>
-
           </ul>
         </div>
       </div>

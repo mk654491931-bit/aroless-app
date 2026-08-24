@@ -1,5 +1,15 @@
 import { useMemo, useState } from "react";
-import { Bookmark, BarChart3, Check, Plus, Trash2, TrendingUp, ShieldCheck, DollarSign, Boxes } from "lucide-react";
+import {
+  Bookmark,
+  BarChart3,
+  Check,
+  Plus,
+  Trash2,
+  TrendingUp,
+  ShieldCheck,
+  DollarSign,
+  Boxes,
+} from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { parseMoneyNum } from "@/lib/consistency";
 import { usePersistentState } from "@/components/finder-extras";
@@ -18,9 +28,13 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
   const stats = useMemo(() => {
     const n = products.length || 1;
     const scores = products.map((p) => p.winner_score ?? 0);
-    const margins = products.map((p) => p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0);
+    const margins = products.map(
+      (p) => p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0,
+    );
     const prices = products.map((p) => parseMoneyNum(p.selling_price_usd)).filter((v) => v > 0);
-    const verified = products.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length;
+    const verified = products.filter(
+      (p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75,
+    ).length;
     const lowComp = products.filter((p) => p.competition_level === "Low").length;
     const rising = products.filter((p) => (p.market_evidence?.trend_momentum_pct ?? 0) > 0).length;
 
@@ -50,8 +64,16 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
   const cards = [
     { icon: <BarChart3 size={13} />, label: "Ort. Winner", value: `${stats.avgScore}` },
     { icon: <DollarSign size={13} />, label: "Ort. net marj", value: `%${stats.avgMargin}` },
-    { icon: <Boxes size={13} />, label: "Medyan fiyat", value: stats.medPrice ? `$${stats.medPrice}` : "—" },
-    { icon: <ShieldCheck size={13} />, label: "Doğrulanmış", value: `${stats.verified}/${products.length}` },
+    {
+      icon: <Boxes size={13} />,
+      label: "Medyan fiyat",
+      value: stats.medPrice ? `$${stats.medPrice}` : "—",
+    },
+    {
+      icon: <ShieldCheck size={13} />,
+      label: "Doğrulanmış",
+      value: `${stats.verified}/${products.length}`,
+    },
     { icon: <TrendingUp size={13} />, label: "Yükselişte", value: `${stats.rising}` },
     { icon: <Check size={13} />, label: "Düşük rekabet", value: `${stats.lowComp}` },
   ];
@@ -63,12 +85,17 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
         <BarChart3 size={14} className="text-[oklch(0.75_0.18_265)]" />
         Sonuç özeti
-        <span className="text-[11px] font-normal text-muted-foreground">· {products.length} ürün</span>
+        <span className="text-[11px] font-normal text-muted-foreground">
+          · {products.length} ürün
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+          <div
+            key={c.label}
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
+          >
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
               {c.icon} {c.label}
             </div>
@@ -113,7 +140,9 @@ export function FilterPresets<T>({
   const save = () => {
     const n = name.trim().slice(0, 32);
     if (!n) return;
-    setPresets((prev) => [{ name: n, state: current }, ...prev.filter((p) => p.name !== n)].slice(0, 12));
+    setPresets((prev) =>
+      [{ name: n, state: current }, ...prev.filter((p) => p.name !== n)].slice(0, 12),
+    );
     setName("");
   };
 
@@ -123,7 +152,10 @@ export function FilterPresets<T>({
         <Bookmark size={11} /> Filtre setleri
       </span>
       {presets.map((p) => (
-        <span key={p.name} className="group inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10">
+        <span
+          key={p.name}
+          className="group inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10"
+        >
           <button type="button" onClick={() => onApply(p.state)} className="max-w-[150px] truncate">
             {p.name}
           </button>
@@ -141,11 +173,21 @@ export function FilterPresets<T>({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              save();
+            }
+          }}
           placeholder="mevcut filtreyi kaydet"
           className="w-[150px] bg-transparent px-1 py-0.5 text-xs outline-none placeholder:text-muted-foreground"
         />
-        <button type="button" onClick={save} aria-label="Filtre setini kaydet" className="rounded-full p-1 hover:bg-white/10">
+        <button
+          type="button"
+          onClick={save}
+          aria-label="Filtre setini kaydet"
+          className="rounded-full p-1 hover:bg-white/10"
+        >
           <Plus size={11} />
         </button>
       </span>

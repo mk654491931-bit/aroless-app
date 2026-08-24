@@ -18,7 +18,11 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
         }
 
         let payload: any;
-        try { payload = JSON.parse(raw); } catch { return new Response("Bad JSON", { status: 400 }); }
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          return new Response("Bad JSON", { status: 400 });
+        }
 
         const eventName: string = payload?.meta?.event_name ?? "";
         const custom = payload?.meta?.custom_data ?? {};
@@ -52,7 +56,9 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
         if (error) return new Response(error.message, { status: 500 });
 
         // Record transaction
-        const totalCents = Number(attrs.total ?? attrs.total_usd ?? 0) || (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900);
+        const totalCents =
+          Number(attrs.total ?? attrs.total_usd ?? 0) ||
+          (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900);
         const currency = String(attrs.currency ?? "USD");
         const paymentMethod = String(attrs.card_brand ?? attrs.payment_method ?? "card");
         const userEmail = String(attrs.user_email ?? attrs.email ?? "");
@@ -77,7 +83,6 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
             amount_cents: totalCents,
           })
           .eq("user_id", userId);
-
 
         return new Response("ok", { status: 200 });
       },

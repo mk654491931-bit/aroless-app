@@ -10,7 +10,9 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (visible[0]) setActive(visible[0].target.id);
       },
       { rootMargin: "-96px 0px -65% 0px", threshold: 0 },
@@ -30,7 +32,9 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
     <div className="mx-auto w-full max-w-6xl px-4 py-10 md:px-6">
       <header className="print:hidden">
         <nav className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-foreground">Ana sayfa</Link>
+          <Link to="/" className="hover:text-foreground">
+            Ana sayfa
+          </Link>
           <span>/</span>
           <span className="text-foreground">Yasal & Uyum</span>
         </nav>
@@ -104,7 +108,8 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
         <main className="min-w-0 rounded-2xl border border-border bg-card/30 p-5 backdrop-blur md:p-8 print:border-0 print:bg-transparent print:p-0">
           <LegalDocBody doc={doc} />
           <p className="mt-10 border-t border-border pt-5 text-xs text-muted-foreground">
-            Bu belge bilgilendirme amaçlıdır ve Aroless tarafından güncellenir. Sorularınız için mk65449191@gmail.com
+            Bu belge bilgilendirme amaçlıdır ve Aroless tarafından güncellenir. Sorularınız için
+            mk65449191@gmail.com
           </p>
         </main>
       </div>

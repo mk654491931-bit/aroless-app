@@ -67,7 +67,10 @@ function translateBody(key: string): string | null {
     const mapped = parts.map((part) => {
       if (SEGMENT_SPLIT.test(part) || !part.trim()) return part;
       const seg = translateSegment(part);
-      if (seg) { changed = true; return seg; }
+      if (seg) {
+        changed = true;
+        return seg;
+      }
       return part;
     });
     if (changed) return mapped.join("");
@@ -205,7 +208,10 @@ function ensureObserver() {
 
 function restoreAll() {
   observer?.disconnect();
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  );
   let n: Node | null = walker.nextNode();
   while (n) {
     if (n.nodeType === Node.TEXT_NODE) {
@@ -233,7 +239,7 @@ let loadToken = 0;
 export async function setAutoLanguage(lang: string | undefined | null) {
   if (typeof document === "undefined") return;
   const code = (AUTO_LANGS as string[]).includes((lang ?? "").slice(0, 2))
-    ? (((lang ?? "").slice(0, 2)) as AutoLang)
+    ? ((lang ?? "").slice(0, 2) as AutoLang)
     : "en";
   if (code === currentLang) return;
   const token = ++loadToken;

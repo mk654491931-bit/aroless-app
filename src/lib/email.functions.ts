@@ -10,7 +10,9 @@ function originOf(fallback = "https://aroless.tech"): string {
 }
 
 function normalizeEmail(input: unknown): { email: string } {
-  const email = String((input as { email?: unknown } | null)?.email ?? "").trim().toLowerCase();
+  const email = String((input as { email?: unknown } | null)?.email ?? "")
+    .trim()
+    .toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 255) {
     throw new Error("Geçerli bir e-posta adresi girin.");
   }

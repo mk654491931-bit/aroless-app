@@ -21,12 +21,9 @@ import { getVisitorId } from "@/lib/fingerprint";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { isDisposableEmail } from "@/lib/disposable-email";
 import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
-import veloraV from "@/assets/velora-v.png.asset.json";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
-
-
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -159,7 +156,9 @@ function QuantumMesh() {
     };
   }, []);
 
-  return <canvas ref={ref} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />;
+  return (
+    <canvas ref={ref} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
+  );
 }
 
 /* ---------------- Haptic ripple wrapper ---------------- */
@@ -174,7 +173,10 @@ function useRipples() {
     window.setTimeout(() => setRipples((rs) => rs.filter((x) => x.id !== id)), 650);
   }, []);
   const layer = (
-    <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+    >
       {ripples.map((r) => (
         <span key={r.id} className="energy-ripple" style={{ left: r.x, top: r.y }} />
       ))}
@@ -190,14 +192,17 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
 
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState<null | "email" | "google">(null);
   const [rotIndex, setRotIndex] = useState(0);
   const [bio, setBio] = useState<0 | 1>(0);
   const [focusField, setFocusField] = useState<null | "email" | "password" | "confirm">(null);
-  const [consent, setConsent] = useState<LegalConsent>({ terms: false, kvkk: false, marketing: false });
+  const [consent, setConsent] = useState<LegalConsent>({
+    terms: false,
+    kvkk: false,
+    marketing: false,
+  });
   const [turnstileToken, setTurnstileToken] = useState("");
   const [promoCode, setPromoCode] = useState("");
 
@@ -286,11 +291,21 @@ function AuthPage() {
         setBusy("email");
         const visitorId = await getVisitorId();
         const res = await startSignupFn({
-          data: { email, password, confirmPassword, visitorId, marketing: consent.marketing, turnstileToken, promoCode },
+          data: {
+            email,
+            password,
+            confirmPassword,
+            visitorId,
+            marketing: consent.marketing,
+            turnstileToken,
+            promoCode,
+          },
         });
 
         if (res.creditsBlocked) {
-          toast.warning("Bu cihazda başlangıç kredisi daha önce tanımlandığı için yeniden verilmedi.");
+          toast.warning(
+            "Bu cihazda başlangıç kredisi daha önce tanımlandığı için yeniden verilmedi.",
+          );
         }
 
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -311,8 +326,6 @@ function AuthPage() {
       setBusy(null);
     }
   };
-
-
 
   /** Doğrudan Supabase Google OAuth — lokal ve kendi sunucunda kullanılan yol. */
   const googleDirect = async (previousError?: unknown) => {
@@ -349,8 +362,6 @@ function AuthPage() {
     }
   };
 
-
-
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Animated aurora / grid / beam backdrop */}
@@ -365,7 +376,6 @@ function AuthPage() {
       <div aria-hidden className="auth-shimmer" />
       <div aria-hidden className="auth-vignette" />
 
-
       {/* Quantum data mesh */}
       <QuantumMesh />
 
@@ -373,7 +383,10 @@ function AuthPage() {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full blur-3xl animate-float-slow"
-        style={{ background: "radial-gradient(circle, var(--color-brand), transparent 65%)", opacity: 0.26 }}
+        style={{
+          background: "radial-gradient(circle, var(--color-brand), transparent 65%)",
+          opacity: 0.26,
+        }}
       />
       <div
         aria-hidden
@@ -391,7 +404,6 @@ function AuthPage() {
         id="signin"
         className="relative mx-auto grid w-full max-w-6xl scroll-mt-6 items-center gap-8 px-4 pb-16 pt-10 sm:px-5 sm:gap-10 sm:pb-20 sm:pt-14 lg:min-h-screen lg:grid-cols-2 lg:gap-16 lg:py-12"
       >
-
         {/* ---------- Brand / value panel ---------- */}
         <section className="animate-rise-in hidden lg:block">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
@@ -401,7 +413,7 @@ function AuthPage() {
 
           <div className="mt-6 flex items-center gap-5">
             <img
-              src={veloraV.url}
+              src="/logo-mark.png"
               alt="Aroless"
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
             />
@@ -429,20 +441,20 @@ function AuthPage() {
             </h1>
           </div>
 
-
           <div className="mt-4 h-7 overflow-hidden">
             <p key={rotIndex} className="animate-rise-in text-lg text-muted-foreground">
               {ROTATING[rotIndex]}
             </p>
           </div>
 
-
           <ul className="mt-9 space-y-3">
             {PERKS.map((p, i) => (
               <li
                 key={p.label}
                 className="premium-card card-lift group flex items-center gap-4 p-4 hover:-translate-y-0.5"
-                style={{ animation: `rise-in 0.6s cubic-bezier(0.22,1,0.36,1) ${0.1 + i * 0.09}s both` }}
+                style={{
+                  animation: `rise-in 0.6s cubic-bezier(0.22,1,0.36,1) ${0.1 + i * 0.09}s both`,
+                }}
               >
                 <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-card/60 text-foreground transition-transform group-hover:scale-110">
                   <p.icon className="h-5 w-5" />
@@ -499,7 +511,7 @@ function AuthPage() {
 
               <div className="relative">
                 <div className="flex items-center gap-2.5">
-                  <img src={veloraV.url} alt="Aroless" className="h-9 w-9 object-contain" />
+                  <img src="/logo-mark.png" alt="Aroless" className="h-9 w-9 object-contain" />
                   <span className="text-base font-light uppercase tracking-[0.3em] text-foreground/95">
                     Aroless
                   </span>
@@ -516,233 +528,264 @@ function AuthPage() {
 
                 {/* liquid mercury tab switch */}
                 <>
+                  <div className="relative mt-6 grid grid-cols-2 rounded-xl border border-border bg-card/40 p-1 text-sm">
+                    <span
+                      aria-hidden
+                      className="mercury absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
+                      style={{
+                        transform:
+                          mode === "signin"
+                            ? "translateX(0.125rem)"
+                            : "translateX(calc(100% + 0.375rem))",
+                      }}
+                    />
+                    {(["signin", "signup"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMode(m)}
+                        className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
+                          mode === m
+                            ? "text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground hover:drop-shadow-[0_0_10px_color-mix(in_oklab,var(--brand)_60%,transparent)]"
+                        }`}
+                      >
+                        {m === "signin" ? "Sign in" : "Sign up"}
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="relative mt-6 grid grid-cols-2 rounded-xl border border-border bg-card/40 p-1 text-sm">
-                  <span
-                    aria-hidden
-                    className="mercury absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
-                    style={{
-                      transform: mode === "signin" ? "translateX(0.125rem)" : "translateX(calc(100% + 0.375rem))",
+                  <button
+                    onClick={(e) => {
+                      googleRipple.spawn(e);
+                      void google();
                     }}
-                  />
-                  {(["signin", "signup"] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMode(m)}
-                      className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
-                        mode === m
-                          ? "text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:drop-shadow-[0_0_10px_color-mix(in_oklab,var(--brand)_60%,transparent)]"
-                      }`}
-                    >
-                      {m === "signin" ? "Sign in" : "Sign up"}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={(e) => {
-                    googleRipple.spawn(e);
-                    void google();
-                  }}
-                  disabled={busy !== null}
-                  className="card-lift liquid-surface group relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-border px-4 py-3 text-sm font-medium hover:-translate-y-0.5 hover:border-[var(--brand)] disabled:opacity-60"
-                >
-                  {googleRipple.layer}
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 48 48"
-                    aria-hidden
-                    className="relative z-10 transition-transform duration-500 group-hover:rotate-[18deg] group-hover:scale-110"
+                    disabled={busy !== null}
+                    className="card-lift liquid-surface group relative mt-5 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-border px-4 py-3 text-sm font-medium hover:-translate-y-0.5 hover:border-[var(--brand)] disabled:opacity-60"
                   >
-                    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z" />
-                    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-                    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.5-5.2l-6.2-5.3C29.3 34.9 26.8 36 24 36c-5.3 0-9.7-3.1-11.3-7.5l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-                    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.5l6.2 5.3C41 34.8 44 29.8 44 24c0-1.2-.1-2.3-.4-3.5z" />
-                  </svg>
-                  <span className="relative z-10">
-                    {busy === "google" ? "Redirecting to Google…" : "Continue with Google"}
-                  </span>
-                </button>
-
-                <div className="relative my-5">
-                  <div className="divider-glow h-px" />
-                  <span className="absolute left-1/2 -top-2.5 -translate-x-1/2 bg-background px-2 text-xs text-muted-foreground">
-                    or with email
-                  </span>
-                </div>
-
-                <form onSubmit={submit} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}>
-                      <input
-                        type="email"
-                        required
-                        autoComplete="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onFocus={() => setFocusField("email")}
-                        onBlur={() => setFocusField(null)}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="inp w-full bg-transparent py-3 text-sm"
+                    {googleRipple.layer}
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 48 48"
+                      aria-hidden
+                      className="relative z-10 transition-transform duration-500 group-hover:rotate-[18deg] group-hover:scale-110"
+                    >
+                      <path
+                        fill="#FFC107"
+                        d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"
                       />
-                      {focusField === "email" && (
+                      <path
+                        fill="#FF3D00"
+                        d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+                      />
+                      <path
+                        fill="#4CAF50"
+                        d="M24 44c5.2 0 9.9-2 13.5-5.2l-6.2-5.3C29.3 34.9 26.8 36 24 36c-5.3 0-9.7-3.1-11.3-7.5l-6.5 5C9.5 39.6 16.2 44 24 44z"
+                      />
+                      <path
+                        fill="#1976D2"
+                        d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.5l6.2 5.3C41 34.8 44 29.8 44 24c0-1.2-.1-2.3-.4-3.5z"
+                      />
+                    </svg>
+                    <span className="relative z-10">
+                      {busy === "google" ? "Redirecting to Google…" : "Continue with Google"}
+                    </span>
+                  </button>
+
+                  <div className="relative my-5">
+                    <div className="divider-glow h-px" />
+                    <span className="absolute left-1/2 -top-2.5 -translate-x-1/2 bg-background px-2 text-xs text-muted-foreground">
+                      or with email
+                    </span>
+                  </div>
+
+                  <form onSubmit={submit} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
+                      >
+                        <input
+                          type="email"
+                          required
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onFocus={() => setFocusField("email")}
+                          onBlur={() => setFocusField(null)}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="inp w-full bg-transparent py-3 text-sm"
+                        />
+                        {focusField === "email" && (
+                          <span aria-hidden className="field-particles">
+                            {[0, 1, 2, 3, 4].map((i) => (
+                              <i
+                                key={i}
+                                style={{ animationDelay: `${i * 0.18}s`, left: `${12 + i * 18}%` }}
+                              />
+                            ))}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Multi-biometric field */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          bioRipple.spawn(e);
+                          toast.info("Biometric sign-in is coming to Enterprise tier.");
+                        }}
+                        aria-label="Biometric sign in (fingerprint / face)"
+                        className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
+                      >
+                        {bioRipple.layer}
+                        <Fingerprint
+                          className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+                        />
+                        <ScanFace
+                          className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+                        />
+                      </button>
+                    </div>
+
+                    <div
+                      className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
+                    >
+                      <input
+                        type={showPw ? "text" : "password"}
+                        required
+                        minLength={6}
+                        autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                        placeholder="Password (min. 6 characters)"
+                        value={password}
+                        onFocus={() => setFocusField("password")}
+                        onBlur={() => setFocusField(null)}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="inp w-full bg-transparent py-3 pr-24 text-sm"
+                      />
+                      <span
+                        aria-hidden
+                        className="holo-badge absolute right-11 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
+                      >
+                        PREMIUM
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPw((v) => !v)}
+                        aria-label={showPw ? "Hide password" : "Show password"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {showPw ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <span className="relative inline-flex">
+                            <Eye className="h-4 w-4" />
+                            <span aria-hidden className="pupil" />
+                          </span>
+                        )}
+                      </button>
+                      {focusField === "password" && (
                         <span aria-hidden className="field-particles">
                           {[0, 1, 2, 3, 4].map((i) => (
-                            <i key={i} style={{ animationDelay: `${i * 0.18}s`, left: `${12 + i * 18}%` }} />
+                            <i
+                              key={i}
+                              style={{ animationDelay: `${i * 0.18}s`, left: `${10 + i * 17}%` }}
+                            />
                           ))}
                         </span>
                       )}
                     </div>
 
-                    {/* Multi-biometric field */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        bioRipple.spawn(e);
-                        toast.info("Biometric sign-in is coming to Enterprise tier.");
-                      }}
-                      aria-label="Biometric sign in (fingerprint / face)"
-                      className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
-                    >
-                      {bioRipple.layer}
-                      <Fingerprint
-                        className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                      />
-                      <ScanFace
-                        className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                      />
-                    </button>
-                  </div>
-
-                  <div className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}>
-                    <input
-                      type={showPw ? "text" : "password"}
-                      required
-                      minLength={6}
-                      autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                      placeholder="Password (min. 6 characters)"
-                      value={password}
-                      onFocus={() => setFocusField("password")}
-                      onBlur={() => setFocusField(null)}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="inp w-full bg-transparent py-3 pr-24 text-sm"
-                    />
-                    <span
-                      aria-hidden
-                      className="holo-badge absolute right-11 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
-                    >
-                      PREMIUM
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPw((v) => !v)}
-                      aria-label={showPw ? "Hide password" : "Show password"}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {showPw ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <span className="relative inline-flex">
-                          <Eye className="h-4 w-4" />
-                          <span aria-hidden className="pupil" />
-                        </span>
-                      )}
-                    </button>
-                    {focusField === "password" && (
-                      <span aria-hidden className="field-particles">
-                        {[0, 1, 2, 3, 4].map((i) => (
-                          <i key={i} style={{ animationDelay: `${i * 0.18}s`, left: `${10 + i * 17}%` }} />
-                        ))}
-                      </span>
-                    )}
-                  </div>
-
-                  {mode === "signup" && password.length > 0 && (
-                    <div className={`neon-field relative ${focusField === "confirm" ? "is-focused" : ""}`}>
-                      <input
-                        type={showPw ? "text" : "password"}
-                        required
-                        minLength={6}
-                        autoComplete="new-password"
-                        placeholder="Şifre tekrarı"
-                        value={confirmPassword}
-                        onFocus={() => setFocusField("confirm")}
-                        onBlur={() => setFocusField(null)}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="inp w-full bg-transparent py-3 pr-4 text-sm"
-                      />
-                    </div>
-                  )}
-
-                  {mode === "signup" && confirmPassword.length > 0 && confirmPassword !== password && (
-                    <p className="text-xs text-destructive">Şifreler birbiriyle eşleşmiyor.</p>
-                  )}
-
-                  {mode === "signup" && password.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      {[1, 2, 3, 4].map((i) => (
-                        <span
-                          key={i}
-                          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                            strength >= i
-                              ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
-                              : "bg-border"
-                          }`}
-                        />
-                      ))}
-                      <span className="w-16 text-right text-[11px] text-muted-foreground">
-                        {["weak", "weak", "fair", "good", "strong"][strength]}
-                      </span>
-                    </div>
-                  )}
-
-                  {mode === "signup" && (
-                    <>
-                      <div className="neon-field relative">
+                    {mode === "signup" && password.length > 0 && (
+                      <div
+                        className={`neon-field relative ${focusField === "confirm" ? "is-focused" : ""}`}
+                      >
                         <input
-                          type="text"
-                          inputMode="text"
-                          autoComplete="off"
-                          placeholder="Promosyon kodu (opsiyonel)"
-                          value={promoCode}
-                          onChange={(e) => setPromoCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
-                          maxLength={32}
-                          className="inp w-full bg-transparent py-3 pr-4 text-sm font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                          type={showPw ? "text" : "password"}
+                          required
+                          minLength={6}
+                          autoComplete="new-password"
+                          placeholder="Şifre tekrarı"
+                          value={confirmPassword}
+                          onFocus={() => setFocusField("confirm")}
+                          onBlur={() => setFocusField(null)}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="inp w-full bg-transparent py-3 pr-4 text-sm"
                         />
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Kod geçerliyse indirim, paket satın alırken otomatik uygulanır.
-                      </p>
-                      <SignupLegalConsent value={consent} onChange={setConsent} />
-                      <TurnstileWidget onToken={setTurnstileToken} />
-                    </>
-                  )}
+                    )}
 
+                    {mode === "signup" &&
+                      confirmPassword.length > 0 &&
+                      confirmPassword !== password && (
+                        <p className="text-xs text-destructive">Şifreler birbiriyle eşleşmiyor.</p>
+                      )}
 
-                  <button
-                    type="submit"
-                    onClick={emailRipple.spawn}
-                    disabled={busy !== null || (mode === "signup" && !legalOk)}
-                    className="glow card-lift group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-3 text-sm font-semibold text-primary-foreground hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {emailRipple.layer}
-                    <span className="relative z-10 inline-flex items-center justify-center gap-2">
-                      {busy === "email" ? "Please wait…" : mode === "signin" ? "Sign in" : "Kayıt Ol"}
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </span>
-                  </button>
-                </form>
+                    {mode === "signup" && password.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4].map((i) => (
+                          <span
+                            key={i}
+                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                              strength >= i
+                                ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
+                                : "bg-border"
+                            }`}
+                          />
+                        ))}
+                        <span className="w-16 text-right text-[11px] text-muted-foreground">
+                          {["weak", "weak", "fair", "good", "strong"][strength]}
+                        </span>
+                      </div>
+                    )}
+
+                    {mode === "signup" && (
+                      <>
+                        <div className="neon-field relative">
+                          <input
+                            type="text"
+                            inputMode="text"
+                            autoComplete="off"
+                            placeholder="Promosyon kodu (opsiyonel)"
+                            value={promoCode}
+                            onChange={(e) =>
+                              setPromoCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))
+                            }
+                            maxLength={32}
+                            className="inp w-full bg-transparent py-3 pr-4 text-sm font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                          />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Kod geçerliyse indirim, paket satın alırken otomatik uygulanır.
+                        </p>
+                        <SignupLegalConsent value={consent} onChange={setConsent} />
+                        <TurnstileWidget onToken={setTurnstileToken} />
+                      </>
+                    )}
+
+                    <button
+                      type="submit"
+                      onClick={emailRipple.spawn}
+                      disabled={busy !== null || (mode === "signup" && !legalOk)}
+                      className="glow card-lift group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-3 text-sm font-semibold text-primary-foreground hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {emailRipple.layer}
+                      <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                        {busy === "email"
+                          ? "Please wait…"
+                          : mode === "signin"
+                            ? "Sign in"
+                            : "Kayıt Ol"}
+                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      </span>
+                    </button>
+                  </form>
                 </>
-
 
                 <p className="mt-5 text-center text-xs text-muted-foreground">
                   By continuing you accept the terms of use. Sign up and start with{" "}
                   <span className="font-medium text-foreground">welcome credits</span>.
                 </p>
-
               </div>
             </div>
             <div aria-hidden className="laptop-base" />

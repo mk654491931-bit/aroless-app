@@ -26,13 +26,34 @@ function hourKey(d = new Date()) {
 }
 
 function slug(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
 }
 
 const FLAGS: Record<string, string> = {
-  US: "🇺🇸", UK: "🇬🇧", GB: "🇬🇧", DE: "🇩🇪", FR: "🇫🇷", TR: "🇹🇷", ES: "🇪🇸", IT: "🇮🇹",
-  NL: "🇳🇱", CA: "🇨🇦", AU: "🇦🇺", AE: "🇦🇪", SA: "🇸🇦", BR: "🇧🇷", MX: "🇲🇽", JP: "🇯🇵",
-  KR: "🇰🇷", IN: "🇮🇳", PL: "🇵🇱", SE: "🇸🇪",
+  US: "🇺🇸",
+  UK: "🇬🇧",
+  GB: "🇬🇧",
+  DE: "🇩🇪",
+  FR: "🇫🇷",
+  TR: "🇹🇷",
+  ES: "🇪🇸",
+  IT: "🇮🇹",
+  NL: "🇳🇱",
+  CA: "🇨🇦",
+  AU: "🇦🇺",
+  AE: "🇦🇪",
+  SA: "🇸🇦",
+  BR: "🇧🇷",
+  MX: "🇲🇽",
+  JP: "🇯🇵",
+  KR: "🇰🇷",
+  IN: "🇮🇳",
+  PL: "🇵🇱",
+  SE: "🇸🇪",
 };
 
 /** Keeps a reported number only when it is a real, finite, positive value. */
@@ -71,7 +92,9 @@ function normalizeSignals(raw: any): ProductSignals | undefined {
 function normalize(raw: any, i: number): HotProduct | null {
   const name = String(raw?.name ?? "").trim();
   if (!name) return null;
-  const country = String(raw?.country ?? "US").toUpperCase().slice(0, 3);
+  const country = String(raw?.country ?? "US")
+    .toUpperCase()
+    .slice(0, 3);
   const comp = String(raw?.competition ?? "Medium");
   return {
     id: `${slug(name)}-${i}`,
@@ -90,7 +113,9 @@ function normalize(raw: any, i: number): HotProduct | null {
     ad_angle: String(raw?.ad_angle ?? "").slice(0, 220),
     sourcing: String(raw?.sourcing ?? "AliExpress / 1688"),
     lead_time: String(raw?.lead_time ?? "8-15 days"),
-    first_week_plan: Array.isArray(raw?.first_week_plan) ? raw.first_week_plan.slice(0, 6).map(String) : [],
+    first_week_plan: Array.isArray(raw?.first_week_plan)
+      ? raw.first_week_plan.slice(0, 6).map(String)
+      : [],
     risks: Array.isArray(raw?.risks) ? raw.risks.slice(0, 4).map(String) : [],
     score: Math.max(0, Math.min(100, Math.round(Number(raw?.score) || 70))),
     signals: normalizeSignals(raw?.signals),
@@ -119,8 +144,12 @@ Return ONLY JSON:
 {"items":[{"name":string,"why_now":string,"country":string (2-letter ISO code),"marketplace":string,"budget_usd":string (e.g. "$800 - $2,000"),"supplier_cost_usd":string,"retail_price_usd":string,"margin_pct":number,"demand_signal":string (real search/social/marketplace evidence),"competition":"Low"|"Medium"|"High","audience":string,"ad_angle":string,"sourcing":string,"lead_time":string,"first_week_plan":string[4],"risks":string[3],"score":number 1-100,
 "signals":{"search_volume_monthly":number,"social_views_now":number,"social_views_7d_ago":number,"active_stores":number,"ads_running_14d":number,"amazon_sellers":number,"review_count":number,"quality_complaint_pct":number,"sizing_complaint_pct":number,"shipping_complaint_pct":number,"on_time_delivery_pct":number,"stock_stability_pct":number,"lead_time_days":number,"cpc_usd":number,"cvr_pct":number,"sources":string[]}}]}`;
 
-  const key = process.env['GEMINI_API_KEY_3'] || process.env['GEMINI_API_KEY'];
-  const text = await callGemini(prompt, key, 0.6, true, ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]);
+  const key = process.env["GEMINI_API_KEY_3"] || process.env["GEMINI_API_KEY"];
+  const text = await callGemini(prompt, key, 0.6, true, [
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+  ]);
   const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
   const items = (parsed.items ?? [])
     .map((r, i) => normalize(r, i))
@@ -153,7 +182,9 @@ async function getPayload(niche: string): Promise<Payload> {
       if (cache.size > 40) cache.delete(cache.keys().next().value as string);
       return payload;
     })
-    .finally(() => { inflight.delete(cacheKey); });
+    .finally(() => {
+      inflight.delete(cacheKey);
+    });
   inflight.set(cacheKey, p);
   return p;
 }
@@ -174,10 +205,10 @@ export const Route = createFileRoute("/api/public/hot-products")({
             },
           });
         } catch (e) {
-          return new Response(
-            JSON.stringify({ items: [], error: (e as Error).message }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+          return new Response(JSON.stringify({ items: [], error: (e as Error).message }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
         }
       },
     },

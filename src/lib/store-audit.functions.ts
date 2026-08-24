@@ -2,14 +2,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callPremiumAI, extractJson } from "@/lib/ai.server";
-import { fetchStorePage, extractSignals, auditPrompt, type AuditReport } from "@/lib/store-audit.server";
+import {
+  fetchStorePage,
+  extractSignals,
+  auditPrompt,
+  type AuditReport,
+} from "@/lib/store-audit.server";
 
 const AuditInput = z.object({
   url: z.string().url().max(300),
   lang: z.string().max(8).optional().default("tr"),
 });
 
-export type StoreAuditRow = { id: string; url: string; health_score: number; report: AuditReport; created_at: string };
+export type StoreAuditRow = {
+  id: string;
+  url: string;
+  health_score: number;
+  report: AuditReport;
+  created_at: string;
+};
 
 export const auditStore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -31,7 +42,10 @@ export const auditStore = createServerFn({ method: "POST" })
       throw new Error("FETCH_FAILED");
     }
     const signals = extractSignals(page.html);
-    const text = await callPremiumAI(auditPrompt(url, signals, page.status, page.ms, data.lang), 0.3);
+    const text = await callPremiumAI(
+      auditPrompt(url, signals, page.status, page.ms, data.lang),
+      0.3,
+    );
     const report = extractJson<AuditReport>(text, {
       health_score: 0,
       summary: "",
@@ -46,11 +60,25 @@ export const auditStore = createServerFn({ method: "POST" })
 
     const { data: saved } = await context.supabase
       .from("store_audits")
-      .insert({ user_id: context.userId, url, health_score: report.health_score, report: report as unknown as never })
+      .insert({
+        user_id: context.userId,
+        url,
+        health_score: report.health_score,
+        report: report as unknown as never,
+      })
       .select("id, url, health_score, report, created_at")
       .single();
 
-    return { ...(saved ?? { id: "", url, health_score: report.health_score, created_at: new Date().toISOString() }), report, signals } as StoreAuditRow & {
+    return {
+      ...(saved ?? {
+        id: "",
+        url,
+        health_score: report.health_score,
+        created_at: new Date().toISOString(),
+      }),
+      report,
+      signals,
+    } as StoreAuditRow & {
       signals: ReturnType<typeof extractSignals>;
     };
   });

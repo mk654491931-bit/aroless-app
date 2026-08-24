@@ -57,12 +57,21 @@ export const radarWatchlist = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: favs }, { data: items }] = await Promise.all([
       context.supabase.from("favorites").select("name").limit(200),
-      context.supabase.from("radar_items").select("title, winner_score, momentum, country").eq("day", today).limit(120),
+      context.supabase
+        .from("radar_items")
+        .select("title, winner_score, momentum, country")
+        .eq("day", today)
+        .limit(120),
     ]);
     const words = (s: string) =>
-      s.toLowerCase().replace(/[^a-z0-9şğüöçı ]/gi, " ").split(/\s+/).filter((w) => w.length > 3);
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9şğüöçı ]/gi, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
 
-    const matches: { favorite: string; radar: string; momentum: number; winner_score: number }[] = [];
+    const matches: { favorite: string; radar: string; momentum: number; winner_score: number }[] =
+      [];
     for (const f of favs ?? []) {
       const fw = new Set(words(String(f.name ?? "")));
       for (const it of items ?? []) {

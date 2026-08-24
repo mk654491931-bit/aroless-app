@@ -29,7 +29,9 @@ export const listViralAds = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<ViralAdRow[]> => {
     let q = context.supabase
       .from("viral_ads")
-      .select("id, title, niche, country, platform, views, likes, video_url, hook_script, cta_text, created_at")
+      .select(
+        "id, title, niche, country, platform, views, likes, video_url, hook_script, cta_text, created_at",
+      )
       .order("views", { ascending: false })
       .limit(data.limit);
 

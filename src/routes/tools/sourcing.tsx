@@ -11,9 +11,16 @@ export const Route = createFileRoute("/tools/sourcing")({
   head: () => ({
     meta: [
       { title: "Sourcing & Factory Hub — Aroless" },
-      { name: "description", content: "AI supplier negotiator, offer analyzer, legitimacy detector and review-to-spec-sheet tools for cross-border sourcing." },
+      {
+        name: "description",
+        content:
+          "AI supplier negotiator, offer analyzer, legitimacy detector and review-to-spec-sheet tools for cross-border sourcing.",
+      },
       { property: "og:title", content: "Sourcing & Factory Hub — Aroless" },
-      { property: "og:description", content: "Negotiate, verify and spec your factory orders with AI." },
+      {
+        property: "og:description",
+        content: "Negotiate, verify and spec your factory orders with AI.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -41,18 +48,37 @@ function SourcingHub() {
         onRun={() => callTool("supplier-negotiator", neg)}
       >
         <Field label="Ürün">
-          <Input value={neg.product} onChange={(e) => setNeg({ ...neg, product: e.target.value })} placeholder="Katlanabilir silikon su şişesi" />
+          <Input
+            value={neg.product}
+            onChange={(e) => setNeg({ ...neg, product: e.target.value })}
+            placeholder="Katlanabilir silikon su şişesi"
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Hedef birim fiyat ($)">
-            <Input type="number" value={neg.targetPrice} onChange={(e) => setNeg({ ...neg, targetPrice: e.target.value })} placeholder="2.40" />
+            <Input
+              type="number"
+              value={neg.targetPrice}
+              onChange={(e) => setNeg({ ...neg, targetPrice: e.target.value })}
+              placeholder="2.40"
+            />
           </Field>
           <Field label="Hedef MOQ">
-            <Input type="number" value={neg.moq} onChange={(e) => setNeg({ ...neg, moq: e.target.value })} placeholder="500" />
+            <Input
+              type="number"
+              value={neg.moq}
+              onChange={(e) => setNeg({ ...neg, moq: e.target.value })}
+              placeholder="500"
+            />
           </Field>
         </div>
         <Field label="Tedarikçi notları / mevcut teklif">
-          <Textarea rows={3} value={neg.notes} onChange={(e) => setNeg({ ...neg, notes: e.target.value })} placeholder="Şu an $3.10 / MOQ 1000 veriyor, kalıp ücreti $450 istiyor…" />
+          <Textarea
+            rows={3}
+            value={neg.notes}
+            onChange={(e) => setNeg({ ...neg, notes: e.target.value })}
+            placeholder="Şu an $3.10 / MOQ 1000 veriyor, kalıp ücreti $450 istiyor…"
+          />
         </Field>
       </ToolCard>
 
@@ -64,7 +90,12 @@ function SourcingHub() {
         onRun={() => callTool("offer-analyzer", { offer })}
       >
         <Field label="Tedarikçi e-postası / teklif metni">
-          <Textarea rows={8} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Dear friend, our best price is USD 3.10/pc EXW, MOQ 1000pcs, mold cost 450USD, lead time 25-30 days…" />
+          <Textarea
+            rows={8}
+            value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+            placeholder="Dear friend, our best price is USD 3.10/pc EXW, MOQ 1000pcs, mold cost 450USD, lead time 25-30 days…"
+          />
         </Field>
       </ToolCard>
 
@@ -76,10 +107,19 @@ function SourcingHub() {
         onRun={() => callTool("legitimacy-detector", legit)}
       >
         <Field label="Alibaba / 1688 profil URL veya firma adı">
-          <Input value={legit.url} onChange={(e) => setLegit({ ...legit, url: e.target.value })} placeholder="https://xxx.en.alibaba.com" />
+          <Input
+            value={legit.url}
+            onChange={(e) => setLegit({ ...legit, url: e.target.value })}
+            placeholder="https://xxx.en.alibaba.com"
+          />
         </Field>
         <Field label="Ek gözlemler">
-          <Textarea rows={3} value={legit.notes} onChange={(e) => setLegit({ ...legit, notes: e.target.value })} placeholder="12 farklı kategoride 4000 ürün listelemiş, 2 yıllık Gold Supplier…" />
+          <Textarea
+            rows={3}
+            value={legit.notes}
+            onChange={(e) => setLegit({ ...legit, notes: e.target.value })}
+            placeholder="12 farklı kategoride 4000 ürün listelemiş, 2 yıllık Gold Supplier…"
+          />
         </Field>
       </ToolCard>
 
@@ -91,10 +131,19 @@ function SourcingHub() {
         onRun={() => callTool("review-spec-sheet", spec)}
       >
         <Field label="Ürün">
-          <Input value={spec.product} onChange={(e) => setSpec({ ...spec, product: e.target.value })} placeholder="Taşınabilir blender" />
+          <Input
+            value={spec.product}
+            onChange={(e) => setSpec({ ...spec, product: e.target.value })}
+            placeholder="Taşınabilir blender"
+          />
         </Field>
         <Field label="1 yıldızlı rakip yorumları (yapıştır)">
-          <Textarea rows={7} value={spec.reviews} onChange={(e) => setSpec({ ...spec, reviews: e.target.value })} placeholder="Motor 3 kullanımda yandı… Kapak sızdırıyor… Şarj kablosu gevşek…" />
+          <Textarea
+            rows={7}
+            value={spec.reviews}
+            onChange={(e) => setSpec({ ...spec, reviews: e.target.value })}
+            placeholder="Motor 3 kullanımda yandı… Kapak sızdırıyor… Şarj kablosu gevşek…"
+          />
         </Field>
       </ToolCard>
     </HubShell>

@@ -1,14 +1,24 @@
 import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { LegalDocBody } from "@/components/legal/legal-doc-body";
 import { TOS, KVKK, DPA, type LegalDoc } from "@/lib/legal-content";
 
 export type LegalConsent = { terms: boolean; kvkk: boolean; marketing: boolean };
 
 export function SignupLegalConsent({
-  value, onChange,
-}: { value: LegalConsent; onChange: (v: LegalConsent) => void }) {
+  value,
+  onChange,
+}: {
+  value: LegalConsent;
+  onChange: (v: LegalConsent) => void;
+}) {
   const [doc, setDoc] = useState<LegalDoc | null>(null);
 
   const openDoc = (d: LegalDoc) => (e: React.MouseEvent) => {
@@ -30,9 +40,13 @@ export function SignupLegalConsent({
         />
         <span>
           Aroless{" "}
-          <a href="/legal/kullanim-kosullari" onClick={openDoc(TOS)} className={linkCls}>Kullanım Koşulları</a>{" "}
+          <a href="/legal/kullanim-kosullari" onClick={openDoc(TOS)} className={linkCls}>
+            Kullanım Koşulları
+          </a>{" "}
           ve{" "}
-          <a href="/legal/veri-isleme-sozlesmesi" onClick={openDoc(DPA)} className={linkCls}>Veri İşleme Sözleşmesi</a>
+          <a href="/legal/veri-isleme-sozlesmesi" onClick={openDoc(DPA)} className={linkCls}>
+            Veri İşleme Sözleşmesi
+          </a>
           'ni okudum, kabul ediyorum.
         </span>
       </label>
@@ -45,7 +59,9 @@ export function SignupLegalConsent({
         />
         <span>
           Kişisel verilerimin işlenmesine ilişkin{" "}
-          <a href="/legal/kvkk-aydinlatma-metni" onClick={openDoc(KVKK)} className={linkCls}>KVKK Aydınlatma Metni</a>
+          <a href="/legal/kvkk-aydinlatma-metni" onClick={openDoc(KVKK)} className={linkCls}>
+            KVKK Aydınlatma Metni
+          </a>
           'ni okudum.
         </span>
       </label>

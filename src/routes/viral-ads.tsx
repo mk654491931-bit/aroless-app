@@ -3,8 +3,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft, Loader2, Search, Play, TrendingUp, Heart,
-  Filter, Globe, Megaphone, Flame, Youtube, Clock, ExternalLink, RefreshCw, X,
+  ArrowLeft,
+  Loader2,
+  Search,
+  Play,
+  TrendingUp,
+  Heart,
+  Filter,
+  Globe,
+  Megaphone,
+  Flame,
+  Youtube,
+  Clock,
+  ExternalLink,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -15,7 +28,11 @@ export const Route = createFileRoute("/viral-ads")({
   head: () => ({
     meta: [
       { title: "Viral Ads Library — Aroless" },
-      { name: "description", content: "Live feed of trending real-world viral ad videos with hooks, thumbnails and playable previews." },
+      {
+        name: "description",
+        content:
+          "Live feed of trending real-world viral ad videos with hooks, thumbnails and playable previews.",
+      },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -39,7 +56,17 @@ type LiveAd = {
 };
 
 const PLATFORMS = ["TikTok", "Instagram", "Facebook", "YouTube"];
-const NICHES = ["Trending", "Beauty", "Fitness", "Home", "Tech", "Pets", "Fashion", "Kitchen", "Outdoor"];
+const NICHES = [
+  "Trending",
+  "Beauty",
+  "Fitness",
+  "Home",
+  "Tech",
+  "Pets",
+  "Fashion",
+  "Kitchen",
+  "Outdoor",
+];
 
 async function fetchLiveAds(): Promise<LiveAd[]> {
   const res = await fetch("/api/public/viral-feed");
@@ -63,7 +90,9 @@ function ViralAdsPage() {
   const [niche, setNiche] = useState("");
   const [playing, setPlaying] = useState<LiveAd | null>(null);
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  useEffect(() => {
+    if (!loading && !user) nav({ to: "/auth" });
+  }, [user, loading, nav]);
 
   const adsQ = useQuery({
     queryKey: ["viral-live"],
@@ -80,7 +109,11 @@ function ViralAdsPage() {
       if (niche && a.niche !== niche) return false;
       if (q.trim()) {
         const t = q.toLowerCase();
-        if (!a.title.toLowerCase().includes(t) && !a.channel.toLowerCase().includes(t) && !a.niche.toLowerCase().includes(t))
+        if (
+          !a.title.toLowerCase().includes(t) &&
+          !a.channel.toLowerCase().includes(t) &&
+          !a.niche.toLowerCase().includes(t)
+        )
           return false;
       }
       return true;
@@ -88,7 +121,11 @@ function ViralAdsPage() {
   }, [adsQ.data, q, platform, niche]);
 
   if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
   }
 
   const totalViews = (adsQ.data ?? []).reduce((s, a) => s + a.views, 0);
@@ -109,7 +146,10 @@ function ViralAdsPage() {
             >
               <RefreshCw size={14} className={adsQ.isFetching ? "animate-spin" : ""} /> Refresh
             </button>
-            <Link to="/" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
+            <Link
+              to="/"
+              className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+            >
               <ArrowLeft size={14} /> Back
             </Link>
           </div>
@@ -129,13 +169,18 @@ function ViralAdsPage() {
             <span className="text-gradient">Viral</span> Ad Archive
           </h1>
           <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-            Real trending ad videos pulled live. Preview thumbnails, watch inline, and steal the hooks.
+            Real trending ad videos pulled live. Preview thumbnails, watch inline, and steal the
+            hooks.
           </p>
         </div>
 
         {!adsQ.isLoading && (adsQ.data?.length ?? 0) > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard icon={Megaphone} label="Live ads" value={(adsQ.data?.length ?? 0).toLocaleString()} />
+            <StatCard
+              icon={Megaphone}
+              label="Live ads"
+              value={(adsQ.data?.length ?? 0).toLocaleString()}
+            />
             <StatCard icon={TrendingUp} label="Total views" value={formatViews(totalViews)} />
             <StatCard icon={Heart} label="Total likes" value={formatViews(totalLikes)} />
             <StatCard icon={Filter} label="Niches" value={String(nicheCount)} />
@@ -144,7 +189,10 @@ function ViralAdsPage() {
 
         <section className="glass rounded-2xl p-4 md:p-5 space-y-4">
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -153,14 +201,30 @@ function ViralAdsPage() {
             />
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
-            <FilterSelect label="Platform" value={platform} onChange={setPlatform} options={PLATFORMS} icon={Megaphone} />
-            <FilterSelect label="Niche" value={niche} onChange={setNiche} options={NICHES} icon={TrendingUp} />
+            <FilterSelect
+              label="Platform"
+              value={platform}
+              onChange={setPlatform}
+              options={PLATFORMS}
+              icon={Megaphone}
+            />
+            <FilterSelect
+              label="Niche"
+              value={niche}
+              onChange={setNiche}
+              options={NICHES}
+              icon={TrendingUp}
+            />
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{filtered.length} ads · sorted by views</span>
             {(q || platform || niche) && (
               <button
-                onClick={() => { setQ(""); setPlatform(""); setNiche(""); }}
+                onClick={() => {
+                  setQ("");
+                  setPlatform("");
+                  setNiche("");
+                }}
                 className="text-[oklch(0.85_0.15_265)] hover:underline"
               >
                 Clear filters
@@ -171,14 +235,18 @@ function ViralAdsPage() {
 
         {adsQ.isLoading && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="glass rounded-xl h-80 animate-pulse" />)}
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="glass rounded-xl h-80 animate-pulse" />
+            ))}
           </div>
         )}
 
         {adsQ.isError && (
           <div className="glass rounded-xl p-8 text-center">
             <Flame className="mx-auto mb-3 text-rose-400" />
-            <p className="text-sm text-muted-foreground">Couldn't fetch the live feed. Try refreshing.</p>
+            <p className="text-sm text-muted-foreground">
+              Couldn't fetch the live feed. Try refreshing.
+            </p>
           </div>
         )}
 
@@ -191,7 +259,9 @@ function ViralAdsPage() {
 
         {!adsQ.isLoading && filtered.length > 0 && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((ad) => <AdCard key={ad.id} ad={ad} onPlay={() => setPlaying(ad)} />)}
+            {filtered.map((ad) => (
+              <AdCard key={ad.id} ad={ad} onPlay={() => setPlaying(ad)} />
+            ))}
           </div>
         )}
       </main>
@@ -232,21 +302,29 @@ function AdCard({ ad, onPlay }: { ad: LiveAd; onPlay: () => void }) {
       </button>
 
       <div className="p-4 flex-1 flex flex-col">
-        <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold">{ad.niche}</div>
+        <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold">
+          {ad.niche}
+        </div>
         <h3 className="font-bold text-[15px] leading-snug line-clamp-2">{ad.title}</h3>
         <div className="text-xs text-muted-foreground mt-1 truncate">{ad.channel}</div>
 
         {ad.hook_script && (
           <div className="mt-3 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/10 to-[oklch(0.66_0.24_305)]/5 border border-[oklch(0.68_0.20_265)]/20 p-2.5">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 flex items-center gap-1"><Play size={10} /> Hook</div>
+            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 flex items-center gap-1">
+              <Play size={10} /> Hook
+            </div>
             <p className="text-xs leading-relaxed line-clamp-2">{ad.hook_script}</p>
           </div>
         )}
 
         <div className="mt-auto pt-3 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><TrendingUp size={12} /> {formatViews(ad.views)}</span>
-            <span className="flex items-center gap-1"><Heart size={12} /> {ad.likes > 0 ? formatViews(ad.likes) : "—"}</span>
+            <span className="flex items-center gap-1">
+              <TrendingUp size={12} /> {formatViews(ad.views)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Heart size={12} /> {ad.likes > 0 ? formatViews(ad.likes) : "—"}
+            </span>
           </div>
           <span className="tabular-nums">{engagement}%</span>
         </div>
@@ -280,15 +358,26 @@ function VideoModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-4xl glass rounded-2xl overflow-hidden border border-white/10" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl glass rounded-2xl overflow-hidden border border-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between p-4 border-b border-white/10">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] font-semibold">{ad.niche} · {ad.platform}</div>
+            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] font-semibold">
+              {ad.niche} · {ad.platform}
+            </div>
             <h3 className="font-bold text-base leading-tight mt-0.5 truncate">{ad.title}</h3>
             <div className="text-xs text-muted-foreground mt-0.5">{ad.channel}</div>
           </div>
-          <button onClick={onClose} className="rounded-lg bg-white/5 hover:bg-white/10 p-2 shrink-0">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-white/5 hover:bg-white/10 p-2 shrink-0"
+          >
             <X size={16} />
           </button>
         </div>
@@ -304,13 +393,18 @@ function VideoModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
             />
           ) : (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-              Preview unavailable — <a href={ad.video_url} target="_blank" rel="noreferrer" className="underline ml-1">open source</a>
+              Preview unavailable —{" "}
+              <a href={ad.video_url} target="_blank" rel="noreferrer" className="underline ml-1">
+                open source
+              </a>
             </div>
           )}
         </div>
         {ad.hook_script && (
           <div className="p-4 border-t border-white/10">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold flex items-center gap-1"><Play size={10} /> Hook</div>
+            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold flex items-center gap-1">
+              <Play size={10} /> Hook
+            </div>
             <p className="text-sm">{ad.hook_script}</p>
           </div>
         )}
@@ -320,9 +414,16 @@ function VideoModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
 }
 
 function FilterSelect({
-  label, value, onChange, options, icon: Icon,
+  label,
+  value,
+  onChange,
+  options,
+  icon: Icon,
 }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[];
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }) {
   return (
@@ -333,14 +434,28 @@ function FilterSelect({
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)] appearance-none"
       >
-        <option value="" className="bg-[oklch(0.20_0.035_265)]">All {label}s</option>
-        {options.map((o) => <option key={o} value={o} className="bg-[oklch(0.20_0.035_265)]">{o}</option>)}
+        <option value="" className="bg-[oklch(0.20_0.035_265)]">
+          All {label}s
+        </option>
+        {options.map((o) => (
+          <option key={o} value={o} className="bg-[oklch(0.20_0.035_265)]">
+            {o}
+          </option>
+        ))}
       </select>
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; value: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="glass rounded-xl p-3 flex items-center gap-3 hover:border-[oklch(0.68_0.20_265)]/40 border border-transparent transition">
       <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/15 flex items-center justify-center">

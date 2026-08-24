@@ -2,26 +2,72 @@ import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
 import { PricingModal } from "@/components/pricing-modal";
 import {
-  Package, Coins, Rocket, ShieldHalf, Newspaper,
-  Handshake, FileSearch, ShieldQuestion, ClipboardList,
-  Calculator, Ship, Wallet, Boxes, ShieldCheck,
-  Gauge, PackagePlus, CalendarClock, Globe2, Megaphone,
-  Tags, ImagePlus, MessageSquareHeart, LineChart, Target, Radar,
-  LayoutDashboard, Scale, Bell, FileText, Lock,
+  Package,
+  Coins,
+  Rocket,
+  ShieldHalf,
+  Newspaper,
+  Handshake,
+  FileSearch,
+  ShieldQuestion,
+  ClipboardList,
+  Calculator,
+  Ship,
+  Wallet,
+  Boxes,
+  ShieldCheck,
+  Gauge,
+  PackagePlus,
+  CalendarClock,
+  Globe2,
+  Megaphone,
+  Tags,
+  ImagePlus,
+  MessageSquareHeart,
+  LineChart,
+  Target,
+  Radar,
+  LayoutDashboard,
+  Scale,
+  Bell,
+  FileText,
+  Lock,
 } from "lucide-react";
 
+type Item = {
+  key: string;
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 
-type Item = { key: string; title: string; url: string; icon: React.ComponentType<{ className?: string }> };
-
-const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typeof Package; items: Item[] }[] = [
+const GROUPS: {
+  id: string;
+  key: string;
+  label: string;
+  emoji: string;
+  icon: typeof Package;
+  items: Item[];
+}[] = [
   {
-    id: "library", key: "g_library", label: "Library", emoji: "📚", icon: LayoutDashboard,
+    id: "library",
+    key: "g_library",
+    label: "Library",
+    emoji: "📚",
+    icon: LayoutDashboard,
     items: [
       { key: "dashboard", title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { key: "command_center", title: "Command Center", url: "/command-center", icon: Radar },
@@ -31,26 +77,68 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
     ],
   },
   {
-    id: "sourcing", key: "g_sourcing", label: "Sourcing & Factory Hub", emoji: "📦", icon: Package,
+    id: "sourcing",
+    key: "g_sourcing",
+    label: "Sourcing & Factory Hub",
+    emoji: "📦",
+    icon: Package,
     items: [
-      { key: "negotiator", title: "AI Supplier Negotiator", url: "/tools/sourcing", icon: Handshake },
-      { key: "offer_analyzer", title: "Supplier Offer Analyzer", url: "/tools/sourcing", icon: FileSearch },
-      { key: "legitimacy", title: "Legitimacy Detector", url: "/tools/sourcing", icon: ShieldQuestion },
-      { key: "spec_sheet", title: "Review ➔ Spec Sheet", url: "/tools/sourcing", icon: ClipboardList },
+      {
+        key: "negotiator",
+        title: "AI Supplier Negotiator",
+        url: "/tools/sourcing",
+        icon: Handshake,
+      },
+      {
+        key: "offer_analyzer",
+        title: "Supplier Offer Analyzer",
+        url: "/tools/sourcing",
+        icon: FileSearch,
+      },
+      {
+        key: "legitimacy",
+        title: "Legitimacy Detector",
+        url: "/tools/sourcing",
+        icon: ShieldQuestion,
+      },
+      {
+        key: "spec_sheet",
+        title: "Review ➔ Spec Sheet",
+        url: "/tools/sourcing",
+        icon: ClipboardList,
+      },
     ],
   },
   {
-    id: "finance", key: "g_finance", label: "Financial & Cost Engine", emoji: "💰", icon: Coins,
+    id: "finance",
+    key: "g_finance",
+    label: "Financial & Cost Engine",
+    emoji: "💰",
+    icon: Coins,
     items: [
-      { key: "reverse_cost", title: "Reverse Cost Engineer", url: "/tools/finance", icon: Calculator },
+      {
+        key: "reverse_cost",
+        title: "Reverse Cost Engineer",
+        url: "/tools/finance",
+        icon: Calculator,
+      },
       { key: "landed_cost", title: "Landed Cost Calculator", url: "/tools/finance", icon: Ship },
-      { key: "capital_planner", title: "Minimum Capital Planner", url: "/tools/finance", icon: Wallet },
+      {
+        key: "capital_planner",
+        title: "Minimum Capital Planner",
+        url: "/tools/finance",
+        icon: Wallet,
+      },
       { key: "desi", title: "Packaging & Desi Optimizer", url: "/tools/finance", icon: Boxes },
       { key: "milestone", title: "Milestone Shield", url: "/tools/finance", icon: ShieldCheck },
     ],
   },
   {
-    id: "growth", key: "g_growth", label: "Growth & Market AI", emoji: "🚀", icon: Rocket,
+    id: "growth",
+    key: "g_growth",
+    label: "Growth & Market AI",
+    emoji: "🚀",
+    icon: Rocket,
     items: [
       { key: "consensus", title: "Multi-AI Consensus Score", url: "/tools/growth", icon: Gauge },
       { key: "bundle", title: "Bundle & AOV Booster", url: "/tools/growth", icon: PackagePlus },
@@ -60,24 +148,52 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
     ],
   },
   {
-    id: "listing", key: "g_listing", label: "Listing & Conversion Studio", emoji: "📝", icon: FileText,
+    id: "listing",
+    key: "g_listing",
+    label: "Listing & Conversion Studio",
+    emoji: "📝",
+    icon: FileText,
     items: [
       { key: "listing_seo", title: "Listing SEO Optimizer", url: "/tools/listing", icon: Tags },
       { key: "listing_visual", title: "Görsel & A+ Brief", url: "/tools/listing", icon: ImagePlus },
-      { key: "review_sentiment", title: "Yorum Sentiment Radarı", url: "/tools/listing", icon: MessageSquareHeart },
-      { key: "price_strategy", title: "Fiyat & Buy Box Stratejisi", url: "/tools/listing", icon: LineChart },
+      {
+        key: "review_sentiment",
+        title: "Yorum Sentiment Radarı",
+        url: "/tools/listing",
+        icon: MessageSquareHeart,
+      },
+      {
+        key: "price_strategy",
+        title: "Fiyat & Buy Box Stratejisi",
+        url: "/tools/listing",
+        icon: LineChart,
+      },
     ],
   },
   {
-    id: "council", key: "g_council", label: "AI Konsey", emoji: "🧠", icon: Gauge,
+    id: "council",
+    key: "g_council",
+    label: "AI Konsey",
+    emoji: "🧠",
+    icon: Gauge,
     items: [{ key: "council", title: "14'lü AI Konsey", url: "/council", icon: Gauge }],
   },
   {
-    id: "radar", key: "g_radar", label: "Trend Radar", emoji: "📡", icon: Radar,
-    items: [{ key: "trend_radar", title: "Multi-Platform Trend Radar", url: "/trend-radar", icon: Radar }],
+    id: "radar",
+    key: "g_radar",
+    label: "Trend Radar",
+    emoji: "📡",
+    icon: Radar,
+    items: [
+      { key: "trend_radar", title: "Multi-Platform Trend Radar", url: "/trend-radar", icon: Radar },
+    ],
   },
   {
-    id: "growth_suite", key: "g_growth_suite", label: "Büyüme Suite", emoji: "📈", icon: Rocket,
+    id: "growth_suite",
+    key: "g_growth_suite",
+    label: "Büyüme Suite",
+    emoji: "📈",
+    icon: Rocket,
     items: [
       { key: "win_radar", title: "Kazanan Ürün Radarı", url: "/radar", icon: Radar },
       { key: "roi_panel", title: "Kâr / ROI Paneli", url: "/roi", icon: Wallet },
@@ -86,7 +202,11 @@ const GROUPS: { id: string; key: string; label: string; emoji: string; icon: typ
     ],
   },
   {
-    id: "news", key: "g_news", label: "E-Com News Explainer", emoji: "📰", icon: Newspaper,
+    id: "news",
+    key: "g_news",
+    label: "E-Com News Explainer",
+    emoji: "📰",
+    icon: Newspaper,
     items: [{ key: "news", title: "News & AI Explainer", url: "/news", icon: Target }],
   },
 ];
@@ -133,12 +253,27 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-white/10">
       <SidebarContent className="pt-4">
+        <Link to="/" className="mx-3 mb-3 flex items-center gap-2">
+          <img
+            src="/logo-mark.png"
+            alt="Aroless"
+            width={28}
+            height={28}
+            className="h-7 w-7 shrink-0 object-contain"
+          />
+          {!collapsed && (
+            <span className="text-[13px] font-light uppercase tracking-[0.3em] text-foreground">
+              Aroless
+            </span>
+          )}
+        </Link>
         {!collapsed && !isPaid && !isAdmin && (
           <button
             onClick={() => setShowPricing(true)}
             className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
           >
-🔒 Ücretsiz plan: günde 2 kredi · sadece Kazanan Ürün Radarı · PRO ile tüm modüller
+            🔒 Ücretsiz plan: tek seferlik 2 hoş geldin kredisi · sadece Kazanan Ürün Radarı · PRO
+            ile tüm modüller
           </button>
         )}
         {!collapsed && (isPaid || isAdmin) && (
@@ -185,4 +320,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-

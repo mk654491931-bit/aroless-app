@@ -21,7 +21,10 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings — Aroless" },
-      { name: "description", content: "Manage your language, currency, notifications, and subscription." },
+      {
+        name: "description",
+        content: "Manage your language, currency, notifications, and subscription.",
+      },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -36,9 +39,15 @@ function SettingsPage() {
   const profileFn = useServerFn(getFullProfile);
   const updateFn = useServerFn(updateProfilePrefs);
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  useEffect(() => {
+    if (!loading && !user) nav({ to: "/auth" });
+  }, [user, loading, nav]);
 
-  const profQ = useQuery({ queryKey: ["profile-full", user?.id], queryFn: () => profileFn(), enabled: !!user });
+  const profQ = useQuery({
+    queryKey: ["profile-full", user?.id],
+    queryFn: () => profileFn(),
+    enabled: !!user,
+  });
   const [notifications, setNotifications] = useState<boolean>(true);
   const [currency, setCurrency] = useState("USD");
 
@@ -50,12 +59,21 @@ function SettingsPage() {
   }, [profQ.data]);
 
   const save = useMutation({
-    mutationFn: (v: { language?: string; currency?: string; notifications_enabled?: boolean }) => updateFn({ data: v }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profile-full"] }); toast.success("Saved"); },
+    mutationFn: (v: { language?: string; currency?: string; notifications_enabled?: boolean }) =>
+      updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["profile-full"] });
+      toast.success("Saved");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading || !user)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
     <div className="min-h-screen">
@@ -69,7 +87,10 @@ function SettingsPage() {
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            <Link to="/" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
+            <Link
+              to="/"
+              className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+            >
               <ArrowLeft size={14} /> Back
             </Link>
           </div>
@@ -80,7 +101,8 @@ function SettingsPage() {
         <section className="glass rounded-2xl p-5">
           <h2 className="font-semibold mb-1">Kullanıcı kimliğiniz</h2>
           <p className="text-xs text-muted-foreground mb-3">
-            Destek taleplerinde bu 8 haneli kimliği paylaşın. E-posta adresinizi paylaşmanız gerekmez.
+            Destek taleplerinde bu 8 haneli kimliği paylaşın. E-posta adresinizi paylaşmanız
+            gerekmez.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-lg tracking-[0.3em]">
@@ -111,7 +133,10 @@ function SettingsPage() {
               return (
                 <button
                   key={l.code}
-                  onClick={() => { i18n.changeLanguage(l.code); save.mutate({ language: l.code }); }}
+                  onClick={() => {
+                    i18n.changeLanguage(l.code);
+                    save.mutate({ language: l.code });
+                  }}
                   className={`rounded-lg border px-3 py-2.5 text-sm text-start flex items-center gap-2 transition ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   <span className="text-lg">{l.flag}</span> {l.label}
@@ -129,7 +154,10 @@ function SettingsPage() {
               return (
                 <button
                   key={c}
-                  onClick={() => { setCurrency(c); save.mutate({ currency: c }); }}
+                  onClick={() => {
+                    setCurrency(c);
+                    save.mutate({ currency: c });
+                  }}
                   className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   {c}
@@ -142,13 +170,17 @@ function SettingsPage() {
         <HuggingFacePanel />
 
         <section className="glass rounded-2xl p-5">
-
-          <h2 className="font-semibold mb-3 flex items-center gap-2"><BellRing size={16} /> {t("notifications")}</h2>
+          <h2 className="font-semibold mb-3 flex items-center gap-2">
+            <BellRing size={16} /> {t("notifications")}
+          </h2>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={notifications}
-              onChange={(e) => { setNotifications(e.target.checked); save.mutate({ notifications_enabled: e.target.checked }); }}
+              onChange={(e) => {
+                setNotifications(e.target.checked);
+                save.mutate({ notifications_enabled: e.target.checked });
+              }}
               className="h-4 w-4 rounded accent-[oklch(0.68_0.20_265)]"
             />
             <span className="text-sm">Enable product & billing notifications</span>
@@ -156,13 +188,18 @@ function SettingsPage() {
         </section>
 
         <section className="glass rounded-2xl p-5">
-          <h2 className="font-semibold mb-3 flex items-center gap-2"><Coins size={16} /> {t("subscription")}</h2>
+          <h2 className="font-semibold mb-3 flex items-center gap-2">
+            <Coins size={16} /> {t("subscription")}
+          </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <Info label="Email" value={profQ.data?.email ?? "—"} />
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
             <Info label={t("credits")} value={String(profQ.data?.credits ?? 0)} />
           </div>
-          <Link to="/pricing" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10">
+          <Link
+            to="/pricing"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
+          >
             Planları ve kredi paketlerini gör
           </Link>
         </section>

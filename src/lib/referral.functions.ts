@@ -43,7 +43,9 @@ export const getMyReferral = createServerFn({ method: "GET" })
         !asReferred &&
         !!profile?.created_at &&
         Date.now() - new Date(profile.created_at as string).getTime() < 30 * 24 * 60 * 60 * 1000,
-      recent: mine.slice(0, 10).map((e) => ({ created_at: e.created_at as string, credits: e.referrer_credits ?? 0 })),
+      recent: mine
+        .slice(0, 10)
+        .map((e) => ({ created_at: e.created_at as string, credits: e.referrer_credits ?? 0 })),
     };
   });
 
@@ -51,52 +53,54 @@ export const getMyReferral = createServerFn({ method: "GET" })
 export const claimReferral = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(4).max(16) }).parse(i))
-  .handler(async ({ data, context }): Promise<{ ok: boolean; reason?: string; credits?: number }> => {
-    const code = data.code.trim().toUpperCase();
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(
+    async ({ data, context }): Promise<{ ok: boolean; reason?: string; credits?: number }> => {
+      const code = data.code.trim().toUpperCase();
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: me } = await supabaseAdmin
-      .from("profiles")
-      .select("id, credits, referral_code, created_at")
-      .eq("id", context.userId)
-      .maybeSingle();
-    if (!me) return { ok: false, reason: "Profil bulunamadı." };
-    if (me.referral_code === code) return { ok: false, reason: "Kendi kodunu kullanamazsın." };
-    if (Date.now() - new Date(me.created_at as string).getTime() > 30 * 24 * 60 * 60 * 1000) {
-      return { ok: false, reason: "Davet kodu yalnızca ilk 30 gün içinde kullanılabilir." };
-    }
+      const { data: me } = await supabaseAdmin
+        .from("profiles")
+        .select("id, credits, referral_code, created_at")
+        .eq("id", context.userId)
+        .maybeSingle();
+      if (!me) return { ok: false, reason: "Profil bulunamadı." };
+      if (me.referral_code === code) return { ok: false, reason: "Kendi kodunu kullanamazsın." };
+      if (Date.now() - new Date(me.created_at as string).getTime() > 30 * 24 * 60 * 60 * 1000) {
+        return { ok: false, reason: "Davet kodu yalnızca ilk 30 gün içinde kullanılabilir." };
+      }
 
-    const { data: existing } = await supabaseAdmin
-      .from("referral_events")
-      .select("id")
-      .eq("referred_user_id", context.userId)
-      .maybeSingle();
-    if (existing) return { ok: false, reason: "Zaten bir davet kodu kullandın." };
+      const { data: existing } = await supabaseAdmin
+        .from("referral_events")
+        .select("id")
+        .eq("referred_user_id", context.userId)
+        .maybeSingle();
+      if (existing) return { ok: false, reason: "Zaten bir davet kodu kullandın." };
 
-    const { data: referrer } = await supabaseAdmin
-      .from("profiles")
-      .select("id, credits")
-      .eq("referral_code", code)
-      .maybeSingle();
-    if (!referrer) return { ok: false, reason: "Kod bulunamadı." };
+      const { data: referrer } = await supabaseAdmin
+        .from("profiles")
+        .select("id, credits")
+        .eq("referral_code", code)
+        .maybeSingle();
+      if (!referrer) return { ok: false, reason: "Kod bulunamadı." };
 
-    const { error: insErr } = await supabaseAdmin.from("referral_events").insert({
-      referrer_id: referrer.id,
-      referred_user_id: context.userId,
-      code,
-      referrer_credits: REFERRER_BONUS,
-      referred_credits: REFERRED_BONUS,
-    });
-    if (insErr) return { ok: false, reason: "Davet kaydedilemedi." };
+      const { error: insErr } = await supabaseAdmin.from("referral_events").insert({
+        referrer_id: referrer.id,
+        referred_user_id: context.userId,
+        code,
+        referrer_credits: REFERRER_BONUS,
+        referred_credits: REFERRED_BONUS,
+      });
+      if (insErr) return { ok: false, reason: "Davet kaydedilemedi." };
 
-    await supabaseAdmin
-      .from("profiles")
-      .update({ credits: (referrer.credits ?? 0) + REFERRER_BONUS })
-      .eq("id", referrer.id);
-    await supabaseAdmin
-      .from("profiles")
-      .update({ credits: (me.credits ?? 0) + REFERRED_BONUS, referred_by: referrer.id })
-      .eq("id", context.userId);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ credits: (referrer.credits ?? 0) + REFERRER_BONUS })
+        .eq("id", referrer.id);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ credits: (me.credits ?? 0) + REFERRED_BONUS, referred_by: referrer.id })
+        .eq("id", context.userId);
 
-    return { ok: true, credits: REFERRED_BONUS };
-  });
+      return { ok: true, credits: REFERRED_BONUS };
+    },
+  );

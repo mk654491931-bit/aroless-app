@@ -34,7 +34,10 @@ export function clientIp(request: Request): string {
 /** Basit hash — IP'yi düz metin saklamamak için. */
 export async function hashValue(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
 }
 
 /**
@@ -57,9 +60,11 @@ export async function requireUser(request: Request): Promise<GuardResult> {
       headers: { apikey: key, Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return { response: json(401, { error: "Oturumunuz geçersiz, tekrar giriş yapın." }) };
+    if (!res.ok)
+      return { response: json(401, { error: "Oturumunuz geçersiz, tekrar giriş yapın." }) };
     const user = (await res.json()) as { id?: string };
-    if (!user?.id) return { response: json(401, { error: "Oturumunuz geçersiz, tekrar giriş yapın." }) };
+    if (!user?.id)
+      return { response: json(401, { error: "Oturumunuz geçersiz, tekrar giriş yapın." }) };
     return { userId: user.id };
   } catch (e) {
     return { response: jsonError(401, "Oturum doğrulanamadı.", e) };
@@ -88,7 +93,9 @@ export async function rateLimit(
     }
     if (data === false) {
       return new Response(
-        JSON.stringify({ error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin." }),
+        JSON.stringify({
+          error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.",
+        }),
         {
           status: 429,
           headers: {

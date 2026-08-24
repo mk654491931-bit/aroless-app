@@ -37,7 +37,8 @@ export function computeRoi(e: RoiEntry): RoiStats {
   const orders = Math.max(0, Number(e.orders) || 0);
   const refunds = Math.min(orders, Math.max(0, Number(e.refunds) || 0));
   const netOrders = Math.max(0, orders - refunds);
-  const unitCost = (Number(e.cost_price) || 0) + (Number(e.shipping_cost) || 0) + (Number(e.other_cost) || 0);
+  const unitCost =
+    (Number(e.cost_price) || 0) + (Number(e.shipping_cost) || 0) + (Number(e.other_cost) || 0);
   const revenue = netOrders * (Number(e.sell_price) || 0);
   const cogs = netOrders * unitCost;
   const grossProfit = revenue - cogs;
@@ -86,8 +87,10 @@ export function aggregateRoi(entries: RoiEntry[]) {
 }
 
 export function money(v: number, currency = "USD") {
-  const symbol = currency === "TRY" ? "₺" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "$";
+  const symbol =
+    currency === "TRY" ? "₺" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "$";
   const abs = Math.abs(v);
-  const formatted = abs >= 1000 ? abs.toLocaleString("en-US", { maximumFractionDigits: 0 }) : abs.toFixed(2);
+  const formatted =
+    abs >= 1000 ? abs.toLocaleString("en-US", { maximumFractionDigits: 0 }) : abs.toFixed(2);
   return `${v < 0 ? "-" : ""}${symbol}${formatted}`;
 }

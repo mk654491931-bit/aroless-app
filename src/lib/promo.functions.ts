@@ -32,7 +32,9 @@ export const listPromoCodes = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("promo_codes")
-      .select("id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at")
+      .select(
+        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at",
+      )
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
@@ -40,7 +42,12 @@ export const listPromoCodes = createServerFn({ method: "GET" })
   });
 
 const CreateInput = z.object({
-  code: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/, "Only letters, numbers, - and _"),
+  code: z
+    .string()
+    .trim()
+    .min(3)
+    .max(32)
+    .regex(/^[A-Za-z0-9_-]+$/, "Only letters, numbers, - and _"),
   discount_pct: z.number().int().min(1).max(100),
   max_redemptions: z.number().int().min(1).max(100000).nullable().optional(),
   expires_at: z.string().nullable().optional(),
@@ -61,9 +68,12 @@ export const createPromoCode = createServerFn({ method: "POST" })
         expires_at: data.expires_at || null,
         created_by: context.userId,
       })
-      .select("id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at")
+      .select(
+        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at",
+      )
       .single();
-    if (error) throw new Error(error.message.includes("duplicate") ? "Bu kod zaten var." : error.message);
+    if (error)
+      throw new Error(error.message.includes("duplicate") ? "Bu kod zaten var." : error.message);
     return row as PromoCodeRow;
   });
 
@@ -73,7 +83,10 @@ export const setPromoCodeActive = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("promo_codes").update({ active: data.active }).eq("id", data.id);
+    const { error } = await supabaseAdmin
+      .from("promo_codes")
+      .update({ active: data.active })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -102,7 +115,8 @@ export const validatePromoCode = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!row) return { valid: false, discount_pct: 0, reason: "Kod bulunamadı." };
     if (!row.active) return { valid: false, discount_pct: 0, reason: "Kod pasif." };
-    if (row.expires_at && new Date(row.expires_at) < new Date()) return { valid: false, discount_pct: 0, reason: "Kodun süresi dolmuş." };
+    if (row.expires_at && new Date(row.expires_at) < new Date())
+      return { valid: false, discount_pct: 0, reason: "Kodun süresi dolmuş." };
     if (row.max_redemptions != null && row.times_redeemed >= row.max_redemptions) {
       return { valid: false, discount_pct: 0, reason: "Kod kullanım limitine ulaştı." };
     }
@@ -127,7 +141,8 @@ export const getMyPromoCode = createServerFn({ method: "GET" })
       .eq("code", code)
       .maybeSingle();
     if (!row || !row.active) return { code: null, discount_pct: 0 };
-    if (row.expires_at && new Date(row.expires_at) < new Date()) return { code: null, discount_pct: 0 };
+    if (row.expires_at && new Date(row.expires_at) < new Date())
+      return { code: null, discount_pct: 0 };
     return { code, discount_pct: row.discount_pct };
   });
 
@@ -148,16 +163,33 @@ export const getPromoCodeStats = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: codes }, { data: reds }] = await Promise.all([
       supabaseAdmin.from("promo_codes").select("code, discount_pct").limit(200),
-      supabaseAdmin.from("promo_redemptions").select("code, purchased_tier, amount_cents").limit(5000),
+      supabaseAdmin
+        .from("promo_redemptions")
+        .select("code, purchased_tier, amount_cents")
+        .limit(5000),
     ]);
     const map = new Map<string, PromoCodeStat>();
     for (const c of codes ?? []) {
-      map.set(c.code, { code: c.code, discount_pct: c.discount_pct, signups: 0, purchases: 0, revenue_cents: 0, by_tier: {} });
+      map.set(c.code, {
+        code: c.code,
+        discount_pct: c.discount_pct,
+        signups: 0,
+        purchases: 0,
+        revenue_cents: 0,
+        by_tier: {},
+      });
     }
     for (const r of reds ?? []) {
       const key = String(r.code ?? "").toUpperCase();
       if (!key) continue;
-      const stat = map.get(key) ?? { code: key, discount_pct: 0, signups: 0, purchases: 0, revenue_cents: 0, by_tier: {} };
+      const stat = map.get(key) ?? {
+        code: key,
+        discount_pct: 0,
+        signups: 0,
+        purchases: 0,
+        revenue_cents: 0,
+        by_tier: {},
+      };
       stat.signups += 1;
       if (r.purchased_tier) {
         stat.purchases += 1;
@@ -166,5 +198,7 @@ export const getPromoCodeStats = createServerFn({ method: "GET" })
       }
       map.set(key, stat);
     }
-    return Array.from(map.values()).sort((a, b) => b.signups - a.signups || a.code.localeCompare(b.code));
+    return Array.from(map.values()).sort(
+      (a, b) => b.signups - a.signups || a.code.localeCompare(b.code),
+    );
   });

@@ -10,7 +10,13 @@ const memory = new Map<string, Entry>();
 
 /** Stable cache key: scope + normalised parts, hashed to a short hex string. */
 export async function cacheKey(scope: string, parts: unknown[]): Promise<string> {
-  const raw = `${scope}::${parts.map((p) => String(p ?? "").trim().toLowerCase()).join("|")}`;
+  const raw = `${scope}::${parts
+    .map((p) =>
+      String(p ?? "")
+        .trim()
+        .toLowerCase(),
+    )
+    .join("|")}`;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   return `${scope}:${[...new Uint8Array(digest)]
     .slice(0, 16)
@@ -59,7 +65,11 @@ export async function cacheSet(key: string, scope: string, value: unknown): Prom
 }
 
 /** get-or-compute helper. */
-export async function cached<T>(scope: string, parts: unknown[], compute: () => Promise<T>): Promise<{ data: T; cache_hit: boolean }> {
+export async function cached<T>(
+  scope: string,
+  parts: unknown[],
+  compute: () => Promise<T>,
+): Promise<{ data: T; cache_hit: boolean }> {
   const key = await cacheKey(scope, parts);
   const hit = await cacheGet<T>(key);
   if (hit) return { data: hit, cache_hit: true };

@@ -39,22 +39,43 @@ export function HuggingFacePanel() {
   };
 
   const badge = {
-    idle: { cls: "border-white/15 bg-white/5 text-muted-foreground", icon: <PlugZap size={12} />, label: "Not tested" },
-    testing: { cls: "border-white/15 bg-white/5 text-muted-foreground", icon: <Loader2 size={12} className="animate-spin" />, label: "Testing…" },
-    connected: { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300", icon: <ShieldCheck size={12} />, label: "Connected" },
-    fallback: { cls: "border-amber-400/40 bg-amber-400/10 text-amber-300", icon: <TriangleAlert size={12} />, label: "Fallback Ready" },
+    idle: {
+      cls: "border-white/15 bg-white/5 text-muted-foreground",
+      icon: <PlugZap size={12} />,
+      label: "Not tested",
+    },
+    testing: {
+      cls: "border-white/15 bg-white/5 text-muted-foreground",
+      icon: <Loader2 size={12} className="animate-spin" />,
+      label: "Testing…",
+    },
+    connected: {
+      cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
+      icon: <ShieldCheck size={12} />,
+      label: "Connected",
+    },
+    fallback: {
+      cls: "border-amber-400/40 bg-amber-400/10 text-amber-300",
+      icon: <TriangleAlert size={12} />,
+      label: "Fallback Ready",
+    },
   }[status];
 
   return (
     <section className="glass rounded-2xl p-5">
       <h2 className="font-semibold mb-1 flex items-center gap-2">
         <Cpu size={16} /> Hugging Face Engines
-        <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badge.cls}`}>
+        <span
+          className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badge.cls}`}
+        >
           {badge.icon} {badge.label}
         </span>
       </h2>
       <p className="text-xs text-muted-foreground mb-3">
-        Powers the search engine switcher: {ENGINES.filter((e) => e.id !== "default").map((e) => e.model).join(" · ")}
+        Powers the search engine switcher:{" "}
+        {ENGINES.filter((e) => e.id !== "default")
+          .map((e) => e.model)
+          .join(" · ")}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input

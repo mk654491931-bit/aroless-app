@@ -104,7 +104,10 @@ export async function getGoogleTrends(keyword: string, country: string): Promise
 }
 
 function finalize(
-  keyword: string, geo: string, yearly: number[], monthly: number[],
+  keyword: string,
+  geo: string,
+  yearly: number[],
+  monthly: number[],
   source: TrendSeries["source"],
 ): TrendSeries {
   const half = Math.max(1, Math.floor(monthly.length / 2));
@@ -125,7 +128,8 @@ export type SourcingEstimate = {
 
 /** AliExpress price discovery (public search JSON-ish page), with heuristic fallback. */
 export async function getSourcingEstimate(
-  keyword: string, sellingPriceUsd: number,
+  keyword: string,
+  sellingPriceUsd: number,
 ): Promise<SourcingEstimate> {
   const fallback = (): SourcingEstimate => ({
     supplier_price_usd: Math.max(1, Math.round(sellingPriceUsd * 0.28 * 100) / 100),
@@ -171,7 +175,13 @@ export type ProductPhysical = {
 };
 
 export async function getProductPhysical(barcode: string): Promise<ProductPhysical> {
-  const empty: ProductPhysical = { found: false, name: "", weight_g: null, dimensions: null, categories: "" };
+  const empty: ProductPhysical = {
+    found: false,
+    name: "",
+    weight_g: null,
+    dimensions: null,
+    categories: "",
+  };
   if (!/^[0-9]{6,14}$/.test(barcode)) return empty;
   try {
     const res = await timedFetch(
@@ -180,7 +190,13 @@ export async function getProductPhysical(barcode: string): Promise<ProductPhysic
     if (!res.ok) return empty;
     const json = (await res.json()) as {
       status?: number;
-      product?: { product_name?: string; quantity?: string; product_quantity?: string; categories?: string; packaging?: string };
+      product?: {
+        product_name?: string;
+        quantity?: string;
+        product_quantity?: string;
+        categories?: string;
+        packaging?: string;
+      };
     };
     const p = json.product;
     if (!p) return empty;
@@ -200,7 +216,7 @@ export async function getProductPhysical(barcode: string): Promise<ProductPhysic
 /* ------------------------------------------------------------ Open PageRank */
 
 export async function getDomainRanks(domains: string[]): Promise<Record<string, number>> {
-  const key = process.env['OPEN_PAGERANK_KEY'];
+  const key = process.env["OPEN_PAGERANK_KEY"];
   const list = [...new Set(domains.filter(Boolean))].slice(0, 20);
   if (!key || !list.length) return {};
   try {
@@ -209,7 +225,9 @@ export async function getDomainRanks(domains: string[]): Promise<Record<string, 
       headers: { "API-OPR": key },
     });
     if (!res.ok) return {};
-    const json = (await res.json()) as { response?: { domain?: string; page_rank_decimal?: number }[] };
+    const json = (await res.json()) as {
+      response?: { domain?: string; page_rank_decimal?: number }[];
+    };
     const out: Record<string, number> = {};
     for (const r of json.response ?? []) {
       if (r.domain) out[r.domain] = Number(r.page_rank_decimal) || 0;
@@ -222,12 +240,24 @@ export async function getDomainRanks(domains: string[]): Promise<Record<string, 
 
 /* ------------------------------------------- Lightweight marketplace scraper */
 
-export type ScrapedSeller = { seller: string; domain: string; platform: string; price_usd: number; url: string };
+export type ScrapedSeller = {
+  seller: string;
+  domain: string;
+  platform: string;
+  price_usd: number;
+  url: string;
+};
 
 const PLATFORM_BY_HOST: [RegExp, string][] = [
-  [/amazon\./i, "Amazon"], [/ebay\./i, "eBay"], [/etsy\./i, "Etsy"],
-  [/walmart\./i, "Walmart"], [/aliexpress\./i, "AliExpress"], [/myshopify\.com/i, "Shopify"],
-  [/temu\./i, "Temu"], [/trendyol\./i, "Trendyol"], [/hepsiburada\./i, "Hepsiburada"],
+  [/amazon\./i, "Amazon"],
+  [/ebay\./i, "eBay"],
+  [/etsy\./i, "Etsy"],
+  [/walmart\./i, "Walmart"],
+  [/aliexpress\./i, "AliExpress"],
+  [/myshopify\.com/i, "Shopify"],
+  [/temu\./i, "Temu"],
+  [/trendyol\./i, "Trendyol"],
+  [/hepsiburada\./i, "Hepsiburada"],
 ];
 
 function platformOf(host: string): string {
@@ -238,21 +268,32 @@ function platformOf(host: string): string {
 function decode(s: string): string {
   return s
     .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
     .trim();
 }
 
 /** Free DuckDuckGo HTML search — top marketplace listings without SerpAPI. */
-export async function scrapeMarketplaceSellers(query: string, country: string): Promise<ScrapedSeller[]> {
+export async function scrapeMarketplaceSellers(
+  query: string,
+  country: string,
+): Promise<ScrapedSeller[]> {
   const region = geoOf(country).toLowerCase();
   const q = `${query} buy price`;
   try {
-    const res = await timedFetch("https://html.duckduckgo.com/html/", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", accept: "text/html" },
-      body: new URLSearchParams({ q, kl: region ? `${region}-${region}` : "us-en" }).toString(),
-    }, 9000);
+    const res = await timedFetch(
+      "https://html.duckduckgo.com/html/",
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", accept: "text/html" },
+        body: new URLSearchParams({ q, kl: region ? `${region}-${region}` : "us-en" }).toString(),
+      },
+      9000,
+    );
     if (!res.ok) return [];
     const html = await res.text();
     const blocks = html.split('class="result results_links').slice(1, 25);
@@ -261,10 +302,19 @@ export async function scrapeMarketplaceSellers(query: string, country: string): 
       const href = /result__a[^>]+href="([^"]+)"/.exec(b)?.[1] ?? "";
       const raw = decodeURIComponent(/uddg=([^&"]+)/.exec(href)?.[1] ?? href);
       let host = "";
-      try { host = new URL(raw.startsWith("http") ? raw : `https://${raw}`).hostname.replace(/^www\./, ""); } catch { continue; }
+      try {
+        host = new URL(raw.startsWith("http") ? raw : `https://${raw}`).hostname.replace(
+          /^www\./,
+          "",
+        );
+      } catch {
+        continue;
+      }
       if (!host || host.includes("duckduckgo")) continue;
       const snippet = decode(b.slice(0, 4000));
-      const price = Number(/[$€£]\s*([0-9]{1,4}(?:[.,][0-9]{2})?)/.exec(snippet)?.[1]?.replace(",", "."));
+      const price = Number(
+        /[$€£]\s*([0-9]{1,4}(?:[.,][0-9]{2})?)/.exec(snippet)?.[1]?.replace(",", "."),
+      );
       if (out.some((s) => s.domain === host)) continue;
       out.push({
         seller: host.split(".")[0].replace(/^\w/, (m) => m.toUpperCase()),

@@ -41,7 +41,11 @@ export function AdminTickets() {
         <span className="text-xs text-muted-foreground font-normal">({rows.length})</span>
       </h2>
 
-      {q.isLoading && <div className="py-6 flex justify-center"><Loader2 className="animate-spin" size={18} /></div>}
+      {q.isLoading && (
+        <div className="py-6 flex justify-center">
+          <Loader2 className="animate-spin" size={18} />
+        </div>
+      )}
       {!q.isLoading && rows.length === 0 && (
         <p className="text-sm text-muted-foreground">Henüz destek talebi yok.</p>
       )}
@@ -51,7 +55,9 @@ export function AdminTickets() {
           <div key={tk.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-white/10 px-2 py-0.5">{tk.category}</span>
-              <span className="rounded-full border border-white/10 px-2 py-0.5">{STATUS_LABEL[tk.status] ?? tk.status}</span>
+              <span className="rounded-full border border-white/10 px-2 py-0.5">
+                {STATUS_LABEL[tk.status] ?? tk.status}
+              </span>
               <span>{tk.email ?? "—"}</span>
               <span>{new Date(tk.created_at).toLocaleString()}</span>
             </div>
@@ -65,7 +71,9 @@ export function AdminTickets() {
                   disabled={save.isPending}
                   onClick={() => save.mutate({ id: tk.id, status: s })}
                   className={`rounded-lg border px-2.5 py-1 text-xs transition ${
-                    tk.status === s ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)]/20" : "border-white/10 hover:bg-white/10"
+                    tk.status === s
+                      ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)]/20"
+                      : "border-white/10 hover:bg-white/10"
                   }`}
                 >
                   {STATUS_LABEL[s]}

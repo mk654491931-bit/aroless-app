@@ -54,10 +54,19 @@ export function AmbientBackground() {
     const wake = () => {
       if (!raf && !document.hidden) raf = requestAnimationFrame(tick);
     };
-    const onPointerWake = (e: PointerEvent) => { onPointer(e); wake(); };
-    const onScrollWake = () => { onScroll(); wake(); };
+    const onPointerWake = (e: PointerEvent) => {
+      onPointer(e);
+      wake();
+    };
+    const onScrollWake = () => {
+      onScroll();
+      wake();
+    };
     const onVisibility = () => {
-      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else wake();
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      } else wake();
     };
 
     onScroll();
@@ -72,7 +81,6 @@ export function AmbientBackground() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
-
 
   return (
     <div className="amb-root" aria-hidden="true" data-no-translate ref={rootRef}>
@@ -92,7 +100,7 @@ export function AmbientBackground() {
               left: `${(i * 97) % 100}%`,
               animationDuration: `${16 + ((i * 7) % 18)}s`,
               animationDelay: `${-((i * 5) % 20)}s`,
-              opacity: 0.22 + ((i % 5) * 0.08),
+              opacity: 0.22 + (i % 5) * 0.08,
               width: i % 4 === 0 ? "3px" : "2px",
               height: i % 4 === 0 ? "3px" : "2px",
             }}

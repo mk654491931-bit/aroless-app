@@ -97,7 +97,13 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     };
   }, []);
 
-  return <canvas ref={ref} aria-hidden className={`pointer-events-none absolute inset-0 h-full w-full ${className}`} />;
+  return (
+    <canvas
+      ref={ref}
+      aria-hidden
+      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+    />
+  );
 }
 
 /* ---------------- Mouse-tracked breathing ambient halo ---------------- */
@@ -134,7 +140,10 @@ export function useRipples() {
     window.setTimeout(() => setRipples((rs) => rs.filter((x) => x.id !== id)), 650);
   }, []);
   const layer = (
-    <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+    >
       {ripples.map((r) => (
         <span key={r.id} className="energy-ripple" style={{ left: r.x, top: r.y }} />
       ))}
@@ -160,7 +169,11 @@ export function GlobalRippleLayer() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
       {ripples.map((r) => (
-        <span key={r.id} className="energy-ripple !h-40 !w-40" style={{ position: "fixed", left: r.x, top: r.y }} />
+        <span
+          key={r.id}
+          className="energy-ripple !h-40 !w-40"
+          style={{ position: "fixed", left: r.x, top: r.y }}
+        />
       ))}
     </div>
   );

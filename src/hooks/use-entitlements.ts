@@ -11,8 +11,8 @@ const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 export const FREE_GROUPS = ["library", "growth_suite"];
 /** Ücretsiz kullanıcıya açık tekil araçlar (Kazanan Ürün Radarı + temel sayfalar). */
 export const FREE_ITEMS = ["dashboard", "command_center", "compare", "notifications", "win_radar"];
-/** Ücretsiz kullanıcı günlük ürün arama kredisi. */
-export const FREE_DAILY_CREDITS = 2;
+/** Ücretsiz kullanıcıya kayıt anında bir kez verilen toplam kredi (yenilenmez). */
+export const FREE_WELCOME_CREDITS = 2;
 
 export type Entitlements = {
   loading: boolean;
@@ -55,8 +55,7 @@ export function useEntitlements(): Entitlements {
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
   // Ücretsiz kullanıcı: sadece Kazanan Ürün Radarı (ürün arama). Ücretli: tüm modüller.
-  const canUse = (groupId: string) =>
-    isAdmin || isPaid || FREE_GROUPS.includes(groupId);
+  const canUse = (groupId: string) => isAdmin || isPaid || FREE_GROUPS.includes(groupId);
   const quota = quotaFor(level);
 
   return {

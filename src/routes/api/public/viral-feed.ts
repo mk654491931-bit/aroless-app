@@ -31,18 +31,18 @@ const PIPED_HOSTS = [
 ];
 
 const QUERIES: Array<{ q: string; niche: string; country: string; platform: string }> = [
-  { q: "viral tiktok product ad",     niche: "Trending", country: "US", platform: "TikTok" },
-  { q: "best beauty tiktok ads 2025", niche: "Beauty",   country: "US", platform: "TikTok" },
-  { q: "fitness gear ad tiktok",      niche: "Fitness",  country: "US", platform: "Instagram" },
-  { q: "smart home gadget commercial",niche: "Home",     country: "US", platform: "Facebook" },
-  { q: "tech gadget unboxing viral",  niche: "Tech",     country: "US", platform: "YouTube" },
-  { q: "pet product tiktok ad",       niche: "Pets",     country: "US", platform: "TikTok" },
+  { q: "viral tiktok product ad", niche: "Trending", country: "US", platform: "TikTok" },
+  { q: "best beauty tiktok ads 2025", niche: "Beauty", country: "US", platform: "TikTok" },
+  { q: "fitness gear ad tiktok", niche: "Fitness", country: "US", platform: "Instagram" },
+  { q: "smart home gadget commercial", niche: "Home", country: "US", platform: "Facebook" },
+  { q: "tech gadget unboxing viral", niche: "Tech", country: "US", platform: "YouTube" },
+  { q: "pet product tiktok ad", niche: "Pets", country: "US", platform: "TikTok" },
   { q: "fashion brand instagram reel ad", niche: "Fashion", country: "UK", platform: "Instagram" },
-  { q: "kitchen gadget viral ad",     niche: "Kitchen",  country: "US", platform: "Facebook" },
-  { q: "outdoor gear commercial short",niche: "Outdoor", country: "US", platform: "YouTube" },
+  { q: "kitchen gadget viral ad", niche: "Kitchen", country: "US", platform: "Facebook" },
+  { q: "outdoor gear commercial short", niche: "Outdoor", country: "US", platform: "YouTube" },
 ];
 
-async function pipedFetch(path: string): Promise<any | null> {
+async function pipedFetch(path: string): Promise<Record<string, unknown> | null> {
   for (const host of PIPED_HOSTS) {
     try {
       const res = await fetch(`${host}${path}`, {
@@ -50,14 +50,21 @@ async function pipedFetch(path: string): Promise<any | null> {
         signal: AbortSignal.timeout(7000),
       });
       if (res.ok) return await res.json();
-    } catch { /* try next host */ }
+    } catch {
+      /* try next host */
+    }
   }
   return null;
 }
 
-async function fetchQuery(q: string, niche: string, country: string, platform: string): Promise<FeedItem[]> {
+async function fetchQuery(
+  q: string,
+  niche: string,
+  country: string,
+  platform: string,
+): Promise<FeedItem[]> {
   const data = await pipedFetch(`/search?q=${encodeURIComponent(q)}&filter=videos`);
-  const items = (data?.items ?? []) as any[];
+  const items = (data?.items ?? []) as Record<string, unknown>[];
   const out: FeedItem[] = [];
   for (const it of items) {
     if (it.type !== "stream") continue;
@@ -79,7 +86,9 @@ async function fetchQuery(q: string, niche: string, country: string, platform: s
       thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       hook_script: null, // filled in from the real video description below
       cta_text: null,
-      created_at: it.uploaded ? new Date(Number(it.uploaded)).toISOString() : new Date().toISOString(),
+      created_at: it.uploaded
+        ? new Date(Number(it.uploaded)).toISOString()
+        : new Date().toISOString(),
       channel: String(it.uploaderName ?? ""),
       duration_sec: Number(it.duration ?? 0),
     });
@@ -110,7 +119,11 @@ async function enrichAll(items: FeedItem[], concurrency = 6): Promise<void> {
   const workers = Array.from({ length: concurrency }, async () => {
     while (i < items.length) {
       const item = items[i++];
-      try { await enrich(item); } catch { /* keep unenriched */ }
+      try {
+        await enrich(item);
+      } catch {
+        /* keep unenriched */
+      }
     }
   });
   await Promise.all(workers);
@@ -143,10 +156,10 @@ export const Route = createFileRoute("/api/public/viral-feed")({
             },
           });
         } catch (e) {
-          return new Response(
-            JSON.stringify({ items: [], error: (e as Error).message }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+          return new Response(JSON.stringify({ items: [], error: (e as Error).message }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
         }
       },
     },

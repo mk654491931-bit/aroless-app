@@ -36,18 +36,37 @@ export type TrendPayload = {
   items: TrendItem[];
 };
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 const cache = new Map<string, TrendPayload>();
 const inflight = new Map<string, Promise<TrendPayload>>();
 
 const hourKey = (d = new Date()) => d.toISOString().slice(0, 13);
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
 
 const VIEW_BRIEF: Record<TrendView, string> = {
   now: "Products whose search demand is SPIKING RIGHT NOW (last 7-14 days) in the target country. Prioritise live spikes over evergreen demand.",
   next: "Predictive seasonality: products whose historical search volume reliably spikes 30-60 days FROM TODAY (e.g. Halloween goods in September, winter gear in October). Buy/list now, sell at the peak.",
-  season: "Fast-track winners for the CURRENT season in the target country (respect the hemisphere), already converting this month.",
+  season:
+    "Fast-track winners for the CURRENT season in the target country (respect the hemisphere), already converting this month.",
 };
 
 async function build(view: TrendView, country: string): Promise<TrendPayload> {
@@ -71,17 +90,20 @@ Return ONLY JSON:
 {"items":[{"name":string,"keyword":string,"category":string,"why":string,"peak_month":string,"spike_window":string,"season":string,"competition":"Low"|"Medium"|"High","marketplace":string,"audience":string,"ad_angle":string,"score":number 1-100}]}`;
 
   const text = await callGroq(prompt, 0.5);
-  const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
+  const parsed = extractJson<{ items?: Record<string, unknown>[] }>(text, { items: [] });
   const raws = (parsed.items ?? []).slice(0, 8);
 
   const items: TrendItem[] = await Promise.all(
-    raws.map(async (raw: any, i: number): Promise<TrendItem | null> => {
+    raws.map(async (raw: Record<string, unknown>, i: number): Promise<TrendItem | null> => {
       const name = String(raw?.name ?? "").trim();
       if (!name) return null;
-      const keyword = String(raw?.keyword ?? name).trim().slice(0, 80);
+      const keyword = String(raw?.keyword ?? name)
+        .trim()
+        .slice(0, 80);
       const comp = String(raw?.competition ?? "Medium");
-      const peak = MONTHS.find((m) => m.toLowerCase() === String(raw?.peak_month ?? "").toLowerCase())
-        ?? MONTHS[(now.getUTCMonth() + (view === "next" ? 1 : 0)) % 12];
+      const peak =
+        MONTHS.find((m) => m.toLowerCase() === String(raw?.peak_month ?? "").toLowerCase()) ??
+        MONTHS[(now.getUTCMonth() + (view === "next" ? 1 : 0)) % 12];
       let series: number[] = [];
       let momentum = 0;
       let source: TrendItem["trend_source"] = "estimated";
@@ -90,7 +112,9 @@ Return ONLY JSON:
         series = (view === "now" ? t.monthly : t.yearly).slice(-52);
         momentum = t.momentum_pct;
         source = t.source;
-      } catch { /* graceful */ }
+      } catch {
+        /* graceful */
+      }
       return {
         id: `${slug(name)}-${i}`,
         name: name.slice(0, 90),
@@ -116,7 +140,13 @@ Return ONLY JSON:
   next.setUTCMinutes(0, 0, 0);
   next.setUTCHours(next.getUTCHours() + 1);
 
-  return { view, country, refreshed_at: now.toISOString(), next_refresh_at: next.toISOString(), items };
+  return {
+    view,
+    country,
+    refreshed_at: now.toISOString(),
+    next_refresh_at: next.toISOString(),
+    items,
+  };
 }
 
 async function getPayload(view: TrendView, country: string): Promise<TrendPayload> {
@@ -151,14 +181,20 @@ export const Route = createFileRoute("/api/public/predictive-trends")({
         try {
           const payload = await getPayload(view, country);
           return new Response(JSON.stringify(payload), {
-            headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=600" },
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "private, max-age=600",
+            },
           });
         } catch (e) {
           console.error("[predictive-trends]", e);
-          return new Response(JSON.stringify({ view, country, items: [], error: "Trend verisi alınamadı." }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ view, country, items: [], error: "Trend verisi alınamadı." }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
       },
     },

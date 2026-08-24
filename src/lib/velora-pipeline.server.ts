@@ -78,20 +78,118 @@ const T3: ProviderId[] = ["openrouter", "huggingface", "groq"];
 const T4: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 export const AGENTS: AgentDef[] = [
-  { id: 1, name: "Web Scraping Cleaner", tier: 1, chain: T1, temperature: 0.2, role: "Sorguyla ilgili pazar yerlerinden gelebilecek ham listeleme metinlerini temizle; gürültüyü, HTML kalıntılarını ve tekrarları at." },
-  { id: 2, name: "Raw Data Normalizer", tier: 1, chain: T1, temperature: 0.2, role: "Ürün adları, birimler, para birimleri ve ölçüleri tek standarda normalize et." },
-  { id: 3, name: "Product Spec Extractor", tier: 1, chain: T1, temperature: 0.2, role: "Her aday ürün için teknik/fiziksel spesifikasyonları (malzeme, boyut, ağırlık, güç) çıkar." },
-  { id: 4, name: "Entity Resolver", tier: 1, chain: T1, temperature: 0.2, role: "Aynı ürünün farklı adlandırmalarını tek varlıkta birleştir, marka/model ayrıştır." },
-  { id: 5, name: "Price Parser", tier: 1, chain: T1, temperature: 0.2, role: "Tedarik ve perakende fiyat aralıklarını sayısallaştır; kargo ve komisyonu ayrı kalem yaz." },
-  { id: 6, name: "Attribute Standardizer", tier: 1, chain: T1, temperature: 0.2, role: "Renk, beden, paket adedi gibi varyant niteliklerini standart anahtarlara oturt." },
-  { id: 7, name: "Noise Filter", tier: 1, chain: T1, temperature: 0.2, role: "Doygun, yasaklı, kırılgan, patentli veya kâr etmeyen adayları ele; nedenini yaz." },
-  { id: 8, name: "Initial Ranker", tier: 1, chain: T1, temperature: 0.3, role: "Kalan adayları talep, marj ve lojistik kolaylığına göre ilk kez sırala (0-100)." },
-  { id: 9, name: "Category Matcher", tier: 2, chain: T2, temperature: 0.3, role: "Her ürünü hedef platformun gerçek kategori ağacına ve komisyon oranına eşle." },
-  { id: 10, name: "Trend Analyzer", tier: 2, chain: T2, temperature: 0.4, role: "Mevsimsellik, arama trendi yönü ve 90 günlük momentum tahmini üret." },
-  { id: 11, name: "Niche Grouping Agent", tier: 2, chain: T2, temperature: 0.4, role: "Ürünleri nişlere kümele; her niş için hedef kitle ve giriş bariyerini belirt." },
-  { id: 12, name: "Customer Sentiment Analyzer", tier: 3, chain: T3, temperature: 0.3, role: "Tipik müşteri şikâyet/övgü temalarını ve iade risklerini duygu analiziyle özetle." },
-  { id: 13, name: "Competitor Price Benchmarker", tier: 3, chain: T3, temperature: 0.3, role: "Rakip fiyat bandını, satıcı yoğunluğunu ve fiyat kırma riskini kıyasla." },
-  { id: 14, name: "Executive Synthesis Engine", tier: 4, chain: T4, temperature: 0.35, role: "Tüm katman çıktılarını sentezleyip en iyi 5 ürünü ve stratejik yönetici raporunu üret." },
+  {
+    id: 1,
+    name: "Web Scraping Cleaner",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Sorguyla ilgili pazar yerlerinden gelebilecek ham listeleme metinlerini temizle; gürültüyü, HTML kalıntılarını ve tekrarları at.",
+  },
+  {
+    id: 2,
+    name: "Raw Data Normalizer",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Ürün adları, birimler, para birimleri ve ölçüleri tek standarda normalize et.",
+  },
+  {
+    id: 3,
+    name: "Product Spec Extractor",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Her aday ürün için teknik/fiziksel spesifikasyonları (malzeme, boyut, ağırlık, güç) çıkar.",
+  },
+  {
+    id: 4,
+    name: "Entity Resolver",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Aynı ürünün farklı adlandırmalarını tek varlıkta birleştir, marka/model ayrıştır.",
+  },
+  {
+    id: 5,
+    name: "Price Parser",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Tedarik ve perakende fiyat aralıklarını sayısallaştır; kargo ve komisyonu ayrı kalem yaz.",
+  },
+  {
+    id: 6,
+    name: "Attribute Standardizer",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Renk, beden, paket adedi gibi varyant niteliklerini standart anahtarlara oturt.",
+  },
+  {
+    id: 7,
+    name: "Noise Filter",
+    tier: 1,
+    chain: T1,
+    temperature: 0.2,
+    role: "Doygun, yasaklı, kırılgan, patentli veya kâr etmeyen adayları ele; nedenini yaz.",
+  },
+  {
+    id: 8,
+    name: "Initial Ranker",
+    tier: 1,
+    chain: T1,
+    temperature: 0.3,
+    role: "Kalan adayları talep, marj ve lojistik kolaylığına göre ilk kez sırala (0-100).",
+  },
+  {
+    id: 9,
+    name: "Category Matcher",
+    tier: 2,
+    chain: T2,
+    temperature: 0.3,
+    role: "Her ürünü hedef platformun gerçek kategori ağacına ve komisyon oranına eşle.",
+  },
+  {
+    id: 10,
+    name: "Trend Analyzer",
+    tier: 2,
+    chain: T2,
+    temperature: 0.4,
+    role: "Mevsimsellik, arama trendi yönü ve 90 günlük momentum tahmini üret.",
+  },
+  {
+    id: 11,
+    name: "Niche Grouping Agent",
+    tier: 2,
+    chain: T2,
+    temperature: 0.4,
+    role: "Ürünleri nişlere kümele; her niş için hedef kitle ve giriş bariyerini belirt.",
+  },
+  {
+    id: 12,
+    name: "Customer Sentiment Analyzer",
+    tier: 3,
+    chain: T3,
+    temperature: 0.3,
+    role: "Tipik müşteri şikâyet/övgü temalarını ve iade risklerini duygu analiziyle özetle.",
+  },
+  {
+    id: 13,
+    name: "Competitor Price Benchmarker",
+    tier: 3,
+    chain: T3,
+    temperature: 0.3,
+    role: "Rakip fiyat bandını, satıcı yoğunluğunu ve fiyat kırma riskini kıyasla.",
+  },
+  {
+    id: 14,
+    name: "Executive Synthesis Engine",
+    tier: 4,
+    chain: T4,
+    temperature: 0.35,
+    role: "Tüm katman çıktılarını sentezleyip en iyi 5 ürünü ve stratejik yönetici raporunu üret.",
+  },
 ];
 
 // ------------------------------------------------------------------ prompts
@@ -135,7 +233,12 @@ function summarize(outputs: { agent: AgentDef; data: StageOutput }[]): string {
     .map(
       ({ agent, data }) =>
         `#${agent.id} ${agent.name}: ${(data.findings ?? []).slice(0, 5).join(" | ")}${
-          data.candidates?.length ? `\n  adaylar: ${data.candidates.slice(0, 10).map((c) => `${c.name} (${c.note})`).join("; ")}` : ""
+          data.candidates?.length
+            ? `\n  adaylar: ${data.candidates
+                .slice(0, 10)
+                .map((c) => `${c.name} (${c.note})`)
+                .join("; ")}`
+            : ""
         }`,
     )
     .join("\n")
@@ -164,7 +267,11 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
           agent.chain,
           { temperature: agent.temperature },
         );
-        return { agent, log, data: parseAgentJson<StageOutput>(text, { findings: [], candidates: [] }) };
+        return {
+          agent,
+          log,
+          data: parseAgentJson<StageOutput>(text, { findings: [], candidates: [] }),
+        };
       }),
     );
     for (const r of results) {

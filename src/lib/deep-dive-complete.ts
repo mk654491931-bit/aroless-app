@@ -8,22 +8,25 @@ export function num(v: unknown, fallback = 0): number {
   return m ? parseFloat(m[0]) : fallback;
 }
 
-const usd = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const usd = (n: number) =>
+  `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 
 /** AI'dan gelen kısmi listeyi tam uzunlukta varsayılan listeyle tamamlar. */
 function mergeByIndex<T>(actual: T[] | undefined, fallback: T[]): T[] {
   const src = Array.isArray(actual) ? actual : [];
-  return fallback.map((def, i) => {
-    const got = src[i] as Record<string, unknown> | undefined;
-    if (!got) return def;
-    const merged: Record<string, unknown> = { ...(def as Record<string, unknown>) };
-    for (const [k, v] of Object.entries(got)) {
-      if (v === null || v === undefined || v === "") continue;
-      if (Array.isArray(v) && v.length === 0) continue;
-      merged[k] = v;
-    }
-    return merged as T;
-  }).concat(src.slice(fallback.length));
+  return fallback
+    .map((def, i) => {
+      const got = src[i] as Record<string, unknown> | undefined;
+      if (!got) return def;
+      const merged: Record<string, unknown> = { ...(def as Record<string, unknown>) };
+      for (const [k, v] of Object.entries(got)) {
+        if (v === null || v === undefined || v === "") continue;
+        if (Array.isArray(v) && v.length === 0) continue;
+        merged[k] = v;
+      }
+      return merged as T;
+    })
+    .concat(src.slice(fallback.length));
 }
 
 /**
@@ -37,7 +40,8 @@ export function completeDeepDive(p: WinningProduct): WinningProduct {
   const fee = num(p.cost_breakdown?.platform_fee, sell * 0.06);
   const ad = num(p.cost_breakdown?.ad_spend, sell * 0.2);
   const netUnit = Math.max(1, num(p.cost_breakdown?.net_profit, sell - cost - ship - fee - ad));
-  const marginPct = p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? Math.round((netUnit / sell) * 100);
+  const marginPct =
+    p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? Math.round((netUnit / sell) * 100);
   const cpa = Math.max(1, num(p.unit_economics?.target_cpa_usd, netUnit * 0.55));
   const capital = Math.max(300, num(p.startup_cost_usd, 800));
   const comp = p.competition_level ?? "Medium";
@@ -147,7 +151,6 @@ export function completeDeepDive(p: WinningProduct): WinningProduct {
   ];
   out.content_calendar = mergeByIndex(out.content_calendar, defaultCalendar);
 
-
   // ---- Ölçekleme oyun kitabı & çıkış kriterleri ----
   if (!out.scaling_playbook) {
     out.scaling_playbook =
@@ -170,8 +173,14 @@ export function completeDeepDive(p: WinningProduct): WinningProduct {
     const score = comp === "Low" ? 32 : comp === "High" ? 78 : 55;
     out.market_saturation = {
       score,
-      active_sellers: comp === "Low" ? "50-200 satıcı" : comp === "High" ? "2.000+ satıcı" : "300-900 satıcı",
-      ad_activity: comp === "Low" ? "Düşük reklam yoğunluğu" : comp === "High" ? "Yoğun reklam rekabeti" : "Orta reklam yoğunluğu",
+      active_sellers:
+        comp === "Low" ? "50-200 satıcı" : comp === "High" ? "2.000+ satıcı" : "300-900 satıcı",
+      ad_activity:
+        comp === "Low"
+          ? "Düşük reklam yoğunluğu"
+          : comp === "High"
+            ? "Yoğun reklam rekabeti"
+            : "Orta reklam yoğunluğu",
       entry_window: comp === "Low" ? "4-6 ay" : comp === "High" ? "3-6 hafta" : "2-3 ay",
       verdict:
         comp === "High"
@@ -183,9 +192,24 @@ export function completeDeepDive(p: WinningProduct): WinningProduct {
   // ---- Fiyat basamakları ----
   if (!out.pricing_ladder || out.pricing_ladder.length === 0) {
     out.pricing_ladder = [
-      { tier: "Giriş", price_usd: usd(sell * 0.85), positioning: "Hızlı ilk satış ve yorum toplamak için agresif fiyat.", expected_cvr_pct: 3.2 },
-      { tier: "Ana", price_usd: usd(sell), positioning: "Marjı koruyan referans fiyat; varsayılan teklif.", expected_cvr_pct: 2.4 },
-      { tier: "Premium paket", price_usd: usd(sell * 1.45), positioning: "Aksesuar/2'li paketle sepet ortalamasını yükseltir.", expected_cvr_pct: 1.5 },
+      {
+        tier: "Giriş",
+        price_usd: usd(sell * 0.85),
+        positioning: "Hızlı ilk satış ve yorum toplamak için agresif fiyat.",
+        expected_cvr_pct: 3.2,
+      },
+      {
+        tier: "Ana",
+        price_usd: usd(sell),
+        positioning: "Marjı koruyan referans fiyat; varsayılan teklif.",
+        expected_cvr_pct: 2.4,
+      },
+      {
+        tier: "Premium paket",
+        price_usd: usd(sell * 1.45),
+        positioning: "Aksesuar/2'li paketle sepet ortalamasını yükseltir.",
+        expected_cvr_pct: 1.5,
+      },
     ];
   }
 

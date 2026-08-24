@@ -31,7 +31,28 @@ const EU = ["DE", "FR", "IT", "ES", "NL", "SE", "PL"];
 
 export const PLATFORM_MARKETS: Record<Platform, PlatformMarket> = {
   Amazon: {
-    native: ["GLOBAL", "US", "UK", "DE", "FR", "IT", "ES", "NL", "SE", "PL", "CA", "AU", "JP", "AE", "SA", "MX", "BR", "IN", "SG", "TR"],
+    native: [
+      "GLOBAL",
+      "US",
+      "UK",
+      "DE",
+      "FR",
+      "IT",
+      "ES",
+      "NL",
+      "SE",
+      "PL",
+      "CA",
+      "AU",
+      "JP",
+      "AE",
+      "SA",
+      "MX",
+      "BR",
+      "IN",
+      "SG",
+      "TR",
+    ],
     commission: [8, 15],
     nativeShipDays: [1, 3],
     note: "FBA ile 1-2 gün teslimat; marka/IP şikâyetleri ve kategori onayı sık.",
@@ -67,8 +88,20 @@ export const PLATFORM_MARKETS: Record<Platform, PlatformMarket> = {
     note: "El yapımı/kişiselleştirilmiş ürün zorunluluğu; jenerik dropshipping yasak.",
     source: "Etsy – Fees & payments policy",
   },
-  Shopify: { native: [], global: true, commission: [2.9, 3.5], nativeShipDays: [3, 12], note: "Kendi mağazan: her ülkede kurulabilir, trafiği reklamla sen üretirsin." },
-  WooCommerce: { native: [], global: true, commission: [2.9, 3.4], nativeShipDays: [3, 12], note: "Self-hosted mağaza: komisyon yok, sadece ödeme işlem ücreti." },
+  Shopify: {
+    native: [],
+    global: true,
+    commission: [2.9, 3.5],
+    nativeShipDays: [3, 12],
+    note: "Kendi mağazan: her ülkede kurulabilir, trafiği reklamla sen üretirsin.",
+  },
+  WooCommerce: {
+    native: [],
+    global: true,
+    commission: [2.9, 3.4],
+    nativeShipDays: [3, 12],
+    note: "Self-hosted mağaza: komisyon yok, sadece ödeme işlem ücreti.",
+  },
   Rakuten: {
     native: ["JP"],
     crossBorder: ["GLOBAL", "US", "FR"],
@@ -102,22 +135,87 @@ export const PLATFORM_MARKETS: Record<Platform, PlatformMarket> = {
     note: "Güneydoğu Asya pazarı; Avrupa/ABD hedefi için uygun değil.",
   },
   Temu: {
-    native: ["GLOBAL", "US", "UK", "DE", "FR", "IT", "ES", "NL", "PL", "SE", "CA", "AU", "MX", "BR", "JP", "KR", "SA", "AE"],
+    native: [
+      "GLOBAL",
+      "US",
+      "UK",
+      "DE",
+      "FR",
+      "IT",
+      "ES",
+      "NL",
+      "PL",
+      "SE",
+      "CA",
+      "AU",
+      "MX",
+      "BR",
+      "JP",
+      "KR",
+      "SA",
+      "AE",
+    ],
     commission: [5, 10],
     nativeShipDays: [5, 15],
     note: "Ultra fiyat rekabeti; marj çok ince, farklılaşma zor.",
   },
   Shein: {
-    native: ["GLOBAL", "US", "UK", "DE", "FR", "IT", "ES", "NL", "PL", "SE", "MX", "BR", "SA", "AE", "TR"],
+    native: [
+      "GLOBAL",
+      "US",
+      "UK",
+      "DE",
+      "FR",
+      "IT",
+      "ES",
+      "NL",
+      "PL",
+      "SE",
+      "MX",
+      "BR",
+      "SA",
+      "AE",
+      "TR",
+    ],
     commission: [5, 15],
     nativeShipDays: [6, 15],
     note: "Moda/aksesuar ağırlıklı; hızlı trend döngüsü.",
   },
-  Ozon: { native: [], crossBorder: [], commission: [5, 20], nativeShipDays: [2, 7], note: "Rusya pazarı; listedeki hedef ülkeler için satış kanalı değil." },
-  "JD.com": { native: [], crossBorder: [], commission: [2, 10], nativeShipDays: [1, 4], note: "Çin iç pazarı; yerel tüzel kişilik zorunlu." },
-  Taobao: { native: [], crossBorder: [], commission: [0, 5], nativeShipDays: [1, 5], note: "Çin iç pazarı / tedarik kanalı." },
-  Tmall: { native: [], crossBorder: [], commission: [2, 8], nativeShipDays: [1, 4], note: "Çin iç pazarı; marka belgesi ve depozito gerekir." },
-  Pinduoduo: { native: [], crossBorder: [], commission: [0, 3], nativeShipDays: [2, 6], note: "Çin iç pazarı." },
+  Ozon: {
+    native: [],
+    crossBorder: [],
+    commission: [5, 20],
+    nativeShipDays: [2, 7],
+    note: "Rusya pazarı; listedeki hedef ülkeler için satış kanalı değil.",
+  },
+  "JD.com": {
+    native: [],
+    crossBorder: [],
+    commission: [2, 10],
+    nativeShipDays: [1, 4],
+    note: "Çin iç pazarı; yerel tüzel kişilik zorunlu.",
+  },
+  Taobao: {
+    native: [],
+    crossBorder: [],
+    commission: [0, 5],
+    nativeShipDays: [1, 5],
+    note: "Çin iç pazarı / tedarik kanalı.",
+  },
+  Tmall: {
+    native: [],
+    crossBorder: [],
+    commission: [2, 8],
+    nativeShipDays: [1, 4],
+    note: "Çin iç pazarı; marka belgesi ve depozito gerekir.",
+  },
+  Pinduoduo: {
+    native: [],
+    crossBorder: [],
+    commission: [0, 3],
+    nativeShipDays: [2, 6],
+    note: "Çin iç pazarı.",
+  },
   "TikTok Shop": {
     native: ["GLOBAL", "US", "UK", "ES", "IT", "FR", "DE", "SG", "MX", "BR", "JP"],
     crossBorder: ["NL", "SE", "PL", "CA", "AU", "AE", "SA"],
@@ -152,12 +250,18 @@ export function countryFit(platform: Platform, code: string | undefined): Countr
 }
 
 export function fitLabel(fit: CountryFit): string {
-  return fit === "native" ? "Yerel pazar" : fit === "cross-border" ? "Sınır ötesi" : "Bu ülkede kullanılamıyor";
+  return fit === "native"
+    ? "Yerel pazar"
+    : fit === "cross-border"
+      ? "Sınır ötesi"
+      : "Bu ülkede kullanılamıyor";
 }
 
 /** Hedef ülkede yerel olarak çalışan platformlar (öneri listesi). */
 export function platformsForCountry(code: string | undefined): Platform[] {
-  return (Object.keys(PLATFORM_MARKETS) as Platform[]).filter((p) => countryFit(p, code) === "native");
+  return (Object.keys(PLATFORM_MARKETS) as Platform[]).filter(
+    (p) => countryFit(p, code) === "native",
+  );
 }
 
 /** Ülke için önerilen küçük ve gerçekçi başlangıç seti. */

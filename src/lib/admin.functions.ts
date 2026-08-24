@@ -37,16 +37,29 @@ export const getAdminStats = createServerFn({ method: "GET" })
 
     const totalUsers = usersRes.count ?? 0;
     const totalTransactions = txCountRes.count ?? 0;
-    const totalRevenueCents = (txAllRes.data ?? []).reduce((s, r: any) => s + (r.amount_cents ?? 0), 0);
+    const totalRevenueCents = (txAllRes.data ?? []).reduce(
+      (s, r: { amount_cents?: number | null }) => s + (r.amount_cents ?? 0),
+      0,
+    );
     const monthStart = new Date();
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
     const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: any) => {
       return new Date(r.created_at) >= monthStart ? s + (r.amount_cents ?? 0) : s;
     }, 0);
-    const totalCreditsSpent = (creditsRes.data ?? []).reduce((s, r: any) => s + (r.credits_spent ?? 0), 0);
+    const totalCreditsSpent = (creditsRes.data ?? []).reduce(
+      (s, r: { credits_spent?: number | null }) => s + (r.credits_spent ?? 0),
+      0,
+    );
 
-    return { totalUsers, totalRevenueCents, monthRevenueCents, totalTransactions, totalCreditsSpent, isAdmin: true };
+    return {
+      totalUsers,
+      totalRevenueCents,
+      monthRevenueCents,
+      totalTransactions,
+      totalCreditsSpent,
+      isAdmin: true,
+    };
   });
 
 export type AdminUserRow = {
@@ -126,22 +139,28 @@ export type FreeCreditAuditRow = {
 /** Ücretsiz kredi denetim logu (yalnızca admin). */
 export const listFreeCreditAudit = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ rows: FreeCreditAuditRow[]; granted: number; blocked: number }> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("free_credit_audit")
-      .select("id, user_id, email, visitor_id, ip_hash, granted, credits, sim_credits, reason, source, created_at")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as FreeCreditAuditRow[];
-    return {
-      rows,
-      granted: rows.filter((r) => r.granted).length,
-      blocked: rows.filter((r) => !r.granted).length,
-    };
-  });
+  .handler(
+    async ({
+      context,
+    }): Promise<{ rows: FreeCreditAuditRow[]; granted: number; blocked: number }> => {
+      await assertAdmin(context);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data, error } = await supabaseAdmin
+        .from("free_credit_audit")
+        .select(
+          "id, user_id, email, visitor_id, ip_hash, granted, credits, sim_credits, reason, source, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []) as FreeCreditAuditRow[];
+      return {
+        rows,
+        granted: rows.filter((r) => r.granted).length,
+        blocked: rows.filter((r) => !r.granted).length,
+      };
+    },
+  );
 
 export type AbuseAlertRow = {
   id: string;

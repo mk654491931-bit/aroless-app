@@ -53,7 +53,6 @@ export type CouncilSummary = {
   kill_criteria?: string[];
 };
 
-
 /** Local competition level, localized for the UI. */
 export type LocalCompetition = "Düşük" | "Orta" | "Yüksek";
 
@@ -88,7 +87,12 @@ export const HYBRID_DEFAULT_MIN_SCORE = 65;
 export const HYBRID_RELAXED_MIN_SCORE = 50;
 
 export function hybridBadge(score: number): { label: string; cls: string } {
-  if (score >= 85) return { label: "Altın Fırsat", cls: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" };
-  if (score >= 70) return { label: "Yüksek Potansiyel", cls: "border-sky-500/40 bg-sky-500/15 text-sky-300" };
+  if (score >= 85)
+    return {
+      label: "Altın Fırsat",
+      cls: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    };
+  if (score >= 70)
+    return { label: "Yüksek Potansiyel", cls: "border-sky-500/40 bg-sky-500/15 text-sky-300" };
   return { label: "İncelemeye Değer", cls: "border-amber-500/40 bg-amber-500/15 text-amber-300" };
 }

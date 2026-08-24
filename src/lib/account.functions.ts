@@ -7,7 +7,17 @@ export const exportMyData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const sb = context.supabase;
-    const [profile, favorites, history, products, sims, tickets, usage, notifications, transactions] = await Promise.all([
+    const [
+      profile,
+      favorites,
+      history,
+      products,
+      sims,
+      tickets,
+      usage,
+      notifications,
+      transactions,
+    ] = await Promise.all([
       sb.from("profiles").select("*").eq("id", context.userId).maybeSingle(),
       sb.from("favorites").select("*").limit(1000),
       sb.from("analysis_history").select("*").limit(500),
@@ -55,7 +65,14 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export type UsageRow = { id: string; tool: string; credits: number; model: string | null; success: boolean; created_at: string };
+export type UsageRow = {
+  id: string;
+  tool: string;
+  credits: number;
+  model: string | null;
+  success: boolean;
+  created_at: string;
+};
 
 /** Kullanıcının kredi harcama günlüğü. */
 export const listMyUsage = createServerFn({ method: "GET" })

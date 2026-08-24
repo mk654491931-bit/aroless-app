@@ -85,11 +85,17 @@ export async function sendOtpEmail(to: string, code: string): Promise<void> {
   );
 }
 
-
 /** Aynı cihazdan ikinci kez ücretsiz hak alınmasını engeller. */
 export async function applyFingerprintPolicy(
   admin: Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"],
-  args: { visitorId: string; userId: string; email: string | null; tier?: string | null; ipHash?: string; source?: string },
+  args: {
+    visitorId: string;
+    userId: string;
+    email: string | null;
+    tier?: string | null;
+    ipHash?: string;
+    source?: string;
+  },
 ): Promise<boolean> {
   if (!args.visitorId && !args.ipHash) return false;
 
@@ -221,7 +227,9 @@ export async function raiseAbuseAlert(
       reasons.push(`Aynı cihazdan ${accounts} farklı hesap`);
     }
     if ((recent?.length ?? 0) >= ABUSE_RULES.rapidCount) {
-      reasons.push(`Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı cihaz)`);
+      reasons.push(
+        `Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı cihaz)`,
+      );
     }
   }
 
@@ -240,7 +248,9 @@ export async function raiseAbuseAlert(
       reasons.push(`Aynı IP'den ${accounts} farklı hesap`);
     }
     if ((recent?.length ?? 0) >= ABUSE_RULES.rapidCount) {
-      reasons.push(`Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı IP)`);
+      reasons.push(
+        `Son ${ABUSE_RULES.rapidWindowMinutes} dakikada ${recent?.length} kayıt (aynı IP)`,
+      );
     }
   }
 
@@ -252,7 +262,10 @@ export async function raiseAbuseAlert(
   const adminIds = [...new Set((admins ?? []).map((a) => a.user_id))];
   if (adminIds.length === 0) return { flagged: true, reasons, severity };
 
-  const title = severity === "high" ? "Kritik: ücretsiz kredi kötüye kullanımı" : "Şüpheli ücretsiz kredi kaydı";
+  const title =
+    severity === "high"
+      ? "Kritik: ücretsiz kredi kötüye kullanımı"
+      : "Şüpheli ücretsiz kredi kaydı";
   const body = `${args.email ?? args.userId} — ${reasons.join(" · ")}${args.blocked ? " (kredi engellendi)" : " (kredi verildi)"}`;
 
   await admin.from("notifications").insert(
@@ -275,5 +288,3 @@ export async function raiseAbuseAlert(
 
   return { flagged: true, reasons, severity };
 }
-
-

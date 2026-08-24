@@ -22,14 +22,28 @@ export function CompareTray({
           <Columns3 size={12} /> Karşılaştırma
         </span>
         {products.map((p) => (
-          <span key={p.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs">
-            <span className="max-w-[140px] truncate">{p.emoji} {p.name}</span>
-            <button type="button" aria-label={`${p.name} çıkar`} onClick={() => onRemove(p.name)} className="opacity-50 hover:opacity-100">
+          <span
+            key={p.name}
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs"
+          >
+            <span className="max-w-[140px] truncate">
+              {p.emoji} {p.name}
+            </span>
+            <button
+              type="button"
+              aria-label={`${p.name} çıkar`}
+              onClick={() => onRemove(p.name)}
+              className="opacity-50 hover:opacity-100"
+            >
               <X size={10} />
             </button>
           </span>
         ))}
-        <button type="button" onClick={onClear} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10">
+        <button
+          type="button"
+          onClick={onClear}
+          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] hover:bg-white/10"
+        >
           <Trash2 size={11} /> Temizle
         </button>
         <button
@@ -63,10 +77,16 @@ export function CompareModal({
   const rows: { label: string; get: (p: WinningProduct) => string }[] = [
     { label: "Winner Score", get: (p) => num(p.winner_score) },
     { label: "Satış fiyatı", get: (p) => String(p.selling_price_usd ?? "—") },
-    { label: "Tedarik maliyeti", get: (p) => String(p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd ?? "—") },
+    {
+      label: "Tedarik maliyeti",
+      get: (p) => String(p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd ?? "—"),
+    },
     { label: "Net kâr", get: (p) => String(p.cost_breakdown?.net_profit ?? "—") },
 
-    { label: "Net marj", get: (p) => num(p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct, "%") },
+    {
+      label: "Net marj",
+      get: (p) => num(p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct, "%"),
+    },
     { label: "Rekabet", get: (p) => String(p.competition_level ?? "—") },
     { label: "Kanıt seviyesi", get: (p) => String(p.evidence_level ?? "—") },
     { label: "Gerçekçilik", get: (p) => num(p.realism_score) },
@@ -78,7 +98,10 @@ export function CompareModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
       <div
         className="premium-card grain mx-auto max-w-6xl rounded-2xl p-5"
         onClick={(e) => e.stopPropagation()}
@@ -88,7 +111,12 @@ export function CompareModal({
             <Columns3 size={15} className="text-[oklch(0.75_0.18_265)]" />
             Yan yana karşılaştırma · {products.length} ürün
           </h3>
-          <button type="button" onClick={onClose} aria-label="Kapat" className="rounded-full border border-white/10 bg-white/5 p-1.5 hover:bg-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Kapat"
+            className="rounded-full border border-white/10 bg-white/5 p-1.5 hover:bg-white/10"
+          >
             <X size={14} />
           </button>
         </div>
@@ -97,12 +125,21 @@ export function CompareModal({
           <table className="w-full min-w-[640px] border-collapse text-xs">
             <thead>
               <tr>
-                <th className="w-40 p-2 text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Metrik</th>
+                <th className="w-40 p-2 text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  Metrik
+                </th>
                 {products.map((p) => (
                   <th key={p.name} className="p-2 text-left align-top">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-semibold">{p.emoji} {p.name}</span>
-                      <button type="button" aria-label={`${p.name} çıkar`} onClick={() => onRemove(p.name)} className="opacity-50 hover:opacity-100">
+                      <span className="text-sm font-semibold">
+                        {p.emoji} {p.name}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`${p.name} çıkar`}
+                        onClick={() => onRemove(p.name)}
+                        className="opacity-50 hover:opacity-100"
+                      >
                         <X size={12} />
                       </button>
                     </div>
@@ -113,9 +150,13 @@ export function CompareModal({
             <tbody>
               {rows.map((r) => (
                 <tr key={r.label} className="border-t border-white/10">
-                  <td className="p-2 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{r.label}</td>
+                  <td className="p-2 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                    {r.label}
+                  </td>
                   {products.map((p) => (
-                    <td key={p.name} className="p-2 align-top tabular-nums">{r.get(p)}</td>
+                    <td key={p.name} className="p-2 align-top tabular-nums">
+                      {r.get(p)}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -126,11 +167,15 @@ export function CompareModal({
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {products.map((p) => (
             <div key={p.name} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="text-xs font-semibold">{p.emoji} {p.name}</div>
+              <div className="text-xs font-semibold">
+                {p.emoji} {p.name}
+              </div>
               {p.market_verdict ? (
                 <MarketFitPanel verdict={p.market_verdict} defaultOpen />
               ) : (
-                <p className="mt-2 text-[11px] text-muted-foreground">Bu ürün için ülke-platform gerekçesi üretilmedi.</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Bu ürün için ülke-platform gerekçesi üretilmedi.
+                </p>
               )}
             </div>
           ))}

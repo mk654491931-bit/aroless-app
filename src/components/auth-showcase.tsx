@@ -14,18 +14,54 @@ import { ArolessMark } from "@/components/velora-mark";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 const FEATURES = [
-  { icon: Search, title: "Ürün Bulucu", text: "20 analiz açısı ile üretilen adaylar, Winner Score ile 0–100 puanlanır." },
-  { icon: Globe, title: "Ülke + platform hassasiyeti", text: "22 platform, 21 ülke: komisyon, teslimat, KDV ve sertifika bariyerleri." },
-  { icon: Gauge, title: "Gerçek birim ekonomisi", text: "Tedarik, kargo, komisyon, iade ve reklam maliyetiyle kaynaklı net kâr." },
-  { icon: Radar, title: "Trend radarı", text: "Saatlik güncellenen e-ticaret gelişmeleri ve yükselen ürün sinyalleri." },
-  { icon: Gamepad2, title: "Mağaza simülatörü", text: "30 günlük sezonlar, rakipler ve nakit akışıyla risksiz pratik." },
-  { icon: GraduationCap, title: "Akademi", text: "XP, seviye ve rozetlerle ilerleyen uçtan uca e-ticaret müfredatı." },
+  {
+    icon: Search,
+    title: "Ürün Bulucu",
+    text: "20 analiz açısı ile üretilen adaylar, Winner Score ile 0–100 puanlanır.",
+  },
+  {
+    icon: Globe,
+    title: "Ülke + platform hassasiyeti",
+    text: "22 platform, 21 ülke: komisyon, teslimat, KDV ve sertifika bariyerleri.",
+  },
+  {
+    icon: Gauge,
+    title: "Gerçek birim ekonomisi",
+    text: "Tedarik, kargo, komisyon, iade ve reklam maliyetiyle kaynaklı net kâr.",
+  },
+  {
+    icon: Radar,
+    title: "Trend radarı",
+    text: "Saatlik güncellenen e-ticaret gelişmeleri ve yükselen ürün sinyalleri.",
+  },
+  {
+    icon: Gamepad2,
+    title: "Mağaza simülatörü",
+    text: "30 günlük sezonlar, rakipler ve nakit akışıyla risksiz pratik.",
+  },
+  {
+    icon: GraduationCap,
+    title: "Akademi",
+    text: "XP, seviye ve rozetlerle ilerleyen uçtan uca e-ticaret müfredatı.",
+  },
 ];
 
 const STEPS = [
-  { n: "01", t: "Niş, ülke ve platform seç", d: "Bütçeni ve hedef kitleni belirt, motoru çalıştır." },
-  { n: "02", t: "Puanlanmış ürünleri incele", d: "Winner Score, kâr tablosu ve neden seçildi/elendi gerekçeleri." },
-  { n: "03", t: "Karşılaştır ve harekete geç", d: "Yan yana karşılaştırma, SEO kiti, reklam senaryoları, dışa aktarma." },
+  {
+    n: "01",
+    t: "Niş, ülke ve platform seç",
+    d: "Bütçeni ve hedef kitleni belirt, motoru çalıştır.",
+  },
+  {
+    n: "02",
+    t: "Puanlanmış ürünleri incele",
+    d: "Winner Score, kâr tablosu ve neden seçildi/elendi gerekçeleri.",
+  },
+  {
+    n: "03",
+    t: "Karşılaştır ve harekete geç",
+    d: "Yan yana karşılaştırma, SEO kiti, reklam senaryoları, dışa aktarma.",
+  },
 ];
 
 const STATS = [
@@ -79,10 +115,11 @@ export function AuthShowcase() {
             Kazandıran ürünü tahminle değil, veriyle buluyoruz.
           </span>
           <span className="mt-2 block">
-            Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak gerçekçi kâr projeksiyonu çıkarır — ürünü bulur, doğrular, satış materyalini hazırlar.
+            Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba
+            katarak gerçekçi kâr projeksiyonu çıkarır — ürünü bulur, doğrular, satış materyalini
+            hazırlar.
           </span>
         </p>
-
 
         <div
           className="animate-rise-in mt-8 grid w-full max-w-3xl grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4"
@@ -151,7 +188,9 @@ export function AuthShowcase() {
               className="premium-card p-4 sm:p-5"
               style={{ ["--reveal-delay" as string]: `${i * 110}ms` }}
             >
-              <div className="text-[11px] font-semibold tracking-[0.3em] text-[var(--brand)]">{s.n}</div>
+              <div className="text-[11px] font-semibold tracking-[0.3em] text-[var(--brand)]">
+                {s.n}
+              </div>
               <h3 className="mt-3 text-sm font-semibold">{s.t}</h3>
               <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{s.d}</p>
             </div>
@@ -162,9 +201,15 @@ export function AuthShowcase() {
           data-reveal
           className="mt-9 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground sm:mt-10 sm:gap-4"
         >
-          <span className="inline-flex items-center gap-1.5"><Cpu className="h-3.5 w-3.5" /> Hibrit AI motoru</span>
-          <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Kaynaklı tahminler</span>
-          <span className="inline-flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> 21 ülke ekonomisi</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Cpu className="h-3.5 w-3.5" /> Hibrit AI motoru
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5" /> Kaynaklı tahminler
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5" /> 21 ülke ekonomisi
+          </span>
         </div>
       </section>
 

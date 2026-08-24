@@ -11,7 +11,6 @@ import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 
-
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/command-center": "Command Center",
@@ -38,7 +37,11 @@ export function AppTopbar() {
   const { tier } = useEntitlements();
   const { user } = useAuth();
   const profileFn = useServerFn(getFullProfile);
-  const profileQ = useQuery({ queryKey: ["profile", user?.id], queryFn: () => profileFn(), enabled: !!user });
+  const profileQ = useQuery({
+    queryKey: ["profile", user?.id],
+    queryFn: () => profileFn(),
+    enabled: !!user,
+  });
   const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
   const publicId = (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null;
   const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Aroless");
@@ -72,9 +75,15 @@ export function AppTopbar() {
             <Zap size={11} /> {tier}
           </span>
 
-          <Link to="/notifications" className="topbar-btn" title="Notifications"><Bell size={14} /></Link>
-          <Link to="/dashboard" className="topbar-btn" title="Dashboard"><LayoutDashboard size={14} /></Link>
-          <Link to="/settings" className="topbar-btn" title="Settings"><SettingsIcon size={14} /></Link>
+          <Link to="/notifications" className="topbar-btn" title="Notifications">
+            <Bell size={14} />
+          </Link>
+          <Link to="/dashboard" className="topbar-btn" title="Dashboard">
+            <LayoutDashboard size={14} />
+          </Link>
+          <Link to="/settings" className="topbar-btn" title="Settings">
+            <SettingsIcon size={14} />
+          </Link>
           <LanguageSwitcher />
           <PaletteToggle />
           <ThemeToggle />

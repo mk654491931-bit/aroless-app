@@ -18,9 +18,22 @@ const metaCache = new Map<string, CountryMeta>();
 const rateCache = new Map<string, number>();
 
 const SYMBOLS: Record<string, string> = {
-  USD: "$", EUR: "€", GBP: "£", TRY: "₺", JPY: "¥", CAD: "C$", AUD: "A$",
-  AED: "د.إ", SAR: "﷼", PLN: "zł", MXN: "MX$", BRL: "R$", INR: "₹",
-  KRW: "₩", SEK: "kr", SGD: "S$",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  TRY: "₺",
+  JPY: "¥",
+  CAD: "C$",
+  AUD: "A$",
+  AED: "د.إ",
+  SAR: "﷼",
+  PLN: "zł",
+  MXN: "MX$",
+  BRL: "R$",
+  INR: "₹",
+  KRW: "₩",
+  SEK: "kr",
+  SGD: "S$",
 };
 
 export function currencySymbol(code: string): string {
@@ -40,8 +53,14 @@ export async function fetchCountryMeta(code: string): Promise<CountryMeta> {
 
   const local = countryByCode(c);
   const fallback: CountryMeta = {
-    code: c, flagSvg: null, flagEmoji: local.flag, currency: local.currency,
-    currencySymbol: currencySymbol(local.currency), region: "", subregion: "", population: null,
+    code: c,
+    flagSvg: null,
+    flagEmoji: local.flag,
+    currency: local.currency,
+    currencySymbol: currencySymbol(local.currency),
+    region: "",
+    subregion: "",
+    population: null,
   };
 
   try {
@@ -53,7 +72,9 @@ export async function fetchCountryMeta(code: string): Promise<CountryMeta> {
     const row = (Array.isArray(raw) ? raw[0] : raw) as {
       flags?: { svg?: string };
       currencies?: Record<string, { symbol?: string }>;
-      region?: string; subregion?: string; population?: number;
+      region?: string;
+      subregion?: string;
+      population?: number;
     };
     const curCode = Object.keys(row.currencies ?? {})[0] ?? local.currency;
     const meta: CountryMeta = {
@@ -95,16 +116,27 @@ export async function fetchUsdRate(currency: string): Promise<number> {
 
 export function useCountryMeta(code: string): CountryMeta {
   const local = countryByCode(code);
-  const [meta, setMeta] = useState<CountryMeta>(() =>
-    metaCache.get((code || "GLOBAL").toUpperCase()) ?? {
-      code: local.code, flagSvg: null, flagEmoji: local.flag, currency: local.currency,
-      currencySymbol: currencySymbol(local.currency), region: "", subregion: "", population: null,
-    },
+  const [meta, setMeta] = useState<CountryMeta>(
+    () =>
+      metaCache.get((code || "GLOBAL").toUpperCase()) ?? {
+        code: local.code,
+        flagSvg: null,
+        flagEmoji: local.flag,
+        currency: local.currency,
+        currencySymbol: currencySymbol(local.currency),
+        region: "",
+        subregion: "",
+        population: null,
+      },
   );
   useEffect(() => {
     let alive = true;
-    fetchCountryMeta(code).then((m) => { if (alive) setMeta(m); });
-    return () => { alive = false; };
+    fetchCountryMeta(code).then((m) => {
+      if (alive) setMeta(m);
+    });
+    return () => {
+      alive = false;
+    };
   }, [code]);
   return meta;
 }
@@ -116,8 +148,12 @@ export function useUsdRate(currency: string): number {
   );
   useEffect(() => {
     let alive = true;
-    fetchUsdRate(currency).then((r) => { if (alive) setRate(r); });
-    return () => { alive = false; };
+    fetchUsdRate(currency).then((r) => {
+      if (alive) setRate(r);
+    });
+    return () => {
+      alive = false;
+    };
   }, [currency]);
   return rate;
 }

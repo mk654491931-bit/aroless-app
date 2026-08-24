@@ -79,7 +79,8 @@ export function SupportPanel() {
           onClick={() => send.mutate()}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          {send.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Gönder
+          {send.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{" "}
+          Gönder
         </button>
       </div>
 
@@ -90,10 +91,16 @@ export function SupportPanel() {
             <div key={t.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">{t.subject}</div>
-                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px]">{STATUS[t.status] ?? t.status}</span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px]">
+                  {STATUS[t.status] ?? t.status}
+                </span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{t.message}</div>
-              {t.admin_note && <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">Yanıt: {t.admin_note}</div>}
+              {t.admin_note && (
+                <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">
+                  Yanıt: {t.admin_note}
+                </div>
+              )}
             </div>
           ))}
         </div>

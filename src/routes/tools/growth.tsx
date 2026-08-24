@@ -1,7 +1,15 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Gauge, PackagePlus, CalendarClock, Globe2, Megaphone, Loader2, Sparkles } from "lucide-react";
+import {
+  Gauge,
+  PackagePlus,
+  CalendarClock,
+  Globe2,
+  Megaphone,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -16,9 +24,16 @@ export const Route = createFileRoute("/tools/growth")({
   head: () => ({
     meta: [
       { title: "Growth & Market AI — Aroless" },
-      { name: "description", content: "Multi-AI consensus scoring, bundle AOV booster, lead-time countdown, cross-border arbitrage matrix and competitor ad hook extraction." },
+      {
+        name: "description",
+        content:
+          "Multi-AI consensus scoring, bundle AOV booster, lead-time countdown, cross-border arbitrage matrix and competitor ad hook extraction.",
+      },
       { property: "og:title", content: "Growth & Market AI — Aroless" },
-      { property: "og:description", content: "Three AI engines score your product and map your growth moves." },
+      {
+        property: "og:description",
+        content: "Three AI engines score your product and map your growth moves.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -38,18 +53,38 @@ type Consensus = {
 };
 
 function Gauge360({ value, label, color }: { value: number; label: string; color: string }) {
-  const r = 30, c = 2 * Math.PI * r;
+  const r = 30,
+    c = 2 * Math.PI * r;
   return (
     <div className="flex flex-col items-center gap-1.5">
       <svg width="76" height="76" viewBox="0 0 76 76" className="-rotate-90">
-        <circle cx="38" cy="38" r={r} fill="none" stroke="currentColor" strokeWidth="7" className="text-white/10" />
         <circle
-          cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c - (c * Math.min(value, 100)) / 100}
+          cx="38"
+          cy="38"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="7"
+          className="text-white/10"
+        />
+        <circle
+          cx="38"
+          cy="38"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c - (c * Math.min(value, 100)) / 100}
         />
       </svg>
-      <div className="-mt-[52px] text-lg font-black" style={{ color }}>{value}</div>
-      <div className="mt-[26px] text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="-mt-[52px] text-lg font-black" style={{ color }}>
+        {value}
+      </div>
+      <div className="mt-[26px] text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
     </div>
   );
 }
@@ -67,7 +102,8 @@ function ConsensusCard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool: "consensus", input: { ...input, uiLang: getUiLang() } }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Consensus başarısız");
+      if (!res.ok)
+        throw new Error((await res.json().catch(() => ({}))).error ?? "Consensus başarısız");
       setData((await res.json()) as Consensus);
     } catch (e) {
       toast.error("Analiz başarısız", { description: (e as Error).message });
@@ -85,15 +121,41 @@ function ConsensusCard() {
           </span>
           Multi-AI Consensus Score
         </CardTitle>
-        <CardDescription className="text-xs">Gemini, Groq, OpenRouter ve Lovable AI aynı ürünü bağımsız puanlar; hibrit skor ağırlıklı olarak birleştirilir.</CardDescription>
+        <CardDescription className="text-xs">
+          Gemini, Groq, OpenRouter ve Lovable AI aynı ürünü bağımsız puanlar; hibrit skor ağırlıklı
+          olarak birleştirilir.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="space-y-3">
-          <Field label="Ürün"><Input value={input.product} onChange={(e) => setInput({ ...input, product: e.target.value })} placeholder="LED yıldız projektör" /></Field>
+          <Field label="Ürün">
+            <Input
+              value={input.product}
+              onChange={(e) => setInput({ ...input, product: e.target.value })}
+              placeholder="LED yıldız projektör"
+            />
+          </Field>
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Pazar"><Input value={input.country} onChange={(e) => setInput({ ...input, country: e.target.value })} /></Field>
-            <Field label="Fiyat ($)"><Input type="number" value={input.price} onChange={(e) => setInput({ ...input, price: e.target.value })} /></Field>
-            <Field label="Maliyet ($)"><Input type="number" value={input.cost} onChange={(e) => setInput({ ...input, cost: e.target.value })} /></Field>
+            <Field label="Pazar">
+              <Input
+                value={input.country}
+                onChange={(e) => setInput({ ...input, country: e.target.value })}
+              />
+            </Field>
+            <Field label="Fiyat ($)">
+              <Input
+                type="number"
+                value={input.price}
+                onChange={(e) => setInput({ ...input, price: e.target.value })}
+              />
+            </Field>
+            <Field label="Maliyet ($)">
+              <Input
+                type="number"
+                value={input.cost}
+                onChange={(e) => setInput({ ...input, cost: e.target.value })}
+              />
+            </Field>
           </div>
           <Button onClick={run} disabled={loading} className="w-full gap-2">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
@@ -101,13 +163,27 @@ function ConsensusCard() {
           </Button>
           {data && (
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p><span className="font-semibold text-[var(--accent-active)]">Gemini:</span> {data.gemini.note}</p>
-              <p><span className="font-semibold text-[var(--profit)]">Groq:</span> {data.groq.note}</p>
-              <p><span className="font-semibold text-[var(--ai)]">OpenRouter:</span> {data.openrouter.note}</p>
-              {data.lovable && <p><span className="font-semibold text-[var(--warning)]">Lovable AI:</span> {data.lovable.note}</p>}
+              <p>
+                <span className="font-semibold text-[var(--accent-active)]">Gemini:</span>{" "}
+                {data.gemini.note}
+              </p>
+              <p>
+                <span className="font-semibold text-[var(--profit)]">Groq:</span> {data.groq.note}
+              </p>
+              <p>
+                <span className="font-semibold text-[var(--ai)]">OpenRouter:</span>{" "}
+                {data.openrouter.note}
+              </p>
+              {data.lovable && (
+                <p>
+                  <span className="font-semibold text-[var(--warning)]">Lovable AI:</span>{" "}
+                  {data.lovable.note}
+                </p>
+              )}
               {typeof data.agreement === "number" && (
                 <p className="pt-1">
-                  <span className="font-semibold">Motor uyumu:</span> %{data.agreement} · {data.engines ?? 0} motor yanıt verdi
+                  <span className="font-semibold">Motor uyumu:</span> %{data.agreement} ·{" "}
+                  {data.engines ?? 0} motor yanıt verdi
                 </p>
               )}
             </div>
@@ -132,7 +208,14 @@ function ConsensusCard() {
 function GrowthHub() {
   const today = new Date().toISOString().slice(0, 10);
   const [bundle, setBundle] = useState({ product: "", price: "39.99", channel: "Amazon US" });
-  const [lead, setLead] = useState({ today, production: "25", transit: "32", checkin: "5", stock: "600", velocity: "14" });
+  const [lead, setLead] = useState({
+    today,
+    production: "25",
+    transit: "32",
+    checkin: "5",
+    stock: "600",
+    velocity: "14",
+  });
   const [arb, setArb] = useState({ product: "", cost: "8.5", price: "39.99" });
   const [hook, setHook] = useState("");
 
@@ -151,10 +234,27 @@ function GrowthHub() {
         runLabel="Bundle Önerileri Getir"
         onRun={() => callTool("bundle-booster", bundle)}
       >
-        <Field label="Ana ürün"><Input value={bundle.product} onChange={(e) => setBundle({ ...bundle, product: e.target.value })} placeholder="Pilates minderi" /></Field>
+        <Field label="Ana ürün">
+          <Input
+            value={bundle.product}
+            onChange={(e) => setBundle({ ...bundle, product: e.target.value })}
+            placeholder="Pilates minderi"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Satış fiyatı ($)"><Input type="number" value={bundle.price} onChange={(e) => setBundle({ ...bundle, price: e.target.value })} /></Field>
-          <Field label="Kanal"><Input value={bundle.channel} onChange={(e) => setBundle({ ...bundle, channel: e.target.value })} /></Field>
+          <Field label="Satış fiyatı ($)">
+            <Input
+              type="number"
+              value={bundle.price}
+              onChange={(e) => setBundle({ ...bundle, price: e.target.value })}
+            />
+          </Field>
+          <Field label="Kanal">
+            <Input
+              value={bundle.channel}
+              onChange={(e) => setBundle({ ...bundle, channel: e.target.value })}
+            />
+          </Field>
         </div>
       </ToolCard>
 
@@ -166,19 +266,61 @@ function GrowthHub() {
         onRun={() => callTool("lead-time", lead)}
       >
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Üretim (gün)"><Input type="number" value={lead.production} onChange={(e) => setLead({ ...lead, production: e.target.value })} /></Field>
-          <Field label="Transit (gün)"><Input type="number" value={lead.transit} onChange={(e) => setLead({ ...lead, transit: e.target.value })} /></Field>
-          <Field label="Depo girişi (gün)"><Input type="number" value={lead.checkin} onChange={(e) => setLead({ ...lead, checkin: e.target.value })} /></Field>
-          <Field label="Eldeki stok"><Input type="number" value={lead.stock} onChange={(e) => setLead({ ...lead, stock: e.target.value })} /></Field>
-          <Field label="Günlük satış"><Input type="number" value={lead.velocity} onChange={(e) => setLead({ ...lead, velocity: e.target.value })} /></Field>
-          <Field label="Bugün"><Input type="date" value={lead.today} onChange={(e) => setLead({ ...lead, today: e.target.value })} /></Field>
+          <Field label="Üretim (gün)">
+            <Input
+              type="number"
+              value={lead.production}
+              onChange={(e) => setLead({ ...lead, production: e.target.value })}
+            />
+          </Field>
+          <Field label="Transit (gün)">
+            <Input
+              type="number"
+              value={lead.transit}
+              onChange={(e) => setLead({ ...lead, transit: e.target.value })}
+            />
+          </Field>
+          <Field label="Depo girişi (gün)">
+            <Input
+              type="number"
+              value={lead.checkin}
+              onChange={(e) => setLead({ ...lead, checkin: e.target.value })}
+            />
+          </Field>
+          <Field label="Eldeki stok">
+            <Input
+              type="number"
+              value={lead.stock}
+              onChange={(e) => setLead({ ...lead, stock: e.target.value })}
+            />
+          </Field>
+          <Field label="Günlük satış">
+            <Input
+              type="number"
+              value={lead.velocity}
+              onChange={(e) => setLead({ ...lead, velocity: e.target.value })}
+            />
+          </Field>
+          <Field label="Bugün">
+            <Input
+              type="date"
+              value={lead.today}
+              onChange={(e) => setLead({ ...lead, today: e.target.value })}
+            />
+          </Field>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-2 text-[10px]">
-          <span className="rounded bg-[var(--accent-active)]/15 px-2 py-1 text-[var(--accent-active)]">Üretim {lead.production}g</span>
+          <span className="rounded bg-[var(--accent-active)]/15 px-2 py-1 text-[var(--accent-active)]">
+            Üretim {lead.production}g
+          </span>
           <span className="h-px flex-1 bg-white/10" />
-          <span className="rounded bg-[var(--ai)]/15 px-2 py-1 text-[var(--ai)]">Transit {lead.transit}g</span>
+          <span className="rounded bg-[var(--ai)]/15 px-2 py-1 text-[var(--ai)]">
+            Transit {lead.transit}g
+          </span>
           <span className="h-px flex-1 bg-white/10" />
-          <span className="rounded bg-[var(--profit)]/15 px-2 py-1 text-[var(--profit)]">Check-in {lead.checkin}g</span>
+          <span className="rounded bg-[var(--profit)]/15 px-2 py-1 text-[var(--profit)]">
+            Check-in {lead.checkin}g
+          </span>
         </div>
       </ToolCard>
 
@@ -189,10 +331,28 @@ function GrowthHub() {
         runLabel="Pazar Matrisini Çıkar"
         onRun={() => callTool("arbitrage-matrix", arb)}
       >
-        <Field label="Ürün"><Input value={arb.product} onChange={(e) => setArb({ ...arb, product: e.target.value })} placeholder="Paslanmaz termos" /></Field>
+        <Field label="Ürün">
+          <Input
+            value={arb.product}
+            onChange={(e) => setArb({ ...arb, product: e.target.value })}
+            placeholder="Paslanmaz termos"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Landed cost ($)"><Input type="number" value={arb.cost} onChange={(e) => setArb({ ...arb, cost: e.target.value })} /></Field>
-          <Field label="Referans fiyat ($)"><Input type="number" value={arb.price} onChange={(e) => setArb({ ...arb, price: e.target.value })} /></Field>
+          <Field label="Landed cost ($)">
+            <Input
+              type="number"
+              value={arb.cost}
+              onChange={(e) => setArb({ ...arb, cost: e.target.value })}
+            />
+          </Field>
+          <Field label="Referans fiyat ($)">
+            <Input
+              type="number"
+              value={arb.price}
+              onChange={(e) => setArb({ ...arb, price: e.target.value })}
+            />
+          </Field>
         </div>
       </ToolCard>
 
@@ -204,7 +364,12 @@ function GrowthHub() {
         onRun={() => callTool("ad-hook-extractor", { adCopy: hook })}
       >
         <Field label="Rakip reklam metni">
-          <Textarea rows={7} value={hook} onChange={(e) => setHook(e.target.value)} placeholder="Only 200 left in stock — over 40,000 moms already switched…" />
+          <Textarea
+            rows={7}
+            value={hook}
+            onChange={(e) => setHook(e.target.value)}
+            placeholder="Only 200 left in stock — over 40,000 moms already switched…"
+          />
         </Field>
       </ToolCard>
     </HubShell>

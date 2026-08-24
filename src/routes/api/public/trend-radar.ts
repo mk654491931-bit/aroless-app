@@ -17,7 +17,9 @@ export const Route = createFileRoute("/api/public/trend-radar")({
           const body = await readJsonBody<Record<string, unknown>>(request, 256 * 1024);
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
           const action = String(body["action"] ?? "scrape");
-          const region = String(body["region"] ?? "GLOBAL").toUpperCase().slice(0, 8);
+          const region = String(body["region"] ?? "GLOBAL")
+            .toUpperCase()
+            .slice(0, 8);
           const category = String(body["category"] ?? "General").slice(0, 40);
 
           if (action === "webhook") {
@@ -34,11 +36,13 @@ export const Route = createFileRoute("/api/public/trend-radar")({
 
           const mod = await import("@/lib/trend-radar.server");
 
-
           if (action === "scrape") {
-            const sources = (Array.isArray(body["sources"]) ? body["sources"] : [])
-              .map(String) as import("@/lib/trend-radar.server").TrendSource[];
-            const rssFeeds = (Array.isArray(body["rss_feeds"]) ? body["rss_feeds"] : []).map(String);
+            const sources = (Array.isArray(body["sources"]) ? body["sources"] : []).map(
+              String,
+            ) as import("@/lib/trend-radar.server").TrendSource[];
+            const rssFeeds = (Array.isArray(body["rss_feeds"]) ? body["rss_feeds"] : []).map(
+              String,
+            );
             const niche = body["niche"] ? String(body["niche"]).slice(0, 60) : undefined;
             const job = await mod.runScrapeJob({ region, category, sources, rssFeeds, niche });
 
@@ -64,26 +68,34 @@ export const Route = createFileRoute("/api/public/trend-radar")({
                   })),
                 );
               }
-            } catch { /* persistence optional */ }
+            } catch {
+              /* persistence optional */
+            }
 
             return Response.json(job);
           }
 
           if (action === "analyze") {
-            const trends = (Array.isArray(body["trends"]) ? body["trends"] : []) as
-              import("@/lib/trend-radar.server").ScrapedTrend[];
-            const mode = (["fast", "deep", "strategy"].includes(String(body["mode"]))
-              ? String(body["mode"])
-              : "fast") as import("@/lib/trend-radar.server").AiMode;
+            const trends = (
+              Array.isArray(body["trends"]) ? body["trends"] : []
+            ) as import("@/lib/trend-radar.server").ScrapedTrend[];
+            const mode = (
+              ["fast", "deep", "strategy"].includes(String(body["mode"]))
+                ? String(body["mode"])
+                : "fast"
+            ) as import("@/lib/trend-radar.server").AiMode;
             if (!trends.length) {
-              return new Response(JSON.stringify({ error: "no trends to analyze" }), { status: 400 });
+              return new Response(JSON.stringify({ error: "no trends to analyze" }), {
+                status: 400,
+              });
             }
             return Response.json(await mod.runDeepAnalysis(trends, mode, region, category));
           }
 
           if (action === "brief") {
             const trend = String(body["trend"] ?? "").slice(0, 160);
-            if (!trend) return new Response(JSON.stringify({ error: "trend required" }), { status: 400 });
+            if (!trend)
+              return new Response(JSON.stringify({ error: "trend required" }), { status: 400 });
             return Response.json(await mod.runProductBrief(trend, region, category));
           }
 
@@ -93,12 +105,18 @@ export const Route = createFileRoute("/api/public/trend-radar")({
               const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
               await supabaseAdmin.from("scraped_platform_trends").insert(
                 rows.map((t) => ({
-                  source: t.source, trend_name: t.trend_name, category: t.category,
-                  region: t.region, metrics: t.metrics,
-                  raw_payload: { ...t.raw_payload, kind: "webhook" }, scraped_at: t.scraped_at,
+                  source: t.source,
+                  trend_name: t.trend_name,
+                  category: t.category,
+                  region: t.region,
+                  metrics: t.metrics,
+                  raw_payload: { ...t.raw_payload, kind: "webhook" },
+                  scraped_at: t.scraped_at,
                 })),
               );
-            } catch { /* optional */ }
+            } catch {
+              /* optional */
+            }
             return Response.json({ ingested: rows.length, trends: rows });
           }
 

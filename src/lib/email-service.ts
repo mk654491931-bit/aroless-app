@@ -14,11 +14,19 @@ import {
 } from "@/lib/email-templates";
 
 async function hmac(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
-  const k = await crypto.subtle.importKey("raw", key as BufferSource, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const k = await crypto.subtle.importKey(
+    "raw",
+    key as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
   return crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data));
 }
 function hex(buf: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 async function sha256Hex(text: string): Promise<string> {
   return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
@@ -91,7 +99,8 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const scope = `${dateStamp}/${region}/ses/aws4_request`;
   const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, await sha256Hex(canonical)].join("\n");
   let signingKey: ArrayBuffer | Uint8Array = new TextEncoder().encode(`AWS4${secretKey}`);
-  for (const part of [dateStamp, region, "ses", "aws4_request"]) signingKey = await hmac(signingKey, part);
+  for (const part of [dateStamp, region, "ses", "aws4_request"])
+    signingKey = await hmac(signingKey, part);
   const signature = hex(await hmac(signingKey, toSign));
 
   const res = await fetch(`https://${host}${path}`, {
@@ -129,7 +138,12 @@ export async function trySendEmail(args: SendEmailArgs): Promise<SendEmailResult
 /** Kayıt sonrası hoş geldiniz e-postası (8 haneli Aroless kimliği ile). */
 export async function sendWelcomeEmail(to: string, publicId: string): Promise<SendEmailResult> {
   const { subject, html } = welcomeEmail({ publicId, email: to });
-  return trySendEmail({ to, subject, html, text: `Aroless'e hoş geldiniz. Kimliğiniz: ${publicId}` });
+  return trySendEmail({
+    to,
+    subject,
+    html,
+    text: `Aroless'e hoş geldiniz. Kimliğiniz: ${publicId}`,
+  });
 }
 
 /** Şifre sıfırlama bağlantısı. */
@@ -147,5 +161,10 @@ export async function sendVerificationEmail(to: string, link: string): Promise<S
 /** 6 haneli doğrulama kodu. */
 export async function sendOtpCodeEmail(to: string, code: string): Promise<SendEmailResult> {
   const { subject, html } = otpEmail({ code });
-  return sendEmail({ to, subject, html, text: `Aroless doğrulama kodunuz: ${code} (10 dakika geçerli)` });
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text: `Aroless doğrulama kodunuz: ${code} (10 dakika geçerli)`,
+  });
 }

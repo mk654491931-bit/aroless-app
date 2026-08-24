@@ -43,7 +43,9 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
     };
 
     const runOne = async (engine: "qwen" | "llama") => {
-      const text = await callHuggingFace(buildHfPrompt({ ...base, engine }), engine, { token: data.token });
+      const text = await callHuggingFace(buildHfPrompt({ ...base, engine }), engine, {
+        token: data.token,
+      });
       return mapHfProducts(text, data.platforms, engine);
     };
 
@@ -52,7 +54,8 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
     if (data.engine === "hybrid") {
       const settled = await Promise.allSettled([runOne("llama"), runOne("qwen")]);
       const lists = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
-      if (lists.length === 0) throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
+      if (lists.length === 0)
+        throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
       const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
       const products = rankProfitable(merged);
       return { products, model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`, engines: lists.length };
@@ -62,11 +65,12 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
     return { products, model: HF_MODELS[data.engine], engines: 1 };
   });
 
-
 /** Connection probe for the settings panel. */
 export const huggingFaceStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ token: z.string().max(200).optional() }).parse(input ?? {}))
+  .inputValidator((input: unknown) =>
+    z.object({ token: z.string().max(200).optional() }).parse(input ?? {}),
+  )
   .handler(async ({ data }) => {
     const { pingHuggingFace, hfToken } = await import("@/lib/hf.server");
     const configured = !!hfToken(data.token);

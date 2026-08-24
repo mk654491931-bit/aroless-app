@@ -15,7 +15,6 @@ import {
 } from "./competitor.server";
 import { scrapeMarketplaceSellers, getGoogleTrends, getDomainRanks } from "./market-data.server";
 
-
 export type { CompetitorReport, CompetitorSeller, CompetitorWeakness, CounterStrategy };
 
 const AnalyzeInput = z.object({
@@ -27,7 +26,10 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => AnalyzeInput.parse(i))
   .handler(async ({ data }): Promise<{ report: CompetitorReport }> => {
-    const g1 = process.env['GEMINI_API_KEY_1'] || process.env['GEMINI_1_API_KEY'] || process.env['GEMINI_API_KEY'];
+    const g1 =
+      process.env["GEMINI_API_KEY_1"] ||
+      process.env["GEMINI_1_API_KEY"] ||
+      process.env["GEMINI_API_KEY"];
     const country = (data.country || "GLOBAL").toUpperCase();
 
     // Free external signals first — they ground the AI prompts (fewer tokens, real data).
@@ -42,7 +44,10 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
         ? `Top marketplace results: ${scraped.map((s) => `${s.seller} (${s.domain}${s.price_usd ? `, $${s.price_usd}` : ""})`).join("; ")}`
         : "",
       `Google Trends (${trends.source}) 30d interest: [${trends.monthly.slice(-14).join(",")}], 30d momentum ${trends.momentum_pct}%`,
-    ].filter(Boolean).join("\n").slice(0, 900);
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 900);
 
     type SellersRaw = { avg_price_usd?: number; sellers?: Partial<CompetitorSeller>[] };
     type SentimentRaw = { sentiment_summary?: string; weaknesses?: Partial<CompetitorWeakness>[] };
@@ -63,7 +68,9 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
       est_monthly_sales: Math.max(0, Math.round(Number(s.est_monthly_sales) || 0)),
       est_stock: Math.max(0, Math.round(Number(s.est_stock) || 0)),
       rating: Math.max(0, Math.min(5, Number(s.rating) || 0)),
-      traffic_sources: Array.isArray(s.traffic_sources) ? s.traffic_sources.slice(0, 4).map(String) : [],
+      traffic_sources: Array.isArray(s.traffic_sources)
+        ? s.traffic_sources.slice(0, 4).map(String)
+        : [],
       margin_note: String(s.margin_note ?? ""),
       domain: String(s.domain ?? ""),
       domain_rank: null as number | null,
@@ -72,7 +79,9 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
 
     // Merge scraped listings (real domains) with the AI-enriched rows.
     const sellers: CompetitorSeller[] = scraped.map((sc, i) => {
-      const ai = aiSellers.find((a) => a.seller.toLowerCase().includes(sc.seller.toLowerCase())) ?? aiSellers[i];
+      const ai =
+        aiSellers.find((a) => a.seller.toLowerCase().includes(sc.seller.toLowerCase())) ??
+        aiSellers[i];
       return {
         seller: sc.seller,
         platform: sc.platform,
@@ -91,21 +100,32 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
     if (sellers.length < 5) {
       for (const a of aiSellers) {
         if (sellers.length >= 5) break;
-        if (!sellers.some((s) => s.seller.toLowerCase() === a.seller.toLowerCase())) sellers.push(a);
+        if (!sellers.some((s) => s.seller.toLowerCase() === a.seller.toLowerCase()))
+          sellers.push(a);
       }
     }
 
-    const weaknesses = (sentimentRaw.weaknesses ?? []).slice(0, 5).map((w) => ({
-      complaint: String(w.complaint ?? ""),
-      frequency: String(w.frequency ?? ""),
-      opportunity: String(w.opportunity ?? ""),
-    })).filter((w) => w.complaint);
+    const weaknesses = (sentimentRaw.weaknesses ?? [])
+      .slice(0, 5)
+      .map((w) => ({
+        complaint: String(w.complaint ?? ""),
+        frequency: String(w.frequency ?? ""),
+        opportunity: String(w.opportunity ?? ""),
+      }))
+      .filter((w) => w.complaint);
 
     const context = [
-      sellers.map((s) => `${s.seller} (${s.platform}) $${s.price_usd} · ~${s.est_monthly_sales} satış/ay · ${s.traffic_sources.join(", ")}`).join("\n"),
+      sellers
+        .map(
+          (s) =>
+            `${s.seller} (${s.platform}) $${s.price_usd} · ~${s.est_monthly_sales} satış/ay · ${s.traffic_sources.join(", ")}`,
+        )
+        .join("\n"),
       weaknesses.map((w) => `Şikayet: ${w.complaint} (${w.frequency})`).join("\n"),
       `Trend momentumu: %${trends.momentum_pct}`,
-    ].join("\n").slice(0, 2500);
+    ]
+      .join("\n")
+      .slice(0, 2500);
 
     const strategy = await callGemini(strategyPrompt(data.query, country, context), g1, 0.6)
       .then((t) => {
@@ -140,7 +160,6 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
     };
   });
 
-
 const CountryStrategyInput = z.object({
   niche: z.string().max(200).default(""),
   country: z.string().min(2).max(8).default("GLOBAL"),
@@ -150,9 +169,17 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data }): Promise<{ strategy: string }> => {
-    const g1 = process.env['GEMINI_API_KEY_1'] || process.env['GEMINI_1_API_KEY'] || process.env['GEMINI_API_KEY'];
+    const g1 =
+      process.env["GEMINI_API_KEY_1"] ||
+      process.env["GEMINI_1_API_KEY"] ||
+      process.env["GEMINI_API_KEY"];
     try {
-      const text = await callGemini(countryStrategyPrompt(data.niche, data.country), g1, 0.6, false);
+      const text = await callGemini(
+        countryStrategyPrompt(data.niche, data.country),
+        g1,
+        0.6,
+        false,
+      );
       const p = extractJson<{ strategy?: string }>(text, {});
       return { strategy: String(p.strategy ?? "") };
     } catch {
@@ -170,11 +197,21 @@ export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CopilotInput.parse(i))
   .handler(async ({ data }): Promise<{ reply: string }> => {
-    const g3 = process.env['GEMINI_API_KEY_3'] || process.env['GEMINI_3_API_KEY'] || process.env['GEMINI_API_KEY'];
+    const g3 =
+      process.env["GEMINI_API_KEY_3"] ||
+      process.env["GEMINI_3_API_KEY"] ||
+      process.env["GEMINI_API_KEY"];
     try {
-      const text = await callGemini(copilotPrompt(data.message, data.context, data.history), g3, 0.8, false);
+      const text = await callGemini(
+        copilotPrompt(data.message, data.context, data.history),
+        g3,
+        0.8,
+        false,
+      );
       const p = extractJson<{ reply?: string }>(text, {});
-      return { reply: String(p.reply ?? "").trim() || "Şu an yanıt üretemedim, tekrar dener misin?" };
+      return {
+        reply: String(p.reply ?? "").trim() || "Şu an yanıt üretemedim, tekrar dener misin?",
+      };
     } catch {
       return { reply: "AI Co-Pilot şu an yanıt veremiyor. Birazdan tekrar dene." };
     }

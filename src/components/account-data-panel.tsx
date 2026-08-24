@@ -55,10 +55,14 @@ export function AccountDataPanel() {
             <div className="text-sm text-muted-foreground">Henüz kayıt yok.</div>
           )}
           {(usageQ.data ?? []).map((r) => (
-            <div key={r.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs">
+            <div
+              key={r.id}
+              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs"
+            >
               <span className="font-medium">{r.tool}</span>
               <span className="text-muted-foreground">
-                {new Date(r.created_at).toLocaleString()} · {r.credits} kredi{r.success ? "" : " · başarısız"}
+                {new Date(r.created_at).toLocaleString()} · {r.credits} kredi
+                {r.success ? "" : " · başarısız"}
               </span>
             </div>
           ))}
@@ -67,13 +71,20 @@ export function AccountDataPanel() {
 
       <div className="glass rounded-2xl p-5">
         <h2 className="font-semibold">Verilerin</h2>
-        <p className="text-sm text-muted-foreground">KVKK/GDPR kapsamında tüm verilerini indirebilir veya hesabını silebilirsin.</p>
+        <p className="text-sm text-muted-foreground">
+          KVKK/GDPR kapsamında tüm verilerini indirebilir veya hesabını silebilirsin.
+        </p>
         <button
           onClick={() => doExport.mutate()}
           disabled={doExport.isPending}
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/10 disabled:opacity-50"
         >
-          {doExport.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Verilerimi indir (JSON)
+          {doExport.isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Download size={14} />
+          )}{" "}
+          Verilerimi indir (JSON)
         </button>
 
         <div className="mt-5 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
@@ -95,7 +106,11 @@ export function AccountDataPanel() {
               onClick={() => doDelete.mutate()}
               className="rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-50"
             >
-              {doDelete.isPending ? <Loader2 size={14} className="animate-spin" /> : "Kalıcı olarak sil"}
+              {doDelete.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                "Kalıcı olarak sil"
+              )}
             </button>
           </div>
         </div>

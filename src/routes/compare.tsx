@@ -5,7 +5,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, ArrowRight, Check, Loader2, Scale, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
-import { loadFavoritesForComparison, summarizeComparison, type ComparisonProduct } from "@/lib/compare.functions";
+import {
+  loadFavoritesForComparison,
+  summarizeComparison,
+  type ComparisonProduct,
+} from "@/lib/compare.functions";
 
 export const Route = createFileRoute("/compare")({
   ssr: false,
@@ -27,14 +31,25 @@ function ComparePage() {
   const loadFn = useServerFn(loadFavoritesForComparison);
   const summarizeFn = useServerFn(summarizeComparison);
 
-  useEffect(() => { if (!loading && !user) nav({ to: "/auth" }); }, [user, loading, nav]);
+  useEffect(() => {
+    if (!loading && !user) nav({ to: "/auth" });
+  }, [user, loading, nav]);
 
-  const favQ = useQuery({ queryKey: ["favorites", user?.id], queryFn: () => listFn(), enabled: !!user });
+  const favQ = useQuery({
+    queryKey: ["favorites", user?.id],
+    queryFn: () => listFn(),
+    enabled: !!user,
+  });
   const favorites: FavoriteRow[] = (favQ.data as FavoriteRow[] | undefined) ?? [];
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [compareData, setCompareData] = useState<ComparisonProduct[] | null>(null);
-  const [summary, setSummary] = useState<{ winner: string; reasoning: string; runner_up: string; risks: string[] } | null>(null);
+  const [summary, setSummary] = useState<{
+    winner: string;
+    reasoning: string;
+    runner_up: string;
+    risks: string[];
+  } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const toggle = (id: string) => {
@@ -67,7 +82,12 @@ function ComparePage() {
     }
   };
 
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading || !user)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
     <div className="min-h-screen">
@@ -79,7 +99,10 @@ function ComparePage() {
             </div>
             <div className="font-bold">Compare Products</div>
           </div>
-          <Link to="/dashboard" className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5">
+          <Link
+            to="/dashboard"
+            className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+          >
             <ArrowLeft size={14} /> Dashboard
           </Link>
         </div>
@@ -102,8 +125,16 @@ function ComparePage() {
             </button>
           </div>
 
-          {favQ.isLoading && <div className="text-sm text-muted-foreground py-6 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</div>}
-          {!favQ.isLoading && favorites.length === 0 && <div className="text-sm text-muted-foreground py-6">No saved products yet. Save products from the finder to compare them.</div>}
+          {favQ.isLoading && (
+            <div className="text-sm text-muted-foreground py-6 flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" /> Loading…
+            </div>
+          )}
+          {!favQ.isLoading && favorites.length === 0 && (
+            <div className="text-sm text-muted-foreground py-6">
+              No saved products yet. Save products from the finder to compare them.
+            </div>
+          )}
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {favorites.map((f) => {
@@ -116,11 +147,15 @@ function ComparePage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-medium text-sm truncate">{f.name}</div>
-                    <div className={`h-5 w-5 rounded border flex items-center justify-center ${selected ? "bg-[oklch(0.68_0.20_265)] border-[oklch(0.68_0.20_265)]" : "border-white/30"}`}>
+                    <div
+                      className={`h-5 w-5 rounded border flex items-center justify-center ${selected ? "bg-[oklch(0.68_0.20_265)] border-[oklch(0.68_0.20_265)]" : "border-white/30"}`}
+                    >
                       {selected && <Check size={12} className="text-white" />}
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">{f.collection_name || "Default"}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {f.collection_name || "Default"}
+                  </div>
                 </button>
               );
             })}
@@ -136,12 +171,18 @@ function ComparePage() {
                   <h2 className="font-semibold">AI Verdict</h2>
                 </div>
                 <div className="text-sm space-y-2">
-                  <p><span className="font-medium">Winner:</span> {summary.winner || "—"}</p>
-                  <p><span className="font-medium">Runner-up:</span> {summary.runner_up || "—"}</p>
+                  <p>
+                    <span className="font-medium">Winner:</span> {summary.winner || "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Runner-up:</span> {summary.runner_up || "—"}
+                  </p>
                   <p className="text-muted-foreground">{summary.reasoning}</p>
                   {summary.risks.length > 0 && (
                     <ul className="list-disc list-inside text-muted-foreground">
-                      {summary.risks.map((r, i) => <li key={i}>{r}</li>)}
+                      {summary.risks.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
                     </ul>
                   )}
                 </div>
@@ -153,17 +194,42 @@ function ComparePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Metric</th>
-                    {compareData.map((p) => <th key={p.id} className="text-left py-2 px-2 font-medium min-w-[180px]">{p.name}</th>)}
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
+                      Metric
+                    </th>
+                    {compareData.map((p) => (
+                      <th key={p.id} className="text-left py-2 px-2 font-medium min-w-[180px]">
+                        {p.name}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  <Row label="Trend score" values={compareData.map((p) => p.product.trend_score ?? "—")} />
-                  <Row label="Profit margin" values={compareData.map((p) => `${p.product.profit_margin_pct ?? "—"}%`)} />
-                  <Row label="Competition" values={compareData.map((p) => p.product.competition_level ?? "—")} />
-                  <Row label="Verdict" values={compareData.map((p) => p.product.sellability_verdict ?? "—")} />
-                  <Row label="Platforms" values={compareData.map((p) => (p.product.platform_fit ?? []).join(", "))} />
-                  <Row label="Why winning" values={compareData.map((p) => p.product.why_winning ?? "—")} long />
+                  <Row
+                    label="Trend score"
+                    values={compareData.map((p) => p.product.trend_score ?? "—")}
+                  />
+                  <Row
+                    label="Profit margin"
+                    values={compareData.map((p) => `${p.product.profit_margin_pct ?? "—"}%`)}
+                  />
+                  <Row
+                    label="Competition"
+                    values={compareData.map((p) => p.product.competition_level ?? "—")}
+                  />
+                  <Row
+                    label="Verdict"
+                    values={compareData.map((p) => p.product.sellability_verdict ?? "—")}
+                  />
+                  <Row
+                    label="Platforms"
+                    values={compareData.map((p) => (p.product.platform_fit ?? []).join(", "))}
+                  />
+                  <Row
+                    label="Why winning"
+                    values={compareData.map((p) => p.product.why_winning ?? "—")}
+                    long
+                  />
                 </tbody>
               </table>
             </div>
@@ -174,7 +240,15 @@ function ComparePage() {
   );
 }
 
-function Row({ label, values, long }: { label: string; values: (string | number)[]; long?: boolean }) {
+function Row({
+  label,
+  values,
+  long,
+}: {
+  label: string;
+  values: (string | number)[];
+  long?: boolean;
+}) {
   return (
     <tr>
       <td className="py-2.5 px-2 text-muted-foreground align-top whitespace-nowrap">{label}</td>

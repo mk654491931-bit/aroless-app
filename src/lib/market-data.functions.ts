@@ -2,8 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
-  getGoogleTrends, getSourcingEstimate, getProductPhysical,
-  type TrendSeries, type SourcingEstimate, type ProductPhysical,
+  getGoogleTrends,
+  getSourcingEstimate,
+  getProductPhysical,
+  type TrendSeries,
+  type SourcingEstimate,
+  type ProductPhysical,
 } from "./market-data.server";
 
 export type { TrendSeries, SourcingEstimate, ProductPhysical };

@@ -13,14 +13,54 @@ import type { Platform } from "./gemini.functions";
 
 /** Ülkeye özel sertifika / gümrük bariyeri olan ürün kalıpları. */
 const COUNTRY_BARRIERS: Record<string, { re: RegExp; why: string }[]> = {
-  SA: [{ re: /(elektronik|electronic|cosmetic|kozmetik|toy|oyuncak|charger|şarj)/i, why: "Suudi Arabistan SABER/SASO belgesi gerektiriyor" }],
-  AE: [{ re: /(cosmetic|kozmetik|supplement|takviye|food|gıda|charger|şarj)/i, why: "BAE ESMA/MoHAP tescili gerektiriyor" }],
-  DE: [{ re: /(battery|pil|batarya|elektronik|electronic|packaging)/i, why: "Almanya VerpackG (ambalaj kaydı) + WEEE/BattG zorunluluğu" }],
-  FR: [{ re: /(battery|pil|elektronik|electronic|textile|tekstil)/i, why: "Fransa EPR (Triman) kayıt zorunluluğu" }],
-  TR: [{ re: /(supplement|takviye|cosmetic|kozmetik|medikal|medical)/i, why: "Türkiye'de Tarım/Sağlık Bakanlığı izni gerekiyor" }],
-  IN: [{ re: /(elektronik|electronic|charger|şarj|toy|oyuncak)/i, why: "Hindistan BIS sertifikası gerekiyor" }],
-  BR: [{ re: /(elektronik|electronic|charger|şarj|wireless|telsiz)/i, why: "Brezilya ANATEL/INMETRO onayı gerekiyor" }],
-  JP: [{ re: /(charger|şarj|battery|pil|wireless|telsiz)/i, why: "Japonya PSE/GİTELEC onayı gerekiyor" }],
+  SA: [
+    {
+      re: /(elektronik|electronic|cosmetic|kozmetik|toy|oyuncak|charger|şarj)/i,
+      why: "Suudi Arabistan SABER/SASO belgesi gerektiriyor",
+    },
+  ],
+  AE: [
+    {
+      re: /(cosmetic|kozmetik|supplement|takviye|food|gıda|charger|şarj)/i,
+      why: "BAE ESMA/MoHAP tescili gerektiriyor",
+    },
+  ],
+  DE: [
+    {
+      re: /(battery|pil|batarya|elektronik|electronic|packaging)/i,
+      why: "Almanya VerpackG (ambalaj kaydı) + WEEE/BattG zorunluluğu",
+    },
+  ],
+  FR: [
+    {
+      re: /(battery|pil|elektronik|electronic|textile|tekstil)/i,
+      why: "Fransa EPR (Triman) kayıt zorunluluğu",
+    },
+  ],
+  TR: [
+    {
+      re: /(supplement|takviye|cosmetic|kozmetik|medikal|medical)/i,
+      why: "Türkiye'de Tarım/Sağlık Bakanlığı izni gerekiyor",
+    },
+  ],
+  IN: [
+    {
+      re: /(elektronik|electronic|charger|şarj|toy|oyuncak)/i,
+      why: "Hindistan BIS sertifikası gerekiyor",
+    },
+  ],
+  BR: [
+    {
+      re: /(elektronik|electronic|charger|şarj|wireless|telsiz)/i,
+      why: "Brezilya ANATEL/INMETRO onayı gerekiyor",
+    },
+  ],
+  JP: [
+    {
+      re: /(charger|şarj|battery|pil|wireless|telsiz)/i,
+      why: "Japonya PSE/GİTELEC onayı gerekiyor",
+    },
+  ],
 };
 
 export type GateInput = {
@@ -53,20 +93,33 @@ const SATURATED = [
   /wireless earbuds?$/i,
 ];
 
-const BULKY = /(koltuk|kanepe|treadmill|koşu bandı|buzdolabı|fridge|mattress|yatak|sofa|bisiklet|bicycle|televizyon|akvaryum|piyano|piano)/i;
-const ILLEGAL = /(replica|çakma|counterfeit|sahte|first copy|knock ?off|airsoft|silah|weapon|reçeteli|prescription)/i;
+const BULKY =
+  /(koltuk|kanepe|treadmill|koşu bandı|buzdolabı|fridge|mattress|yatak|sofa|bisiklet|bicycle|televizyon|akvaryum|piyano|piano)/i;
+const ILLEGAL =
+  /(replica|çakma|counterfeit|sahte|first copy|knock ?off|airsoft|silah|weapon|reçeteli|prescription)/i;
 
 const normalizeName = (s: string) =>
   s
     .toLowerCase()
     .replace(/[^a-z0-9çğıöşü ]+/gi, " ")
-    .replace(/\b(pro|plus|max|mini|set|kit|adet|pcs|pack|the|for|ile|with|new|yeni|2024|2025|2026)\b/g, " ")
+    .replace(
+      /\b(pro|plus|max|mini|set|kit|adet|pcs|pack|the|for|ile|with|new|yeni|2024|2025|2026)\b/g,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
 
 function tokenSimilarity(a: string, b: string): number {
-  const ta = new Set(normalizeName(a).split(" ").filter((w) => w.length > 2));
-  const tb = new Set(normalizeName(b).split(" ").filter((w) => w.length > 2));
+  const ta = new Set(
+    normalizeName(a)
+      .split(" ")
+      .filter((w) => w.length > 2),
+  );
+  const tb = new Set(
+    normalizeName(b)
+      .split(" ")
+      .filter((w) => w.length > 2),
+  );
   if (!ta.size || !tb.size) return 0;
   let hit = 0;
   ta.forEach((t) => {
@@ -117,7 +170,9 @@ export function winnerGate<T extends GateInput>(
   const country = (opts.country || "GLOBAL").toUpperCase();
   const platforms = opts.platforms ?? [];
   // Kullanıcının seçtiği kanallardan bu ülkede gerçekten çalışanlar.
-  const usable = platforms.filter((p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable");
+  const usable = platforms.filter(
+    (p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable",
+  );
   const barriers = COUNTRY_BARRIERS[country] ?? [];
 
   const unique = dedupeCandidates(items);
@@ -138,7 +193,11 @@ export function winnerGate<T extends GateInput>(
       );
 
     const checks: VerdictCheck[] = [
-      { label: "Yasal risk taraması", passed: !ILLEGAL.test(text), detail: "Taklit / kısıtlı ürün kalıpları" },
+      {
+        label: "Yasal risk taraması",
+        passed: !ILLEGAL.test(text),
+        detail: "Taklit / kısıtlı ürün kalıpları",
+      },
       {
         label: "Doygunluk",
         passed: !(SATURATED.some((r) => r.test(text)) && !hasDiff),
@@ -153,7 +212,10 @@ export function winnerGate<T extends GateInput>(
       },
       {
         label: "Hedef fiyat bandı",
-        passed: !((priceMin > 0 && price > 0 && price < priceMin) || (priceMax > 0 && price > 0 && price > priceMax)),
+        passed: !(
+          (priceMin > 0 && price > 0 && price < priceMin) ||
+          (priceMax > 0 && price > 0 && price > priceMax)
+        ),
         value: price > 0 ? `$${price.toFixed(2)}` : "—",
         threshold: priceMin || priceMax ? `$${priceMin || 0} – $${priceMax || "∞"}` : "sınır yok",
       },
@@ -184,12 +246,18 @@ export function winnerGate<T extends GateInput>(
     else if (SATURATED.some((r) => r.test(text)) && !hasDiff)
       reason = "Aşırı doymuş jenerik ürün — belirgin farklılaşma kanıtı yok.";
     else if (BULKY.test(text)) reason = "Hacimli/ağır ürün — kargo maliyeti kârı yok ediyor.";
-    else if (price > 0 && price < 9) reason = `Satış fiyatı çok düşük ($${price.toFixed(2)}) — reklam maliyeti karşılanmaz.`;
-    else if (priceMin > 0 && price > 0 && price < priceMin) reason = `Hedef fiyat bandının altında ($${price.toFixed(2)}).`;
-    else if (priceMax > 0 && price > 0 && price > priceMax) reason = `Hedef fiyat bandının üstünde ($${price.toFixed(2)}).`;
-    else if (margin < minMargin) reason = `Net marj yetersiz (%${Math.round(margin)} < %${minMargin}).`;
-    else if (channelBlocked) reason = `Önerilen satış kanalları ${country} pazarında kullanılamıyor.`;
-    else if (barrierHit && !hasDiff) reason = `Pazar uyumu: ${barrierHit.why} — küçük satıcı için giriş bariyeri yüksek.`;
+    else if (price > 0 && price < 9)
+      reason = `Satış fiyatı çok düşük ($${price.toFixed(2)}) — reklam maliyeti karşılanmaz.`;
+    else if (priceMin > 0 && price > 0 && price < priceMin)
+      reason = `Hedef fiyat bandının altında ($${price.toFixed(2)}).`;
+    else if (priceMax > 0 && price > 0 && price > priceMax)
+      reason = `Hedef fiyat bandının üstünde ($${price.toFixed(2)}).`;
+    else if (margin < minMargin)
+      reason = `Net marj yetersiz (%${Math.round(margin)} < %${minMargin}).`;
+    else if (channelBlocked)
+      reason = `Önerilen satış kanalları ${country} pazarında kullanılamıyor.`;
+    else if (barrierHit && !hasDiff)
+      reason = `Pazar uyumu: ${barrierHit.why} — küçük satıcı için giriş bariyeri yüksek.`;
 
     const verdict = buildVerdict({
       decision: reason ? "rejected" : "kept",
@@ -230,4 +298,3 @@ export function winnerGate<T extends GateInput>(
 
   return { survivors, rejected };
 }
-
