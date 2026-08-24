@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { CheckCircle, ExternalLink, FileText, Shield } from "lucide-react";
 import { openCookiePreferences } from "@/components/cookie-banner";
+import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
 export function SiteFooter() {
   const year = new Date().getFullYear();
@@ -90,7 +91,10 @@ export function SiteFooter() {
       </div>
 
       <div className="border-t border-border/70 px-4 pb-16 pt-4 text-center text-[11px] text-muted-foreground md:px-6">
-        © {year} Aroless. Tüm hakları saklıdır.
+        <p className="mx-auto max-w-3xl leading-relaxed text-muted-foreground/70">
+          {AI_DISCLAIMER_TR}
+        </p>
+        <p className="mt-2">© {year} Aroless. Tüm hakları saklıdır.</p>
       </div>
     </footer>
   );

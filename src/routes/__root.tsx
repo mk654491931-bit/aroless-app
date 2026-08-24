@@ -28,6 +28,7 @@ import { DeviceGuard } from "@/components/device-guard";
 import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 function NotFoundComponent() {
   return (
