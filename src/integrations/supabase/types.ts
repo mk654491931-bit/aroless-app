@@ -420,6 +420,7 @@ export type Database = {
         Row: {
           created_at: string
           credits: number
+          credits_reset_at: string | null
           credits_spent: number
           currency: string
           email: string | null
@@ -440,6 +441,7 @@ export type Database = {
         Insert: {
           created_at?: string
           credits?: number
+          credits_reset_at?: string | null
           credits_spent?: number
           currency?: string
           email?: string | null
@@ -460,6 +462,7 @@ export type Database = {
         Update: {
           created_at?: string
           credits?: number
+          credits_reset_at?: string | null
           credits_spent?: number
           currency?: string
           email?: string | null
