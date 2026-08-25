@@ -1,7 +1,6 @@
 {
   "buildCommand": "bun run build",
-  "outputDirectory": ".output/public",
-  "rewrites": [
+   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ]
 }
