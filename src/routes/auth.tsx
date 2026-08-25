@@ -345,21 +345,7 @@ function AuthPage() {
 
   const google = async () => {
     setBusy("google");
-
-    try {
-      // Lovable köprüsü ile tek tıkla Google girişi (iframe uyumlu).
-
-      const { lovable } = await import("@/integrations/lovable");
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-      if (result?.error) throw result.error;
-      if (!("redirected" in (result ?? {})) || !result?.redirected) {
-        nav({ to: "/" });
-      }
-    } catch (err) {
-      await googleDirect(err);
-    }
+    await googleDirect();
   };
 
   return (
