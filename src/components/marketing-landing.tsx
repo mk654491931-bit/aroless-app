@@ -12,6 +12,9 @@ import {
   Check,
   Cpu,
   TrendingUp,
+  BarChart3,
+  CircleDollarSign,
+  ScanSearch,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -168,6 +171,81 @@ export function MarketingLanding() {
               <div className="text-xs text-muted-foreground">{s.v}</div>
             </div>
           ))}
+        </div>
+
+        <div className="mx-auto mt-12 max-w-5xl text-left">
+          <div className="glass overflow-hidden rounded-3xl border-white/15 shadow-2xl shadow-black/20">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground/90">
+                <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary/15 text-primary">
+                  <ScanSearch size={14} />
+                </span>
+                Fırsat taraması
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-profit">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-profit" /> Canlı analiz
+              </span>
+            </div>
+            <div className="grid gap-5 p-4 sm:p-6 md:grid-cols-[1.15fr_0.85fr]">
+              <div className="rounded-2xl border border-white/10 bg-black/10 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Kazanan aday
+                    </p>
+                    <h3 className="mt-2 text-xl font-bold sm:text-2xl">Akıllı Mini Projektör</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">TikTok Shop · Almanya</p>
+                  </div>
+                  <div className="shrink-0 rounded-2xl border border-profit/30 bg-profit/10 px-3 py-2 text-center">
+                    <div className="text-2xl font-extrabold text-profit">87</div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-profit/80">
+                      Winner Score
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-6 grid grid-cols-3 gap-2">
+                  {[
+                    ["Satış fiyatı", "€79,90"],
+                    ["Tahmini maliyet", "€31,40"],
+                    ["Net marj", "%34,8"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[10px] text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-sm font-bold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col justify-between rounded-2xl border border-primary/20 bg-primary/10 p-4 sm:p-5">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <BarChart3 size={16} className="text-primary" /> Sinyal özeti
+                  </div>
+                  <div className="mt-5 space-y-4">
+                    {[
+                      ["Talep ivmesi", "Yükseliyor", "w-[82%]"],
+                      ["Rekabet yoğunluğu", "Düşük", "w-[34%]"],
+                      ["Kargo uygunluğu", "İyi", "w-[71%]"],
+                    ].map(([label, value, width]) => (
+                      <div key={label}>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">{label}</span>
+                          <span className="font-medium text-foreground">{value}</span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full rounded-full bg-primary ${width}`} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-6 flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-muted-foreground">
+                  <CircleDollarSign size={15} className="text-profit" />
+                  <span>İlk test bütçesi: <strong className="text-foreground">€420</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
