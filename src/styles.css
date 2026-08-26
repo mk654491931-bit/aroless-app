@@ -900,7 +900,6 @@ html, body, .premium-card, .glass {
 .amb-layer {
   position: absolute;
   transition: opacity 700ms ease;
-  will-change: transform;
 }
 
 .amb-aurora {
@@ -912,6 +911,7 @@ html, body, .premium-card, .glass {
   opacity: 0.55;
   filter: blur(78px);
   animation: aurora-swirl 26s ease-in-out infinite alternate;
+  will-change: transform;
   translate: calc(var(--px) * 34px) calc(var(--py) * 26px - var(--sy) * 60px);
 }
 html.light .amb-aurora { opacity: 0.32; }
@@ -927,6 +927,7 @@ html.palette-aurora .amb-aurora { opacity: 0.68; }
   left: -10vw; top: 4vh;
   background: radial-gradient(circle at 40% 40%, var(--brand) 0%, transparent 68%);
   animation: amb-float-a 22s ease-in-out infinite alternate;
+  will-change: transform;
   translate: calc(var(--px) * 60px) calc(var(--py) * 44px - var(--sy) * 120px);
 }
 .amb-blob-2 {
@@ -934,6 +935,7 @@ html.palette-aurora .amb-aurora { opacity: 0.68; }
   right: -8vw; bottom: -6vh;
   background: radial-gradient(circle at 60% 60%, var(--brand-2) 0%, transparent 68%);
   animation: amb-float-b 27s ease-in-out infinite alternate;
+  will-change: transform;
   translate: calc(var(--px) * -48px) calc(var(--py) * -36px + var(--sy) * 90px);
 }
 html.light .amb-blob { opacity: 0.26; }
@@ -957,6 +959,7 @@ html.palette-aurora .amb-blob { opacity: 0.6; }
   mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 5%, transparent 78%);
   opacity: 0.42;
   animation: grid-pan 30s linear infinite;
+  will-change: transform;
   translate: calc(var(--px) * -18px) calc(var(--py) * -14px + var(--sy) * 40px);
 }
 
@@ -969,6 +972,7 @@ html.palette-aurora .amb-blob { opacity: 0.6; }
   rotate: 14deg;
   opacity: 0.75;
   animation: beam-sweep 18s ease-in-out infinite alternate;
+  will-change: transform;
   translate: calc(var(--px) * 80px) calc(var(--sy) * -70px);
 }
 
@@ -1191,7 +1195,7 @@ html.palette-aurora .amb-swirl { opacity: 0.55; }
 .topbar {
   position: relative;
   z-index: 45;
-  backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(135%);
   background: linear-gradient(180deg,
     color-mix(in oklab, var(--brand) 10%, oklch(0 0 0 / 0.28)),
     oklch(0 0 0 / 0.14));
@@ -1283,7 +1287,7 @@ html.light .page-hero { border-color: oklch(0.25 0.04 265 / 0.1); }
 /* Let the animated background read through the app chrome */
 [data-sidebar="sidebar"] {
   background: color-mix(in oklab, var(--surface) 62%, transparent) !important;
-  backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(125%);
 }
 
 /* Scroll reveal (auth showcase) */
@@ -1325,10 +1329,12 @@ body {
   .topbar-inner {
     gap: 0.5rem;
     padding-inline: 0.625rem;
+    padding-left: max(0.625rem, env(safe-area-inset-left));
+    padding-right: max(0.625rem, env(safe-area-inset-right));
   }
 
   .topbar-actions {
-    max-width: calc(100vw - 7.25rem);
+    max-width: calc(100vw - 7.25rem - env(safe-area-inset-left) - env(safe-area-inset-right));
     padding-block: 0.125rem;
   }
 
