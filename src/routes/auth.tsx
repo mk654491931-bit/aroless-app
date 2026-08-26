@@ -214,6 +214,11 @@ function AuthPage() {
   const googleRipple = useRipples();
   const bioRipple = useRipples();
 
+  const getRedirectPath = () => {
+    const redirect = new URLSearchParams(window.location.search).get("redirect");
+    return redirect?.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+  };
+
   const startSignupFn = useServerFn(startEmailSignup);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
 
@@ -227,7 +232,7 @@ function AuthPage() {
       } catch {
         /* parmak izi kaydı girişi engellemez */
       }
-      if (!cancelled) nav({ to: "/" });
+      if (!cancelled) nav({ to: getRedirectPath() });
     })();
     return () => {
       cancelled = true;

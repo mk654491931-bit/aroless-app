@@ -29,6 +29,7 @@ import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { useAuth } from "@/hooks/use-auth";
 
 function NotFoundComponent() {
   return (
@@ -142,17 +143,24 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const chromeless = pathname.startsWith("/auth");
+  const { user } = useAuth();
+  const chromeless =
+    pathname.startsWith("/auth") ||
+    pathname === "/pricing" ||
+    pathname.startsWith("/legal") ||
+    (pathname === "/" && !user);
   const [lang, setLang] = useState<string>("en");
   useEffect(() => {
     initI18n();
     setLang(i18n.language ?? "en");
     setAutoLanguage(i18n.language);
+    document.documentElement.lang = (i18n.language ?? "en").slice(0, 2);
     // Dil değişince: DOM sözlüğünü değiştir, React ağacını tazele ve
     // AI/sunucu kaynaklı içerikleri yeni dilde yeniden çek.
     const onLang = (lng: string) => {
       setAutoLanguage(lng);
       setLang(lng);
+      document.documentElement.lang = lng.slice(0, 2);
       queryClient.invalidateQueries();
     };
     i18n.on("languageChanged", onLang);
@@ -225,7 +233,6 @@ function RootComponent() {
                 <AiDisclaimer />
               </div>
               <SiteFooter />
-
             </div>
           </div>
         </SidebarProvider>

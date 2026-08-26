@@ -1,5 +1,7 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { useAuth } from "@/hooks/use-auth";
 import { LockedPanel } from "@/components/upgrade-gate";
 import { PricingModal } from "@/components/pricing-modal";
 
@@ -9,10 +11,23 @@ import { PricingModal } from "@/components/pricing-modal";
  * Ürün Bulucu (ana sayfa) bu kapının dışındadır — ücretsiz kullanıma açıktır.
  */
 export function ProRouteGate({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, loading: authLoading } = useAuth();
   const { isPaid, isAdmin, loading } = useEntitlements();
   const [showPricing, setShowPricing] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      void navigate({
+        to: "/auth",
+        search: { redirect: `${location.pathname}${location.search}` },
+        replace: true,
+      });
+    }
+  }, [authLoading, location.pathname, location.search, navigate, user]);
+
+  if (authLoading || loading || !user) {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 text-center text-sm text-muted-foreground">
         Yükleniyor…
