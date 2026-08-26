@@ -20,7 +20,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { getVisitorId } from "@/lib/fingerprint";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { isDisposableEmail } from "@/lib/disposable-email";
-import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
+import {
+  startEmailSignup,
+  registerDeviceFingerprint,
+  verifyEmailSignup,
+} from "@/lib/signup.functions";
+import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
@@ -205,6 +210,13 @@ function AuthPage() {
   });
   const [turnstileToken, setTurnstileToken] = useState("");
   const [promoCode, setPromoCode] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpStep, setOtpStep] = useState(false);
+  const [referralCode] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase() ?? "",
+  );
 
   const legalOk = consent.terms && consent.kvkk;
   const cardRef = useRef<HTMLDivElement>(null);
@@ -220,7 +232,9 @@ function AuthPage() {
   };
 
   const startSignupFn = useServerFn(startEmailSignup);
+  const verifySignupFn = useServerFn(verifyEmailSignup);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
+  const claimReferralFn = useServerFn(claimReferral);
 
   useEffect(() => {
     if (!user) return;
@@ -280,6 +294,25 @@ function AuthPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (mode === "signup" && otpStep) {
+        setBusy("email");
+        const visitorId = await getVisitorId();
+        const res = await verifySignupFn({ data: { email, code: otpCode, visitorId } });
+        if (res.creditsBlocked) {
+          toast.warning(
+            "Bu cihaz veya IP üzerinden daha önce kayıt yapıldığı için başlangıç kredisi verilmedi.",
+          );
+        }
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        if (referralCode) {
+          const referral = await claimReferralFn({ data: { code: referralCode } });
+          if (referral.ok) toast.success(`Davet bonusu uygulandı · +${referral.credits} kredi`);
+        }
+        toast.success("E-posta doğrulandı. Hesabınız hazır.");
+        nav({ to: "/" });
+        return;
+      }
       if (mode === "signup") {
         if (!legalOk) {
           toast.error("Devam etmek için zorunlu yasal onayları işaretleyin.");
@@ -307,16 +340,8 @@ function AuthPage() {
           },
         });
 
-        if (res.creditsBlocked) {
-          toast.warning(
-            "Bu cihazda başlangıç kredisi daha önce tanımlandığı için yeniden verilmedi.",
-          );
-        }
-
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("Hesabınız hazır. Aramıza hoş geldiniz.");
-        nav({ to: "/" });
+        setOtpStep(true);
+        toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
         return;
       } else {
         setBusy("email");
@@ -534,7 +559,11 @@ function AuthPage() {
                       <button
                         key={m}
                         type="button"
-                        onClick={() => setMode(m)}
+                        onClick={() => {
+                          setMode(m);
+                          setOtpStep(false);
+                          setOtpCode("");
+                        }}
                         className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
                           mode === m
                             ? "text-primary-foreground"
@@ -592,7 +621,39 @@ function AuthPage() {
                   </div>
 
                   <form onSubmit={submit} className="space-y-3">
-                    <div className="flex items-center gap-2">
+                    {mode === "signup" && otpStep && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          {email} adresine gönderilen 6 haneli kodu girin.
+                        </p>
+                        <div className="neon-field relative">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                            required
+                            autoFocus
+                            placeholder="000000"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                            className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em]"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtpStep(false);
+                            setOtpCode("");
+                          }}
+                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                        >
+                          E-posta veya şifreyi değiştir
+                        </button>
+                      </div>
+                    )}
+                    {!otpStep && <div className="flex items-center gap-2">
                       <div
                         className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
                       >
@@ -602,6 +663,7 @@ function AuthPage() {
                           autoComplete="email"
                           placeholder="you@example.com"
                           value={email}
+                          disabled={otpStep}
                           onFocus={() => setFocusField("email")}
                           onBlur={() => setFocusField(null)}
                           onChange={(e) => setEmail(e.target.value)}
@@ -637,9 +699,9 @@ function AuthPage() {
                           className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
                         />
                       </button>
-                    </div>
+                    </div>}
 
-                    <div
+                    {!otpStep && <div
                       className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
                     >
                       <input
@@ -685,9 +747,9 @@ function AuthPage() {
                           ))}
                         </span>
                       )}
-                    </div>
+                    </div>}
 
-                    {mode === "signup" && password.length > 0 && (
+                    {!otpStep && mode === "signup" && password.length > 0 && (
                       <div
                         className={`neon-field relative ${focusField === "confirm" ? "is-focused" : ""}`}
                       >
@@ -712,7 +774,7 @@ function AuthPage() {
                         <p className="text-xs text-destructive">Şifreler birbiriyle eşleşmiyor.</p>
                       )}
 
-                    {mode === "signup" && password.length > 0 && (
+                    {!otpStep && mode === "signup" && password.length > 0 && (
                       <div className="flex items-center gap-2">
                         {[1, 2, 3, 4].map((i) => (
                           <span
@@ -730,7 +792,7 @@ function AuthPage() {
                       </div>
                     )}
 
-                    {mode === "signup" && (
+                    {!otpStep && mode === "signup" && (
                       <>
                         <div className="neon-field relative">
                           <input
@@ -766,7 +828,9 @@ function AuthPage() {
                           ? "Please wait…"
                           : mode === "signin"
                             ? "Sign in"
-                            : "Kayıt Ol"}
+                            : otpStep
+                              ? "E-postayı doğrula"
+                              : "Kayıt Ol"}
                         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </span>
                     </button>

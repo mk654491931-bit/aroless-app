@@ -6,7 +6,6 @@ import { Gift, Copy, Check, Users, Coins, Loader2 } from "lucide-react";
 import {
   getMyReferral,
   claimReferral,
-  REFERRED_BONUS,
   REFERRER_BONUS,
 } from "@/lib/referral.functions";
 
@@ -53,8 +52,8 @@ export function ReferralPanel() {
         <h2 className="font-semibold">Arkadaşını davet et</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Davet linkinle kayıt olan her kullanıcı için sana <b>+{REFERRER_BONUS} kredi</b>, ona{" "}
-        <b>+{REFERRED_BONUS} kredi</b>.
+        Davet linkinle kayıt olan her arkadaşın için <b>+{REFERRER_BONUS} kredi</b> kazanırsın.
+        En fazla 2 arkadaş davet edebilirsin.
       </p>
 
       {q.isLoading ? (

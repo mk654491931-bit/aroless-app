@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export const REFERRER_BONUS = 3;
-export const REFERRED_BONUS = 2;
+export const REFERRER_BONUS = 1;
+export const REFERRED_BONUS = 0;
 
 export type ReferralSummary = {
   code: string;
@@ -83,6 +83,12 @@ export const claimReferral = createServerFn({ method: "POST" })
         .maybeSingle();
       if (!referrer) return { ok: false, reason: "Kod bulunamadı." };
 
+      const { count } = await supabaseAdmin
+        .from("referral_events")
+        .select("id", { count: "exact", head: true })
+        .eq("referrer_id", referrer.id);
+      if ((count ?? 0) >= 2) return { ok: false, reason: "En fazla 2 arkadaş davet edebilirsin." };
+
       const { error: insErr } = await supabaseAdmin.from("referral_events").insert({
         referrer_id: referrer.id,
         referred_user_id: context.userId,
@@ -101,6 +107,6 @@ export const claimReferral = createServerFn({ method: "POST" })
         .update({ credits: (me.credits ?? 0) + REFERRED_BONUS, referred_by: referrer.id })
         .eq("id", context.userId);
 
-      return { ok: true, credits: REFERRED_BONUS };
+      return { ok: true, credits: REFERRER_BONUS };
     },
   );

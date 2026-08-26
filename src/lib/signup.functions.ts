@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isDisposableEmail } from "@/lib/disposable-email";
-import { applyFingerprintPolicy } from "@/lib/signup.server";
+import { applyFingerprintPolicy, generateOtp, hashOtp, sendOtpEmail } from "@/lib/signup.server";
 import { clientIp, hashIp, verifyTurnstile } from "@/lib/turnstile.server";
 import { getRequest } from "@tanstack/react-start/server";
 
@@ -79,7 +79,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: {
         marketing_opt_in: data.marketing,
         legal_accepted_at: new Date().toISOString(),
@@ -97,7 +97,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
         msg.includes("already") || msg.includes("registered") || msg.includes("exists");
       if (!exists) throw new Error(createError.message);
 
-      // Eski akıştan kalan, doğrulanmamış hesapları kurtar: onayla ve şifreyi tazele.
+      // Eski akıştan kalan doğrulanmamış hesabı yeniden kullan ve yeni kod gönder.
       const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
       const existing = list?.users?.find(
         (u) => u.email?.toLowerCase() === data.email.toLowerCase(),
@@ -108,7 +108,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       }
       const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(existing.id, {
         password: data.password,
-        email_confirm: true,
+        email_confirm: false,
       });
       if (updErr) throw new Error(updErr.message);
       userId = existing.id;
@@ -116,14 +116,19 @@ export const startEmailSignup = createServerFn({ method: "POST" })
 
     if (!userId) throw new Error("Hesap oluşturulamadı. Lütfen tekrar deneyin.");
 
-    const reused = await applyFingerprintPolicy(supabaseAdmin, {
-      visitorId: data.visitorId,
-      userId,
+    const code = generateOtp();
+    const { error: otpError } = await supabaseAdmin.from("email_otps").insert({
       email: data.email,
-      tier: "Free",
-      ipHash: await requestIpHash(),
-      source: "email_signup",
+      code_hash: await hashOtp(data.email, code),
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
     });
+    if (otpError) throw new Error("Doğrulama kodu oluşturulamadı. Lütfen tekrar deneyin.");
+    try {
+      await sendOtpEmail(data.email, code);
+    } catch (error) {
+      if (created?.user?.id) await supabaseAdmin.auth.admin.deleteUser(userId);
+      throw error;
+    }
 
     // Promosyon kodunu kalıcı olarak bağla ve kullanımı say.
     let promoDiscount = 0;
@@ -167,7 +172,50 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       console.error("[email] welcome send failed", e);
     }
 
-    return { ok: true as const, email: data.email, creditsBlocked: reused, promoDiscount };
+    return { ok: true as const, email: data.email, creditsBlocked: false, promoDiscount };
+  });
+
+export const verifyEmailSignup = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; code: string; visitorId?: string }) => {
+    const email = String(input?.email ?? "").trim().toLowerCase();
+    const code = String(input?.code ?? "").trim();
+    if (!email || !/^\d{6}$/.test(code)) throw new Error("6 haneli doğrulama kodunu girin.");
+    return { email, code, visitorId: String(input?.visitorId ?? "").slice(0, 128) };
+  })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: otp } = await supabaseAdmin
+      .from("email_otps")
+      .select("id, code_hash, attempts, expires_at")
+      .eq("email", data.email)
+      .is("consumed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!otp || new Date(otp.expires_at) <= new Date())
+      throw new Error("Kodun süresi dolmuş. Kayıt işlemini yeniden başlatın.");
+    if (otp.attempts >= 5) throw new Error("Çok fazla hatalı deneme. Yeni kod isteyin.");
+
+    if ((await hashOtp(data.email, data.code)) !== otp.code_hash) {
+      await supabaseAdmin.from("email_otps").update({ attempts: otp.attempts + 1 }).eq("id", otp.id);
+      throw new Error("Doğrulama kodu hatalı.");
+    }
+
+    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const user = list?.users?.find((candidate) => candidate.email?.toLowerCase() === data.email);
+    if (!user) throw new Error("Kayıt bulunamadı. Lütfen yeniden deneyin.");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: true });
+    if (error) throw new Error(error.message);
+    await supabaseAdmin.from("email_otps").update({ consumed_at: new Date().toISOString() }).eq("id", otp.id);
+    const creditsBlocked = await applyFingerprintPolicy(supabaseAdmin, {
+      visitorId: data.visitorId,
+      userId: user.id,
+      email: data.email,
+      tier: "Free",
+      ipHash: await requestIpHash(),
+      source: "email_signup",
+    });
+    return { ok: true as const, creditsBlocked };
   });
 
 /** Google ile giren kullanıcılar için cihaz parmak izini kaydeder. */
