@@ -120,7 +120,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
       radial-gradient(1200px 620px at 10% -12%, color-mix(in oklab, var(--brand) 30%, transparent), transparent 62%),
       radial-gradient(1000px 520px at 100% 0%, color-mix(in oklab, var(--brand-2) 26%, transparent), transparent 62%),
       radial-gradient(900px 600px at 50% 110%, color-mix(in oklab, var(--brand-2) 18%, transparent), transparent 60%);
-    background-attachment: fixed;
+    background-attachment: scroll;
     min-height: 100vh;
   }
 }
@@ -715,7 +715,7 @@ html.light.palette-aurora body {
 
 /* Palet geçişini yumuşat */
 html, body, .premium-card, .glass {
-  transition: background-color 0.5s ease, color 0.4s ease, border-color 0.4s ease;
+  transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 
@@ -1212,7 +1212,16 @@ html.light .topbar {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  overflow: hidden;
+  overflow: visible;
+}
+.topbar-actions {
+  max-width: min(70vw, 48rem);
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.topbar-actions::-webkit-scrollbar {
+  display: none;
 }
 .topbar-line {
   height: 1px;
@@ -1309,4 +1318,68 @@ html {
 }
 body {
   overflow-x: hidden;
+}
+
+/* Keep every topbar action available without forcing a narrow viewport wider. */
+@media (max-width: 639px) {
+  .topbar-inner {
+    gap: 0.5rem;
+    padding-inline: 0.625rem;
+  }
+
+  .topbar-actions {
+    max-width: calc(100vw - 7.25rem);
+    padding-block: 0.125rem;
+  }
+
+  .topbar-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .topbar-btn {
+    height: 2.25rem;
+    width: 2.25rem;
+  }
+}
+
+/* The ambient scene is decorative; keep content and interaction responsive. */
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  body {
+    background-attachment: scroll;
+  }
+
+  .amb-root {
+    perspective: none;
+  }
+
+  .amb-layer {
+    animation: none !important;
+  }
+
+  .amb-grid,
+  .amb-rays,
+  .amb-scan,
+  .amb-beam,
+  .amb-particles {
+    display: none;
+  }
+
+  .amb-swirl,
+  .amb-aurora,
+  .amb-blob {
+    filter: blur(32px);
+    opacity: 0.45;
+  }
+
+  .glass,
+  .premium-card,
+  [data-sidebar="sidebar"] {
+    backdrop-filter: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .amb-layer {
+    contain: paint;
+  }
 }
