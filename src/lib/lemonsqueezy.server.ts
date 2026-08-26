@@ -12,11 +12,14 @@ export function lemonEnv(plan: "Pro" | "Starter" | "Business" = "Pro"): LemonEnv
   const storeId = process.env["LEMON_SQUEEZY_STORE_ID"] || process.env["LEMONSQUEEZY_STORE_ID"];
   const perPlan =
     plan === "Starter"
-      ? process.env["LEMONSQUEEZY_STARTER_VARIANT_ID"]
+      ? process.env["LEMON_SQUEEZY_STARTER_VARIANT_ID"] ||
+        process.env["LEMONSQUEEZY_STARTER_VARIANT_ID"]
       : plan === "Business"
-        ? process.env["LEMONSQUEEZY_BUSINESS_VARIANT_ID"]
-        : process.env["LEMONSQUEEZY_PRO_VARIANT_ID"];
-  const variantId = perPlan || process.env["LEMON_SQUEEZY_VARIANT_ID"];
+        ? process.env["LEMON_SQUEEZY_BUSINESS_VARIANT_ID"] ||
+          process.env["LEMONSQUEEZY_BUSINESS_VARIANT_ID"]
+        : process.env["LEMON_SQUEEZY_PRO_VARIANT_ID"] || process.env["LEMONSQUEEZY_PRO_VARIANT_ID"];
+  const variantId =
+    perPlan || process.env["LEMON_SQUEEZY_VARIANT_ID"] || process.env["LEMONSQUEEZY_VARIANT_ID"];
   if (!apiKey || !storeId || !variantId) return null;
   return { apiKey, storeId, variantId };
 }
