@@ -57,17 +57,44 @@ export async function createLemonCheckout(opts: {
     },
   };
 
-  const resp = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
+  const headers = {
+    Accept: "application/vnd.api+json",
+    "Content-Type": "application/vnd.api+json",
+    Authorization: `Bearer ${env.apiKey}`,
+  };
+  let resp = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
     method: "POST",
-    headers: {
-      Accept: "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      Authorization: `Bearer ${env.apiKey}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
+
+  // Lemon returns the same 404 when a product ID is supplied as a variant ID.
+  // Resolve that common configuration mistake using the store's variants.
+  if (resp.status === 404) {
+    const variantsResp = await fetch(
+      `https://api.lemonsqueezy.com/v1/variants?filter[product_id]=${encodeURIComponent(env.variantId)}&filter[store_id]=${encodeURIComponent(env.storeId)}`,
+      { headers },
+    );
+    if (variantsResp.ok) {
+      const variants = (await variantsResp.json()) as {
+        data?: Array<{ id?: string }>;
+      };
+      const variant = variants.data?.find((item) => item.id);
+      if (variant?.id) {
+        body.data.relationships.variant.data.id = variant.id;
+        resp = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+      }
+    }
+  }
   if (!resp.ok) {
-    throw new Error(`Lemon Squeezy ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+    const detail = (await resp.text()).slice(0, 300);
+    throw new Error(
+      `Lemon Squeezy ${resp.status}: ${detail} (LEMON_SQUEEZY_VARIANT_ID, Lemon panelindeki Variant ID olmalı.)`,
+    );
   }
   const json = (await resp.json()) as { data?: { attributes?: { url?: string } } };
   const url = json.data?.attributes?.url;
