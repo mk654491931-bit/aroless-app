@@ -98,10 +98,11 @@ export const claimReferral = createServerFn({ method: "POST" })
       });
       if (insErr) return { ok: false, reason: "Davet kaydedilemedi." };
 
-      await supabaseAdmin
-        .from("profiles")
-        .update({ credits: (referrer.credits ?? 0) + REFERRER_BONUS })
-        .eq("id", referrer.id);
+      const { error: creditError } = await supabaseAdmin.rpc("increment_profile_credits", {
+        _profile_id: referrer.id,
+        _amount: REFERRER_BONUS,
+      });
+      if (creditError) return { ok: false, reason: "Davet bonusu uygulanamadı." };
       await supabaseAdmin
         .from("profiles")
         .update({ credits: (me.credits ?? 0) + REFERRED_BONUS, referred_by: referrer.id })

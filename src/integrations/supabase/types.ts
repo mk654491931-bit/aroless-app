@@ -1045,6 +1045,14 @@ export type Database = {
         Args: { _bucket: string; _limit: number; _window_seconds: number }
         Returns: boolean
       }
+      increment_profile_credits: {
+        Args: { _amount: number; _profile_id: string }
+        Returns: undefined
+      }
+      lock_signup_fingerprint: {
+        Args: { lock_key: string }
+        Returns: undefined
+      }
       deduct_credit: { Args: never; Returns: number }
       deduct_sim_credit: { Args: never; Returns: number }
       gen_public_id: { Args: never; Returns: string }

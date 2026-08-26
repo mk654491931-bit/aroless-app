@@ -99,6 +99,17 @@ export async function applyFingerprintPolicy(
 ): Promise<boolean> {
   if (!args.visitorId && !args.ipHash) return false;
 
+  const lockKeys = [
+    args.visitorId ? `visitor:${args.visitorId}` : null,
+    args.ipHash ? `ip:${args.ipHash}` : null,
+  ]
+    .filter((key): key is string => !!key)
+    .sort();
+  for (const key of lockKeys) {
+    const { error: lockError } = await admin.rpc("lock_signup_fingerprint", { lock_key: key });
+    if (lockError) throw new Error("Kayıt güvenlik kontrolü tamamlanamadı.");
+  }
+
   // Aynı cihaz parmak izi VEYA aynı IP üzerinden açılmış başka bir hesap var mı?
   const [byDevice, byIp] = await Promise.all([
     args.visitorId
