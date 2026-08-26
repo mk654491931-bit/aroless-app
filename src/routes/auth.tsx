@@ -23,7 +23,7 @@ import { isDisposableEmail } from "@/lib/disposable-email";
 import { startEmailSignup, registerDeviceFingerprint } from "@/lib/signup.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
-import { isManagedHost, oauthRedirectUrl } from "@/lib/runtime-env";
+import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -345,23 +345,7 @@ function AuthPage() {
 
   const google = async () => {
     setBusy("google");
-    if (!isManagedHost()) {
-      await googleDirect();
-      return;
-    }
-
-    try {
-      const { lovable } = await import("@/integrations/lovable");
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: oauthRedirectUrl(),
-      });
-      if (result?.error) throw result.error;
-      if (!("redirected" in (result ?? {})) || !result?.redirected) {
-        nav({ to: "/" });
-      }
-    } catch (err) {
-      await googleDirect(err);
-    }
+    await googleDirect();
   };
 
   return (
