@@ -13,6 +13,7 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     if (!ctx) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
     let raf = 0;
     let w = 0;
     let h = 0;
@@ -42,7 +43,7 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
       mouse.current.x = e.clientX / window.innerWidth;
       mouse.current.y = e.clientY / window.innerHeight;
     };
-    window.addEventListener("mousemove", onMove);
+    if (!coarse) window.addEventListener("mousemove", onMove);
 
     let t = 0;
     const draw = () => {
@@ -86,14 +87,25 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
         ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.4), 0, Math.PI * 2);
         ctx.fill();
       }
-      raf = requestAnimationFrame(draw);
+      if (!reduce && !coarse && !document.hidden) raf = requestAnimationFrame(draw);
     };
     draw();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      } else if (!reduce && !coarse && !raf) {
+        raf = requestAnimationFrame(draw);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", onMove);
+      if (!coarse) window.removeEventListener("mousemove", onMove);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 

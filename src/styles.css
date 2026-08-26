@@ -118,8 +118,7 @@ html.light [class*="text-white/"] { color: oklch(0.35 0.03 265 / 0.85) !importan
     font-family: var(--font-sans);
     background-image:
       radial-gradient(1200px 620px at 10% -12%, color-mix(in oklab, var(--brand) 30%, transparent), transparent 62%),
-      radial-gradient(1000px 520px at 100% 0%, color-mix(in oklab, var(--brand-2) 26%, transparent), transparent 62%),
-      radial-gradient(900px 600px at 50% 110%, color-mix(in oklab, var(--brand-2) 18%, transparent), transparent 60%);
+      radial-gradient(1000px 520px at 100% 0%, color-mix(in oklab, var(--brand-2) 22%, transparent), transparent 62%);
     background-attachment: scroll;
     min-height: 100vh;
   }
@@ -1373,15 +1372,22 @@ body {
   .amb-swirl,
   .amb-aurora,
   .amb-blob {
-    filter: blur(32px);
-    opacity: 0.45;
+    filter: blur(24px);
+    opacity: 0.32;
   }
+
+  .amb-root { opacity: 0.7; }
 
   .glass,
   .premium-card,
   [data-sidebar="sidebar"] {
     backdrop-filter: none;
   }
+}
+
+@media (pointer: coarse) {
+  .amb-root { opacity: 0.62; }
+  .amb-swirl, .amb-rays, .amb-scan, .amb-beam, .amb-grid, .amb-particles { display: none; }
 }
 
 @media (min-width: 768px) {
