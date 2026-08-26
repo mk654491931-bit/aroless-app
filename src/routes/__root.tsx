@@ -194,12 +194,12 @@ function RootComponent() {
       <DeviceGuard />
       {chromeless ? (
         <>
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-[var(--surface)]/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-(--surface)/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
             <LanguageSwitcher />
             <PaletteToggle />
             <ThemeToggle />
           </div>
-          <div key={`${pathname}|${lang}`} className="page-fade">
+          <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
             <Outlet />
           </div>
         </>
@@ -207,7 +207,7 @@ function RootComponent() {
         <SidebarProvider defaultOpen={false}>
           <div className="flex min-h-screen w-full">
             <AppSidebar />
-            <div className="flex-1 min-w-0">
+            <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
               {pathname !== "/" && <AppTopbar />}
               {pathname === "/" && (
                 <>
@@ -215,10 +215,10 @@ function RootComponent() {
                     <PaletteToggle />
                     <ThemeToggle />
                   </div>
-                  <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-[var(--surface)]/90 backdrop-blur hover:bg-white/10" />
+                  <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-(--surface)/90 backdrop-blur hover:bg-white/10" />
                 </>
               )}
-              <div key={`${pathname}|${lang}`} className="page-fade">
+              <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
                 <Outlet />
               </div>
               <div className="mx-auto w-full max-w-6xl px-4 md:px-6">

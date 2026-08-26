@@ -58,7 +58,7 @@ export function AppTopbar() {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5">
           {publicId ? (
             <span
               className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[11px] text-muted-foreground lg:inline-flex"

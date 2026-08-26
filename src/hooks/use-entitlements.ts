@@ -5,7 +5,7 @@ import { getFullProfile } from "@/lib/analysis.functions";
 import { checkIsAdmin } from "@/lib/admin.functions";
 import { tierLevel, quotaFor } from "@/lib/plans";
 
-const ADMIN_EMAIL = "omnic.111111@gmail.com";
+const ADMIN_EMAILS = new Set(["omnic.111111@gmail.com", "mk654491931@gmail.com"]);
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 /** Ücretsiz kullanıcıya açık modül grupları. */
 export const FREE_GROUPS = ["library"];
@@ -50,7 +50,7 @@ export function useEntitlements(): Entitlements {
   );
   const isAdmin =
     !!(adminQ.data as { isAdmin?: boolean } | undefined)?.isAdmin ||
-    user?.email?.toLowerCase() === ADMIN_EMAIL;
+    !!user?.email && ADMIN_EMAILS.has(user.email.toLowerCase());
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);

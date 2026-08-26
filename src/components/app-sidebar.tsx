@@ -244,7 +244,7 @@ export function AppSidebar() {
     return (
       <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
         <Link to={item.url} className="hover:bg-white/5">
-          <item.icon className="h-4 w-4 text-[var(--accent-active)]" />
+          <item.icon className="h-4 w-4 text-accent-active" />
           {!iconOnly && <span className="text-xs">{tooltip}</span>}
         </Link>
       </SidebarMenuButton>
@@ -271,7 +271,7 @@ export function AppSidebar() {
         {!collapsed && !isPaid && !isAdmin && (
           <button
             onClick={() => setShowPricing(true)}
-            className="mx-3 mb-2 rounded-xl border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-2 text-left text-[10px] font-semibold text-[var(--accent-active)]"
+            className="mx-3 mb-2 rounded-xl border border-(--accent-active)/30 bg-(--accent-active)/10 px-3 py-2 text-left text-[10px] font-semibold text-accent-active"
           >
             🔒 Ücretsiz plan: tek seferlik 2 hoş geldin kredisi · sadece Ürün Bulucu · PRO ile 14'lü
             AI Konsey ve tüm modüller
