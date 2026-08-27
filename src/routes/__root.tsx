@@ -30,6 +30,7 @@ import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { useAuth } from "@/hooks/use-auth";
+import { PricingModal } from "@/components/pricing-modal";
 
 function NotFoundComponent() {
   return (
@@ -144,6 +145,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user } = useAuth();
+  const [showPricing, setShowPricing] = useState(false);
   const chromeless =
     pathname.startsWith("/auth") ||
     pathname === "/pricing" ||
@@ -214,7 +216,7 @@ function RootComponent() {
       ) : (
         <SidebarProvider defaultOpen={false}>
           <div className="flex min-h-screen w-full">
-            <AppSidebar />
+            <AppSidebar onUpgrade={() => setShowPricing(true)} />
             <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
               {pathname !== "/" && <AppTopbar />}
               {pathname === "/" && (
@@ -238,6 +240,7 @@ function RootComponent() {
         </SidebarProvider>
       )}
 
+      <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
       <CookieBanner />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>

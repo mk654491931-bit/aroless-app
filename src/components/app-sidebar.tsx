@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -13,7 +12,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
-import { PricingModal } from "@/components/pricing-modal";
 import {
   Package,
   Coins,
@@ -212,14 +210,13 @@ const GROUPS: {
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
   const { t } = useTranslation();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const iconOnly = collapsed && !isMobile;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { isPaid, isAdmin, quota } = useEntitlements();
-  const [showPricing, setShowPricing] = useState(false);
 
   const unlocked = isPaid || isAdmin;
   const itemLocked = (item: Item) => !unlocked && !FREE_ITEMS.includes(item.key);
@@ -229,7 +226,10 @@ export function AppSidebar() {
       return (
         <SidebarMenuButton
           tooltip={`${tooltip} — PRO`}
-          onClick={() => setShowPricing(true)}
+          onClick={() => {
+            setOpenMobile(false);
+            onUpgrade();
+          }}
           className="opacity-60 hover:opacity-100"
         >
           <item.icon className="h-4 w-4 text-muted-foreground" />
@@ -271,7 +271,10 @@ export function AppSidebar() {
         </Link>
         {!iconOnly && !isPaid && !isAdmin && (
           <button
-            onClick={() => setShowPricing(true)}
+            onClick={() => {
+              setOpenMobile(false);
+              onUpgrade();
+            }}
             className="mx-3 mb-2 rounded-xl border border-(--accent-active)/30 bg-(--accent-active)/10 px-3 py-2 text-left text-[10px] font-semibold text-accent-active"
           >
             🔒 Ücretsiz plan: tek seferlik 2 hoş geldin kredisi · sadece Ürün Bulucu · PRO ile 14'lü
@@ -318,7 +321,6 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
     </Sidebar>
   );
 }

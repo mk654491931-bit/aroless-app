@@ -23,6 +23,12 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   // Kayıt sırasında girilen promosyon kodunu otomatik uygula.
   useEffect(() => {
     if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
     let cancelled = false;
     (async () => {
       try {
@@ -37,8 +43,10 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     })();
     return () => {
       cancelled = true;
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, myPromoFn]);
+  }, [open, myPromoFn, onClose]);
 
   if (!open) return null;
 
@@ -89,11 +97,14 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pricing-modal-title"
+      className="fixed inset-0 z-[100] flex min-h-dvh items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="glass relative max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl p-4 md:max-h-[calc(100dvh-4rem)] md:p-8"
+        className="glass relative h-full max-h-dvh w-full overflow-y-auto rounded-none p-4 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-6xl sm:rounded-2xl md:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -106,7 +117,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-300">
             <Sparkles size={12} /> Lansmana özel · 1 hafta %50 indirim
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold">
+          <h2 id="pricing-modal-title" className="text-2xl md:text-3xl font-bold">
             Upgrade your <span className="text-gradient">edge</span>
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
