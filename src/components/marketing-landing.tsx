@@ -144,7 +144,24 @@ const DEMOS = [
 
 export function MarketingLanding() {
   const [demoIndex, setDemoIndex] = useState(0);
+  const [niche, setNiche] = useState("");
+  const [demoContext, setDemoContext] = useState("Ev yaşam");
   const demo = DEMOS[demoIndex];
+
+  const applyNiche = (value: string) => {
+    const next = value.trim();
+    if (!next) return;
+    setNiche(next);
+    const match = DEMOS.findIndex((item) =>
+      item.label.toLocaleLowerCase("tr").includes(next.toLocaleLowerCase("tr")),
+    );
+    if (match >= 0) {
+      setDemoIndex(match);
+      setDemoContext(DEMOS[match].label);
+    } else {
+      setDemoContext(next);
+    }
+  };
 
   return (
     <div className="relative min-h-screen">
@@ -201,6 +218,12 @@ export function MarketingLanding() {
           >
             Ücretsiz başla <ArrowRight size={16} />
           </Link>
+          <a
+            href="#demo"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
+          >
+            Nişini test et <Search size={16} />
+          </a>
           <Link
             to="/pricing"
             className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
@@ -234,18 +257,77 @@ export function MarketingLanding() {
           ))}
         </div>
 
-        <div className="mx-auto mt-12 max-w-5xl text-left">
+        <div id="demo" className="mx-auto mt-12 max-w-5xl scroll-mt-24 text-left">
           <div className="glass overflow-hidden rounded-3xl border-white/15 shadow-2xl shadow-black/20">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2 text-xs font-semibold text-foreground/90">
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary/15 text-primary">
                   <ScanSearch size={14} />
                 </span>
-                Fırsat taraması
+                Fırsat taraması · {demoContext}
               </div>
               <span className="inline-flex items-center gap-1.5 text-[11px] text-profit">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-profit" /> Canlı analiz
               </span>
+            </div>
+            <div className="border-b border-white/10 bg-white/[0.025] px-4 py-4 sm:px-6">
+              <form
+                className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  applyNiche(niche);
+                }}
+              >
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="landing-niche" className="text-xs font-semibold text-foreground">
+                    Kendi nişinle önizle
+                  </label>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Bir kategori yaz veya aşağıdaki hazır örneklerden birini seç.
+                  </p>
+                  <div className="relative mt-2">
+                    <Search
+                      size={15}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                      id="landing-niche"
+                      value={niche}
+                      onChange={(event) => setNiche(event.target.value)}
+                      placeholder="Örn. evcil hayvan, güzellik, outdoor"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-black/10 pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+                >
+                  Önizlemeyi güncelle <ArrowRight size={15} />
+                </button>
+              </form>
+              <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Hızlı niş seçimi">
+                <span className="mr-1 text-[11px] text-muted-foreground">Hızlı seçim:</span>
+                {DEMOS.map((item, index) => (
+                  <button
+                    key={`quick-${item.label}`}
+                    type="button"
+                    onClick={() => {
+                      setNiche(item.label);
+                      setDemoIndex(index);
+                      setDemoContext(item.label);
+                    }}
+                    className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-[11px] text-muted-foreground" aria-live="polite">
+                {demoContext === demo.label
+                  ? `${demoContext} için seçilmiş örnek fırsatı inceliyorsun.`
+                  : `${demoContext} için kişisel bir tarama başlatmaya hazırsın.`}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3 sm:px-6">
               <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -274,10 +356,15 @@ export function MarketingLanding() {
                     <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                       Kazanan aday
                     </p>
-                    <h3 key={demo.product} className="mt-2 animate-rise-in text-xl font-bold sm:text-2xl">
+                    <h3
+                      key={demo.product}
+                      className="mt-2 animate-rise-in text-xl font-bold sm:text-2xl"
+                    >
                       {demo.product}
                     </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{demo.platform} · {demo.country}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {demo.platform} · {demo.country}
+                    </p>
                   </div>
                   <div className="shrink-0 rounded-2xl border border-profit/30 bg-profit/10 px-3 py-2 text-center">
                     <div className="text-2xl font-extrabold text-profit">{demo.score}</div>
@@ -316,7 +403,9 @@ export function MarketingLanding() {
                 </div>
                 <div className="mt-6 flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-muted-foreground">
                   <CircleDollarSign size={15} className="text-profit" />
-                  <span>İlk test bütçesi: <strong className="text-foreground">{demo.budget}</strong></span>
+                  <span>
+                    İlk test bütçesi: <strong className="text-foreground">{demo.budget}</strong>
+                  </span>
                 </div>
               </div>
             </div>
