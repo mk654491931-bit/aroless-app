@@ -16,6 +16,7 @@ Not: `npm install` sırasında `@lovable.dev/*` paketleri `optionalDependencies`
 ## 2) Senin gireceğin `.env` değerleri (tek tek)
 
 **Zorunlu — Supabase (backend)**
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
@@ -24,15 +25,18 @@ Not: `npm install` sırasında `@lovable.dev/*` paketleri `optionalDependencies`
 - `SUPABASE_SERVICE_ROLE_KEY` (admin paneli, kayıt akışı, ücretsiz kredi denetimi bunu kullanıyor — olmadan signup ve admin çalışmaz)
 
 **Zorunlu değil ama AI özellikleri için gerekli (en az bir sağlayıcı)**
+
 - `GEMINI_1_API_KEY`, `GEMINI_2_API_KEY`, `GEMINI_3_API_KEY`
 - `GROQ_API_KEY`, `GROQ_API_KEY_2`
 - `OPENROUTER_API_KEY1`, `OPENROUTER_API_KEY2`
 - `HUGGING_FACE_API_KEY1`, `HUGGING_FACE_API_KEY2`
 
 **Opsiyonel — kendi AI ağ geçidin (OpenAI uyumlu)**
+
 - `AI_GATEWAY_URL`, `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODELS`
 
 **Opsiyonel — e-posta ve bot koruması**
+
 - `RESEND_API_KEY` (+ istersen `RESEND_API_KEY_2`, `RESEND_API_KEY_3`, `RESEND_FROM_EMAIL`) — boşsa OTP e-postası gönderilmez
 - `VITE_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` — boşsa captcha devre dışı
 

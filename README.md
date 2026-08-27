@@ -39,23 +39,23 @@ Uygulama `supabase.auth.signInWithOAuth` kullanır — hiçbir üçüncü parti 
 
 Aşağıdakiler `.env`'de boş bırakılırsa özellik otomatik devre dışı kalır, uygulama çalışmaya devam eder:
 
-| Değişken | Etki |
-| --- | --- |
+| Değişken                                               | Etki                                                              |
+| ------------------------------------------------------ | ----------------------------------------------------------------- |
 | `GEMINI_*`, `GROQ_*`, `OPENROUTER_*`, `HUGGING_FACE_*` | AI motorları (havuz hâlinde sırayla döner, rate-limit'e takılmaz) |
-| `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY` | Ek OpenAI uyumlu ağ geçidi (yedek motor) |
-| `RESEND_API_KEY` | E-posta gönderimi |
-| `VITE_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | Bot koruması |
+| `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY`                | Ek OpenAI uyumlu ağ geçidi (yedek motor)                          |
+| `RESEND_API_KEY`                                       | E-posta gönderimi                                                 |
+| `VITE_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`     | Bot koruması                                                      |
 
 En az bir AI anahtarı önerilir; hiçbiri yoksa AI özellikleri hata yerine "yapılandırılmadı" uyarısı verir.
 
 ## Komutlar
 
-| Komut | Açıklama |
-| --- | --- |
-| `npm run dev` | Geliştirme sunucusu (8080) |
-| `npm run build` | Üretim derlemesi |
+| Komut             | Açıklama                   |
+| ----------------- | -------------------------- |
+| `npm run dev`     | Geliştirme sunucusu (8080) |
+| `npm run build`   | Üretim derlemesi           |
 | `npm run preview` | Derlemeyi yerelde çalıştır |
-| `npm run lint` | ESLint |
+| `npm run lint`    | ESLint                     |
 
 ## GitHub Codespaces
 
@@ -73,11 +73,11 @@ ortam değişkenleri hedef platformun secret ekranına girilir. Sabit domain yaz
 hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üzerinden
 üretilir.
 
-| Hedef | Adımlar |
-| --- | --- |
-| Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir) |
-| Node sunucu / VPS | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
-| Lovable | Publish butonu; env değerleri proje secret'larından okunur |
+| Hedef              | Adımlar                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir)           |
+| Node sunucu / VPS  | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
+| Lovable            | Publish butonu; env değerleri proje secret'larından okunur                                                  |
 
 Notlar:
 

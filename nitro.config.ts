@@ -4,5 +4,5 @@
 // causing 502 / Internal server error responses on SSR.
 export default {
   compatibilityDate: "2025-07-13",
-  preset: "vercel"
+  preset: "vercel",
 };

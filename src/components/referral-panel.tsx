@@ -3,11 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Gift, Copy, Check, Users, Coins, Loader2 } from "lucide-react";
-import {
-  getMyReferral,
-  claimReferral,
-  REFERRER_BONUS,
-} from "@/lib/referral.functions";
+import { getMyReferral, claimReferral, REFERRER_BONUS } from "@/lib/referral.functions";
 
 export function ReferralPanel() {
   const summaryFn = useServerFn(getMyReferral);
@@ -52,8 +48,8 @@ export function ReferralPanel() {
         <h2 className="font-semibold">Arkadaşını davet et</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Davet linkinle kayıt olan her arkadaşın için <b>+{REFERRER_BONUS} kredi</b> kazanırsın.
-        En fazla 2 arkadaş davet edebilirsin.
+        Davet linkinle kayıt olan her arkadaşın için <b>+{REFERRER_BONUS} kredi</b> kazanırsın. En
+        fazla 2 arkadaş davet edebilirsin.
       </p>
 
       {q.isLoading ? (

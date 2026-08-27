@@ -49,8 +49,7 @@ export default defineConfig(async ({ command, mode }) => {
       try {
         const mod: Record<string, unknown> = await import(/* @vite-ignore */ spec);
         const factory = (mod["hmrGatePlugin"] ?? mod["devServerBridgePlugin"]) as
-          | ((opts?: unknown) => PluginOption)
-          | undefined;
+          ((opts?: unknown) => PluginOption) | undefined;
         if (factory) plugins.push(factory({}));
       } catch {
         // not installed → skip
@@ -93,7 +92,13 @@ export default defineConfig(async ({ command, mode }) => {
       port: 8080,
       ...(isSandbox ? { strictPort: true, hmr: { overlay: false } } : {}),
       watch: {
-        ignored: ["**/.workspace/**", "**/.agents/**", "**/.claude/**", "**/.lovable/**", "**/.tanstack/tmp/**"],
+        ignored: [
+          "**/.workspace/**",
+          "**/.agents/**",
+          "**/.claude/**",
+          "**/.lovable/**",
+          "**/.tanstack/tmp/**",
+        ],
       },
     },
     plugins,

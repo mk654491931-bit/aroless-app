@@ -50,7 +50,7 @@ export function useEntitlements(): Entitlements {
   );
   const isAdmin =
     !!(adminQ.data as { isAdmin?: boolean } | undefined)?.isAdmin ||
-    !!user?.email && ADMIN_EMAILS.has(user.email.toLowerCase());
+    (!!user?.email && ADMIN_EMAILS.has(user.email.toLowerCase()));
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);

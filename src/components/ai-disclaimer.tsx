@@ -6,13 +6,7 @@ import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
  * AI üretimli her rapor/kart/panel altında gösterilen sade yasal uyarı.
  * Görünür ama dikkat dağıtmayan (muted) bir dipnot olarak tasarlandı.
  */
-export function AiDisclaimer({
-  className,
-  icon = true,
-}: {
-  className?: string;
-  icon?: boolean;
-}) {
+export function AiDisclaimer({ className, icon = true }: { className?: string; icon?: boolean }) {
   return (
     <p
       role="note"

@@ -450,11 +450,7 @@ export function CommandCenter() {
                           {AGENT_META[a.agent_id].desc}
                         </div>
                         <div className="mt-auto flex items-center justify-between gap-1 border-t border-border/40 pt-1.5 font-mono text-[10px]">
-                          <span
-                            className={cn(
-                              a.score < 40 ? "text-destructive" : "text-[--ai]",
-                            )}
-                          >
+                          <span className={cn(a.score < 40 ? "text-destructive" : "text-[--ai]")}>
                             {st === "processing" ? "··" : `${a.score}/100`}
                           </span>
                           <span className="text-muted-foreground">conf {a.confidence_level}%</span>

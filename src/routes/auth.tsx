@@ -215,7 +215,7 @@ function AuthPage() {
   const [referralCode] = useState(() =>
     typeof window === "undefined"
       ? ""
-      : new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase() ?? "",
+      : (new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase() ?? ""),
   );
 
   const legalOk = consent.terms && consent.kvkk;
@@ -653,101 +653,108 @@ function AuthPage() {
                         </button>
                       </div>
                     )}
-                    {!otpStep && <div className="flex items-center gap-2">
+                    {!otpStep && (
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
+                        >
+                          <input
+                            type="email"
+                            required
+                            autoComplete="email"
+                            placeholder="you@example.com"
+                            value={email}
+                            disabled={otpStep}
+                            onFocus={() => setFocusField("email")}
+                            onBlur={() => setFocusField(null)}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="inp w-full bg-transparent py-3 text-sm"
+                          />
+                          {focusField === "email" && (
+                            <span aria-hidden className="field-particles">
+                              {[0, 1, 2, 3, 4].map((i) => (
+                                <i
+                                  key={i}
+                                  style={{
+                                    animationDelay: `${i * 0.18}s`,
+                                    left: `${12 + i * 18}%`,
+                                  }}
+                                />
+                              ))}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Multi-biometric field */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            bioRipple.spawn(e);
+                            toast.info("Biometric sign-in is coming to Enterprise tier.");
+                          }}
+                          aria-label="Biometric sign in (fingerprint / face)"
+                          className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
+                        >
+                          {bioRipple.layer}
+                          <Fingerprint
+                            className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+                          />
+                          <ScanFace
+                            className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
+                    {!otpStep && (
                       <div
-                        className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
+                        className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
                       >
                         <input
-                          type="email"
+                          type={showPw ? "text" : "password"}
                           required
-                          autoComplete="email"
-                          placeholder="you@example.com"
-                          value={email}
-                          disabled={otpStep}
-                          onFocus={() => setFocusField("email")}
+                          minLength={6}
+                          autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                          placeholder="Password (min. 6 characters)"
+                          value={password}
+                          onFocus={() => setFocusField("password")}
                           onBlur={() => setFocusField(null)}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="inp w-full bg-transparent py-3 text-sm"
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="inp w-full bg-transparent py-3 pr-24 text-sm"
                         />
-                        {focusField === "email" && (
+                        <span
+                          aria-hidden
+                          className="holo-badge absolute right-11 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
+                        >
+                          PREMIUM
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPw((v) => !v)}
+                          aria-label={showPw ? "Hide password" : "Show password"}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {showPw ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <span className="relative inline-flex">
+                              <Eye className="h-4 w-4" />
+                              <span aria-hidden className="pupil" />
+                            </span>
+                          )}
+                        </button>
+                        {focusField === "password" && (
                           <span aria-hidden className="field-particles">
                             {[0, 1, 2, 3, 4].map((i) => (
                               <i
                                 key={i}
-                                style={{ animationDelay: `${i * 0.18}s`, left: `${12 + i * 18}%` }}
+                                style={{ animationDelay: `${i * 0.18}s`, left: `${10 + i * 17}%` }}
                               />
                             ))}
                           </span>
                         )}
                       </div>
-
-                      {/* Multi-biometric field */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          bioRipple.spawn(e);
-                          toast.info("Biometric sign-in is coming to Enterprise tier.");
-                        }}
-                        aria-label="Biometric sign in (fingerprint / face)"
-                        className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
-                      >
-                        {bioRipple.layer}
-                        <Fingerprint
-                          className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                        />
-                        <ScanFace
-                          className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                        />
-                      </button>
-                    </div>}
-
-                    {!otpStep && <div
-                      className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
-                    >
-                      <input
-                        type={showPw ? "text" : "password"}
-                        required
-                        minLength={6}
-                        autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                        placeholder="Password (min. 6 characters)"
-                        value={password}
-                        onFocus={() => setFocusField("password")}
-                        onBlur={() => setFocusField(null)}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="inp w-full bg-transparent py-3 pr-24 text-sm"
-                      />
-                      <span
-                        aria-hidden
-                        className="holo-badge absolute right-11 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
-                      >
-                        PREMIUM
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        aria-label={showPw ? "Hide password" : "Show password"}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {showPw ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <span className="relative inline-flex">
-                            <Eye className="h-4 w-4" />
-                            <span aria-hidden className="pupil" />
-                          </span>
-                        )}
-                      </button>
-                      {focusField === "password" && (
-                        <span aria-hidden className="field-particles">
-                          {[0, 1, 2, 3, 4].map((i) => (
-                            <i
-                              key={i}
-                              style={{ animationDelay: `${i * 0.18}s`, left: `${10 + i * 17}%` }}
-                            />
-                          ))}
-                        </span>
-                      )}
-                    </div>}
+                    )}
 
                     {!otpStep && mode === "signup" && password.length > 0 && (
                       <div

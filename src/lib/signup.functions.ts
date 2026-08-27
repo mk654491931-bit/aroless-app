@@ -177,7 +177,9 @@ export const startEmailSignup = createServerFn({ method: "POST" })
 
 export const verifyEmailSignup = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; code: string; visitorId?: string }) => {
-    const email = String(input?.email ?? "").trim().toLowerCase();
+    const email = String(input?.email ?? "")
+      .trim()
+      .toLowerCase();
     const code = String(input?.code ?? "").trim();
     if (!email || !/^\d{6}$/.test(code)) throw new Error("6 haneli doğrulama kodunu girin.");
     return { email, code, visitorId: String(input?.visitorId ?? "").slice(0, 128) };
@@ -197,16 +199,24 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
     if (otp.attempts >= 5) throw new Error("Çok fazla hatalı deneme. Yeni kod isteyin.");
 
     if ((await hashOtp(data.email, data.code)) !== otp.code_hash) {
-      await supabaseAdmin.from("email_otps").update({ attempts: otp.attempts + 1 }).eq("id", otp.id);
+      await supabaseAdmin
+        .from("email_otps")
+        .update({ attempts: otp.attempts + 1 })
+        .eq("id", otp.id);
       throw new Error("Doğrulama kodu hatalı.");
     }
 
     const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     const user = list?.users?.find((candidate) => candidate.email?.toLowerCase() === data.email);
     if (!user) throw new Error("Kayıt bulunamadı. Lütfen yeniden deneyin.");
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: true });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      email_confirm: true,
+    });
     if (error) throw new Error(error.message);
-    await supabaseAdmin.from("email_otps").update({ consumed_at: new Date().toISOString() }).eq("id", otp.id);
+    await supabaseAdmin
+      .from("email_otps")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", otp.id);
     const creditsBlocked = await applyFingerprintPolicy(supabaseAdmin, {
       visitorId: data.visitorId,
       userId: user.id,

@@ -10,6 +10,7 @@ Tüm site tarandı. Tip kontrolü temiz, tüm sayfalarda meta etiketleri mevcut.
 - kredi sistemini tamamen atlayarak ücretli modülleri bedava kullanabilir.
 
 Yapılacak:
+
 - Bu uçları oturum zorunlu hale getirmek (webhook'lar ve gerçekten herkese açık olması gereken `fx` / `hot-products` hariç).
 - Uygulama içi çağrıları oturumlu sunucu fonksiyonlarına taşımak, böylece kredi düşümü sunucu tarafında garanti altına alınır.
 - Kalan açık uçlara IP başına oran sınırı (rate limit) ve istek gövdesi boyut sınırı eklemek.
@@ -19,6 +20,7 @@ Yapılacak:
 RLS açık ama hiç politikası olmayan 3 tablo var: `ai_cache`, `device_fingerprints`, `email_otps`. Şu an bunlar yalnızca sunucu tarafından okunuyor; niyetin bu olduğunu kalıcı hale getirmek için açık "yalnızca servis" politikaları ve doğru GRANT'ler yazılacak, denetim uyarıları temizlenecek.
 
 Ayrıca:
+
 - `promo_codes`: kullanıcı tarafında kod doğrulaması yapılıyorsa yalnızca aktif/süresi geçmemiş kodları gösteren dar bir okuma politikası; yapılmıyorsa sunucu tarafı doğrulamanın teyidi.
 - `promo_redemptions`: kullanım kaydının sunucu tarafından yazıldığının doğrulanması.
 - Signed-in kullanıcıların çağırabildiği `SECURITY DEFINER` fonksiyonlarının gözden geçirilmesi; gereksiz olanlarda EXECUTE yetkisinin geri alınması.
@@ -28,6 +30,7 @@ Ayrıca:
 Şu anda veritabanı tetikleyicisi yalnızca `omnic.111111@gmail.com` adresine admin veriyor. Yeni kural:
 
 Sabit admin listesi (yalnızca bu 4 adres):
+
 - mryetenek@gmail.com
 - mk654491931@gmail.com
 - omnic.111111@gmail.com
@@ -36,6 +39,7 @@ Sabit admin listesi (yalnızca bu 4 adres):
 Ek olarak `@aroless.com` uzantılı adreslerden kayıt sırasına göre **yalnızca ilk 2 tanesi** otomatik admin olur; sonrakiler normal kullanıcı kalır. Bu sayım veritabanında yapılır, yarış durumuna karşı kilitlenir, yani üçüncü bir `@aroless.com` adresi hiçbir koşulda admin olamaz.
 
 Ayrıca:
+
 - Listede olmayan mevcut tüm admin kayıtları temizlenir.
 - Admin rolü yalnızca bu kuralla verilir; kullanıcı arayüzünden veya API'den rol yazımı tamamen kapatılır.
 - E-posta karşılaştırması küçük harfe indirgenip kırpılarak yapılır (büyük/küçük harf veya boşlukla atlatma engellenir).
@@ -59,10 +63,10 @@ Her kullanıcıya rastgele, benzersiz 8 haneli bir numara atanır (örn. `482107
 - Sunucu loglarında e-posta/IP gibi kişisel verilerin maskelenmesi.
 - Kredi düşümü, promosyon kodu ve abonelik yükseltmelerinin yalnızca sunucu tarafında yapılabilmesi.
 
-
 ## 6. Mobil uyum ve kullanıcı deneyimi
 
 Öncelikli ekranlar 390px, 768px ve 1280px genişliklerde tek tek kontrol edilip düzeltilecek:
+
 - Ürün bulucu (kart ızgarası, filtre çubuğu, karşılaştırma tepsisi)
 - Komuta merkezi / 14 ajan paneli
 - Akademi ve eğitim simülatörü sekmeleri
@@ -72,6 +76,7 @@ Her kullanıcıya rastgele, benzersiz 8 haneli bir numara atanır (örn. `482107
 Düzeltmeler: yatay taşmaların giderilmesi, dokunma hedeflerinin en az 44px olması, uzun tabloların mobilde kart görünümüne dönmesi, modal ve tepsilerin güvenli alan (safe-area) desteği.
 
 Kullanıcı dostuluk:
+
 - Tüm uzun işlemlerde iskelet (skeleton) ve ilerleme durumu.
 - Hata durumlarında anlaşılır Türkçe/çok dilli mesaj ve "tekrar dene" aksiyonu.
 - Boş durum ekranlarının netleştirilmesi.
