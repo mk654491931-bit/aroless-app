@@ -15,7 +15,10 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         const secret = lemonWebhookSecret();
         if (!secret) return new Response("Not configured", { status: 500 });
 
+        const contentLength = Number(request.headers.get("content-length") ?? 0);
+        if (contentLength > 1_000_000) return new Response("Payload too large", { status: 413 });
         const raw = await request.text();
+        if (raw.length > 1_000_000) return new Response("Payload too large", { status: 413 });
         const signature = request.headers.get("x-signature") ?? "";
         const expected = createHmac("sha256", secret).update(raw).digest("hex");
         const sig = Buffer.from(signature, "hex");
@@ -36,6 +39,9 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         const plan = payload.meta?.custom_data?.plan ?? "Pro";
         const attrs = payload.data?.attributes ?? {};
         const status = String(attrs["status"] ?? "");
+        if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
+          return new Response("Bad user id", { status: 400 });
+        }
         if (!userId) return new Response("ok", { status: 200 });
 
         let tier: string | null = null;
@@ -65,7 +71,10 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
             updated_at: new Date().toISOString(),
           })
           .eq("id", userId);
-        if (error) return new Response(error.message, { status: 500 });
+        if (error) {
+          console.error("[lemon-webhook] profile update failed", error);
+          return new Response("Webhook işlenemedi", { status: 500 });
+        }
 
         return new Response("ok", { status: 200 });
       },

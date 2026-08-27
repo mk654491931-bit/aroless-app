@@ -8,8 +8,12 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
         const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
         if (!secret) return new Response("Not configured", { status: 500 });
 
+        const contentLength = Number(request.headers.get("content-length") ?? 0);
+        if (contentLength > 1_000_000) return new Response("Payload too large", { status: 413 });
+
         const signature = request.headers.get("x-signature") ?? "";
         const raw = await request.text();
+        if (raw.length > 1_000_000) return new Response("Payload too large", { status: 413 });
         const expected = createHmac("sha256", secret).update(raw).digest("hex");
         const sigBuf = Buffer.from(signature, "hex");
         const expBuf = Buffer.from(expected, "hex");
@@ -17,20 +21,26 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           return new Response("Invalid signature", { status: 401 });
         }
 
-        let payload: any;
+        let payload: unknown;
         try {
           payload = JSON.parse(raw);
         } catch {
           return new Response("Bad JSON", { status: 400 });
         }
 
-        const eventName: string = payload?.meta?.event_name ?? "";
-        const custom = payload?.meta?.custom_data ?? {};
-        const userId: string | undefined = custom.user_id;
-        const plan: string | undefined = custom.plan;
-        const attrs = payload?.data?.attributes ?? {};
+        if (!isRecord(payload)) return new Response("Bad payload", { status: 400 });
+        const meta = isRecord(payload.meta) ? payload.meta : {};
+        const custom = isRecord(meta.custom_data) ? meta.custom_data : {};
+        const data = isRecord(payload.data) ? payload.data : {};
+        const attrs = isRecord(data.attributes) ? data.attributes : {};
+        const eventName = typeof meta.event_name === "string" ? meta.event_name : "";
+        const userId = typeof custom.user_id === "string" ? custom.user_id : undefined;
+        const plan = typeof custom.plan === "string" ? custom.plan : undefined;
+        if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
+          return new Response("Bad user id", { status: 400 });
+        }
         const customerId = attrs.customer_id ? String(attrs.customer_id) : null;
-        const subscriptionId = payload?.data?.id ? String(payload.data.id) : null;
+        const subscriptionId = data.id ? String(data.id) : null;
 
         // Only credit on successful subscription creation or renewal payment
         const shouldCredit =
@@ -53,7 +63,10 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           _customer_id: customerId ?? "",
           _subscription_id: subscriptionId ?? "",
         });
-        if (error) return new Response(error.message, { status: 500 });
+        if (error) {
+          console.error("[lemon-webhook] credit application failed", error);
+          return new Response("Webhook işlenemedi", { status: 500 });
+        }
 
         // Record transaction
         const totalCents =
@@ -62,7 +75,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
         const currency = String(attrs.currency ?? "USD");
         const paymentMethod = String(attrs.card_brand ?? attrs.payment_method ?? "card");
         const userEmail = String(attrs.user_email ?? attrs.email ?? "");
-        await supabaseAdmin.from("transactions").insert({
+        const { error: transactionError } = await supabaseAdmin.from("transactions").insert({
           user_id: userId,
           email: userEmail || null,
           tier,
@@ -73,6 +86,9 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           provider_event: eventName,
           external_id: subscriptionId,
         });
+        if (transactionError) {
+          console.error("[lemon-webhook] transaction record failed", transactionError);
+        }
 
         // Promosyon kodu dönüşümünü işaretle (admin panel istatistikleri için).
         await supabaseAdmin
@@ -89,3 +105,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
     },
   },
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}

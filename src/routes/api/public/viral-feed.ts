@@ -156,10 +156,14 @@ export const Route = createFileRoute("/api/public/viral-feed")({
             },
           });
         } catch (e) {
-          return new Response(JSON.stringify({ items: [], error: (e as Error).message }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          console.error("[viral-feed] feed generation failed", e);
+          return new Response(
+            JSON.stringify({ items: [], error: "Feed temporarily unavailable" }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
       },
     },

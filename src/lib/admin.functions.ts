@@ -1,11 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const ADMIN_EMAILS = new Set(["omnic.111111@gmail.com", "mk654491931@gmail.com"]);
-
 async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
-  const email = String(context.claims?.email ?? "").toLowerCase();
-  if (ADMIN_EMAILS.has(email)) return;
   const { data, error } = await context.supabase.rpc("has_role", {
     _user_id: context.userId,
     _role: "admin",
@@ -113,13 +109,12 @@ export const listAdminTransactions = createServerFn({ method: "GET" })
 export const checkIsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ isAdmin: boolean }> => {
-    const email = String(context.claims?.email ?? "").toLowerCase();
-    if (ADMIN_EMAILS.has(email)) return { isAdmin: true };
-    const { data } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    return { isAdmin: !!data };
+    try {
+      await assertAdmin(context);
+      return { isAdmin: true };
+    } catch {
+      return { isAdmin: false };
+    }
   });
 
 export type FreeCreditAuditRow = {

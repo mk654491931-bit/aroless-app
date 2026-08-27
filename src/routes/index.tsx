@@ -316,7 +316,7 @@ function Dashboard() {
     queryFn: () => checkAdminFn(),
     enabled: !!user,
   });
-  const isAdmin = !!adminQ.data?.isAdmin || user?.email?.toLowerCase() === "omnic.111111@gmail.com";
+  const isAdmin = !!adminQ.data?.isAdmin;
 
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
 

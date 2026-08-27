@@ -205,10 +205,14 @@ export const Route = createFileRoute("/api/public/hot-products")({
             },
           });
         } catch (e) {
-          return new Response(JSON.stringify({ items: [], error: (e as Error).message }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          console.error("Hot products scan failed", e);
+          return new Response(
+            JSON.stringify({ items: [], error: "Market scan temporarily unavailable" }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
       },
     },
