@@ -297,7 +297,7 @@ function AuthPage() {
       if (mode === "signup" && otpStep) {
         setBusy("email");
         const visitorId = await getVisitorId();
-        const res = await verifySignupFn({ data: { email, code: otpCode, visitorId } });
+        const _res = await verifySignupFn({ data: { email, code: otpCode, visitorId } });
         if (res.creditsBlocked) {
           toast.warning(
             "Bu cihaz veya IP üzerinden daha önce kayıt yapıldığı için başlangıç kredisi verilmedi.",
@@ -328,7 +328,7 @@ function AuthPage() {
         }
         setBusy("email");
         const visitorId = await getVisitorId();
-        const res = await startSignupFn({
+        const _res = await startSignupFn({
           data: {
             email,
             password,

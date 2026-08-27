@@ -31,7 +31,6 @@ import {
   Truck,
   Receipt,
   Shield,
-  Flame,
   Activity,
   GraduationCap,
   Target,
