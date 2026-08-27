@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/lemon.functions";
@@ -95,7 +96,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     }
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -220,6 +221,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           Secure checkout by Lemon Squeezy. Cancel anytime.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

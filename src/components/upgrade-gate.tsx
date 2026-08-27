@@ -34,9 +34,13 @@ export function LockedGate({
     <div
       role="button"
       tabIndex={0}
+      aria-label={`${label}. ${note}`}
       onClick={onUpgrade}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onUpgrade();
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onUpgrade();
+        }
       }}
       className="relative mt-3 cursor-pointer overflow-hidden rounded-xl border border-white/10"
       title="Locked — click to upgrade"
