@@ -68,7 +68,7 @@ export const getFullProfile = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("profiles")
       .select(
-        "email, public_id, credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
+        "email, public_id, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
       )
       .eq("id", context.userId)
       .maybeSingle();

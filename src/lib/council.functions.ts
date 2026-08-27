@@ -30,7 +30,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const cachedReport = await peekCouncil(data.query, data.country, data.category, data.lang);
     if (cachedReport) return cachedReport;
 
-    const { error } = await context.supabase.rpc("deduct_credit");
+    const { error } = await context.supabase.rpc("deduct_product_finder_credit");
     if (error) {
       throw new Error(
         error.message.includes("no_credits")

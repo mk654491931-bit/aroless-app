@@ -11,7 +11,7 @@ import {
   type HybridScore,
 } from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
-import { marketBriefBlock, countryAngles, countryFit } from "@/lib/platform-market";
+import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { MarketEvidence } from "@/lib/market-evidence";
 import type { WinnerBreakdown } from "@/lib/winner-score";
@@ -275,7 +275,9 @@ export const generateProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: remaining, error: deductErr } = await context.supabase.rpc("deduct_credit");
+    const { data: remaining, error: deductErr } = await context.supabase.rpc(
+      "deduct_product_finder_credit",
+    );
     if (deductErr) {
       if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
       throw new Error(deductErr.message);

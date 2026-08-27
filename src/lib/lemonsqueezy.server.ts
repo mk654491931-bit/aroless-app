@@ -68,18 +68,24 @@ export async function createLemonCheckout(opts: {
     body: JSON.stringify(body),
   });
 
-  // Lemon returns the same 404 when a product ID is supplied as a variant ID.
-  // Resolve that common configuration mistake using the store's variants.
+  // A Product ID is sometimes copied into the Variant setting. Resolve it
+  // once through the API, while keeping the configured value variant-first.
   if (resp.status === 404) {
-    const variantsResp = await fetch(
-      `https://api.lemonsqueezy.com/v1/variants?filter[product_id]=${encodeURIComponent(env.variantId)}&filter[store_id]=${encodeURIComponent(env.storeId)}`,
+    const productVariantsResp = await fetch(
+      `https://api.lemonsqueezy.com/v1/products/${encodeURIComponent(env.variantId)}/variants`,
       { headers },
     );
+    const variantsResp = productVariantsResp.ok
+      ? productVariantsResp
+      : await fetch(
+          `https://api.lemonsqueezy.com/v1/variants?filter[product_id]=${encodeURIComponent(env.variantId)}`,
+          { headers },
+        );
     if (variantsResp.ok) {
       const variants = (await variantsResp.json()) as {
         data?: Array<{ id?: string }>;
       };
-      const variant = variants.data?.find((item) => item.id);
+      const variant = variants.data?.find((item) => item.id && item.id !== env.variantId);
       if (variant?.id) {
         body.data.relationships.variant.data.id = variant.id;
         resp = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {

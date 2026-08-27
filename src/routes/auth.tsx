@@ -24,6 +24,7 @@ import {
   startEmailSignup,
   registerDeviceFingerprint,
   verifyEmailSignup,
+  verifyEmailLoginTurnstile,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
@@ -233,6 +234,7 @@ function AuthPage() {
 
   const startSignupFn = useServerFn(startEmailSignup);
   const verifySignupFn = useServerFn(verifyEmailSignup);
+  const verifyLoginCaptchaFn = useServerFn(verifyEmailLoginTurnstile);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
   const claimReferralFn = useServerFn(claimReferral);
 
@@ -297,7 +299,7 @@ function AuthPage() {
       if (mode === "signup" && otpStep) {
         setBusy("email");
         const visitorId = await getVisitorId();
-        const _res = await verifySignupFn({ data: { email, code: otpCode, visitorId } });
+        const res = await verifySignupFn({ data: { email, code: otpCode, visitorId } });
         if (res.creditsBlocked) {
           toast.warning(
             "Bu cihaz veya IP üzerinden daha önce kayıt yapıldığı için başlangıç kredisi verilmedi.",
@@ -328,7 +330,7 @@ function AuthPage() {
         }
         setBusy("email");
         const visitorId = await getVisitorId();
-        const _res = await startSignupFn({
+        await startSignupFn({
           data: {
             email,
             password,
@@ -346,6 +348,7 @@ function AuthPage() {
         return;
       } else {
         setBusy("email");
+        await verifyLoginCaptchaFn({ data: { turnstileToken } });
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         nav({ to: "/" });
@@ -820,9 +823,10 @@ function AuthPage() {
                           Kod geçerliyse indirim, paket satın alırken otomatik uygulanır.
                         </p>
                         <SignupLegalConsent value={consent} onChange={setConsent} />
-                        <TurnstileWidget onToken={setTurnstileToken} />
                       </>
                     )}
+
+                    {!otpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
 
                     <button
                       type="submit"

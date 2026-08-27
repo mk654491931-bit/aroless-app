@@ -416,6 +416,7 @@ export type Database = {
           credits: number;
           credits_reset_at: string | null;
           credits_spent: number;
+          finder_credits: number;
           currency: string;
           email: string | null;
           id: string;
@@ -438,6 +439,7 @@ export type Database = {
           credits?: number;
           credits_reset_at?: string | null;
           credits_spent?: number;
+          finder_credits?: number;
           currency?: string;
           email?: string | null;
           id: string;
@@ -460,6 +462,7 @@ export type Database = {
           credits?: number;
           credits_reset_at?: string | null;
           credits_spent?: number;
+          finder_credits?: number;
           currency?: string;
           email?: string | null;
           id?: string;
@@ -1048,6 +1051,7 @@ export type Database = {
         Returns: undefined;
       };
       deduct_credit: { Args: never; Returns: number };
+      deduct_product_finder_credit: { Args: never; Returns: number };
       deduct_sim_credit: { Args: never; Returns: number };
       gen_public_id: { Args: never; Returns: string };
       gen_referral_code: { Args: never; Returns: string };

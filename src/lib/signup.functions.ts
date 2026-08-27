@@ -17,6 +17,23 @@ type StartInput = {
   promoCode?: string;
 };
 
+export const verifyEmailLoginTurnstile = createServerFn({ method: "POST" })
+  .inputValidator((input: { turnstileToken?: string }) => ({
+    turnstileToken: String(input?.turnstileToken ?? "").slice(0, 4096),
+  }))
+  .handler(async ({ data }) => {
+    const limit = await rateLimit(
+      `login-captcha:ip:${await hashValue(clientIp(getRequest()))}`,
+      20,
+      600,
+    );
+    if (limit) throw new Error("Çok fazla giriş denemesi. Lütfen biraz sonra tekrar deneyin.");
+    const captcha = await verifyTurnstile(data.turnstileToken, clientIp(getRequest()));
+    if (!captcha.ok)
+      throw new Error("Bot doğrulaması başarısız. Sayfayı yenileyip tekrar deneyin.");
+    return { ok: true as const };
+  });
+
 /** İstekten IP hash'i üretir (bot/mükerrer hesap denetimi için). */
 async function requestIpHash(): Promise<string> {
   try {
@@ -81,7 +98,11 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       if (!row.active) throw new Error("Promosyon kodu pasif.");
       if (row.expires_at && new Date(row.expires_at) < new Date())
         throw new Error("Promosyon kodunun süresi dolmuş.");
-      if (row.max_redemptions != null && row.times_redeemed >= row.max_redemptions) {
+      if (
+        row.max_redemptions !== null &&
+        row.max_redemptions !== undefined &&
+        row.times_redeemed >= row.max_redemptions
+      ) {
         throw new Error("Promosyon kodu kullanım limitine ulaştı.");
       }
       promo = { id: row.id, code: row.code, discount_pct: row.discount_pct };
