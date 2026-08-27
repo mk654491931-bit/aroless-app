@@ -335,6 +335,7 @@ function AuthPage() {
             confirmPassword,
             visitorId,
             marketing: consent.marketing,
+            legalAccepted: legalOk,
             turnstileToken,
             promoCode,
           },

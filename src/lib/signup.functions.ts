@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isDisposableEmail } from "@/lib/disposable-email";
 import { applyFingerprintPolicy, generateOtp, hashOtp, sendOtpEmail } from "@/lib/signup.server";
 import { clientIp, hashIp, verifyTurnstile } from "@/lib/turnstile.server";
+import { hashValue, rateLimit } from "@/lib/api-guard.server";
 import { getRequest } from "@tanstack/react-start/server";
 
 type StartInput = {
@@ -11,6 +12,7 @@ type StartInput = {
   confirmPassword: string;
   visitorId?: string;
   marketing?: boolean;
+  legalAccepted?: boolean;
   turnstileToken?: string;
   promoCode?: string;
 };
@@ -37,6 +39,8 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     if (password.length < 6 || password.length > 72)
       throw new Error("Şifre en az 6 karakter olmalı.");
     if (password !== confirmPassword) throw new Error("Şifreler birbiriyle eşleşmiyor.");
+    if (input?.legalAccepted !== true)
+      throw new Error("Kayıt için zorunlu yasal onayları kabul etmelisiniz.");
     if (isDisposableEmail(email))
       throw new Error("Geçici (temp-mail) e-posta adresleriyle kayıt yapılamaz.");
     return {
@@ -44,6 +48,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       password,
       visitorId: String(input?.visitorId ?? "").slice(0, 128),
       marketing: !!input?.marketing,
+      legalAccepted: true,
       turnstileToken: String(input?.turnstileToken ?? "").slice(0, 4096),
       promoCode: String(input?.promoCode ?? "")
         .trim()
@@ -52,6 +57,12 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
+    const signupLimit = await rateLimit(
+      `signup:ip:${await hashValue(clientIp(getRequest()))}`,
+      5,
+      3600,
+    );
+    if (signupLimit) throw new Error("Çok fazla kayıt denemesi. Lütfen daha sonra tekrar deneyin.");
     const captcha = await verifyTurnstile(data.turnstileToken, clientIp(getRequest()));
     if (!captcha.ok)
       throw new Error("Bot doğrulaması başarısız. Sayfayı yenileyip tekrar deneyin.");
@@ -185,6 +196,14 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
     return { email, code, visitorId: String(input?.visitorId ?? "").slice(0, 128) };
   })
   .handler(async ({ data }) => {
+    const ipLimit = await rateLimit(
+      `verify-otp:ip:${await hashValue(clientIp(getRequest()))}`,
+      10,
+      600,
+    );
+    const emailLimit = await rateLimit(`verify-otp:email:${await hashValue(data.email)}`, 10, 600);
+    if (ipLimit || emailLimit)
+      throw new Error("Çok fazla doğrulama denemesi. Lütfen biraz sonra tekrar deneyin.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: otp } = await supabaseAdmin
       .from("email_otps")
@@ -198,13 +217,25 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
       throw new Error("Kodun süresi dolmuş. Kayıt işlemini yeniden başlatın.");
     if (otp.attempts >= 5) throw new Error("Çok fazla hatalı deneme. Yeni kod isteyin.");
 
-    if ((await hashOtp(data.email, data.code)) !== otp.code_hash) {
+    const codeHash = await hashOtp(data.email, data.code);
+    if (codeHash !== otp.code_hash) {
       await supabaseAdmin
         .from("email_otps")
         .update({ attempts: otp.attempts + 1 })
         .eq("id", otp.id);
       throw new Error("Doğrulama kodu hatalı.");
     }
+
+    const { data: consumedOtp } = await supabaseAdmin
+      .from("email_otps")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", otp.id)
+      .eq("code_hash", codeHash)
+      .is("consumed_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .select("id")
+      .maybeSingle();
+    if (!consumedOtp) throw new Error("Bu doğrulama kodu artık geçerli değil.");
 
     const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     const user = list?.users?.find((candidate) => candidate.email?.toLowerCase() === data.email);
@@ -213,10 +244,6 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
       email_confirm: true,
     });
     if (error) throw new Error(error.message);
-    await supabaseAdmin
-      .from("email_otps")
-      .update({ consumed_at: new Date().toISOString() })
-      .eq("id", otp.id);
     const creditsBlocked = await applyFingerprintPolicy(supabaseAdmin, {
       visitorId: data.visitorId,
       userId: user.id,
