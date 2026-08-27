@@ -101,7 +101,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
       role="dialog"
       aria-modal="true"
       aria-labelledby="pricing-modal-title"
-      className="fixed inset-0 z-[100] flex min-h-dvh items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-100 flex min-h-dvh items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
@@ -163,10 +163,10 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
             return (
               <div
                 key={p.id}
-                className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-gradient-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}
+                className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-linear-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}
               >
                 {p.highlight && (
-                  <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] mb-2">
+                  <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] mb-2">
                     Most popular
                   </div>
                 )}
@@ -207,7 +207,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                   onClick={() => subscribe(p.id)}
                   disabled={loading !== null}
 
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
+                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
                 >
                   {loading === p.id
                     ? "Ödeme sayfası açılıyor…"

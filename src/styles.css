@@ -1759,6 +1759,12 @@ html.light .topbar {
   padding: 1.1rem 1.25rem;
   backdrop-filter: blur(10px);
 }
+@media (max-width: 639px) {
+  .page-hero {
+    border-radius: 0.75rem;
+    padding: 0.9rem;
+  }
+}
 .page-hero::after {
   content: "";
   position: absolute;
