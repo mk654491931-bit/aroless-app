@@ -110,7 +110,7 @@ import { attachWinnerScores } from "@/lib/winner-score";
 
 import { HotTicker } from "@/components/hot-ticker";
 import { PredictiveTrendsTab } from "@/components/predictive-trends-tab";
-import { ApiKeyBadge, DataSourcesButton } from "@/components/header-extras";
+import { DataSourcesButton } from "@/components/header-extras";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/countries";
 import {
   countryFit,
@@ -538,7 +538,6 @@ function Dashboard() {
                 <Cpu size={11} className="opacity-80" />
                 {engineLabel(engine).label}
               </span>
-              <ApiKeyBadge />
               <FxBadge />
               <div className="morph-pill heartbeat hidden sm:flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5">
                 <Coins size={14} className="morph-icon text-[oklch(0.85_0.18_90)]" />
