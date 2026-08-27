@@ -18,7 +18,7 @@ export function LanguageSwitcher() {
   }, []);
 
   return (
-    <div ref={ref} className="relative" data-no-translate>
+    <div ref={ref} className="relative shrink-0" data-no-translate>
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 px-2.5 py-1.5 text-xs"

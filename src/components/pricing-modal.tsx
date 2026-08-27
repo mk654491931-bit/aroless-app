@@ -93,7 +93,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
       onClick={onClose}
     >
       <div
-        className="glass rounded-2xl max-w-3xl w-full p-6 md:p-8 relative"
+        className="glass relative max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl p-4 md:max-h-[calc(100dvh-4rem)] md:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button

@@ -214,8 +214,9 @@ const GROUPS: {
 
 export function AppSidebar() {
   const { t } = useTranslation();
-  const { state } = useSidebar();
+  const { state, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
+  const iconOnly = collapsed && !isMobile;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { isPaid, isAdmin, quota } = useEntitlements();
   const [showPricing, setShowPricing] = useState(false);
@@ -262,13 +263,13 @@ export function AppSidebar() {
             height={28}
             className="h-7 w-7 shrink-0 object-contain"
           />
-          {!collapsed && (
+          {!iconOnly && (
             <span className="text-[13px] font-light uppercase tracking-[0.3em] text-foreground">
               Aroless
             </span>
           )}
         </Link>
-        {!collapsed && !isPaid && !isAdmin && (
+        {!iconOnly && !isPaid && !isAdmin && (
           <button
             onClick={() => setShowPricing(true)}
             className="mx-3 mb-2 rounded-xl border border-(--accent-active)/30 bg-(--accent-active)/10 px-3 py-2 text-left text-[10px] font-semibold text-accent-active"
@@ -277,21 +278,21 @@ export function AppSidebar() {
             AI Konsey ve tüm modüller
           </button>
         )}
-        {!collapsed && (isPaid || isAdmin) && (
+        {!iconOnly && (isPaid || isAdmin) && (
           <div className="px-3 pb-1 text-[10px] text-emerald-300">
             🔓 Tüm modüller açık{isAdmin ? " · Admin" : ` · ${quota.toolRuns} araç çalıştırma / ay`}
           </div>
         )}
         {GROUPS.map((g) => (
           <SidebarGroup key={g.id}>
-            {!collapsed && (
+            {!iconOnly && (
               <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
                 {g.emoji} {t(`nav.${g.key}`, { defaultValue: g.label })}
               </SidebarGroupLabel>
             )}
             <SidebarGroupContent>
               <SidebarMenu>
-                {collapsed ? (
+                {iconOnly ? (
                   <SidebarMenuItem>
                     {renderItem(
                       { ...g.items[0], icon: g.icon },

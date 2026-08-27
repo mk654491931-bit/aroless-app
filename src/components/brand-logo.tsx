@@ -13,7 +13,10 @@ type Props = {
 export function BrandLogo({ subtitle = "AI Commerce OS", linkTo = "/", size = "md" }: Props) {
   const h = size === "sm" ? 28 : 36;
   return (
-    <Link to={linkTo} className="group flex select-none items-center gap-2.5">
+    <Link
+      to={linkTo}
+      className="group flex shrink-0 select-none items-center gap-2.5 whitespace-nowrap"
+    >
       <img
         src="/logo-mark.png"
         alt="Aroless"
@@ -24,8 +27,8 @@ export function BrandLogo({ subtitle = "AI Commerce OS", linkTo = "/", size = "m
       />
       <span className="leading-none">
         <span
-          className="block font-light uppercase text-foreground/95"
-          style={{ fontSize: size === "sm" ? 15 : 19, letterSpacing: "0.3em" }}
+          className="block font-light uppercase tracking-[0.16em] text-foreground/95 sm:tracking-[0.3em]"
+          style={{ fontSize: size === "sm" ? 15 : 19 }}
         >
           Aroless
         </span>

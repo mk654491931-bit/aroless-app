@@ -66,7 +66,7 @@ export function HotTicker() {
     return (
       <button
         onClick={toggle}
-        className="fixed right-0 top-1/2 z-20 hidden -translate-y-1/2 items-center gap-1.5 rounded-l-lg border border-r-0 border-border/60 bg-background/80 px-2 py-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-md hover:text-foreground xl:flex"
+        className="fixed right-0 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1.5 rounded-l-lg border border-r-0 border-border/60 bg-background/90 px-2 py-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-md hover:text-foreground"
         style={{ writingMode: "vertical-rl" }}
         aria-label="Canlı listeyi aç"
       >
@@ -77,7 +77,7 @@ export function HotTicker() {
 
   return (
     <aside
-      className="pointer-events-none fixed right-3 top-24 z-20 hidden w-56 xl:block"
+      className="pointer-events-none fixed bottom-3 left-3 right-3 top-auto z-20 w-auto md:bottom-auto md:left-auto md:right-3 md:top-24 md:w-56"
       style={{ maxHeight: "calc(100dvh - 8rem)" }}
     >
       <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/70 backdrop-blur-md">

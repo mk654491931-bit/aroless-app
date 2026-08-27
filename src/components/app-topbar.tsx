@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap } from "lucide-react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -10,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -33,6 +35,8 @@ const TITLES: Record<string, string> = {
  * Rendered above every in-app page (except the finder home and auth).
  */
 export function AppTopbar() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { tier } = useEntitlements();
   const { user } = useAuth();
@@ -87,6 +91,20 @@ export function AppTopbar() {
           <LanguageSwitcher />
           <PaletteToggle />
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={async () => {
+              await queryClient.cancelQueries();
+              queryClient.clear();
+              await supabase.auth.signOut();
+              await navigate({ to: "/auth", replace: true });
+            }}
+            className="topbar-btn"
+            title="Çıkış yap"
+            aria-label="Çıkış yap"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
       <div className="topbar-line" />
