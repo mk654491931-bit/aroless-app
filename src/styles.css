@@ -1946,3 +1946,67 @@ body {
     contain: paint;
   }
 }
+
+
+/* ── Premium Product Card Enhancements ── */
+@keyframes winner-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.premium-card:has(.border-amber-400\/50)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.82 0.18 85 / 0.06) 45%,
+    oklch(0.82 0.18 85 / 0.12) 50%,
+    oklch(0.82 0.18 85 / 0.06) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: winner-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.05); opacity: 0.3; }
+  100% { transform: scale(1); opacity: 0.6; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+/* ── Focus ring for accessibility ── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid oklch(0.68 0.2 265 / 0.7);
+  outline-offset: 2px;
+}
+
+/* ── Smooth page transitions ── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Winner card shimmer border ── */
+@keyframes border-flow {
+  0% { border-color: oklch(0.82 0.18 85 / 0.3); }
+  50% { border-color: oklch(0.82 0.18 85 / 0.6); }
+  100% { border-color: oklch(0.82 0.18 85 / 0.3); }
+}
+
+.animate-border-flow {
+  animation: border-flow 2s ease-in-out infinite;
+}

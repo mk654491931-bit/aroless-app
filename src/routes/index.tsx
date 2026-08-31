@@ -1147,19 +1147,50 @@ function Dashboard() {
                       </div>
                     )}
                     {searching && (
-                      <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <div
-                            key={i}
-                            className="glass rounded-xl p-5 h-60 sm:h-72 animate-pulse"
-                          />
-                        ))}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-center gap-3 py-2">
+                          <Loader2 size={18} className="animate-spin text-[var(--brand)]" />
+                          <span className="text-sm text-muted-foreground animate-pulse">
+                            AI motorları analiz ediyor — bu 15-30 saniye sürebilir…
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <div
+                              key={i}
+                              className="glass rounded-xl p-5 h-60 sm:h-72 animate-pulse"
+                              style={{ animationDelay: `${i * 120}ms` }}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                     {!searching && results.length === 0 && (
-                      <div className="text-center text-sm text-muted-foreground py-16">
-                        <Sparkles className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
-                        Platformunu ve bütçeni seç, ardından “Kazananları Bul”a bas.
+                      <div className="text-center py-16 space-y-4">
+                        <div className="relative inline-flex">
+                          <div className="absolute inset-0 rounded-full bg-[var(--brand)]/20 blur-2xl animate-pulse-soft" />
+                          <div className="relative grid h-20 w-20 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--brand)]/10 to-[var(--brand-2)]/10">
+                            <Sparkles size={32} className="text-[oklch(0.75_0.18_265)]" />
+                          </div>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground">Kazananünü keşet</h3>
+                          <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
+                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
+                            gerçek zamanlı verilerle en kârlı ürünleri bulacak.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            <Zap size={10} className="text-amber-400" /> 15-30 saniye
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            <ShieldCheck size={10} className="text-emerald-400" /> 1 kredi
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            <TrendingUp size={10} className="text-blue-400" /> AI Konsey onaylı
+                          </span>
+                        </div>
                       </div>
                     )}
                     {!searching &&
@@ -1601,9 +1632,19 @@ function ProductCard({
   const rec = recommendationStyle(enriched.recommendation);
   const realImg = useRealProductImage(p.name);
   const modelImg = resolveProductImage(p);
+  const isTopWinner = (p.winner_score ?? 0) >= 75;
+  const isElite = (p.winner_score ?? 0) >= 85;
   return (
     <article
-      className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:border-[oklch(0.68_0.20_265)]/50 hover:-translate-y-1 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)] border flex flex-col animate-rise-in relative ${selected ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]" : "border-transparent"}`}
+      className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:-translate-y-1 border flex flex-col animate-rise-in relative transition-all duration-300 ${
+        isElite
+          ? "border-amber-400/50 shadow-[0_0_30px_-5px_oklch(0.82_0.18_85/0.45),0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)]"
+          : isTopWinner
+            ? "border-[oklch(0.68_0.20_265)]/50 shadow-[0_0_20px_-5px_oklch(0.68_0.20_265/0.35),0_20px_60px_-20px_oklch(0.68_0.20_265/0.45)]"
+            : selected
+              ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]"
+              : "border-transparent hover:border-[oklch(0.68_0.20_265)]/30"
+      }`}
     >
       {onToggleSelect && (
         <button
@@ -1648,6 +1689,16 @@ function ProductCard({
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+        {isElite && (
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm">
+            👑 ELITE
+          </div>
+        )}
+        {isTopWinner && !isElite && (
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/20 px-2 py-0.5 text-[10px] font-bold text-blue-300 backdrop-blur-sm">
+            ⚡ WINNER
+          </div>
+        )}
       </div>
 
       <div className="flex items-start justify-between mb-2">
@@ -2606,10 +2657,12 @@ function ConsistencyBadge({ p }: { p: WinningProduct }) {
 }
 
 function ScorePill({ label, value }: { label: string; value: number }) {
+  const color = value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : value >= 40 ? "text-blue-400" : "text-muted-foreground";
+  const glow = value >= 80 ? "shadow-[0_0_8px_-2px_oklch(0.75_0.18_155/0.4)]" : "";
   return (
-    <div className="rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center">
+    <div className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}>
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="text-xs font-bold text-[oklch(0.85_0.15_265)]">{value}</div>
+      <div className={`text-xs font-bold ${color}`}>{value}</div>
     </div>
   );
 }
