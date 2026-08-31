@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, ArrowRight, Check, Loader2, Scale, Sparkles } from "lucide-react";
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/compare")({
 
 function ComparePage() {
   const nav = useNavigate();
-  const _queryClient = useQueryClient();
   const { user, loading } = useAuth();
   const listFn = useServerFn(listFavorites);
   const loadFn = useServerFn(loadFavoritesForComparison);

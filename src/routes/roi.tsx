@@ -27,7 +27,7 @@ import {
 import { PageHero } from "@/components/page-hero";
 import { useAuth } from "@/hooks/use-auth";
 import { listRoiEntries, saveRoiEntry, deleteRoiEntry } from "@/lib/roi.functions";
-import { aggregateRoi, computeRoi, money, type RoiEntry } from "@/lib/roi-math";
+import { aggregateRoi, money, type RoiEntry } from "@/lib/roi-math";
 
 export const Route = createFileRoute("/roi")({
   ssr: false,

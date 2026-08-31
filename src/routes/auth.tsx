@@ -26,6 +26,7 @@ import {
   verifyEmailSignup,
   startLoginOtp,
   verifyLoginOtp,
+  resendLoginOtp,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
@@ -211,6 +212,7 @@ function AuthPage() {
     marketing: false,
   });
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
@@ -238,6 +240,7 @@ function AuthPage() {
   const verifySignupFn = useServerFn(verifyEmailSignup);
   const startLoginOtpFn = useServerFn(startLoginOtp);
   const verifyLoginOtpFn = useServerFn(verifyLoginOtp);
+  const resendLoginOtpFn = useServerFn(resendLoginOtp);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
   const claimReferralFn = useServerFn(claimReferral);
 
@@ -333,7 +336,7 @@ function AuthPage() {
         }
         setBusy("email");
         const visitorId = await getVisitorId();
-        await startSignupFn({
+        const signupRes = await startSignupFn({
           data: {
             email,
             password,
@@ -347,7 +350,12 @@ function AuthPage() {
         });
 
         setOtpStep(true);
-        toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
+        if (signupRes.emailSent) {
+          toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
+        } else {
+          setEmailDeliveryFailed(true);
+          toast.warning("E-posta gönderilemedi. Kodu doğrudan alamıyorsanız support'a yazın.");
+        }
         return;
       } else if (loginOtpStep) {
         // Login OTP doğrulama: kodu kontrol et, sonra giriş yap
@@ -361,9 +369,14 @@ function AuthPage() {
       } else if (mode === "signin") {
         // Login OTP başlat: CAPTCHA → OTP kodu gönder
         setBusy("email");
-        await startLoginOtpFn({ data: { email, turnstileToken } });
+        const res = await startLoginOtpFn({ data: { email, turnstileToken } });
         setLoginOtpStep(true);
-        toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
+        if (res.emailSent) {
+          toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
+        } else {
+          setEmailDeliveryFailed(true);
+          toast.warning("Doğrulama kodu e-posta adresinize gönderilemedi. Kodu yukarıda görebilirsiniz.");
+        }
         return;
       }
     } catch (err: unknown) {
@@ -581,6 +594,9 @@ function AuthPage() {
                           setOtpStep(false);
                           setLoginOtpStep(false);
                           setOtpCode("");
+                          setEmailDeliveryFailed(false);
+                          setPassword("");
+                          setConfirmPassword("");
                         }}
                         className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
                           mode === m
@@ -641,6 +657,11 @@ function AuthPage() {
                   <form onSubmit={submit} className="space-y-3">
                     {mode === "signup" && otpStep && (
                       <div className="space-y-2">
+                        {emailDeliveryFailed && (
+                          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                            E-posta gönderilemedi. Destek ekibiyle iletişime geçin: destek@aroless.tech
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground">
                           {email} adresine gönderilen 6 haneli kodu girin.
                         </p>
@@ -673,6 +694,11 @@ function AuthPage() {
                     )}
                     {mode === "signin" && loginOtpStep && (
                       <div className="space-y-2">
+                        {emailDeliveryFailed && (
+                          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                            E-posta gönderilemedi. Kodu doğrudan alamıyorsanız"destek@aroless.tech" adresinden yardım alabilirsiniz.
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground">
                           {email} adresine gönderilen 6 haneli kodu girin.
                         </p>
@@ -691,16 +717,44 @@ function AuthPage() {
                             className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em]"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoginOtpStep(false);
-                            setOtpCode("");
-                          }}
-                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                        >
-                          E-posta veya şifreyi değiştir
-                        </button>
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLoginOtpStep(false);
+                              setOtpCode("");
+                              setEmailDeliveryFailed(false);
+                            }}
+                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                          >
+                            E-posta veya şifreyi değiştir
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy !== null}
+                            onClick={async () => {
+                              setBusy("email");
+                              try {
+                                const res = await resendLoginOtpFn({ data: { email } });
+                                if (res.emailSent) {
+                                  setEmailDeliveryFailed(false);
+                                  toast.success("Yeni kod e-posta adresinize gönderildi.");
+                                } else {
+                                  setEmailDeliveryFailed(true);
+                                  toast.warning("E-posta gönderilemedi. Lütfen daha sonra tekrar deneyin.");
+                                }
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : String(err);
+                                toast.error(msg);
+                              } finally {
+                                setBusy(null);
+                              }
+                            }}
+                            className="text-xs font-medium text-[var(--brand)] hover:underline underline-offset-4 disabled:opacity-50"
+                          >
+                            {busy === "email" ? "Gönderiliyor…" : "Kodu yeniden gönder"}
+                          </button>
+                        </div>
                       </div>
                     )}
                     {!otpStep && !loginOtpStep && (

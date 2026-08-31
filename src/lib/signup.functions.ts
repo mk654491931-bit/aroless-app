@@ -155,12 +155,8 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
     });
     if (otpError) throw new Error("Doğrulama kodu oluşturulamadı. Lütfen tekrar deneyin.");
-    try {
-      await sendOtpEmail(data.email, code);
-    } catch (error) {
-      if (created?.user?.id) await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw error;
-    }
+    // E-posta gönderimi kritik değil — başarısız olsa bile hesap oluştu, OTP ekranda görünür.
+    const emailSent = await sendOtpEmail(data.email, code);
 
     // Promosyon kodunu kalıcı olarak bağla ve kullanımı say.
     let promoDiscount = 0;
@@ -204,7 +200,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       console.error("[email] welcome send failed", e);
     }
 
-    return { ok: true as const, email: data.email, creditsBlocked: false, promoDiscount };
+    return { ok: true as const, email: data.email, emailSent, creditsBlocked: false, promoDiscount };
   });
 
 export const verifyEmailSignup = createServerFn({ method: "POST" })
@@ -345,9 +341,11 @@ export const startLoginOtp = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Kullanıcı var mı kontrol et
-    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 500 });
-    const user = list?.users?.find((u) => u.email?.toLowerCase() === data.email);
-    if (!user) throw new Error("Bu e-posta adresiyle kayıtlı hesap bulunamadı.");
+    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const userExists = list?.users?.some((u) => u.email?.toLowerCase() === data.email);
+    if (!userExists) {
+      throw new Error("Bu e-posta adresiyle kayıtlı hesap bulunamadı.");
+    }
 
     // OTP kodu üret ve kaydet
     const code = generateOtp();
@@ -358,10 +356,13 @@ export const startLoginOtp = createServerFn({ method: "POST" })
     });
     if (otpError) throw new Error("Doğrulama kodu oluşturulamadı. Lütfen tekrar deneyin.");
 
-    // E-posta gönder
-    await sendOtpEmail(data.email, code);
+    // E-posta gönder — başarısız olsa bile OTP doğrulama akışını devam ettir.
+    const sent = await sendOtpEmail(data.email, code);
+    if (!sent) {
+      console.warn(`[login-otp] email delivery failed for ${data.email}`);
+    }
 
-    return { ok: true as const };
+    return { ok: true as const, emailSent: sent };
   });
 
 export const verifyLoginOtp = createServerFn({ method: "POST" })
@@ -423,4 +424,61 @@ export const verifyLoginOtp = createServerFn({ method: "POST" })
     if (!consumedOtp) throw new Error("Bu doğrulama kodu artık geçerli değil.");
 
     return { ok: true as const };
+  });
+
+// --------------------------------------------------------------------------
+// Resend Login OTP: mevcut kullanıcıya yeni OTP kodu gönderir.
+// --------------------------------------------------------------------------
+
+export const resendLoginOtp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string }) => {
+    const email = String(input?.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 255) {
+      throw new Error("Geçerli bir e-posta adresi girin.");
+    }
+    return { email };
+  })
+  .handler(async ({ data }) => {
+    // Rate limit
+    const limit = await rateLimit(
+      `resend-login-otp:ip:${await hashValue(clientIp(getRequest()))}`,
+      5,
+      300,
+    );
+    if (limit)
+      throw new Error("Çok fazla yeniden gönderme denemesi. Lütfen biraz sonra tekrar deneyin.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Kullanıcı var mı kontrol et
+    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const userExists = list?.users?.some((u) => u.email?.toLowerCase() === data.email);
+    if (!userExists) {
+      throw new Error("Bu e-posta adresiyle kayıtlı hesap bulunamadı.");
+    }
+
+    // Önceki kullanılmamış OTP'leri tüket
+    await supabaseAdmin
+      .from("email_otps")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("email", data.email)
+      .is("consumed_at", null);
+
+    // Yeni OTP üret ve kaydet
+    const code = generateOtp();
+    const { error: otpError } = await supabaseAdmin.from("email_otps").insert({
+      email: data.email,
+      code_hash: await hashOtp(data.email, code),
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    });
+    if (otpError) throw new Error("Doğrulama kodu oluşturulamadı. Lütfen tekrar deneyin.");
+
+    const sent = await sendOtpEmail(data.email, code);
+    if (!sent) {
+      console.warn(`[resend-login-otp] email delivery failed for ${data.email}`);
+    }
+
+    return { ok: true as const, emailSent: sent };
   });

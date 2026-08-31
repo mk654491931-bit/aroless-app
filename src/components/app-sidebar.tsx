@@ -16,7 +16,6 @@ import {
   Package,
   Coins,
   Rocket,
-  ShieldHalf,
   Newspaper,
   Handshake,
   FileSearch,

@@ -3,8 +3,7 @@
  * React Query, memoization, ve bundle size iyileştirmeleri
  */
 
-import { useMemo, useCallback, memo } from "react";
-import type { ReactNode } from "react";
+import { useMemo, useCallback, memo, useState, useEffect, useRef } from "react";
 
 /**
  * React Query Global Configuration - Caching ve Stale-While-Revalidate
@@ -51,7 +50,7 @@ export function useAsyncMemo<T>(
 ): T {
   const [value, setValue] = useState<T>(initialValue);
 
-  useMemo(() => {
+  useEffect(() => {
     let mounted = true;
     void factory().then((result) => {
       if (mounted) setValue(result);
@@ -68,13 +67,13 @@ export function useAsyncMemo<T>(
  * useStableCallback - Callback stability, deps gerektirmez
  */
 export function useStableCallback<T extends (...args: any[]) => any>(callback: T): T {
-  const ref = useRef(callback);
+  const ref = useRef<T>(callback);
 
   useEffect(() => {
     ref.current = callback;
   }, [callback]);
 
-  return useCallback((...args) => ref.current(...args), []) as T;
+  return useCallback((...args: any[]) => ref.current(...args), []) as unknown as T;
 }
 
 /**
@@ -151,8 +150,7 @@ export function useOptimizedImage(
   }, [src, options?.width, options?.quality, options?.format]);
 }
 
-// Re-export React hooks
-export { useState, useEffect, useRef, useCallback, useMemo } from "react";
+
 
 // Type definitions
 interface LayoutShiftEntry extends PerformanceEntry {

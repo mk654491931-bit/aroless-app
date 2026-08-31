@@ -27,8 +27,6 @@ import {
   Pie,
   Cell,
   Legend,
-  LineChart,
-  Line,
   AreaChart,
   Area,
   RadarChart,

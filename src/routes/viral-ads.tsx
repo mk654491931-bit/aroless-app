@@ -11,7 +11,6 @@ import {
   TrendingUp,
   Heart,
   Filter,
-  Globe,
   Megaphone,
   Flame,
   Youtube,
