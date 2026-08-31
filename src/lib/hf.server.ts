@@ -63,7 +63,7 @@ export async function callHuggingFace(
   let lastErr: unknown = null;
   for (const token of tokens) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90_000);
+    const timer = setTimeout(() => controller.abort(), 25_000);
     try {
       const resp = await fetch(HF_URL, {
         method: "POST",

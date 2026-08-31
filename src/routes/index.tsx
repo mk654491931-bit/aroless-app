@@ -318,6 +318,7 @@ function Dashboard() {
   const isAdmin = !!adminQ.data?.isAdmin;
 
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
+  const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const gen = useMutation({
     mutationFn: (
@@ -360,17 +361,20 @@ function Dashboard() {
         setShowPricing(true);
       } else toast.error(err.message);
     },
+    onSettled: () => {
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    },
   });
 
   const hfFn = useServerFn(huggingFaceSearch);
   const hfGen = useMutation({
-    mutationFn: (vars: { engine: "qwen" | "llama" | "hybrid" }) =>
+    mutationFn: (vars: { engine: "qwen" | "llama" | "hybrid"; platforms?: Platform[] }) =>
       hfFn({
         data: {
           niche,
           category,
           audience,
-          platforms,
+          platforms: vars.platforms ?? platforms,
           budget,
           target_country: marketplace === "turkey" ? "TR" : targetCountry,
           marketplace,
@@ -400,6 +404,9 @@ function Dashboard() {
           ? "Hugging Face token missing — add HF_TOKEN in Settings."
           : err.message,
       );
+    },
+    onSettled: () => {
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     },
   });
 
@@ -436,15 +443,45 @@ function Dashboard() {
     }
     pushRecent(nicheValue);
     setResultQuery("");
+    // When ALL selected platforms are unavailable in the target country,
+    // automatically add cross-border alternatives to avoid empty results.
+    const effectivePlatforms = (() => {
+      const allBlocked = platforms.every(
+        (p) => countryFit(p, effectiveCountry) === "unavailable",
+      );
+      if (!allBlocked) return platforms;
+      const cb = platforms
+        .filter((p) => countryFit(p, effectiveCountry) === "cross-border")
+        .slice(0, 3);
+      if (cb.length > 0) {
+        toast.info(`All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`);
+        return cb;
+      }
+      // Last resort: add global platforms (Shopify, Amazon)
+      const globalFallback = ["Amazon", "Shopify", "eBay"].filter(
+        (p) => countryFit(p as Platform, effectiveCountry) !== "unavailable",
+      ) as Platform[];
+      if (globalFallback.length > 0) {
+        toast.info(`Switching to global platforms for ${countryName(effectiveCountry)} market.`);
+        return globalFallback;
+      }
+      return platforms;
+    })();
+    // Safety timer: if mutation hangs (server crash, network drop),
+    // reset the searching UI after 3 minutes.
+    if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    searchSafetyTimerRef.current = setTimeout(() => {
+      toast.error("Search timed out — please try again.");
+    }, 180_000);
     if (engine !== "default") {
-      hfGen.mutate({ engine });
+      hfGen.mutate({ engine, platforms: effectivePlatforms });
       return;
     }
     gen.mutate({
       niche: nicheValue,
       category,
       audience,
-      platforms,
+      platforms: effectivePlatforms,
       budget,
       target_country: marketplace === "turkey" ? "TR" : targetCountry,
       min_score: minScore,
@@ -459,6 +496,11 @@ function Dashboard() {
     e.preventDefault();
     runSearch(niche);
   };
+
+  // Cleanup search safety timer on unmount
+  useEffect(() => {
+    return () => { if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current); };
+  }, []);
 
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
   useEffect(() => {

@@ -335,7 +335,7 @@ async function geminiOnce(
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[Math.min(attempt, models.length - 1)];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
+    const timeout = setTimeout(() => controller.abort(), 25000);
     try {
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
