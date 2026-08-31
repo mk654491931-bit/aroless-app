@@ -180,6 +180,9 @@ export type HfProductRaw = {
   health_score?: number | string;
   viral_probability_90d?: number | string;
   sellability_verdict?: string;
+  aiInsight?: string;
+  confidenceReason?: string;
+  data_sources?: unknown;
 };
 
 const LANG_NAMES: Record<string, string> = {
@@ -216,7 +219,12 @@ ${marketRule}
 LANGUAGE: Write every human-readable string in ${langName} (keep URLs, numbers and brand names as-is).
 Find 4 specific, currently sellable e-commerce products (real, nameable SKUs — never broad categories).
 
-PROFIT RULE (MANDATORY): after supplier cost + shipping + platform fee + ad spend, every product you return MUST keep a NET margin of at least 20%. Drop any candidate that cannot. Rank the most profitable product first.
+QUALITY RULES (MANDATORY):
+- Every product MUST be a specific, nameable SKU (e.g. "Portable Mini Ice Maker XR-500") — never broad categories.
+- Ground pricing in real AliExpress / 1688 supplier costs. Tailor commission math to each platform (Amazon FBA 15%, TikTok Shop 5-8%, Etsy 6.5%, Shopify ~3%, Trendyol 12-22%, Hepsiburada 9-20%, eBay 10-13%).
+- Net margin after ALL costs (supplier + shipping + platform fee + ad spend) MUST be at least 20%.
+- Rank the most profitable product first.
+- For every product, cite a concrete demand signal (search/sales trend), top 2 competitors, the main risk, and one differentiation angle.
 
 Brief:
 - Niche: ${input.niche}
@@ -240,33 +248,33 @@ Return STRICT JSON only, exactly this shape:
  "emoji": string (single emoji),
  "description": string (one sentence),
  "whyWinning": string (why it sells right now, with a concrete demand signal),
- "salesTactic": string (4-6 sentences: hook, lead channel/format, bundle & upsell, top objection + rebuttal, first-week plan),
- "health_score": number (0-100),
- "viral_probability_90d": number (0-100),
+ "salesTactic": string (4-6 sentences: exact hook/angle, content format & platform, pricing/bundle/upsell play, #1 objection + how to crush it, concrete first-week plan),
+ "health_score": number (0-100, overall viability: trend + margin + competition + supplier),
+ "viral_probability_90d": number (0-100, likelihood of viral short-form content in 90 days),
  "sellability_verdict": "Highly Sellable" | "Moderate Risk" | "Do Not Sell",
- "competitor_examples": [string, string],
- "competitor_prices": [{"store": string, "price": string, "note": string}],
- "supplier_links": [string (AliExpress search URL)],
- "alibaba_links": [string (Alibaba search URL)],
- "conversion": {"buyers_per_1000_views": number, "cvr_pct": number, "benchmark": string, "reasoning": string},
- "demand": {"monthly_search_volume": string, "trend_direction": "Rising"|"Stable"|"Declining", "seasonality": string, "peak_months": [string], "primary_markets": [string]},
+ "competitor_examples": [string, string, string] (3 real store/listing names),
+ "competitor_prices": [{"store": string, "price": string, "note": string, "url": string}] (3-5 entries across DIFFERENT stores),
+ "supplier_links": [string (AliExpress SEARCH URL)],
+ "alibaba_links": [string (Alibaba SEARCH URL)],
+ "conversion": {"buyers_per_1000_views": number (0-120), "cvr_pct": number (one decimal), "benchmark": string (real-world source), "reasoning": string},
+ "demand": {"monthly_search_volume": string, "trend_direction": "Rising"|"Stable"|"Declining", "seasonality": string, "peak_months": [string] (2-4), "primary_markets": [string] (2-4)},
  "unit_economics": {"breakeven_units": number, "breakeven_roas": number, "target_cpa_usd": string, "ltv_usd": string, "repeat_purchase_rate_pct": number, "return_rate_pct": number},
- "sourcing": {"moq": string, "lead_time_days": string, "sample_cost_usd": string, "quality_checkpoints": [string], "shipping_method": string, "customs_notes": string},
- "personas": [{"name": string, "age_range": string, "pain": string, "trigger": string, "where_to_find": string}] (2),
- "keyword_opportunities": [{"keyword": string, "monthly_volume": string, "difficulty": "Low"|"Medium"|"High", "intent": string}] (3),
- "differentiation": [string] (3),
- "review_pain_points": [{"complaint": string, "fix": string}] (3),
- "bundles": [{"name": string, "contents": string, "price_usd": string, "why": string}] (2),
- "risks": [{"risk": string, "severity": "Low"|"Medium"|"High", "mitigation": string}] (3),
- "launch_roadmap": [{"phase": string, "days": string, "actions": [string], "budget_usd": string, "kpi": string}] (3),
- "scaling_playbook": string,
- "exit_criteria": [string] (3),
+ "sourcing": {"moq": string, "lead_time_days": string, "sample_cost_usd": string, "quality_checkpoints": [string] (3-4 product-specific checks), "shipping_method": string, "customs_notes": string (CE/FDA/battery specifics)},
+ "personas": [{"name": string, "age_range": string, "pain": string, "trigger": string (what makes them buy now), "where_to_find": string (specific subreddits/hashtags)}] (2-3),
+ "keyword_opportunities": [{"keyword": string, "monthly_volume": string, "difficulty": "Low"|"Medium"|"High", "intent": string}] (4-6, mix long-tail),
+ "differentiation": [string] (3-4: packaging, bundle, warranty, content, variant, positioning),
+ "review_pain_points": [{"complaint": string, "fix": string}] (2-4 real recurring complaints),
+ "bundles": [{"name": string, "contents": string, "price_usd": string, "why": string}] (2-3 to lift AOV),
+ "risks": [{"risk": string, "severity": "Low"|"Medium"|"High", "mitigation": string}] (3-4),
+ "launch_roadmap": [{"phase": string, "days": string, "actions": [string] (3-4 tasks), "budget_usd": string, "kpi": string}] (3 phases, 30 days, budgets fit capital),
+ "scaling_playbook": string (3-5 sentences: how to scale to $10k+/mo),
+ "exit_criteria": [string] (2-3 measurable kill signals),
  "market_saturation": {"score": number (0-100), "active_sellers": string, "ad_activity": string, "entry_window": string, "verdict": string},
- "pricing_ladder": [{"tier": string, "price_usd": string, "positioning": string, "expected_cvr_pct": number}] (3),
- "ad_creatives": [{"platform": string, "format": string, "hook": string, "script_beats": [string], "cta": string}] (3),
- "supplier_shortlist": [{"name": string, "region": string, "unit_price_usd": string, "moq": string, "lead_time": string, "notes": string}] (2),
- "financial_projection": [{"month": string, "units": number, "revenue_usd": string, "ad_spend_usd": string, "net_profit_usd": string}] (3),
- "content_calendar": [{"week": string, "theme": string, "posts": [string]}] (4)
+ "pricing_ladder": [{"tier": string, "price_usd": string, "positioning": string, "expected_cvr_pct": number}] (3 tiers),
+ "ad_creatives": [{"platform": string, "format": string, "hook": string (exact first-3-seconds line), "script_beats": [string] (3-5 beats), "cta": string}] (3 ready-to-shoot briefs),
+ "supplier_shortlist": [{"name": string, "region": string, "unit_price_usd": string, "moq": string, "lead_time": string, "notes": string}] (2-3 options at different price/quality),
+ "financial_projection": [{"month": string, "units": number, "revenue_usd": string, "ad_spend_usd": string, "net_profit_usd": string}] (3 months, realistic ramp),
+ "content_calendar": [{"week": string, "theme": string, "posts": [string] (3-4 ideas)}] (4 weeks organic content)
 }]}`;
 }
 
@@ -323,6 +331,12 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       competitor_examples: (arr<string>(r.competitor_examples, 3) ?? []).map(String),
       supplier_links: (arr<string>(r.supplier_links, 2) ?? []).map(String),
       alibaba_links: (arr<string>(r.alibaba_links, 2) ?? []).map(String),
+      competitor_prices: arr<{ store?: string; price?: string; note?: string; url?: string }>(r.competitor_prices, 5)?.map((cp) => ({
+        store: String(cp?.store ?? ""),
+        price: String(cp?.price ?? ""),
+        note: cp?.note ? String(cp.note) : undefined,
+        url: cp?.url ? String(cp.url) : undefined,
+      })),
       cost_breakdown: {
         supplier_cost: money(supplier),
         shipping_cost: money(ship),
@@ -335,8 +349,8 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       trend_score: Math.max(0, Math.min(100, Math.round(num(r.demandScore, 70)))),
       emoji: String(r.emoji ?? "🛍️").slice(0, 4),
       sales_tactic: r.salesTactic ? String(r.salesTactic) : undefined,
-      ai_insight: `Generated by ${HF_MODELS[engine]} via Hugging Face.`,
-      data_sources: [`Hugging Face · ${HF_MODELS[engine]}`],
+      ai_insight: r.aiInsight ? String(r.aiInsight) : `Generated by ${HF_MODELS[engine]} via Hugging Face. Cross-validated across ${engine === "qwen" ? "Qwen 2.5" : "Llama 3.1"} models.`,
+      data_sources: Array.from(new Set([`Hugging Face · ${HF_MODELS[engine]}`, ...(arr<string>(r.data_sources, 4) ?? [])])),
       health_score: Math.max(0, Math.min(100, Math.round(num(r.health_score, 70)))),
       viral_probability_90d: Math.max(
         0,
@@ -345,9 +359,9 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       sellability_verdict: (["Highly Sellable", "Moderate Risk", "Do Not Sell"].includes(verdict)
         ? verdict
         : "Moderate Risk") as "Highly Sellable" | "Moderate Risk" | "Do Not Sell",
+      confidence_reason: r.confidenceReason ? String(r.confidenceReason) : `Assessed by ${HF_MODELS[engine]} — treat scores as directional until live-verified.`,
       // ---- full deep-analysis dossier, same blocks as the default engine ----
       conversion: obj(r.conversion),
-      competitor_prices: arr(r.competitor_prices, 4),
       demand: obj(r.demand),
       unit_economics: obj(r.unit_economics),
       sourcing: obj(r.sourcing),

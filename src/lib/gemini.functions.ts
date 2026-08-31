@@ -606,6 +606,50 @@ JSON shape:
       const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
       if (parsed.products?.length) products = parsed.products;
     }
+    // ---- Cross-engine fallback: Gemini tükendiyse HF motorlarıyla dene ----
+    let fallbackEngine = "gemini";
+    if (products.length === 0) {
+      try {
+        const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, hfTokenPool } =
+          await import("@/lib/hf.server");
+        const hfTokens = hfTokenPool();
+        if (hfTokens.length > 0) {
+          const hfBase = {
+            niche: data.niche,
+            category: data.category,
+            audience: data.audience,
+            platforms: data.platforms as string[],
+            budget: data.budget,
+            target_country: data.target_country,
+            marketplace: data.marketplace,
+            lang: data.lang,
+          };
+          const hfEnginePromises = [
+            (async () => {
+              const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "llama" }), "llama");
+              return mapHfProducts(text, data.platforms as string[], "llama");
+            })(),
+            (async () => {
+              const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "qwen" }), "qwen");
+              return mapHfProducts(text, data.platforms as string[], "qwen");
+            })(),
+          ];
+          const hfResults = await Promise.allSettled(hfEnginePromises);
+          const hfLists = hfResults
+            .filter((r): r is PromiseFulfilledResult<ReturnType<typeof mapHfProducts>> => r.status === "fulfilled")
+            .map((r) => r.value);
+          if (hfLists.length > 0) {
+            const merged = mergeHfProducts(hfLists) as unknown as WinningProduct[];
+            if (merged.length > 0) {
+              products = merged;
+              fallbackEngine = "hf_hybrid";
+            }
+          }
+        }
+      } catch {
+        // HF fallback başarısız olsa da Gemini hatasıyla devam et
+      }
+    }
     if (products.length === 0) {
       await refund();
       throw new Error(
@@ -816,6 +860,7 @@ JSON shape:
       target_country: country,
       min_score: minScore,
       fallback,
+      fallback_engine: fallbackEngine,
     };
   });
 
