@@ -1,6 +1,6 @@
 import { ArolessCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -301,12 +301,14 @@ function Dashboard() {
     queryKey: ["profile", user?.id],
     queryFn: () => getProfileFn(),
     enabled: !!user,
+    staleTime: 2 * 60_000, // 2 dk cache — profil her sorguda yeniden çekilmesin
   });
 
   const favsQ = useQuery({
     queryKey: ["favorites", user?.id],
     queryFn: () => listFavFn(),
     enabled: !!user,
+    staleTime: 5 * 60_000, // 5 dk cache — favoriler sık değişmez
   });
 
   const checkAdminFn = useServerFn(checkIsAdmin);
@@ -314,6 +316,7 @@ function Dashboard() {
     queryKey: ["is-admin", user?.id],
     queryFn: () => checkAdminFn(),
     enabled: !!user,
+    staleTime: 10 * 60_000, // 10 dk cache — admin statüsü çok nadir değişir
   });
   const isAdmin = !!adminQ.data?.isAdmin;
 
@@ -428,9 +431,9 @@ function Dashboard() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const togglePlatform = (p: Platform) => {
+  const togglePlatform = useCallback((p: Platform) => {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  };
+  }, [setPlatforms]);
 
   const searching = gen.isPending || hfGen.isPending;
 
@@ -1218,16 +1221,22 @@ function Dashboard() {
                           return true;
                         };
 
-                        const filtered = applyFilters(results, filters)
-                          .filter(bandPass)
-                          .filter(
-                            (p) =>
-                              !q ||
-                              [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
-                                .filter(Boolean)
-                                .some((v) => String(v).toLowerCase().includes(q)),
-                          );
-                        const shown = sortProducts(filtered, sortBy, onlyLaunch, sortDesc);
+                        const filtered = useMemo(() =>
+                          applyFilters(results, filters)
+                            .filter(bandPass)
+                            .filter(
+                              (p) =>
+                                !q ||
+                                [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
+                                  .filter(Boolean)
+                                  .some((v) => String(v).toLowerCase().includes(q)),
+                            ),
+                          [results, filters, band, q, onlyLaunch],
+                        );
+                        const shown = useMemo(() =>
+                          sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
+                          [filtered, sortBy, onlyLaunch, sortDesc],
+                        );
                         const bands = [
                           { id: "all", label: `Tümü (${results.length})` },
                           {

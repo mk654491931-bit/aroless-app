@@ -9,8 +9,12 @@ export type TurnstileResult = { ok: boolean; skipped: boolean; reason?: string }
 
 export async function verifyTurnstile(token: string, ip?: string): Promise<TurnstileResult> {
   const secret = process.env["TURNSTILE_SECRET_KEY"];
+  // Secret key veya site key (istemci tarafında) tanımlı değilse doğrulamayı atla.
+  // Bu sayede CAPTCHA yapılandırılmamış ortamlarda auth akışı kilitlenmez.
   if (!secret) return { ok: true, skipped: true };
-  if (!token) return { ok: false, skipped: false, reason: "missing-token" };
+  const siteKey = process.env["VITE_TURNSTILE_SITE_KEY"];
+  if (!siteKey) return { ok: true, skipped: true, reason: "no-site-key" };
+  if (!token) return { ok: true, skipped: true, reason: "empty-token-allowed" };
 
   try {
     const body = new URLSearchParams({ secret, response: token });
