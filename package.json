@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "setup": "cp -n .env.example .env; npm install"
   },
   "dependencies": {
@@ -91,7 +93,8 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
     "@lovable.dev/vite-tanstack-config": "2.13.1"
