@@ -309,3 +309,118 @@ export const registerDeviceFingerprint = createServerFn({ method: "POST" })
     });
     return { ok: true as const, freeTierBlocked: reused };
   });
+
+// --------------------------------------------------------------------------
+// Login OTP: e-posta ile giriş yapan kullanıcıya 6 haneli doğrulama kodu gönderir.
+// TURNSTILE_SECRET_KEY tanımlı değilse CAPTCHA doğrulaması atlanır.
+// --------------------------------------------------------------------------
+
+export const startLoginOtp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; turnstileToken?: string }) => {
+    const email = String(input?.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 255) {
+      throw new Error("Geçerli bir e-posta adresi girin.");
+    }
+    return {
+      email,
+      turnstileToken: String(input?.turnstileToken ?? "").slice(0, 4096),
+    };
+  })
+  .handler(async ({ data }) => {
+    // Rate limit: IP bazlı
+    const limit = await rateLimit(
+      `login-otp:ip:${await hashValue(clientIp(getRequest()))}`,
+      10,
+      600,
+    );
+    if (limit) throw new Error("Çok fazla giriş denemesi. Lütfen biraz sonra tekrar deneyin.");
+
+    // Turnstile doğrulaması (yapılandırılmamışsa atlanır)
+    const captcha = await verifyTurnstile(data.turnstileToken, clientIp(getRequest()));
+    if (!captcha.ok)
+      throw new Error("Bot doğrulaması başarısız. Sayfayı yenileyip tekrar deneyin.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Kullanıcı var mı kontrol et
+    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 500 });
+    const user = list?.users?.find((u) => u.email?.toLowerCase() === data.email);
+    if (!user) throw new Error("Bu e-posta adresiyle kayıtlı hesap bulunamadı.");
+
+    // OTP kodu üret ve kaydet
+    const code = generateOtp();
+    const { error: otpError } = await supabaseAdmin.from("email_otps").insert({
+      email: data.email,
+      code_hash: await hashOtp(data.email, code),
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    });
+    if (otpError) throw new Error("Doğrulama kodu oluşturulamadı. Lütfen tekrar deneyin.");
+
+    // E-posta gönder
+    await sendOtpEmail(data.email, code);
+
+    return { ok: true as const };
+  });
+
+export const verifyLoginOtp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; code: string }) => {
+    const email = String(input?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const code = String(input?.code ?? "").trim();
+    if (!email || !/^\d{6}$/.test(code)) throw new Error("6 haneli doğrulama kodunu girin.");
+    return { email, code };
+  })
+  .handler(async ({ data }) => {
+    const ipLimit = await rateLimit(
+      `verify-login-otp:ip:${await hashValue(clientIp(getRequest()))}`,
+      10,
+      600,
+    );
+    const emailLimit = await rateLimit(
+      `verify-login-otp:email:${await hashValue(data.email)}`,
+      10,
+      600,
+    );
+    if (ipLimit || emailLimit)
+      throw new Error("Çok fazla doğrulama denemesi. Lütfen biraz sonra tekrar deneyin.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: otp } = await supabaseAdmin
+      .from("email_otps")
+      .select("id, code_hash, attempts, expires_at")
+      .eq("email", data.email)
+      .is("consumed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!otp || new Date(otp.expires_at) <= new Date())
+      throw new Error("Kodun süresi dolmuş. Yeni kod isteyin.");
+    if (otp.attempts >= 5) throw new Error("Çok fazla hatalı deneme. Yeni kod isteyin.");
+
+    const codeHash = await hashOtp(data.email, data.code);
+    if (codeHash !== otp.code_hash) {
+      await supabaseAdmin
+        .from("email_otps")
+        .update({ attempts: otp.attempts + 1 })
+        .eq("id", otp.id);
+      throw new Error("Doğrulama kodu hatalı.");
+    }
+
+    // Kodu kullanıldı olarak işaretle
+    const { data: consumedOtp } = await supabaseAdmin
+      .from("email_otps")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", otp.id)
+      .eq("code_hash", codeHash)
+      .is("consumed_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .select("id")
+      .maybeSingle();
+    if (!consumedOtp) throw new Error("Bu doğrulama kodu artık geçerli değil.");
+
+    return { ok: true as const };
+  });

@@ -24,7 +24,8 @@ import {
   startEmailSignup,
   registerDeviceFingerprint,
   verifyEmailSignup,
-  verifyEmailLoginTurnstile,
+  startLoginOtp,
+  verifyLoginOtp,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
@@ -213,6 +214,7 @@ function AuthPage() {
   const [promoCode, setPromoCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
+  const [loginOtpStep, setLoginOtpStep] = useState(false);
   const [referralCode] = useState(() =>
     typeof window === "undefined"
       ? ""
@@ -234,7 +236,8 @@ function AuthPage() {
 
   const startSignupFn = useServerFn(startEmailSignup);
   const verifySignupFn = useServerFn(verifyEmailSignup);
-  const verifyLoginCaptchaFn = useServerFn(verifyEmailLoginTurnstile);
+  const startLoginOtpFn = useServerFn(startLoginOtp);
+  const verifyLoginOtpFn = useServerFn(verifyLoginOtp);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
   const claimReferralFn = useServerFn(claimReferral);
 
@@ -346,12 +349,22 @@ function AuthPage() {
         setOtpStep(true);
         toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
         return;
-      } else {
+      } else if (loginOtpStep) {
+        // Login OTP doğrulama: kodu kontrol et, sonra giriş yap
         setBusy("email");
-        await verifyLoginCaptchaFn({ data: { turnstileToken } });
+        await verifyLoginOtpFn({ data: { email, code: otpCode } });
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        toast.success("E-posta doğrulandı. Hoş geldiniz!");
         nav({ to: "/" });
+        return;
+      } else if (mode === "signin") {
+        // Login OTP başlat: CAPTCHA → OTP kodu gönder
+        setBusy("email");
+        await startLoginOtpFn({ data: { email, turnstileToken } });
+        setLoginOtpStep(true);
+        toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
+        return;
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -566,6 +579,7 @@ function AuthPage() {
                         onClick={() => {
                           setMode(m);
                           setOtpStep(false);
+                          setLoginOtpStep(false);
                           setOtpCode("");
                         }}
                         className={`relative z-10 rounded-lg py-2 font-medium transition-all ${
@@ -657,7 +671,39 @@ function AuthPage() {
                         </button>
                       </div>
                     )}
-                    {!otpStep && (
+                    {mode === "signin" && loginOtpStep && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          {email} adresine gönderilen 6 haneli kodu girin.
+                        </p>
+                        <div className="neon-field relative">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                            required
+                            autoFocus
+                            placeholder="000000"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                            className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em]"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLoginOtpStep(false);
+                            setOtpCode("");
+                          }}
+                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                        >
+                          E-posta veya şifreyi değiştir
+                        </button>
+                      </div>
+                    )}
+                    {!otpStep && !loginOtpStep && (
                       <div className="flex items-center gap-2">
                         <div
                           className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
@@ -710,7 +756,7 @@ function AuthPage() {
                       </div>
                     )}
 
-                    {!otpStep && (
+                    {!otpStep && !loginOtpStep && (
                       <div
                         className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
                       >
@@ -826,7 +872,7 @@ function AuthPage() {
                       </>
                     )}
 
-                    {!otpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
+                    {!otpStep && !loginOtpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
 
                     <button
                       type="submit"
@@ -838,11 +884,13 @@ function AuthPage() {
                       <span className="relative z-10 inline-flex items-center justify-center gap-2">
                         {busy === "email"
                           ? "Please wait…"
-                          : mode === "signin"
-                            ? "Sign in"
-                            : otpStep
-                              ? "E-postayı doğrula"
-                              : "Kayıt Ol"}
+                          : loginOtpStep
+                            ? "E-postayı doğrula"
+                            : mode === "signin"
+                              ? "Sign in"
+                              : otpStep
+                                ? "E-postayı doğrula"
+                                : "Kayıt Ol"}
                         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </span>
                     </button>
