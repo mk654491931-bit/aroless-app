@@ -222,9 +222,12 @@ Find 4 specific, currently sellable e-commerce products (real, nameable SKUs —
 QUALITY RULES (MANDATORY):
 - Every product MUST be a specific, nameable SKU (e.g. "Portable Mini Ice Maker XR-500") — never broad categories.
 - Ground pricing in real AliExpress / 1688 supplier costs. Tailor commission math to each platform (Amazon FBA 15%, TikTok Shop 5-8%, Etsy 6.5%, Shopify ~3%, Trendyol 12-22%, Hepsiburada 9-20%, eBay 10-13%).
-- Net margin after ALL costs (supplier + shipping + platform fee + ad spend) MUST be at least 20%.
+- Net margin after ALL costs (supplier + shipping + platform fee + ad spend + returns) MUST be at least 25%.
 - Rank the most profitable product first.
 - For every product, cite a concrete demand signal (search/sales trend), top 2 competitors, the main risk, and one differentiation angle.
+- Do NOT return generic dropshipping items (random phone cases, USB cables, etc.). Return products with real brand identity and proven market demand.
+- Every product must have a specific viral proof — a real TikTok/Reels URL with view count.
+- Products must solve a real problem or fulfill a genuine desire, not just look cool in a video.
 
 Brief:
 - Niche: ${input.niche}

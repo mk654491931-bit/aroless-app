@@ -388,8 +388,16 @@ export const generateProducts = createServerFn({ method: "POST" })
       extra = "",
     ) => `You are an elite e-commerce product research analyst with LIVE Google Search access.
 CRITICAL: Use the Google Search tool before answering. Base every number, price, competitor, link and trend claim on real, current search results you actually retrieved. Never invent, estimate blindly, or simulate data. If a figure cannot be verified, give the closest verified real-world figure and say so in "confidence_reason".
+QUALITY BAR (ENFORCED): Every product you return must pass ALL of these tests:
+1. It must be a SPECIFIC, real, currently-sold product — not a category or generic description.
+2. It must have at least ONE verified viral proof (TikTok/Reels/Shorts URL with real view count found via search).
+3. Its net profit margin AFTER all costs (supplier + shipping + platform fee + ad spend + returns) must be ≥ 25%.
+4. It must NOT be in a hyper-saturated category where 500+ identical sellers exist.
+5. The selling price must be realistic for the target country's shoppers (not US prices copy-pasted for other markets).
+If a product fails ANY of these tests, DROP IT and return fewer products rather than lower-quality ones.
 ANGLE FOR THIS BATCH: ${angle}
 VIRAL-ONLY RULE (MANDATORY): Every product you return MUST currently have a REAL, verifiable viral form on TikTok, Instagram Reels, YouTube Shorts, or a similar short-form platform — a specific video, hashtag, or creator post with real view counts you actually found via search. If a candidate product does NOT have a currently-viral form you can prove with a URL and view count, DROP IT ENTIRELY. It is better to return 1 product with rock-solid viral proof than 2 without.
+ANTI-DROP-SHIPPING RULE: Do NOT return generic dropshipping products that are available on AliExpress with zero branding (e.g., random phone accessories, generic kitchen tools). Return products that have at least some brand identity, unique value proposition, or proven market demand beyond impulse buys. Products must solve a real problem or fulfill a genuine desire — not just look cool in a 15-second video.
 Return UP TO 2 products that match the angle (may be 0, 1, or 2 depending on how many you can prove are viral right now). Each returned product must be your highest-conviction pick with maximum depth and rigor.
 Every product MUST be a specific, nameable SKU currently sold online (e.g. "Portable Mini Ice Maker XR-500", "Sol de Janeiro Brazilian Bum Bum Cream 240ml"), not a category like "kitchen gadgets".
 Ground pricing in real AliExpress / 1688 supplier costs and realistic retail selling prices for the SELECTED sales platforms. Tailor commission math, fee structure, and marketing strategy to each platform (Amazon FBA fees, TikTok Shop 5-8% + ads, Etsy listing + 6.5%, Shopify processing, Trendyol commission 12-22%, Hepsiburada commission 9-20% + local cargo, WooCommerce self-hosted, eBay 10-13%).
@@ -709,11 +717,22 @@ JSON shape:
       return { ...p, hybrid, consensus };
     });
 
-    // Rank by the weighted hybrid score — no strict AND gate, so the engine
-    // never deadlocks into an empty result set.
-    const ranked = [...judged].sort(
-      (a, b) => (b.hybrid?.calculated_score ?? 0) - (a.hybrid?.calculated_score ?? 0),
-    );
+    // Rank by the weighted hybrid score with quality bonuses:
+    // +5 for products with verified viral proof (URL + views)
+    // +3 for products with profit margin > 40%
+    // +2 for products with 3+ platform fit options
+    const ranked = [...judged].sort((a, b) => {
+      const scoreA = (a.hybrid?.calculated_score ?? 0);
+      const scoreB = (b.hybrid?.calculated_score ?? 0);
+      // Quality bonuses
+      const bonusA = ((a.viral_proof ?? []).length > 0 ? 5 : 0)
+        + ((a.cost_breakdown?.net_margin_pct ?? a.profit_margin_pct ?? 0) > 40 ? 3 : 0)
+        + ((a.platform_fit ?? []).length >= 3 ? 2 : 0);
+      const bonusB = ((b.viral_proof ?? []).length > 0 ? 5 : 0)
+        + ((b.cost_breakdown?.net_margin_pct ?? b.profit_margin_pct ?? 0) > 40 ? 3 : 0)
+        + ((b.platform_fit ?? []).length >= 3 ? 2 : 0);
+      return (scoreB + bonusB) - (scoreA + bonusA);
+    });
 
     let finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= minScore);
     let fallback: { type: "relaxed"; message: string } | null = null;

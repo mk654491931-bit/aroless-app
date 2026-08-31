@@ -329,6 +329,10 @@ export function marketBriefBlock(platforms: Platform[], code: string | undefined
     `- Apply the real commission range above for the top channel in cost_breakdown, plus ${country.vat_pct}% ${country.vat_label} and local last-mile shipping.`,
     `- Drop any product that is blocked, restricted or needs certification that a small seller cannot obtain in ${country.name} (e.g. certification, customs or packaging-registration barriers listed above). If you keep it, state the barrier explicitly in risks.`,
     `- platform_fit must only contain channels that actually work in ${country.name}.`,
+    `- Shipping cost MUST account for the actual distance from China/US to ${country.name}. For example: US → Turkey takes 15-25 days economy, 7-12 days express. Factor this into ALL margin calculations.`,
+    `- Return rate expectations by country: US 8-15%, EU 5-10%, Turkey 3-8%, Middle East 2-5%. Use the correct rate for ${country.name} in unit_economics.`,
+    `- Every product must have a CONCRETE viral proof (TikTok/Reels URL with view count). Vague claims like "trending on social media" are NOT acceptable.`,
+    `- products with profit_margin_pct below 25% AFTER all costs (shipping + platform fee + ad spend + returns) must be dropped.`,
   ]
     .filter(Boolean)
     .join("\n");

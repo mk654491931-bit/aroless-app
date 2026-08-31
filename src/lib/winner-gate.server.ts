@@ -91,6 +91,16 @@ const SATURATED = [
   /su şişesi|generic water bottle/i,
   /yoga mat[ıi]?$/i,
   /wireless earbuds?$/i,
+  /screen protector|ekran koruyucu/i,
+  /car phone mount|telefon tutucu/i,
+  /silicone spatula|silikon kaşık$/i,
+  /beard trimmer|sakal düzeltici/i,
+  /nail clipster|tırnak makası/i,
+  /makeup sponge|makyaj süngeri$/i,
+  /car air freshener|hava temizleyici/i,
+  /laptop stand|dizüstü Stand$/i,
+  /kitchen timer|mutfak zamanlayıcı$/i,
+  / laundry bag|çamaşır torbası$/i,
 ];
 
 const BULKY =
@@ -206,9 +216,9 @@ export function winnerGate<T extends GateInput>(
       { label: "Kargo uygunluğu", passed: !BULKY.test(text), detail: "Hacimli/ağır ürün kontrolü" },
       {
         label: "Satış fiyatı tabanı",
-        passed: !(price > 0 && price < 9),
+        passed: !(price > 0 && price < 12),
         value: price > 0 ? `$${price.toFixed(2)}` : "—",
-        threshold: "≥ $9",
+        threshold: "≥ $12",
       },
       {
         label: "Hedef fiyat bandı",
@@ -246,8 +256,8 @@ export function winnerGate<T extends GateInput>(
     else if (SATURATED.some((r) => r.test(text)) && !hasDiff)
       reason = "Aşırı doymuş jenerik ürün — belirgin farklılaşma kanıtı yok.";
     else if (BULKY.test(text)) reason = "Hacimli/ağır ürün — kargo maliyeti kârı yok ediyor.";
-    else if (price > 0 && price < 9)
-      reason = `Satış fiyatı çok düşük ($${price.toFixed(2)}) — reklam maliyeti karşılanmaz.`;
+    else if (price > 0 && price < 12)
+      reason = `Satış fiyatı çok düşük ($${price.toFixed(2)}) — reklam maliyeti karşılanmaz, minimum $12 olmalı.`;
     else if (priceMin > 0 && price > 0 && price < priceMin)
       reason = `Hedef fiyat bandının altında ($${price.toFixed(2)}).`;
     else if (priceMax > 0 && price > 0 && price > priceMax)
