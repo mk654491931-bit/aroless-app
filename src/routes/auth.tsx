@@ -24,9 +24,6 @@ import {
   startEmailSignup,
   registerDeviceFingerprint,
   verifyEmailSignup,
-  startLoginOtp,
-  verifyLoginOtp,
-  resendLoginOtp,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
@@ -216,7 +213,6 @@ function AuthPage() {
   const [promoCode, setPromoCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
-  const [loginOtpStep, setLoginOtpStep] = useState(false);
   const [referralCode] = useState(() =>
     typeof window === "undefined"
       ? ""
@@ -238,9 +234,6 @@ function AuthPage() {
 
   const startSignupFn = useServerFn(startEmailSignup);
   const verifySignupFn = useServerFn(verifyEmailSignup);
-  const startLoginOtpFn = useServerFn(startLoginOtp);
-  const verifyLoginOtpFn = useServerFn(verifyLoginOtp);
-  const resendLoginOtpFn = useServerFn(resendLoginOtp);
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
   const claimReferralFn = useServerFn(claimReferral);
 
@@ -357,26 +350,21 @@ function AuthPage() {
           toast.warning("E-posta gönderilemedi. Kodu doğrudan alamıyorsanız support'a yazın.");
         }
         return;
-      } else if (loginOtpStep) {
-        // Login OTP doğrulama: kodu kontrol et, sonra giriş yap
-        setBusy("email");
-        await verifyLoginOtpFn({ data: { email, code: otpCode } });
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("E-posta doğrulandı. Hoş geldiniz!");
-        nav({ to: "/" });
-        return;
       } else if (mode === "signin") {
-        // Login OTP başlat: CAPTCHA → OTP kodu gönder
+        // Doğrudan email + şifre girişi — OTP gerekmez
         setBusy("email");
-        const res = await startLoginOtpFn({ data: { email, turnstileToken } });
-        setLoginOtpStep(true);
-        if (res.emailSent) {
-          toast.success("6 haneli doğrulama kodu e-posta adresinize gönderildi.");
-        } else {
-          setEmailDeliveryFailed(true);
-          toast.warning("Doğrulama kodu e-posta adresinize gönderilemedi. Kodu yukarıda görebilirsiniz.");
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          // Supabase hata mesajlarını kullanıcı dostu yap
+          const msg = error.message.includes("Invalid login credentials")
+            ? "E-posta veya şifre hatalı."
+            : error.message.includes("Email not confirmed")
+              ? "E-posta adresiniz henüz doğrulanmamış. Kayıt akışını tamamlayın."
+              : error.message;
+          throw new Error(msg);
         }
+        toast.success("Hoş geldiniz!");
+        nav({ to: getRedirectPath() });
         return;
       }
     } catch (err: unknown) {
@@ -592,7 +580,6 @@ function AuthPage() {
                         onClick={() => {
                           setMode(m);
                           setOtpStep(false);
-                          setLoginOtpStep(false);
                           setOtpCode("");
                           setEmailDeliveryFailed(false);
                           setPassword("");
@@ -692,72 +679,7 @@ function AuthPage() {
                         </button>
                       </div>
                     )}
-                    {mode === "signin" && loginOtpStep && (
-                      <div className="space-y-2">
-                        {emailDeliveryFailed && (
-                          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                            E-posta gönderilemedi. Kodu doğrudan alamıyorsanız"destek@aroless.tech" adresinden yardım alabilirsiniz.
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground">
-                          {email} adresine gönderilen 6 haneli kodu girin.
-                        </p>
-                        <div className="neon-field relative">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            pattern="[0-9]{6}"
-                            maxLength={6}
-                            required
-                            autoFocus
-                            placeholder="000000"
-                            value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                            className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em]"
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLoginOtpStep(false);
-                              setOtpCode("");
-                              setEmailDeliveryFailed(false);
-                            }}
-                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                          >
-                            E-posta veya şifreyi değiştir
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy !== null}
-                            onClick={async () => {
-                              setBusy("email");
-                              try {
-                                const res = await resendLoginOtpFn({ data: { email } });
-                                if (res.emailSent) {
-                                  setEmailDeliveryFailed(false);
-                                  toast.success("Yeni kod e-posta adresinize gönderildi.");
-                                } else {
-                                  setEmailDeliveryFailed(true);
-                                  toast.warning("E-posta gönderilemedi. Lütfen daha sonra tekrar deneyin.");
-                                }
-                              } catch (err: unknown) {
-                                const msg = err instanceof Error ? err.message : String(err);
-                                toast.error(msg);
-                              } finally {
-                                setBusy(null);
-                              }
-                            }}
-                            className="text-xs font-medium text-[var(--brand)] hover:underline underline-offset-4 disabled:opacity-50"
-                          >
-                            {busy === "email" ? "Gönderiliyor…" : "Kodu yeniden gönder"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {!otpStep && !loginOtpStep && (
+                    {!otpStep && (
                       <div className="flex items-center gap-2">
                         <div
                           className={`neon-field relative flex-1 ${focusField === "email" ? "is-focused" : ""}`}
@@ -810,7 +732,7 @@ function AuthPage() {
                       </div>
                     )}
 
-                    {!otpStep && !loginOtpStep && (
+                    {!otpStep && (
                       <div
                         className={`neon-field relative ${focusField === "password" ? "is-focused" : ""}`}
                       >
@@ -926,7 +848,7 @@ function AuthPage() {
                       </>
                     )}
 
-                    {!otpStep && !loginOtpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
+                    {!otpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
 
                     <button
                       type="submit"
@@ -938,13 +860,11 @@ function AuthPage() {
                       <span className="relative z-10 inline-flex items-center justify-center gap-2">
                         {busy === "email"
                           ? "Please wait…"
-                          : loginOtpStep
-                            ? "E-postayı doğrula"
-                            : mode === "signin"
-                              ? "Sign in"
-                              : otpStep
-                                ? "E-postayı doğrula"
-                                : "Kayıt Ol"}
+                          : mode === "signin"
+                            ? "Sign in"
+                            : otpStep
+                              ? "E-postayı doğrula"
+                              : "Kayıt Ol"}
                         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </span>
                     </button>
