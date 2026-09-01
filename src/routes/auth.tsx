@@ -13,6 +13,7 @@ import {
   Fingerprint,
   ScanFace,
   BadgeCheck,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -210,6 +211,7 @@ function AuthPage() {
   });
   const [turnstileToken, setTurnstileToken] = useState("");
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [shakeKey, setShakeKey] = useState(0);
   const [promoCode, setPromoCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
@@ -355,13 +357,22 @@ function AuthPage() {
         setBusy("email");
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-          // Supabase hata mesajlarını kullanıcı dostu yap
-          const msg = error.message.includes("Invalid login credentials")
-            ? "E-posta veya şifre hatalı."
-            : error.message.includes("Email not confirmed")
-              ? "E-posta adresiniz henüz doğrulanmamış. Kayıt akışını tamamlayın."
-              : error.message;
-          throw new Error(msg);
+          let msg: string;
+          let unconfirmed = false;
+          if (error.message.includes("Invalid login credentials")) {
+            msg = "Invalid email or password.";
+          } else if (error.message.includes("Email not confirmed")) {
+            msg = "Your email is not verified yet. Check your inbox or resend the verification email below.";
+            unconfirmed = true;
+          } else {
+            msg = error.message;
+          }
+          setShakeKey((k) => k + 1);
+          if (unconfirmed) {
+            toast.error(msg, { duration: 6000 });
+          } else {
+            throw new Error(msg);
+          }
         }
         toast.success("Hoş geldiniz!");
         nav({ to: getRedirectPath() });
@@ -519,13 +530,12 @@ function AuthPage() {
         {/* ---------- Auth card inside laptop frame ---------- */}
         <section className="relative mx-auto w-full max-w-md">
           {/* Ambient light halo beneath the card */}
-          <div ref={haloRef} aria-hidden className="ambient-halo" />
-
-          <div className="laptop-frame">
+          <div ref={haloRef} aria-hidden className="ambient-halo" />              <div className="laptop-frame">
             <div
               ref={cardRef}
               onMouseMove={trackPointer}
-              className="premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8"
+              key={shakeKey}
+              className={`premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8 ${shakeKey > 0 ? "animate-error-shake" : ""}`}
             >
               {/* pointer spotlight */}
               <div
@@ -791,7 +801,7 @@ function AuthPage() {
                           required
                           minLength={6}
                           autoComplete="new-password"
-                          placeholder="Şifre tekrarı"
+                          placeholder="Confirm password"
                           value={confirmPassword}
                           onFocus={() => setFocusField("confirm")}
                           onBlur={() => setFocusField(null)}
@@ -804,7 +814,7 @@ function AuthPage() {
                     {mode === "signup" &&
                       confirmPassword.length > 0 &&
                       confirmPassword !== password && (
-                        <p className="text-xs text-destructive">Şifreler birbiriyle eşleşmiyor.</p>
+                        <p className="text-xs text-destructive">Passwords do not match.</p>
                       )}
 
                     {!otpStep && mode === "signup" && password.length > 0 && (
@@ -842,10 +852,36 @@ function AuthPage() {
                           />
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          Kod geçerliyse indirim, paket satın alırken otomatik uygulanır.
+                          Discount will be applied automatically at checkout.
                         </p>
                         <SignupLegalConsent value={consent} onChange={setConsent} />
                       </>
+                    )}
+
+                    {/* Forgot password (signin only) */}
+                    {!otpStep && mode === "signin" && password.length > 0 && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!email) {
+                              toast.error("Enter your email first.");
+                              return;
+                            }
+                            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                              redirectTo: `${window.location.origin}/auth`,
+                            });
+                            if (error) {
+                              toast.error(error.message);
+                            } else {
+                              toast.success("Password reset link sent. Check your inbox.", { duration: 5000 });
+                            }
+                          }}
+                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                     )}
 
                     {!otpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
@@ -858,14 +894,18 @@ function AuthPage() {
                     >
                       {emailRipple.layer}
                       <span className="relative z-10 inline-flex items-center justify-center gap-2">
-                        {busy === "email"
-                          ? "Please wait…"
-                          : mode === "signin"
-                            ? "Sign in"
-                            : otpStep
-                              ? "E-postayı doğrula"
-                              : "Kayıt Ol"}
-                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        {busy === "email" ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Please wait…
+                          </>
+                        ) : mode === "signin" ? (
+                          <>Sign in <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                        ) : otpStep ? (
+                          <>Verify email <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                        ) : (
+                          <>Create account <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                        )}
                       </span>
                     </button>
                   </form>
