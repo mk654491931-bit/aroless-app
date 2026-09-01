@@ -196,6 +196,34 @@ function SettingsPage() {
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
             <Info label={t("credits")} value={String(profQ.data?.credits ?? 0)} />
           </div>
+
+          {/* Kredi bakiye görselleştirme */}
+          {profQ.data && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-muted-foreground">Kredi bakiyesi</span>
+                <span className="font-semibold text-foreground">{profQ.data.credits ?? 0}</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${Math.min(100, ((profQ.data.credits ?? 0) / 500) * 100)}%`,
+                    background: (profQ.data.credits ?? 0) > 50
+                      ? "linear-gradient(90deg, oklch(0.76 0.17 158), oklch(0.68 0.2 265))"
+                      : (profQ.data.credits ?? 0) > 10
+                        ? "linear-gradient(90deg, oklch(0.82 0.16 80), oklch(0.76 0.17 158))"
+                        : "linear-gradient(90deg, oklch(0.62 0.24 25), oklch(0.82 0.16 80))",
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                <span>0</span>
+                <span>500</span>
+              </div>
+            </div>
+          )}
+
           <Link
             to="/pricing"
             className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10"

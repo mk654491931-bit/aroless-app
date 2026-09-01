@@ -20,6 +20,7 @@ import {
   checkIsAdmin,
   ensureAdminCredits,
 } from "@/lib/admin.functions";
+import { getProviderHealth, type ProviderHealth } from "@/lib/ai-health.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
@@ -44,6 +45,7 @@ function AdminPage() {
   const statsFn = useServerFn(getAdminStats);
   const usersFn = useServerFn(listAdminUsers);
   const txFn = useServerFn(listAdminTransactions);
+  const healthFn = useServerFn(getProviderHealth);
 
   useEffect(() => {
     if (!loading && !user) nav({ to: "/auth" });
@@ -78,6 +80,12 @@ function AdminPage() {
     enabled: isAdmin,
   });
   const txQ = useQuery({ queryKey: ["admin-tx"], queryFn: () => txFn(), enabled: isAdmin });
+  const healthQ = useQuery({
+    queryKey: ["admin-provider-health"],
+    queryFn: () => healthFn(),
+    enabled: isAdmin,
+    refetchInterval: 30_000, // 30 sn'de bir sağlık durumunu yenile
+  });
 
   if (loading || !user || adminQ.isLoading) {
     return (
@@ -173,6 +181,23 @@ function AdminPage() {
             loading={statsQ.isLoading}
           />
         </section>
+
+        {/* AI Provider Health */}
+        {healthQ.data && healthQ.data.providers.length > 0 && (
+          <section className="glass rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Sparkles size={16} /> AI Provider Health
+              </h2>
+              <span className="text-[10px] text-muted-foreground">auto-refresh 30s</span>
+            </div>
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {healthQ.data.providers.map((p) => (
+                <ProviderHealthCard key={p.id} provider={p} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Users */}
         <AdminPromoCodes />
@@ -315,6 +340,34 @@ function KpiCard({
         {loading ? <Loader2 className="animate-spin" size={20} /> : value}
       </div>
       {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
+
+function ProviderHealthCard({ provider }: { provider: ProviderHealth }) {
+  const icons: Record<string, string> = {
+    gemini: "✨", groq: "⚡", together: "🔗", cerebras: "🧠",
+    sambanova: "🌐", openrouter: "🔀", huggingface: "🤗", bedrock: "🏔️",
+  };
+  return (
+    <div className={`rounded-xl border p-3 transition-colors ${
+      provider.healthy
+        ? "border-emerald-500/30 bg-emerald-500/5"
+        : "border-red-500/30 bg-red-500/5"
+    }`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium capitalize flex items-center gap-1.5">
+          <span>{icons[provider.id] ?? "🤖"}</span>
+          {provider.id}
+        </span>
+        <span className={`h-2 w-2 rounded-full ${provider.healthy ? "bg-emerald-400" : "bg-red-400 animate-pulse"}`} />
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>{provider.keyCount} key{provider.keyCount !== 1 ? "s" : ""}</span>
+        {provider.failures > 0 && (
+          <span className="text-red-400">{provider.failures} err</span>
+        )}
+      </div>
     </div>
   );
 }

@@ -829,17 +829,30 @@ function AuthPage() {
 
                     {!otpStep && mode === "signup" && password.length > 0 && (
                       <div className="flex items-center gap-2">
-                        {[1, 2, 3, 4].map((i) => (
-                          <span
-                            key={i}
-                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                              strength >= i
-                                ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
-                                : "bg-border"
-                            }`}
-                          />
-                        ))}
-                        <span className="w-16 text-right text-[11px] text-muted-foreground">
+                        {[1, 2, 3, 4].map((i) => {
+                          const strengthColors = [
+                            "bg-red-500",        // 1: weak
+                            "bg-orange-500",     // 2: fair
+                            "bg-amber-400",      // 3: good
+                            "bg-emerald-500",    // 4: strong
+                          ];
+                          return (
+                            <span
+                              key={i}
+                              className={`h-1.5 flex-1 rounded-full transition-all duration-500 ease-out ${
+                                strength >= i
+                                  ? strengthColors[Math.min(strength, 4) - 1]
+                                  : "bg-border"
+                              }`}
+                            />
+                          );
+                        })}
+                        <span className={`w-16 text-right text-[11px] font-medium transition-colors duration-300 ${
+                          strength <= 1 ? "text-red-400"
+                          : strength <= 2 ? "text-orange-400"
+                          : strength <= 3 ? "text-amber-400"
+                          : "text-emerald-400"
+                        }`}>
                           {["weak", "weak", "fair", "good", "strong"][strength]}
                         </span>
                       </div>
