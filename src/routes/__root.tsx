@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
 import i18n from "@/lib/i18n";
+import { usePerformanceInit } from "@/lib/performance-init";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -152,6 +153,16 @@ function RootComponent() {
     pathname.startsWith("/legal") ||
     (pathname === "/" && !user);
   const [lang, setLang] = useState<string>("en");
+
+  // Performance optimizations başlat
+  usePerformanceInit({
+    enableWebVitals: true,
+    enableSessionPersistence: true,
+    enableMobileOptimizations: true,
+    enableNetworkAwareness: true,
+    debug: process.env.NODE_ENV === "development",
+  });
+
   useEffect(() => {
     initI18n();
     setLang(i18n.language ?? "en");

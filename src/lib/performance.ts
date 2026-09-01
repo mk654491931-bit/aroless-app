@@ -10,9 +10,12 @@ import { useMemo, useCallback, memo, useState, useEffect, useRef } from "react";
  */
 export const getDefaultQueryConfig = () => ({
   staleTime: 1000 * 60 * 5, // 5 dakika
-  gcTime: 1000 * 60 * 10, // 10 dakika (eski: cacheTime)
+  gcTime: 30 * 60 * 1000, // 30 dakika (eski: cacheTime)
   retry: 1,
   retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: "stale", // Bağlantı sağlandığında stale veriyi yenile
+  refetchOnMount: false, // Mount'da tekrar fetch etme
 });
 
 /**
@@ -21,6 +24,7 @@ export const getDefaultQueryConfig = () => ({
 export const getDefaultMutationConfig = () => ({
   retry: 1,
   retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  networkMode: "online", // Mutation sadece online modda çalışsın
 });
 
 /**

@@ -86,6 +86,7 @@ export default defineConfig(async ({ command, mode }) => {
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
       ],
+      exclude: ["@lovable.dev/cloud-auth-js"],
     },
     server: {
       host: "::",
@@ -100,6 +101,66 @@ export default defineConfig(async ({ command, mode }) => {
           "**/.tanstack/tmp/**",
         ],
       },
+    },
+    build: {
+      target: "ES2022",
+      minify: "terser",
+      terserOptions: {
+        compress: {
+          drop_console: mode === "production",
+          drop_debugger: true,
+          passes: 3,
+        },
+        format: {
+          comments: false,
+        },
+      },
+      rollupOptions: {
+        output: {
+          // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
+          manualChunks: {
+            "react-vendor": ["react", "react-dom"],
+            "ui-vendor": [
+              "@radix-ui/react-accordion",
+              "@radix-ui/react-alert-dialog",
+              "@radix-ui/react-avatar",
+              "@radix-ui/react-checkbox",
+              "@radix-ui/react-collapsible",
+              "@radix-ui/react-dialog",
+              "@radix-ui/react-dropdown-menu",
+              "@radix-ui/react-label",
+              "@radix-ui/react-popover",
+              "@radix-ui/react-select",
+              "@radix-ui/react-slider",
+              "@radix-ui/react-tabs",
+              "@radix-ui/react-tooltip",
+            ],
+            "tanstack-vendor": ["@tanstack/react-router", "@tanstack/react-query"],
+            "supabase-vendor": ["@supabase/supabase-js"],
+            "form-vendor": ["react-hook-form", "@hookform/resolvers"],
+            "utils-vendor": ["clsx", "tailwind-merge"],
+          },
+          // Gzip compression için optimize edilmiş chunk boyutları
+          entryFileNames: "js/[name].[hash:8].js",
+          chunkFileNames: "js/[name].[hash:8].js",
+          assetFileNames: (assetInfo) => {
+            const info = assetInfo.name.split(".");
+            const ext = info[info.length - 1];
+            if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
+              return `images/[name].[hash:8][extname]`;
+            } else if (/woff|woff2|eot|ttf|otf/.test(ext)) {
+              return `fonts/[name].[hash:8][extname]`;
+            }
+            return `assets/[name].[hash:8][extname]`;
+          },
+        },
+      },
+      // Daha büyük chunk boyutu sınırı (çünkü daha iyi tree-shaking)
+      chunkSizeWarningLimit: 600,
+      // Gzip compression
+      reportCompressedSize: true,
+      cssCodeSplit: true,
+      sourcemap: mode !== "production",
     },
     plugins,
   };

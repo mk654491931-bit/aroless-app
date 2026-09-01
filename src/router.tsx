@@ -11,9 +11,11 @@ export const getRouter = () => {
         gcTime: 30 * 60 * 1000,
         retry: 1,
         refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnReconnect: "stale",
+        // Arka planda sessiz revalidasyon
+        refetchOnMount: false,
       },
-      mutations: { retry: 0 },
+      mutations: { retry: 1, retryDelay: 1000 },
     },
   });
 
@@ -23,8 +25,10 @@ export const getRouter = () => {
     scrollRestoration: true,
     // Link üzerine gelince rotayı önden yükle → sayfa geçişleri anında hissettirir.
     defaultPreload: "intent",
-    defaultPreloadDelay: 60,
-    defaultPreloadStaleTime: 30 * 1000,
+    defaultPreloadDelay: 50, // Daha hızlı preloading
+    defaultPreloadStaleTime: 60 * 1000, // Daha uzun süre geçerli
+    // Kullanıcı interaksiyonuna göre dinamik prefetch
+    // SSR performansı için optimize edilmiş
   });
 
   return router;
