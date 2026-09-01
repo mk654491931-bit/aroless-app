@@ -7,6 +7,7 @@
 import {
   callGemini,
   callGroq,
+  callTogetherAI,
   extractJson,
   geminiKeyPool,
   groqKeyPool,
@@ -20,6 +21,7 @@ export const FAST_CHAIN: ProviderId[] = [
   "sambanova",
   "groq",
   "gemini",
+  "together",
   "openrouter",
   "huggingface",
 ];
@@ -27,7 +29,7 @@ export const FAST_CHAIN: ProviderId[] = [
 export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 export type ProviderId =
-  "cerebras" | "sambanova" | "groq" | "gemini" | "openrouter" | "huggingface" | "bedrock";
+  "cerebras" | "sambanova" | "groq" | "gemini" | "together" | "openrouter" | "huggingface" | "bedrock";
 
 export type ProviderCall = (
   prompt: string,
@@ -197,6 +199,14 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
           json: false,
         }),
     ),
+
+  together: async (prompt, temperature, signal) => {
+    try {
+      return await callTogetherAI(prompt, temperature, signal);
+    } catch {
+      return "{}";
+    }
+  },
 
   bedrock: (prompt, temperature, signal) => callBedrockClaude(prompt, temperature, signal),
 };

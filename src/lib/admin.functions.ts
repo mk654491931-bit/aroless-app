@@ -117,6 +117,50 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
     }
   });
 
+/**
+ * Admin kredi tanımlama: Admin rolüne sahip kullanıcılar için kredileri 250'ye günceller.
+ * Yeni kayıt akışına DOKUNMAZ — signup.flow'daki varsayılan kredi miktarı değişmez.
+ * Bu fonksiyon sadece admin panele erişildiğinde veya rol atandığında çalışır.
+ */
+export const ensureAdminCredits = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ updated: boolean; credits: number }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Kullanıcının admin rolü var mı kontrol et
+    const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) return { updated: false, credits: 0 };
+
+    // Mevcut kredi miktarını al
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("credits")
+      .eq("id", context.userId)
+      .maybeSingle();
+    const currentCredits = profile?.credits ?? 0;
+
+    // 250'ten azsa güncelle
+    if (currentCredits >= 250) {
+      return { updated: false, credits: currentCredits };
+    }
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ credits: 250 })
+      .eq("id", context.userId)
+      .lte("credits", 250); // Race condition koruması: sadece 250'den azsa güncelle
+
+    if (error) {
+      console.error("[admin-credits] update failed", error);
+      return { updated: false, credits: currentCredits };
+    }
+
+    return { updated: true, credits: 250 };
+  });
+
 export type FreeCreditAuditRow = {
   id: string;
   user_id: string | null;

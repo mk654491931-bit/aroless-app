@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { createPaddleCheckout, getPaddleEnv } from "@/lib/paddle.server";
 
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
   redirectUrl: z.string().url().max(500).optional(),
 });
 
-/** Oturum açmış kullanıcı için Lemon Squeezy ödeme bağlantısı üretir. */
+/** Oturum açmış kullanıcı için Paddle ödeme bağlantısı üretir. */
 export const Route = createFileRoute("/api/checkout")({
   server: {
     handlers: {
@@ -25,9 +26,13 @@ export const Route = createFileRoute("/api/checkout")({
           const { data: userData, error } = await supabase.auth.getUser(token);
           if (error || !userData.user) return json({ error: "Unauthorized" }, 401);
 
+          const paddleEnv = getPaddleEnv();
+          if (!paddleEnv) {
+            return json({ error: "Ödeme sistemi yapılandırılmamış." }, 500);
+          }
+
           const body = BodySchema.parse(await request.json().catch(() => ({})));
-          const { createLemonCheckout } = await import("@/lib/lemonsqueezy.server");
-          const url = await createLemonCheckout({
+          const url = await createPaddleCheckout({
             userId: userData.user.id,
             email: userData.user.email,
             plan: body.plan,

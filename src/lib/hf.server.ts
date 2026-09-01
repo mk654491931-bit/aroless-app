@@ -38,7 +38,7 @@ const providerMetrics = {
 /** Error kategorileri */
 type ErrorCategory = "quota" | "network" | "timeout" | "invalid_response" | "unknown";
 
-function categorizeError(status: number, body: string, error?: unknown): ErrorCategory {
+function categorizeError(status: number, _body: string, error?: unknown): ErrorCategory {
   if (status === 429 || status === 402 || status === 403) return "quota";
   if (status === 0 || (error instanceof TypeError)) return "network";
   if (error instanceof Error && error.name === "AbortError") return "timeout";

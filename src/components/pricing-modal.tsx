@@ -79,15 +79,15 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
         discount > 0 && promo.trim()
           ? `${url}${url.includes("?") ? "&" : "?"}checkout[discount_code]=${encodeURIComponent(promo.trim().toUpperCase())}`
           : url;
-      // Lemon Squeezy overlay via their JS if available, else new tab
       const w = window as unknown as {
-        LemonSqueezy?: { Url: { Open: (u: string) => void } };
-        createLemonSqueezy?: () => void;
+        Paddle?: { Checkout: { open: (opts: { transactionId: string }) => void } };
       };
-      if (w.LemonSqueezy?.Url?.Open) {
-        w.LemonSqueezy.Url.Open(finalUrl);
+      if (w.Paddle?.Checkout) {
+        // Paddle overlay checkout (client-side SDK varsa)
+        w.Paddle.Checkout.open({ transactionId: finalUrl });
       } else {
-        window.open(finalUrl, "_blank", "noopener");
+        // Paddle S2S checkout URL redirect
+        window.location.href = finalUrl;
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");
@@ -218,7 +218,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           })}
         </div>
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Secure checkout by Lemon Squeezy. Cancel anytime.
+          Secure checkout by Paddle. Cancel anytime.
         </p>
       </div>
     </div>,

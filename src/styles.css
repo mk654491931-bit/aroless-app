@@ -105,6 +105,19 @@ html.light body {
     radial-gradient(1000px 500px at 100% 0%, oklch(0.52 0.22 305 / 0.08), transparent 60%);
 }
 
+/* Light mode: softer, modern shadows */
+html.light .glass {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.03),
+    0 4px 16px -4px oklch(0 0 0 / 0.06),
+    inset 0 1px 0 oklch(1 0 0 / 0.8);
+}
+html.light .glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--brand) 20%, transparent),
+    0 8px 32px -8px color-mix(in oklab, var(--brand) 25%, transparent);
+}
+
 /* Koyu tema için yazılmış yarı saydam beyaz katmanları gündüz temasında ters çevir */
 html.light [class*="bg-white/"] {
   background-color: oklch(0.25 0.04 265 / 0.05) !important;
@@ -295,6 +308,53 @@ html.light [class*="text-white/"] {
   background-clip: text;
   color: transparent;
   animation: shine-sweep 3.5s linear infinite;
+}
+
+/* ---------- Modern SaaS enhancements ---------- */
+@utility shadow-soft {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 4px 16px -4px oklch(0 0 0 / 0.1),
+    0 12px 40px -8px oklch(0 0 0 / 0.06);
+}
+@utility shadow-elevated {
+  box-shadow:
+    0 2px 4px oklch(0 0 0 / 0.06),
+    0 8px 32px -6px oklch(0 0 0 / 0.14),
+    0 20px 60px -12px oklch(0 0 0 / 0.08);
+}
+@utility ring-brand {
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--brand) 25%, transparent),
+    0 10px 40px -10px color-mix(in oklab, var(--brand) 40%, transparent);
+}
+
+/* Smooth micro-interaction hover lifts for cards */
+.card-hover {
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 12px oklch(0 0 0 / 0.1),
+    0 16px 48px -8px oklch(0 0 0 / 0.12);
+}
+
+/* Modern input focus ring */
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* Responsive container padding */
+@container (min-width: 640px) {
+  .container-pad {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
 }
 
 @utility card-lift {

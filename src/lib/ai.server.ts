@@ -300,15 +300,24 @@ export function extractJson<T>(text: string, fallback: T): T {
   return fallback;
 }
 
-/** All configured Gemini keys, de-duplicated, in rotation order. */
+/** All configured Gemini keys (up to 6), de-duplicated, in rotation order. */
 export function geminiKeyPool(): string[] {
   const raw = [
+    process.env["GEMINI_KEY_1"],
     process.env["GEMINI_API_KEY_1"],
     process.env["GEMINI_1_API_KEY"],
+    process.env["GEMINI_KEY_2"],
     process.env["GEMINI_API_KEY_2"],
     process.env["GEMINI_2_API_KEY"],
+    process.env["GEMINI_KEY_3"],
     process.env["GEMINI_API_KEY_3"],
     process.env["GEMINI_3_API_KEY"],
+    process.env["GEMINI_KEY_4"],
+    process.env["GEMINI_API_KEY_4"],
+    process.env["GEMINI_KEY_5"],
+    process.env["GEMINI_API_KEY_5"],
+    process.env["GEMINI_KEY_6"],
+    process.env["GEMINI_API_KEY_6"],
     process.env["GEMINI_API_KEY"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
@@ -467,17 +476,19 @@ export async function callGemini(
   }
 }
 
-/** All configured Groq keys, de-duplicated, in rotation order. */
+/** All configured Groq keys (up to 4+), de-duplicated, in rotation order. */
 export function groqKeyPool(): string[] {
   const raw = [
+    process.env["GROQ_KEY_1"],
     process.env["GROQ_API_KEY"],
     process.env["GROQ_API_KEY_1"],
-    process.env["GROQ_API_KEY1"],
+    process.env["GROQ_KEY_2"],
     process.env["GROQ_API_KEY_2"],
-    process.env["GROQ_API_KEY2"],
     process.env["GROQ_2_API_KEY"],
+    process.env["GROQ_KEY_3"],
     process.env["GROQ_API_KEY_3"],
-    process.env["GROQ_API_KEY3"],
+    process.env["GROQ_KEY_4"],
+    process.env["GROQ_API_KEY_4"],
   ].filter((k): k is string => Boolean(k && k.trim()));
   return Array.from(new Set(raw));
 }
@@ -530,6 +541,92 @@ export async function callGroq(prompt: string, temperature = 0.3): Promise<strin
   } catch {
     throw lastErr instanceof Error ? lastErr : new Error("Groq request failed");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Together AI — OpenAI-compatible, 1 key, low-cost fallback tier.
+// ---------------------------------------------------------------------------
+
+/** All configured Together AI keys, de-duplicated, in rotation order. */
+export function togetherKeyPool(): string[] {
+  const raw = [
+    process.env["TOGETHER_API_KEY"],
+    process.env["TOGETHER_KEY_1"],
+    process.env["TOGETHER_AI_API_KEY"],
+  ].filter((k): k is string => Boolean(k && k.trim()));
+  return Array.from(new Set(raw));
+}
+
+const TOGETHER_MODELS = [
+  "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+  "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+  "mistralai/Mistral-7B-Instruct-v0.3",
+  "Qwen/Qwen2.5-72B-Instruct-Turbo",
+];
+
+let togetherCursor = 0;
+
+/**
+ * Calls Together AI with automatic key rotation and model fallback.
+ * Designed as the low-cost tertiary tier after Gemini and Groq.
+ */
+export async function callTogetherAI(
+  prompt: string,
+  temperature = 0.3,
+  signal?: AbortSignal,
+): Promise<string> {
+  prompt = withEstimationRules(prompt);
+  const pool = togetherKeyPool();
+  if (!pool.length) throw new Error("no together api key configured");
+  const keys = scheduleKeys(pool, togetherCursor++);
+  let lastErr: unknown = null;
+  for (const key of keys) {
+    for (const model of TOGETHER_MODELS) {
+      const controller = new AbortController();
+      const timer = signal
+        ? (() => {
+            signal.addEventListener("abort", () => controller.abort());
+            return undefined;
+          })()
+        : undefined;
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      try {
+        const resp = await fetch("https://api.together.xyz/v1/chat/completions", {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify({
+            model,
+            temperature,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+          }),
+        });
+        if (!resp.ok) {
+          const body = (await resp.text()).slice(0, 180);
+          lastErr = new Error(`Together error: ${resp.status} ${body}`);
+          if (isQuotaError(resp.status, body)) {
+            parkKey(key);
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 600 * (TOGETHER_MODELS.indexOf(model) + 1)));
+          continue;
+        }
+        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        return json.choices?.[0]?.message?.content ?? "{}";
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 600 * (TOGETHER_MODELS.indexOf(model) + 1)));
+      } finally {
+        clearTimeout(timeout);
+        void timer;
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Together AI request failed");
 }
 
 export { isQuotaError };

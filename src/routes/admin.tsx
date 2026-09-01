@@ -18,6 +18,7 @@ import {
   listAdminUsers,
   listAdminTransactions,
   checkIsAdmin,
+  ensureAdminCredits,
 } from "@/lib/admin.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
@@ -55,6 +56,16 @@ function AdminPage() {
   });
 
   const isAdmin = !!adminQ.data?.isAdmin;
+
+  // Admin kullanıcılara 250 kredi tanımla (eğer henüz tanımlanmamışsa)
+  const ensureCreditsFn = useServerFn(ensureAdminCredits);
+  useEffect(() => {
+    if (isAdmin) {
+      ensureCreditsFn().catch(() => {
+        /* kredi güncelleme başarısızsa sessizce devam et */
+      });
+    }
+  }, [isAdmin, ensureCreditsFn]);
 
   const statsQ = useQuery({
     queryKey: ["admin-stats"],

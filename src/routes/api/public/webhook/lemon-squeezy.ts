@@ -1,60 +1,68 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { verifyPaddleWebhook, getPaddleEnv } from "@/lib/paddle.server";
 
-type LemonPayload = {
-  meta?: { event_name?: string; custom_data?: { user_id?: string; plan?: string } };
-  data?: { id?: string; attributes?: Record<string, unknown> };
-};
-
-/** Abonelik durumunu (PRO / FREE) senkronize eden imzalı webhook. */
+/**
+ * Alternatif Paddle webhook endpoint (URL uyumluluğu için).
+ * Ana webhook handler ile aynı mantığı çalıştırır.
+ */
 export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { lemonWebhookSecret } = await import("@/lib/lemonsqueezy.server");
-        const secret = lemonWebhookSecret();
-        if (!secret) return new Response("Not configured", { status: 500 });
+        const paddleEnv = getPaddleEnv();
+        if (!paddleEnv) return new Response("Not configured", { status: 500 });
 
         const contentLength = Number(request.headers.get("content-length") ?? 0);
         if (contentLength > 1_000_000) return new Response("Payload too large", { status: 413 });
+
         const raw = await request.text();
         if (raw.length > 1_000_000) return new Response("Payload too large", { status: 413 });
-        const signature = request.headers.get("x-signature") ?? "";
-        const expected = createHmac("sha256", secret).update(raw).digest("hex");
-        const sig = Buffer.from(signature, "hex");
-        const exp = Buffer.from(expected, "hex");
-        if (sig.length !== exp.length || !timingSafeEqual(sig, exp)) {
+
+        // Webhook imza doğrulama
+        const signatureHeader = request.headers.get("paddle-signature") ?? "";
+        if (!signatureHeader) {
+          return new Response("Missing signature", { status: 401 });
+        }
+
+        const validSignature = await verifyPaddleWebhook(raw, signatureHeader);
+        if (!validSignature) {
+          console.error("[paddle-webhook-alt] invalid signature");
           return new Response("Invalid signature", { status: 401 });
         }
 
-        let payload: LemonPayload;
+        let payload: Record<string, unknown>;
         try {
-          payload = JSON.parse(raw) as LemonPayload;
+          payload = JSON.parse(raw);
         } catch {
           return new Response("Bad JSON", { status: 400 });
         }
 
-        const event = payload.meta?.event_name ?? "";
-        const userId = payload.meta?.custom_data?.user_id;
-        const plan = payload.meta?.custom_data?.plan ?? "Pro";
-        const attrs = payload.data?.attributes ?? {};
-        const status = String(attrs["status"] ?? "");
+        const eventType = String(payload.event_type ?? "");
+        const data = (payload.data ?? {}) as Record<string, unknown>;
+        const customData = (data.custom_data ?? {}) as Record<string, unknown>;
+
+        const userId = typeof customData.user_id === "string" ? customData.user_id : undefined;
+        const plan = typeof customData.plan === "string" ? customData.plan : undefined;
+
         if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
           return new Response("Bad user id", { status: 400 });
         }
         if (!userId) return new Response("ok", { status: 200 });
 
+        // Tier belirleme
         let tier: string | null = null;
-        switch (event) {
-          case "subscription_created":
-            tier = plan;
+        switch (eventType) {
+          case "subscription.created":
+          case "transaction.completed":
+            tier = plan ?? "Pro";
             break;
-          case "subscription_updated":
-            // active / on_trial → plan aktif; diğer her durum ücretsize düşer.
-            tier = status === "active" || status === "on_trial" ? plan : "Free";
+          case "subscription.updated":
+            tier = plan ?? "Pro";
             break;
-          case "subscription_cancelled":
-          case "subscription_expired":
+          case "subscription.canceled":
+          case "subscription.expired":
+          case "subscription.paused":
+          case "subscription.past_due":
             tier = "Free";
             break;
           default:
@@ -66,13 +74,11 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
           .from("profiles")
           .update({
             subscription_tier: tier,
-            lemon_subscription_id: payload.data?.id ? String(payload.data.id) : null,
-            lemon_customer_id: attrs["customer_id"] ? String(attrs["customer_id"]) : null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", userId);
         if (error) {
-          console.error("[lemon-webhook] profile update failed", error);
+          console.error("[paddle-webhook-alt] profile update failed", error);
           return new Response("Webhook işlenemedi", { status: 500 });
         }
 

@@ -17,10 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
 import i18n from "@/lib/i18n";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { PaletteToggle } from "@/components/palette-toggle";
+import { FloatingThemeControls } from "@/components/floating-theme-controls";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 import { AmbientBackground } from "@/components/ambient-background";
@@ -206,9 +205,8 @@ function RootComponent() {
         <>
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-(--surface)/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
             <LanguageSwitcher />
-            <PaletteToggle />
-            <ThemeToggle />
           </div>
+          <FloatingThemeControls />
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
             <Outlet />
           </div>
@@ -219,15 +217,7 @@ function RootComponent() {
             <AppSidebar onUpgrade={() => setShowPricing(true)} />
             <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
               {pathname !== "/" && <AppTopbar />}
-              {pathname === "/" && (
-                <>
-                  <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2">
-                    <PaletteToggle />
-                    <ThemeToggle />
-                  </div>
-                  <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-(--surface)/90 backdrop-blur hover:bg-white/10" />
-                </>
-              )}
+              <FloatingThemeControls />
               <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
                 <Outlet />
               </div>

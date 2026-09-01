@@ -42,8 +42,6 @@ type QueuedEmail = {
 const emailQueue = new Map<string, QueuedEmail>();
 const sentLog = new Map<string, number>(); // emailHash → lastSentTime
 const DEDUP_WINDOW = 60_000; // 1 dakika — aynı e-postayı tekrar gönderme
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF = 5_000; // 5 saniye
 const EMAIL_TIMEOUT = 10_000; // 10 saniye
 
 // Provider health tracking
@@ -61,9 +59,6 @@ const providerStats = {
 
 function getEmailHash(to: string | string[], subject: string): string {
   const recipients = (Array.isArray(to) ? to : [to]).sort().join(",");
-  const data = `${recipients}::${subject}`;
-  const encoder = new TextEncoder();
-  const hashBuffer = crypto.getRandomValues(new Uint8Array(32)); // Placeholder
   return `${recipients.slice(0, 20)}:${subject.slice(0, 20)}`.replace(/[^a-z0-9:]/gi, "");
 }
 

@@ -271,7 +271,7 @@ function PricingPage() {
         </div>
 
         <div className="mt-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck size={14} /> Ödemeler Lemon Squeezy üzerinden güvenle işlenir · istediğin
+          <ShieldCheck size={14} /> Ödemeler Paddle üzerinden güvenle işlenir · istediğin
           zaman iptal
         </div>
       </div>

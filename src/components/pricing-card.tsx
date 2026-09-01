@@ -62,6 +62,7 @@ export function PricingCard({ className }: { className?: string }) {
       });
       const json = (await resp.json()) as { url?: string; error?: string };
       if (!resp.ok || !json.url) throw new Error(json.error || "Ödeme bağlantısı alınamadı.");
+      // Paddle S2S checkout redirect
       window.location.href = json.url;
     } catch (e) {
       toast.error((e as Error).message);
