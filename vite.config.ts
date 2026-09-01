@@ -66,6 +66,7 @@ export default defineConfig(async ({ command, mode }) => {
 
   return {
     define,
+    css: { transformer: "lightningcss" as const },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
       dedupe: [
@@ -85,7 +86,6 @@ export default defineConfig(async ({ command, mode }) => {
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
       ],
-      exclude: ["@lovable.dev/cloud-auth-js"],
     },
     server: {
       host: "::",
@@ -100,62 +100,6 @@ export default defineConfig(async ({ command, mode }) => {
           "**/.tanstack/tmp/**",
         ],
       },
-    },
-    build: {
-      target: "ES2020",
-      minify: false,
-      sourcemap: mode !== "production",
-      rollupOptions: {
-        output: {
-          // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
-          manualChunks: (id) => {
-            // Vendor chunks
-            if (id.includes("node_modules/react") && !id.includes("react-dom")) {
-              return "react-vendor";
-            }
-            if (id.includes("node_modules/react-dom")) {
-              return "react-vendor";
-            }
-            if (id.includes("node_modules/@radix-ui")) {
-              return "ui-vendor";
-            }
-            if (id.includes("node_modules/@tanstack")) {
-              return "tanstack-vendor";
-            }
-            if (id.includes("node_modules/@supabase")) {
-              return "supabase-vendor";
-            }
-            if (id.includes("node_modules/react-hook-form") || 
-                id.includes("node_modules/@hookform")) {
-              return "form-vendor";
-            }
-            if (id.includes("node_modules") && 
-                (id.includes("clsx") || id.includes("tailwind-merge"))) {
-              return "utils-vendor";
-            }
-            return undefined;
-          },
-          // Gzip compression için optimize edilmiş chunk boyutları
-          entryFileNames: "js/[name].[hash:8].js",
-          chunkFileNames: "js/[name].[hash:8].js",
-          assetFileNames: (assetInfo) => {
-            const info = assetInfo.name.split(".");
-            const ext = info[info.length - 1];
-            if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
-              return `images/[name].[hash:8][extname]`;
-            } else if (/woff|woff2|eot|ttf|otf/.test(ext)) {
-              return `fonts/[name].[hash:8][extname]`;
-            }
-            return `assets/[name].[hash:8][extname]`;
-          },
-        },
-      },
-      // Daha büyük chunk boyutu sınırı (çünkü daha iyi tree-shaking)
-      chunkSizeWarningLimit: 600,
-      // Gzip compression
-      reportCompressedSize: true,
-      cssCodeSplit: true,
-      cssMinify: false, // Disable CSS minification to avoid lightningcss issues
     },
     plugins,
   };
