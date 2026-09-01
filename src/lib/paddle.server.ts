@@ -92,27 +92,54 @@ export async function createPaddleCheckout(opts: {
     body.customer = { email: opts.email };
   }
 
-  const resp = await fetch(`${baseUrl}/checkout/sessions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${paddleEnv.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  // Retry logic: 502/503/429 durumlarında 2 kez yeniden dene
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const resp = await fetch(`${baseUrl}/checkout/sessions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${paddleEnv.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      clearTimeout(timeout);
 
-  if (!resp.ok) {
-    const detail = (await resp.text()).slice(0, 300);
-    throw new Error(`Paddle checkout ${resp.status}: ${detail}`);
+      if (resp.status === 429 || resp.status === 502 || resp.status === 503) {
+        const detail = (await resp.text()).slice(0, 200);
+        lastError = new Error(`Paddle checkout ${resp.status}: ${detail}`);
+        // Üstel geri çekilme
+        await new Promise((r) => setTimeout(r, 800 * 2 ** attempt + Math.random() * 400));
+        continue;
+      }
+
+      if (!resp.ok) {
+        const detail = (await resp.text()).slice(0, 300);
+        throw new Error(`Paddle checkout ${resp.status}: ${detail}`);
+      }
+
+      const json = (await resp.json()) as {
+        data?: { id?: string; url?: string };
+      };
+
+      const url = json.data?.url;
+      if (!url) throw new Error("Paddle checkout bağlantısı alınamadı.");
+      return url;
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e instanceof Error && e.name === "AbortError") {
+        lastError = new Error("Paddle checkout isteği zaman aşımına uğradı.");
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+        continue;
+      }
+      throw e; // Abort以外 hataları anında fırlat
+    }
   }
-
-  const json = (await resp.json()) as {
-    data?: { id?: string; url?: string };
-  };
-
-  const url = json.data?.url;
-  if (!url) throw new Error("Paddle checkout bağlantısı alınamadı.");
-  return url;
+  throw lastError ?? new Error("Paddle checkout başarısız (3 deneme)");
 }
 
 /**

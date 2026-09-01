@@ -18,10 +18,35 @@ function applyPalette(p: PaletteId) {
   document.documentElement.classList.toggle("palette-aurora", p === "aurora");
 }
 
+/** Viewport sınırları içinde konum hesapla (snap-to-edge destekli). */
+function clampPosition(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): { x: number; y: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 12;
+
+  let nx = Math.max(margin, Math.min(vw - w - margin, x));
+  let ny = Math.max(margin, Math.min(vh - h - margin, y));
+
+  // Snap-to-edge: yakınsa kenara yapıştır
+  if (nx < margin + 24) nx = margin;
+  if (nx > vw - w - margin - 24) nx = vw - w - margin;
+  if (ny < margin + 24) ny = margin;
+  if (ny > vh - h - margin - 24) ny = vh - h - margin;
+
+  return { x: nx, y: ny };
+}
+
 /**
  * Floating, draggable theme + palette toggle.
- * Kullanıcı ekran üzerinde sürükleyip konumlandırabilir;
- * tercihleri localStorage'da saklanır.
+ * - Keyboard shortcut: Ctrl+Shift+T (tema geçişi)
+ * - Sürüklendiğinde snap-to-edge
+ * - Viewport yeniden boyutlandığında sınırlar içinde kalır
+ * - Tercihleri localStorage'da saklanır
  */
 export function FloatingThemeControls({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<Theme>("dark");
@@ -51,6 +76,24 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
     }
   }, []);
 
+  // Viewport yeniden boyutlandığında konumu düzelt
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        if (!prev) return prev;
+        const el = dragRef.current;
+        const rect = el?.getBoundingClientRect();
+        const w = rect?.width ?? 220;
+        const h = rect?.height ?? 40;
+        const fixed = clampPosition(prev.x, prev.y, w, h);
+        localStorage.setItem(POS_KEY, JSON.stringify(fixed));
+        return fixed;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
@@ -64,6 +107,18 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
     localStorage.setItem(PALETTE_KEY, next);
     applyPalette(next);
   }, [palette]);
+
+  // Keyboard shortcut: Ctrl+Shift+T
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "T") {
+        e.preventDefault();
+        toggleTheme();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleTheme]);
 
   // Drag handlers
   const onPointerDown = useCallback(
@@ -84,9 +139,17 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
     const onMove = (e: PointerEvent) => {
       const dx = e.clientX - startMouse.current.x;
       const dy = e.clientY - startMouse.current.y;
-      const newX = Math.max(8, Math.min(window.innerWidth - 56, startPos.current.x + dx));
-      const newY = Math.max(8, Math.min(window.innerHeight - 56, startPos.current.y + dy));
-      setPos({ x: newX, y: newY });
+      const el = dragRef.current;
+      const rect = el?.getBoundingClientRect();
+      const w = rect?.width ?? 220;
+      const h = rect?.height ?? 40;
+      const fixed = clampPosition(
+        startPos.current.x + dx,
+        startPos.current.y + dy,
+        w,
+        h,
+      );
+      setPos(fixed);
     };
 
     const onUp = () => {
@@ -121,8 +184,9 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
         <button
           type="button"
           onClick={() => setCollapsed(false)}
+          aria-label="Tema kontrollerini aç"
           className="group flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/90 shadow-lg backdrop-blur-xl transition-all hover:scale-105 hover:shadow-xl"
-          title="Tema kontrollerini aç"
+          title="Tema kontrollerini aç (sürükle)"
         >
           <GripVertical
             size={16}
@@ -135,7 +199,9 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
           <div
             onPointerDown={onPointerDown}
             className="flex h-8 w-6 cursor-grab items-center justify-center rounded-lg hover:bg-accent/40 active:cursor-grabbing"
-            title="Sürükle"
+            title="Sürükle — konumlandırma"
+            role="separator"
+            aria-orientation="vertical"
           >
             <GripVertical size={14} className="text-muted-foreground" />
           </div>
@@ -144,8 +210,8 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Gündüz temasına geç" : "Karanlık temaya geç"}
-            title={theme === "dark" ? "Gündüz teması" : "Karanlık tema"}
+            aria-label={theme === "dark" ? "Gündüz temasına geç (Ctrl+Shift+T)" : "Karanlık temaya geç (Ctrl+Shift+T)"}
+            title={theme === "dark" ? "Gündüz teması — Ctrl+Shift+T" : "Karanlık tema — Ctrl+Shift+T"}
             className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors hover:bg-accent/40"
           >
             {theme === "dark" ? (
@@ -153,7 +219,7 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
             ) : (
               <Moon size={14} className="text-[var(--brand)]" />
             )}
-            <span className="hidden sm:inline">{theme === "dark" ? "Gündüz" : "Karanlık"}</span>
+            <span className="hidden sm:inline">{theme === "dark" ? "Light" : "Dark"}</span>
           </button>
 
           {/* Palette toggle */}
@@ -174,6 +240,7 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
           <button
             type="button"
             onClick={() => setCollapsed(true)}
+            aria-label="Tema kontrollerini küçült"
             className="flex h-8 w-8 items-center justify-center rounded-xl text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
             title="Küçült"
           >

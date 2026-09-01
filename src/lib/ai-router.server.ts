@@ -7,7 +7,6 @@
 import {
   callGemini,
   callGroq,
-  callTogetherAI,
   extractJson,
   geminiKeyPool,
   groqKeyPool,
@@ -38,6 +37,36 @@ export type ProviderCall = (
 ) => Promise<string>;
 
 const TIMEOUT_MS = 45_000;
+
+// ---------------------------------------------------------------- provider health
+const providerFailures = new Map<string, { count: number; lastFail: number }>();
+const FAIL_WINDOW_MS = 60_000;
+
+function recordFailure(pid: string) {
+  const prev = providerFailures.get(pid);
+  const now = Date.now();
+  if (!prev || now - prev.lastFail > FAIL_WINDOW_MS) {
+    providerFailures.set(pid, { count: 1, lastFail: now });
+  } else {
+    prev.count++;
+    prev.lastFail = now;
+  }
+}
+
+function recordSuccess(pid: string) {
+  providerFailures.delete(pid);
+}
+
+/** Son 60 sn içinde 5+ hata sayan provider’ı geçici olarak devre dışı bırak. */
+function isProviderHealthy(pid: string): boolean {
+  const f = providerFailures.get(pid);
+  if (!f) return true;
+  if (Date.now() - f.lastFail > FAIL_WINDOW_MS) {
+    providerFailures.delete(pid);
+    return true;
+  }
+  return f.count < 5;
+}
 
 function pool(...names: string[]): string[] {
   const raw = names.map((n) => process.env[n]).filter((v): v is string => Boolean(v && v.trim()));
@@ -200,13 +229,20 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
         }),
     ),
 
-  together: async (prompt, temperature, signal) => {
-    try {
-      return await callTogetherAI(prompt, temperature, signal);
-    } catch {
-      return "{}";
-    }
-  },
+  together: (prompt, temperature, signal) =>
+    rotate(
+      pool("TOGETHER_API_KEY", "TOGETHER_KEY_1", "TOGETHER_AI_API_KEY"),
+      ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mistral-7B-Instruct-v0.3"],
+      (key, model) =>
+        openAICompatible({
+          url: "https://api.together.xyz/v1/chat/completions",
+          key,
+          model,
+          prompt,
+          temperature,
+          signal,
+        }),
+    ),
 
   bedrock: (prompt, temperature, signal) => callBedrockClaude(prompt, temperature, signal),
 };
@@ -340,6 +376,11 @@ export async function executeAgentWithFallback(
 
   for (let round = 0; round < retries; round++) {
     for (const provider of chain) {
+      // Sağlık kontrolü: son 60sn'de 5+ hata sayan provider'ı atla.
+      if (!isProviderHealthy(provider)) {
+        lastError = `${provider}: skipped (circuit breaker)`;
+        continue;
+      }
       attempts++;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -347,12 +388,14 @@ export async function executeAgentWithFallback(
         const text = await PROVIDERS[provider](prompt, temperature, controller.signal);
         clearTimeout(timer);
         if (!text || !text.trim()) throw new Error("empty response");
+        recordSuccess(provider);
         return {
           text,
           log: { agent: agentName, provider, attempts, latencyMs: Date.now() - started, ok: true },
         };
       } catch (e) {
         clearTimeout(timer);
+        recordFailure(provider);
         lastError = `${provider}: ${(e as Error).message}`.slice(0, 200);
       }
     }
@@ -376,4 +419,15 @@ export async function executeAgentWithFallback(
 export function parseAgentJson<T>(text: string, fallback: T): T {
   if (!text.trim()) return fallback;
   return extractJson<T>(text, fallback);
+}
+
+/** Provider sağlık durumunu dışarı açar (admin dashboard vb. için). */
+export function getProviderHealth(): Record<string, { failures: number; healthy: boolean }> {
+  const all: ProviderId[] = ["cerebras", "sambanova", "groq", "gemini", "together", "openrouter", "huggingface", "bedrock"];
+  const result: Record<string, { failures: number; healthy: boolean }> = {};
+  for (const pid of all) {
+    const f = providerFailures.get(pid);
+    result[pid] = { failures: f?.count ?? 0, healthy: isProviderHealthy(pid) };
+  }
+  return result;
 }

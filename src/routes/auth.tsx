@@ -673,8 +673,18 @@ function AuthPage() {
                             autoFocus
                             placeholder="000000"
                             value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                            className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em]"
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, "");
+                              setOtpCode(val);
+                              // 6 haneli kod girildiğinde otomatik doğrula
+                              if (val.length === 6 && !busy) {
+                                // form submit tetikle
+                                setTimeout(() => {
+                                  e.target.closest("form")?.requestSubmit();
+                                }, 50);
+                              }
+                            }}
+                            className="inp w-full bg-transparent py-3 text-center text-lg tracking-[0.5em] font-mono"
                           />
                         </div>
                         <button
