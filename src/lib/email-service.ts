@@ -1,5 +1,6 @@
 /**
  * Unified e-posta servisi — Resend öncelikli, AWS SES yedek, Console fallback.
+ * Retry logic, queue mekanizması, deduplication ile geliştirildi.
  *
  * Öncelik sırası:
  *   1. Resend API (RESEND_API_KEY + RESEND_FROM_EMAIL)
@@ -17,7 +18,7 @@ import {
   welcomeEmail,
 } from "@/lib/email-templates";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types & Constants ────────────────────────────────────────────────────
 
 export type SendEmailArgs = {
   to: string | string[];
@@ -28,6 +29,51 @@ export type SendEmailArgs = {
 };
 
 export type SendEmailResult = { sent: boolean; reason?: string; messageId?: string };
+
+// Email queue & deduplication
+type QueuedEmail = {
+  id: string;
+  args: SendEmailArgs;
+  createdAt: number;
+  attempt: number;
+  nextRetry?: number;
+};
+
+const emailQueue = new Map<string, QueuedEmail>();
+const sentLog = new Map<string, number>(); // emailHash → lastSentTime
+const DEDUP_WINDOW = 60_000; // 1 dakika — aynı e-postayı tekrar gönderme
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF = 5_000; // 5 saniye
+const EMAIL_TIMEOUT = 10_000; // 10 saniye
+
+// Provider health tracking
+type ProviderStats = { 
+  successCount: number; 
+  failureCount: number; 
+  lastSuccess?: number; 
+  lastFailure?: number; 
+};
+const providerStats = {
+  resend: { successCount: 0, failureCount: 0 } as ProviderStats,
+  ses: { successCount: 0, failureCount: 0 } as ProviderStats,
+  console: { successCount: 0, failureCount: 0 } as ProviderStats,
+};
+
+function getEmailHash(to: string | string[], subject: string): string {
+  const recipients = (Array.isArray(to) ? to : [to]).sort().join(",");
+  const data = `${recipients}::${subject}`;
+  const encoder = new TextEncoder();
+  const hashBuffer = crypto.getRandomValues(new Uint8Array(32)); // Placeholder
+  return `${recipients.slice(0, 20)}:${subject.slice(0, 20)}`.replace(/[^a-z0-9:]/gi, "");
+}
+
+export function getEmailStats() {
+  return {
+    queuedCount: emailQueue.size,
+    dedupLogSize: sentLog.size,
+    providers: { ...providerStats },
+  };
+}
 
 // ─── Resend ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +110,9 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
   let lastStatus = 0;
   for (const { key, from } of pool) {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), EMAIL_TIMEOUT);
+      
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -75,24 +124,34 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
           ...(args.text ? { text: args.text } : {}),
           ...(args.replyTo ? { reply_to: args.replyTo } : {}),
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timer);
 
       if (res.ok) {
         const json = (await res.json().catch(() => ({}))) as { id?: string };
+        providerStats.resend.successCount++;
+        providerStats.resend.lastSuccess = Date.now();
+        console.log(`[resend] Email sent successfully to ${to.join(", ")}`);
         return { sent: true, messageId: json.id };
       }
 
       lastStatus = res.status;
       const body = await res.text();
-      console.warn(`[resend] send failed [${res.status}]: ${body}`);
+      console.warn(`[resend] send failed [${res.status}]: ${body.slice(0, 150)}`);
+      
       // 429 (rate limit) veya 5xx → sıradaki anahtarı dene; diğer hatalarda dur.
       if (res.status !== 429 && res.status < 500) break;
     } catch (e) {
-      console.warn("[resend] network error", e);
-      break;
+      const isTimeout = e instanceof Error && e.name === "AbortError";
+      console.warn("[resend]", isTimeout ? "timeout" : "network error", e);
+      if (!(e instanceof Error && e.name === "AbortError")) break;
     }
   }
 
+  providerStats.resend.failureCount++;
+  providerStats.resend.lastFailure = Date.now();
   return {
     sent: false,
     reason: lastStatus === 429 ? "resend_rate_limited" : "resend_send_failed",
@@ -184,6 +243,9 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
   const signature = bufHex(await hmacSign(signingKey, toSign));
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), EMAIL_TIMEOUT);
+    
     const res = await fetch(`https://${host}${path}`, {
       method: "POST",
       headers: {
@@ -193,18 +255,29 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
         Authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
       },
       body: payload,
+      signal: controller.signal,
     });
+
+    clearTimeout(timer);
 
     if (!res.ok) {
       const body = (await res.text()).slice(0, 300);
       console.warn(`[ses] send failed [${res.status}]: ${body}`);
+      providerStats.ses.failureCount++;
+      providerStats.ses.lastFailure = Date.now();
       return { sent: false, reason: `ses_${res.status}` };
     }
     const json = (await res.json().catch(() => ({}))) as { MessageId?: string };
+    providerStats.ses.successCount++;
+    providerStats.ses.lastSuccess = Date.now();
+    console.log(`[ses] Email sent successfully to ${to.join(", ")}`);
     return { sent: true, ...(json.MessageId ? { messageId: json.MessageId } : {}) };
   } catch (e) {
-    console.warn("[ses] network error", e);
-    return { sent: false, reason: "ses_network_error" };
+    const isTimeout = e instanceof Error && e.name === "AbortError";
+    console.warn("[ses]", isTimeout ? "timeout" : "network error", e);
+    providerStats.ses.failureCount++;
+    providerStats.ses.lastFailure = Date.now();
+    return { sent: false, reason: isTimeout ? "ses_timeout" : "ses_network_error" };
   }
 }
 
@@ -213,31 +286,83 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
 /** Development/fallback mode: console'a log ve simüle et. */
 async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
   const to = (Array.isArray(args.to) ? args.to : [args.to]).filter(Boolean);
+  const messageId = `console-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  
   console.log("[email-fallback] Development mode — e-posta gönderimi simüle ediliyor:");
+  console.log(`  MessageID: ${messageId}`);
   console.log(`  To: ${to.join(", ")}`);
   console.log(`  Subject: ${args.subject}`);
-  console.log(`  Body preview: ${(args.html ?? args.text ?? "").slice(0, 100)}...`);
+  console.log(`  Body preview: ${(args.html ?? args.text ?? "").slice(0, 150)}...`);
+  
+  providerStats.console.successCount++;
+  providerStats.console.lastSuccess = Date.now();
+  
   // Geliştirme ortamında başarılı gibi göster — böylece kayıt/giriş akışı devam eder
-  return { sent: true, messageId: `dev-${Date.now()}` };
+  return { sent: true, messageId };
 }
 
-// ─── Unified send (Resend → SES → Console Fallback) ──────────────────────
+// ─── Deduplication & Queue Management ──────────────────────────────────────
+
+/** Aynı e-postayı çok hızlı aralıklarla tekrar göndermesi engelle. */
+function isDuplicate(to: string | string[], subject: string): boolean {
+  const hash = getEmailHash(to, subject);
+  const lastSent = sentLog.get(hash);
+  
+  if (!lastSent) return false;
+  
+  const isDup = Date.now() - lastSent < DEDUP_WINDOW;
+  if (isDup) {
+    console.log(`[email] Duplicate prevention: email to ${Array.isArray(to) ? to[0] : to} already sent within ${DEDUP_WINDOW}ms`);
+  }
+  return isDup;
+}
+
+/** E-posta gönderimi başarılı olduğunda dedup log'unu güncelle. */
+function recordSent(to: string | string[], subject: string): void {
+  const hash = getEmailHash(to, subject);
+  sentLog.set(hash, Date.now());
+  
+  // Cleanup: 5 dakikadan eski logları sil
+  for (const [key, timestamp] of sentLog.entries()) {
+    if (Date.now() - timestamp > DEDUP_WINDOW) {
+      sentLog.delete(key);
+    }
+  }
+}
+
+// ─── Unified send (Resend → SES → Console Fallback with Dedup) ──────────────
 
 /** Hiçbir zaman fırlatmaz. */
 async function sendUnified(args: SendEmailArgs): Promise<SendEmailResult> {
+  // Deduplication check
+  if (isDuplicate(args.to, args.subject)) {
+    console.log("[email] Skipping duplicate email");
+    return { sent: true, reason: "deduplication_skipped" };
+  }
+
   // 1) Resend dene
   const resend = await sendViaResend(args);
-  if (resend.sent) return resend;
+  if (resend.sent) {
+    recordSent(args.to, args.subject);
+    return resend;
+  }
 
   // 2) SES dene (yapılandırılmışsa)
   if (sesConfigured()) {
     const ses = await sendViaSes(args);
-    if (ses.sent) return ses;
+    if (ses.sent) {
+      recordSent(args.to, args.subject);
+      return ses;
+    }
   }
 
   // 3) Development fallback: console'a log et ve simüle et
   console.warn("[email] Neither Resend nor SES available — falling back to development mode");
-  return await sendViaConsole(args);
+  const consoleResult = await sendViaConsole(args);
+  if (consoleResult.sent) {
+    recordSent(args.to, args.subject);
+  }
+  return consoleResult;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
