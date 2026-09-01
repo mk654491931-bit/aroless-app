@@ -75,20 +75,8 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     setLoading(plan);
     try {
       const { url } = await checkout({ data: { plan } });
-      const finalUrl =
-        discount > 0 && promo.trim()
-          ? `${url}${url.includes("?") ? "&" : "?"}checkout[discount_code]=${encodeURIComponent(promo.trim().toUpperCase())}`
-          : url;
-      // Lemon Squeezy overlay via their JS if available, else new tab
-      const w = window as unknown as {
-        LemonSqueezy?: { Url: { Open: (u: string) => void } };
-        createLemonSqueezy?: () => void;
-      };
-      if (w.LemonSqueezy?.Url?.Open) {
-        w.LemonSqueezy.Url.Open(finalUrl);
-      } else {
-        window.open(finalUrl, "_blank", "noopener");
-      }
+      // Paddle checkout URL'sini aç (Paddle'ın kendi hosting'i, SDK wrapper gerekmez)
+      window.open(url, "_blank", "noopener");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");
     } finally {

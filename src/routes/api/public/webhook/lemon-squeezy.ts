@@ -1,80 +1,112 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createHmac, timingSafeEqual } from "node:crypto";
 
-type LemonPayload = {
-  meta?: { event_name?: string; custom_data?: { user_id?: string; plan?: string } };
-  data?: { id?: string; attributes?: Record<string, unknown> };
+type PaddleWebhookPayload = {
+  eventId?: string;
+  eventType?: string;
+  data?: {
+    id?: string;
+    status?: string;
+    customData?: { userId?: string; plan?: string };
+    customerId?: string;
+  };
 };
 
-/** Abonelik durumunu (PRO / FREE) senkronize eden imzalı webhook. */
-export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
+/**
+ * Paddle Billing v2 webhook handler
+ * Subscription events'ı dinle ve profile'ı güncelle
+ */
+export const Route = createFileRoute("/api/public/webhook/paddle")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { lemonWebhookSecret } = await import("@/lib/lemonsqueezy.server");
-        const secret = lemonWebhookSecret();
-        if (!secret) return new Response("Not configured", { status: 500 });
+        // 1. Webhook secret'ı yükle
+        const { paddleEnv, verifyPaddleWebhookSignature, getPaddleSubscriptionTier } =
+          await import("@/lib/paddle.server");
 
+        const env = paddleEnv();
+        if (!env) {
+          console.error("[Paddle Webhook] Paddle not configured");
+          return new Response("Paddle not configured", { status: 500 });
+        }
+
+        // 2. Payload boyutu kontrolü (Dos protection)
         const contentLength = Number(request.headers.get("content-length") ?? 0);
-        if (contentLength > 1_000_000) return new Response("Payload too large", { status: 413 });
+        if (contentLength > 1_000_000) {
+          return new Response("Payload too large", { status: 413 });
+        }
+
+        // 3. Raw body'yi oku
         const raw = await request.text();
-        if (raw.length > 1_000_000) return new Response("Payload too large", { status: 413 });
-        const signature = request.headers.get("x-signature") ?? "";
-        const expected = createHmac("sha256", secret).update(raw).digest("hex");
-        const sig = Buffer.from(signature, "hex");
-        const exp = Buffer.from(expected, "hex");
-        if (sig.length !== exp.length || !timingSafeEqual(sig, exp)) {
+        if (raw.length > 1_000_000) {
+          return new Response("Payload too large", { status: 413 });
+        }
+
+        // 4. Signature doğrulaması (Paddle-Signature header)
+        const paddleSignature = request.headers.get("paddle-signature") ?? "";
+        if (!verifyPaddleWebhookSignature(raw, paddleSignature, env.webhookSecret)) {
+          console.warn("[Paddle Webhook] Invalid signature");
           return new Response("Invalid signature", { status: 401 });
         }
 
-        let payload: LemonPayload;
+        // 5. JSON parse
+        let payload: PaddleWebhookPayload;
         try {
-          payload = JSON.parse(raw) as LemonPayload;
-        } catch {
+          payload = JSON.parse(raw) as PaddleWebhookPayload;
+        } catch (e) {
+          console.error("[Paddle Webhook] JSON parse error:", e);
           return new Response("Bad JSON", { status: 400 });
         }
 
-        const event = payload.meta?.event_name ?? "";
-        const userId = payload.meta?.custom_data?.user_id;
-        const plan = payload.meta?.custom_data?.plan ?? "Pro";
-        const attrs = payload.data?.attributes ?? {};
-        const status = String(attrs["status"] ?? "");
+        // 6. Event tipi ve data'yı çıkart
+        const eventType = payload.eventType ?? "";
+        const subscriptionId = payload.data?.id;
+        const status = payload.data?.status ?? "";
+        const userId = payload.data?.customData?.userId;
+        const customerId = payload.data?.customerId;
+        const plan = payload.data?.customData?.plan ?? "Pro";
+
+        // 7. User ID validasyonu (UUID format)
         if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
-          return new Response("Bad user id", { status: 400 });
-        }
-        if (!userId) return new Response("ok", { status: 200 });
-
-        let tier: string | null = null;
-        switch (event) {
-          case "subscription_created":
-            tier = plan;
-            break;
-          case "subscription_updated":
-            // active / on_trial → plan aktif; diğer her durum ücretsize düşer.
-            tier = status === "active" || status === "on_trial" ? plan : "Free";
-            break;
-          case "subscription_cancelled":
-          case "subscription_expired":
-            tier = "Free";
-            break;
-          default:
-            return new Response("ok", { status: 200 });
+          console.warn("[Paddle Webhook] Invalid user ID format:", userId);
+          return new Response("Bad user id format", { status: 400 });
         }
 
+        // User ID yoksa webhook'u başarılı kabul et (duplicate prevention)
+        if (!userId) {
+          return new Response("ok", { status: 200 });
+        }
+
+        // 8. Subscription tier'ı belirle
+        const tier = getPaddleSubscriptionTier(eventType, status);
+
+        // Bilinmeyen event → başarılı kabul et
+        if (tier === null) {
+          return new Response("ok", { status: 200 });
+        }
+
+        // 9. Database update
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+        const updateData: Record<string, unknown> = {
+          subscription_tier: tier,
+          paddle_subscription_id: subscriptionId ?? null,
+          paddle_customer_id: customerId ?? null,
+          updated_at: new Date().toISOString(),
+        };
+
         const { error } = await supabaseAdmin
           .from("profiles")
-          .update({
-            subscription_tier: tier,
-            lemon_subscription_id: payload.data?.id ? String(payload.data.id) : null,
-            lemon_customer_id: attrs["customer_id"] ? String(attrs["customer_id"]) : null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq("id", userId);
+
         if (error) {
-          console.error("[lemon-webhook] profile update failed", error);
-          return new Response("Webhook işlenemedi", { status: 500 });
+          console.error("[Paddle Webhook] Profile update failed:", error);
+          return new Response("Update failed", { status: 500 });
         }
+
+        console.log(
+          `[Paddle Webhook] ✓ ${eventType} for user ${userId}: tier=${tier}`,
+        );
 
         return new Response("ok", { status: 200 });
       },

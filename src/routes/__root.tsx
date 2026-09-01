@@ -135,7 +135,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
-        <script src="https://assets.lemonsqueezy.com/lemon.js" defer />
+        {/* Paddle client SDK (opsiyonel — checkout URL redirect ile yeterli) */}
         <Scripts />
       </body>
     </html>

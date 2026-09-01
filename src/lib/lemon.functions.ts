@@ -1,10 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { createLemonCheckout } from "@/lib/lemonsqueezy.server";
+import { createPaddleCheckout } from "@/lib/paddle.server";
 
 const InputSchema = z.object({ plan: z.enum(["Starter", "Pro", "Business"]) });
 
+/**
+ * Paddle checkout URL'si oluştur
+ * Eskiden Lemon Squeezy, şimdi Paddle v2 üzerinden
+ */
 export const createCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
@@ -15,11 +19,13 @@ export const createCheckout = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
-    const url = await createLemonCheckout({
+    const { checkoutUrl } = await createPaddleCheckout({
       userId: context.userId,
       email: profile?.email,
       plan: data.plan,
       redirectUrl: process.env.APP_URL || undefined,
     });
-    return { url };
+
+    return { url: checkoutUrl };
   });
+
