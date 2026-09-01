@@ -66,7 +66,6 @@ export default defineConfig(async ({ command, mode }) => {
 
   return {
     define,
-    css: { transformer: "lightningcss" as const },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
       dedupe: [
@@ -103,42 +102,38 @@ export default defineConfig(async ({ command, mode }) => {
       },
     },
     build: {
-      target: "ES2022",
-      minify: "terser",
-      terserOptions: {
-        compress: {
-          drop_console: mode === "production",
-          drop_debugger: true,
-          passes: 3,
-        },
-        format: {
-          comments: false,
-        },
-      },
+      target: "ES2020",
+      minify: false,
+      sourcemap: mode !== "production",
       rollupOptions: {
         output: {
           // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
-          manualChunks: {
-            "react-vendor": ["react", "react-dom"],
-            "ui-vendor": [
-              "@radix-ui/react-accordion",
-              "@radix-ui/react-alert-dialog",
-              "@radix-ui/react-avatar",
-              "@radix-ui/react-checkbox",
-              "@radix-ui/react-collapsible",
-              "@radix-ui/react-dialog",
-              "@radix-ui/react-dropdown-menu",
-              "@radix-ui/react-label",
-              "@radix-ui/react-popover",
-              "@radix-ui/react-select",
-              "@radix-ui/react-slider",
-              "@radix-ui/react-tabs",
-              "@radix-ui/react-tooltip",
-            ],
-            "tanstack-vendor": ["@tanstack/react-router", "@tanstack/react-query"],
-            "supabase-vendor": ["@supabase/supabase-js"],
-            "form-vendor": ["react-hook-form", "@hookform/resolvers"],
-            "utils-vendor": ["clsx", "tailwind-merge"],
+          manualChunks: (id) => {
+            // Vendor chunks
+            if (id.includes("node_modules/react") && !id.includes("react-dom")) {
+              return "react-vendor";
+            }
+            if (id.includes("node_modules/react-dom")) {
+              return "react-vendor";
+            }
+            if (id.includes("node_modules/@radix-ui")) {
+              return "ui-vendor";
+            }
+            if (id.includes("node_modules/@tanstack")) {
+              return "tanstack-vendor";
+            }
+            if (id.includes("node_modules/@supabase")) {
+              return "supabase-vendor";
+            }
+            if (id.includes("node_modules/react-hook-form") || 
+                id.includes("node_modules/@hookform")) {
+              return "form-vendor";
+            }
+            if (id.includes("node_modules") && 
+                (id.includes("clsx") || id.includes("tailwind-merge"))) {
+              return "utils-vendor";
+            }
+            return undefined;
           },
           // Gzip compression için optimize edilmiş chunk boyutları
           entryFileNames: "js/[name].[hash:8].js",
@@ -160,7 +155,7 @@ export default defineConfig(async ({ command, mode }) => {
       // Gzip compression
       reportCompressedSize: true,
       cssCodeSplit: true,
-      sourcemap: mode !== "production",
+      cssMinify: false, // Disable CSS minification to avoid lightningcss issues
     },
     plugins,
   };
