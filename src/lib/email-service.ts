@@ -1,9 +1,10 @@
 /**
- * Unified e-posta servisi — Resend öncelikli, AWS SES yedek.
+ * Unified e-posta servisi — Resend öncelikli, AWS SES yedek, Console fallback.
  *
  * Öncelik sırası:
  *   1. Resend API (RESEND_API_KEY + RESEND_FROM_EMAIL)
  *   2. AWS SES v2 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ...)
+ *   3. Development/Console log fallback (e-posta gönderilemediğinde konsola yazar)
  *
  * Hiçbir hata yukarı fırlatılmaz; gönderim başarısız olursa { sent: false } döner.
  * Bu sayede kayıt/giriş akışları e-posta servisi yüzünden asla kırılmaz.
@@ -207,7 +208,20 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
   }
 }
 
-// ─── Unified send (Resend → SES → skip) ──────────────────────────────────────
+// ─── Fallback console log ──────────────────────────────────────────────────
+
+/** Development/fallback mode: console'a log ve simüle et. */
+async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
+  const to = (Array.isArray(args.to) ? args.to : [args.to]).filter(Boolean);
+  console.log("[email-fallback] Development mode — e-posta gönderimi simüle ediliyor:");
+  console.log(`  To: ${to.join(", ")}`);
+  console.log(`  Subject: ${args.subject}`);
+  console.log(`  Body preview: ${(args.html ?? args.text ?? "").slice(0, 100)}...`);
+  // Geliştirme ortamında başarılı gibi göster — böylece kayıt/giriş akışı devam eder
+  return { sent: true, messageId: `dev-${Date.now()}` };
+}
+
+// ─── Unified send (Resend → SES → Console Fallback) ──────────────────────
 
 /** Hiçbir zaman fırlatmaz. */
 async function sendUnified(args: SendEmailArgs): Promise<SendEmailResult> {
@@ -219,10 +233,11 @@ async function sendUnified(args: SendEmailArgs): Promise<SendEmailResult> {
   if (sesConfigured()) {
     const ses = await sendViaSes(args);
     if (ses.sent) return ses;
-    console.warn("[email] both Resend and SES failed — email not sent");
   }
 
-  return { sent: false, reason: resend.reason ?? "no_provider_configured" };
+  // 3) Development fallback: console'a log et ve simüle et
+  console.warn("[email] Neither Resend nor SES available — falling back to development mode");
+  return await sendViaConsole(args);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

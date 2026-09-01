@@ -14,7 +14,8 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
   if (!secret) return { ok: true, skipped: true };
   const siteKey = process.env["VITE_TURNSTILE_SITE_KEY"];
   if (!siteKey) return { ok: true, skipped: true, reason: "no-site-key" };
-  if (!token) return { ok: true, skipped: true, reason: "empty-token-allowed" };
+  // Secret key varsa token boş olmamalı — doğrulama gerekli
+  if (!token) return { ok: false, skipped: false, reason: "token-required" };
 
   try {
     const body = new URLSearchParams({ secret, response: token });

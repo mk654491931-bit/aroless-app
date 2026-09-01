@@ -45,7 +45,7 @@ function hfIsQuota(status: number, body: string): boolean {
 /**
  * Raw chat completion against the HF router. Rotates keys on rate limits and,
  * when every HF token is spent (or none is configured), silently hands the
- * prompt to the other providers (Groq → Gemini → Lovable AI) so the user never
+ * prompt to the other providers (Premium AI → Gemini → Groq → LovableAI) so the user never
  * sees a rate-limit error. Pass `noFallback` for pure connectivity probes.
  */
 export async function callHuggingFace(
@@ -57,10 +57,13 @@ export async function callHuggingFace(
   const tokens = hfTokenPool(opts.token);
   if (!tokens.length) {
     if (opts.noFallback) throw new Error("HF_TOKEN_MISSING");
+    console.log("[hf] No HF tokens configured — using fallback providers");
     return hfCrossProviderFallback(prompt, opts.temperature);
   }
 
   let lastErr: unknown = null;
+  let successCount = 0;
+  
   for (const token of tokens) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
@@ -87,12 +90,19 @@ export async function callHuggingFace(
       if (!resp.ok) {
         const body = (await resp.text()).slice(0, 200);
         lastErr = new Error(`HF_ERROR ${resp.status}: ${body}`);
-        if (hfIsQuota(resp.status, body)) continue; // key spent — rotate
+        if (hfIsQuota(resp.status, body)) {
+          console.warn(`[hf] Token quota exceeded — trying next token`);
+          continue; // key spent — rotate
+        }
         throw lastErr;
       }
       const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      return json.choices?.[0]?.message?.content ?? "{}";
+      const result = json.choices?.[0]?.message?.content ?? "{}";
+      successCount++;
+      if (successCount === 1) console.log(`[hf] ${engine} engine successful`);
+      return result;
     } catch (e) {
+      console.warn(`[hf] ${engine} engine error:`, e instanceof Error ? e.message : String(e));
       lastErr = e;
     } finally {
       clearTimeout(timer);
@@ -100,23 +110,33 @@ export async function callHuggingFace(
   }
   if (opts.noFallback) throw lastErr instanceof Error ? lastErr : new Error("HF request failed");
   // Bütün HF anahtarları tükendi → arkada diğer motorlar devralır.
+  console.log("[hf] All HF tokens exhausted — using fallback providers");
   return hfCrossProviderFallback(prompt, opts.temperature);
 }
 
 /** HF tükendiğinde sessizce devreye giren diğer sağlayıcılar. */
 async function hfCrossProviderFallback(prompt: string, temperature = 0.5): Promise<string> {
-  const { callGroq, callGemini, callLovableAI } = await import("@/lib/ai.server");
+  const { callPremiumAI, callLovableAI, callGemini, callGroq } = await import("@/lib/ai.server");
+  
+  // Fallback sırası: Premium Gateway → Gemini → Groq → LovableAI
   const chain = [
-    () => callGroq(prompt, temperature),
-    () => callGemini(prompt, undefined, temperature, false),
-    () => callLovableAI(prompt, temperature),
+    { name: "Premium AI Gateway", run: () => callPremiumAI(prompt, temperature) },
+    { name: "Gemini", run: () => callGemini(prompt, undefined, temperature, false) },
+    { name: "Groq", run: () => callGroq(prompt, temperature) },
+    { name: "Lovable AI", run: () => callLovableAI(prompt, temperature) },
   ];
   let lastErr: unknown = null;
-  for (const run of chain) {
+  
+  for (const provider of chain) {
     try {
-      const text = await run();
-      if (text && text.trim()) return text;
+      console.log(`[hf-fallback] Trying ${provider.name}...`);
+      const text = await provider.run();
+      if (text && text.trim()) {
+        console.log(`[hf-fallback] ${provider.name} başarılı`);
+        return text;
+      }
     } catch (e) {
+      console.warn(`[hf-fallback] ${provider.name} başarısız:`, e instanceof Error ? e.message : String(e));
       lastErr = e;
     }
   }
