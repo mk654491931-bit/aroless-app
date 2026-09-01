@@ -1,114 +1,173 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { verifyPaddleWebhook, getPaddleEnv } from "@/lib/paddle.server";
 import { guardPublic } from "@/lib/api-guard.server";
 
-type PaddleEvent = {
-  event_id?: string;
-  event_type?: string;
-  data?: {
-    id?: string;
-    status?: string;
-    customer?: { email?: string; id?: string };
-    custom_data?: { user_id?: string; plan?: string };
-    items?: Array<{
-      price?: { id?: string; name?: string; product_id?: string };
-      quantity?: number;
-    }>;
-    totals?: { total?: string; currency?: string };
-    subscription_id?: string;
-    billing_period?: { start?: string; finish?: string };
-  };
-};
-
 /**
- * Paddle Billing v2 webhook handler.
- * Abonelik durumunu (PRO / Starter / Business / Free) senkronize eder.
- * shadow_transaction veya subscription.created/updated/cancelled/events about.
+ * Paddle Billing v2 webhook handler (canonical URL).
+ * Abonelik durumunu (Pro / Starter / Business / Free) senkronize eder.
+ *
+ * Paddle dashboard'unda bu URL'yi webhook endpoint olarak kaydedin:
+ *   /api/public/paddle-webhook
+ *
+ * Geriye dönük uyumluluk için eski /lemonsqueezy-webhook endpoint'i
+ * korunmaya devam etmektedir.
  */
-export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
+
+const MAX_PAYLOAD_BYTES = 1_000_000;
+
+const PaddleEventSchema = z.object({
+  event_id: z.string().optional(),
+  event_type: z.string().optional(),
+  data: z
+    .object({
+      id: z.string().optional(),
+      status: z.string().optional(),
+      customer: z
+        .object({
+          email: z.string().optional(),
+          id: z.string().optional(),
+        })
+        .optional(),
+      custom_data: z
+        .object({
+          user_id: z.string().optional(),
+          plan: z.string().optional(),
+        })
+        .optional(),
+      items: z
+        .array(
+          z.object({
+            price: z
+              .object({
+                id: z.string().optional(),
+                name: z.string().optional(),
+                product_id: z.string().optional(),
+              })
+              .optional(),
+            quantity: z.number().optional(),
+          }),
+        )
+        .optional(),
+      totals: z
+        .object({
+          total: z.string().optional(),
+          currency: z.string().optional(),
+        })
+        .optional(),
+      subscription_id: z.string().optional(),
+      billing_period: z
+        .object({
+          start: z.string().optional(),
+          finish: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+type PaddleEvent = z.infer<typeof PaddleEventSchema>;
+
+/** UUID formatı kontrolü — injection engellemek için. */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function json(payload: unknown, status: number): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+export const Route = createFileRoute("/api/public/paddle-webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // Rate limit (IP-based, herkese açık webhook)
-        const rateLimited = await guardPublic(request, "lemonsqueezy-webhook", 120, 60);
+        // 1. Rate limit (IP-based, herkese açık webhook)
+        const rateLimited = await guardPublic(request, "paddle-webhook", 120, 60);
         if (rateLimited) return rateLimited;
 
+        // 2. Paddle yapılandırması kontrolü
         const paddleEnv = getPaddleEnv();
-        if (!paddleEnv) return new Response("Not configured", { status: 500 });
+        if (!paddleEnv) return json({ error: "Not configured" }, 500);
 
-        // Boyut kontrolü
+        // 3. Payload boyut kontrolü
         const contentLength = Number(request.headers.get("content-length") ?? 0);
-        if (contentLength > 1_000_000) return new Response("Payload too large", { status: 413 });
+        if (contentLength > MAX_PAYLOAD_BYTES)
+          return json({ error: "Payload too large" }, 413);
 
         const raw = await request.text();
-        if (raw.length > 1_000_000) return new Response("Payload too large", { status: 413 });
+        if (raw.length > MAX_PAYLOAD_BYTES)
+          return json({ error: "Payload too large" }, 413);
 
-        // Paddle v2 webhook imza doğrulama
+        // 4. Webhook imza doğrulama (Paddle v2 HMAC-SHA256)
         const signatureHeader = request.headers.get("paddle-signature") ?? "";
         if (!signatureHeader) {
-          return new Response("Missing signature", { status: 401 });
+          return json({ error: "Missing signature" }, 401);
         }
 
         const validSignature = await verifyPaddleWebhook(raw, signatureHeader);
         if (!validSignature) {
           console.error("[paddle-webhook] invalid signature");
-          return new Response("Invalid signature", { status: 401 });
+          return json({ error: "Invalid signature" }, 401);
         }
 
+        // 5. JSON parse + Zod doğrulama
         let payload: PaddleEvent;
         try {
-          payload = JSON.parse(raw) as PaddleEvent;
+          const parsed: unknown = JSON.parse(raw);
+          payload = PaddleEventSchema.parse(parsed);
         } catch {
-          return new Response("Bad JSON", { status: 400 });
+          return json({ error: "Bad JSON or invalid schema" }, 400);
         }
 
         const eventType = payload.event_type ?? "";
         const data = payload.data ?? {};
+        const customData = data.custom_data ?? {};
 
-        // Webhook verilerinden user_id ve plan bilgisini çıkar
-        const userId = data.custom_data?.user_id;
-        const plan = data.custom_data?.plan;
-
-        // UUID format kontrolü
-        if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
-          return new Response("Bad user id", { status: 400 });
+        // 6. UUID format kontrolü — injection engellemek için
+        const userId = customData.user_id;
+        if (userId && !UUID_REGEX.test(userId)) {
+          return json({ error: "Bad user id" }, 400);
         }
 
-        // Event tipine göre tier belirleme
+        const plan = customData.plan;
+
+        // 7. Event tipine göre tier belirleme
         let tier: string | null = null;
         let shouldCredit = false;
 
         switch (eventType) {
           case "transaction.completed":
           case "subscription.created":
-            tier = plan ?? "Pro";
+            tier = (plan as string) ?? "Pro";
             shouldCredit = true;
             break;
           case "subscription.updated":
-            // subscription updated → duruma göre tier
-            tier = plan ?? "Pro";
+            tier = (plan as string) ?? "Pro";
             shouldCredit = true;
             break;
           case "subscription.canceled":
           case "subscription.expired":
-            tier = "Free";
-            break;
           case "subscription.past_due":
           case "subscription.paused":
             tier = "Free";
             break;
           default:
             // Bilinmeyen event türlerini sessizce kabul et
-            return new Response("ok", { status: 200 });
+            return json({ ok: true }, 200);
         }
 
         if (!userId) {
-          return new Response("ok", { status: 200 });
+          return json({ ok: true }, 200);
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-        // Profili güncelle
+        // 8. Profili güncelle
         if (tier) {
           const { error } = await supabaseAdmin
             .from("profiles")
@@ -119,11 +178,11 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
             .eq("id", userId);
           if (error) {
             console.error("[paddle-webhook] profile update failed", error);
-            return new Response("Webhook işlenemedi", { status: 500 });
+            return json({ error: "Webhook işlenemedi" }, 500);
           }
         }
 
-        // Kredi uygula
+        // 9. Kredi uygula
         if (shouldCredit && tier && tier !== "Free") {
           const tierCredits =
             tier === "Business" ? 50 : tier === "Pro" ? 15 : tier === "Starter" ? 8 : 0;
@@ -175,7 +234,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
             .eq("user_id", userId);
         }
 
-        return new Response("ok", { status: 200 });
+        return json({ ok: true }, 200);
       },
     },
   },

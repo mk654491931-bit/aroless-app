@@ -2082,3 +2082,93 @@ input:focus-visible {
 .animate-border-flow {
   animation: border-flow 2s ease-in-out infinite;
 }
+
+/* ── Landing page premium enhancements ── */
+
+/* Feature card hover glow ring */
+.feature-glow {
+  position: relative;
+}
+.feature-glow::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  opacity: 0;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 62%,
+    color-mix(in oklab, var(--brand) 70%, transparent) 74%,
+    color-mix(in oklab, var(--brand-2) 60%, transparent) 82%,
+    transparent 94%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.feature-glow:hover::after {
+  opacity: 1;
+  animation: trace-spin 3s linear infinite;
+}
+
+/* Hero text blur-in entrance */
+@keyframes hero-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-hero-reveal {
+  animation: hero-reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stats counter shimmer */
+@keyframes stat-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.stat-shimmer {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--brand) 15%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: stat-shimmer 3s linear infinite;
+}
+
+/* Premium footer atmosphere */
+html.light footer {
+  border-top-color: oklch(0.25 0.04 265 / 10%);
+}
+
+/* Landing CTA glow pulse */
+@keyframes cta-glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--brand) 30%, transparent),
+      0 10px 40px -10px color-mix(in oklab, var(--brand) 45%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--brand) 50%, transparent),
+      0 10px 50px -8px color-mix(in oklab, var(--brand) 65%, transparent);
+  }
+}
+
+.cta-glow {
+  animation: cta-glow-pulse 3s ease-in-out infinite;
+}

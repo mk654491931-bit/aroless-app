@@ -41,6 +41,7 @@ import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
 import { Route as ApiPublicLemonsqueezyWebhookRouteImport } from './routes/api/public/lemonsqueezy-webhook'
+import { Route as ApiPublicPaddleWebhookRouteImport } from './routes/api/public/paddle-webhook'
 import { Route as ApiPublicPredictiveTrendsRouteImport } from './routes/api/public/predictive-trends'
 import { Route as ApiPublicProductImageRouteImport } from './routes/api/public/product-image'
 import { Route as ApiPublicToolRouteImport } from './routes/api/public/tool'
@@ -210,6 +211,11 @@ const ApiPublicLemonsqueezyWebhookRoute =
     path: '/api/public/lemonsqueezy-webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicPaddleWebhookRoute = ApiPublicPaddleWebhookRouteImport.update({
+  id: '/api/public/paddle-webhook',
+  path: '/api/public/paddle-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicPredictiveTrendsRoute =
   ApiPublicPredictiveTrendsRouteImport.update({
     id: '/api/public/predictive-trends',
@@ -281,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
   '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/api/public/tool': typeof ApiPublicToolRoute
@@ -322,6 +329,7 @@ export interface FileRoutesByTo {
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
   '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/api/public/tool': typeof ApiPublicToolRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/lemonsqueezy-webhook': typeof ApiPublicLemonsqueezyWebhookRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
   '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/api/public/tool': typeof ApiPublicToolRoute
@@ -407,6 +416,7 @@ export interface FileRouteTypes {
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/paddle-webhook'
     | '/api/public/predictive-trends'
     | '/api/public/product-image'
     | '/api/public/tool'
@@ -448,6 +458,7 @@ export interface FileRouteTypes {
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/paddle-webhook'
     | '/api/public/predictive-trends'
     | '/api/public/product-image'
     | '/api/public/tool'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/lemonsqueezy-webhook'
+    | '/api/public/paddle-webhook'
     | '/api/public/predictive-trends'
     | '/api/public/product-image'
     | '/api/public/tool'
@@ -530,6 +542,7 @@ export interface RootRouteChildren {
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
   ApiPublicLemonsqueezyWebhookRoute: typeof ApiPublicLemonsqueezyWebhookRoute
+  ApiPublicPaddleWebhookRoute: typeof ApiPublicPaddleWebhookRoute
   ApiPublicPredictiveTrendsRoute: typeof ApiPublicPredictiveTrendsRoute
   ApiPublicProductImageRoute: typeof ApiPublicProductImageRoute
   ApiPublicToolRoute: typeof ApiPublicToolRoute
@@ -765,6 +778,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicLemonsqueezyWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/paddle-webhook': {
+      id: '/api/public/paddle-webhook'
+      path: '/api/public/paddle-webhook'
+      fullPath: '/api/public/paddle-webhook'
+      preLoaderRoute: typeof ApiPublicPaddleWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/predictive-trends': {
       id: '/api/public/predictive-trends'
       path: '/api/public/predictive-trends'
@@ -859,6 +879,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
   ApiPublicLemonsqueezyWebhookRoute: ApiPublicLemonsqueezyWebhookRoute,
+  ApiPublicPaddleWebhookRoute: ApiPublicPaddleWebhookRoute,
   ApiPublicPredictiveTrendsRoute: ApiPublicPredictiveTrendsRoute,
   ApiPublicProductImageRoute: ApiPublicProductImageRoute,
   ApiPublicToolRoute: ApiPublicToolRoute,
@@ -870,13 +891,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -1,8 +1,18 @@
 /**
- * Velora çok sağlayıcılı AI yönlendirici (sunucu tarafı).
+ * Velora çok sağlayıcılı AI yönlendirici — akıllı görev tabanlı yönlendirme.
  *
- * Ağır bir dış gateway servisi yok: saf TypeScript try/catch + switch/case ile
- * sağlayıcı zinciri, 429/timeout durumunda anında fallback, üstel geri çekilme.
+ * Görev tipine göre en uygun sağlayıcıyı seçer:
+ *  - "search"    → Gemini (grounded search destekli)
+ *  - "analysis"  → Bedrock Claude → Gemini Pro → OpenRouter
+ *  - "quick"     → Groq → Cerebras → SambaNova (düşük gecikme)
+ *  - "creative"  → Gemini Flash → OpenRouter → Together
+ *  - "default"   → FAST_CHAIN sırasıyla
+ *
+ * Her sağlayıcı için:
+ *  - Round-robin key rotasyonu (eşzamanlı çağrılar farklı key kullanır)
+ *  - 429/timeout/anonim hata → bir sonraki key'e geçiş
+ *  - Circuit breaker: 60sn'de 5+ hata → sağlayıcı geçici devre dışı
+ *  - Üstel geri çekilme + jitter
  */
 import {
   callGemini,
@@ -11,10 +21,34 @@ import {
   geminiKeyPool,
   groqKeyPool,
   openRouterKeyPool,
+  togetherKeyPool,
 } from "./ai.server";
 import { withEstimationRules } from "./ai-guidance";
 
-/** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
+// ---------------------------------------------------------------- provider types
+export type ProviderId =
+  | "cerebras"
+  | "sambanova"
+  | "groq"
+  | "gemini"
+  | "together"
+  | "openrouter"
+  | "huggingface"
+  | "bedrock";
+
+export type ProviderCall = (
+  prompt: string,
+  temperature: number,
+  signal: AbortSignal,
+) => Promise<string>;
+
+/** Görev tipi — sağlayıcı seçimini belirler. */
+export type TaskType = "search" | "analysis" | "quick" | "creative" | "default";
+
+const TIMEOUT_MS = 45_000;
+
+// ---------------------------------------------------------------- provider chains per task
+/** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır. */
 export const FAST_CHAIN: ProviderId[] = [
   "cerebras",
   "sambanova",
@@ -24,19 +58,23 @@ export const FAST_CHAIN: ProviderId[] = [
   "openrouter",
   "huggingface",
 ];
+
 /** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
-export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
+export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = [
+  "bedrock",
+  "gemini",
+  "openrouter",
+  "groq",
+];
 
-export type ProviderId =
-  "cerebras" | "sambanova" | "groq" | "gemini" | "together" | "openrouter" | "huggingface" | "bedrock";
-
-export type ProviderCall = (
-  prompt: string,
-  temperature: number,
-  signal: AbortSignal,
-) => Promise<string>;
-
-const TIMEOUT_MS = 45_000;
+/** Görev bazlı optimal zincir sıralaması. */
+export const TASK_CHAINS: Record<TaskType, ProviderId[]> = {
+  search: ["gemini", "groq", "cerebras", "sambanova", "openrouter", "together"],
+  analysis: ["bedrock", "gemini", "openrouter", "groq", "together"],
+  quick: ["groq", "cerebras", "sambanova", "gemini", "together"],
+  creative: ["gemini", "openrouter", "together", "groq", "cerebras"],
+  default: FAST_CHAIN,
+};
 
 // ---------------------------------------------------------------- provider health
 const providerFailures = new Map<string, { count: number; lastFail: number }>();
@@ -57,7 +95,7 @@ function recordSuccess(pid: string) {
   providerFailures.delete(pid);
 }
 
-/** Son 60 sn içinde 5+ hata sayan provider’ı geçici olarak devre dışı bırak. */
+/** Son 60 sn içinde 5+ hata sayan provider'ı geçici olarak devre dışı bırak. */
 function isProviderHealthy(pid: string): boolean {
   const f = providerFailures.get(pid);
   if (!f) return true;
@@ -174,7 +212,6 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     const keys = groqKeyPool();
     if (!keys.length) return callGroq(prompt, temperature);
     try {
-      // Birincil → ikincil anahtar rotasyonu (429/401/402'de anında 2. anahtar).
       return await rotate(keys, GROQ_MODELS, (key, model) =>
         openAICompatible({
           url: "https://api.groq.com/openai/v1/chat/completions",
@@ -191,7 +228,6 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   },
 
   gemini: (prompt, temperature) =>
-    // Sıradaki anahtar 429/401/402 alırsa otomatik olarak 2./3. anahtara geçer.
     rotate(geminiKeyPool(), ["gemini"], (key) => callGemini(prompt, key, temperature, true)),
 
   openrouter: (prompt, temperature, signal) =>
@@ -232,7 +268,11 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   together: (prompt, temperature, signal) =>
     rotate(
       pool("TOGETHER_API_KEY", "TOGETHER_KEY_1", "TOGETHER_AI_API_KEY"),
-      ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mistral-7B-Instruct-v0.3"],
+      [
+        "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+      ],
       (key, model) =>
         openAICompatible({
           url: "https://api.together.xyz/v1/chat/completions",
@@ -298,7 +338,7 @@ export async function callBedrockClaude(
         temperature,
         messages: [{ role: "user", content: prompt }],
       });
-      const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+      const amzDate = new Date().toISOString().replace(/[:-]|\\\.\d{3}/g, "");
       const dateStamp = amzDate.slice(0, 8);
       const payloadHash = await sha256Hex(payload);
       const canonical = [
@@ -369,14 +409,13 @@ export async function executeAgentWithFallback(
 ): Promise<FallbackResult> {
   prompt = withEstimationRules(prompt);
   const temperature = opts.temperature ?? 0.3;
-  const retries = opts.retries ?? 2; // zincir üzerinden tam tur sayısı
+  const retries = opts.retries ?? 2;
   const started = Date.now();
   let attempts = 0;
   let lastError = "";
 
   for (let round = 0; round < retries; round++) {
     for (const provider of chain) {
-      // Sağlık kontrolü: son 60sn'de 5+ hata sayan provider'ı atla.
       if (!isProviderHealthy(provider)) {
         lastError = `${provider}: skipped (circuit breaker)`;
         continue;
@@ -399,7 +438,7 @@ export async function executeAgentWithFallback(
         lastError = `${provider}: ${(e as Error).message}`.slice(0, 200);
       }
     }
-    await sleep(400 * 2 ** round + Math.random() * 250); // üstel geri çekilme + jitter
+    await sleep(400 * 2 ** round + Math.random() * 250);
   }
 
   return {
@@ -415,6 +454,20 @@ export async function executeAgentWithFallback(
   };
 }
 
+/**
+ * Görev tipine göre optimize edilmiş zincir ile çalıştırır.
+ * search → Gemini grounded, analysis → Bedrock, quick → Groq/Cerebras vb.
+ */
+export async function executeTaskWithOptimalChain(
+  taskType: TaskType,
+  agentName: string,
+  prompt: string,
+  opts: { temperature?: number; retries?: number } = {},
+): Promise<FallbackResult> {
+  const chain = TASK_CHAINS[taskType] ?? TASK_CHAINS.default;
+  return executeAgentWithFallback(agentName, prompt, chain, opts);
+}
+
 /** JSON bekleyen ajanlar için yardımcı. */
 export function parseAgentJson<T>(text: string, fallback: T): T {
   if (!text.trim()) return fallback;
@@ -423,11 +476,37 @@ export function parseAgentJson<T>(text: string, fallback: T): T {
 
 /** Provider sağlık durumunu dışarı açar (admin dashboard vb. için). */
 export function getProviderHealth(): Record<string, { failures: number; healthy: boolean }> {
-  const all: ProviderId[] = ["cerebras", "sambanova", "groq", "gemini", "together", "openrouter", "huggingface", "bedrock"];
+  const all: ProviderId[] = [
+    "cerebras",
+    "sambanova",
+    "groq",
+    "gemini",
+    "together",
+    "openrouter",
+    "huggingface",
+    "bedrock",
+  ];
   const result: Record<string, { failures: number; healthy: boolean }> = {};
   for (const pid of all) {
     const f = providerFailures.get(pid);
     result[pid] = { failures: f?.count ?? 0, healthy: isProviderHealthy(pid) };
   }
   return result;
+}
+
+/**
+ * Aktif key havuzu boyutlarını dışarı açar (admin monitoring için).
+ */
+export function getKeyPoolSizes(): Record<string, number> {
+  return {
+    gemini: geminiKeyPool().length,
+    groq: groqKeyPool().length,
+    openrouter: openRouterKeyPool().length,
+    together: togetherKeyPool().length,
+    cerebras: pool("CEREBRAS_API_KEY", "CEREBRAS_API_KEY_2").length,
+    sambanova: pool("SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_2").length,
+    bedrock:
+      process.env["AWS_ACCESS_KEY_ID"] && process.env["AWS_SECRET_ACCESS_KEY"] ? 1 : 0,
+    huggingface: pool("HF_TOKEN_1", "HF_TOKEN", "HUGGING_FACE_API_KEY1", "HF_TOKEN_2").length,
+  };
 }

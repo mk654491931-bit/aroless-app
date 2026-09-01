@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { verifyPaddleWebhook, getPaddleEnv } from "@/lib/paddle.server";
+import { guardPublic } from "@/lib/api-guard.server";
 
 /**
  * Alternatif Paddle webhook endpoint (URL uyumluluğu için).
@@ -9,6 +10,10 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // Rate limit (IP-based, herkese açık webhook)
+        const rateLimited = await guardPublic(request, "paddle-webhook-alt", 120, 60);
+        if (rateLimited) return rateLimited;
+
         const paddleEnv = getPaddleEnv();
         if (!paddleEnv) return new Response("Not configured", { status: 500 });
 
@@ -21,13 +26,19 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         // Webhook imza doğrulama
         const signatureHeader = request.headers.get("paddle-signature") ?? "";
         if (!signatureHeader) {
-          return new Response("Missing signature", { status: 401 });
+          return new Response("Missing signature", {
+            status: 401,
+            headers: { "X-Content-Type-Options": "nosniff" },
+          });
         }
 
         const validSignature = await verifyPaddleWebhook(raw, signatureHeader);
         if (!validSignature) {
           console.error("[paddle-webhook-alt] invalid signature");
-          return new Response("Invalid signature", { status: 401 });
+          return new Response("Invalid signature", {
+            status: 401,
+            headers: { "X-Content-Type-Options": "nosniff" },
+          });
         }
 
         let payload: Record<string, unknown>;
@@ -44,7 +55,7 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         const userId = typeof customData.user_id === "string" ? customData.user_id : undefined;
         const plan = typeof customData.plan === "string" ? customData.plan : undefined;
 
-        if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) {
+        if (userId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
           return new Response("Bad user id", { status: 400 });
         }
         if (!userId) return new Response("ok", { status: 200 });

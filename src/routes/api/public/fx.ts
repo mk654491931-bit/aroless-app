@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { guardPublic } from "@/lib/api-guard.server";
 
 /**
  * Live USD-based FX rates for country-aware pricing.
@@ -90,7 +91,9 @@ async function fetchRates(): Promise<FxPayload> {
 export const Route = createFileRoute("/api/public/fx")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const limited = await guardPublic(request, "fx", 40, 60);
+        if (limited) return limited;
         if (cache && Date.now() - cache.at < TTL) {
           return Response.json(cache.data, {
             headers: { "Cache-Control": "public, max-age=3600" },

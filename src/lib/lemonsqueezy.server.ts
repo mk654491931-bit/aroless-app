@@ -1,6 +1,7 @@
 /**
- * Geriye dönük uyumluluk köprüsü — eski import'ları Paddle'a yönlendirir.
+ * @deprecated Geriye dönük uyumluluk köprüsü — eski import'ları Paddle'a yönlendirir.
  * Tüm yeni kod paddle.server.ts import etmelidir.
+ * Bu dosya mevcut import zincirlerini kırmamak için korunmaktadır.
  */
 
 export type LemonEnv = {
@@ -21,6 +22,7 @@ export function lemonWebhookSecret(): string | undefined {
 
 /**
  * Geriye dönük uyumluluk — Paddle checkout'a yönlendirir.
+ * @deprecated Use createPaddleCheckout from "@/lib/paddle.server" directly.
  */
 export async function createLemonCheckout(opts: {
   userId: string;

@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createPaddleCheckout, getPaddleEnv } from "@/lib/paddle.server";
 import type { PaddlePlan } from "@/lib/paddle.server";
 
+/** @deprecated Use paddle-checkout server route instead. Kept for backward compatibility. */
+
 const InputSchema = z.object({ plan: z.enum(["Starter", "Pro", "Business"]) });
 
 export const createCheckout = createServerFn({ method: "POST" })

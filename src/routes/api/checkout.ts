@@ -39,8 +39,8 @@ export const Route = createFileRoute("/api/checkout")({
             redirectUrl: body.redirectUrl ?? new URL(request.url).origin + "/settings",
           });
           return json({ url }, 200);
-        } catch (e) {
-          return json({ error: (e as Error).message }, 500);
+        } catch {
+          return json({ error: "Ödeme bağlantısı oluşturulamadı. Lütfen tekrar deneyin." }, 500);
         }
       },
     },
