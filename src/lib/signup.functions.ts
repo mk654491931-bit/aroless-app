@@ -127,7 +127,14 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       const msg = createError.message.toLowerCase();
       const exists =
         msg.includes("already") || msg.includes("registered") || msg.includes("exists");
-      if (!exists) throw new Error(createError.message);
+      if (!exists) {
+        // Database trigger veya profil oluşturma hatası — kullanıcıya anlamlı mesaj ver
+        console.error("[signup] createUser failed:", createError.message, createError);
+        if (msg.includes("database") || msg.includes("trigger") || msg.includes("constraint")) {
+          throw new Error("Kayıt sırasında bir veritabanı hatası oluştu. Lütfen biraz sonra tekrar deneyin.");
+        }
+        throw new Error("Hesap oluşturulamadı. Lütfen farklı bir e-posta ile tekrar deneyin.");
+      }
 
       // Eski akıştan kalan doğrulanmamış hesabı yeniden kullan ve yeni kod gönder.
       const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
@@ -260,7 +267,13 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       email_confirm: true,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[signup-verify] updateUserById failed:", error.message);
+      if (error.message.includes("database") || error.message.includes("trigger")) {
+        throw new Error("Doğrulama sırasında veritabanı hatası oluştu. Lütfen tekrar deneyin.");
+      }
+      throw new Error("E-posta doğrulanamadı. Lütfen tekrar deneyin.");
+    }
     const creditsBlocked = await applyFingerprintPolicy(supabaseAdmin, {
       visitorId: data.visitorId,
       userId: user.id,

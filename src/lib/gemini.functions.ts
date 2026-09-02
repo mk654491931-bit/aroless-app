@@ -283,8 +283,6 @@ export const generateProducts = createServerFn({ method: "POST" })
       throw new Error(deductErr.message);
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
     // Fetch GitHub public repo trends as an additional confidence signal.
     let githubBlock = "";
     let githubTrends: GitHubRepoTrend[] = [];
@@ -551,12 +549,21 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
       }),
     );
     const collected: WinningProduct[] = [];
-    for (const r of results) {
+    const angleLogs: { angle: string; status: string; productCount: number; error?: string }[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
       if (r.status === "fulfilled") {
         const parsedBatch = extractJson<{ products?: WinningProduct[] }>(r.value, { products: [] });
-        if (parsedBatch.products?.length) collected.push(...parsedBatch.products);
+        const count = parsedBatch.products?.length ?? 0;
+        angleLogs.push({ angle: activeAngles[i]?.slice(0, 40) ?? `angle_${i}`, status: "ok", productCount: count });
+        if (count) collected.push(...parsedBatch.products!);
+      } else {
+        const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        angleLogs.push({ angle: activeAngles[i]?.slice(0, 40) ?? `angle_${i}`, status: "failed", productCount: 0, error: errMsg.slice(0, 120) });
       }
     }
+    console.log("[product-search] angle results:", JSON.stringify(angleLogs));
+    console.log(`[product-search] collected ${collected.length} products from ${results.length} angles`);
     // Keep only products with real viral proof (URL + views).
     const hasViralProof = (p: WinningProduct) =>
       Array.isArray(p?.viral_proof) &&
@@ -567,34 +574,24 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     // Fuzzy de-duplication: aynı ürünün farklı isimleri tek adaya iner.
     const { dedupeCandidates, winnerGate } = await import("@/lib/winner-gate.server");
     const unique: WinningProduct[] = dedupeCandidates(collected as WinningProduct[]);
+    console.log(`[product-search] after dedup: ${unique.length} unique from ${collected.length} collected`);
     // Prefer products with real viral proof, but never return an empty set
     // just because the model omitted proof URLs.
     const proven = unique.filter(hasViralProof);
     let products: WinningProduct[] = proven.length >= 3 ? proven : unique;
+    console.log(`[product-search] viral proof filter: ${proven.length} with proof, using ${products.length} products`);
     // Aday havuzu geniş tutulur; asıl eleme Winner Gate + skorlamada yapılır.
     const cap = Math.max(10, angleCount * 2);
     if (products.length > cap) products = products.slice(0, cap);
 
-    // If nothing came back, retry the first angle without grounding (strict JSON)
+    // ---- SLIM-SCHEMA RETRY: the full prompt likely truncated past maxOutputTokens.
+    // Try Gemini (same provider, smaller prompt) first — cheapest retry.
     if (products.length === 0) {
-      const retry = await callGemini(anglePrompts[0], apiKey, 0.7, false).catch(() => "");
-      const parsed = extractJson<{ products?: WinningProduct[] }>(retry, { products: [] });
-      if (parsed.products?.length) products = parsed.products;
-    }
-    if (products.length === 0) {
-      // Lovable AI gateway direct fallback
-      const retry2 = await callGemini(anglePrompts[0], undefined, 0.7, false).catch(() => "");
-      const parsed = extractJson<{ products?: WinningProduct[] }>(retry2, { products: [] });
-      if (parsed.products?.length) products = parsed.products;
-    }
-    if (products.length === 0) {
-      // Emergency slim-schema fallback: the full prompt likely truncated past maxOutputTokens.
-      // Ask for the minimal viable shape so downstream normalizeProduct can fill defaults.
+      console.log("[product-search] retry 1: slim-schema Gemini (grounding off)");
       const slimPrompt = `You are an e-commerce product researcher. Return STRICT JSON only.
-Find 4 REAL, specific, currently trending products for:
+Find 3 REAL, specific, currently trending products for:
 - Niche: ${data.niche}
 - Category: ${data.category}
-- Audience: ${data.audience || "(none)"}
 - Platforms: ${data.platforms.join(", ")}
 - Budget: ${data.budget}
 
@@ -606,16 +603,71 @@ JSON shape:
   "profit_margin_pct": number, "startup_cost_usd": string,
   "platform_fit": string[], "competition_level": "Low"|"Medium"|"High",
   "trend_score": number, "emoji": string,
+  "cost_breakdown": { "supplier_cost": string, "shipping_cost": string, "platform_fee": string, "ad_spend": string, "net_profit": string, "net_margin_pct": number },
   "sales_tactic": string, "ai_insight": string,
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-      const slim = await callGemini(slimPrompt, undefined, 0.8, false).catch(() => "");
+      const slim = await callGemini(slimPrompt, undefined, 0.8, false).catch((e) => { console.error("[product-search] retry1 slim-schema failed:", (e as Error)?.message); return ""; });
       const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
+      console.log(`[product-search] retry1 returned ${parsed.products?.length ?? 0} products`);
       if (parsed.products?.length) products = parsed.products;
     }
-    // ---- Cross-engine fallback: Gemini tükendiyse HF motorlarıyla dene ----
     let fallbackEngine = "gemini";
+    // ---- CROSS-PROVIDER RETRY: try Lovable AI gateway + Groq — different provider family.
+    if (products.length === 0) {
+      console.log("[product-search] retry 2: cross-provider fallback (Lovable AI → Groq)");
+      const crossProviderPrompt = `You are an e-commerce product researcher. Return STRICT JSON only.
+Find 2 REAL, specific, currently trending products for:
+- Niche: ${data.niche}
+- Category: ${data.category}
+- Platforms: ${data.platforms.join(", ")}
+- Budget: ${data.budget}
+
+JSON shape:
+{ "products": [ {
+  "name": string, "description": string, "why_winning": string,
+  "target_audience": string, "ad_angles": string[3],
+  "supplier_price_usd": string, "selling_price_usd": string,
+  "profit_margin_pct": number, "startup_cost_usd": string,
+  "platform_fit": string[], "competition_level": "Low"|"Medium"|"High",
+  "trend_score": number, "emoji": string,
+  "cost_breakdown": { "supplier_cost": string, "shipping_cost": string, "platform_fee": string, "ad_spend": string, "net_profit": string, "net_margin_pct": number },
+  "sales_tactic": string, "ai_insight": string,
+  "health_score": number, "viral_probability_90d": number,
+  "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
+} ] }`;
+      try {
+        const { callLovableAI } = await import("@/lib/ai.server");
+        // Try Lovable AI gateway first (no key exhaustion)
+        const gatewayText = await callLovableAI(crossProviderPrompt, 0.8).catch(() => "");
+        const gatewayParsed = extractJson<{ products?: WinningProduct[] }>(gatewayText, { products: [] });
+        console.log(`[product-search] retry2 gateway: ${gatewayParsed.products?.length ?? 0} products`);
+        if (gatewayParsed.products?.length) {
+          products = gatewayParsed.products;
+          fallbackEngine = "lovable_ai_gateway";
+        }
+      } catch (e) {
+        console.error("[product-search] retry2 gateway failed:", (e as Error)?.message);
+      }
+      // If gateway failed, try Groq directly
+      if (products.length === 0) {
+        try {
+          const { callGroq } = await import("@/lib/ai.server");
+          const groqText = await callGroq(crossProviderPrompt, 0.8).catch(() => "");
+          const groqParsed = extractJson<{ products?: WinningProduct[] }>(groqText, { products: [] });
+          console.log(`[product-search] retry2 groq: ${groqParsed.products?.length ?? 0} products`);
+          if (groqParsed.products?.length) {
+            products = groqParsed.products;
+            fallbackEngine = "groq_fallback";
+          }
+        } catch (e) {
+          console.error("[product-search] retry2 groq failed:", (e as Error)?.message);
+        }
+      }
+    }
+    console.log(`[product-search] after cross-provider: ${products.length} products`);
+    // ---- Cross-engine fallback: Gemini tükendiyse HF motorlarıyla dene ----
     if (products.length === 0) {
       try {
         const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, hfTokenPool } =
@@ -658,7 +710,48 @@ JSON shape:
         // HF fallback başarısız olsa da Gemini hatasıyla devam et
       }
     }
+    console.log(`[product-search] pre-normalize: ${products.length} products, engine: ${fallbackEngine}`);
+    // ---- ABSOLUTE LAST RESORT: minimal call across ANY available provider ----
     if (products.length === 0) {
+      console.log("[product-search] ABSOLUTE FALLBACK: multi-angle multi-provider");
+      const absAngles = [
+        `Find 2 real, specific products selling well in the "${data.niche}" niche for "${data.platforms.join(", ")}" platforms with budget ${data.budget}.`,
+        `What are the top trending products in the "${data.niche}" category right now? Give 2 specific SKUs with real supplier and retail prices.`,
+        `Name 2 specific products in the "${data.niche}" space that have strong profit margins and are currently popular on ${data.platforms[0] ?? 'Shopify'}.`,
+      ];
+      try {
+        const { callLovableAI, callGroq } = await import("@/lib/ai.server");
+        const schema = `{"name":"string","description":"string","why_winning":"string","target_audience":"string","ad_angles":["a","b","c"],"supplier_price_usd":"$5.00","selling_price_usd":"$29.99","profit_margin_pct":45,"startup_cost_usd":"$500","platform_fit":["Shopify"],"competition_level":"Medium","trend_score":65,"emoji":"📦","cost_breakdown":{"supplier_cost":"$5.00","shipping_cost":"$2.50","platform_fee":"$3.00","ad_spend":"$6.00","net_profit":"$13.49","net_margin_pct":45},"sales_tactic":"Go-to-market plan","ai_insight":"Key insight","health_score":70,"viral_probability_90d":50,"sellability_verdict":"Moderate Risk"}`;
+        const providers = [
+          { name: "gemini", fn: (q: string) => callGemini(`You are an e-commerce researcher. Return STRICT JSON: {"products":[${schema},${schema}]}
+
+${q}`, undefined, 0.9, false) },
+          { name: "lovable_ai", fn: (q: string) => callLovableAI(`You are an e-commerce researcher. Return STRICT JSON: {"products":[${schema},${schema}]}
+
+${q}`, 0.9) },
+          { name: "groq", fn: (q: string) => callGroq(`You are an e-commerce researcher. Return STRICT JSON: {"products":[${schema},${schema}]}
+
+${q}`, 0.9) },
+        ];
+        for (const p of providers) {
+          for (const angle of absAngles) {
+            const text = await p.fn(angle).catch(() => "");
+            const parsed = extractJson<{ products?: WinningProduct[] }>(text, { products: [] });
+            if (parsed.products?.length) {
+              products = parsed.products;
+              fallbackEngine = `abs_${p.name}`;
+              console.log(`[product-search] ABSOLUTE FALLBACK via ${p.name}: ${products.length} products`);
+              break;
+            }
+          }
+          if (products.length) break;
+        }
+      } catch (e) {
+        console.error("[product-search] ABSOLUTE FALLBACK failed:", (e as Error)?.message);
+      }
+    }
+    if (products.length === 0) {
+      console.error("[product-search] ALL fallbacks exhausted — returning empty result with refund");
       await refund();
       throw new Error(
         "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
@@ -689,6 +782,7 @@ JSON shape:
       rejection_reason: r.rejection_reason,
       market_verdict: r.verdict,
     }));
+    console.log(`[product-search] winner gate: ${gate.survivors.length} survivors, ${gate.rejected.length} rejected (from ${normalized.length} normalized)`);
     // Pahalı derin analiz sadece kapıyı geçen en iyi adaylara uygulanır.
     const deepLimit = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
     const gated = gate.survivors.slice(0, deepLimit);
@@ -717,6 +811,7 @@ JSON shape:
       return { ...p, hybrid, consensus };
     });
 
+    console.log(`[product-search] hybrid scoring complete: ${judged.length} judged, scores: ${judged.map((p) => p.hybrid?.calculated_score ?? 'N/A').join(', ')}`);
     // Rank by the weighted hybrid score with quality bonuses:
     // +5 for products with verified viral proof (URL + views)
     // +3 for products with profit margin > 40%
@@ -735,14 +830,22 @@ JSON shape:
     });
 
     let finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= minScore);
+    console.log(`[product-search] minScore ${minScore} filter: ${finalProducts.length}/${ranked.length} products passed`);
     let fallback: { type: "relaxed"; message: string } | null = null;
 
     if (finalProducts.length === 0) {
+      console.log("[product-search] all products below minScore, activating relaxed fallback");
       // Fallback A — relax the threshold and show the best available.
       finalProducts = ranked
         .filter((p) => (p.hybrid?.calculated_score ?? 0) >= HYBRID_RELAXED_MIN_SCORE)
         .slice(0, 3);
       if (finalProducts.length === 0) finalProducts = ranked.slice(0, Math.min(3, ranked.length));
+      // GUARANTEE: always return at least 1 product if any were scored at all
+      if (finalProducts.length === 0 && judged.length > 0) {
+        finalProducts = judged.slice(0, 1);
+        console.log("[product-search] emergency fallback: using first judged product");
+      }
+      console.log(`[product-search] relaxed fallback: ${finalProducts.length} products (from ${ranked.length} ranked, ${judged.length} judged)`);
       fallback = {
         type: "relaxed",
         message: `Bugün ${countryName(country)} pazarında ${minScore}+ puanlı mükemmel bir eşleşme bulunamadı. Potansiyeli en yüksek alternatifler listeleniyor.`,
@@ -871,6 +974,30 @@ JSON shape:
             (b.unified_score ?? 0) - (a.unified_score ?? 0),
         );
     }
+
+    // ---- Placeholder detection: ABSOLUTE FALLBACK products may have 'Test' values ----
+    for (const p of finalProducts) {
+      if (/^test$/i.test(p.sales_tactic ?? "") || /^test$/i.test(p.ai_insight ?? "")) {
+        console.warn(`[product-search] placeholder detected in product "${p.name}" — sales_tactic or ai_insight is 'Test'`);
+      }
+    }
+
+    // ---- Pipeline summary ----
+    const summary = [
+      `[product-search] PIPELINE SUMMARY`,
+      `  collected: ${collected.length} products from ${results.length} angles`,
+      `  after dedup: ${unique.length}`,
+      `  after viral filter: ${products.length}`,
+      `  fallback engine: ${fallbackEngine}`,
+      `  after normalize: ${normalized.length}`,
+      `  after winner gate: ${gate.survivors.length} survived, ${gate.rejected.length} rejected`,
+      `  after hybrid scoring: ${judged.length} judged`,
+      `  after minScore(${minScore}) filter: ${finalProducts.length}`,
+      `  rejected candidates: ${rejectedCandidates.length}`,
+      `  final products: ${finalProducts.length}`,
+      `  country: ${country}, marketplace: ${data.marketplace}`,
+    ].join("\n");
+    console.log(summary);
 
     return {
       products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),

@@ -74,20 +74,17 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   const subscribe = async (plan: PlanId) => {
     setLoading(plan);
     try {
-      const { url } = await checkout({ data: { plan } });
-      const finalUrl =
-        discount > 0 && promo.trim()
-          ? `${url}${url.includes("?") ? "&" : "?"}checkout[discount_code]=${encodeURIComponent(promo.trim().toUpperCase())}`
-          : url;
+      const promoCode = discount > 0 && promo.trim() ? promo.trim().toUpperCase() : undefined;
+      const { url } = await checkout({ data: { plan, promoCode } });
       const w = window as unknown as {
         Paddle?: { Checkout: { open: (opts: { transactionId: string }) => void } };
       };
       if (w.Paddle?.Checkout) {
         // Paddle overlay checkout (client-side SDK varsa)
-        w.Paddle.Checkout.open({ transactionId: finalUrl });
+        w.Paddle.Checkout.open({ transactionId: url });
       } else {
         // Paddle S2S checkout URL redirect
-        window.location.href = finalUrl;
+        window.location.href = url;
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");

@@ -54,6 +54,10 @@ export async function createPaddleCheckout(opts: {
   email?: string | null;
   plan: PaddlePlan;
   redirectUrl?: string;
+  /** 0-100 arası yüzdelik indirim. 0 veya tanımsızsa indirim uygulanmaz. */
+  discountPct?: number;
+  /** İndirim için referans kodu (webhook'ta takip için). */
+  promoCode?: string;
 }): Promise<string> {
   const paddleEnv = getPaddleEnv();
   if (!paddleEnv) {
@@ -82,11 +86,29 @@ export async function createPaddleCheckout(opts: {
     customData: {
       user_id: opts.userId,
       plan: opts.plan,
+      ...(opts.promoCode ? { promo_code: opts.promoCode } : {}),
+      ...(opts.discountPct ? { discount_pct: opts.discountPct } : {}),
     },
     settings: {
       successUrl: opts.redirectUrl || `${process.env.APP_URL || ""}/settings?checkout=success`,
     },
   };
+
+  // Paddle v2 adjustments: yüzdelik indirim varsa line item'a uygula
+  if (opts.discountPct && opts.discountPct > 0 && opts.discountPct < 100) {
+    (body.items as Record<string, unknown>[])[0] = {
+      ...(body.items as Record<string, unknown>[])[0],
+      adjustments: [
+        {
+          type: "percentage",
+          amount: opts.discountPct,
+          description: opts.promoCode
+            ? `Promosyon kodu: ${opts.promoCode} (-%${opts.discountPct})`
+            : `İndirim (-%${opts.discountPct})`,
+        },
+      ],
+    };
+  }
 
   if (opts.email) {
     body.customer = { email: opts.email };

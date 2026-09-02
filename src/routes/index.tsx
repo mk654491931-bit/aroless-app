@@ -339,30 +339,55 @@ function Dashboard() {
       } & DeepSearchOptions,
     ) => generateFn({ data: vars }),
     onSuccess: (res, vars) => {
-      const scored = attachWinnerScores(res.products);
+      // Defensive: wrap in try-catch so any unexpected data shape never crashes the UI.
+      try {
+      // Defensive: ensure res.products is always an array even if backend returns unexpected shape
+      const rawProducts = Array.isArray(res?.products) ? res.products : [];
+      console.log(`[product-search:ui] onSuccess: ${rawProducts.length} products, ${(res as { rejected?: RejectedCandidate[] }).rejected?.length ?? 0} rejected, engine: ${res.fallback_engine ?? 'default'}, country: ${res.target_country}, minScore: ${res.min_score}`);
+      const scored = attachWinnerScores(rawProducts);
+      console.log(`[product-search:ui] after attachWinnerScores: ${scored.length} products`);
+      if (scored.length === 0 && rawProducts.length > 0) {
+        console.error("[product-search:ui] attachWinnerScores returned 0 products from", rawProducts.length, "— possible data loss in scoring layer");
+      }
       setResults(scored);
       setRejected((res as { rejected?: RejectedCandidate[] }).rejected ?? []);
+      const engineLabel = res.fallback_engine && res.fallback_engine !== 'gemini' ? ` (${res.fallback_engine})` : '';
       setFallbackNotice(res.fallback?.message ?? null);
       qc.invalidateQueries({ queryKey: ["profile"] });
-      toast.success(`${res.products.length} winning products generated!`);
+      if (scored.length === 0) {
+        toast.warning("Arama tamamlandı ama sonuç bulunamadı. Farklı bir niş deneyin.");
+      } else {
+        toast.success(`${rawProducts.length} winning products generated!${engineLabel}`);
+      }
 
       // fire-and-forget history save
       saveAnalysisFn({
         data: {
           search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
-          results: res.products,
+          results: rawProducts,
         },
       }).catch(() => {});
       // persist products for reliability tracking & viral scoring
       insertProductsFn({
-        data: { products: res.products, target_country: vars.target_country },
+        data: { products: rawProducts, target_country: vars.target_country },
       }).catch(() => {});
+      } catch (onSuccessErr) {
+        console.error('[product-search:ui] onSuccess handler error:', onSuccessErr);
+        toast.error('Results received but could not be displayed. Please try again.');
+      }
     },
     onError: (err: Error) => {
+      console.error(`[product-search:ui] onError: ${err.message}`);
       if (err.message.includes("NO_CREDITS")) {
         toast.error("Out of credits — upgrade to keep going.");
         setShowPricing(true);
-      } else toast.error(err.message);
+      } else if (err.message.includes("AI anahtarı") || err.message.includes("AI providers")) {
+        toast.error("AI service unavailable. Please check your API keys in Settings → Environment.");
+        toast.info("Gerekli anahtarlar: GEMINI_API_KEY_1, GROQ_API_KEY veya AI_GATEWAY_API_KEY + AI_GATEWAY_URL", { duration: 8000 });
+      } else {
+        toast.error(err.message);
+        toast.info("İpucu: Konsoldaki [product-search] loglarını kontrol edin — hangi aşamanın başarısız olduğunu görebilirsiniz.", { duration: 6000 });
+      }
     },
     onSettled: () => {
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
@@ -386,15 +411,24 @@ function Dashboard() {
           token: storedHfToken(),
         },
       }),
-    onSuccess: (res) => {
-      setResults(attachWinnerScores(res.products));
+    onSuccess: (res: { products?: WinningProduct[]; model?: string; engines?: number } | null | undefined) => {
+      try {
+      // Defensive: always safe even if the server returns an unexpected shape.
+      const hfProducts = Array.isArray(res?.products) ? res.products : [];
+      const modelName = res && typeof res === 'object' && 'model' in res ? String((res as { model?: string }).model ?? 'unknown') : 'unknown';
+      console.log(`[product-search:ui] hfGen onSuccess: ${hfProducts.length} products, engine: ${modelName}`);
+      setResults(attachWinnerScores(hfProducts));
       setRejected([]);
-      setFallbackNotice(null);
+      setFallbackNotice(hfProducts.length > 0 ? null : `Hugging Face engine returned no products for this niche.`);
 
       qc.invalidateQueries({ queryKey: ["profile"] });
-      if (res.products.length === 0)
-        toast.error("Hugging Face returned no products — try another niche.");
-      else toast.success(`${res.products.length} products from ${res.model}`);
+      if (hfProducts.length === 0)
+        toast.error("Hugging Face returned no products — try another niche or switch to the default engine.");
+      else toast.success(`${hfProducts.length} products from ${modelName}`);
+      } catch (onSuccessErr) {
+        console.error('[product-search:ui] hfGen onSuccess error:', onSuccessErr);
+        toast.error('Hugging Face results could not be displayed. Please try again.');
+      }
     },
     onError: (err: Error) => {
       if (err.message.includes("NO_CREDITS")) {

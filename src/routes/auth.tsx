@@ -360,16 +360,19 @@ function AuthPage() {
           let msg: string;
           let unconfirmed = false;
           if (error.message.includes("Invalid login credentials")) {
-            msg = "Invalid email or password.";
+            msg = "E-posta veya şifre hatalı. Lütfen tekrar deneyin.";
           } else if (error.message.includes("Email not confirmed")) {
-            msg = "Your email is not verified yet. Check your inbox or resend the verification email below.";
+            msg = "E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzu kontrol edin veya doğrulama kodunu tekrar gönderin.";
             unconfirmed = true;
+          } else if (error.message.includes("database") || error.message.includes("Database")) {
+            msg = "Giriş sırasında bir hata oluştu. Lütfen biraz sonra tekrar deneyin.";
           } else {
-            msg = error.message;
+            msg = "Giriş yapılamadı. Lütfen tekrar deneyin.";
           }
           setShakeKey((k) => k + 1);
           if (unconfirmed) {
             toast.error(msg, { duration: 6000 });
+            return;
           } else {
             throw new Error(msg);
           }

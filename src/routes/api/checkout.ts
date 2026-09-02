@@ -7,6 +7,7 @@ import { createPaddleCheckout, getPaddleEnv } from "@/lib/paddle.server";
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
   redirectUrl: z.string().url().max(500).optional(),
+  promoCode: z.string().trim().min(1).max(32).optional(),
 });
 
 /** Oturum açmış kullanıcı için Paddle ödeme bağlantısı üretir. */
@@ -32,13 +33,36 @@ export const Route = createFileRoute("/api/checkout")({
           }
 
           const body = BodySchema.parse(await request.json().catch(() => ({})));
+
+          // Promosyon kodu doğrulama
+          let discountPct = 0;
+          if (body.promoCode) {
+            const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+            const { data: promoRow } = await supabaseAdmin
+              .from("promo_codes")
+              .select("discount_pct, active, expires_at, max_redemptions, times_redeemed")
+              .eq("code", body.promoCode.trim().toUpperCase())
+              .maybeSingle();
+            if (
+              promoRow &&
+              promoRow.active &&
+              (!promoRow.expires_at || new Date(promoRow.expires_at) >= new Date()) &&
+              (promoRow.max_redemptions == null ||
+                promoRow.times_redeemed < promoRow.max_redemptions)
+            ) {
+              discountPct = promoRow.discount_pct;
+            }
+          }
+
           const url = await createPaddleCheckout({
             userId: userData.user.id,
             email: userData.user.email,
             plan: body.plan,
             redirectUrl: body.redirectUrl ?? new URL(request.url).origin + "/settings",
+            discountPct,
+            promoCode: body.promoCode?.trim().toUpperCase() || undefined,
           });
-          return json({ url }, 200);
+          return json({ url, discountPct }, 200);
         } catch {
           return json({ error: "Ödeme bağlantısı oluşturulamadı. Lütfen tekrar deneyin." }, 500);
         }

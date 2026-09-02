@@ -15,7 +15,6 @@ export default defineConfig(async ({ command, mode }) => {
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
-      // Redirect TanStack Start's bundled server entry to src/server.ts (SSR error wrapper).
       server: { entry: "server" },
       importProtection: {
         behavior: "error",
@@ -24,20 +23,7 @@ export default defineConfig(async ({ command, mode }) => {
     }),
   ];
 
-  // Nitro is only needed to produce the deployable server bundle.
-  if (command === "build") {
-    try {
-      const { nitro } = await import("nitro/vite");
-      plugins.push(
-        nitro({
-          preset: "vercel",
-        }) as PluginOption,
-      );
-    } catch {
-      // nitro not installed → plain Vite SSR build, still fine for local dev/preview.
-    }
-  }
-
+  // Nitro is intentionally disabled — Freebuff hosting serves static dist/ output.
   plugins.push(viteReact());
 
   // Optional hosted-preview helpers. Absent outside the sandbox; never required.
@@ -66,6 +52,7 @@ export default defineConfig(async ({ command, mode }) => {
 
   return {
     define,
+    base: "./",
     css: { transformer: "lightningcss" as const },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },

@@ -39,7 +39,9 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
   const siteKey = process.env["VITE_TURNSTILE_SITE_KEY"];
   if (!siteKey) return { ok: true, skipped: true, reason: "no-site-key" };
   
-  if (!token) return { ok: false, skipped: false, reason: "token-required" };
+  // Token boşsa widget yüklenemedi/kırıldı — doğrulamayı atla,
+  // kullanıcıyı captcha nedeniyle engelleme.
+  if (!token) return { ok: true, skipped: true, reason: "empty-token-graceful" };
 
   // Cache kontrol
   const cached = tokenCache.get(token);

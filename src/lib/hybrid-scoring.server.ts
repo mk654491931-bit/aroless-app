@@ -190,15 +190,17 @@ export async function scoreProductForCountry(
   productContext: string,
   country: string,
 ): Promise<HybridScore> {
-  const [market, logistics] = await Promise.all([
-    runMarketDemandAI(productContext, country),
-    runLogisticsAI(productContext, country),
-  ]);
-  const calculated = Math.round(
-    market.ai_1_score * HYBRID_WEIGHT_AI1 + logistics.ai_2_score * HYBRID_WEIGHT_AI2,
-  );
-  const copy = await runTooltipAI(productContext, country, calculated);
-  return {
+  try {
+    const [market, logistics] = await Promise.all([
+      runMarketDemandAI(productContext, country),
+      runLogisticsAI(productContext, country),
+    ]);
+    const calculated = Math.round(
+      market.ai_1_score * HYBRID_WEIGHT_AI1 + logistics.ai_2_score * HYBRID_WEIGHT_AI2,
+    );
+    console.log(`[hybrid-scoring] product scored: ai1=${market.ai_1_score} ai2=${logistics.ai_2_score} → calculated=${calculated} (country: ${country})`);
+    const copy = await runTooltipAI(productContext, country, calculated);
+    return {
     target_country: (country || "GLOBAL").toUpperCase(),
     ai_1_score: market.ai_1_score,
     local_competition_level: market.local_competition_level,
@@ -210,4 +212,21 @@ export async function scoreProductForCountry(
     tooltip: copy.tooltip,
     badge_note: copy.badge_note,
   };
+  } catch (e) {
+    // NEVER let scoring errors propagate — return a neutral score so the product
+    // still appears in the UI (with fallback score) rather than silently vanishing.
+    console.error("[hybrid-scoring] scoreProductForCountry FAILED, returning neutral fallback:", e instanceof Error ? e.message : e);
+    return {
+      target_country: (country || "GLOBAL").toUpperCase(),
+      ai_1_score: 50,
+      local_competition_level: "Orta",
+      market_note: "",
+      ai_2_score: 50,
+      estimated_shipping_days: 14,
+      logistics_note: "",
+      calculated_score: 50,
+      tooltip: "",
+      badge_note: "",
+    };
+  }
 }

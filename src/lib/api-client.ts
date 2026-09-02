@@ -43,7 +43,9 @@ export async function apiPost<T>(path: string, body: unknown, timeoutMs = DEFAUL
     },
     timeoutMs,
   );
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  // Safely parse JSON — if the body is empty or not JSON, fall back to an
+  // empty object so callers always receive a defined value.
+  const data: T & { error?: string } = (await res.json().catch(() => ({}) as T)) as T & { error?: string };
   if (!res.ok) throw new Error(data?.error || "İstek başarısız oldu. Lütfen tekrar deneyin.");
-  return data as T;
+  return (data ?? {}) as T;
 }
