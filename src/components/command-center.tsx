@@ -195,7 +195,9 @@ export function CommandCenter() {
   });
 
   const { products, disqualified } = useMemo(() => {
-    const source = feed.data?.items ?? [];
+    const source = (feed.data?.items ?? []).filter(
+      (item): item is HotProduct => item != null && typeof item === "object",
+    );
     const scored = source.map((p) => {
       const e = econOf(p);
       return { p, e, finger: fingerScore(p, e) };

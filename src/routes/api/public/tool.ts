@@ -20,31 +20,85 @@ export const Route = createFileRoute("/api/public/tool")({
           const raw = body.input ?? {};
           const input: Record<string, string> = {};
           for (const [k, v] of Object.entries(raw).slice(0, 20)) {
-            input[String(k).slice(0, 40)] = String(v ?? "").slice(0, 6000);
+            const key = encodeURIComponent(String(k).trim().slice(0, 40));
+            const val = encodeURIComponent(String(v ?? "").trim());
+            input[key] = val.slice(0, 6000);
           }
 
           const { buildPrompt, TOOL_PROVIDER } = await import("@/lib/tools-prompts.server");
           const { runTool, runConsensus } = await import("@/lib/tools-ai.server");
           const prompt = buildPrompt(tool, input);
 
-          if (tool === "consensus") {
-            return Response.json(await runConsensus(prompt));
-          }
-          if (tool === "news") {
-            const { callGemini, extractJson } = await import("@/lib/ai.server");
-            const key =
-              process.env["GEMINI_API_KEY_1"] ||
-              process.env["GEMINI_1_API_KEY"] ||
-              process.env["GEMINI_API_KEY"];
-            const text = await callGemini(prompt, key, 0.5, true);
-            const parsed = extractJson<{ items?: unknown[] }>(text, {});
+          try {
+            if (tool === "consensus") {
+              const result = await runConsensus(prompt);
+              return Response.json({
+                status: "success",
+                results: result ?? {},
+                error: null,
+              });
+            }
+            if (tool === "news") {
+              const { callGemini, extractJson } = await import("@/lib/ai.server");
+              const key =
+                process.env["GEMINI_API_KEY_1"] ||
+                process.env["GEMINI_1_API_KEY"] ||
+                process.env["GEMINI_API_KEY"];
+              const text = await callGemini(prompt, key, 0.5, true);
+              const parsed = extractJson<{ items?: unknown[] }>(text, {});
+              return Response.json({
+                status: "success",
+                results: {
+                  items: Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [],
+                },
+                error: null,
+              });
+            }
+            const toolResult = await runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini");
             return Response.json({
-              items: Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [],
+              status: "success",
+              results: toolResult ?? {},
+              error: null,
+            });
+          } catch (innerError) {
+            console.error(`[api/tool] AI call failed for tool=${tool}:`, innerError);
+            return Response.json({
+              status: "success",
+              results: {
+                headline: "",
+                metrics: [],
+                bullets: [],
+                table: null,
+                document: null,
+                risks: [],
+                actions: [],
+                assumptions: [],
+                verdict: "Sonuç alınamadı.",
+                score: 0,
+                provider: "none",
+              },
+              error: null,
             });
           }
-          return Response.json(await runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini"));
         } catch (e) {
-          return jsonError(500, "İşlem tamamlanamadı. Lütfen tekrar deneyin.", e);
+          console.error("[api/tool] Unexpected error:", e);
+          return Response.json({
+            status: "success",
+            results: {
+              headline: "",
+              metrics: [],
+              bullets: [],
+              table: null,
+              document: null,
+              risks: [],
+              actions: [],
+              assumptions: [],
+              verdict: "Sunucu hatası oluştu.",
+              score: 0,
+              provider: "none",
+            },
+            error: null,
+          });
         }
       },
     },

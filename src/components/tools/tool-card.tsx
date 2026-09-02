@@ -1,5 +1,5 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   Loader2,
   Sparkles,
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { apiFetch } from "@/lib/api-client";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export type ToolResult = {
   headline: string;
@@ -44,13 +45,47 @@ export type ToolResult = {
 };
 
 export async function callTool(tool: string, input: Record<string, string>): Promise<ToolResult> {
-  const res = await apiFetch("/api/public/tool", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tool, input: { ...input, uiLang: getUiLang() } }),
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "AI isteği başarısız");
-  return (await res.json()) as ToolResult;
+  const res = await apiFetch(
+    "/api/public/tool",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool, input: { ...input, uiLang: getUiLang() } }),
+    },
+    60_000, // AI calls can take up to 60s across multiple provider fallbacks
+  );
+  const json = (await res.json().catch(() => ({}))) as {
+    status?: string;
+    results?: Partial<ToolResult>;
+    error?: string;
+  } & Partial<ToolResult>;
+
+  if (!res.ok) throw new Error(json.error ?? "AI isteği başarısız");
+
+  // Support both legacy direct format and new { status, results } wrapper
+  const data: Partial<ToolResult> = json.results ?? json;
+
+  return {
+    headline: String(data.headline ?? "").slice(0, 160),
+    metrics: Array.isArray(data.metrics) ? data.metrics : [],
+    bullets: Array.isArray(data.bullets) ? data.bullets : [],
+    table:
+      data.table &&
+      typeof data.table === "object" &&
+      Array.isArray((data.table as { columns?: unknown }).columns) &&
+      Array.isArray((data.table as { rows?: unknown }).rows)
+        ? (data.table as ToolResult["table"])
+        : null,
+    document: typeof data.document === "string" ? data.document : null,
+    risks: Array.isArray(data.risks) ? data.risks : [],
+    actions: Array.isArray(data.actions) ? data.actions : [],
+    assumptions: Array.isArray(data.assumptions) ? data.assumptions : [],
+    verdict: typeof data.verdict === "string" ? data.verdict : "",
+    score: typeof data.score === "number" ? data.score : 0,
+    provider: typeof data.provider === "string" ? data.provider : "unknown",
+    providers: Array.isArray(data.providers) ? data.providers : undefined,
+    confidence: typeof data.confidence === "number" ? data.confidence : undefined,
+  };
 }
 
 const toneClass: Record<string, string> = {
@@ -153,21 +188,42 @@ export function ToolCard({
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<ToolResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [copied, setCopied] = useState(false);
 
   const run = async () => {
+    // Abort any in-flight request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
     setStage(0);
     const timer = setInterval(() => setStage((s) => (s + 1) % STAGES.length), 2600);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      setError("Arama zaman aşımına uğradı. Lütfen tekrar deneyin.");
+      setLoading(false);
+      clearInterval(timer);
+    }, 65_000); // Slightly longer than the 60s apiFetch timeout
     try {
       setResult(await onRun());
     } catch (e) {
-      setError((e as Error).message);
-      toast.error("Analiz başarısız", { description: (e as Error).message });
+      if (controller.signal.aborted && !(e as Error).message?.includes("abort")) {
+        // User-initiated abort, skip error state
+      } else {
+        const msg =
+          (e as Error).name === "AbortError"
+            ? "Arama zaman aşımına uğradı. Lütfen tekrar deneyin."
+            : (e as Error).message || "Bilinmeyen hata oluştu.";
+        setError(msg);
+        toast.error("Analiz başarısız", { description: msg });
+      }
     } finally {
+      clearTimeout(timeoutId);
       clearInterval(timer);
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
@@ -241,53 +297,65 @@ export function ToolCard({
         )}
 
         {result && !loading && (
+          <ErrorBoundary
+            fallback={(err, retry) => (
+              <div className="rounded-xl border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-3 text-xs text-[var(--warning)]">
+                <div className="mb-2 font-semibold">Sonuç gösterilirken hata oluştu</div>
+                <p className="mb-2 opacity-80">{err.message}</p>
+                <button onClick={retry} className="underline hover:opacity-100">
+                  Tekrar dene
+                </button>
+              </div>
+            )}
+            onError={(e) => console.error("[ToolCard] result render error:", e)}
+          >
           <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                {result.verdict && (
+                {result?.verdict && (
                   <Badge className="mb-1.5 border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 text-[10px] text-[var(--accent-active)]">
                     {result.verdict}
                   </Badge>
                 )}
-                {result.headline && (
+                {result?.headline && (
                   <p className="text-sm font-semibold leading-snug">{result.headline}</p>
                 )}
               </div>
-              {(result.score ?? 0) > 0 && <ScoreRing value={result.score ?? 0} label="skor" />}
+              {(result?.score ?? 0) > 0 && <ScoreRing value={result?.score ?? 0} label="skor" />}
             </div>
 
-            {result.metrics.length > 0 && (
+            {(result?.metrics ?? []).length > 0 && (
               <div className="grid grid-cols-2 gap-2">
-                {result.metrics.map((m, i) => (
+                {(result?.metrics ?? []).map((m, i) => (
                   <div
                     key={i}
-                    className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m.tone ?? "neutral"]}`}
+                    className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m?.tone ?? "neutral"]}`}
                   >
-                    <div className="text-[10px] uppercase tracking-wider opacity-70">{m.label}</div>
-                    <div className="mt-0.5 text-sm font-bold">{m.value}</div>
+                    <div className="text-[10px] uppercase tracking-wider opacity-70">{m?.label ?? ""}</div>
+                    <div className="mt-0.5 text-sm font-bold">{m?.value ?? ""}</div>
                   </div>
                 ))}
               </div>
             )}
 
-            {result.table && result.table.rows.length > 0 && (
+            {result?.table && Array.isArray(result.table.columns) && Array.isArray(result.table.rows) && result.table.rows.length > 0 && (
               <div className="overflow-x-auto rounded-lg border border-white/10">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-white/10 hover:bg-transparent">
-                      {result.table.columns.map((c, i) => (
+                      {(result.table.columns ?? []).map((c, i) => (
                         <TableHead key={i} className="text-[11px] whitespace-nowrap">
-                          {c}
+                          {String(c ?? "")}
                         </TableHead>
                       ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {result.table.rows.map((r, i) => (
+                    {(result.table.rows ?? []).map((r, i) => (
                       <TableRow key={i} className="border-white/5">
-                        {r.map((cell, j) => (
+                        {(Array.isArray(r) ? r : []).map((cell, j) => (
                           <TableCell key={j} className="text-xs">
-                            {cell}
+                            {String(cell ?? "")}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -297,12 +365,12 @@ export function ToolCard({
               </div>
             )}
 
-            {result.bullets.length > 0 && (
+            {(result?.bullets ?? []).length > 0 && (
               <ul className="space-y-1.5">
-                {result.bullets.map((b, i) => (
+                {(result?.bullets ?? []).map((b, i) => (
                   <li key={i} className="flex gap-2 text-xs text-muted-foreground">
                     <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--accent-active)]" />
-                    {b}
+                    {String(b ?? "")}
                   </li>
                 ))}
               </ul>
@@ -311,23 +379,23 @@ export function ToolCard({
             <ListBlock
               icon={ShieldAlert}
               title="Riskler"
-              items={result.risks ?? []}
+              items={(result?.risks ?? []).filter(Boolean)}
               tone="warning"
             />
             <ListBlock
               icon={ListChecks}
               title="Aksiyon planı"
-              items={result.actions ?? []}
+              items={(result?.actions ?? []).filter(Boolean)}
               tone="profit"
             />
             <ListBlock
               icon={Info}
               title="Varsayımlar"
-              items={result.assumptions ?? []}
+              items={(result?.assumptions ?? []).filter(Boolean)}
               tone="action"
             />
 
-            {result.document && (
+            {result?.document && (
               <div className="space-y-2">
                 <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-[11px] leading-relaxed">
                   {result.document}
@@ -342,9 +410,8 @@ export function ToolCard({
                 </div>
               </div>
             )}
-
             <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
-              {(result.providers ?? []).map((p) => (
+              {(result?.providers ?? []).filter(Boolean).map((p) => (
                 <Badge
                   key={p}
                   variant="outline"
@@ -357,9 +424,9 @@ export function ToolCard({
                 variant="outline"
                 className="border-white/10 text-[10px] text-muted-foreground"
               >
-                {result.provider}
+                {result?.provider ?? ""}
               </Badge>
-              {typeof result.confidence === "number" && result.confidence > 0 && (
+              {typeof result?.confidence === "number" && (result?.confidence ?? 0) > 0 && (
                 <Badge
                   variant="outline"
                   className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
@@ -369,6 +436,7 @@ export function ToolCard({
               )}
             </div>
           </div>
+          </ErrorBoundary>
         )}
         <AiDisclaimer />
       </CardContent>
