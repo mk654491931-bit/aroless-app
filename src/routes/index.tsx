@@ -1,6 +1,6 @@
 import { ArolessCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -168,6 +168,20 @@ export const Route = createFileRoute("/")({
 });
 
 type Tab = "finder" | "trends" | "seo" | "creative" | "library" | "training" | "academy";
+
+function isWinningProduct(value: unknown): value is WinningProduct {
+  if (!value || typeof value !== "object") return false;
+
+  const product = value as Partial<WinningProduct>;
+  return (
+    typeof product.name === "string" &&
+    typeof product.description === "string" &&
+    typeof product.selling_price_usd === "string" &&
+    typeof product.supplier_price_usd === "string" &&
+    Array.isArray(product.ad_angles) &&
+    Array.isArray(product.platform_fit)
+  );
+}
 
 function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -341,39 +355,38 @@ function Dashboard() {
     onSuccess: (res, vars) => {
       // Defensive: wrap in try-catch so any unexpected data shape never crashes the UI.
       try {
-      // Defensive: ensure res.products is always an array even if backend returns unexpected shape
-      const rawProducts = Array.isArray(res?.products) ? res.products : [];
-      console.log(`[product-search:ui] onSuccess: ${rawProducts.length} products, ${(res as { rejected?: RejectedCandidate[] }).rejected?.length ?? 0} rejected, engine: ${res.fallback_engine ?? 'default'}, country: ${res.target_country}, minScore: ${res.min_score}`);
-      const scored = attachWinnerScores(rawProducts);
-      console.log(`[product-search:ui] after attachWinnerScores: ${scored.length} products`);
-      if (scored.length === 0 && rawProducts.length > 0) {
-        console.error("[product-search:ui] attachWinnerScores returned 0 products from", rawProducts.length, "— possible data loss in scoring layer");
-      }
-      setResults(scored);
-      setRejected((res as { rejected?: RejectedCandidate[] }).rejected ?? []);
-      const engineLabel = res.fallback_engine && res.fallback_engine !== 'gemini' ? ` (${res.fallback_engine})` : '';
-      setFallbackNotice(res.fallback?.message ?? null);
-      qc.invalidateQueries({ queryKey: ["profile"] });
-      if (scored.length === 0) {
-        toast.warning("Arama tamamlandı ama sonuç bulunamadı. Farklı bir niş deneyin.");
-      } else {
-        toast.success(`${rawProducts.length} winning products generated!${engineLabel}`);
-      }
+        const rawProducts = Array.isArray(res?.products) ? res.products : [];
+        const products = rawProducts.filter(isWinningProduct);
+        const rejected = Array.isArray(res?.rejected) ? res.rejected : [];
+        const scored = attachWinnerScores(products);
+        setResults(scored);
+        setRejected(rejected);
+        const engineLabel =
+          res.fallback_engine && res.fallback_engine !== "gemini"
+            ? ` (${res.fallback_engine})`
+            : "";
+        setFallbackNotice(res.fallback?.message ?? null);
+        qc.invalidateQueries({ queryKey: ["profile"] });
+        if (scored.length === 0) {
+          toast.warning("Arama tamamlandı ama sonuç bulunamadı. Farklı bir niş deneyin.");
+        } else {
+          toast.success(`${scored.length} winning products generated!${engineLabel}`);
+        }
 
-      // fire-and-forget history save
-      saveAnalysisFn({
-        data: {
-          search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
-          results: rawProducts,
-        },
-      }).catch(() => {});
-      // persist products for reliability tracking & viral scoring
-      insertProductsFn({
-        data: { products: rawProducts, target_country: vars.target_country },
-      }).catch(() => {});
+        // fire-and-forget history save
+        saveAnalysisFn({
+          data: {
+            search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
+            results: products,
+          },
+        }).catch(() => {});
+        // persist products for reliability tracking & viral scoring
+        insertProductsFn({
+          data: { products, target_country: vars.target_country },
+        }).catch(() => {});
       } catch (onSuccessErr) {
-        console.error('[product-search:ui] onSuccess handler error:', onSuccessErr);
-        toast.error('Results received but could not be displayed. Please try again.');
+        console.error("[product-search:ui] onSuccess handler error:", onSuccessErr);
+        toast.error("Results received but could not be displayed. Please try again.");
       }
     },
     onError: (err: Error) => {
@@ -382,11 +395,19 @@ function Dashboard() {
         toast.error("Out of credits — upgrade to keep going.");
         setShowPricing(true);
       } else if (err.message.includes("AI anahtarı") || err.message.includes("AI providers")) {
-        toast.error("AI service unavailable. Please check your API keys in Settings → Environment.");
-        toast.info("Gerekli anahtarlar: GEMINI_API_KEY_1, GROQ_API_KEY veya AI_GATEWAY_API_KEY + AI_GATEWAY_URL", { duration: 8000 });
+        toast.error(
+          "AI service unavailable. Please check your API keys in Settings → Environment.",
+        );
+        toast.info(
+          "Gerekli anahtarlar: GEMINI_API_KEY_1, GROQ_API_KEY veya AI_GATEWAY_API_KEY + AI_GATEWAY_URL",
+          { duration: 8000 },
+        );
       } else {
         toast.error(err.message);
-        toast.info("İpucu: Konsoldaki [product-search] loglarını kontrol edin — hangi aşamanın başarısız olduğunu görebilirsiniz.", { duration: 6000 });
+        toast.info(
+          "İpucu: Konsoldaki [product-search] loglarını kontrol edin — hangi aşamanın başarısız olduğunu görebilirsiniz.",
+          { duration: 6000 },
+        );
       }
     },
     onSettled: () => {
@@ -411,23 +432,29 @@ function Dashboard() {
           token: storedHfToken(),
         },
       }),
-    onSuccess: (res: { products?: WinningProduct[]; model?: string; engines?: number } | null | undefined) => {
+    onSuccess: (
+      res: { products?: WinningProduct[]; model?: string; engines?: number } | null | undefined,
+    ) => {
       try {
-      // Defensive: always safe even if the server returns an unexpected shape.
-      const hfProducts = Array.isArray(res?.products) ? res.products : [];
-      const modelName = res && typeof res === 'object' && 'model' in res ? String((res as { model?: string }).model ?? 'unknown') : 'unknown';
-      console.log(`[product-search:ui] hfGen onSuccess: ${hfProducts.length} products, engine: ${modelName}`);
-      setResults(attachWinnerScores(hfProducts));
-      setRejected([]);
-      setFallbackNotice(hfProducts.length > 0 ? null : `Hugging Face engine returned no products for this niche.`);
+        const products = (Array.isArray(res?.products) ? res.products : []).filter(
+          isWinningProduct,
+        );
+        const modelName = res?.model ?? "unknown";
+        setResults(attachWinnerScores(products));
+        setRejected([]);
+        setFallbackNotice(
+          products.length > 0 ? null : "Hugging Face engine returned no products for this niche.",
+        );
 
-      qc.invalidateQueries({ queryKey: ["profile"] });
-      if (hfProducts.length === 0)
-        toast.error("Hugging Face returned no products — try another niche or switch to the default engine.");
-      else toast.success(`${hfProducts.length} products from ${modelName}`);
+        qc.invalidateQueries({ queryKey: ["profile"] });
+        if (products.length === 0)
+          toast.error(
+            "Hugging Face returned no products — try another niche or switch to the default engine.",
+          );
+        else toast.success(`${products.length} products from ${modelName}`);
       } catch (onSuccessErr) {
-        console.error('[product-search:ui] hfGen onSuccess error:', onSuccessErr);
-        toast.error('Hugging Face results could not be displayed. Please try again.');
+        console.error("[product-search:ui] hfGen onSuccess error:", onSuccessErr);
+        toast.error("Hugging Face results could not be displayed. Please try again.");
       }
     },
     onError: (err: Error) => {
@@ -465,9 +492,12 @@ function Dashboard() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const togglePlatform = useCallback((p: Platform) => {
-    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  }, [setPlatforms]);
+  const togglePlatform = useCallback(
+    (p: Platform) => {
+      setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    },
+    [setPlatforms],
+  );
 
   const searching = gen.isPending || hfGen.isPending;
 
@@ -483,15 +513,15 @@ function Dashboard() {
     // When ALL selected platforms are unavailable in the target country,
     // automatically add cross-border alternatives to avoid empty results.
     const effectivePlatforms = (() => {
-      const allBlocked = platforms.every(
-        (p) => countryFit(p, effectiveCountry) === "unavailable",
-      );
+      const allBlocked = platforms.every((p) => countryFit(p, effectiveCountry) === "unavailable");
       if (!allBlocked) return platforms;
       const cb = platforms
         .filter((p) => countryFit(p, effectiveCountry) === "cross-border")
         .slice(0, 3);
       if (cb.length > 0) {
-        toast.info(`All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`);
+        toast.info(
+          `All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`,
+        );
         return cb;
       }
       // Last resort: add global platforms (Shopify, Amazon)
@@ -536,7 +566,9 @@ function Dashboard() {
 
   // Cleanup search safety timer on unmount
   useEffect(() => {
-    return () => { if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current); };
+    return () => {
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    };
   }, []);
 
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
@@ -1213,8 +1245,8 @@ function Dashboard() {
                         <div>
                           <h3 className="text-lg font-bold text-foreground">Kazananünü keşet</h3>
                           <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
-                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
-                            gerçek zamanlı verilerle en kârlı ürünleri bulacak.
+                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız gerçek
+                            zamanlı verilerle en kârlı ürünleri bulacak.
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
@@ -1255,22 +1287,16 @@ function Dashboard() {
                           return true;
                         };
 
-                        const filtered = useMemo(() =>
-                          applyFilters(results, filters)
-                            .filter(bandPass)
-                            .filter(
-                              (p) =>
-                                !q ||
-                                [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
-                                  .filter(Boolean)
-                                  .some((v) => String(v).toLowerCase().includes(q)),
-                            ),
-                          [results, filters, band, q, onlyLaunch],
-                        );
-                        const shown = useMemo(() =>
-                          sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
-                          [filtered, sortBy, onlyLaunch, sortDesc],
-                        );
+                        const filtered = applyFilters(results, filters)
+                          .filter(bandPass)
+                          .filter(
+                            (p) =>
+                              !q ||
+                              [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
+                                .filter(Boolean)
+                                .some((v) => String(v).toLowerCase().includes(q)),
+                          );
+                        const shown = sortProducts(filtered, sortBy, onlyLaunch, sortDesc);
                         const bands = [
                           { id: "all", label: `Tümü (${results.length})` },
                           {
@@ -2700,10 +2726,19 @@ function ConsistencyBadge({ p }: { p: WinningProduct }) {
 }
 
 function ScorePill({ label, value }: { label: string; value: number }) {
-  const color = value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : value >= 40 ? "text-blue-400" : "text-muted-foreground";
+  const color =
+    value >= 80
+      ? "text-emerald-400"
+      : value >= 60
+        ? "text-amber-400"
+        : value >= 40
+          ? "text-blue-400"
+          : "text-muted-foreground";
   const glow = value >= 80 ? "shadow-[0_0_8px_-2px_oklch(0.75_0.18_155/0.4)]" : "";
   return (
-    <div className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}>
+    <div
+      className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}
+    >
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`text-xs font-bold ${color}`}>{value}</div>
     </div>

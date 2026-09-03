@@ -10,7 +10,7 @@
  *   VITE_PADDLE_ENV          — "sandbox" | "production"
  */
 
-import { definePaddleParameters, type Paddle } from "@paddle/paddle-js";
+import { initializePaddle, type Paddle, type InitializePaddleOptions } from "@paddle/paddle-js";
 
 let paddleInstance: Paddle | null = null;
 
@@ -35,14 +35,17 @@ export async function getPaddle(
     );
   }
 
-  const params = definePaddleParameters({
+  const options: InitializePaddleOptions = {
     token,
     environment: env === "production" ? "production" : "sandbox",
     ...(pwCustomerId ? { pwCustomer: { id: pwCustomerId } } : {}),
-  });
+  };
 
-  // Dynamic import — only loaded in the browser, tree-shaken from SSR.
-  const { Paddle } = await import("@paddle/paddle-js");
-  paddleInstance = await Paddle(params);
+  const instance = await initializePaddle(options);
+  if (!instance) {
+    throw new Error("Failed to initialize Paddle SDK.");
+  }
+
+  paddleInstance = instance;
   return paddleInstance;
 }

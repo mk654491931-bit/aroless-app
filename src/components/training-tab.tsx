@@ -393,7 +393,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5">
+              <span className="rounded-lg bg-linear-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5">
                 <Store size={15} />
               </span>
               <h2 className="text-lg font-bold">{state.storeName}</h2>
@@ -459,7 +459,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             <button
               disabled={over || busy || autoplay}
               onClick={() => advance(1)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40"
             >
               <Play size={13} /> 1 gün
             </button>
@@ -530,7 +530,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all"
+                className="h-full rounded-full bg-linear-to-r from-emerald-400 to-teal-300 transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
