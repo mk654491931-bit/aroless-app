@@ -37,12 +37,12 @@ cat > dist/index.html <<HTMLEOF
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Aroless — Find Winning Products</title>
-<link rel="icon" href="./favicon.png" type="image/png" />
-<link rel="stylesheet" href="./${CSS_FILE}" />
+<link rel="icon" href="/favicon.png" type="image/png" />
+<link rel="stylesheet" href="/${CSS_FILE}" />
 </head>
 <body>
 <div id="root"></div>
-<script type="module" src="./${ENTRY_JS}"></script>
+<script type="module" src="/${ENTRY_JS}"></script>
 </body>
 </html>
 HTMLEOF

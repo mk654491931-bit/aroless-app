@@ -52,7 +52,9 @@ export default defineConfig(async ({ command, mode }) => {
 
   return {
     define,
-    base: "./",
+    // Vercel catch-all rewrite altında alt rotalar (ör. /auth/callback) için
+    // göreli ./assets URL'leri tekrar index.html'e çözülür ve modül yüklemesi düşer.
+    base: "/",
     css: { transformer: "lightningcss" as const },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
