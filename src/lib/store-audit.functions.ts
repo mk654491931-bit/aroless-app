@@ -24,7 +24,7 @@ export type StoreAuditRow = {
 
 export const auditStore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => AuditInput.parse(input))
+  .validator((input: unknown) => AuditInput.parse(input))
   .handler(async ({ data, context }) => {
     const url = data.url.startsWith("http") ? data.url : `https://${data.url}`;
     if (!/^https?:\/\//i.test(url)) throw new Error("INVALID_URL");
@@ -96,7 +96,7 @@ export const listStoreAudits = createServerFn({ method: "POST" })
 
 export const deleteStoreAudit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     await context.supabase.from("store_audits").delete().eq("id", data.id);
     return { ok: true };

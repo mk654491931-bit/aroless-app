@@ -36,7 +36,7 @@ const EMPTY: CreativeKit = {
 
 export const generateCreativeKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => KitInput.parse(input))
+  .validator((input: unknown) => KitInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error: deductErr } = await context.supabase.rpc("deduct_credit");
     if (deductErr) {
@@ -81,7 +81,7 @@ export const listCreativeAssets = createServerFn({ method: "POST" })
 
 export const deleteCreativeAsset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     await context.supabase.from("creative_assets").delete().eq("id", data.id);
     return { ok: true };

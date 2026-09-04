@@ -34,7 +34,7 @@ export const listRoiEntries = createServerFn({ method: "POST" })
 
 export const saveRoiEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => EntryInput.parse(input))
+  .validator((input: unknown) => EntryInput.parse(input))
   .handler(async ({ data, context }) => {
     const { id, ...rest } = data;
     const row = { ...rest, user_id: context.userId };
@@ -48,7 +48,7 @@ export const saveRoiEntry = createServerFn({ method: "POST" })
 
 export const deleteRoiEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("roi_entries").delete().eq("id", data.id);
     if (error) throw new Error(error.message);

@@ -28,7 +28,7 @@ const MarkReadInput = z.object({ id: z.string().uuid() });
 
 export const markNotificationRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => MarkReadInput.parse(input))
+  .validator((input: unknown) => MarkReadInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("notifications")
@@ -43,7 +43,7 @@ const MarkAllReadInput = z.object({ type: z.string().optional() });
 
 export const markAllNotificationsRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => MarkAllReadInput.parse(input))
+  .validator((input: unknown) => MarkAllReadInput.parse(input))
   .handler(async ({ data, context }) => {
     let query = context.supabase
       .from("notifications")
@@ -89,7 +89,7 @@ const PreferencesInput = z.object({
 
 export const updateNotificationPreferences = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => PreferencesInput.parse(input))
+  .validator((input: unknown) => PreferencesInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("notification_preferences")

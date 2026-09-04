@@ -14,7 +14,7 @@ const RadarInput = z.object({
 /** Bugünün radar akışı — boşsa AI ile üretir (kredi harcamaz). */
 export const getRadar = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => RadarInput.parse(input ?? {}))
+  .validator((input: unknown) => RadarInput.parse(input ?? {}))
   .handler(async ({ data, context }) => {
     const today = new Date().toISOString().slice(0, 10);
 

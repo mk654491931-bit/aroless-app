@@ -24,7 +24,7 @@ const AnalyzeInput = z.object({
 
 export const analyzeCompetitors = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => AnalyzeInput.parse(i))
+  .validator((i: unknown) => AnalyzeInput.parse(i))
   .handler(async ({ data }): Promise<{ report: CompetitorReport }> => {
     const g1 =
       process.env["GEMINI_API_KEY_1"] ||
@@ -167,7 +167,7 @@ const CountryStrategyInput = z.object({
 
 export const getCountryStrategy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
+  .validator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data }): Promise<{ strategy: string }> => {
     const g1 =
       process.env["GEMINI_API_KEY_1"] ||
@@ -195,7 +195,7 @@ const CopilotInput = z.object({
 
 export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CopilotInput.parse(i))
+  .validator((i: unknown) => CopilotInput.parse(i))
   .handler(async ({ data }): Promise<{ reply: string }> => {
     const g3 =
       process.env["GEMINI_API_KEY_3"] ||

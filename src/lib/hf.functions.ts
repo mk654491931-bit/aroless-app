@@ -19,7 +19,7 @@ const HfInput = z.object({
 /** Runs a product search through the Hugging Face Qwen 2.5 / Llama 3.1 engines (or both in Hybrid mode). */
 export const huggingFaceSearch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => HfInput.parse(input))
+  .validator((input: unknown) => HfInput.parse(input))
   .handler(async ({ data, context }) => {
     const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, HF_MODELS } =
       await import("@/lib/hf.server");
@@ -72,7 +72,7 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
 /** Connection probe for the settings panel. */
 export const huggingFaceStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ token: z.string().max(200).optional() }).parse(input ?? {}),
   )
   .handler(async ({ data }) => {

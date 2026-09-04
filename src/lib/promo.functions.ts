@@ -51,7 +51,7 @@ const CreateInput = z.object({
 
 export const createPromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CreateInput.parse(i))
+  .validator((i: unknown) => CreateInput.parse(i))
   .handler(async ({ data, context }): Promise<PromoCodeRow> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -75,7 +75,7 @@ export const createPromoCode = createServerFn({ method: "POST" })
 
 export const setPromoCodeActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(i))
+  .validator((i: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -89,7 +89,7 @@ export const setPromoCodeActive = createServerFn({ method: "POST" })
 
 export const deletePromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
+  .validator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -101,7 +101,7 @@ export const deletePromoCode = createServerFn({ method: "POST" })
 /** Checkout-time validation. Returns the discount percentage for a valid code. */
 export const validatePromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(1).max(32) }).parse(i))
+  .validator((i: unknown) => z.object({ code: z.string().trim().min(1).max(32) }).parse(i))
   .handler(async ({ data }): Promise<{ valid: boolean; discount_pct: number; reason?: string }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin

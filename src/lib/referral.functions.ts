@@ -52,7 +52,7 @@ export const getMyReferral = createServerFn({ method: "GET" })
 /** Davet kodunu kullan: hem davet edene hem yeni kullanıcıya kredi verir. */
 export const claimReferral = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(4).max(16) }).parse(i))
+  .validator((i: unknown) => z.object({ code: z.string().trim().min(4).max(16) }).parse(i))
   .handler(
     async ({
       data,

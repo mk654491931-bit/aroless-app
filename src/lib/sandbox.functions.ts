@@ -24,7 +24,7 @@ const StartInput = z.object({
 
 export const startSimulation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => StartInput.parse(i))
+  .validator((i: unknown) => StartInput.parse(i))
   .handler(
     async ({
       data,
@@ -75,7 +75,7 @@ const CrisisInput = z.object({
 
 export const getSimCrisis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CrisisInput.parse(i))
+  .validator((i: unknown) => CrisisInput.parse(i))
   .handler(async ({ data }): Promise<{ crisis: Crisis | null }> => {
     try {
       const text = await callGemini(crisisPrompt(data), process.env.GEMINI_API_KEY, 1.0);
@@ -116,7 +116,7 @@ const ReviewInput = z.object({
 
 export const getSimReviews = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ReviewInput.parse(i))
+  .validator((i: unknown) => ReviewInput.parse(i))
   .handler(
     async ({ data }): Promise<{ reviews: { stars: number; author: string; text: string }[] }> => {
       try {
@@ -150,7 +150,7 @@ const CoachInput = z.object({
 
 export const getSimCoach = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CoachInput.parse(i))
+  .validator((i: unknown) => CoachInput.parse(i))
   .handler(async ({ data }): Promise<{ advice: CoachAdvice | null }> => {
     try {
       const text = await callGemini(coachPrompt(data), process.env.GEMINI_API_KEY, 0.7);
@@ -184,7 +184,7 @@ const SubmitInput = z.object({
 
 export const submitSimRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => SubmitInput.parse(i))
+  .validator((i: unknown) => SubmitInput.parse(i))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("sim_runs")

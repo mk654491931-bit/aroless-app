@@ -26,7 +26,7 @@ export const CATEGORIES = ["general", "billing", "bug", "feature", "data"] as co
 
 export const createTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         category: z.enum(CATEGORIES).default("general"),
@@ -83,7 +83,7 @@ export const adminListTickets = createServerFn({ method: "GET" })
 
 export const adminUpdateTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         id: z.string().uuid(),

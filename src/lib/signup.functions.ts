@@ -18,7 +18,7 @@ type StartInput = {
 };
 
 export const verifyEmailLoginTurnstile = createServerFn({ method: "POST" })
-  .inputValidator((input: { turnstileToken?: string }) => ({
+  .validator((input: { turnstileToken?: string }) => ({
     turnstileToken: String(input?.turnstileToken ?? "").slice(0, 4096),
   }))
   .handler(async ({ data }) => {
@@ -44,7 +44,7 @@ async function requestIpHash(): Promise<string> {
 }
 
 export const startEmailSignup = createServerFn({ method: "POST" })
-  .inputValidator((input: StartInput) => {
+  .validator((input: StartInput) => {
     const email = String(input?.email ?? "")
       .trim()
       .toLowerCase();
@@ -219,7 +219,7 @@ export const startEmailSignup = createServerFn({ method: "POST" })
   });
 
 export const verifyEmailSignup = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string; visitorId?: string }) => {
+  .validator((input: { email: string; code: string; visitorId?: string }) => {
     const email = String(input?.email ?? "")
       .trim()
       .toLowerCase();
@@ -296,7 +296,7 @@ export const verifyEmailSignup = createServerFn({ method: "POST" })
 /** Google ile giren kullanıcılar için cihaz parmak izini kaydeder. */
 export const registerDeviceFingerprint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { visitorId: string }) => ({
+  .validator((input: { visitorId: string }) => ({
     visitorId: String(input?.visitorId ?? "").slice(0, 128),
   }))
   .handler(async ({ data, context }) => {
@@ -333,7 +333,7 @@ export const registerDeviceFingerprint = createServerFn({ method: "POST" })
 // --------------------------------------------------------------------------
 
 export const startLoginOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; turnstileToken?: string }) => {
+  .validator((input: { email: string; turnstileToken?: string }) => {
     const email = String(input?.email ?? "")
       .trim()
       .toLowerCase();
@@ -387,7 +387,7 @@ export const startLoginOtp = createServerFn({ method: "POST" })
   });
 
 export const verifyLoginOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string }) => {
+  .validator((input: { email: string; code: string }) => {
     const email = String(input?.email ?? "")
       .trim()
       .toLowerCase();
@@ -452,7 +452,7 @@ export const verifyLoginOtp = createServerFn({ method: "POST" })
 // --------------------------------------------------------------------------
 
 export const resendLoginOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string }) => {
+  .validator((input: { email: string }) => {
     const email = String(input?.email ?? "")
       .trim()
       .toLowerCase();

@@ -25,7 +25,7 @@ const ListInput = z.object({
 
 export const listViralAds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ListInput.parse(input))
+  .validator((input: unknown) => ListInput.parse(input))
   .handler(async ({ data, context }): Promise<ViralAdRow[]> => {
     let q = context.supabase
       .from("viral_ads")

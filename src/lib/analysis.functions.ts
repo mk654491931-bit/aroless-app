@@ -9,7 +9,7 @@ const SaveInput = z.object({
 
 export const saveAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SaveInput.parse(input))
+  .validator((input: unknown) => SaveInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("analysis_history")
@@ -46,7 +46,7 @@ const PrefsInput = z.object({
 
 export const updateProfilePrefs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => PrefsInput.parse(input))
+  .validator((input: unknown) => PrefsInput.parse(input))
   .handler(async ({ data, context }) => {
     const update: { language?: string; currency?: string; notifications_enabled?: boolean } = {};
     if (data.language !== undefined) update.language = data.language;

@@ -10,7 +10,7 @@ type Input = { query: string; country?: string; category?: string; lang?: string
  */
 export const runCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: Input) => {
+  .validator((input: Input) => {
     const query = String(input?.query ?? "")
       .trim()
       .slice(0, 140);

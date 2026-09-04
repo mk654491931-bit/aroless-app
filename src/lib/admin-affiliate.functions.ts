@@ -62,7 +62,7 @@ async function emailsFor(db: AffDb, userIds: string[]): Promise<Record<string, s
 /** Arama + tarih aralığı filtreli affiliate listesi (özet değerlerle). */
 export const listAdminAffiliates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         search: z.string().trim().max(80).optional().default(""),
@@ -171,7 +171,7 @@ export type AdminAffiliateDetail = {
 
 export const getAdminAffiliateDetail = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ affiliateId: z.string().min(8) }).parse(i))
+  .validator((i: unknown) => z.object({ affiliateId: z.string().min(8) }).parse(i))
   .handler(async ({ data, context }): Promise<AdminAffiliateDetail> => {
     const db = await adminDb(context);
     const { data: affiliateRow } = await db
@@ -261,7 +261,7 @@ async function uniqueCode(db: AffDb, preferred?: string): Promise<string> {
 
 export const createAdminAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         email: z.string().email().optional(),
@@ -336,7 +336,7 @@ export const createAdminAffiliate = createServerFn({ method: "POST" })
 
 export const updateAdminAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         affiliateId: z.string().min(8),
@@ -386,7 +386,7 @@ export const updateAdminAffiliate = createServerFn({ method: "POST" })
 
 export const markCommissionsPaid = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z.object({ ids: z.array(z.string().min(1)).min(1).max(500) }).parse(i),
   )
   .handler(async ({ data, context }): Promise<{ ok: true; paid: number }> => {
@@ -397,7 +397,7 @@ export const markCommissionsPaid = createServerFn({ method: "POST" })
 
 export const reverseAdminCommission = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     z
       .object({
         id: z.string().min(1),
