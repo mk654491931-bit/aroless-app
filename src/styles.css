@@ -1066,13 +1066,16 @@ body,
   position: absolute;
   inset: -20%;
   pointer-events: none;
+  /* Yumuşak radyal gradyanlar zaten feathered — blur(70px) kaldırıldı çünkü
+     tam ekran blur + her karede transform animasyonu ana iş parçacığını
+     kilitleyip sayfayı "yanıt vermiyor" durumuna sokuyordu. */
   background:
-    radial-gradient(40% 32% at 20% 25%, var(--brand) 0%, transparent 62%),
-    radial-gradient(38% 30% at 78% 30%, var(--brand-2) 0%, transparent 64%),
-    radial-gradient(46% 34% at 50% 82%, var(--accent-active) 0%, transparent 66%);
-  opacity: 0.22;
-  filter: blur(70px);
-  animation: aurora-swirl 22s ease-in-out infinite alternate;
+    radial-gradient(46% 36% at 20% 25%, var(--brand) 0%, transparent 72%),
+    radial-gradient(44% 34% at 78% 30%, var(--brand-2) 0%, transparent 74%),
+    radial-gradient(52% 38% at 50% 82%, var(--accent-active) 0%, transparent 76%);
+  opacity: 0.26;
+  will-change: transform;
+  animation: aurora-swirl 26s ease-in-out infinite alternate;
 }
 @keyframes aurora-swirl {
   0% {
@@ -1104,24 +1107,25 @@ body,
   background-size: 64px 64px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 10%, transparent 75%);
   opacity: 0.35;
+  will-change: transform;
   animation: grid-pan 26s linear infinite;
 }
+/* background-position animasyonu her karede tam ekran repaint yapıyordu;
+   desen 64px periyodik olduğu için 64px'lik translate görsel olarak birebir
+   aynıdır ve yalnızca compositor'da çalışır. */
 @keyframes grid-pan {
   from {
-    background-position:
-      0 0,
-      0 0;
+    transform: translate3d(0, 0, 0);
   }
   to {
-    background-position:
-      64px 128px,
-      64px 128px;
+    transform: translate3d(0, 64px, 0);
   }
 }
 
 .auth-beam {
   position: absolute;
   top: -30%;
+  left: 0;
   width: 40vw;
   height: 160%;
   pointer-events: none;
@@ -1131,17 +1135,18 @@ body,
     color-mix(in oklab, var(--brand-2) 35%, transparent),
     transparent
   );
-  filter: blur(40px);
-  transform: rotate(14deg);
-  animation: beam-sweep 14s ease-in-out infinite alternate;
+  filter: blur(18px);
+  will-change: transform;
+  animation: beam-sweep 18s ease-in-out infinite alternate;
 }
+/* left yerine transform: her karede layout yerine yalnızca compositor çalışır */
 @keyframes beam-sweep {
   from {
-    left: -35%;
-    opacity: 0.25;
+    transform: translateX(-35vw) rotate(14deg);
+    opacity: 0.3;
   }
   to {
-    left: 85%;
+    transform: translateX(85vw) rotate(14deg);
     opacity: 0.55;
   }
 }
@@ -1195,10 +1200,26 @@ body,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(115deg, transparent 40%, oklch(1 0 0 / 0.06) 50%, transparent 60%);
-  background-size: 250% 100%;
-  animation: shine-sweep 9s linear infinite;
+  /* background-position süpürmesi her karede tam ekran repaint üretiyordu;
+     geniş statik diyagonal ışıltı + yavaş opaklık nefesi aynı hissi çok daha
+     ucuz verir (sadece compositor). */
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    oklch(1 0 0 / 0.05) 50%,
+    transparent 70%
+  );
   mix-blend-mode: screen;
+  animation: shimmer-breathe 7s ease-in-out infinite;
+}
+@keyframes shimmer-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .auth-vignette {
@@ -1210,6 +1231,17 @@ body,
     transparent 40%,
     oklch(0 0 0 / 0.55) 100%
   );
+}
+
+/* Kullanıcı hareketi azaltmayı seçtiyse ortam katmanlarını dondur */
+@media (prefers-reduced-motion: reduce) {
+  .auth-aurora,
+  .auth-beam,
+  .auth-grid,
+  .auth-shimmer,
+  .auth-orbits span {
+    animation: none !important;
+  }
 }
 
 /* Harf harf beliren AROLESS yazısı */

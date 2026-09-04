@@ -31,6 +31,7 @@ let dict: Record<string, string> = {};
 let currentLang: AutoLang | null = null;
 let observer: MutationObserver | null = null;
 let scheduled = false;
+let needsFullWalk = false;
 
 const originalText = new WeakMap<Text, string>();
 const originalAttrs = new WeakMap<Element, Record<string, string>>();
@@ -158,7 +159,12 @@ function flush() {
   if (!currentLang) return;
   observer?.disconnect();
   try {
-    if (dirty.size === 0) {
+    // Tam tarama yalnızca dil değiştiğinde yapılır. Aksi hâlde sadece
+    // mutasyona uğrayan düğümler taranır — her DOM değişikliğinde tüm sayfayı
+    // baştan yürümek ana iş parçacığını kilitleyip "yanıt vermiyor" durumuna
+    // yol açıyordu (bkz. g35 sonrası donma şikayetleri).
+    if (needsFullWalk) {
+      needsFullWalk = false;
       walk(document.body);
     } else {
       for (const node of dirty) {
@@ -196,12 +202,13 @@ function connect() {
 function ensureObserver() {
   if (observer || typeof MutationObserver === "undefined") return;
   observer = new MutationObserver((records) => {
+    // Yalnızca gerçekten değişen düğümleri kirlet — burada çıplak schedule()
+    // çağrısı her mutasyonda tüm belgeyi yeniden tarattırıyordu.
     for (const r of records) {
       if (r.type === "characterData") schedule(r.target);
       else if (r.type === "attributes") schedule(r.target);
       else r.addedNodes.forEach((n) => schedule(n));
     }
-    if (records.length) schedule();
   });
   connect();
 }
@@ -255,6 +262,7 @@ export async function setAutoLanguage(lang: string | undefined | null) {
   ensureObserver();
   restoreAll();
   dirty.clear();
+  needsFullWalk = true;
   schedule();
 }
 
