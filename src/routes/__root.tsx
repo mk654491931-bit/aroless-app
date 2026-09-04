@@ -146,6 +146,20 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // QueryClientProvider must wrap every component that calls TanStack Query
+  // hooks (useQuery/useMutation/...), including the root layout itself.
+  // Rendering the provider inside the same component that already called
+  // such hooks throws "No QueryClient set" on every page — so the layout
+  // body lives in RootLayout, below the provider.
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootLayout />
+    </QueryClientProvider>
+  );
+}
+
+function RootLayout() {
+  const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user } = useAuth();
   const [showPricing, setShowPricing] = useState(false);
@@ -252,7 +266,7 @@ function RootComponent() {
     return () => data.subscription.unsubscribe();
   }, [queryClient]);
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <AmbientBackground />
       <DeviceGuard />
       {chromeless ? (
@@ -291,6 +305,6 @@ function RootComponent() {
       <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
       <CookieBanner />
       <Toaster position="top-right" richColors />
-    </QueryClientProvider>
+    </>
   );
 }
