@@ -28,6 +28,7 @@ import { AppTopbar } from "@/components/app-topbar";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
 
@@ -208,7 +209,9 @@ function RootComponent() {
           </div>
           <FloatingThemeControls />
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-            <Outlet />
+            <ErrorBoundary key={pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </>
       ) : (
@@ -219,7 +222,9 @@ function RootComponent() {
               {pathname !== "/" && <AppTopbar />}
               <FloatingThemeControls />
               <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-                <Outlet />
+                <ErrorBoundary key={pathname}>
+                  <Outlet />
+                </ErrorBoundary>
               </div>
               <div className="mx-auto w-full max-w-6xl px-4 md:px-6">
                 <AiDisclaimer />
