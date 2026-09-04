@@ -18,19 +18,41 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+function getSupabaseConfig() {
+  const url =
+    import.meta.env["VITE_SUPABASE_URL"] ||
+    import.meta.env["NEXT_PUBLIC_SUPABASE_URL"] ||
+    process.env["SUPABASE_URL"];
+  const key =
+    import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    import.meta.env["VITE_SUPABASE_ANON_KEY"] ||
+    import.meta.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["SUPABASE_ANON_KEY"];
+
+  return { url, key };
+}
+
+export function getSupabaseConfigError(): string | null {
+  const { url, key } = getSupabaseConfig();
+  if (url && key) return null;
+
+  const missing = [
+    ...(!url ? ["VITE_SUPABASE_URL"] : []),
+    ...(!key ? ["VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY)"] : []),
+  ];
+  return `Missing Supabase environment variable(s): ${missing.join(", ")}.`;
+}
+
+export function isSupabaseConfigured(): boolean {
+  return getSupabaseConfigError() === null;
+}
+
 function createSupabaseClient() {
-  // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"];
-  const SUPABASE_PUBLISHABLE_KEY =
-    import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_PUBLISHABLE_KEY"];
+  const { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY } = getSupabaseConfig();
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY ? ["SUPABASE_PUBLISHABLE_KEY"] : []),
-    ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud.`;
+    const message = getSupabaseConfigError() ?? "Missing Supabase configuration.";
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }

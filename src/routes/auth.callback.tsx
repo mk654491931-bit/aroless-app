@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
   ssr: false,
@@ -20,8 +20,14 @@ export const Route = createFileRoute("/auth/callback")({
 
 function AuthCallback() {
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const configError = getSupabaseConfigError();
+    if (configError) {
+      setError("Kimlik doğrulama yapılandırması eksik. Lütfen daha sonra tekrar deneyin.");
+      return;
+    }
     let done = false;
     const go = (to: string) => {
       if (done) return;
@@ -30,23 +36,36 @@ function AuthCallback() {
     };
 
     const check = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        const saved = sessionStorage.getItem("velora:post-auth") ?? "/";
-        sessionStorage.removeItem("velora:post-auth");
-        go(saved.startsWith("/") ? saved : "/");
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (data.session) {
+          const saved = sessionStorage.getItem("velora:post-auth") ?? "/";
+          sessionStorage.removeItem("velora:post-auth");
+          go(saved.startsWith("/") ? saved : "/");
+        }
+      } catch (caught) {
+        console.error("Auth callback failed", caught);
+        setError("Giriş doğrulanamadı. Lütfen tekrar deneyin.");
       }
     };
 
     void check();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) void check();
-    });
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+        if (session) void check();
+      });
+      unsubscribe = () => sub.subscription.unsubscribe();
+    } catch (caught) {
+      console.error("Auth callback subscription failed", caught);
+      setError("Giriş doğrulanamadı. Lütfen tekrar deneyin.");
+    }
     const timer = setTimeout(() => go("/auth"), 8000);
 
     return () => {
       clearTimeout(timer);
-      sub.subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, [navigate]);
 
@@ -54,7 +73,7 @@ function AuthCallback() {
     <div className="flex min-h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <p className="text-sm">Giriş doğrulanıyor…</p>
+        <p className="text-sm">{error ?? "Giriş doğrulanıyor..."}</p>
       </div>
     </div>
   );

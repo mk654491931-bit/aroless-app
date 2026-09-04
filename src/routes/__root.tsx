@@ -13,7 +13,7 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
 import i18n from "@/lib/i18n";
@@ -258,12 +258,17 @@ function RootLayout() {
     }
   }, [pathname]);
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        queryClient.invalidateQueries();
-      }
-    });
-    return () => data.subscription.unsubscribe();
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+          queryClient.invalidateQueries();
+        }
+      });
+      return () => data.subscription.unsubscribe();
+    } catch (error) {
+      console.error("Auth cache subscription failed", error);
+    }
   }, [queryClient]);
   return (
     <>
