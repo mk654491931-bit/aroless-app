@@ -9,7 +9,13 @@ const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 /** Ücretsiz kullanıcıya açık modül grupları. */
 export const FREE_GROUPS = ["library"];
 /** Ücretsiz kullanıcıya açık tekil araçlar (Ürün Bulucu + temel sayfalar). */
-export const FREE_ITEMS = ["product_finder", "dashboard", "compare", "notifications"];
+export const FREE_ITEMS = [
+  "product_finder",
+  "dashboard",
+  "compare",
+  "notifications",
+  "partner_dashboard",
+];
 /** Ücretsiz kullanıcıya kayıt anında bir kez verilen toplam kredi (yenilenmez). */
 export const FREE_WELCOME_CREDITS = 2;
 

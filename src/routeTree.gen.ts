@@ -20,6 +20,7 @@ import { Route as CouncilRouteImport } from './routes/council'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as PartnerRouteImport } from './routes/partner'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as RoiRouteImport } from './routes/roi'
@@ -37,6 +38,7 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiPublicAffiliateClickRouteImport } from './routes/api/public/affiliate-click'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
@@ -103,6 +105,11 @@ const NewsRoute = NewsRouteImport.update({
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerRoute = PartnerRouteImport.update({
+  id: '/partner',
+  path: '/partner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -190,6 +197,11 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAffiliateClickRoute = ApiPublicAffiliateClickRouteImport.update({
+  id: '/api/public/affiliate-click',
+  path: '/api/public/affiliate-click',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   id: '/api/public/agent',
   path: '/api/public/agent',
@@ -266,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/partner': typeof PartnerRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
   '/roi': typeof RoiRoute
@@ -283,6 +296,7 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/public/affiliate-click': typeof ApiPublicAffiliateClickRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -308,6 +322,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/partner': typeof PartnerRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
   '/roi': typeof RoiRoute
@@ -325,6 +340,7 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/public/affiliate-click': typeof ApiPublicAffiliateClickRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -351,6 +367,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
+  '/partner': typeof PartnerRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
   '/roi': typeof RoiRoute
@@ -368,6 +385,7 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/public/affiliate-click': typeof ApiPublicAffiliateClickRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -395,6 +413,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/partner'
     | '/pricing'
     | '/radar'
     | '/roi'
@@ -412,6 +431,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/public/affiliate-click'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -437,6 +457,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/partner'
     | '/pricing'
     | '/radar'
     | '/roi'
@@ -454,6 +475,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/public/affiliate-click'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -479,6 +501,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/news'
     | '/notifications'
+    | '/partner'
     | '/pricing'
     | '/radar'
     | '/roi'
@@ -496,6 +519,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/public/affiliate-click'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -522,6 +546,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   NewsRoute: typeof NewsRoute
   NotificationsRoute: typeof NotificationsRoute
+  PartnerRoute: typeof PartnerRoute
   PricingRoute: typeof PricingRoute
   RadarRoute: typeof RadarRoute
   RoiRoute: typeof RoiRoute
@@ -538,6 +563,7 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiPublicAffiliateClickRoute: typeof ApiPublicAffiliateClickRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
@@ -629,6 +655,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner': {
+      id: '/partner'
+      path: '/partner'
+      fullPath: '/partner'
+      preLoaderRoute: typeof PartnerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -750,6 +783,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/affiliate-click': {
+      id: '/api/public/affiliate-click'
+      path: '/api/public/affiliate-click'
+      fullPath: '/api/public/affiliate-click'
+      preLoaderRoute: typeof ApiPublicAffiliateClickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/agent': {
       id: '/api/public/agent'
       path: '/api/public/agent'
@@ -859,6 +899,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   NewsRoute: NewsRoute,
   NotificationsRoute: NotificationsRoute,
+  PartnerRoute: PartnerRoute,
   PricingRoute: PricingRoute,
   RadarRoute: RadarRoute,
   RoiRoute: RoiRoute,
@@ -875,6 +916,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiPublicAffiliateClickRoute: ApiPublicAffiliateClickRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,

@@ -31,6 +31,9 @@ import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
+import { ensureDailyAdminCredits } from "@/lib/admin.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { useMutation } from "@tanstack/react-query";
 
 function NotFoundComponent() {
   return (
@@ -146,6 +149,30 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user } = useAuth();
   const [showPricing, setShowPricing] = useState(false);
+  // Admin kullanıcıları için günlük 250 kredi (günde bir kez; sunucuda doğrulanır).
+  // Ayrıca mk65449131@gmail.com gibi DB allowlist'inde olan hesaplar girişte otomatik
+  // admin yapılır (yalnızca supabase is_admin_email onayıyla).
+  const dailyCreditsFn = useServerFn(ensureDailyAdminCredits);
+  const dailyCredits = useMutation({ mutationFn: () => dailyCreditsFn() });
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    const run = () => {
+      if (!alive) return;
+      dailyCredits.mutate(undefined, {
+        onError: () => {
+          /* rol/kredi yoksa veya ağ hatası: sessizce geç */
+        },
+      });
+    };
+    run();
+    const t = setInterval(run, 60 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   const chromeless =
     pathname.startsWith("/auth") ||
     pathname === "/pricing" ||
@@ -179,12 +206,38 @@ function RootComponent() {
     };
   }, [queryClient]);
 
-  // Davet linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır.
+  // Davet/partner linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır
+  // ve partner click sayacına (backend, dedupe'lu) beacon gönderilir.
   useEffect(() => {
     try {
       const ref = new URLSearchParams(window.location.search).get("ref");
-      if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
-        window.localStorage.setItem("velora.ref", ref.toUpperCase());
+      if (!ref || !/^[A-Za-z0-9]{4,16}$/.test(ref)) return;
+      const code = ref.toUpperCase();
+      window.localStorage.setItem("velora.ref", code);
+      // Aynı partner kodunun click'i oturum başına bir kez bildirilir (DB de dedupe eder).
+      const sessionFlag = `velora.ref.clicked.${code}`;
+      if (window.sessionStorage.getItem(sessionFlag)) return;
+      window.sessionStorage.setItem(sessionFlag, "1");
+      try {
+        let visitorKey = window.localStorage.getItem("velora.visitor") ?? "";
+        if (!visitorKey) {
+          visitorKey = crypto.randomUUID?.() ?? `v${Date.now()}`;
+          window.localStorage.setItem("velora.visitor", visitorKey);
+        }
+        void fetch("/api/public/affiliate-click", {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            visitorKey,
+            path: window.location.pathname,
+          }),
+        }).catch(() => {
+          /* beacon başarısızsa sorun değil */
+        });
+      } catch {
+        /* beacon isteğe bağlı */
       }
     } catch {
       /* yoksay */

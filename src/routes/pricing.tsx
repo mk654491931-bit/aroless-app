@@ -82,13 +82,17 @@ function PricingPage() {
     }
   }, []);
 
-  const rate = cur === "TRY" ? (data?.rates?.TRY ?? 34.2) : 1;
+  // Canlı kur yoksa (ağ/API kesintisi) ASLA sabit/bayat kur ile hesap yapılmaz;
+  // gösterim USD'ye düşer ve kullanıcı bilgilendirilir.
+  const tryRate = data?.rates?.TRY;
+  const effective = cur === "TRY" && !tryRate ? "USD" : cur;
+  const rate = effective === "TRY" ? (tryRate ?? 1) : 1;
   const price = (usd: number) => {
     const v = usd * rate * (yearly ? 10 : 1);
-    if (v === 0) return cur === "TRY" ? "₺0" : "$0";
-    return new Intl.NumberFormat(cur === "TRY" ? "tr-TR" : "en-US", {
+    if (v === 0) return effective === "TRY" ? "₺0" : "$0";
+    return new Intl.NumberFormat(effective === "TRY" ? "tr-TR" : "en-US", {
       style: "currency",
-      currency: cur,
+      currency: effective,
       maximumFractionDigits: 0,
     }).format(v);
   };
@@ -161,6 +165,13 @@ function PricingPage() {
             </div>
           </div>
         </div>
+
+        {cur === "TRY" && !tryRate && (
+          <p className="mt-4 text-center text-xs text-amber-300/90">
+            Canlı TL kuru şu an alınamadı — fiyatlar USD üzerinden gösteriliyor (tahsilat zaten
+            USD'dir). Bağlantı düzelince kur otomatik güncellenir.
+          </p>
+        )}
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => {

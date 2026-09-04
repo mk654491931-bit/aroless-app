@@ -54,7 +54,10 @@ export const claimReferral = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(4).max(16) }).parse(i))
   .handler(
-    async ({ data, context }): Promise<{ ok: boolean; reason?: string; credits?: number }> => {
+    async ({
+      data,
+      context,
+    }): Promise<{ ok: boolean; reason?: string; credits?: number; affiliate?: boolean }> => {
       const code = data.code.trim().toUpperCase();
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -83,6 +86,37 @@ export const claimReferral = createServerFn({ method: "POST" })
         .maybeSingle();
       if (!referrer) return { ok: false, reason: "Kod bulunamadı." };
 
+      // ---- Affiliate / partner ilişkilendirmesi (first-touch, backend) ----
+      // Kod bir AFFILIATE (partner) kaydına aitse müşteri backend'de o
+      // partner'e bağlanır. Kredi bonusu/2-davet sınırı partner akışında
+      // uygulanmaz; attribution customer_id üzerinde benzersizdir ve sonradan
+      // başka bir partnerle değiştirilemez.
+      const { data: affRow } = await supabaseAdmin
+        .from("affiliates")
+        .select("id, referral_code, status")
+        .eq("user_id", referrer.id)
+        .maybeSingle();
+      if (affRow?.status === "active") {
+        if (me.referral_code === code) {
+          return { ok: false, reason: "Kendi kodunu kullanamazsın." };
+        }
+        const { error: attErr } = await supabaseAdmin.from("affiliate_referrals").upsert(
+          {
+            affiliate_id: affRow.id,
+            customer_id: context.userId,
+            referral_code: code,
+            source: "link",
+            visitor_id: null,
+            status: "referred",
+          },
+          { onConflict: "customer_id", ignoreDuplicates: true },
+        );
+        if (attErr) {
+          console.error("[affiliate] attribution failed", attErr);
+        }
+        return { ok: true, credits: 0, affiliate: true };
+      }
+
       const { count } = await supabaseAdmin
         .from("referral_events")
         .select("id", { count: "exact", head: true })
@@ -108,6 +142,6 @@ export const claimReferral = createServerFn({ method: "POST" })
         .update({ credits: (me.credits ?? 0) + REFERRED_BONUS, referred_by: referrer.id })
         .eq("id", context.userId);
 
-      return { ok: true, credits: REFERRER_BONUS };
+      return { ok: true, credits: REFERRER_BONUS, affiliate: false };
     },
   );

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Gift, Copy, Check, Users, Coins, Loader2 } from "lucide-react";
+import { Gift, Copy, Check, Users, Coins, Loader2, Megaphone, ArrowRight } from "lucide-react";
 import { getMyReferral, claimReferral, REFERRER_BONUS } from "@/lib/referral.functions";
 
 export function ReferralPanel() {
@@ -18,7 +19,11 @@ export function ReferralPanel() {
     mutationFn: (c: string) => claimFn({ data: { code: c } }),
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success(`Davet kodu uygulandı · +${res.credits} kredi`);
+        toast.success(
+          res.affiliate
+            ? "Partner hesabına bağlandınız · komisyon takibi başladı"
+            : `Davet kodu uygulandı · +${res.credits} kredi`,
+        );
         setCode("");
         qc.invalidateQueries({ queryKey: ["referral"] });
         qc.invalidateQueries({ queryKey: ["profile"] });
@@ -110,6 +115,22 @@ export function ReferralPanel() {
               Davet kodu kullanıldı: <b>{q.data.referred_by_code}</b>
             </p>
           )}
+
+          <Link
+            to="/partner"
+            className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[oklch(0.68_0.20_265)]/30 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/15 to-[oklch(0.66_0.24_305)]/15 px-4 py-3 text-sm hover:from-[oklch(0.68_0.20_265)]/25 hover:to-[oklch(0.66_0.24_305)]/25"
+          >
+            <span className="flex items-center gap-2">
+              <Megaphone size={15} className="text-[oklch(0.75_0.18_265)]" />
+              <span>
+                <b>Affiliate Partner Programı</b>
+                <span className="block text-[11px] text-muted-foreground">
+                  %30 tekrarlayan komisyon · 12 ay · canlı panel
+                </span>
+              </span>
+            </span>
+            <ArrowRight size={15} className="shrink-0 text-muted-foreground" />
+          </Link>
         </>
       )}
     </div>

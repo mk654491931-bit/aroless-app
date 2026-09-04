@@ -304,7 +304,11 @@ function Dashboard() {
     claimReferralFn({ data: { code } })
       .then((res) => {
         if (res.ok) {
-          toast.success(`Davet bonusu eklendi · +${res.credits} kredi`);
+          toast.success(
+            res.affiliate
+              ? "Partner hesabına bağlandınız · komisyon takibi başladı"
+              : `Davet bonusu eklendi · +${res.credits} kredi`,
+          );
           qc.invalidateQueries({ queryKey: ["profile"] });
         }
       })

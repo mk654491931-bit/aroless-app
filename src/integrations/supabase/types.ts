@@ -1062,6 +1062,180 @@ export type Database = {
         };
         Relationships: [];
       };
+      affiliates: {
+        Row: {
+          commission_duration_months: number;
+          commission_rate_pct: number;
+          created_at: string;
+          display_name: string;
+          id: string;
+          referral_code: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          commission_duration_months?: number;
+          commission_rate_pct?: number;
+          created_at?: string;
+          display_name?: string;
+          id?: string;
+          referral_code: string;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          commission_duration_months?: number;
+          commission_rate_pct?: number;
+          created_at?: string;
+          display_name?: string;
+          id?: string;
+          referral_code?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      affiliate_clicks: {
+        Row: {
+          affiliate_id: string;
+          created_at: string;
+          id: string;
+          landing_path: string | null;
+          referral_code: string;
+          visitor_key: string;
+        };
+        Insert: {
+          affiliate_id: string;
+          created_at?: string;
+          id?: string;
+          landing_path?: string | null;
+          referral_code: string;
+          visitor_key: string;
+        };
+        Update: {
+          affiliate_id?: string;
+          created_at?: string;
+          id?: string;
+          landing_path?: string | null;
+          referral_code?: string;
+          visitor_key?: string;
+        };
+        Relationships: [];
+      };
+      affiliate_referrals: {
+        Row: {
+          affiliate_id: string;
+          commission_duration_months: number | null;
+          commission_rate_pct: number | null;
+          created_at: string;
+          customer_id: string;
+          first_paid_at: string | null;
+          id: string;
+          plan: string | null;
+          referral_code: string;
+          source: string;
+          status: string;
+          subscription_id: string | null;
+          updated_at: string;
+          visitor_id: string | null;
+        };
+        Insert: {
+          affiliate_id: string;
+          commission_duration_months?: number | null;
+          commission_rate_pct?: number | null;
+          created_at?: string;
+          customer_id: string;
+          first_paid_at?: string | null;
+          id?: string;
+          plan?: string | null;
+          referral_code: string;
+          source?: string;
+          status?: string;
+          subscription_id?: string | null;
+          updated_at?: string;
+          visitor_id?: string | null;
+        };
+        Update: {
+          affiliate_id?: string;
+          commission_duration_months?: number | null;
+          commission_rate_pct?: number | null;
+          created_at?: string;
+          customer_id?: string;
+          first_paid_at?: string | null;
+          id?: string;
+          plan?: string | null;
+          referral_code?: string;
+          source?: string;
+          status?: string;
+          subscription_id?: string | null;
+          updated_at?: string;
+          visitor_id?: string | null;
+        };
+        Relationships: [];
+      };
+      commissions: {
+        Row: {
+          affiliate_id: string;
+          commission_amount_cents: number;
+          commission_rate_pct: number;
+          created_at: string;
+          currency: string;
+          customer_id: string;
+          id: string;
+          paid_at: string | null;
+          payment_id: string;
+          period_end: string;
+          period_start: string;
+          plan: string;
+          reversed_at: string | null;
+          reversed_reason: string | null;
+          status: string;
+          subscription_amount_cents: number;
+          subscription_id: string;
+        };
+        Insert: {
+          affiliate_id: string;
+          commission_amount_cents?: number;
+          commission_rate_pct: number;
+          created_at?: string;
+          currency?: string;
+          customer_id: string;
+          id?: string;
+          paid_at?: string | null;
+          payment_id: string;
+          period_end: string;
+          period_start: string;
+          plan: string;
+          reversed_at?: string | null;
+          reversed_reason?: string | null;
+          status?: string;
+          subscription_amount_cents: number;
+          subscription_id: string;
+        };
+        Update: {
+          affiliate_id?: string;
+          commission_amount_cents?: number;
+          commission_rate_pct?: number;
+          created_at?: string;
+          currency?: string;
+          customer_id?: string;
+          id?: string;
+          paid_at?: string | null;
+          payment_id?: string;
+          period_end?: string;
+          period_start?: string;
+          plan?: string;
+          reversed_at?: string | null;
+          reversed_reason?: string | null;
+          status?: string;
+          subscription_amount_cents?: number;
+          subscription_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

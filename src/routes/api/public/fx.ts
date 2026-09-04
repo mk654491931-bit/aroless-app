@@ -16,23 +16,23 @@ export type FxPayload = {
 
 const STATIC_FALLBACK: Record<string, number> = {
   USD: 1,
-  EUR: 0.92,
-  GBP: 0.79,
-  TRY: 34.2,
-  CAD: 1.36,
-  AUD: 1.52,
-  JPY: 152,
+  EUR: 0.84,
+  GBP: 0.72,
+  TRY: 48.4,
+  CAD: 1.34,
+  AUD: 1.48,
+  JPY: 143,
   AED: 3.67,
   SAR: 3.75,
-  PLN: 4.0,
-  MXN: 18.5,
-  BRL: 5.5,
-  INR: 83.5,
-  KRW: 1350,
-  SEK: 10.6,
-  SGD: 1.34,
-  CNY: 7.2,
-  CHF: 0.88,
+  PLN: 3.85,
+  MXN: 18.2,
+  BRL: 5.1,
+  INR: 84,
+  KRW: 1340,
+  SEK: 9.8,
+  SGD: 1.28,
+  CNY: 7.05,
+  CHF: 0.82,
 };
 
 const TTL = 6 * 60 * 60 * 1000;
@@ -101,6 +101,14 @@ export const Route = createFileRoute("/api/public/fx")({
         }
         const data = await fetchRates();
         if (data.source !== "fallback") cache = { at: Date.now(), data };
+        if (data.source === "fallback" && cache) {
+          // Sağlayıcılar geçici olarak erişilemezse: eski ama GERÇEK kuru göster,
+          // bayat statik sabite düşme. (Fiyat sayacı hiçbir zaman yanlış kur göstermesin.)
+          return Response.json(
+            { ...cache.data, updated: cache.data.updated, source: "cached-stale" },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        }
         return Response.json(data, { headers: { "Cache-Control": "public, max-age=3600" } });
       },
     },

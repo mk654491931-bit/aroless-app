@@ -18,13 +18,14 @@ import {
   listAdminUsers,
   listAdminTransactions,
   checkIsAdmin,
-  ensureAdminCredits,
+  ensureDailyAdminCredits,
 } from "@/lib/admin.functions";
 import { getProviderHealth, type ProviderHealth } from "@/lib/ai-health.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
 import { AdminAbuseAlerts } from "@/components/admin-abuse-alerts";
+import { AdminAffiliates } from "@/components/admin-affiliates";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -59,14 +60,24 @@ function AdminPage() {
 
   const isAdmin = !!adminQ.data?.isAdmin;
 
-  // Admin kullanıcılara 250 kredi tanımla (eğer henüz tanımlanmamışsa)
-  const ensureCreditsFn = useServerFn(ensureAdminCredits);
+  // Admin kullanıcılara HER GÜN 250 kredi tanımla (günde bir kez; oturum boyunca tekrarla).
+  const ensureCreditsFn = useServerFn(ensureDailyAdminCredits);
   useEffect(() => {
-    if (isAdmin) {
+    if (!isAdmin) return;
+    let alive = true;
+    const run = () => {
+      if (!alive) return;
       ensureCreditsFn().catch(() => {
         /* kredi güncelleme başarısızsa sessizce devam et */
       });
-    }
+    };
+    run();
+    // Gece yarısını geçen oturumlar için saatte bir tekrar dene.
+    const t = setInterval(run, 60 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, [isAdmin, ensureCreditsFn]);
 
   const statsQ = useQuery({
@@ -198,6 +209,9 @@ function AdminPage() {
             </div>
           </section>
         )}
+
+        {/* Affiliate partners */}
+        <AdminAffiliates />
 
         {/* Users */}
         <AdminPromoCodes />

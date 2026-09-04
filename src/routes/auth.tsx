@@ -310,7 +310,13 @@ function AuthPage() {
         if (error) throw error;
         if (referralCode) {
           const referral = await claimReferralFn({ data: { code: referralCode } });
-          if (referral.ok) toast.success(`Davet bonusu uygulandı · +${referral.credits} kredi`);
+          if (referral.ok) {
+            toast.success(
+              referral.affiliate
+                ? "Partner hesabına bağlandınız · komisyon takibi başladı"
+                : `Davet bonusu uygulandı · +${referral.credits} kredi`,
+            );
+          }
         }
         toast.success("E-posta doğrulandı. Hesabınız hazır.");
         nav({ to: "/" });

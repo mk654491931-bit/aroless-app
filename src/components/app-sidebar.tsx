@@ -207,6 +207,21 @@ const GROUPS: {
     icon: Newspaper,
     items: [{ key: "news", title: "News & AI Explainer", url: "/news", icon: Target }],
   },
+  {
+    id: "partner",
+    key: "g_partner",
+    label: "Affiliate Programı",
+    emoji: "🤝",
+    icon: Handshake,
+    items: [
+      {
+        key: "partner_dashboard",
+        title: "Partner Dashboard",
+        url: "/partner",
+        icon: Handshake,
+      },
+    ],
+  },
 ];
 
 export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {

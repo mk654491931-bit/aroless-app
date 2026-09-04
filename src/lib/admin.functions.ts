@@ -118,48 +118,102 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
   });
 
 /**
- * Admin kredi tanımlama: Admin rolüne sahip kullanıcılar için kredileri 250'ye günceller.
- * Yeni kayıt akışına DOKUNMAZ — signup.flow'daki varsayılan kredi miktarı değişmez.
- * Bu fonksiyon sadece admin panele erişildiğinde veya rol atandığında çalışır.
+ * Günlük admin kredisi: Admin rolündeki kullanıcıya her UTC günü 250 kredi yükler.
+ *
+ * Güvenlik/doğruluk:
+ *  - Rol kontrolü önce yapılır (has_role RPC) — istek gövdesine güvenilmez.
+ *  - Günlük teslimat `profiles.credits_reset_at` ile kayıt altına alınır; aynı gün
+ *    içinde tekrar yükleme YAPILMAZ (günlük 250 kredidir, 250'ye tamamlama değil).
+ *  - Rolü olmayan kullanıcı için: e-posta Supabase'deki is_admin_email allowlist'inde
+ *    ise rol atanır (DB onayı olmadan admin yetkisi verilmez) ve kredi güncellenir.
+ *  - Yeni kayıt akışına / signup kredilerine DOKUNMAZ.
  */
-export const ensureAdminCredits = createServerFn({ method: "POST" })
+export const ensureDailyAdminCredits = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ updated: boolean; credits: number }> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(
+    async ({
+      context,
+    }): Promise<{ updated: boolean; granted: boolean; credits: number; reason?: string }> => {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Kullanıcının admin rolü var mı kontrol et
-    const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (!isAdmin) return { updated: false, credits: 0 };
+      // 1) Kullanıcının admin rolü var mı?
+      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+        _user_id: context.userId,
+        _role: "admin",
+      });
+      if (!isAdmin) {
+        // 1b) DB allowlist onayı olmadan admin rolü asla verilmez.
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id", context.userId)
+          .maybeSingle();
+        const email = String(profile?.email ?? context.claims?.email ?? "").toLowerCase();
+        if (!email) return { updated: false, granted: false, credits: 0, reason: "no_email" };
+        const { data: allowed, error: allowErr } = await supabaseAdmin.rpc("is_admin_email", {
+          _email: email,
+        });
+        if (allowErr || !allowed) {
+          return { updated: false, granted: false, credits: 0, reason: "not_allowlisted" };
+        }
+        const { data: hasRole } = await supabaseAdmin
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", context.userId)
+          .eq("role", "admin")
+          .maybeSingle();
+        if (!hasRole) {
+          const { error: roleErr } = await supabaseAdmin
+            .from("user_roles")
+            .insert({ user_id: context.userId, role: "admin" as const });
+          if (roleErr) {
+            console.error("[admin-bootstrap] role insert failed", roleErr);
+            return { updated: false, granted: false, credits: 0, reason: "role_insert_failed" };
+          }
+        }
+      }
 
-    // Mevcut kredi miktarını al
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("credits")
-      .eq("id", context.userId)
-      .maybeSingle();
-    const currentCredits = profile?.credits ?? 0;
+      // 2) Bugün zaten yüklendiyse dokunma (günde bir kez).
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const todayIso = today.toISOString();
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("credits, credits_reset_at")
+        .eq("id", context.userId)
+        .maybeSingle();
+      const last = profile?.credits_reset_at ? new Date(profile.credits_reset_at as string) : null;
+      if (last && last.getTime() >= today.getTime()) {
+        return {
+          updated: false,
+          granted: true,
+          credits: profile?.credits ?? 0,
+          reason: "already_today",
+        };
+      }
 
-    // 250'ten azsa güncelle
-    if (currentCredits >= 250) {
-      return { updated: false, credits: currentCredits };
-    }
+      // 3) Günlük 250 krediyi yükle (race guard: yalnızca bugün yüklenmemişse).
+      const { data: updatedRow } = await supabaseAdmin
+        .from("profiles")
+        .update({ credits: 250, credits_reset_at: new Date().toISOString() })
+        .eq("id", context.userId)
+        .or(`credits_reset_at.is.null,credits_reset_at.lt.${todayIso}`)
+        .select("credits")
+        .maybeSingle();
+      if (!updatedRow) {
+        return {
+          updated: false,
+          granted: true,
+          credits: profile?.credits ?? 0,
+          reason: "concurrent_grant",
+        };
+      }
+      return { updated: true, granted: true, credits: 250 };
+    },
+  );
 
-    const { error } = await supabaseAdmin
-      .from("profiles")
-      .update({ credits: 250 })
-      .eq("id", context.userId)
-      .lte("credits", 250); // Race condition koruması: sadece 250'den azsa güncelle
-
-    if (error) {
-      console.error("[admin-credits] update failed", error);
-      return { updated: false, credits: currentCredits };
-    }
-
-    return { updated: true, credits: 250 };
-  });
+/** @deprecated Eski tek seferlik kredi tamamlama; günlük sürüm: ensureDailyAdminCredits. */
+export const ensureAdminCredits = ensureDailyAdminCredits;
 
 export type FreeCreditAuditRow = {
   id: string;

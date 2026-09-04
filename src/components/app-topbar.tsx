@@ -28,6 +28,7 @@ const TITLES: Record<string, string> = {
   "/notifications": "Notifications",
   "/settings": "Settings",
   "/admin": "Admin",
+  "/partner": "Partner Dashboard",
 };
 
 /**

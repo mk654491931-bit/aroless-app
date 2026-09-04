@@ -22,6 +22,12 @@
 import { z } from "zod";
 import type { Database } from "../integrations/supabase/types";
 import { planForPriceId, verifyPaddleWebhook, type PaddlePlan } from "./paddle.server";
+import {
+  cancelReferralSubscription,
+  createCommissionForPayment,
+  reverseCommissionsForPayment,
+  type AffDb,
+} from "./affiliate/affiliate.service";
 
 export const MAX_PAYLOAD_BYTES = 1_000_000;
 
@@ -47,6 +53,9 @@ const PaddleEventSchema = z.object({
           plan: z.string().optional(),
         })
         .optional(),
+      action: z.string().optional(),
+      /** adjustment.* olaylarında geri iade edilen işlemin kimliği. */
+      transaction_id: z.string().optional(),
       items: z
         .array(
           z.object({
@@ -58,6 +67,12 @@ const PaddleEventSchema = z.object({
               })
               .optional(),
             quantity: z.number().optional(),
+            billing_period: z
+              .object({
+                starts_at: z.string().optional(),
+                ends_at: z.string().optional(),
+              })
+              .optional(),
           }),
         )
         .optional(),
@@ -208,6 +223,11 @@ export async function processPaddleWebhook(input: {
     case "subscription.paused":
       result = await handleSubscriptionCanceled({ eventId, userId, data, supabase });
       break;
+    case "adjustment.created":
+    case "adjustment.updated":
+      // Refund/chargeback → ilgili komisyonlar otomatik tersine çevrilir.
+      result = await handleAdjustment({ eventId, data, supabase });
+      break;
     default:
       logInfo(eventId, `unhandled event type: ${eventType || "(none)"}`);
       result = ok();
@@ -303,6 +323,30 @@ async function handleTransactionCompleted(input: {
     });
   } catch (e) {
     logError(eventId, "transaction record failed", e);
+  }
+
+  // Affiliate: her başarılı ödeme için komisyon (backend attribution + idempotency).
+  if (plan && totalCents > 0 && resolvedUserId) {
+    const bpStart =
+      data.billing_period?.start ??
+      data.items?.[0]?.billing_period?.starts_at ??
+      new Date().toISOString();
+    const bpEnd =
+      data.billing_period?.finish ?? data.items?.[0]?.billing_period?.ends_at ?? bpStart;
+    await tryAffiliate(supabase, (aff) =>
+      createCommissionForPayment(aff, {
+        customerId: resolvedUserId,
+        // Idempotency anahtarı: Paddle transaction id (data.id) her ödeme için benzersizdir.
+        paymentId: data.id ?? `${subscriptionId ?? "sub"}:${bpStart}`,
+        subscriptionId: subscriptionId ?? "",
+        plan,
+        subscriptionAmountCents: totalCents,
+        currency: data.totals?.currency ?? "USD",
+        periodStart: bpStart,
+        periodEnd: bpEnd,
+        paidAt: new Date().toISOString(),
+      }),
+    );
   }
 
   return ok();
@@ -407,7 +451,68 @@ async function handleSubscriptionCanceled(input: {
     return fail(500, { error: "Webhook processing failed" });
   }
   logInfo(eventId, `subscription canceled user=${resolvedUserId}`);
+
+  // Affiliate: müşteri iptal etti → gelecekteki komisyonlar durur.
+  if (subscriptionId && resolvedUserId) {
+    await tryAffiliate(supabase, (aff) =>
+      cancelReferralSubscription(aff, {
+        customerId: resolvedUserId,
+        subscriptionId,
+      }),
+    );
+  }
   return ok();
+}
+
+/**
+ * adjustment.created / adjustment.updated — refund ve chargeback olayları.
+ * İlgili işlem veya abonelikle eşleşen komisyonlar otomatik olarak
+ * "reversed" yapılır (kayıt silinmez; denetim izi korunur).
+ */
+async function handleAdjustment(input: {
+  eventId: string;
+  data: NonNullable<PaddleEvent["data"]>;
+  supabase: SupabaseLike;
+}): Promise<WebhookResult> {
+  const { eventId, data, supabase } = input;
+  const action = String(data.action ?? "").toLowerCase();
+  const isMoneyBack = action.includes("refund") || action.includes("chargeback");
+  if (!isMoneyBack) {
+    logInfo(eventId, `adjustment action ignored: ${action || "(none)"}`);
+    return ok();
+  }
+
+  const paymentId = data.transaction_id ?? "";
+  const subscriptionId = data.subscription_id ?? "";
+  if (!paymentId && !subscriptionId) {
+    logInfo(eventId, "adjustment without transaction/subscription ref — acknowledged");
+    return ok();
+  }
+
+  await tryAffiliate(supabase, (aff) =>
+    reverseCommissionsForPayment(aff, {
+      paymentId: paymentId || undefined,
+      subscriptionId: paymentId ? undefined : subscriptionId || undefined,
+      reason: action === "chargeback" ? "chargeback" : "refund",
+    }),
+  );
+  logInfo(eventId, `adjustment processed action=${action}`);
+  return ok();
+}
+
+/**
+ * Affiliate senkronizasyonu her zaman opsiyoneldir: tablolar henüz migrate
+ * edilmemişse veya beklenmedik bir hata olursa webhook akışı bozulmaz.
+ */
+async function tryAffiliate(
+  supabase: SupabaseLike,
+  fn: (db: AffDb) => Promise<unknown>,
+): Promise<void> {
+  try {
+    await fn(supabase as unknown as AffDb);
+  } catch (e) {
+    logError("", "affiliate sync failed (ignored)", e);
+  }
 }
 
 /**
@@ -468,7 +573,10 @@ export interface SupabaseLike {
     select<T = { id?: string; event_id?: string }>(
       columns: string,
     ): {
-      eq(column: string, value: string): {
+      eq(
+        column: string,
+        value: string,
+      ): {
         maybeSingle(): PromiseLike<{ data: T | null; error: { message: string } | null }>;
       };
     };
@@ -491,7 +599,9 @@ export async function recordProcessedEvent(
 ): Promise<void> {
   if (!eventId) return;
   try {
-    await supabase.from("paddle_webhook_events").insert({ event_id: eventId, event_type: eventType });
+    await supabase
+      .from("paddle_webhook_events")
+      .insert({ event_id: eventId, event_type: eventType });
   } catch (e) {
     logError(eventId, "idempotency record failed (continuing)", e);
   }
