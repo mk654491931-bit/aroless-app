@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { getSupabaseConfigError, supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
-  ssr: false,
+  // Not: `ssr: false` kullanılmaz — OAuth dönüşü tam sayfa yüklemesidir; SSR'da
+  // bekleyen eşleşme preview'da beyaz ekrana yol açıyordu. Bileşen sunucuda güvenli.
   component: AuthCallback,
   head: () => ({
     meta: [

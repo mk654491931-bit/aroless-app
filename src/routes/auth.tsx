@@ -32,7 +32,9 @@ import { AuthShowcase } from "@/components/auth-showcase";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 export const Route = createFileRoute("/auth")({
-  ssr: false,
+  // Not: `ssr: false` kullanılmaz — SSR'da bekleyen (pending) eşleşme preview'da
+  // beyaz ekrana yol açıyordu. Sayfa sunucuda güvenle render edilir (tüm tarayıcı
+  // API'leri effect içinde korunuyor), böylece doğrudan yükleme anında içerik gelir.
   head: () => ({
     meta: [
       { title: "Sign in — Aroless" },
