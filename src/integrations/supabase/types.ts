@@ -410,6 +410,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      paddle_webhook_events: {
+        Row: {
+          id: string;
+          event_id: string;
+          event_type: string | null;
+          payload: Json | null;
+          received_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          event_type?: string | null;
+          payload?: Json | null;
+          received_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          event_type?: string | null;
+          payload?: Json | null;
+          received_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -423,6 +447,11 @@ export type Database = {
           language: string;
           lemon_customer_id: string | null;
           lemon_subscription_id: string | null;
+          paddle_customer_id: string | null;
+          paddle_current_period_end: string | null;
+          paddle_price_id: string | null;
+          paddle_subscription_id: string | null;
+          paddle_subscription_status: string | null;
           notifications_enabled: boolean;
           onboarding_completed: boolean;
           promo_code: string | null;
@@ -446,6 +475,11 @@ export type Database = {
           language?: string;
           lemon_customer_id?: string | null;
           lemon_subscription_id?: string | null;
+          paddle_customer_id?: string | null;
+          paddle_current_period_end?: string | null;
+          paddle_price_id?: string | null;
+          paddle_subscription_id?: string | null;
+          paddle_subscription_status?: string | null;
           notifications_enabled?: boolean;
           onboarding_completed?: boolean;
           promo_code?: string | null;
@@ -469,6 +503,11 @@ export type Database = {
           language?: string;
           lemon_customer_id?: string | null;
           lemon_subscription_id?: string | null;
+          paddle_customer_id?: string | null;
+          paddle_current_period_end?: string | null;
+          paddle_price_id?: string | null;
+          paddle_subscription_id?: string | null;
+          paddle_subscription_status?: string | null;
           notifications_enabled?: boolean;
           onboarding_completed?: boolean;
           promo_code?: string | null;

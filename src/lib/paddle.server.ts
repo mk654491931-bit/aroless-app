@@ -46,6 +46,23 @@ export function priceIdForPlan(plan: PaddlePlan): string | null {
 }
 
 /**
+ * Paddle Price ID'sini plan adına eşler (webhook'ta tier belirlemek için).
+ * custom_data.plan her zaman güvenilir olmadığından önce price ID eşlemesine bakılır.
+ */
+export function planForPriceId(priceId: string | null | undefined): PaddlePlan | null {
+  if (!priceId) return null;
+  const map: Array<[string, PaddlePlan]> = [
+    [process.env["PADDLE_PRICE_STARTER"] ?? "", "Starter"],
+    [process.env["PADDLE_PRICE_PRO"] ?? "", "Pro"],
+    [process.env["PADDLE_PRICE_BUSINESS"] ?? "", "Business"],
+  ];
+  for (const [envPriceId, plan] of map) {
+    if (envPriceId && priceId === envPriceId) return plan;
+  }
+  return null;
+}
+
+/**
  * Paddle Billing v2 Checkout API ile yeni bir ödeme bağlantısı üretir.
  *流式 API kullanarak S2S (Server-to-Server) checkout oluşturur.
  */
@@ -163,30 +180,95 @@ export async function createPaddleCheckout(opts: {
 }
 
 /**
- * Paddle webhook imzasını doğrular (HMAC-SHA256, base64).
- * Paddle v2 webhook signing秘密钥ı ile imza doğrulama.
+ * Paddle Billing v2 webhook imzasını doğrular.
+ *
+ * Paddle v2 formatı:
+ *   Paddle-Signature: ts=<unix-zaman>;h1=<hex-hmac-sha256>
+ * İmza şunun üzerine alınır: HMAC-SHA256(secret, `${ts}:${rawBody}`)
+ *
+ * Ayrıca replay saldırılarına karşı zaman damgası kontrolü yapılır
+ * (varsayılan 5 dakika — Paddle'ın önerdiği üst sınır).
  */
+export const PADDLE_SIGNATURE_MAX_AGE_SECONDS = 300;
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.trim().toLowerCase();
+  if (clean.length % 2 !== 0 || !/^[0-9a-f]+$/.test(clean)) return new Uint8Array(0);
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+function timingSafeEqualHex(a: string, b: string): boolean {
+  const ba = hexToBytes(a);
+  const bb = hexToBytes(b);
+  if (ba.length === 0 || ba.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ba.length; i++) diff |= ba[i]! ^ bb[i]!;
+  return diff === 0;
+}
+
+/** `ts=...;h1=...` başlığını ayrıştırır; geçersizse null döner. */
+export function parsePaddleSignatureHeader(
+  header: string,
+): { ts: number; h1: string } | null {
+  const parts = header.split(";").map((p) => p.trim());
+  let ts: number | null = null;
+  let h1: string | null = null;
+  for (const part of parts) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const key = part.slice(0, eq).trim().toLowerCase();
+    const value = part.slice(eq + 1).trim();
+    if (key === "ts") {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) ts = n;
+    } else if (key === "h1") {
+      h1 = value;
+    }
+  }
+  if (ts === null || !h1) return null;
+  return { ts, h1 };
+}
+
 export async function verifyPaddleWebhook(
   rawBody: string,
   signatureHeader: string,
+  /** Test edilebilirlik için; gerçek çağrıda Date.now() kullanılır. */
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+  /** Doğrulama anahtarı; verilmezse PADDLE_WEBHOOK_SECRET kullanılır. */
+  secret: string = process.env["PADDLE_WEBHOOK_SECRET"] ?? "",
 ): Promise<boolean> {
-  const paddleEnv = getPaddleEnv();
-  if (!paddleEnv) return false;
+  if (!secret) return false;
+
+  const parsed = parsePaddleSignatureHeader(signatureHeader);
+  if (!parsed) return false;
+
+  // Replay koruması: zaman damgası çok eskiyse reddet.
+  const age = nowSeconds - parsed.ts;
+  if (!Number.isFinite(age) || age < -60 || age > PADDLE_SIGNATURE_MAX_AGE_SECONDS) {
+    return false;
+  }
 
   try {
-    const secretBytes = new TextEncoder().encode(paddleEnv.webhookSecret);
     const key = await crypto.subtle.importKey(
       "raw",
-      secretBytes,
+      new TextEncoder().encode(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["verify"],
+      ["sign"],
     );
-
-    const dataBytes = new TextEncoder().encode(rawBody);
-    // Paddle v2: base64 encoded HMAC-SHA256 signature
-    const sigBytes = Uint8Array.from(atob(signatureHeader), (c) => c.charCodeAt(0));
-    return await crypto.subtle.verify("HMAC", key, sigBytes, dataBytes);
+    const mac = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(`${parsed.ts}:${rawBody}`),
+    );
+    const expected = [...new Uint8Array(mac)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    return timingSafeEqualHex(expected, parsed.h1);
   } catch {
     return false;
   }
