@@ -308,7 +308,7 @@ function RoiPage() {
                   {money(stats.cac, entry.currency)}
                 </TableCell>
                 <TableCell className="text-right text-xs">
-                  {stats.vsExpectedPct == null ? (
+                  {stats.vsExpectedPct === null || stats.vsExpectedPct === undefined ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     <Badge

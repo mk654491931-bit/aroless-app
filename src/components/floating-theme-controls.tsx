@@ -19,12 +19,7 @@ function applyPalette(p: PaletteId) {
 }
 
 /** Viewport sınırları içinde konum hesapla (snap-to-edge destekli). */
-function clampPosition(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-): { x: number; y: number } {
+function clampPosition(x: number, y: number, w: number, h: number): { x: number; y: number } {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const margin = 12;
@@ -121,17 +116,14 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
   }, [toggleTheme]);
 
   // Drag handlers
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      setDragging(true);
-      const rect = dragRef.current?.getBoundingClientRect();
-      startPos.current = { x: rect?.left ?? 0, y: rect?.top ?? 0 };
-      startMouse.current = { x: e.clientX, y: e.clientY };
-    },
-    [],
-  );
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setDragging(true);
+    const rect = dragRef.current?.getBoundingClientRect();
+    startPos.current = { x: rect?.left ?? 0, y: rect?.top ?? 0 };
+    startMouse.current = { x: e.clientX, y: e.clientY };
+  }, []);
 
   useEffect(() => {
     if (!dragging) return;
@@ -143,12 +135,7 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
       const rect = el?.getBoundingClientRect();
       const w = rect?.width ?? 220;
       const h = rect?.height ?? 40;
-      const fixed = clampPosition(
-        startPos.current.x + dx,
-        startPos.current.y + dy,
-        w,
-        h,
-      );
+      const fixed = clampPosition(startPos.current.x + dx, startPos.current.y + dy, w, h);
       setPos(fixed);
     };
 
@@ -210,8 +197,14 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Gündüz temasına geç (Ctrl+Shift+T)" : "Karanlık temaya geç (Ctrl+Shift+T)"}
-            title={theme === "dark" ? "Gündüz teması — Ctrl+Shift+T" : "Karanlık tema — Ctrl+Shift+T"}
+            aria-label={
+              theme === "dark"
+                ? "Gündüz temasına geç (Ctrl+Shift+T)"
+                : "Karanlık temaya geç (Ctrl+Shift+T)"
+            }
+            title={
+              theme === "dark" ? "Gündüz teması — Ctrl+Shift+T" : "Karanlık tema — Ctrl+Shift+T"
+            }
             className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors hover:bg-accent/40"
           >
             {theme === "dark" ? (
@@ -231,9 +224,7 @@ export function FloatingThemeControls({ className = "" }: { className?: string }
             className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors hover:bg-accent/40"
           >
             <Palette size={14} className="text-[var(--brand)]" />
-            <span className="hidden sm:inline">
-              {palette === "default" ? "Klasik" : "Aurora"}
-            </span>
+            <span className="hidden sm:inline">{palette === "default" ? "Klasik" : "Aurora"}</span>
           </button>
 
           {/* Collapse */}

@@ -12,8 +12,18 @@ type CacheEntry = { result: TurnstileResult; expires: number };
 const tokenCache = new Map<string, CacheEntry>();
 
 // Provider sağlık izleme
-type ProviderHealth = { lastSuccess: number; lastError: number; errorCount: number; successCount: number };
-const providerHealth: ProviderHealth = { lastSuccess: 0, lastError: 0, errorCount: 0, successCount: 0 };
+type ProviderHealth = {
+  lastSuccess: number;
+  lastError: number;
+  errorCount: number;
+  successCount: number;
+};
+const providerHealth: ProviderHealth = {
+  lastSuccess: 0,
+  lastError: 0,
+  errorCount: 0,
+  successCount: 0,
+};
 
 export function turnstileEnabled(): boolean {
   return Boolean(process.env["TURNSTILE_SECRET_KEY"]);
@@ -35,10 +45,10 @@ export type TurnstileResult = { ok: boolean; skipped: boolean; reason?: string }
 export async function verifyTurnstile(token: string, ip?: string): Promise<TurnstileResult> {
   const secret = process.env["TURNSTILE_SECRET_KEY"];
   if (!secret) return { ok: true, skipped: true };
-  
+
   const siteKey = process.env["VITE_TURNSTILE_SITE_KEY"];
   if (!siteKey) return { ok: true, skipped: true, reason: "no-site-key" };
-  
+
   // Token boşsa widget yüklenemedi/kırıldı — doğrulamayı atla,
   // kullanıcıyı captcha nedeniyle engelleme.
   if (!token) return { ok: true, skipped: true, reason: "empty-token-graceful" };
@@ -51,49 +61,52 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
   }
 
   let lastErr: unknown = null;
-  
+
   // Retry loop
   for (let attempt = 0; attempt <= TURNSTILE_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT);
-      
+
       const body = new URLSearchParams({ secret, response: token });
       if (ip) body.set("remoteip", ip);
-      
+
       const res = await fetch(TURNSTILE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,
         signal: controller.signal,
       });
-      
+
       clearTimeout(timer);
-      
+
       const json = (await res.json()) as { success?: boolean; "error-codes"?: string[] };
       const result: TurnstileResult = json.success
         ? { ok: true, skipped: false }
         : { ok: false, skipped: false, reason: (json["error-codes"] ?? []).join(",") || "failed" };
-      
+
       // Cache ve health tracking
       tokenCache.set(token, { result, expires: Date.now() + TURNSTILE_CACHE_DURATION });
       providerHealth.lastSuccess = Date.now();
       providerHealth.successCount++;
-      
-      console.log(`[turnstile] Verification ${result.ok ? "succeeded" : "failed"} on attempt ${attempt + 1}`);
+
+      console.log(
+        `[turnstile] Verification ${result.ok ? "succeeded" : "failed"} on attempt ${attempt + 1}`,
+      );
       return result;
-      
     } catch (e) {
       lastErr = e;
       const isTimeout = lastErr instanceof Error && lastErr.name === "AbortError";
       const isNetworkError = lastErr instanceof TypeError;
-      
-      console.warn(`[turnstile] Attempt ${attempt + 1} failed:`, 
-        isTimeout ? "timeout" : isNetworkError ? "network error" : String(lastErr));
-      
+
+      console.warn(
+        `[turnstile] Attempt ${attempt + 1} failed:`,
+        isTimeout ? "timeout" : isNetworkError ? "network error" : String(lastErr),
+      );
+
       if (attempt < TURNSTILE_RETRIES && (isTimeout || isNetworkError)) {
         // Wait before retry (exponential backoff)
-        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 100));
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 100));
         continue;
       }
     }
@@ -102,7 +115,7 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
   // Tüm retry'lar başarısız — graceful fallback
   providerHealth.lastError = Date.now();
   providerHealth.errorCount++;
-  
+
   console.warn("[turnstile] All retries exhausted — falling back to graceful mode");
   return { ok: true, skipped: true, reason: "verifier-unreachable" };
 }

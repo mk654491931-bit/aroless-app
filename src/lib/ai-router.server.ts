@@ -20,7 +20,9 @@ import {
   extractJson,
   geminiKeyPool,
   groqKeyPool,
+  huggingFaceKeyPool,
   openRouterKeyPool,
+  sambaNovaKeyPool,
   togetherKeyPool,
 } from "./ai.server";
 import { withEstimationRules } from "./ai-guidance";
@@ -60,12 +62,7 @@ export const FAST_CHAIN: ProviderId[] = [
 ];
 
 /** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
-export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = [
-  "bedrock",
-  "gemini",
-  "openrouter",
-  "groq",
-];
+export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 /** Görev bazlı optimal zincir sıralaması. */
 export const TASK_CHAINS: Record<TaskType, ProviderId[]> = {
@@ -197,7 +194,7 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   sambanova: (prompt, temperature, signal) =>
-    rotate(pool("SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_2"), SAMBANOVA_MODELS, (key, model) =>
+    rotate(sambaNovaKeyPool(), SAMBANOVA_MODELS, (key, model) =>
       openAICompatible({
         url: "https://api.sambanova.ai/v1/chat/completions",
         key,
@@ -244,25 +241,16 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   huggingface: (prompt, temperature, signal) =>
-    rotate(
-      pool(
-        "HF_TOKEN_1",
-        "HF_TOKEN",
-        "HUGGING_FACE_API_KEY1",
-        "HF_TOKEN_2",
-        "HUGGING_FACE_API_KEY2",
-      ),
-      HF_MODELS,
-      (key, model) =>
-        openAICompatible({
-          url: "https://router.huggingface.co/v1/chat/completions",
-          key,
-          model,
-          prompt,
-          temperature,
-          signal,
-          json: false,
-        }),
+    rotate(pool(...huggingFaceKeyPool()), HF_MODELS, (key, model) =>
+      openAICompatible({
+        url: "https://router.huggingface.co/v1/chat/completions",
+        key,
+        model,
+        prompt,
+        temperature,
+        signal,
+        json: false,
+      }),
     ),
 
   together: (prompt, temperature, signal) =>
@@ -505,8 +493,7 @@ export function getKeyPoolSizes(): Record<string, number> {
     together: togetherKeyPool().length,
     cerebras: pool("CEREBRAS_API_KEY", "CEREBRAS_API_KEY_2").length,
     sambanova: pool("SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_2").length,
-    bedrock:
-      process.env["AWS_ACCESS_KEY_ID"] && process.env["AWS_SECRET_ACCESS_KEY"] ? 1 : 0,
+    bedrock: process.env["AWS_ACCESS_KEY_ID"] && process.env["AWS_SECRET_ACCESS_KEY"] ? 1 : 0,
     huggingface: pool("HF_TOKEN_1", "HF_TOKEN", "HUGGING_FACE_API_KEY1", "HF_TOKEN_2").length,
   };
 }

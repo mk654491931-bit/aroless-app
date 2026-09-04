@@ -33,7 +33,11 @@ export async function apiFetch(
 }
 
 /** JSON POST kısayolu; hata durumunda anlaşılır mesaj fırlatır. */
-export async function apiPost<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   const res = await apiFetch(
     path,
     {
@@ -45,7 +49,9 @@ export async function apiPost<T>(path: string, body: unknown, timeoutMs = DEFAUL
   );
   // Safely parse JSON — if the body is empty or not JSON, fall back to an
   // empty object so callers always receive a defined value.
-  const data: T & { error?: string } = (await res.json().catch(() => ({}) as T)) as T & { error?: string };
+  const data: T & { error?: string } = (await res.json().catch(() => ({}) as T)) as T & {
+    error?: string;
+  };
   if (!res.ok) throw new Error(data?.error || "İstek başarısız oldu. Lütfen tekrar deneyin.");
   return (data ?? {}) as T;
 }

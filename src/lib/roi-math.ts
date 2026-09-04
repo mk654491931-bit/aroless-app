@@ -49,7 +49,10 @@ export function computeRoi(e: RoiEntry): RoiStats {
   const cac = netOrders > 0 ? ads / netOrders : 0;
   const unitGross = (Number(e.sell_price) || 0) - unitCost;
   const breakEvenRoas = unitGross > 0 ? (Number(e.sell_price) || 0) / unitGross : 0;
-  const expected = e.expected_margin_pct == null ? null : Number(e.expected_margin_pct);
+  const expected =
+    e.expected_margin_pct === null || e.expected_margin_pct === undefined
+      ? null
+      : Number(e.expected_margin_pct);
   return {
     netOrders,
     revenue,
@@ -62,7 +65,7 @@ export function computeRoi(e: RoiEntry): RoiStats {
     breakEvenRoas,
     profitPerOrder: netOrders > 0 ? netProfit / netOrders : 0,
     refundRate: orders > 0 ? (refunds / orders) * 100 : 0,
-    vsExpectedPct: expected == null ? null : marginPct - expected,
+    vsExpectedPct: expected === null || expected === undefined ? null : marginPct - expected,
   };
 }
 

@@ -96,12 +96,10 @@ export const Route = createFileRoute("/api/public/paddle-webhook")({
 
         // 3. Payload boyut kontrolü
         const contentLength = Number(request.headers.get("content-length") ?? 0);
-        if (contentLength > MAX_PAYLOAD_BYTES)
-          return json({ error: "Payload too large" }, 413);
+        if (contentLength > MAX_PAYLOAD_BYTES) return json({ error: "Payload too large" }, 413);
 
         const raw = await request.text();
-        if (raw.length > MAX_PAYLOAD_BYTES)
-          return json({ error: "Payload too large" }, 413);
+        if (raw.length > MAX_PAYLOAD_BYTES) return json({ error: "Payload too large" }, 413);
 
         // 4. Webhook imza doğrulama (Paddle v2 HMAC-SHA256)
         const signatureHeader = request.headers.get("paddle-signature") ?? "";
@@ -200,9 +198,7 @@ export const Route = createFileRoute("/api/public/paddle-webhook")({
           }
 
           // Transaction kaydı
-          const totalCents = Math.round(
-            (parseFloat(data.totals?.total ?? "0") || 0) * 100,
-          );
+          const totalCents = Math.round((parseFloat(data.totals?.total ?? "0") || 0) * 100);
           try {
             await supabaseAdmin.from("transactions").insert({
               user_id: userId,
@@ -210,7 +206,13 @@ export const Route = createFileRoute("/api/public/paddle-webhook")({
               tier,
               amount_cents:
                 totalCents ||
-                (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : tier === "Starter" ? 3900 : 0),
+                (tier === "Business"
+                  ? 19900
+                  : tier === "Pro"
+                    ? 5900
+                    : tier === "Starter"
+                      ? 3900
+                      : 0),
               currency: data.totals?.currency ?? "USD",
               payment_method: "card",
               provider: "paddle",
@@ -228,8 +230,7 @@ export const Route = createFileRoute("/api/public/paddle-webhook")({
               purchased_tier: tier,
               purchased_at: new Date().toISOString(),
               amount_cents:
-                totalCents ||
-                (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900),
+                totalCents || (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900),
             })
             .eq("user_id", userId);
         }

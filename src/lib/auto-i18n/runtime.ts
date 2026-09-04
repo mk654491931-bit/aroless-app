@@ -105,7 +105,7 @@ function applyToText(node: Text) {
   if (!source.trim()) return;
   if (shouldSkip(node.parentElement)) return;
   const next = lookup(source);
-  if (next == null) {
+  if (next === null || next === undefined) {
     if (originalText.has(node) && node.nodeValue !== source) {
       node.nodeValue = source;
       originalText.delete(node);
@@ -123,7 +123,7 @@ function applyToElement(el: Element) {
     const source = stored ?? el.getAttribute(attr);
     if (!source || !source.trim()) continue;
     const next = lookup(source);
-    if (next == null) {
+    if (next === null || next === undefined) {
       if (stored && el.getAttribute(attr) !== stored) el.setAttribute(attr, stored);
       continue;
     }
@@ -217,7 +217,7 @@ function restoreAll() {
     if (n.nodeType === Node.TEXT_NODE) {
       const t = n as Text;
       const src = originalText.get(t);
-      if (src != null && t.nodeValue !== src) t.nodeValue = src;
+      if (src !== null && src !== undefined && t.nodeValue !== src) t.nodeValue = src;
       originalText.delete(t);
     } else {
       const el = n as Element;

@@ -72,9 +72,7 @@ export async function createPaddleCheckout(opts: {
   }
 
   const baseUrl =
-    paddleEnv.env === "production"
-      ? "https://api.paddle.com"
-      : "https://sandbox-api.paddle.com";
+    paddleEnv.env === "production" ? "https://api.paddle.com" : "https://sandbox-api.paddle.com";
 
   const body: Record<string, unknown> = {
     items: [

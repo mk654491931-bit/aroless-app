@@ -131,7 +131,9 @@ export const startEmailSignup = createServerFn({ method: "POST" })
         // Database trigger veya profil oluşturma hatası — kullanıcıya anlamlı mesaj ver
         console.error("[signup] createUser failed:", createError.message, createError);
         if (msg.includes("database") || msg.includes("trigger") || msg.includes("constraint")) {
-          throw new Error("Kayıt sırasında bir veritabanı hatası oluştu. Lütfen biraz sonra tekrar deneyin.");
+          throw new Error(
+            "Kayıt sırasında bir veritabanı hatası oluştu. Lütfen biraz sonra tekrar deneyin.",
+          );
         }
         throw new Error("Hesap oluşturulamadı. Lütfen farklı bir e-posta ile tekrar deneyin.");
       }
@@ -207,7 +209,13 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       console.error("[email] welcome send failed", e);
     }
 
-    return { ok: true as const, email: data.email, emailSent, creditsBlocked: false, promoDiscount };
+    return {
+      ok: true as const,
+      email: data.email,
+      emailSent,
+      creditsBlocked: false,
+      promoDiscount,
+    };
   });
 
 export const verifyEmailSignup = createServerFn({ method: "POST" })

@@ -141,9 +141,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
           }
 
           // Transaction kaydı
-          const totalCents = Math.round(
-            (parseFloat(data.totals?.total ?? "0") || 0) * 100,
-          );
+          const totalCents = Math.round((parseFloat(data.totals?.total ?? "0") || 0) * 100);
           try {
             await supabaseAdmin.from("transactions").insert({
               user_id: userId,
@@ -151,7 +149,13 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
               tier,
               amount_cents:
                 totalCents ||
-                (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : tier === "Starter" ? 3900 : 0),
+                (tier === "Business"
+                  ? 19900
+                  : tier === "Pro"
+                    ? 5900
+                    : tier === "Starter"
+                      ? 3900
+                      : 0),
               currency: data.totals?.currency ?? "USD",
               payment_method: "card",
               provider: "paddle",
@@ -169,8 +173,7 @@ export const Route = createFileRoute("/api/public/lemonsqueezy-webhook")({
               purchased_tier: tier,
               purchased_at: new Date().toISOString(),
               amount_cents:
-                totalCents ||
-                (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900),
+                totalCents || (tier === "Business" ? 19900 : tier === "Pro" ? 5900 : 3900),
             })
             .eq("user_id", userId);
         }

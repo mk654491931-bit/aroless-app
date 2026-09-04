@@ -37,7 +37,12 @@ export const startSimulation = createServerFn({ method: "POST" })
       // Statik/mock baseline yok: veriler yalnızca canlı AI pazar taramasından gelir.
       const text = await callGemini(baselinePrompt(data), key, 0.4);
       const parsed = extractJson<Partial<MarketBaseline>>(text, {});
-      if (parsed.cvr_pct == null || parsed.cpc_usd == null) {
+      if (
+        parsed.cvr_pct === null ||
+        parsed.cvr_pct === undefined ||
+        parsed.cpc_usd === null ||
+        parsed.cpc_usd === undefined
+      ) {
         throw new Error("Canlı pazar verisi alınamadı. Lütfen tekrar deneyin.");
       }
       const baseline: MarketBaseline = {

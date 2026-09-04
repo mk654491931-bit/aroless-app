@@ -40,7 +40,7 @@ type ErrorCategory = "quota" | "network" | "timeout" | "invalid_response" | "unk
 
 function categorizeError(status: number, _body: string, error?: unknown): ErrorCategory {
   if (status === 429 || status === 402 || status === 403) return "quota";
-  if (status === 0 || (error instanceof TypeError)) return "network";
+  if (status === 0 || error instanceof TypeError) return "network";
   if (error instanceof Error && error.name === "AbortError") return "timeout";
   if (status >= 400 && status < 500) return "invalid_response";
   return "unknown";
@@ -49,7 +49,10 @@ function categorizeError(status: number, _body: string, error?: unknown): ErrorC
 function getCacheKey(prompt: string, engine: HfEngine, system?: string): string {
   const data = `${engine}:${system ?? "default"}:${prompt.slice(0, 100)}`;
   // Simple hash
-  return data.split("").reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0).toString(36);
+  return data
+    .split("")
+    .reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0)
+    .toString(36);
 }
 
 export function getHfMetrics() {
@@ -97,7 +100,7 @@ function hfIsQuota(status: number, body: string): boolean {
  * when every HF token is spent (or none is configured), silently hands the
  * prompt to the other providers (Premium AI → Gemini → Groq → LovableAI) so the user never
  * sees a rate-limit error. Pass `noFallback` for pure connectivity probes.
- * 
+ *
  * Geliştirilmiş: Response cache, timeout, error categorization, metrics.
  */
 export async function callHuggingFace(
@@ -107,7 +110,7 @@ export async function callHuggingFace(
 ): Promise<string> {
   prompt = withEstimationRules(prompt);
   const cacheKey = getCacheKey(prompt, engine, opts.system);
-  
+
   // Cache kontrol
   const cached = responseCache.get(cacheKey);
   if (cached && cached.expires > Date.now() && cached.engine === engine) {
@@ -124,13 +127,12 @@ export async function callHuggingFace(
 
   let lastErr: unknown = null;
   let lastStatus = 0;
-  let successCount = 0;
-  
+
   for (const token of tokens) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), HF_REQUEST_TIMEOUT);
     const startTime = Date.now();
-    
+
     try {
       const resp = await fetch(HF_URL, {
         method: "POST",
@@ -151,50 +153,55 @@ export async function callHuggingFace(
         }),
         signal: controller.signal,
       });
-      
+
       clearTimeout(timer);
       const responseTime = Date.now() - startTime;
-      
+
       if (!resp.ok) {
         const body = (await resp.text()).slice(0, 200);
         lastStatus = resp.status;
         lastErr = new Error(`HF_ERROR ${resp.status}: ${body}`);
         const category = categorizeError(resp.status, body);
-        
-        console.warn(`[hf] ${engine} request failed [${resp.status}] (${category}): ${body.slice(0, 100)}`);
-        
+
+        console.warn(
+          `[hf] ${engine} request failed [${resp.status}] (${category}): ${body.slice(0, 100)}`,
+        );
+
         if (hfIsQuota(resp.status, body)) {
           console.warn(`[hf] Token quota/rate limit exceeded — trying next token`);
           continue; // key spent — rotate
         }
         throw lastErr;
       }
-      
+
       const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const result = json.choices?.[0]?.message?.content ?? "{}";
-      
+
       if (!result || result.trim() === "{}") {
         console.warn("[hf] Empty response from HF — trying fallback");
         continue;
       }
-      
+
       // Cache ve metrics
-      responseCache.set(cacheKey, { response: result, expires: Date.now() + HF_CACHE_DURATION, engine });
+      responseCache.set(cacheKey, {
+        response: result,
+        expires: Date.now() + HF_CACHE_DURATION,
+        engine,
+      });
       providerMetrics.hf.successCount++;
       providerMetrics.hf.lastSuccess = Date.now();
-      providerMetrics.hf.avgResponseTime = 
-        (providerMetrics.hf.avgResponseTime + responseTime) / 2;
-      successCount++;
-      
+      providerMetrics.hf.avgResponseTime = (providerMetrics.hf.avgResponseTime + responseTime) / 2;
       console.log(`[hf] ${engine} engine successful (${responseTime}ms)`);
       return result;
-      
     } catch (e) {
       clearTimeout(timer);
       const category = categorizeError(lastStatus, "", e);
-      console.warn(`[hf] ${engine} error (${category}):`, e instanceof Error ? e.message : String(e));
+      console.warn(
+        `[hf] ${engine} error (${category}):`,
+        e instanceof Error ? e.message : String(e),
+      );
       lastErr = e;
-      
+
       if (category === "timeout") {
         providerMetrics.hf.failureCount++;
         providerMetrics.hf.lastError = Date.now();
@@ -220,58 +227,59 @@ export async function callHuggingFace(
 /** HF tükendiğinde sessizce devreye giren diğer sağlayıcılar — metrics tracking ile. */
 async function hfCrossProviderFallback(prompt: string, temperature = 0.5): Promise<string> {
   const { callPremiumAI, callLovableAI, callGemini, callGroq } = await import("@/lib/ai.server");
-  
+
   // Fallback sırası: Premium Gateway → Gemini → Groq → LovableAI
   const chain = [
-    { 
-      name: "Premium AI Gateway", 
+    {
+      name: "Premium AI Gateway",
       run: () => callPremiumAI(prompt, temperature),
       metrics: providerMetrics.premium,
     },
-    { 
-      name: "Gemini", 
+    {
+      name: "Gemini",
       run: () => callGemini(prompt, undefined, temperature, false),
       metrics: providerMetrics.gemini,
     },
-    { 
-      name: "Groq", 
+    {
+      name: "Groq",
       run: () => callGroq(prompt, temperature),
       metrics: providerMetrics.groq,
     },
-    { 
-      name: "Lovable AI", 
+    {
+      name: "Lovable AI",
       run: () => callLovableAI(prompt, temperature),
       metrics: providerMetrics.premium, // Same as premium for fallback
     },
   ];
-  
+
   let lastErr: unknown = null;
-  
+
   for (const provider of chain) {
     try {
       console.log(`[hf-fallback] Trying ${provider.name}...`);
       const startTime = Date.now();
       const text = await provider.run();
       const responseTime = Date.now() - startTime;
-      
+
       if (text && text.trim()) {
         provider.metrics.successCount++;
         provider.metrics.lastSuccess = Date.now();
-        provider.metrics.avgResponseTime = 
-          (provider.metrics.avgResponseTime + responseTime) / 2;
-        
+        provider.metrics.avgResponseTime = (provider.metrics.avgResponseTime + responseTime) / 2;
+
         console.log(`[hf-fallback] ${provider.name} başarılı (${responseTime}ms)`);
         return text;
       }
     } catch (e) {
       provider.metrics.failureCount++;
       provider.metrics.lastError = Date.now();
-      console.warn(`[hf-fallback] ${provider.name} başarısız:`, 
-        e instanceof Error ? e.message : String(e));
+      console.warn(
+        `[hf-fallback] ${provider.name} başarısız:`,
+        e instanceof Error ? e.message : String(e),
+      );
       lastErr = e;
     }
   }
-  
+
   throw lastErr instanceof Error
     ? lastErr
     : new Error("AI motorları şu anda meşgul, birazdan tekrar deneyin.");
@@ -486,7 +494,10 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       competitor_examples: (arr<string>(r.competitor_examples, 3) ?? []).map(String),
       supplier_links: (arr<string>(r.supplier_links, 2) ?? []).map(String),
       alibaba_links: (arr<string>(r.alibaba_links, 2) ?? []).map(String),
-      competitor_prices: arr<{ store?: string; price?: string; note?: string; url?: string }>(r.competitor_prices, 5)?.map((cp) => ({
+      competitor_prices: arr<{ store?: string; price?: string; note?: string; url?: string }>(
+        r.competitor_prices,
+        5,
+      )?.map((cp) => ({
         store: String(cp?.store ?? ""),
         price: String(cp?.price ?? ""),
         note: cp?.note ? String(cp.note) : undefined,
@@ -504,8 +515,12 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       trend_score: Math.max(0, Math.min(100, Math.round(num(r.demandScore, 70)))),
       emoji: String(r.emoji ?? "🛍️").slice(0, 4),
       sales_tactic: r.salesTactic ? String(r.salesTactic) : undefined,
-      ai_insight: r.aiInsight ? String(r.aiInsight) : `Generated by ${HF_MODELS[engine]} via Hugging Face. Cross-validated across ${engine === "qwen" ? "Qwen 2.5" : "Llama 3.1"} models.`,
-      data_sources: Array.from(new Set([`Hugging Face · ${HF_MODELS[engine]}`, ...(arr<string>(r.data_sources, 4) ?? [])])),
+      ai_insight: r.aiInsight
+        ? String(r.aiInsight)
+        : `Generated by ${HF_MODELS[engine]} via Hugging Face. Cross-validated across ${engine === "qwen" ? "Qwen 2.5" : "Llama 3.1"} models.`,
+      data_sources: Array.from(
+        new Set([`Hugging Face · ${HF_MODELS[engine]}`, ...(arr<string>(r.data_sources, 4) ?? [])]),
+      ),
       health_score: Math.max(0, Math.min(100, Math.round(num(r.health_score, 70)))),
       viral_probability_90d: Math.max(
         0,
@@ -514,7 +529,9 @@ export function mapHfProducts(text: string, platforms: string[], engine: HfEngin
       sellability_verdict: (["Highly Sellable", "Moderate Risk", "Do Not Sell"].includes(verdict)
         ? verdict
         : "Moderate Risk") as "Highly Sellable" | "Moderate Risk" | "Do Not Sell",
-      confidence_reason: r.confidenceReason ? String(r.confidenceReason) : `Assessed by ${HF_MODELS[engine]} — treat scores as directional until live-verified.`,
+      confidence_reason: r.confidenceReason
+        ? String(r.confidenceReason)
+        : `Assessed by ${HF_MODELS[engine]} — treat scores as directional until live-verified.`,
       // ---- full deep-analysis dossier, same blocks as the default engine ----
       conversion: obj(r.conversion),
       demand: obj(r.demand),

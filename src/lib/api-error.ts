@@ -158,7 +158,14 @@ export function logApiError(error: ApiError, context?: Record<string, unknown>):
   }
 
   // Optionally send to error tracking service
-  if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING) {
-    ((window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING as { captureException?: (err: Error, ctx?: Record<string, unknown>) => void }).captureException?.(error, { extra: context });
+  if (
+    typeof window !== "undefined" &&
+    (window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING
+  ) {
+    (
+      (window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING as {
+        captureException?: (err: Error, ctx?: Record<string, unknown>) => void;
+      }
+    ).captureException?.(error, { extra: context });
   }
 }

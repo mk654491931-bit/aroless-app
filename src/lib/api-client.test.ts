@@ -52,9 +52,7 @@ describe("apiPost", () => {
   });
 
   it("returns fallback error message when body has no error field", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response("Server Error", { status: 500 }),
-    );
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response("Server Error", { status: 500 }));
 
     await expect(apiPost("/api/test", {}, 5000)).rejects.toThrow(
       "İstek başarısız oldu. Lütfen tekrar deneyin.",
@@ -153,10 +151,10 @@ describe("callTool response normalization", () => {
 
   it("handles null results from backend gracefully", async () => {
     mockFetch.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ status: "success", results: null, error: null }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ status: "success", results: null, error: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const result = await callTool("listing-seo", { product: "test" });
@@ -231,10 +229,10 @@ describe("callTool response normalization", () => {
 
   it("throws on HTTP error with error message", async () => {
     mockFetch.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ error: "AI isteği başarısız" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ error: "AI isteği başarısız" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     await expect(callTool("listing-seo", { product: "test" })).rejects.toThrow(

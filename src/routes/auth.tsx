@@ -362,7 +362,8 @@ function AuthPage() {
           if (error.message.includes("Invalid login credentials")) {
             msg = "E-posta veya şifre hatalı. Lütfen tekrar deneyin.";
           } else if (error.message.includes("Email not confirmed")) {
-            msg = "E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzu kontrol edin veya doğrulama kodunu tekrar gönderin.";
+            msg =
+              "E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzu kontrol edin veya doğrulama kodunu tekrar gönderin.";
             unconfirmed = true;
           } else if (error.message.includes("database") || error.message.includes("Database")) {
             msg = "Giriş sırasında bir hata oluştu. Lütfen biraz sonra tekrar deneyin.";
@@ -533,7 +534,8 @@ function AuthPage() {
         {/* ---------- Auth card inside laptop frame ---------- */}
         <section className="relative mx-auto w-full max-w-md">
           {/* Ambient light halo beneath the card */}
-          <div ref={haloRef} aria-hidden className="ambient-halo" />              <div className="laptop-frame">
+          <div ref={haloRef} aria-hidden className="ambient-halo" />{" "}
+          <div className="laptop-frame">
             <div
               ref={cardRef}
               onMouseMove={trackPointer}
@@ -659,7 +661,8 @@ function AuthPage() {
                       <div className="space-y-2">
                         {emailDeliveryFailed && (
                           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                            E-posta gönderilemedi. Destek ekibiyle iletişime geçin: destek@aroless.tech
+                            E-posta gönderilemedi. Destek ekibiyle iletişime geçin:
+                            destek@aroless.tech
                           </p>
                         )}
                         <p className="text-sm text-muted-foreground">
@@ -834,10 +837,10 @@ function AuthPage() {
                       <div className="flex items-center gap-2">
                         {[1, 2, 3, 4].map((i) => {
                           const strengthColors = [
-                            "bg-red-500",        // 1: weak
-                            "bg-orange-500",     // 2: fair
-                            "bg-amber-400",      // 3: good
-                            "bg-emerald-500",    // 4: strong
+                            "bg-red-500", // 1: weak
+                            "bg-orange-500", // 2: fair
+                            "bg-amber-400", // 3: good
+                            "bg-emerald-500", // 4: strong
                           ];
                           return (
                             <span
@@ -850,12 +853,17 @@ function AuthPage() {
                             />
                           );
                         })}
-                        <span className={`w-16 text-right text-[11px] font-medium transition-colors duration-300 ${
-                          strength <= 1 ? "text-red-400"
-                          : strength <= 2 ? "text-orange-400"
-                          : strength <= 3 ? "text-amber-400"
-                          : "text-emerald-400"
-                        }`}>
+                        <span
+                          className={`w-16 text-right text-[11px] font-medium transition-colors duration-300 ${
+                            strength <= 1
+                              ? "text-red-400"
+                              : strength <= 2
+                                ? "text-orange-400"
+                                : strength <= 3
+                                  ? "text-amber-400"
+                                  : "text-emerald-400"
+                          }`}
+                        >
                           {["weak", "weak", "fair", "good", "strong"][strength]}
                         </span>
                       </div>
@@ -900,7 +908,9 @@ function AuthPage() {
                             if (error) {
                               toast.error(error.message);
                             } else {
-                              toast.success("Password reset link sent. Check your inbox.", { duration: 5000 });
+                              toast.success("Password reset link sent. Check your inbox.", {
+                                duration: 5000,
+                              });
                             }
                           }}
                           className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
@@ -926,11 +936,20 @@ function AuthPage() {
                             Please wait…
                           </>
                         ) : mode === "signin" ? (
-                          <>Sign in <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Sign in{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         ) : otpStep ? (
-                          <>Verify email <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Verify email{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         ) : (
-                          <>Create account <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Create account{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         )}
                       </span>
                     </button>

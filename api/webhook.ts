@@ -88,10 +88,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /* ─── Handler ──────────────────────────────────────────────── */
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // 1. Method check — only POST
   if (req.method !== "POST") {
     json(res, 405, { error: "Method not allowed" });
@@ -147,8 +144,7 @@ export default async function handler(
   const customData = data.custom_data ?? {};
 
   // 6. Extract user_id (UUID validation)
-  const userId =
-    typeof customData.user_id === "string" ? customData.user_id : undefined;
+  const userId = typeof customData.user_id === "string" ? customData.user_id : undefined;
   if (userId && !UUID_RE.test(userId)) {
     json(res, 400, { error: "Bad user id" });
     return;
@@ -234,8 +230,7 @@ async function handleSubscriptionActive(
   const subscriptionId = data.subscription_id ?? data.id ?? null;
   const periodEnd = data.billing_period?.finish ?? null;
 
-  const subscriptionStatus =
-    eventType === "subscription.created" ? "active" : "active";
+  const subscriptionStatus = eventType === "subscription.created" ? "active" : "active";
 
   // Build update payload — only set fields that are present
   const updatePayload: Record<string, unknown> = {

@@ -47,7 +47,8 @@ export const Route = createFileRoute("/api/checkout")({
               promoRow &&
               promoRow.active &&
               (!promoRow.expires_at || new Date(promoRow.expires_at) >= new Date()) &&
-              (promoRow.max_redemptions == null ||
+              (promoRow.max_redemptions === null ||
+                promoRow.max_redemptions === undefined ||
                 promoRow.times_redeemed < promoRow.max_redemptions)
             ) {
               discountPct = promoRow.discount_pct;

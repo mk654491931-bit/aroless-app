@@ -355,17 +355,18 @@ function Dashboard() {
     onSuccess: (res, vars) => {
       // Defensive: wrap in try-catch so any unexpected data shape never crashes the UI.
       try {
-        const rawProducts = Array.isArray(res?.products) ? res.products : [];
+        const response = res ?? {};
+        const rawProducts = Array.isArray(response.products) ? response.products : [];
         const products = rawProducts.filter(isWinningProduct);
-        const rejected = Array.isArray(res?.rejected) ? res.rejected : [];
+        const rejected = Array.isArray(response.rejected) ? response.rejected : [];
         const scored = attachWinnerScores(products);
         setResults(scored);
         setRejected(rejected);
         const engineLabel =
-          res.fallback_engine && res.fallback_engine !== "gemini"
-            ? ` (${res.fallback_engine})`
+          response.fallback_engine && response.fallback_engine !== "gemini"
+            ? ` (${response.fallback_engine})`
             : "";
-        setFallbackNotice(res.fallback?.message ?? null);
+        setFallbackNotice(response.fallback?.message ?? null);
         qc.invalidateQueries({ queryKey: ["profile"] });
         if (scored.length === 0) {
           toast.warning("Arama tamamlandı ama sonuç bulunamadı. Farklı bir niş deneyin.");

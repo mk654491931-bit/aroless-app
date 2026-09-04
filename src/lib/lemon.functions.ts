@@ -17,9 +17,7 @@ export const createCheckout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const paddleEnv = getPaddleEnv();
     if (!paddleEnv) {
-      throw new Error(
-        "Ödeme sistemi yapılandırılmamış. Lütfen yöneticiyle iletişime geçin.",
-      );
+      throw new Error("Ödeme sistemi yapılandırılmamış. Lütfen yöneticiyle iletişime geçin.");
     }
 
     const { data: profile } = await context.supabase
@@ -41,7 +39,8 @@ export const createCheckout = createServerFn({ method: "POST" })
         promoRow &&
         promoRow.active &&
         (!promoRow.expires_at || new Date(promoRow.expires_at) >= new Date()) &&
-        (promoRow.max_redemptions == null ||
+        (promoRow.max_redemptions === null ||
+          promoRow.max_redemptions === undefined ||
           promoRow.times_redeemed < promoRow.max_redemptions)
       ) {
         discountPct = promoRow.discount_pct;

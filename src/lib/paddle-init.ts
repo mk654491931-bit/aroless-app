@@ -21,18 +21,14 @@ let paddleInstance: Paddle | null = null;
  * @param pwCustomerId - The logged-in user's Paddle customer ID (e.g. "ctm_xxx").
  *                        Pass `null` if the user has no Paddle customer yet.
  */
-export async function getPaddle(
-  pwCustomerId: string | null = null,
-): Promise<Paddle> {
+export async function getPaddle(pwCustomerId: string | null = null): Promise<Paddle> {
   if (paddleInstance) return paddleInstance;
 
   const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
   const env = import.meta.env.VITE_PADDLE_ENV as "sandbox" | "production";
 
   if (!token) {
-    throw new Error(
-      "Paddle client token is not configured (VITE_PADDLE_CLIENT_TOKEN).",
-    );
+    throw new Error("Paddle client token is not configured (VITE_PADDLE_CLIENT_TOKEN).");
   }
 
   const options: InitializePaddleOptions = {

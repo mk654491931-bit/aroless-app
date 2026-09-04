@@ -5,7 +5,8 @@
  * Her API endpoint'inde yetkilendirme kontrolü için bu modülü kullanın.
  */
 
-export type RbacCheckResult = { allowed: true; userId: string } | { allowed: false; response: Response };
+export type RbacCheckResult =
+  { allowed: true; userId: string } | { allowed: false; response: Response };
 
 function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -51,10 +52,7 @@ export async function requireRole(
  *   if (!guard.allowed) return guard.response;
  *   // guard.userId ile devam et
  */
-export async function requireAdmin(
-  request: Request,
-  resource: string,
-): Promise<RbacCheckResult> {
+export async function requireAdmin(request: Request, resource: string): Promise<RbacCheckResult> {
   // Auth kontrolü
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -105,7 +103,7 @@ export async function requireAdmin(
     }
 
     return { allowed: true, userId: user.id };
-  } catch (e) {
+  } catch {
     return {
       allowed: false,
       response: json(500, { error: "Yetkilendirme kontrolü başarısız." }),

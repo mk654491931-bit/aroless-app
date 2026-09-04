@@ -309,133 +309,138 @@ export function ToolCard({
             )}
             onError={(e) => console.error("[ToolCard] result render error:", e)}
           >
-          <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                {result?.verdict && (
-                  <Badge className="mb-1.5 border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 text-[10px] text-[var(--accent-active)]">
-                    {result.verdict}
-                  </Badge>
-                )}
-                {result?.headline && (
-                  <p className="text-sm font-semibold leading-snug">{result.headline}</p>
-                )}
-              </div>
-              {(result?.score ?? 0) > 0 && <ScoreRing value={result?.score ?? 0} label="skor" />}
-            </div>
-
-            {(result?.metrics ?? []).length > 0 && (
-              <div className="grid grid-cols-2 gap-2">
-                {(result?.metrics ?? []).map((m, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m?.tone ?? "neutral"]}`}
-                  >
-                    <div className="text-[10px] uppercase tracking-wider opacity-70">{m?.label ?? ""}</div>
-                    <div className="mt-0.5 text-sm font-bold">{m?.value ?? ""}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {result?.table && Array.isArray(result.table.columns) && Array.isArray(result.table.rows) && result.table.rows.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border border-white/10">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-white/10 hover:bg-transparent">
-                      {(result.table.columns ?? []).map((c, i) => (
-                        <TableHead key={i} className="text-[11px] whitespace-nowrap">
-                          {String(c ?? "")}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(result.table.rows ?? []).map((r, i) => (
-                      <TableRow key={i} className="border-white/5">
-                        {(Array.isArray(r) ? r : []).map((cell, j) => (
-                          <TableCell key={j} className="text-xs">
-                            {String(cell ?? "")}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {(result?.bullets ?? []).length > 0 && (
-              <ul className="space-y-1.5">
-                {(result?.bullets ?? []).map((b, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-muted-foreground">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--accent-active)]" />
-                    {String(b ?? "")}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <ListBlock
-              icon={ShieldAlert}
-              title="Riskler"
-              items={(result?.risks ?? []).filter(Boolean)}
-              tone="warning"
-            />
-            <ListBlock
-              icon={ListChecks}
-              title="Aksiyon planı"
-              items={(result?.actions ?? []).filter(Boolean)}
-              tone="profit"
-            />
-            <ListBlock
-              icon={Info}
-              title="Varsayımlar"
-              items={(result?.assumptions ?? []).filter(Boolean)}
-              tone="action"
-            />
-
-            {result?.document && (
-              <div className="space-y-2">
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-[11px] leading-relaxed">
-                  {result.document}
-                </pre>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" className="gap-1.5" onClick={copyDoc}>
-                    {copied ? <Check size={13} /> : <Copy size={13} />} Kopyala
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={download}>
-                    İndir
-                  </Button>
+            <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {result?.verdict && (
+                    <Badge className="mb-1.5 border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 text-[10px] text-[var(--accent-active)]">
+                      {result.verdict}
+                    </Badge>
+                  )}
+                  {result?.headline && (
+                    <p className="text-sm font-semibold leading-snug">{result.headline}</p>
+                  )}
                 </div>
+                {(result?.score ?? 0) > 0 && <ScoreRing value={result?.score ?? 0} label="skor" />}
               </div>
-            )}
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
-              {(result?.providers ?? []).filter(Boolean).map((p) => (
+
+              {(result?.metrics ?? []).length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {(result?.metrics ?? []).map((m, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m?.tone ?? "neutral"]}`}
+                    >
+                      <div className="text-[10px] uppercase tracking-wider opacity-70">
+                        {m?.label ?? ""}
+                      </div>
+                      <div className="mt-0.5 text-sm font-bold">{m?.value ?? ""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result?.table &&
+                Array.isArray(result.table.columns) &&
+                Array.isArray(result.table.rows) &&
+                result.table.rows.length > 0 && (
+                  <div className="overflow-x-auto rounded-lg border border-white/10">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-white/10 hover:bg-transparent">
+                          {(result.table.columns ?? []).map((c, i) => (
+                            <TableHead key={i} className="text-[11px] whitespace-nowrap">
+                              {String(c ?? "")}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(result.table.rows ?? []).map((r, i) => (
+                          <TableRow key={i} className="border-white/5">
+                            {(Array.isArray(r) ? r : []).map((cell, j) => (
+                              <TableCell key={j} className="text-xs">
+                                {String(cell ?? "")}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+              {(result?.bullets ?? []).length > 0 && (
+                <ul className="space-y-1.5">
+                  {(result?.bullets ?? []).map((b, i) => (
+                    <li key={i} className="flex gap-2 text-xs text-muted-foreground">
+                      <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--accent-active)]" />
+                      {String(b ?? "")}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <ListBlock
+                icon={ShieldAlert}
+                title="Riskler"
+                items={(result?.risks ?? []).filter(Boolean)}
+                tone="warning"
+              />
+              <ListBlock
+                icon={ListChecks}
+                title="Aksiyon planı"
+                items={(result?.actions ?? []).filter(Boolean)}
+                tone="profit"
+              />
+              <ListBlock
+                icon={Info}
+                title="Varsayımlar"
+                items={(result?.assumptions ?? []).filter(Boolean)}
+                tone="action"
+              />
+
+              {result?.document && (
+                <div className="space-y-2">
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-[11px] leading-relaxed">
+                    {result.document}
+                  </pre>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" className="gap-1.5" onClick={copyDoc}>
+                      {copied ? <Check size={13} /> : <Copy size={13} />} Kopyala
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={download}>
+                      İndir
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
+                {(result?.providers ?? []).filter(Boolean).map((p) => (
+                  <Badge
+                    key={p}
+                    variant="outline"
+                    className="border-white/10 text-[10px] text-muted-foreground"
+                  >
+                    <Cpu size={10} className="mr-1" /> {p}
+                  </Badge>
+                ))}
                 <Badge
-                  key={p}
                   variant="outline"
                   className="border-white/10 text-[10px] text-muted-foreground"
                 >
-                  <Cpu size={10} className="mr-1" /> {p}
+                  {result?.provider ?? ""}
                 </Badge>
-              ))}
-              <Badge
-                variant="outline"
-                className="border-white/10 text-[10px] text-muted-foreground"
-              >
-                {result?.provider ?? ""}
-              </Badge>
-              {typeof result?.confidence === "number" && (result?.confidence ?? 0) > 0 && (
-                <Badge
-                  variant="outline"
-                  className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
-                >
-                  <TrendingUp size={10} className="mr-1" /> güven %{result.confidence}
-                </Badge>
-              )}
+                {typeof result?.confidence === "number" && (result?.confidence ?? 0) > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
+                  >
+                    <TrendingUp size={10} className="mr-1" /> güven %{result.confidence}
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
           </ErrorBoundary>
         )}
         <AiDisclaimer />

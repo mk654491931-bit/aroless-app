@@ -182,12 +182,19 @@ function AnimatedStat({ value, label }: { value: string; label: string }) {
   }, []);
 
   return (
-    <div ref={ref} className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center backdrop-blur-sm transition-all duration-500 hover:border-[var(--brand)]/30 hover:bg-white/[0.07]">
+    <div
+      ref={ref}
+      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center backdrop-blur-sm transition-all duration-500 hover:border-[var(--brand)]/30 hover:bg-white/[0.07]"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] to-transparent" />
-      <div className={`relative text-3xl font-extrabold text-gradient transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+      <div
+        className={`relative text-3xl font-extrabold text-gradient transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+      >
         {value}
       </div>
-      <div className={`relative mt-1.5 text-xs text-muted-foreground transition-all duration-700 delay-150 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}>
+      <div
+        className={`relative mt-1.5 text-xs text-muted-foreground transition-all duration-700 delay-150 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}
+      >
         {label}
       </div>
     </div>
@@ -250,10 +257,18 @@ export function MarketingLanding() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <BrandLogo />
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">Özellikler</a>
-            <a href="#how" className="transition-colors hover:text-foreground">Nasıl çalışır</a>
-            <Link to="/pricing" className="transition-colors hover:text-foreground">Fiyatlandırma</Link>
-            <a href="#faq" className="transition-colors hover:text-foreground">SSS</a>
+            <a href="#features" className="transition-colors hover:text-foreground">
+              Özellikler
+            </a>
+            <a href="#how" className="transition-colors hover:text-foreground">
+              Nasıl çalışır
+            </a>
+            <Link to="/pricing" className="transition-colors hover:text-foreground">
+              Fiyatlandırma
+            </Link>
+            <a href="#faq" className="transition-colors hover:text-foreground">
+              SSS
+            </a>
           </nav>
           <div className="flex items-center gap-2.5">
             <Link
@@ -287,8 +302,7 @@ export function MarketingLanding() {
         <h1
           className={`mx-auto max-w-4xl text-4xl font-extrabold leading-[1.08] md:text-6xl lg:text-7xl transition-all duration-700 delay-100 ${heroReady ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
         >
-          Kazandıran ürünü{" "}
-          <span className="text-aurora">tahminle değil</span>, veriyle bul
+          Kazandıran ürünü <span className="text-aurora">tahminle değil</span>, veriyle bul
         </h1>
 
         <p
@@ -359,7 +373,8 @@ export function MarketingLanding() {
                 Fırsat taraması · {demoContext}
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> Canlı analiz
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> Canlı
+                analiz
               </span>
             </div>
 
@@ -396,10 +411,17 @@ export function MarketingLanding() {
                   type="submit"
                   className="glow group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-5 text-sm font-semibold text-white transition-all hover:scale-[1.02]"
                 >
-                  Önizlemeyi güncelle <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+                  Önizlemeyi güncelle{" "}
+                  <ArrowRight
+                    size={15}
+                    className="transition-transform group-hover:translate-x-0.5"
+                  />
                 </button>
               </form>
-              <div className="mt-3.5 flex flex-wrap items-center gap-2" aria-label="Hızlı niş seçimi">
+              <div
+                className="mt-3.5 flex flex-wrap items-center gap-2"
+                aria-label="Hızlı niş seçimi"
+              >
                 <span className="mr-1 text-[11px] text-muted-foreground">Hızlı seçim:</span>
                 {DEMOS.map((item, index) => (
                   <button
@@ -526,9 +548,13 @@ export function MarketingLanding() {
               style={{ animationDelay: `${i * 0.08}s` }}
             >
               {/* Hover gradient overlay */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${f.gradient} opacity-0 transition-opacity duration-300 group-hover:opacity-100`} />
+              <div
+                className={`absolute inset-0 bg-gradient-to-br ${f.gradient} opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
+              />
               <div className="relative">
-                <span className={`grid h-12 w-12 place-items-center rounded-xl border border-white/10 bg-white/[0.06] ${f.iconColor} transition-transform duration-300 group-hover:scale-110`}>
+                <span
+                  className={`grid h-12 w-12 place-items-center rounded-xl border border-white/10 bg-white/[0.06] ${f.iconColor} transition-transform duration-300 group-hover:scale-110`}
+                >
                   <f.icon size={22} />
                 </span>
                 <h3 className="mt-4 font-semibold">{f.title}</h3>
@@ -546,13 +572,19 @@ export function MarketingLanding() {
         </SectionHead>
         <div className="mt-12 grid gap-4 md:grid-cols-3">
           {STEPS.map((s, i) => (
-            <div key={s.n} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-[var(--brand)]/30 hover:bg-white/[0.07]">
+            <div
+              key={s.n}
+              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-[var(--brand)]/30 hover:bg-white/[0.07]"
+            >
               {/* Number */}
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand)]/20 to-[var(--brand-2)]/20 text-sm font-bold text-[var(--brand)]">
                   {s.n}
                 </span>
-                <s.icon size={20} className="text-muted-foreground transition-colors group-hover:text-[var(--brand)]" />
+                <s.icon
+                  size={20}
+                  className="text-muted-foreground transition-colors group-hover:text-[var(--brand)]"
+                />
               </div>
               <h3 className="mt-4 font-semibold">{s.t}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
@@ -575,9 +607,9 @@ export function MarketingLanding() {
             </div>
             <h2 className="text-2xl font-bold md:text-3xl">Her puanın gerekçesi görünür</h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Winner Score paneli; doğrulanmış ve tahmini sinyalleri, kullanılan ağırlıkları ve kaynak
-              bağlantılarını gösterir. Elenen ürünler için de neden elendiği (komisyon, teslimat,
-              sertifika bariyeri) listelenir.
+              Winner Score paneli; doğrulanmış ve tahmini sinyalleri, kullanılan ağırlıkları ve
+              kaynak bağlantılarını gösterir. Elenen ürünler için de neden elendiği (komisyon,
+              teslimat, sertifika bariyeri) listelenir.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs">
               {[
@@ -587,7 +619,10 @@ export function MarketingLanding() {
                 "Kargo & gümrük",
                 "Sertifika bariyeri",
               ].map((c) => (
-                <span key={c} className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-1.5 text-muted-foreground transition-colors hover:border-[var(--brand)]/30 hover:text-foreground">
+                <span
+                  key={c}
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-1.5 text-muted-foreground transition-colors hover:border-[var(--brand)]/30 hover:text-foreground"
+                >
                   {c}
                 </span>
               ))}
@@ -601,16 +636,19 @@ export function MarketingLanding() {
         <SectionHead>Sık sorulanlar</SectionHead>
         <div className="mt-10 space-y-3">
           {FAQ.map((f) => (
-            <details key={f.q} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm transition-all hover:border-white/15">
+            <details
+              key={f.q}
+              className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm transition-all hover:border-white/15"
+            >
               <summary className="cursor-pointer px-5 py-4 text-sm font-semibold list-none [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center justify-between">
                   {f.q}
-                  <span className="text-muted-foreground transition-transform group-open:rotate-45 text-lg leading-none">+</span>
+                  <span className="text-muted-foreground transition-transform group-open:rotate-45 text-lg leading-none">
+                    +
+                  </span>
                 </span>
               </summary>
-              <div className="px-5 pb-4 text-sm leading-relaxed text-muted-foreground">
-                {f.a}
-              </div>
+              <div className="px-5 pb-4 text-sm leading-relaxed text-muted-foreground">{f.a}</div>
             </details>
           ))}
         </div>

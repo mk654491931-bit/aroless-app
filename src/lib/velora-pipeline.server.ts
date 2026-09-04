@@ -279,8 +279,16 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
       if (r.log.ok) collected.push({ agent: r.agent, data: r.data });
     }
     const tierFailed = results.filter((r) => !r.log.ok).length;
-    console.log(`[velora-pipeline] tier ${tier} done: ${results.length - tierFailed}/${results.length} agents ok, ${Date.now() - tierStart}ms`);
-    if (tierFailed) console.log(`[velora-pipeline] tier ${tier} failed agents:`, results.filter((r) => !r.log.ok).map((r) => `${r.agent.name}: ${r.log.error?.slice(0, 80)}`));
+    console.log(
+      `[velora-pipeline] tier ${tier} done: ${results.length - tierFailed}/${results.length} agents ok, ${Date.now() - tierStart}ms`,
+    );
+    if (tierFailed)
+      console.log(
+        `[velora-pipeline] tier ${tier} failed agents:`,
+        results
+          .filter((r) => !r.log.ok)
+          .map((r) => `${r.agent.name}: ${r.log.error?.slice(0, 80)}`),
+      );
     tierLatencyMs[`tier${tier}`] = Date.now() - tierStart;
   }
 

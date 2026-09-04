@@ -55,7 +55,10 @@ export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
         const userId = typeof customData.user_id === "string" ? customData.user_id : undefined;
         const plan = typeof customData.plan === "string" ? customData.plan : undefined;
 
-        if (userId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+        if (
+          userId &&
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+        ) {
           return new Response("Bad user id", { status: 400 });
         }
         if (!userId) return new Response("ok", { status: 200 });

@@ -209,11 +209,12 @@ function SettingsPage() {
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
                     width: `${Math.min(100, ((profQ.data.credits ?? 0) / 500) * 100)}%`,
-                    background: (profQ.data.credits ?? 0) > 50
-                      ? "linear-gradient(90deg, oklch(0.76 0.17 158), oklch(0.68 0.2 265))"
-                      : (profQ.data.credits ?? 0) > 10
-                        ? "linear-gradient(90deg, oklch(0.82 0.16 80), oklch(0.76 0.17 158))"
-                        : "linear-gradient(90deg, oklch(0.62 0.24 25), oklch(0.82 0.16 80))",
+                    background:
+                      (profQ.data.credits ?? 0) > 50
+                        ? "linear-gradient(90deg, oklch(0.76 0.17 158), oklch(0.68 0.2 265))"
+                        : (profQ.data.credits ?? 0) > 10
+                          ? "linear-gradient(90deg, oklch(0.82 0.16 80), oklch(0.76 0.17 158))"
+                          : "linear-gradient(90deg, oklch(0.62 0.24 25), oklch(0.82 0.16 80))",
                   }}
                 />
               </div>

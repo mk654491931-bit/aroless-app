@@ -59,15 +59,19 @@ export function computeUnitEconomics(input: EconomicsInput): UnitEconomics {
   const retail = Math.max(0, parseMoney(input.retail_price));
   const cogs = Math.max(0, parseMoney(input.supplier_cost));
   const shipping =
-    input.shipping == null ? Math.max(1.5, cogs * 0.35) : Math.max(0, parseMoney(input.shipping));
+    input.shipping === null || input.shipping === undefined
+      ? Math.max(1.5, cogs * 0.35)
+      : Math.max(0, parseMoney(input.shipping));
   const platform_fee =
-    input.platform_fee == null
+    input.platform_fee === null || input.platform_fee === undefined
       ? retail * platformRate(input.marketplace)
       : Math.max(0, parseMoney(input.platform_fee));
   // CAC scales with competition — the single biggest killer of paper margins.
   const cacRate = input.competition === "High" ? 0.32 : input.competition === "Low" ? 0.16 : 0.24;
   const ad_spend =
-    input.ad_spend == null ? retail * cacRate : Math.max(0, parseMoney(input.ad_spend));
+    input.ad_spend === null || input.ad_spend === undefined
+      ? retail * cacRate
+      : Math.max(0, parseMoney(input.ad_spend));
 
   const net_profit = retail - (cogs + shipping + platform_fee + ad_spend);
   const net_margin_pct = retail > 0 ? (net_profit / retail) * 100 : 0;

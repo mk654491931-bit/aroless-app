@@ -55,9 +55,14 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
       const settled = await Promise.allSettled([runOne("llama"), runOne("qwen")]);
       const lists = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
       if (lists.length === 0)
-        throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");        const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
+        throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
+      const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
       const products = rankProfitable(merged);
-      return { products: products ?? [], model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`, engines: lists.length };
+      return {
+        products: products ?? [],
+        model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`,
+        engines: lists.length,
+      };
     }
 
     const products = rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]);

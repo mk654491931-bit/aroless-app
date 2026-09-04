@@ -113,7 +113,11 @@ export const validatePromoCode = createServerFn({ method: "POST" })
     if (!row.active) return { valid: false, discount_pct: 0, reason: "Kod pasif." };
     if (row.expires_at && new Date(row.expires_at) < new Date())
       return { valid: false, discount_pct: 0, reason: "Kodun süresi dolmuş." };
-    if (row.max_redemptions != null && row.times_redeemed >= row.max_redemptions) {
+    if (
+      row.max_redemptions !== null &&
+      row.max_redemptions !== undefined &&
+      row.times_redeemed >= row.max_redemptions
+    ) {
       return { valid: false, discount_pct: 0, reason: "Kod kullanım limitine ulaştı." };
     }
     return { valid: true, discount_pct: row.discount_pct };

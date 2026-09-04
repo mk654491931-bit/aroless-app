@@ -12,10 +12,6 @@ export async function hashOtp(email: string, code: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-
-
-
-
 /**
  * OTP kodunu gönderir — unified email-service üzerinden.
  * Asla fırlatmaz; gönderim başarısız olursa hata loglanır.

@@ -198,24 +198,29 @@ export async function scoreProductForCountry(
     const calculated = Math.round(
       market.ai_1_score * HYBRID_WEIGHT_AI1 + logistics.ai_2_score * HYBRID_WEIGHT_AI2,
     );
-    console.log(`[hybrid-scoring] product scored: ai1=${market.ai_1_score} ai2=${logistics.ai_2_score} → calculated=${calculated} (country: ${country})`);
+    console.log(
+      `[hybrid-scoring] product scored: ai1=${market.ai_1_score} ai2=${logistics.ai_2_score} → calculated=${calculated} (country: ${country})`,
+    );
     const copy = await runTooltipAI(productContext, country, calculated);
     return {
-    target_country: (country || "GLOBAL").toUpperCase(),
-    ai_1_score: market.ai_1_score,
-    local_competition_level: market.local_competition_level,
-    market_note: market.market_note,
-    ai_2_score: logistics.ai_2_score,
-    estimated_shipping_days: logistics.estimated_shipping_days,
-    logistics_note: logistics.logistics_note,
-    calculated_score: calculated,
-    tooltip: copy.tooltip,
-    badge_note: copy.badge_note,
-  };
+      target_country: (country || "GLOBAL").toUpperCase(),
+      ai_1_score: market.ai_1_score,
+      local_competition_level: market.local_competition_level,
+      market_note: market.market_note,
+      ai_2_score: logistics.ai_2_score,
+      estimated_shipping_days: logistics.estimated_shipping_days,
+      logistics_note: logistics.logistics_note,
+      calculated_score: calculated,
+      tooltip: copy.tooltip,
+      badge_note: copy.badge_note,
+    };
   } catch (e) {
     // NEVER let scoring errors propagate — return a neutral score so the product
     // still appears in the UI (with fallback score) rather than silently vanishing.
-    console.error("[hybrid-scoring] scoreProductForCountry FAILED, returning neutral fallback:", e instanceof Error ? e.message : e);
+    console.error(
+      "[hybrid-scoring] scoreProductForCountry FAILED, returning neutral fallback:",
+      e instanceof Error ? e.message : e,
+    );
     return {
       target_country: (country || "GLOBAL").toUpperCase(),
       ai_1_score: 50,

@@ -196,7 +196,7 @@ export function CommandCenter() {
 
   const { products, disqualified } = useMemo(() => {
     const source = (feed.data?.items ?? []).filter(
-      (item): item is HotProduct => item != null && typeof item === "object",
+      (item): item is HotProduct => item !== null && item !== undefined && typeof item === "object",
     );
     const scored = source.map((p) => {
       const e = econOf(p);

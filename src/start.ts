@@ -7,7 +7,12 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
     return await next();
   } catch (error) {
-    if (error != null && typeof error === "object" && "statusCode" in error) {
+    if (
+      error !== null &&
+      error !== undefined &&
+      typeof error === "object" &&
+      "statusCode" in error
+    ) {
       throw error;
     }
     console.error(error);

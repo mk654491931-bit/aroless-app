@@ -23,6 +23,9 @@ const AI_KEYS = [
   "GROQ_API_KEY",
   "OPENROUTER_API_KEY1",
   "OPENROUTER_API_KEY",
+  "SAMBANOVA_API_KEY",
+  "HF_TOKEN",
+  "HUGGING_FACE_API_KEY1",
 ] as const;
 
 /** İlk çağrıda eksik zorunlu değişkenleri konsola yazar (bir kez). */
@@ -37,9 +40,14 @@ export function checkServerEnvOnce(): void {
         `[env] Eksik zorunlu değişken(ler): ${missing.join(", ")} — .env dosyanızı kontrol edin (.env.example örnek alınabilir).`,
       );
     }
-    if (!AI_KEYS.some((k) => String(env[k] ?? "").trim())) {
+    const hasNumberedAiKey = Object.keys(env).some(
+      (key) =>
+        /^(?:GEMINI|GROQ|OPENROUTER|SAMBANOVA|HF_TOKEN|HUGGING_FACE_API_KEY)/i.test(key) &&
+        String(env[key] ?? "").trim(),
+    );
+    if (!AI_KEYS.some((k) => String(env[k] ?? "").trim()) && !hasNumberedAiKey) {
       console.warn(
-        "[env] Hiçbir AI sağlayıcı anahtarı tanımlı değil; yapay zeka modülleri devre dışı kalacak (GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_*).",
+        "[env] Hiçbir AI sağlayıcı anahtarı tanımlı değil; yapay zeka modülleri devre dışı kalacak (Gemini / Groq / OpenRouter / SambaNova / Hugging Face veya AI_GATEWAY_*).",
       );
     }
   } catch {

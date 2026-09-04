@@ -346,27 +346,37 @@ function KpiCard({
 
 function ProviderHealthCard({ provider }: { provider: ProviderHealth }) {
   const icons: Record<string, string> = {
-    gemini: "✨", groq: "⚡", together: "🔗", cerebras: "🧠",
-    sambanova: "🌐", openrouter: "🔀", huggingface: "🤗", bedrock: "🏔️",
+    gemini: "✨",
+    groq: "⚡",
+    together: "🔗",
+    cerebras: "🧠",
+    sambanova: "🌐",
+    openrouter: "🔀",
+    huggingface: "🤗",
+    bedrock: "🏔️",
   };
   return (
-    <div className={`rounded-xl border p-3 transition-colors ${
-      provider.healthy
-        ? "border-emerald-500/30 bg-emerald-500/5"
-        : "border-red-500/30 bg-red-500/5"
-    }`}>
+    <div
+      className={`rounded-xl border p-3 transition-colors ${
+        provider.healthy
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-red-500/30 bg-red-500/5"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium capitalize flex items-center gap-1.5">
           <span>{icons[provider.id] ?? "🤖"}</span>
           {provider.id}
         </span>
-        <span className={`h-2 w-2 rounded-full ${provider.healthy ? "bg-emerald-400" : "bg-red-400 animate-pulse"}`} />
+        <span
+          className={`h-2 w-2 rounded-full ${provider.healthy ? "bg-emerald-400" : "bg-red-400 animate-pulse"}`}
+        />
       </div>
       <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>{provider.keyCount} key{provider.keyCount !== 1 ? "s" : ""}</span>
-        {provider.failures > 0 && (
-          <span className="text-red-400">{provider.failures} err</span>
-        )}
+        <span>
+          {provider.keyCount} key{provider.keyCount !== 1 ? "s" : ""}
+        </span>
+        {provider.failures > 0 && <span className="text-red-400">{provider.failures} err</span>}
       </div>
     </div>
   );

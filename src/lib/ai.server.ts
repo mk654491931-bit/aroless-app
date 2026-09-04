@@ -76,7 +76,9 @@ export function hasAnyAiProvider(): boolean {
     hasGateway() ||
     geminiKeyPool().length > 0 ||
     groqKeyPool().length > 0 ||
-    openRouterKeyPool().length > 0
+    openRouterKeyPool().length > 0 ||
+    sambaNovaKeyPool().length > 0 ||
+    huggingFaceKeyPool().length > 0
   );
 }
 
@@ -158,10 +160,12 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
   if (
     geminiKeyPool().length === 0 &&
     groqKeyPool().length === 0 &&
-    openRouterKeyPool().length === 0
+    openRouterKeyPool().length === 0 &&
+    sambaNovaKeyPool().length === 0 &&
+    huggingFaceKeyPool().length === 0
   ) {
     throw new Error(
-      "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
+      "AI anahtarı tanımlı değil. .env dosyasına Gemini, Groq, OpenRouter, SambaNova veya Hugging Face anahtarlarından en az birini ekleyin.",
     );
   }
   const geminiModels = GEMINI_MODELS_LATEST;
@@ -229,21 +233,81 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
       }
     }
   }
+  for (const k of sambaNovaKeyPool()) {
+    for (const model of SAMBANOVA_MODELS) {
+      try {
+        const resp = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${k}` },
+          body: JSON.stringify({
+            model,
+            temperature,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+          }),
+        });
+        if (!resp.ok) continue;
+        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        const text = json.choices?.[0]?.message?.content;
+        if (text) return text;
+      } catch {
+        // try the next configured provider
+      }
+    }
+  }
+  for (const k of huggingFaceKeyPool()) {
+    for (const model of HUGGINGFACE_MODELS) {
+      try {
+        const resp = await fetch("https://router.huggingface.co/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${k}` },
+          body: JSON.stringify({
+            model,
+            temperature,
+            messages: [{ role: "user", content: prompt }],
+          }),
+        });
+        if (!resp.ok) continue;
+        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        const text = json.choices?.[0]?.message?.content;
+        if (text) return text;
+      } catch {
+        // try the next configured provider
+      }
+    }
+  }
   throw new Error(
     "Yapay zeka motorları şu anda meşgul, lütfen birkaç saniye sonra tekrar deneyin.",
   );
 }
 
+const SAMBANOVA_MODELS = ["Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct"];
+const HUGGINGFACE_MODELS = [
+  "meta-llama/Llama-3.1-8B-Instruct",
+  "mistralai/Mistral-7B-Instruct-v0.3",
+];
+
+function envKeyPool(pattern: RegExp, names: string[]): string[] {
+  const values = [
+    ...names.map((name) => process.env[name]),
+    ...Object.entries(process.env)
+      .filter(([name]) => pattern.test(name))
+      .map(([, value]) => value),
+  ].filter((key): key is string => Boolean(key?.trim()));
+  return Array.from(new Set(values));
+}
+
+export function sambaNovaKeyPool(): string[] {
+  return envKeyPool(/^SAMBANOVA_(?:API_KEY|KEY)_?\d*$/i, ["SAMBANOVA_API_KEY"]);
+}
+
+export function huggingFaceKeyPool(): string[] {
+  return envKeyPool(/^(?:HF_TOKEN|HUGGING_FACE_API_KEY)_?\d*$/i, ["HF_TOKEN"]);
+}
+
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 export function openRouterKeyPool(): string[] {
-  const raw = [
-    process.env["OPENROUTER_API_KEY"],
-    process.env["OPENROUTER_API_KEY1"],
-    process.env["OPENROUTER_API_KEY_1"],
-    process.env["OPENROUTER_API_KEY2"],
-    process.env["OPENROUTER_API_KEY_2"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return envKeyPool(/^OPENROUTER_API_KEY_?\d*$/i, ["OPENROUTER_API_KEY"]);
 }
 
 /** Pull a JSON object out of a model response that may be fenced or prefixed. */
@@ -302,25 +366,7 @@ export function extractJson<T>(text: string, fallback: T): T {
 
 /** All configured Gemini keys (up to 6), de-duplicated, in rotation order. */
 export function geminiKeyPool(): string[] {
-  const raw = [
-    process.env["GEMINI_KEY_1"],
-    process.env["GEMINI_API_KEY_1"],
-    process.env["GEMINI_1_API_KEY"],
-    process.env["GEMINI_KEY_2"],
-    process.env["GEMINI_API_KEY_2"],
-    process.env["GEMINI_2_API_KEY"],
-    process.env["GEMINI_KEY_3"],
-    process.env["GEMINI_API_KEY_3"],
-    process.env["GEMINI_3_API_KEY"],
-    process.env["GEMINI_KEY_4"],
-    process.env["GEMINI_API_KEY_4"],
-    process.env["GEMINI_KEY_5"],
-    process.env["GEMINI_API_KEY_5"],
-    process.env["GEMINI_KEY_6"],
-    process.env["GEMINI_API_KEY_6"],
-    process.env["GEMINI_API_KEY"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return envKeyPool(/^(?:GEMINI_KEY|GEMINI_API_KEY|GEMINI_\d+_API_KEY)_?\d*$/i, ["GEMINI_API_KEY"]);
 }
 
 function isQuotaError(status: number, body: string): boolean {
@@ -478,19 +524,7 @@ export async function callGemini(
 
 /** All configured Groq keys (up to 4+), de-duplicated, in rotation order. */
 export function groqKeyPool(): string[] {
-  const raw = [
-    process.env["GROQ_KEY_1"],
-    process.env["GROQ_API_KEY"],
-    process.env["GROQ_API_KEY_1"],
-    process.env["GROQ_KEY_2"],
-    process.env["GROQ_API_KEY_2"],
-    process.env["GROQ_2_API_KEY"],
-    process.env["GROQ_KEY_3"],
-    process.env["GROQ_API_KEY_3"],
-    process.env["GROQ_KEY_4"],
-    process.env["GROQ_API_KEY_4"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return envKeyPool(/^(?:GROQ_KEY|GROQ_API_KEY|GROQ_\d+_API_KEY)_?\d*$/i, ["GROQ_API_KEY"]);
 }
 
 /**
