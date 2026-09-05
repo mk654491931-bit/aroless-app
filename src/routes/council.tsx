@@ -62,7 +62,7 @@ function StageList({ active }: { active: number }) {
             key={s.label}
             className={`flex items-center gap-3 text-sm ${i > active ? "opacity-40" : ""}`}
           >
-            <span className="h-7 w-7 shrink-0 rounded-lg bg-[oklch(0.68_0.20_265)]/15 flex items-center justify-center">
+            <span className="h-7 w-7 shrink-0 rounded-lg bg-[var(--brand)]/15 flex items-center justify-center">
               {done ? (
                 <Check size={14} className="text-emerald-400" />
               ) : i === active ? (
@@ -82,7 +82,7 @@ function StageList({ active }: { active: number }) {
 function ScoreRing({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-4">
-      <div className="relative h-24 w-24 rounded-full grid place-items-center bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]">
+      <div className="relative h-24 w-24 rounded-full grid place-items-center bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)]">
         <div className="h-[86px] w-[86px] rounded-full bg-background grid place-items-center">
           <div className="text-center">
             <div className="text-2xl font-extrabold">{score}</div>
@@ -140,7 +140,7 @@ function CouncilPage() {
     >
       <div className="mx-auto w-full max-w-4xl space-y-6 py-6">
         <div className="flex items-center gap-2">
-          <Brain className="text-[oklch(0.75_0.16_265)]" />
+          <Brain className="text-[var(--brand)]" />
           <h1 className="text-xl font-extrabold">Konsey Analizi</h1>
           <CreditCost amount={1} />
         </div>
@@ -170,7 +170,7 @@ function CouncilPage() {
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || query.trim().length < 2}
-            className="rounded-xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] disabled:opacity-50"
+            className="rounded-xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] disabled:opacity-50"
           >
             {mutation.isPending ? "Konsey çalışıyor…" : "Konseyi çalıştır"}
           </button>
@@ -232,7 +232,7 @@ function CouncilPage() {
                     </div>
                     <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                        className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
                         style={{ width: `${t.score}%` }}
                       />
                     </div>

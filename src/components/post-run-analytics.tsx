@@ -71,7 +71,7 @@ export function PostRunAnalytics({
           </div>
           <button
             onClick={onRestart}
-            className="rounded-xl px-5 py-3 text-sm font-bold bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow flex items-center gap-2"
+            className="rounded-xl px-5 py-3 text-sm font-bold bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow flex items-center gap-2"
           >
             <RotateCcw size={15} /> New run
           </button>
@@ -119,7 +119,7 @@ export function PostRunAnalytics({
         <h3 className="font-bold text-sm mb-3">Where the money went</h3>
         <StackedBar
           rows={[
-            { label: "Ad spend", value: totalAd, color: "oklch(0.68 0.20 265)" },
+            { label: "Ad spend", value: totalAd, color: "var(--brand)" },
             { label: "Platform fees", value: totalFees, color: "oklch(0.75 0.18 200)" },
             { label: "Refunds", value: totalRefunds, color: "oklch(0.7 0.20 20)" },
             {
@@ -145,7 +145,7 @@ export function PostRunAnalytics({
               Loss
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-[oklch(0.75_0.18_265)]" />
+              <span className="w-2 h-2 rounded-full bg-[var(--brand)]" />
               Capital
             </span>
           </div>
@@ -177,7 +177,7 @@ export function PostRunAnalytics({
                     </div>
                   </div>
                   <div className="absolute inset-x-0" style={{ top: `${100 - capPct}%` }}>
-                    <div className="w-full h-[2px] bg-[oklch(0.75_0.18_265)]/60" />
+                    <div className="w-full h-[2px] bg-[var(--brand)]/60" />
                   </div>
                   <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 z-10 text-[10px] whitespace-nowrap bg-black/90 border border-white/10 rounded px-1.5 py-1">
                     D{d.day} · {money(d.profit)} · cap {money(d.capital)}
@@ -346,10 +346,10 @@ function computeGrade(roi: number, rating: number, roas: number) {
       letter: "B",
       headline: "Solid learner.",
       subline: "Profitable overall but room to tighten fundamentals.",
-      textCls: "text-[oklch(0.75_0.18_265)]",
-      bgCls: "bg-[oklch(0.68_0.20_265)]/15",
-      borderCls: "border-[oklch(0.68_0.20_265)]/40",
-      glowCls: "bg-[oklch(0.68_0.20_265)]/25",
+      textCls: "text-[var(--brand)]",
+      bgCls: "bg-[var(--brand)]/15",
+      borderCls: "border-[var(--brand)]/40",
+      glowCls: "bg-[var(--brand)]/25",
     };
   if (score >= -10)
     return {

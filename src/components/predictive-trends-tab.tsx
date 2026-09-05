@@ -57,7 +57,7 @@ function TrendCard({ p, onOpen }: { p: TrendItem; onOpen: () => void }) {
         }
       }}
       title="Detaylı AI analizi için tıkla"
-      className="premium-card cursor-pointer rounded-2xl p-4 space-y-3 transition hover:border-white/20 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[oklch(0.68_0.20_265)]"
+      className="premium-card cursor-pointer rounded-2xl p-4 space-y-3 transition hover:border-white/20 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
         <div className="min-w-0">
@@ -66,7 +66,7 @@ function TrendCard({ p, onOpen }: { p: TrendItem; onOpen: () => void }) {
             {p.category} · {p.marketplace}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-2 py-0.5 text-[11px] font-semibold text-white">
+        <span className="shrink-0 rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-2 py-0.5 text-[11px] font-semibold text-white">
           {p.score}
         </span>
       </div>
@@ -103,7 +103,7 @@ function TrendCard({ p, onOpen }: { p: TrendItem; onOpen: () => void }) {
         </p>
       )}
       {p.audience && <p className="text-[10px] text-muted-foreground">🎯 {p.audience}</p>}
-      <p className="text-[10px] font-semibold text-[oklch(0.78_0.16_290)]">
+      <p className="text-[10px] font-semibold text-[var(--brand)]">
         Detaylı AI analizi için tıkla →
       </p>
     </article>
@@ -141,7 +141,7 @@ export function PredictiveTrendsTab({ country }: { country: string }) {
             <button
               key={v.id}
               onClick={() => setView(v.id)}
-              className={`rounded-full border px-3 py-1.5 text-xs transition ${on ? "border-transparent bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}
+              className={`rounded-full border px-3 py-1.5 text-xs transition ${on ? "border-transparent bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}
             >
               {v.label}
             </button>

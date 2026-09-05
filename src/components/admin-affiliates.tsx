@@ -263,11 +263,11 @@ export function AdminAffiliates() {
     <section className="glass rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold flex items-center gap-2">
-          <Megaphone size={16} className="text-[oklch(0.75_0.18_265)]" /> Affiliate Partnerler
+          <Megaphone size={16} className="text-[var(--brand)]" /> Affiliate Partnerler
         </h2>
         <button
           onClick={() => setShowCreate((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-1.5 text-xs font-semibold text-white"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-1.5 text-xs font-semibold text-white"
         >
           {showCreate ? <X size={13} /> : <Plus size={13} />}
           {showCreate ? "Vazgeç" : "Partner Ekle"}
@@ -291,7 +291,7 @@ export function AdminAffiliates() {
               onChange={(e) => setNewEmail(e.target.value)}
               required
               placeholder="partner@ornek.com"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
           </label>
           <label className="text-xs">
@@ -300,7 +300,7 @@ export function AdminAffiliates() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Marka / influencer"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
           </label>
           <label className="text-xs">
@@ -310,7 +310,7 @@ export function AdminAffiliates() {
               onChange={(e) => setNewCode(e.target.value.toUpperCase())}
               maxLength={16}
               placeholder="OTOMATİK"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm uppercase outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm uppercase outline-none focus:border-[var(--brand)]"
             />
           </label>
           <label className="text-xs">
@@ -321,7 +321,7 @@ export function AdminAffiliates() {
               max={100}
               value={newRate}
               onChange={(e) => setNewRate(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
           </label>
           <label className="text-xs">
@@ -332,13 +332,13 @@ export function AdminAffiliates() {
               max={24}
               value={newMonths}
               onChange={(e) => setNewMonths(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
           </label>
           <button
             type="submit"
             disabled={create.isPending}
-            className="inline-flex items-center justify-center gap-1.5 self-end rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-1.5 self-end rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
             {create.isPending ? (
               <Loader2 className="animate-spin" size={14} />
@@ -362,7 +362,7 @@ export function AdminAffiliates() {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && setAppliedSearch(search.trim())}
             placeholder="İsim, e-posta veya kod ara…"
-            className="w-64 rounded-lg border border-white/10 bg-white/5 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="w-64 rounded-lg border border-white/10 bg-white/5 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-[var(--brand)]"
           />
         </div>
         <button
@@ -377,14 +377,14 @@ export function AdminAffiliates() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)] [color-scheme:dark]"
+            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)] [color-scheme:dark]"
           />
           <span>→</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)] [color-scheme:dark]"
+            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)] [color-scheme:dark]"
           />
         </div>
         <div className="ml-auto flex flex-wrap gap-2 text-[10px]">
@@ -449,7 +449,7 @@ export function AdminAffiliates() {
               rows.map((a) => (
                 <tr
                   key={a.id}
-                  className={`border-t border-white/5 hover:bg-white/[0.02] ${selectedId === a.id ? "bg-[oklch(0.68_0.20_265)]/[0.07]" : ""}`}
+                  className={`border-t border-white/5 hover:bg-white/[0.02] ${selectedId === a.id ? "bg-[var(--brand)]/[0.07]" : ""}`}
                 >
                   <Td>
                     <div className="font-medium">{a.displayName}</div>
@@ -528,7 +528,7 @@ export function AdminAffiliates() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex-1 min-w-[220px]">
               <h3 className="font-bold flex items-center gap-2">
-                <Megaphone size={14} className="text-[oklch(0.75_0.18_265)]" />
+                <Megaphone size={14} className="text-[var(--brand)]" />
                 {aff.displayName}
                 <StatusChip status={aff.status} />
               </h3>
@@ -566,7 +566,7 @@ export function AdminAffiliates() {
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
                 />
               </label>
               <label className="text-xs">
@@ -575,7 +575,7 @@ export function AdminAffiliates() {
                   value={editCode}
                   onChange={(e) => setEditCode(e.target.value.toUpperCase())}
                   maxLength={16}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-sm uppercase outline-none focus:border-[oklch(0.68_0.20_265)]"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-sm uppercase outline-none focus:border-[var(--brand)]"
                 />
               </label>
               <label className="text-xs">
@@ -586,7 +586,7 @@ export function AdminAffiliates() {
                   max={100}
                   value={editRate}
                   onChange={(e) => setEditRate(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
                 />
               </label>
               <label className="text-xs">
@@ -597,14 +597,14 @@ export function AdminAffiliates() {
                   max={24}
                   value={editMonths}
                   onChange={(e) => setEditMonths(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
                 />
               </label>
               <div className="flex items-end gap-2">
                 <button
                   type="submit"
                   disabled={update.isPending}
-                  className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                 >
                   {update.isPending ? (
                     <Loader2 className="mx-auto animate-spin" size={13} />
@@ -691,7 +691,7 @@ export function AdminAffiliates() {
                       setCommFrom(e.target.value);
                       setPayoutIds(new Set());
                     }}
-                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] outline-none focus:border-[oklch(0.68_0.20_265)] [color-scheme:dark]"
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] outline-none focus:border-[var(--brand)] [color-scheme:dark]"
                     title="Komisyon başlangıç tarihi"
                   />
                   <span>→</span>
@@ -702,7 +702,7 @@ export function AdminAffiliates() {
                       setCommTo(e.target.value);
                       setPayoutIds(new Set());
                     }}
-                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] outline-none focus:border-[oklch(0.68_0.20_265)] [color-scheme:dark]"
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] outline-none focus:border-[var(--brand)] [color-scheme:dark]"
                     title="Komisyon bitiş tarihi"
                   />
                   {(commFrom || commTo) && (
@@ -757,7 +757,7 @@ export function AdminAffiliates() {
                         }
                         onChange={toggleAllPending}
                         disabled={pendingOfDetail.length === 0}
-                        className="accent-[oklch(0.68_0.20_265)]"
+                        className="accent-[var(--brand)]"
                         title="Bekleyenleri seç"
                       />
                     </th>
@@ -798,7 +798,7 @@ export function AdminAffiliates() {
                             type="checkbox"
                             checked={payoutIds.has(c.id)}
                             onChange={() => togglePayout(c.id)}
-                            className="accent-[oklch(0.68_0.20_265)]"
+                            className="accent-[var(--brand)]"
                           />
                         ) : null}
                       </td>

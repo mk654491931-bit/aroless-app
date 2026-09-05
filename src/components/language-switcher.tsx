@@ -29,7 +29,7 @@ export function LanguageSwitcher() {
         <span className="hidden md:inline uppercase font-medium">{current.code}</span>
       </button>
       {open && (
-        <div className="absolute end-0 mt-2 min-w-[10rem] rounded-lg border border-white/10 bg-[oklch(0.20_0.035_265)] shadow-xl z-50 py-1">
+        <div className="absolute end-0 mt-2 min-w-[10rem] rounded-lg border border-white/10 bg-[var(--surface)] shadow-xl z-50 py-1">
           {LANGUAGES.map((l) => (
             <button
               key={l.code}
@@ -38,7 +38,7 @@ export function LanguageSwitcher() {
                 setOpen(false);
               }}
               className={`w-full text-start flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 ${
-                l.code === i18n.language ? "text-[oklch(0.85_0.15_265)]" : ""
+                l.code === i18n.language ? "text-[var(--brand)]" : ""
               }`}
             >
               <span>{l.flag}</span>

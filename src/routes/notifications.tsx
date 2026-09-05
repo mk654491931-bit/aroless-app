@@ -93,7 +93,7 @@ function NotificationsPage() {
       <header className="border-b border-white/10 glass sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
             </div>
             <div className="font-bold">Notifications</div>
@@ -153,7 +153,7 @@ function NotificationsPage() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAll}
-                className="text-xs flex items-center gap-1.5 text-[oklch(0.85_0.15_265)] hover:underline"
+                className="text-xs flex items-center gap-1.5 text-[var(--brand)] hover:underline"
               >
                 <Check size={14} /> Mark all read
               </button>

@@ -48,7 +48,7 @@ function MarketRadar({ bars }: { bars: { label: string; value: number }[] }) {
           </div>
           <div className="h-2 rounded-full bg-white/5 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
               style={{ width: `${Math.max(2, Math.min(100, b.value))}%` }}
             />
           </div>
@@ -175,10 +175,10 @@ export function ProductDeepDiveModal({
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+                className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
               >
                 {TARGET_COUNTRIES.map((tc) => (
-                  <option key={tc.code} value={tc.code} className="bg-[oklch(0.20_0.035_265)]">
+                  <option key={tc.code} value={tc.code} className="bg-[var(--surface)]">
                     {tc.flag} {tc.label}
                   </option>
                 ))}
@@ -286,7 +286,7 @@ export function ProductDeepDiveModal({
                   min={0}
                   value={val}
                   onChange={(e) => set(Math.max(0, Number(e.target.value) || 0))}
-                  className="mt-1 w-full rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-[oklch(0.68_0.20_265)]"
+                  className="mt-1 w-full rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-[var(--brand)]"
                 />
               </label>
             ))}
@@ -329,7 +329,7 @@ export function ProductDeepDiveModal({
           </h3>
           <div className="grid md:grid-cols-2 gap-3 text-xs">
             <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 flex items-center gap-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] mb-1 flex items-center gap-1.5">
                 <Target size={11} /> Groq — Talep &amp; Rekabet ({h?.ai_1_score ?? "—"}/100)
               </div>
               <p className="text-muted-foreground">
@@ -337,7 +337,7 @@ export function ProductDeepDiveModal({
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 flex items-center gap-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] mb-1 flex items-center gap-1.5">
                 <Truck size={11} /> Gemini — Lojistik &amp; Vergi ({h?.ai_2_score ?? "—"}/100)
               </div>
               <p className="text-muted-foreground">
@@ -375,7 +375,7 @@ export function ProductDeepDiveModal({
             onClick={() =>
               nav({ to: "/competitor-analysis", search: { q: product.name, country } })
             }
-            className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold text-white flex items-center justify-center gap-1.5"
+            className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-2 text-xs font-semibold text-white flex items-center justify-center gap-1.5"
           >
             <Swords size={13} /> Rakipleri Analiz Et
           </button>

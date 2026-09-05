@@ -393,7 +393,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-linear-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] p-1.5">
+              <span className="rounded-lg bg-linear-to-br from-[var(--brand)] to-[var(--brand-2)] p-1.5">
                 <Store size={15} />
               </span>
               <h2 className="text-lg font-bold">{state.storeName}</h2>
@@ -430,7 +430,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
                 <Swords size={11} /> Pazar payın %{Math.round(share.you * 100)}
               </button>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
-                <Gem size={11} className="text-[oklch(0.78_0.16_265)]" /> Marka {brand}/100
+                <Gem size={11} className="text-[var(--brand)]" /> Marka {brand}/100
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground">
                 <Users size={11} /> {Math.floor(state.subscribers ?? 0)} abone
@@ -449,7 +449,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
                 </span>
               )}
               {cal && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-foreground">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--brand)]/40 bg-[var(--brand)]/12 px-2.5 py-1 text-foreground">
                   <Sparkles size={11} /> {cal.title}
                 </span>
               )}
@@ -459,7 +459,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             <button
               disabled={over || busy || autoplay}
               onClick={() => advance(1)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-[var(--brand)] to-[var(--brand-2)] px-3.5 py-2 text-xs font-semibold glow disabled:opacity-40"
             >
               <Play size={13} /> 1 gün
             </button>
@@ -546,7 +546,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all"
                 style={{ width: `${lvl.pct}%` }}
               />
             </div>
@@ -558,7 +558,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
             onClick={() => setView("missions")}
             className="mt-3 w-full text-left flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 transition"
           >
-            <Flag size={14} className="mt-0.5 shrink-0 text-[oklch(0.72_0.18_265)]" />
+            <Flag size={14} className="mt-0.5 shrink-0 text-[var(--brand)]" />
             <span>
               <b>Sıradaki görev:</b> {nextMission.title} —{" "}
               <span className="text-muted-foreground">{nextMission.hint}</span>
@@ -602,7 +602,7 @@ export function TrainingTab({ catalog }: { catalog: WinningProduct[] }) {
         {state.status === "finished" && (
           <button
             onClick={doContinueSeason}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2.5 text-xs font-semibold glow"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2.5 text-xs font-semibold glow"
           >
             <RefreshCw size={13} /> Sezon {season + 1}'e devam et — mağazan, markan ve stokun
             korunur
@@ -692,7 +692,7 @@ function MissionsView({
     <div className="space-y-4">
       <div className="premium-card rounded-2xl p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] font-bold">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] font-bold">
             {lvl.level}
           </span>
           <div>
@@ -736,7 +736,7 @@ function MissionsView({
                       </p>
                       <div className="mt-2.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"}`}
+                          className={`h-full rounded-full transition-all ${m.done ? "bg-emerald-400" : "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"}`}
                           style={{ width: `${m.pct}%` }}
                         />
                       </div>
@@ -785,7 +785,7 @@ function CoachView({
     <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
       <div className="space-y-3">
         <h3 className="text-sm font-semibold flex items-center gap-2">
-          <ArolessMark size={17} className="text-[oklch(0.78_0.16_265)]" /> Aroless Koçu
+          <ArolessMark size={17} className="text-[var(--brand)]" /> Aroless Koçu
         </h3>
         {tips.map((t, i) => (
           <div
@@ -903,7 +903,7 @@ function SetupScreen(props: {
             value={props.storeName}
             onChange={(e) => props.setStoreName(e.target.value)}
             placeholder="Nova Home Goods"
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]/60"
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm outline-none focus:border-[var(--brand)]/60"
           />
         </div>
 
@@ -916,7 +916,7 @@ function SetupScreen(props: {
                 <button
                   key={d.id}
                   onClick={() => props.setDifficulty(d.id)}
-                  className={`text-left rounded-xl border p-3.5 transition card-lift ${on ? "border-[oklch(0.68_0.20_265)]/60 bg-[oklch(0.68_0.20_265)]/12" : "border-white/10 bg-white/5 hover:bg-white/8"}`}
+                  className={`text-left rounded-xl border p-3.5 transition card-lift ${on ? "border-[var(--brand)]/60 bg-[var(--brand)]/12" : "border-white/10 bg-white/5 hover:bg-white/8"}`}
                 >
                   <div className="font-semibold text-sm">{d.label}</div>
                   <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
@@ -938,7 +938,7 @@ function SetupScreen(props: {
 
         <button
           onClick={props.onStart}
-          className="w-full rounded-xl bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-3 text-sm font-semibold glow"
+          className="w-full rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-3 text-sm font-semibold glow"
         >
           Eğitim mağazamı aç
         </button>
@@ -1038,7 +1038,7 @@ function Storefront({ state }: { state: SimState }) {
   const shown = live.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className="rounded-2xl border border-white/10 overflow-hidden bg-[oklch(0.16_0.02_265)]">
+    <div className="rounded-2xl border border-white/10 overflow-hidden bg-[var(--surface)]">
       {/* fake shop chrome */}
       <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-3 py-2">
         <span className="flex gap-1.5">
@@ -1071,7 +1071,7 @@ function Storefront({ state }: { state: SimState }) {
         </div>
       </div>
 
-      <div className="border-b border-white/10 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/15 px-4 py-5">
+      <div className="border-b border-white/10 bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/15 px-4 py-5">
         <div className="text-lg font-bold">Free shipping over $50 · 30-day returns</div>
         <p className="text-xs text-muted-foreground mt-1">
           This is exactly what your customers would see. Stock, price and ratings update as you
@@ -1423,7 +1423,7 @@ function AdsView({
             <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                  <FlaskConical size={12} className="text-[oklch(0.72_0.18_265)]" /> Kreatif A/B
+                  <FlaskConical size={12} className="text-[var(--brand)]" /> Kreatif A/B
                   testi
                   {!!(p.cvrBonus ?? 0) && (
                     <b className="text-emerald-300">
@@ -1465,7 +1465,7 @@ function AdsView({
                   step={0.5}
                   value={p.price}
                   onChange={(e) => onPatch(p.id, { price: Number(e.target.value) })}
-                  className="mt-2 w-full accent-[oklch(0.68_0.20_265)]"
+                  className="mt-2 w-full accent-[var(--brand)]"
                 />
                 <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
                   <span>cost {money(p.unitCost)}</span>
@@ -1490,7 +1490,7 @@ function AdsView({
                   step={5}
                   value={p.adBudget}
                   onChange={(e) => onPatch(p.id, { adBudget: Number(e.target.value) })}
-                  className="mt-2 w-full accent-[oklch(0.66_0.24_305)]"
+                  className="mt-2 w-full accent-[var(--brand-2)]"
                 />
                 <div className="mt-2 text-[11px] text-muted-foreground">
                   ≈ {clicks.toFixed(0)} clicks/day → ≈ {expected.toFixed(1)} orders/day → est. daily
@@ -1569,7 +1569,7 @@ function Analytics({ state }: { state: SimState }) {
               className="flex-1 flex flex-col justify-end items-center gap-0.5 group relative"
             >
               <div
-                className="w-full rounded-t bg-[oklch(0.68_0.20_265)]/70"
+                className="w-full rounded-t bg-[var(--brand)]/70"
                 style={{ height: `${(d.revenue / max) * 100}%` }}
               />
               <div
@@ -1672,7 +1672,7 @@ function DecisionModal({ id, onChoose }: { id: string; onChoose: (i: number) => 
             <button
               key={i}
               onClick={() => onChoose(i)}
-              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 hover:bg-white/10 hover:border-[oklch(0.68_0.20_265)]/50 transition card-lift"
+              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 hover:bg-white/10 hover:border-[var(--brand)]/50 transition card-lift"
             >
               <div className="text-sm font-semibold">{o.label}</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">{o.detail}</div>
@@ -1712,7 +1712,7 @@ function GrowthView({
     <div className="space-y-4">
       <div className="premium-card rounded-2xl p-4 md:p-5">
         <div className="flex items-center gap-2">
-          <Rocket size={15} className="text-[oklch(0.72_0.18_265)]" />
+          <Rocket size={15} className="text-[var(--brand)]" />
           <h3 className="text-sm font-bold">Mağaza yükseltmeleri</h3>
           <span className="text-[11px] text-muted-foreground">
             Kalıcı etki — bir kez alınır, sezon boyunca çalışır.
@@ -1800,7 +1800,7 @@ function GrowthView({
 
         <div className="premium-card rounded-2xl p-4 md:p-5">
           <div className="flex items-center gap-2">
-            <Mail size={15} className="text-[oklch(0.72_0.18_265)]" />
+            <Mail size={15} className="text-[var(--brand)]" />
             <h3 className="text-sm font-bold">E-posta listesi & kampanya</h3>
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
@@ -1815,7 +1815,7 @@ function GrowthView({
             <div className="flex-1">
               <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
                   style={{ width: `${Math.min(100, (subs / 400) * 100)}%` }}
                 />
               </div>
@@ -1827,7 +1827,7 @@ function GrowthView({
           <button
             disabled={!canCampaign}
             onClick={onCampaign}
-            className="mt-3 w-full rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold glow disabled:opacity-40"
+            className="mt-3 w-full rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-2 text-xs font-semibold glow disabled:opacity-40"
           >
             {cd > 0
               ? `${cd} gün sonra gönderilebilir`
@@ -1887,7 +1887,7 @@ function MarketView({ state }: { state: SimState }) {
               title={`${r.name} %${(r.share * 100).toFixed(0)}`}
               className={
                 r.you
-                  ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+                  ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
                   : "bg-white/18 border-l border-black/30"
               }
               style={{ width: `${r.share * 100}%` }}
@@ -1898,7 +1898,7 @@ function MarketView({ state }: { state: SimState }) {
           {rows.map((r) => (
             <div
               key={r.key}
-              className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${r.you ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : "border-white/10 bg-white/5"}`}
+              className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${r.you ? "border-[var(--brand)]/40 bg-[var(--brand)]/10" : "border-white/10 bg-white/5"}`}
             >
               <span className="text-base">{r.emoji}</span>
               <b>{r.name}</b>
@@ -1919,11 +1919,11 @@ function MarketView({ state }: { state: SimState }) {
 
       <div className="premium-card rounded-xl p-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <Gem size={14} className="text-[oklch(0.78_0.16_265)]" /> Marka değeri {brand}/100
+          <Gem size={14} className="text-[var(--brand)]" /> Marka değeri {brand}/100
         </h3>
         <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all"
             style={{ width: `${brand}%` }}
           />
         </div>
@@ -1974,7 +1974,7 @@ function MarketView({ state }: { state: SimState }) {
             return (
               <div
                 key={c.title}
-                className={`rounded-xl border px-3 py-2 text-xs ${active ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10" : past ? "border-white/10 bg-white/5 opacity-50" : "border-white/10 bg-white/5"}`}
+                className={`rounded-xl border px-3 py-2 text-xs ${active ? "border-[var(--brand)]/40 bg-[var(--brand)]/10" : past ? "border-white/10 bg-white/5 opacity-50" : "border-white/10 bg-white/5"}`}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <b>{c.title}</b>
@@ -2056,7 +2056,7 @@ function OpsView({
             step={5}
             value={budget}
             onChange={(e) => onSupportBudget(Number(e.target.value))}
-            className="mt-2 w-full accent-[oklch(0.68_0.20_265)]"
+            className="mt-2 w-full accent-[var(--brand)]"
           />
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
             <span>

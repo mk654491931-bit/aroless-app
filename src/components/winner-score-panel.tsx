@@ -22,7 +22,7 @@ const barColor = (v: number) =>
   v >= 75
     ? "bg-emerald-400"
     : v >= 55
-      ? "bg-[var(--brand,oklch(0.68_0.20_265))]"
+      ? "bg-[var(--brand,var(--brand))]"
       : v >= 40
         ? "bg-amber-400"
         : "bg-rose-400";
@@ -39,7 +39,7 @@ export function WinnerBadge({
     score >= 80
       ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
       : score >= 65
-        ? "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10 text-[oklch(0.85_0.15_265)]"
+        ? "border-[var(--brand)]/40 bg-[var(--brand)]/10 text-[var(--brand)]"
         : score >= 50
           ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
           : "border-rose-500/40 bg-rose-500/10 text-rose-300";
@@ -104,7 +104,7 @@ function ComponentRow({ c }: { c: ScoreComponent }) {
         <div className="mt-2 space-y-1.5">
           {c.formula && (
             <div className="flex items-start gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-muted-foreground">
-              <Sigma size={10} className="mt-0.5 shrink-0 text-[oklch(0.78_0.16_265)]" />
+              <Sigma size={10} className="mt-0.5 shrink-0 text-[var(--brand)]" />
               <span>
                 <b className="text-foreground">Hesap:</b> {c.formula}
               </span>
@@ -136,7 +136,7 @@ function ComponentRow({ c }: { c: ScoreComponent }) {
                       target="_blank"
                       rel="noopener noreferrer nofollow"
                       onClick={(evt) => evt.stopPropagation()}
-                      className="inline-flex items-center gap-0.5 text-[oklch(0.82_0.15_265)] hover:underline"
+                      className="inline-flex items-center gap-0.5 text-[var(--brand)] hover:underline"
                     >
                       kanıt <ExternalLink size={9} />
                     </a>

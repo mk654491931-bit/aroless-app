@@ -83,11 +83,11 @@ export function HuggingFacePanel() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="HF_TOKEN (hf_…) — leave empty to use the server token"
-          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.68_0.20_265)]"
+          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[var(--brand)]"
         />
         <button
           onClick={save}
-          className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2.5 text-sm font-semibold text-white glow"
+          className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2.5 text-sm font-semibold text-white glow"
         >
           Save & Test
         </button>

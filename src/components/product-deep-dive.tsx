@@ -134,7 +134,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
   return (
     <div className="mt-3 space-y-2">
-      <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)]">
+      <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-[var(--brand)]">
         <span className="flex items-center gap-1.5">
           <Activity size={11} /> Derin analiz
         </span>
@@ -521,7 +521,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           <div className="max-h-72 overflow-y-auto pr-1 space-y-2">
             {p.launch_roadmap.map((ph, i) => (
               <div key={i} className="relative pl-4 border-l border-white/10 pb-2 last:pb-0">
-                <span className="absolute -left-[4px] top-1 h-2 w-2 rounded-full bg-[oklch(0.68_0.20_265)]" />
+                <span className="absolute -left-[4px] top-1 h-2 w-2 rounded-full bg-[var(--brand)]" />
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">{ph.phase}</span>
                   <span className="text-[10px] text-muted-foreground">{trDuration(ph.days)}</span>
@@ -627,7 +627,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   {c.format}
                 </span>
               </div>
-              <div className="text-[oklch(0.85_0.15_265)]">“{c.hook}”</div>
+              <div className="text-[var(--brand)]">“{c.hook}”</div>
               <ol className="space-y-0.5 list-decimal list-inside text-muted-foreground">
                 {(c.script_beats ?? []).map((b, j) => (
                   <li key={j}>{b}</li>
@@ -659,7 +659,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
       {p.financial_projection && p.financial_projection.length > 0 && (
         <Block icon={<LineChart size={11} />} title="90 günlük finansal projeksiyon" defaultOpen>
           <div className="max-h-56 overflow-y-auto pr-1">
-            <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground border-b border-white/10 pb-1 sticky top-0 bg-[oklch(0.19_0.03_265)]">
+            <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground border-b border-white/10 pb-1 sticky top-0 bg-[var(--surface)]">
               <span>Ay</span>
               <span className="text-right">Adet</span>
               <span className="text-right">Ciro</span>
@@ -689,7 +689,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
             const m = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
             return (
               <div className="grid grid-cols-5 gap-1 text-[11px] font-semibold border-t border-white/15 mt-1 pt-1.5">
-                <span className="text-[oklch(0.85_0.15_265)]">Toplam</span>
+                <span className="text-[var(--brand)]">Toplam</span>
                 <span className="text-right tabular-nums">{t.units}</span>
                 <span className="text-right tabular-nums">{m(t.rev)}</span>
                 <span className="text-right tabular-nums text-rose-300/90">{m(t.ad)}</span>

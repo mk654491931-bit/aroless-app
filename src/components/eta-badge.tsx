@@ -36,15 +36,15 @@ export function EtaBadge({ running, etaMs }: { running: boolean; etaMs: number }
     <span
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold backdrop-blur-xl transition-all duration-500 ${
         running
-          ? "border-[oklch(0.68_0.20_265)]/50 bg-[oklch(0.68_0.20_265)]/12 text-[oklch(0.88_0.10_265)] glow"
+          ? "border-[var(--brand)]/50 bg-[var(--brand)]/12 text-[var(--brand)] glow"
           : "border-emerald-400/45 bg-emerald-400/10 text-emerald-200"
       }`}
     >
       {running ? (
         <>
           <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-            <span className="absolute inset-0 rounded-full border border-[oklch(0.78_0.20_305)]/70 border-t-transparent animate-spin" />
-            <span className="absolute inset-0 rounded-full bg-[oklch(0.78_0.20_305)]/40 animate-ping" />
+            <span className="absolute inset-0 rounded-full border border-[var(--brand-2)]/70 border-t-transparent animate-spin" />
+            <span className="absolute inset-0 rounded-full bg-[var(--brand-2)]/40 animate-ping" />
           </span>
           <Cpu size={11} className="opacity-80" />
           {t("ui.eta_running")} ~{remaining.toFixed(1)}s

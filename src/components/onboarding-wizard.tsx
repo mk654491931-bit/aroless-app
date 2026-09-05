@@ -147,7 +147,7 @@ export function OnboardingWizard({
       <div className="glass w-full max-w-xl rounded-2xl p-6">
         <div className="flex items-start justify-between">
           <div className="inline-flex items-center gap-2">
-            <Rocket size={18} className="text-[oklch(0.75_0.18_265)]" />
+            <Rocket size={18} className="text-[var(--brand)]" />
             <span className="text-sm font-semibold uppercase tracking-wide">Hızlı kurulum</span>
           </div>
           <button

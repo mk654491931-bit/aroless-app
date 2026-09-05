@@ -100,7 +100,7 @@ export function ConsensusPanel({ consensus }: { consensus: ConsensusResult }) {
           role="Growth angles"
           icon={<TrendingUp size={16} />}
           verdict={consensus.agent1}
-          accent="text-[oklch(0.75_0.18_265)]"
+          accent="text-[var(--brand)]"
         />
         <AgentCard
           title="Agent 2 — Risk & Audit"

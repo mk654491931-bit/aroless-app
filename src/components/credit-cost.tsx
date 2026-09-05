@@ -4,7 +4,7 @@ type Kind = "credit" | "sim" | "free";
 
 const STYLES: Record<Kind, string> = {
   credit: "border-[oklch(0.85_0.18_90)]/40 bg-[oklch(0.85_0.18_90)]/10 text-[oklch(0.88_0.16_90)]",
-  sim: "border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/10 text-[oklch(0.86_0.10_265)]",
+  sim: "border-[var(--brand)]/40 bg-[var(--brand)]/10 text-[var(--brand)]",
   free: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
 };
 

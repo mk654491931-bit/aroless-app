@@ -93,7 +93,7 @@ function ComparePage() {
       <header className="border-b border-white/10 glass sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
             </div>
             <div className="font-bold">Compare Products</div>
@@ -117,7 +117,7 @@ function ComparePage() {
             <button
               onClick={runCompare}
               disabled={selectedIds.length < 2 || busy}
-              className="text-xs rounded-lg bg-[oklch(0.68_0.20_265)] text-white px-4 py-2 disabled:opacity-50 flex items-center gap-1.5"
+              className="text-xs rounded-lg bg-[var(--brand)] text-white px-4 py-2 disabled:opacity-50 flex items-center gap-1.5"
             >
               {busy ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
               Compare
@@ -142,12 +142,12 @@ function ComparePage() {
                 <button
                   key={f.id}
                   onClick={() => toggle(f.id)}
-                  className={`text-left rounded-xl border p-3 transition-colors ${selected ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                  className={`text-left rounded-xl border p-3 transition-colors ${selected ? "border-[var(--brand)] bg-[var(--brand)]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-medium text-sm truncate">{f.name}</div>
                     <div
-                      className={`h-5 w-5 rounded border flex items-center justify-center ${selected ? "bg-[oklch(0.68_0.20_265)] border-[oklch(0.68_0.20_265)]" : "border-white/30"}`}
+                      className={`h-5 w-5 rounded border flex items-center justify-center ${selected ? "bg-[var(--brand)] border-[var(--brand)]" : "border-white/30"}`}
                     >
                       {selected && <Check size={12} className="text-white" />}
                     </div>
@@ -164,7 +164,7 @@ function ComparePage() {
         {compareData && compareData.length > 0 && (
           <div className="space-y-4">
             {summary && (
-              <div className="glass rounded-2xl p-5 border-l-4 border-[oklch(0.68_0.20_265)]">
+              <div className="glass rounded-2xl p-5 border-l-4 border-[var(--brand)]">
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles size={16} />
                   <h2 className="font-semibold">AI Verdict</h2>

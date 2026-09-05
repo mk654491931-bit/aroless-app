@@ -62,7 +62,7 @@ export function DeepSearchPanel({
           onClick={() => setOpen((o) => !o)}
           className="flex flex-1 items-center gap-2 text-left text-sm font-medium"
         >
-          <Radar size={14} className="text-[oklch(0.75_0.18_265)]" />
+          <Radar size={14} className="text-[var(--brand)]" />
           Derin arama
           <span className="text-[11px] font-normal text-muted-foreground">
             · {DEPTHS.find((d) => d.id === value.depth)?.label}
@@ -95,7 +95,7 @@ export function DeepSearchPanel({
                   onClick={() => set("depth", d.id)}
                   className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
                     value.depth === d.id
-                      ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground"
+                      ? "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 text-foreground"
                       : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -161,7 +161,7 @@ export function DeepSearchPanel({
                 className={inputCls}
               >
                 {SOURCING.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-[oklch(0.20_0.035_265)]">
+                  <option key={s.id} value={s.id} className="bg-[var(--surface)]">
                     {s.label}
                   </option>
                 ))}
@@ -186,10 +186,10 @@ export function DeepSearchPanel({
                 }
                 className={inputCls}
               >
-                <option value="any" className="bg-[oklch(0.20_0.035_265)]">
+                <option value="any" className="bg-[var(--surface)]">
                   Farketmez
                 </option>
-                <option value="low" className="bg-[oklch(0.20_0.035_265)]">
+                <option value="low" className="bg-[var(--surface)]">
                   Sadece düşük rekabet
                 </option>
               </select>
@@ -200,13 +200,13 @@ export function DeepSearchPanel({
                 onChange={(e) => set("novelty", e.target.value as DeepSearchOptions["novelty"])}
                 className={inputCls}
               >
-                <option value="any" className="bg-[oklch(0.20_0.035_265)]">
+                <option value="any" className="bg-[var(--surface)]">
                   Farketmez
                 </option>
-                <option value="fresh" className="bg-[oklch(0.20_0.035_265)]">
+                <option value="fresh" className="bg-[var(--surface)]">
                   Yeni yükselen (son 30-60 gün)
                 </option>
-                <option value="proven" className="bg-[oklch(0.20_0.035_265)]">
+                <option value="proven" className="bg-[var(--surface)]">
                   Kanıtlanmış satıcı
                 </option>
               </select>
@@ -219,7 +219,7 @@ export function DeepSearchPanel({
 }
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]";
+  "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]";
 
 function Label({ children }: { children: React.ReactNode; icon?: boolean }) {
   return (

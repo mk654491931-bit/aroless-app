@@ -91,10 +91,10 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
   return (
     <div className="fixed z-[60]" style={{ left: pos.x, top: pos.y }}>
       {open && (
-        <div className="absolute bottom-16 right-0 w-[330px] max-w-[85vw] rounded-2xl border border-white/10 bg-[oklch(0.18_0.03_265)]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+        <div className="absolute bottom-16 right-0 w-[330px] max-w-[85vw] rounded-2xl border border-white/10 bg-[var(--surface)]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
             <span className="text-xs font-semibold flex items-center gap-1.5">
-              <ArolessMark size={15} className="text-[oklch(0.78_0.16_265)]" /> Aroless Co-Pilot
+              <ArolessMark size={15} className="text-[var(--brand)]" /> Aroless Co-Pilot
             </span>
             <button
               onClick={() => setOpen(false)}
@@ -114,7 +114,7 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
             {msgs.map((m, i) => (
               <div
                 key={i}
-                className={`rounded-lg px-2.5 py-1.5 ${m.role === "user" ? "bg-white/10 ml-6" : "bg-[oklch(0.68_0.20_265)]/15 mr-6"}`}
+                className={`rounded-lg px-2.5 py-1.5 ${m.role === "user" ? "bg-white/10 ml-6" : "bg-[var(--brand)]/15 mr-6"}`}
               >
                 {m.text}
               </div>
@@ -141,11 +141,11 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
               onChange={(e) => setInput(e.target.value)}
               placeholder="Sorunu yaz…"
               maxLength={1000}
-              className="flex-1 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="flex-1 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
             />
             <button
               type="submit"
-              className="p-2 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white"
+              className="p-2 rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white"
               aria-label="Gönder"
             >
               <Send size={13} />
@@ -157,7 +157,7 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className="h-14 w-14 rounded-full bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white shadow-xl glow grid place-items-center cursor-grab active:cursor-grabbing touch-none select-none"
+        className="h-14 w-14 rounded-full bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] text-white shadow-xl glow grid place-items-center cursor-grab active:cursor-grabbing touch-none select-none"
         aria-label="AI Co-Pilot"
         title="Sürükleyebilirsin · tıkla ve sohbet et"
       >

@@ -100,7 +100,7 @@ export function AdminPromoCodes() {
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-mono uppercase outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-mono uppercase outline-none focus:border-[var(--brand)]"
               placeholder="VLRXXXXXX"
               required
             />
@@ -125,7 +125,7 @@ export function AdminPromoCodes() {
             max={100}
             value={pct}
             onChange={(e) => setPct(Number(e.target.value))}
-            className="w-full accent-[oklch(0.68_0.20_265)]"
+            className="w-full accent-[var(--brand)]"
           />
         </label>
 
@@ -136,7 +136,7 @@ export function AdminPromoCodes() {
             min={1}
             value={maxUses}
             onChange={(e) => setMaxUses(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             placeholder="∞"
           />
         </label>
@@ -147,14 +147,14 @@ export function AdminPromoCodes() {
             type="date"
             value={expires}
             onChange={(e) => setExpires(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
           />
         </label>
 
         <button
           type="submit"
           disabled={create.isPending}
-          className="self-end rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="self-end rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {create.isPending ? (
             <Loader2 className="mx-auto animate-spin" size={16} />
@@ -195,7 +195,7 @@ export function AdminPromoCodes() {
                   <td className="px-5 py-3 font-mono font-semibold">
                     <button
                       onClick={() => copy(p.code)}
-                      className="inline-flex items-center gap-1.5 hover:text-[oklch(0.86_0.10_265)]"
+                      className="inline-flex items-center gap-1.5 hover:text-[var(--brand)]"
                       title="Kopyala"
                     >
                       {p.code}{" "}

@@ -50,7 +50,7 @@ export function TrendAnalysisModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[oklch(0.18_0.03_265)] p-5 shadow-2xl"
+        className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[var(--surface)] p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -84,7 +84,7 @@ export function TrendAnalysisModal({
         {data && (
           <div className="mt-4 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-1 text-sm font-bold text-white">
+              <span className="rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-1 text-sm font-bold text-white">
                 Hibrit Skor {data.hybrid.calculated_score}/100
               </span>
               {badge && (
@@ -155,7 +155,7 @@ export function TrendAnalysisModal({
             )}
 
             {data.ai_comment && (
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[oklch(0.68_0.20_265)]/10 to-transparent p-3">
+              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[var(--brand)]/10 to-transparent p-3">
                 <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold">
                   <Bot size={13} /> AI Yorumu (4 motorun ortak kararı)
                 </p>

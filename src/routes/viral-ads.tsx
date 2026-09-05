@@ -158,7 +158,7 @@ function ViralAdsPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="text-center relative">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/10 px-3 py-1 text-[11px] font-semibold text-[oklch(0.85_0.15_265)] mb-4">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--brand)] mb-4">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
@@ -197,7 +197,7 @@ function ViralAdsPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search titles, channels, niches..."
-              className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
             />
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -225,7 +225,7 @@ function ViralAdsPage() {
                   setPlatform("");
                   setNiche("");
                 }}
-                className="text-[oklch(0.85_0.15_265)] hover:underline"
+                className="text-[var(--brand)] hover:underline"
               >
                 Clear filters
               </button>
@@ -252,7 +252,7 @@ function ViralAdsPage() {
 
         {!adsQ.isLoading && !adsQ.isError && filtered.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-16">
-            <Megaphone className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
+            <Megaphone className="mx-auto mb-3 text-[var(--brand)]" />
             No viral ads match your filters.
           </div>
         )}
@@ -274,7 +274,7 @@ function ViralAdsPage() {
 function AdCard({ ad, onPlay }: { ad: LiveAd; onPlay: () => void }) {
   const engagement = ad.views > 0 ? Math.round((ad.likes / ad.views) * 100) : 0;
   return (
-    <article className="group glass rounded-xl overflow-hidden border border-transparent hover:border-[oklch(0.68_0.20_265)]/50 hover:shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.45)] transition-all flex flex-col">
+    <article className="group glass rounded-xl overflow-hidden border border-transparent hover:border-[var(--brand)]/50 hover:shadow-[0_20px_60px_-20px_color-mix(in_oklab,var(--brand)_45%,transparent)] transition-all flex flex-col">
       <button onClick={onPlay} className="relative aspect-video overflow-hidden bg-black">
         {ad.thumbnail && (
           <img
@@ -302,15 +302,15 @@ function AdCard({ ad, onPlay }: { ad: LiveAd; onPlay: () => void }) {
       </button>
 
       <div className="p-4 flex-1 flex flex-col">
-        <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold">
+        <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] mb-1 font-semibold">
           {ad.niche}
         </div>
         <h3 className="font-bold text-[15px] leading-snug line-clamp-2">{ad.title}</h3>
         <div className="text-xs text-muted-foreground mt-1 truncate">{ad.channel}</div>
 
         {ad.hook_script && (
-          <div className="mt-3 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/10 to-[oklch(0.66_0.24_305)]/5 border border-[oklch(0.68_0.20_265)]/20 p-2.5">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 flex items-center gap-1">
+          <div className="mt-3 rounded-lg bg-gradient-to-br from-[var(--brand)]/10 to-[var(--brand-2)]/5 border border-[var(--brand)]/20 p-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] mb-1 flex items-center gap-1">
               <Play size={10} /> Hook
             </div>
             <p className="text-xs leading-relaxed line-clamp-2">{ad.hook_script}</p>
@@ -332,7 +332,7 @@ function AdCard({ ad, onPlay }: { ad: LiveAd; onPlay: () => void }) {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             onClick={onPlay}
-            className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] hover:brightness-110 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 text-white"
+            className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] hover:brightness-110 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 text-white"
           >
             <Play size={12} fill="currentColor" /> Watch
           </button>
@@ -368,7 +368,7 @@ function VideoModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
       >
         <div className="flex items-start justify-between p-4 border-b border-white/10">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] font-semibold">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] font-semibold">
               {ad.niche} · {ad.platform}
             </div>
             <h3 className="font-bold text-base leading-tight mt-0.5 truncate">{ad.title}</h3>
@@ -402,7 +402,7 @@ function VideoModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
         </div>
         {ad.hook_script && (
           <div className="p-4 border-t border-white/10">
-            <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1 font-semibold flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--brand)] mb-1 font-semibold flex items-center gap-1">
               <Play size={10} /> Hook
             </div>
             <p className="text-sm">{ad.hook_script}</p>
@@ -432,13 +432,13 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)] appearance-none"
+        className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[var(--brand)] appearance-none"
       >
-        <option value="" className="bg-[oklch(0.20_0.035_265)]">
+        <option value="" className="bg-[var(--surface)]">
           All {label}s
         </option>
         {options.map((o) => (
-          <option key={o} value={o} className="bg-[oklch(0.20_0.035_265)]">
+          <option key={o} value={o} className="bg-[var(--surface)]">
             {o}
           </option>
         ))}
@@ -457,9 +457,9 @@ function StatCard({
   value: string;
 }) {
   return (
-    <div className="glass rounded-xl p-3 flex items-center gap-3 hover:border-[oklch(0.68_0.20_265)]/40 border border-transparent transition">
-      <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/15 flex items-center justify-center">
-        <Icon size={16} className="text-[oklch(0.85_0.15_265)]" />
+    <div className="glass rounded-xl p-3 flex items-center gap-3 hover:border-[var(--brand)]/40 border border-transparent transition">
+      <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-[var(--brand)]/25 to-[var(--brand-2)]/15 flex items-center justify-center">
+        <Icon size={16} className="text-[var(--brand)]" />
       </div>
       <div>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>

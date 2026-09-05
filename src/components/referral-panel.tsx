@@ -49,7 +49,7 @@ export function ReferralPanel() {
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
-        <Gift size={18} className="text-[oklch(0.75_0.18_265)]" />
+        <Gift size={18} className="text-[var(--brand)]" />
         <h2 className="font-semibold">Arkadaşını davet et</h2>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -118,10 +118,10 @@ export function ReferralPanel() {
 
           <Link
             to="/partner"
-            className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[oklch(0.68_0.20_265)]/30 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/15 to-[oklch(0.66_0.24_305)]/15 px-4 py-3 text-sm hover:from-[oklch(0.68_0.20_265)]/25 hover:to-[oklch(0.66_0.24_305)]/25"
+            className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[var(--brand)]/30 bg-gradient-to-r from-[var(--brand)]/15 to-[var(--brand-2)]/15 px-4 py-3 text-sm hover:from-[var(--brand)]/25 hover:to-[var(--brand-2)]/25"
           >
             <span className="flex items-center gap-2">
-              <Megaphone size={15} className="text-[oklch(0.75_0.18_265)]" />
+              <Megaphone size={15} className="text-[var(--brand)]" />
               <span>
                 <b>Affiliate Partner Programı</b>
                 <span className="block text-[11px] text-muted-foreground">

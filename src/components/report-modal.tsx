@@ -170,7 +170,7 @@ export function ReportModal({
             {product.target_audience}
           </Section>
           <Section icon={TrendingUp} title={t("report.market_demand")}>
-            <ul className="space-y-1.5 list-disc list-inside marker:text-[oklch(0.75_0.18_265)]">
+            <ul className="space-y-1.5 list-disc list-inside marker:text-[var(--brand)]">
               {(product.ad_angles || []).map((a, i) => (
                 <li key={i}>{a}</li>
               ))}
@@ -197,7 +197,7 @@ export function ReportModal({
             {product.platform_strategy}
           </Section>
           <Section icon={ShieldAlert} title={t("report.hooks")}>
-            <ol className="space-y-1.5 list-decimal list-inside marker:text-[oklch(0.75_0.18_265)]">
+            <ol className="space-y-1.5 list-decimal list-inside marker:text-[var(--brand)]">
               {(product.ad_angles || []).map((a, i) => (
                 <li key={i}>{a}</li>
               ))}
@@ -207,10 +207,10 @@ export function ReportModal({
 
         <AiDisclaimer />
 
-        <div className="mt-6 flex flex-wrap gap-2 sticky bottom-0 -mx-6 md:-mx-8 px-6 md:px-8 pt-4 pb-1 border-t border-white/10 bg-gradient-to-t from-[oklch(0.17_0.03_265)] to-transparent">
+        <div className="mt-6 flex flex-wrap gap-2 sticky bottom-0 -mx-6 md:-mx-8 px-6 md:px-8 pt-4 pb-1 border-t border-white/10 bg-gradient-to-t from-[var(--surface)] to-transparent">
           <button
             onClick={onPdf}
-            className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2 text-sm font-semibold text-white glow flex items-center gap-2"
+            className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white glow flex items-center gap-2"
           >
             <Download size={14} /> {t("export_pdf")}
           </button>
@@ -244,7 +244,7 @@ function Section({
   return (
     <section>
       <h3 className="font-semibold mb-2 flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-        <Icon size={14} className="text-[oklch(0.75_0.18_265)]" /> {title}
+        <Icon size={14} className="text-[var(--brand)]" /> {title}
       </h3>
       <div className="text-sm leading-relaxed">{children}</div>
     </section>

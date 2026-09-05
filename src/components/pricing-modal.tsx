@@ -123,7 +123,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           </p>
           <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
-              <Ticket size={13} className="text-[oklch(0.75_0.18_265)]" />
+              <Ticket size={13} className="text-[var(--brand)]" />
               <input
                 value={promo}
                 onChange={(e) => {
@@ -160,15 +160,15 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
             return (
               <div
                 key={p.id}
-                className={`rounded-xl p-6 border ${p.highlight ? "border-[oklch(0.68_0.20_265)] glow bg-linear-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}
+                className={`rounded-xl p-6 border ${p.highlight ? "border-[var(--brand)] glow bg-linear-to-b from-white/5 to-transparent" : "border-white/10 bg-white/5"}`}
               >
                 {p.highlight && (
-                  <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] mb-2">
+                  <div className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-linear-to-r from-[var(--brand)] to-[var(--brand-2)] mb-2">
                     Most popular
                   </div>
                 )}
                 <div className="flex items-center gap-2 mb-1">
-                  <Icon size={18} className="text-[oklch(0.75_0.18_265)]" />
+                  <Icon size={18} className="text-[var(--brand)]" />
                   <h3 className="text-lg font-bold">{p.label}</h3>
                 </div>
                 <div className="mb-1 flex items-baseline gap-2">
@@ -195,7 +195,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 <ul className="space-y-2 mb-6">
                   {p.features.map((f) => (
                     <li key={f} className="text-sm flex gap-2">
-                      <Check size={16} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" />
+                      <Check size={16} className="text-[var(--brand)] shrink-0 mt-0.5" />
                       <span>{f}</span>
                     </li>
                   ))}
@@ -204,7 +204,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                   onClick={() => subscribe(p.id)}
                   disabled={loading !== null}
 
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
+                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
                 >
                   {loading === p.id
                     ? "Ödeme sayfası açılıyor…"

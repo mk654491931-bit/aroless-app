@@ -577,7 +577,7 @@ function AuthPage() {
 
               {/* Enterprise tier badge */}
               <div className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-foreground backdrop-blur elite-glow">
-                <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.80_0.14_200)]" />
+                <BadgeCheck className="h-3.5 w-3.5 text-[var(--accent-active)]" />
                 AI ELITE · ENTERPRISE
               </div>
 
@@ -768,7 +768,7 @@ function AuthPage() {
                             toast.info("Biometric sign-in is coming to Enterprise tier.");
                           }}
                           aria-label="Biometric sign in (fingerprint / face)"
-                          className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
+                          className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[var(--accent-active)]"
                         >
                           {bioRipple.layer}
                           <Fingerprint

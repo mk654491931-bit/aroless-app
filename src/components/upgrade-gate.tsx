@@ -56,7 +56,7 @@ export function LockedGate({
           <Lock size={12} /> {label}
         </span>
         <span className="text-[11px] text-white/70">{note}</span>
-        <span className="mt-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-1.5 text-[11px] font-semibold text-white">
+        <span className="mt-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-1.5 text-[11px] font-semibold text-white">
           <Sparkles size={11} /> Unlock now
         </span>
       </div>
@@ -83,7 +83,7 @@ export function LockedPanel({
       <p className="mt-2 text-sm text-muted-foreground">{note}</p>
       <button
         onClick={onUpgrade}
-        className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-4 py-2 text-sm font-semibold text-white"
+        className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-2 text-sm font-semibold text-white"
       >
         <Sparkles size={14} /> Unlock now
       </button>

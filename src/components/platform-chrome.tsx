@@ -124,10 +124,10 @@ export function HardModeBar({ value, onChange }: { value: string; onChange: (v: 
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+        className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
       >
         {HARD_SCENARIOS.map((s) => (
-          <option key={s.id} value={s.id} className="bg-[oklch(0.20_0.035_265)]">
+          <option key={s.id} value={s.id} className="bg-[var(--surface)]">
             {s.label}
           </option>
         ))}

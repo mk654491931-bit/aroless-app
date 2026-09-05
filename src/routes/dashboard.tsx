@@ -58,7 +58,7 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const COLORS = [
-  "oklch(0.68 0.20 265)",
+  "var(--brand)",
   "oklch(0.66 0.24 305)",
   "oklch(0.75 0.18 200)",
   "oklch(0.78 0.16 90)",
@@ -420,7 +420,7 @@ function DashboardPage() {
                         borderRadius: 8,
                       }}
                     />
-                    <Bar dataKey="count" fill="oklch(0.68 0.20 265)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="var(--brand)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -459,7 +459,7 @@ function DashboardPage() {
             </ul>
             <Link
               to="/notifications"
-              className="mt-3 inline-block text-xs text-[oklch(0.85_0.15_265)] hover:underline"
+              className="mt-3 inline-block text-xs text-[var(--brand)] hover:underline"
             >
               View all notifications →
             </Link>
@@ -505,8 +505,8 @@ function Kpi({
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 flex items-center justify-center">
-          <Icon size={14} className="text-[oklch(0.85_0.15_265)]" />
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[var(--brand)]/25 to-[var(--brand-2)]/25 flex items-center justify-center">
+          <Icon size={14} className="text-[var(--brand)]" />
         </div>
       </div>
       <div className="mt-3 text-2xl font-bold">{value.toLocaleString()}</div>

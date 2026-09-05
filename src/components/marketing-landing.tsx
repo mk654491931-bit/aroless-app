@@ -237,7 +237,7 @@ function AnimatedStat({ value, label }: { value: string; label: string }) {
 function SectionHead({ children, sub }: { children: React.ReactNode; sub?: string }) {
   return (
     <div className="relative text-center">
-      <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto h-40 w-[min(500px,80%)] rounded-full bg-[radial-gradient(closest-side,oklch(0.68_0.20_265/0.18),transparent)] blur-3xl" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto h-40 w-[min(500px,80%)] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--brand)_18%,transparent),transparent)] blur-3xl" />
       <h2 className="relative text-2xl font-bold md:text-3xl">{children}</h2>
       {sub && <p className="relative mx-auto mt-3 max-w-xl text-sm text-muted-foreground">{sub}</p>}
     </div>

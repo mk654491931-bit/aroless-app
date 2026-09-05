@@ -45,7 +45,7 @@ export function AccountDataPanel() {
     <div className="space-y-4">
       <div className="glass rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-1">
-          <Activity size={18} className="text-[oklch(0.75_0.18_265)]" />
+          <Activity size={18} className="text-[var(--brand)]" />
           <h2 className="font-semibold">Kredi kullanımı</h2>
         </div>
         <p className="text-sm text-muted-foreground">Son 100 işlem · toplam {totalCredits} kredi</p>

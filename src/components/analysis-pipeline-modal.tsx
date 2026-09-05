@@ -133,7 +133,7 @@ export function AnalysisPipelineModal({
       <div className="w-full max-w-4xl grid gap-4 md:grid-cols-2">
         <div className="glass rounded-2xl w-full p-6 md:p-7">
           <div className="flex items-center gap-3 mb-5">
-            <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] flex items-center justify-center">
               <Sparkles size={18} className="text-white animate-pulse" />
             </div>
             <div className="min-w-0 flex-1">
@@ -147,18 +147,18 @@ export function AnalysisPipelineModal({
               </div>
             </div>
             {engine && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[10px] font-semibold text-[oklch(0.86_0.10_265)] max-w-[9rem] truncate">
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/45 bg-[var(--brand)]/12 px-2.5 py-1 text-[10px] font-semibold text-[var(--brand)] max-w-[9rem] truncate">
                 <Cpu size={10} /> {engine}
               </span>
             )}
           </div>
           <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden mb-3">
             <div
-              className="h-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all duration-200"
+              className="h-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all duration-200"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="mb-4 flex items-center gap-2 text-xs text-[oklch(0.88_0.10_265)]">
+          <div className="mb-4 flex items-center gap-2 text-xs text-[var(--brand)]">
             <Loader2 size={12} className="animate-spin" />
             <span className="truncate">{steps[stepIdx]}</span>
           </div>
@@ -172,7 +172,7 @@ export function AnalysisPipelineModal({
                   className={`flex items-center gap-2.5 text-sm transition ${complete ? "text-foreground" : active ? "text-foreground" : "text-muted-foreground/60"}`}
                 >
                   <span
-                    className={`flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center border ${complete ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300" : active ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)]/20 animate-pulse-soft" : "border-white/10 bg-white/5"}`}
+                    className={`flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center border ${complete ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300" : active ? "border-[var(--brand)] bg-[var(--brand)]/20 animate-pulse-soft" : "border-white/10 bg-white/5"}`}
                   >
                     {complete ? (
                       <Check size={11} />
@@ -192,7 +192,7 @@ export function AnalysisPipelineModal({
         {/* RIGHT — 14-Agent AI Council live status (70% weight) */}
         <div className="glass rounded-2xl w-full p-6 md:p-7">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[var(--brand-2)] flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -214,7 +214,7 @@ export function AnalysisPipelineModal({
                     complete
                       ? "border-emerald-400/40 bg-emerald-500/10"
                       : active
-                        ? "border-[oklch(0.68_0.20_265)]/50 bg-[oklch(0.68_0.20_265)]/10 animate-pulse-soft"
+                        ? "border-[var(--brand)]/50 bg-[var(--brand)]/10 animate-pulse-soft"
                         : "border-white/10 bg-white/5 opacity-60"
                   }`}
                 >
@@ -222,7 +222,7 @@ export function AnalysisPipelineModal({
                     {complete ? (
                       <Check size={11} className="text-emerald-300" />
                     ) : active ? (
-                      <Loader2 size={11} className="animate-spin text-[oklch(0.86_0.10_265)]" />
+                      <Loader2 size={11} className="animate-spin text-[var(--brand)]" />
                     ) : (
                       <span className="text-[10px] text-muted-foreground">{i + 1}</span>
                     )}

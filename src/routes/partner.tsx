@@ -226,8 +226,8 @@ function PartnerPage() {
 
         {q.isSuccess && !aff && (
           <div className="glass rounded-2xl p-8 sm:p-12 text-center max-w-2xl mx-auto">
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25">
-              <Gift size={26} className="text-[oklch(0.85_0.15_265)]" />
+            <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-[var(--brand)]/25 to-[var(--brand-2)]/25">
+              <Gift size={26} className="text-[var(--brand)]" />
             </div>
             <h2 className="mt-5 text-xl font-bold">Henüz partner değilsiniz</h2>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -263,7 +263,7 @@ function PartnerPage() {
                 <div className="min-w-[240px] flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="font-semibold flex items-center gap-2">
-                      <Gift size={16} className="text-[oklch(0.75_0.18_265)]" /> Kişisel davet
+                      <Gift size={16} className="text-[var(--brand)]" /> Kişisel davet
                       linkin
                     </h2>
                     <StatusBadge status={aff.status === "active" ? "active" : "inactive"} />
@@ -606,13 +606,13 @@ function Kpi({
         <div
           className={`grid h-7 w-7 place-items-center rounded-lg ${
             accent
-              ? "bg-gradient-to-br from-[oklch(0.68_0.20_265)]/30 to-[oklch(0.66_0.24_305)]/30"
+              ? "bg-gradient-to-br from-[var(--brand)]/30 to-[var(--brand-2)]/30"
               : "bg-white/5"
           }`}
         >
           <Icon
             size={13}
-            className={accent ? "text-[oklch(0.85_0.15_265)]" : "text-muted-foreground"}
+            className={accent ? "text-[var(--brand)]" : "text-muted-foreground"}
           />
         </div>
       </div>

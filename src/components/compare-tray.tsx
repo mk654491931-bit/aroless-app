@@ -17,7 +17,7 @@ export function CompareTray({
   if (products.length === 0) return null;
   return (
     <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-      <div className="premium-card grain flex max-w-full flex-wrap items-center gap-2 rounded-2xl px-3 py-2 shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.6)]">
+      <div className="premium-card grain flex max-w-full flex-wrap items-center gap-2 rounded-2xl px-3 py-2 shadow-[0_20px_60px_-20px_color-mix(in_oklab,var(--brand)_60%,transparent)]">
         <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
           <Columns3 size={12} /> Karşılaştırma
         </span>
@@ -50,7 +50,7 @@ export function CompareTray({
           type="button"
           onClick={onOpen}
           disabled={products.length < 2}
-          className="rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          className="rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
         >
           Yan yana karşılaştır ({products.length})
         </button>
@@ -108,7 +108,7 @@ export function CompareModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="inline-flex items-center gap-2 text-sm font-semibold">
-            <Columns3 size={15} className="text-[oklch(0.75_0.18_265)]" />
+            <Columns3 size={15} className="text-[var(--brand)]" />
             Yan yana karşılaştırma · {products.length} ürün
           </h3>
           <button

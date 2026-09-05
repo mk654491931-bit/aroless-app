@@ -183,7 +183,7 @@ function PricingPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                    <Icon size={16} className="text-[oklch(0.75_0.18_265)]" /> {p.label}
+                    <Icon size={16} className="text-[var(--brand)]" /> {p.label}
                   </div>
                   {p.highlight && (
                     <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-bold">
@@ -208,7 +208,7 @@ function PricingPage() {
                 <ul className="mt-4 space-y-2 text-sm">
                   {p.features.map((f) => (
                     <li key={f} className="flex items-start gap-2">
-                      <Check size={15} className="mt-0.5 shrink-0 text-[oklch(0.75_0.18_265)]" />{" "}
+                      <Check size={15} className="mt-0.5 shrink-0 text-[var(--brand)]" />{" "}
                       <span className="text-muted-foreground">{f}</span>
                     </li>
                   ))}

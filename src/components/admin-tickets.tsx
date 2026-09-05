@@ -72,7 +72,7 @@ export function AdminTickets() {
                   onClick={() => save.mutate({ id: tk.id, status: s })}
                   className={`rounded-lg border px-2.5 py-1 text-xs transition ${
                     tk.status === s
-                      ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)]/20"
+                      ? "border-[var(--brand)] bg-[var(--brand)]/20"
                       : "border-white/10 hover:bg-white/10"
                   }`}
                 >
@@ -86,7 +86,7 @@ export function AdminTickets() {
                 value={notes[tk.id] ?? tk.admin_note ?? ""}
                 onChange={(e) => setNotes((n) => ({ ...n, [tk.id]: e.target.value }))}
                 placeholder="Yönetici notu"
-                className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+                className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
               />
               <button
                 disabled={save.isPending}

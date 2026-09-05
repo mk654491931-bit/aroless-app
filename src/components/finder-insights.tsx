@@ -83,7 +83,7 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
   return (
     <div className="premium-card grain mb-4 rounded-2xl p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-        <BarChart3 size={14} className="text-[oklch(0.75_0.18_265)]" />
+        <BarChart3 size={14} className="text-[var(--brand)]" />
         Sonuç özeti
         <span className="text-[11px] font-normal text-muted-foreground">
           · {products.length} ürün
@@ -109,7 +109,7 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
           <div key={labels[i]} className="flex flex-1 flex-col items-center gap-1">
             <span className="text-[10px] tabular-nums text-muted-foreground">{b}</span>
             <div
-              className="w-full rounded-t-md bg-gradient-to-t from-[oklch(0.68_0.20_265)]/30 to-[oklch(0.66_0.24_305)]/70 transition-all"
+              className="w-full rounded-t-md bg-gradient-to-t from-[var(--brand)]/30 to-[var(--brand-2)]/70 transition-all"
               style={{ height: `${8 + (b / stats.max) * 48}px` }}
             />
             <span className="text-[10px] text-muted-foreground">{labels[i]}</span>

@@ -644,11 +644,11 @@ function Dashboard() {
                 className={`hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                   engine === "default"
                     ? "border-white/15 bg-white/5 text-muted-foreground"
-                    : "border-[oklch(0.68_0.20_265)]/50 bg-[oklch(0.68_0.20_265)]/15 text-[oklch(0.86_0.10_265)] glow"
+                    : "border-[var(--brand)]/50 bg-[var(--brand)]/15 text-[var(--brand)] glow"
                 }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${engine === "default" ? "bg-emerald-400" : "bg-[oklch(0.78_0.20_305)]"} animate-pulse-soft`}
+                  className={`h-1.5 w-1.5 rounded-full ${engine === "default" ? "bg-emerald-400" : "bg-[var(--brand-2)]"} animate-pulse-soft`}
                 />
                 <Cpu size={11} className="opacity-80" />
                 {engineLabel(engine).label}
@@ -696,14 +696,14 @@ function Dashboard() {
               </Link>
               <button
                 onClick={() => setShowPricing(true)}
-                className="morph-pill rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-1.5 text-xs font-semibold glow"
+                className="morph-pill rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-1.5 text-xs font-semibold glow"
               >
                 {t("upgrade")}
               </button>
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.68_0.20_265)]/50 bg-[oklch(0.68_0.20_265)]/10 px-3 py-1.5 text-xs font-semibold"
+                  className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand)]/50 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-semibold"
                   title="Admin Dashboard"
                 >
                   <Shield size={13} className="morph-icon" /> {t("admin")}
@@ -778,7 +778,7 @@ function Dashboard() {
               {tab === "finder" && (
                 <>
                   <div className="relative text-center mb-10">
-                    <div className="pointer-events-none absolute inset-x-0 -top-16 mx-auto h-56 w-[min(680px,90%)] rounded-full bg-[radial-gradient(closest-side,oklch(0.68_0.20_265/0.28),transparent)] blur-2xl animate-float-slow" />
+                    <div className="pointer-events-none absolute inset-x-0 -top-16 mx-auto h-56 w-[min(680px,90%)] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--brand)_28%,transparent),transparent)] blur-2xl animate-float-slow" />
                     <div className="relative animate-rise-in">
                       <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
@@ -861,7 +861,7 @@ function Dashboard() {
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
                       >
                         {[
                           "Any",
@@ -875,7 +875,7 @@ function Dashboard() {
                           "Outdoor",
                           "Kitchen",
                         ].map((c) => (
-                          <option key={c} className="bg-[oklch(0.20_0.035_265)]">
+                          <option key={c} className="bg-[var(--surface)]">
                             {c}
                           </option>
                         ))}
@@ -884,7 +884,7 @@ function Dashboard() {
                         value={audience}
                         onChange={(e) => setAudience(e.target.value)}
                         placeholder={t("audience_placeholder")}
-                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
                       />
                     </div>
 
@@ -895,10 +895,10 @@ function Dashboard() {
                       <select
                         value={engine}
                         onChange={(e) => setEngine(e.target.value as EngineId)}
-                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition focus:border-[oklch(0.68_0.20_265)] hover:bg-white/10"
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition focus:border-[var(--brand)] hover:bg-white/10"
                       >
                         {ENGINES.map((e) => (
-                          <option key={e.id} value={e.id} className="bg-[oklch(0.20_0.035_265)]">
+                          <option key={e.id} value={e.id} className="bg-[var(--surface)]">
                             {e.label}
                           </option>
                         ))}
@@ -909,8 +909,8 @@ function Dashboard() {
                       </span>
 
                       {engine !== "default" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[10px] font-semibold text-[oklch(0.86_0.10_265)] glow">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.78_0.20_305)] animate-pulse-soft" />
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/45 bg-[var(--brand)]/12 px-2.5 py-1 text-[10px] font-semibold text-[var(--brand)] glow">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-2)] animate-pulse-soft" />
                           {engine === "hybrid" ? t("ui.hybrid_pill") : t("ui.hf_free")}
                         </span>
                       )}
@@ -926,7 +926,7 @@ function Dashboard() {
                           <button
                             type="button"
                             onClick={() => setRecoOpen((v) => !v)}
-                            className="normal-case tracking-normal text-[11px] inline-flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/45 bg-[oklch(0.68_0.20_265)]/12 px-2.5 py-1 text-[oklch(0.86_0.10_265)] hover:bg-[oklch(0.68_0.20_265)]/22"
+                            className="normal-case tracking-normal text-[11px] inline-flex items-center gap-1 rounded-full border border-[var(--brand)]/45 bg-[var(--brand)]/12 px-2.5 py-1 text-[var(--brand)] hover:bg-[var(--brand)]/22"
                           >
                             {countryName(effectiveCountry)} için öner
                             <ChevronDown
@@ -940,7 +940,7 @@ function Dashboard() {
                                 className="fixed inset-0 z-30"
                                 onClick={() => setRecoOpen(false)}
                               />
-                              <div className="absolute right-0 z-40 mt-1 max-h-64 w-56 overflow-auto rounded-xl border border-white/10 bg-[oklch(0.20_0.035_265)] p-1 shadow-2xl">
+                              <div className="absolute right-0 z-40 mt-1 max-h-64 w-56 overflow-auto rounded-xl border border-white/10 bg-[var(--surface)] p-1 shadow-2xl">
                                 {TARGET_COUNTRIES.map((c) => (
                                   <button
                                     key={c.code}
@@ -979,7 +979,7 @@ function Dashboard() {
                                 on
                                   ? blocked
                                     ? "border-amber-400/60 bg-amber-400/15 text-amber-200"
-                                    : "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground"
+                                    : "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 text-foreground"
                                   : blocked
                                     ? "border-white/5 bg-white/[0.02] text-muted-foreground/50 line-through"
                                     : fit === "native"
@@ -1027,7 +1027,7 @@ function Dashboard() {
                               type="button"
                               key={b}
                               onClick={() => setBudget(b)}
-                              className={`text-xs px-3 py-2 rounded-lg border text-center transition ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}
+                              className={`text-xs px-3 py-2 rounded-lg border text-center transition ${on ? "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}
                             >
                               {b}
                             </button>
@@ -1047,13 +1047,13 @@ function Dashboard() {
                         <select
                           value={targetCountry}
                           onChange={(e) => setTargetCountry(e.target.value)}
-                          className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                          className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
                         >
                           {TARGET_COUNTRIES.map((c) => (
                             <option
                               key={c.code}
                               value={c.code}
-                              className="bg-[oklch(0.20_0.035_265)]"
+                              className="bg-[var(--surface)]"
                             >
                               {c.flag} {c.label}
                             </option>
@@ -1076,7 +1076,7 @@ function Dashboard() {
                           step={5}
                           value={minScore}
                           onChange={(e) => setMinScore(Number(e.target.value))}
-                          className="w-full accent-[oklch(0.68_0.20_265)]"
+                          className="w-full accent-[var(--brand)]"
                         />
                         <p className="mt-1 text-[11px] text-muted-foreground">
                           Hibrit skor = Pazar talebi (%55) + Kâr &amp; lojistik (%45)
@@ -1090,7 +1090,7 @@ function Dashboard() {
                         type="checkbox"
                         checked={useGithubTrends}
                         onChange={(e) => setUseGithubTrends(e.target.checked)}
-                        className="h-4 w-4 accent-[oklch(0.68_0.20_265)]"
+                        className="h-4 w-4 accent-[var(--brand)]"
                       />
                       <label htmlFor="use-github-trends" className="flex-1 text-sm cursor-pointer">
                         <span className="font-medium">Include GitHub repo trends</span>
@@ -1118,7 +1118,7 @@ function Dashboard() {
                       <button
                         type="submit"
                         disabled={searching}
-                        className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {searching ? (
                           <>
@@ -1244,7 +1244,7 @@ function Dashboard() {
                         <div className="relative inline-flex">
                           <div className="absolute inset-0 rounded-full bg-[var(--brand)]/20 blur-2xl animate-pulse-soft" />
                           <div className="relative grid h-20 w-20 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--brand)]/10 to-[var(--brand-2)]/10">
-                            <Sparkles size={32} className="text-[oklch(0.75_0.18_265)]" />
+                            <Sparkles size={32} className="text-[var(--brand)]" />
                           </div>
                         </div>
                         <div>
@@ -1349,7 +1349,7 @@ function Dashboard() {
                                   onClick={() => setBand(b.id)}
                                   className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                                     band === b.id
-                                      ? "border-[oklch(0.68_0.20_265)]/60 bg-[oklch(0.68_0.20_265)]/15 text-[oklch(0.85_0.15_265)]"
+                                      ? "border-[var(--brand)]/60 bg-[var(--brand)]/15 text-[var(--brand)]"
                                       : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
                                   }`}
                                 >
@@ -1712,12 +1712,12 @@ function ProductCard({
     <article
       className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:-translate-y-1 border flex flex-col animate-rise-in relative transition-all duration-300 ${
         isElite
-          ? "border-amber-400/50 shadow-[0_0_30px_-5px_oklch(0.82_0.18_85/0.45),0_20px_60px_-20px_oklch(0.68_0.20_265/0.55)]"
+          ? "border-amber-400/50 shadow-[0_0_30px_-5px_oklch(0.82_0.18_85/0.45),0_20px_60px_-20px_color-mix(in_oklab,var(--brand)_55%,transparent)]"
           : isTopWinner
-            ? "border-[oklch(0.68_0.20_265)]/50 shadow-[0_0_20px_-5px_oklch(0.68_0.20_265/0.35),0_20px_60px_-20px_oklch(0.68_0.20_265/0.45)]"
+            ? "border-[var(--brand)]/50 shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--brand)_35%,transparent),0_20px_60px_-20px_color-mix(in_oklab,var(--brand)_45%,transparent)]"
             : selected
-              ? "border-[oklch(0.68_0.20_265)]/70 shadow-[0_0_0_1px_oklch(0.68_0.20_265/0.5)]"
-              : "border-transparent hover:border-[oklch(0.68_0.20_265)]/30"
+              ? "border-[var(--brand)]/70 shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
+              : "border-transparent hover:border-[var(--brand)]/30"
       }`}
     >
       {onToggleSelect && (
@@ -1731,7 +1731,7 @@ function ProductCard({
           title={selected ? "Karşılaştırmadan çıkar" : "Karşılaştırmaya ekle"}
           className={`absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition ${
             selected
-              ? "border-[oklch(0.68_0.20_265)]/70 bg-[oklch(0.68_0.20_265)]/30 text-white"
+              ? "border-[var(--brand)]/70 bg-[var(--brand)]/30 text-white"
               : "border-white/20 bg-black/40 text-white/80 hover:bg-black/60"
           }`}
         >
@@ -1769,7 +1769,7 @@ function ProductCard({
           </div>
         )}
         {isTopWinner && !isElite && (
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full border border-[oklch(0.68_0.20_265)]/40 bg-[oklch(0.68_0.20_265)]/20 px-2 py-0.5 text-[10px] font-bold text-blue-300 backdrop-blur-sm">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full border border-[var(--brand)]/40 bg-[var(--brand)]/20 px-2 py-0.5 text-[10px] font-bold text-blue-300 backdrop-blur-sm">
             ⚡ WINNER
           </div>
         )}
@@ -1864,7 +1864,7 @@ function ProductCard({
       )}
 
       {p.council && (
-        <div className="mt-3 rounded-lg border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
+        <div className="mt-3 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold">🧠 14'lü AI Konsey</span>
             <span className="font-extrabold text-foreground">
@@ -2084,7 +2084,7 @@ function ProductCard({
                           href={b.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-[oklch(0.75_0.18_265)] hover:underline"
+                          className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-[var(--brand)] hover:underline"
                         >
                           {b.source} ↗
                         </a>
@@ -2100,20 +2100,20 @@ function ProductCard({
 
       <div className="mt-3 space-y-2 text-xs">
         <div className="flex gap-2">
-          <Sparkles size={14} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" />
+          <Sparkles size={14} className="text-[var(--brand)] shrink-0 mt-0.5" />
           <span className="text-muted-foreground">{p.why_winning}</span>
         </div>
         <div className="flex gap-2">
-          <Users size={14} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" />
+          <Users size={14} className="text-[var(--brand)] shrink-0 mt-0.5" />
           <span className="text-muted-foreground">{p.target_audience}</span>
         </div>
         <div className="flex gap-2">
-          <DollarSign size={14} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" />
+          <DollarSign size={14} className="text-[var(--brand)] shrink-0 mt-0.5" />
           <span className={compColor}>{p.competition_level} competition</span>
         </div>
         {p.platform_strategy && (
           <div className="flex gap-2">
-            <Store size={14} className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5" />
+            <Store size={14} className="text-[var(--brand)] shrink-0 mt-0.5" />
             <span className="text-muted-foreground">{p.platform_strategy}</span>
           </div>
         )}
@@ -2138,7 +2138,7 @@ function ProductCard({
               </div>
             )}
             {p.health_score !== undefined && (
-              <ScoreBar label="Health" value={p.health_score} color="oklch(0.68 0.20 265)" />
+              <ScoreBar label="Health" value={p.health_score} color="var(--brand)" />
             )}
             {p.viral_probability_90d !== undefined && (
               <ScoreBar
@@ -2167,8 +2167,8 @@ function ProductCard({
       <ConsistencyBadge p={p} />
 
       {p.ai_insight && (
-        <div className="mt-3 rounded-lg border border-[oklch(0.68_0.20_265)]/30 bg-gradient-to-br from-[oklch(0.68_0.20_265)]/10 to-[oklch(0.66_0.24_305)]/5 p-3">
-          <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-[oklch(0.85_0.15_265)] mb-1">
+        <div className="mt-3 rounded-lg border border-[var(--brand)]/30 bg-gradient-to-br from-[var(--brand)]/10 to-[var(--brand-2)]/5 p-3">
+          <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-[var(--brand)] mb-1">
             <Sparkles size={11} /> AI Insight
           </div>
           <p className="text-xs text-foreground/90 leading-relaxed">{p.ai_insight}</p>
@@ -2323,7 +2323,7 @@ function ProductCard({
         </button>
         <button
           onClick={() => (locked ? onUpgrade() : onCreative(p.name))}
-          className="rounded-lg border border-white/10 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20 hover:from-[oklch(0.68_0.20_265)]/35 hover:to-[oklch(0.66_0.24_305)]/35 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
+          className="rounded-lg border border-white/10 bg-gradient-to-r from-[var(--brand)]/20 to-[var(--brand-2)]/20 hover:from-[var(--brand)]/35 hover:to-[var(--brand-2)]/35 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
         >
           {locked ? <Lock size={12} className="text-amber-300" /> : <Film size={12} />} Reels Script{" "}
           {locked && <span className="text-amber-300">· Kilitli</span>}
@@ -2331,7 +2331,7 @@ function ProductCard({
       </div>
       <button
         onClick={onOpen}
-        className="mt-2 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3 py-2 text-xs font-semibold text-white w-full flex items-center justify-center gap-1.5"
+        className="mt-2 rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-3 py-2 text-xs font-semibold text-white w-full flex items-center justify-center gap-1.5"
       >
         {locked ? <Lock size={12} /> : <Radar size={12} />} Derinlemesine Analiz{" "}
         {locked && "· Kilitli"}
@@ -2539,7 +2539,7 @@ function ResultsToolbar({
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Sonuçlarda ara — ürün adı, kitle veya platform"
-          className="w-full rounded-lg border border-white/10 bg-white/5 pl-8 pr-8 py-2 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+          className="w-full rounded-lg border border-white/10 bg-white/5 pl-8 pr-8 py-2 text-xs outline-none focus:border-[var(--brand)]"
         />
         {query && (
           <button
@@ -2563,7 +2563,7 @@ function ResultsToolbar({
             onClick={() => onSortBy(s.id)}
             className={`text-xs px-3 py-1.5 rounded-full border transition ${
               sortBy === s.id
-                ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 text-foreground"
+                ? "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 text-foreground"
                 : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -2638,7 +2638,7 @@ function ConversionBlock({ p }: { p: WinningProduct }) {
   const f = p.conversion?.funnel;
   const pct = Math.min(100, (value / 60) * 100);
   return (
-    <div className="mt-3 rounded-xl border border-white/10 bg-[radial-gradient(120%_120%_at_0%_0%,oklch(0.68_0.20_265/0.16),transparent_60%)] p-3">
+    <div className="mt-3 rounded-xl border border-white/10 bg-[radial-gradient(120%_120%_at_0%_0%,color-mix(in_oklab,var(--brand)_16%,transparent),transparent_60%)] p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1">
           <Target size={11} /> Buyers per 1,000 viewers
@@ -2656,7 +2656,7 @@ function ConversionBlock({ p }: { p: WinningProduct }) {
       </div>
       <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)]"
+          className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)]"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -2857,21 +2857,21 @@ function SeoTab({
             value={product}
             onChange={(e) => setProduct(e.target.value)}
             placeholder="Product name (e.g. Portable Ice Maker XR-500)"
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           />
           <input
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
             placeholder="Target audience (optional)"
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           />
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value as Platform)}
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           >
             {PLATFORMS.map((p) => (
-              <option key={p} className="bg-[oklch(0.20_0.035_265)]">
+              <option key={p} className="bg-[var(--surface)]">
                 {p}
               </option>
             ))}
@@ -2881,7 +2881,7 @@ function SeoTab({
           <button
             type="submit"
             disabled={mut.isPending}
-            className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center gap-2"
+            className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center gap-2"
           >
             {mut.isPending ? (
               <>
@@ -2906,7 +2906,7 @@ function SeoTab({
         )}
         {!mut.isPending && !kit && (
           <div className="text-center text-sm text-muted-foreground py-16">
-            <Wand2 className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
+            <Wand2 className="mx-auto mb-3 text-[var(--brand)]" />
             Enter a product to generate a complete SEO & ad-copy kit.
           </div>
         )}
@@ -2947,14 +2947,14 @@ function KitView({ kit }: { kit: SeoKit }) {
           <div className="grid md:grid-cols-2 gap-3">
             {kit.ad_copy.map((a, i) => (
               <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <div className="text-[11px] uppercase tracking-wider text-[oklch(0.75_0.18_265)] mb-1">
+                <div className="text-[11px] uppercase tracking-wider text-[var(--brand)] mb-1">
                   {a.platform}
                 </div>
                 <div className="text-sm font-semibold">{a.hook}</div>
                 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">
                   {a.primary}
                 </p>
-                <div className="text-[11px] mt-2 inline-block rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 border border-white/10 px-2 py-0.5">
+                <div className="text-[11px] mt-2 inline-block rounded-full bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 border border-white/10 px-2 py-0.5">
                   CTA: {a.cta}
                 </div>
                 <CopyBtn text={`${a.hook}\n\n${a.primary}\n\n${a.cta}`} />
@@ -3084,21 +3084,21 @@ function CreativeTab({
             value={product}
             onChange={(e) => setProduct(e.target.value)}
             placeholder="Product name"
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           />
           <input
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
             placeholder="Audience (optional)"
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           />
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value as Platform)}
-            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           >
             {PLATFORMS.map((p) => (
-              <option key={p} className="bg-[oklch(0.20_0.035_265)]">
+              <option key={p} className="bg-[var(--surface)]">
                 {p}
               </option>
             ))}
@@ -3108,7 +3108,7 @@ function CreativeTab({
           <button
             type="submit"
             disabled={mut.isPending}
-            className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center gap-2"
+            className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center gap-2"
           >
             {mut.isPending ? (
               <>
@@ -3133,7 +3133,7 @@ function CreativeTab({
         )}
         {!mut.isPending && scripts.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-16">
-            <Film className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
+            <Film className="mx-auto mb-3 text-[var(--brand)]" />
             Enter a product to generate viral short-form video scripts.
           </div>
         )}
@@ -3154,7 +3154,7 @@ function ScriptCard({ s }: { s: CreativeScript }) {
   return (
     <article className="premium-card grain rounded-xl p-5 flex flex-col">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[11px] uppercase tracking-wider text-[oklch(0.75_0.18_265)] flex items-center gap-1">
+        <div className="text-[11px] uppercase tracking-wider text-[var(--brand)] flex items-center gap-1">
           <Film size={12} /> {s.format}
         </div>
         <div className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5">
@@ -3184,7 +3184,7 @@ function ScriptCard({ s }: { s: CreativeScript }) {
             </ul>
           </Section>
         )}
-        <div className="text-xs inline-block rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 border border-white/10 px-3 py-1">
+        <div className="text-xs inline-block rounded-full bg-gradient-to-r from-[var(--brand)]/25 to-[var(--brand-2)]/25 border border-white/10 px-3 py-1">
           CTA: {s.cta}
         </div>
         {s.hashtags?.length > 0 && (
@@ -3266,7 +3266,7 @@ function LibraryTab({
 
       {!loading && favorites.length === 0 && (
         <div className="text-center text-sm text-muted-foreground py-16">
-          <Bookmark className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
+          <Bookmark className="mx-auto mb-3 text-[var(--brand)]" />
           Your library is empty. Tap the heart icon on any product to save it here.
         </div>
       )}
@@ -3297,7 +3297,7 @@ function LibraryTab({
                   {f.tags?.map((tag) => (
                     <span
                       key={tag}
-                      className="text-[10px] px-1.5 py-0.5 rounded-full border border-[oklch(0.68_0.20_265)]/30 bg-[oklch(0.68_0.20_265)]/10 text-[oklch(0.85_0.15_265)]"
+                      className="text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/10 text-[var(--brand)]"
                     >
                       {tag}
                     </span>
@@ -3359,7 +3359,7 @@ function LibraryTab({
                   </button>
                   <button
                     onClick={() => onCreative(p.name)}
-                    className="rounded-lg border border-white/10 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20 hover:from-[oklch(0.68_0.20_265)]/35 hover:to-[oklch(0.66_0.24_305)]/35 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
+                    className="rounded-lg border border-white/10 bg-gradient-to-r from-[var(--brand)]/20 to-[var(--brand-2)]/20 hover:from-[var(--brand)]/35 hover:to-[var(--brand-2)]/35 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
                   >
                     <Film size={12} /> Reels
                   </button>
@@ -3563,7 +3563,7 @@ function RotatingSlogan() {
   return (
     <div className="mt-6 flex justify-center">
       <div className="premium-card rounded-full px-5 py-2 h-10 flex items-center gap-2 overflow-hidden">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[oklch(0.72_0.22_285)] animate-pulse-soft" />
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)] animate-pulse-soft" />
         <span
           key={i}
           className="text-sm font-semibold text-foreground/90 animate-rise-in whitespace-nowrap"

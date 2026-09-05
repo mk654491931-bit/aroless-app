@@ -40,63 +40,64 @@
 
 :root {
   --radius: 0.75rem;
-  /* High-contrast dark SaaS — slate / navy */
-  --background: #0b0f17;
-  --foreground: oklch(0.97 0.005 260);
-  --surface: #0f172a;
-  --card: oklch(0.22 0.035 265 / 0.7);
-  --card-foreground: oklch(0.97 0.005 260);
-  --popover: #0f172a;
-  --popover-foreground: oklch(0.97 0.005 260);
-  --primary: oklch(0.68 0.2 265);
-  --primary-foreground: oklch(0.99 0.005 260);
-  --secondary: oklch(0.27 0.04 265);
-  --secondary-foreground: oklch(0.97 0.005 260);
-  --muted: oklch(0.25 0.035 265);
-  --muted-foreground: oklch(0.72 0.03 260);
-  --accent: oklch(0.3 0.06 285);
-  --accent-foreground: oklch(0.97 0.005 260);
-  --destructive: oklch(0.62 0.24 25);
-  --destructive-foreground: oklch(0.98 0.005 260);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.68 0.2 265);
-  --brand: oklch(0.68 0.2 265); /* electric blue */
-  --brand-2: oklch(0.66 0.24 305); /* violet */
+  /* Kurumsal koyu tema — neredeyse siyah zemin, doygunluğu düşük çelik-mavi vurgu.
+     Mor/neon baskı kaldırıldı: marka artık soğuk, resmi bir mavi-çelik tonu. */
+  --background: #07090d;
+  --foreground: oklch(0.96 0.004 255);
+  --surface: #0c1016;
+  --card: oklch(0.16 0.012 258 / 0.75);
+  --card-foreground: oklch(0.96 0.004 255);
+  --popover: #0c1016;
+  --popover-foreground: oklch(0.96 0.004 255);
+  --primary: oklch(0.73 0.115 256);
+  --primary-foreground: oklch(0.99 0.004 255);
+  --secondary: oklch(0.21 0.015 258);
+  --secondary-foreground: oklch(0.96 0.004 255);
+  --muted: oklch(0.19 0.012 258);
+  --muted-foreground: oklch(0.68 0.018 252);
+  --accent: oklch(0.23 0.02 255);
+  --accent-foreground: oklch(0.96 0.004 255);
+  --destructive: oklch(0.62 0.22 24);
+  --destructive-foreground: oklch(0.98 0.004 255);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.73 0.115 256);
+  --brand: oklch(0.73 0.115 256); /* çelik-mavi — mor yerine */
+  --brand-2: oklch(0.71 0.095 222); /* çelik — mavi geçişi (magenta yerine) */
   /* Semantic accents */
-  --accent-active: oklch(0.8 0.14 200); /* cyan — active UI */
+  --accent-active: oklch(0.79 0.105 202); /* cyan — active UI */
 
-  --profit: oklch(0.76 0.17 158); /* emerald — profit */
-  --warning: oklch(0.82 0.16 80); /* amber — warnings */
-  --ai: oklch(0.7 0.2 290); /* indigo/purple — AI */
+  --profit: oklch(0.76 0.16 158); /* emerald — profit */
+  --warning: oklch(0.82 0.15 80); /* amber — warnings */
+  --ai: oklch(0.73 0.1 256); /* marka ile aynı ailede — mor yerine */
 }
 
 /* ---------- Light (gündüz) teması ---------- */
 html.light {
-  --background: #f6f8fc;
-  --foreground: oklch(0.22 0.03 265);
+  --background: #f7f9fc;
+  --foreground: oklch(0.23 0.015 255);
   --surface: #ffffff;
   --card: oklch(1 0 0 / 0.85);
-  --card-foreground: oklch(0.22 0.03 265);
+  --card-foreground: oklch(0.23 0.015 255);
   --popover: #ffffff;
-  --popover-foreground: oklch(0.22 0.03 265);
-  --primary: oklch(0.55 0.19 265);
-  --primary-foreground: oklch(0.99 0.005 260);
-  --secondary: oklch(0.94 0.015 265);
-  --secondary-foreground: oklch(0.25 0.03 265);
-  --muted: oklch(0.94 0.012 265);
-  --muted-foreground: oklch(0.48 0.03 262);
-  --accent: oklch(0.92 0.03 275);
-  --accent-foreground: oklch(0.25 0.04 265);
-  --border: oklch(0.25 0.04 265 / 12%);
-  --input: oklch(0.25 0.04 265 / 16%);
-  --ring: oklch(0.55 0.19 265);
-  --brand: oklch(0.53 0.19 265);
-  --brand-2: oklch(0.52 0.22 305);
-  --accent-active: oklch(0.55 0.13 210);
-  --profit: oklch(0.52 0.15 158);
-  --warning: oklch(0.62 0.15 70);
-  --ai: oklch(0.52 0.19 290);
+  --popover-foreground: oklch(0.23 0.015 255);
+  --primary: oklch(0.5 0.09 256);
+  --primary-foreground: oklch(0.99 0.004 255);
+  --secondary: oklch(0.94 0.008 255);
+  --secondary-foreground: oklch(0.26 0.015 255);
+  --muted: oklch(0.94 0.006 255);
+  --muted-foreground: oklch(0.48 0.014 252);
+  --accent: oklch(0.92 0.012 255);
+  --accent-foreground: oklch(0.26 0.02 255);
+  --border: oklch(0.25 0.02 255 / 12%);
+  --input: oklch(0.25 0.02 255 / 16%);
+  --ring: oklch(0.5 0.09 256);
+  --brand: oklch(0.5 0.09 256);
+  --brand-2: oklch(0.49 0.075 224);
+  --accent-active: oklch(0.52 0.1 205);
+  --profit: oklch(0.5 0.13 158);
+  --warning: oklch(0.6 0.13 72);
+  --ai: oklch(0.5 0.08 256);
 }
 
 html.light body {
@@ -147,12 +148,12 @@ html.light [class*="text-white/"] {
     background-image:
       radial-gradient(
         1200px 620px at 10% -12%,
-        color-mix(in oklab, var(--brand) 30%, transparent),
+        color-mix(in oklab, var(--brand) 16%, transparent),
         transparent 62%
       ),
       radial-gradient(
         1000px 520px at 100% 0%,
-        color-mix(in oklab, var(--brand-2) 22%, transparent),
+        color-mix(in oklab, var(--brand-2) 12%, transparent),
         transparent 62%
       );
     background-attachment: scroll;

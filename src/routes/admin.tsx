@@ -110,7 +110,7 @@ function AdminPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="glass rounded-2xl p-8 max-w-md text-center">
-          <Shield className="mx-auto mb-3 text-[oklch(0.75_0.18_265)]" />
+          <Shield className="mx-auto mb-3 text-[var(--brand)]" />
           <h1 className="text-xl font-semibold">Access Restricted</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             This area is only available to platform administrators.
@@ -142,12 +142,12 @@ function AdminPage() {
       <header className="border-b border-white/10 glass sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
             </div>
             <div>
               <div className="font-bold leading-tight flex items-center gap-2">
-                Admin Dashboard <Shield size={14} className="text-[oklch(0.75_0.18_265)]" />
+                Admin Dashboard <Shield size={14} className="text-[var(--brand)]" />
               </div>
               <div className="text-[10px] text-muted-foreground leading-tight">
                 Aroless · Platform Ops
@@ -346,8 +346,8 @@ function KpiCard({
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 flex items-center justify-center">
-          <Icon size={14} className="text-[oklch(0.85_0.15_265)]" />
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[var(--brand)]/25 to-[var(--brand-2)]/25 flex items-center justify-center">
+          <Icon size={14} className="text-[var(--brand)]" />
         </div>
       </div>
       <div className="mt-3 text-2xl font-bold">
@@ -400,7 +400,7 @@ function TierBadge({ tier }: { tier: string }) {
   const isPaid = tier === "Starter" || tier === "Pro" || tier === "Business";
   return (
     <span
-      className={`text-[10px] px-2 py-0.5 rounded-full border ${isPaid ? "border-[oklch(0.68_0.20_265)]/50 bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground"}`}
+      className={`text-[10px] px-2 py-0.5 rounded-full border ${isPaid ? "border-[var(--brand)]/50 bg-gradient-to-r from-[var(--brand)]/20 to-[var(--brand-2)]/20 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground"}`}
     >
       {tier}
     </span>

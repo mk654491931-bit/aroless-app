@@ -356,7 +356,7 @@ export function SandboxTab({
           <button
             key={id}
             onClick={() => setView(id)}
-            className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition ${view === id ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/5 hover:bg-white/10 text-muted-foreground"}`}
+            className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition ${view === id ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow" : "bg-white/5 hover:bg-white/10 text-muted-foreground"}`}
           >
             <Icon size={15} />
             {label}
@@ -387,7 +387,7 @@ export function SandboxTab({
             return (
               <div
                 key={id}
-                className="glass rounded-xl px-4 py-3 flex items-center gap-3 border border-[oklch(0.68_0.20_265)]/50 glow animate-in slide-in-from-right"
+                className="glass rounded-xl px-4 py-3 flex items-center gap-3 border border-[var(--brand)]/50 glow animate-in slide-in-from-right"
               >
                 <Award size={20} className="text-[oklch(0.8_0.17_85)]" />
                 <div>
@@ -447,7 +447,7 @@ function SetupView({
   return (
     <div className="space-y-6">
       <div className="glass rounded-2xl p-6 md:p-8 relative overflow-hidden">
-        <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-[oklch(0.68_0.20_265)]/20 blur-3xl" />
+        <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-[var(--brand)]/20 blur-3xl" />
         <div className="relative">
           <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/10 mb-3">
             <Sparkles size={12} /> Flight simulator for e-commerce
@@ -472,7 +472,7 @@ function SetupView({
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
-                  className={`text-left rounded-xl p-3 border transition ${on ? "border-[oklch(0.68_0.20_265)] bg-white/10 glow" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                  className={`text-left rounded-xl p-3 border transition ${on ? "border-[var(--brand)] bg-white/10 glow" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{p}</span>
@@ -493,7 +493,7 @@ function SetupView({
               <button
                 key={c}
                 onClick={() => setCapital(c)}
-                className={`rounded-full px-5 py-2 text-sm font-semibold transition ${capital === c ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "bg-white/5 hover:bg-white/10"}`}
+                className={`rounded-full px-5 py-2 text-sm font-semibold transition ${capital === c ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow" : "bg-white/5 hover:bg-white/10"}`}
               >
                 {c >= 10000 ? "$10,000+" : `$${c.toLocaleString()}`}
               </button>
@@ -505,7 +505,7 @@ function SetupView({
           <select
             value={pick}
             onChange={(e) => setPick(e.target.value)}
-            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
           >
             {catalog.map((c) => (
               <option key={c.name} value={c.name} className="bg-[#0b0d16]">
@@ -575,7 +575,7 @@ function SetupView({
               }
               onStart({ platform, capital, storeName, product, name, cogs, price });
             }}
-            className="flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
             {loading ? "Loading live market data…" : "Start simulation — 1 credit"}
@@ -654,7 +654,7 @@ function MetricsBar({
             <button
               onClick={onNext}
               disabled={busy}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow disabled:opacity-60"
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white glow disabled:opacity-60"
             >
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />} Advance
               to day {state.day}
@@ -980,7 +980,7 @@ function AdsView({
                   step={5}
                   value={p.adBudget}
                   onChange={(e) => update(p.id, { adBudget: Number(e.target.value) })}
-                  className="w-full accent-[oklch(0.68_0.20_265)]"
+                  className="w-full accent-[var(--brand)]"
                 />
               </Field>
               <Field label="Target audience">
@@ -1096,7 +1096,7 @@ function CoachView({ state, advice }: { state: SandboxState; advice: CoachAdvice
     <div className="grid lg:grid-cols-3 gap-4">
       <div className="lg:col-span-2 glass rounded-2xl p-5">
         <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-          <Brain size={15} className="text-[oklch(0.75_0.18_265)]" />
+          <Brain size={15} className="text-[var(--brand)]" />
           AI coach & mentor
         </h3>
         {!advice ? (
@@ -1116,7 +1116,7 @@ function CoachView({ state, advice }: { state: SandboxState; advice: CoachAdvice
                   <li key={i} className="flex gap-2 text-sm">
                     <ChevronRight
                       size={16}
-                      className="text-[oklch(0.75_0.18_265)] shrink-0 mt-0.5"
+                      className="text-[var(--brand)] shrink-0 mt-0.5"
                     />
                     {a}
                   </li>
@@ -1165,7 +1165,7 @@ function RanksView({ state }: { state: SandboxState }) {
             return (
               <div
                 key={b.id}
-                className={`rounded-xl p-3 border ${on ? "border-[oklch(0.68_0.20_265)]/60 bg-white/10" : "border-white/10 bg-white/5 opacity-55"}`}
+                className={`rounded-xl p-3 border ${on ? "border-[var(--brand)]/60 bg-white/10" : "border-white/10 bg-white/5 opacity-55"}`}
               >
                 <div className="text-sm font-semibold">{b.label}</div>
                 <div className="text-[11px] text-muted-foreground">{b.desc}</div>
@@ -1186,7 +1186,7 @@ function RanksView({ state }: { state: SandboxState }) {
             {(lb.data?.rows ?? []).map((r, i) => (
               <div
                 key={r.id}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs ${r.is_me ? "bg-[oklch(0.68_0.20_265)]/20 border border-[oklch(0.68_0.20_265)]/40" : "bg-white/5"}`}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs ${r.is_me ? "bg-[var(--brand)]/20 border border-[var(--brand)]/40" : "bg-white/5"}`}
               >
                 <span className="w-5 text-muted-foreground">{i + 1}</span>
                 <span className="flex-1 truncate font-semibold">{r.store_name}</span>

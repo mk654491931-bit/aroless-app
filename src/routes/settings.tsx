@@ -80,7 +80,7 @@ function SettingsPage() {
       <header className="border-b border-white/10 glass sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[var(--brand)] to-[var(--brand-2)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
             </div>
             <div className="font-bold">{t("settings")}</div>
@@ -137,7 +137,7 @@ function SettingsPage() {
                     i18n.changeLanguage(l.code);
                     save.mutate({ language: l.code });
                   }}
-                  className={`rounded-lg border px-3 py-2.5 text-sm text-start flex items-center gap-2 transition ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-start flex items-center gap-2 transition ${on ? "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/20 to-[var(--brand-2)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   <span className="text-lg">{l.flag}</span> {l.label}
                 </button>
@@ -158,7 +158,7 @@ function SettingsPage() {
                     setCurrency(c);
                     save.mutate({ currency: c });
                   }}
-                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${on ? "border-[oklch(0.68_0.20_265)] bg-gradient-to-r from-[oklch(0.68_0.20_265)]/20 to-[oklch(0.66_0.24_305)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${on ? "border-[var(--brand)] bg-gradient-to-r from-[var(--brand)]/20 to-[var(--brand-2)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 >
                   {c}
                 </button>
@@ -181,7 +181,7 @@ function SettingsPage() {
                 setNotifications(e.target.checked);
                 save.mutate({ notifications_enabled: e.target.checked });
               }}
-              className="h-4 w-4 rounded accent-[oklch(0.68_0.20_265)]"
+              className="h-4 w-4 rounded accent-[var(--brand)]"
             />
             <span className="text-sm">Enable product & billing notifications</span>
           </label>

@@ -44,7 +44,7 @@ export function SupportPanel() {
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
-        <LifeBuoy size={18} className="text-[oklch(0.75_0.18_265)]" />
+        <LifeBuoy size={18} className="text-[var(--brand)]" />
         <h2 className="font-semibold">Destek</h2>
       </div>
       <p className="text-sm text-muted-foreground">Sorun, öneri veya faturalama sorusu gönder.</p>

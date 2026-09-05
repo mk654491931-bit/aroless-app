@@ -78,7 +78,7 @@ function CompetitorAnalysisPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[oklch(0.16_0.03_265)]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[var(--surface)]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <Link
             to="/"
@@ -111,7 +111,7 @@ function CompetitorAnalysisPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="örn. B0C7KMR9ZD, posture corrector, myshopify.com/store"
               maxLength={300}
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
             />
           </div>
           <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
@@ -122,10 +122,10 @@ function CompetitorAnalysisPage() {
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.68_0.20_265)]"
+                className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
               >
                 {TARGET_COUNTRIES.map((tc) => (
-                  <option key={tc.code} value={tc.code} className="bg-[oklch(0.20_0.035_265)]">
+                  <option key={tc.code} value={tc.code} className="bg-[var(--surface)]">
                     {tc.flag} {tc.label}
                   </option>
                 ))}
@@ -134,7 +134,7 @@ function CompetitorAnalysisPage() {
             <button
               type="submit"
               disabled={mut.isPending}
-              className="rounded-lg bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 inline-flex items-center gap-2"
+              className="rounded-lg bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 inline-flex items-center gap-2"
             >
               {mut.isPending ? (
                 <>

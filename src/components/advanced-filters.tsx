@@ -76,7 +76,7 @@ export function AdvancedFilters({
     <div className="premium-card grain rounded-2xl p-4 mb-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <SlidersHorizontal size={14} className="text-[oklch(0.75_0.18_265)]" />
+          <SlidersHorizontal size={14} className="text-[var(--brand)]" />
           Advanced filters
           <span className="text-[11px] font-normal text-muted-foreground">
             · {matched} / {products.length} match
@@ -179,7 +179,7 @@ function SliderRow({
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[oklch(0.68_0.20_265)]"
+        className="w-full accent-[var(--brand)]"
       />
     </label>
   );
@@ -215,7 +215,7 @@ function RangePair({
           max={maxCap}
           value={min}
           onChange={(e) => onMin(Math.max(0, Number(e.target.value) || 0))}
-          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
         />
         <input
           type="number"
@@ -223,7 +223,7 @@ function RangePair({
           max={maxCap}
           value={max}
           onChange={(e) => onMax(Math.max(min, Number(e.target.value) || 0))}
-          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+          className="w-1/2 rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
         />
       </div>
     </div>
@@ -249,7 +249,7 @@ function SelectRow({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[oklch(0.68_0.20_265)]"
+        className="w-full rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
       >
         {options.map((o) => (
           <option key={o} value={o} className="bg-[#0b0d16]">

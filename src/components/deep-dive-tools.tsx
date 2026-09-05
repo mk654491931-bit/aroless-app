@@ -58,7 +58,7 @@ export function CheckItem({
         <span
           className={`mt-[2px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded border transition ${
             done
-              ? "border-[oklch(0.68_0.20_265)] bg-[oklch(0.68_0.20_265)] text-white"
+              ? "border-[var(--brand)] bg-[var(--brand)] text-white"
               : "border-white/20 bg-white/[0.03] text-transparent group-hover:border-white/40"
           }`}
         >
@@ -78,7 +78,7 @@ export function ChecklistProgress({ total, completed }: { total: number; complet
     <div className="flex items-center gap-2">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] transition-all"
+          className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -173,7 +173,7 @@ export function ScenarioSimulator({ p }: { p: WinningProduct }) {
 
       <div className="max-h-40 overflow-y-auto rounded border border-white/10">
         <table className="w-full text-[11px]">
-          <thead className="sticky top-0 bg-[oklch(0.19_0.03_265)] text-[10px] text-muted-foreground">
+          <thead className="sticky top-0 bg-[var(--surface)] text-[10px] text-muted-foreground">
             <tr>
               <th className="px-2 py-1 text-left font-normal">Ay</th>
               <th className="px-2 py-1 text-right font-normal">Adet</th>
@@ -232,7 +232,7 @@ function SimSlider({
     <div>
       <div className="flex items-center justify-between text-[10px]">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-[oklch(0.85_0.15_265)]">{display}</span>
+        <span className="font-medium text-[var(--brand)]">{display}</span>
       </div>
       <input
         type="range"
@@ -241,7 +241,7 @@ function SimSlider({
         step={0.05}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[oklch(0.68_0.20_265)]"
+        className="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[var(--brand)]"
         aria-label={label}
       />
     </div>
@@ -386,7 +386,7 @@ function ExportBtn({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition ${
         primary
-          ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white hover:opacity-90"
+          ? "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] text-white hover:opacity-90"
           : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground hover:bg-white/10"
       }`}
     >
