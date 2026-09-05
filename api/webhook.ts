@@ -9,7 +9,8 @@
  *   src/lib/paddle-webhook-core.ts
  *
  * Gereken ortam değişkenleri:
- *   PADDLE_WEBHOOK_SECRET     — Paddle webhook signing secret
+ *   PADDLE_WEBHOOK_SECRET_KEY — Paddle webhook signing secret
+ *                            (eski ad PADDLE_WEBHOOK_SECRET de çalışır)
  *   SUPABASE_URL              — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service-role key (server-only)
  *

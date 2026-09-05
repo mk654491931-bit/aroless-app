@@ -8,8 +8,13 @@
  *
  * Güvenlik:
  *   - Paddle-Signature: ts=<unix>;h1=<hex> → HMAC-SHA256(secret, "ts:body")
- *   - İmza doğrulama başarısız → 400
+ *   - İmza doğrulama başarısız → 401
  *   - Replay penceresi 5 dakika + event_id idempotency (paddle_webhook_events)
+ *
+ * Veritabanı senkronizasyonu:
+ *   - Kanonik durum `profiles` üzerindedir (uygulama buradan okur)
+ *   - `subscriptions` tablosu da abonelik olaylarıyla upsert ile senkron tutulur;
+ *     tablo henüz migrate edilmemişse akış bozulmaz (log + devam)
  *
  * Ele alınan olaylar:
  *   - transaction.completed   → aboneliği aktifleştir / süresini uzat
@@ -119,7 +124,7 @@ export interface WebhookResult {
   body: Record<string, unknown>;
 }
 
-function ok(body: Record<string, unknown> = { ok: true }): WebhookResult {
+function ok(body: Record<string, unknown> = { status: "success" }): WebhookResult {
   return { status: 200, body };
 }
 
@@ -168,7 +173,7 @@ export async function processPaddleWebhook(input: {
   const valid = await verifyPaddleWebhook(raw, signatureHeader, nowSeconds);
   if (!valid) {
     logError("", "invalid signature");
-    return fail(400, { error: "Invalid signature" });
+    return fail(401, { error: "Invalid signature" });
   }
 
   // 2. JSON parse + şema doğrulama
@@ -176,8 +181,9 @@ export async function processPaddleWebhook(input: {
   try {
     payload = PaddleEventSchema.parse(JSON.parse(raw));
   } catch (e) {
+    // Parse/şema hatası → 500: Paddle retry edebilsin (5xx'te yeniden dener).
     logError("", "bad payload", e);
-    return fail(400, { error: "Bad JSON or invalid schema" });
+    return fail(500, { error: "Bad JSON or invalid schema" });
   }
 
   const eventId = payload.event_id ?? "";
@@ -200,7 +206,7 @@ export async function processPaddleWebhook(input: {
       .maybeSingle();
     if (!dedupeErr && existing) {
       logInfo(eventId, "duplicate event — skipped");
-      return ok({ ok: true, duplicate: true });
+      return ok({ status: "success", duplicate: true });
     }
     if (dedupeErr) {
       // Tablo henüz migrate edilmemiş olabilir; akışı bozmayalım.
@@ -288,6 +294,18 @@ async function handleTransactionCompleted(input: {
     return fail(500, { error: "Webhook processing failed" });
   }
   logInfo(eventId, `profile activated user=${resolvedUserId} plan=${plan ?? "-"}`);
+
+  // Paddle abonelik kaydı → subscriptions tablosu (best-effort).
+  if (subscriptionId) {
+    await syncSubscription(supabase, eventId, {
+      id: subscriptionId,
+      user_id: resolvedUserId,
+      customer_id: customerId,
+      status,
+      price_id: priceId,
+      current_period_end: periodEnd,
+    });
+  }
 
   // Kredi uygulama (RPC yoksa sessizce atlanır).
   if (plan) {
@@ -409,6 +427,18 @@ async function handleSubscriptionUpdated(input: {
     eventId,
     `subscription updated user=${resolvedUserId} plan=${plan ?? "-"} status=${status}`,
   );
+
+  // Paddle abonelik kaydı → subscriptions tablosu (upsert, best-effort).
+  if (subscriptionId) {
+    await syncSubscription(supabase, eventId, {
+      id: subscriptionId,
+      user_id: resolvedUserId,
+      customer_id: customerId,
+      status,
+      price_id: priceId,
+      current_period_end: periodEnd,
+    });
+  }
   return ok();
 }
 
@@ -451,6 +481,19 @@ async function handleSubscriptionCanceled(input: {
     return fail(500, { error: "Webhook processing failed" });
   }
   logInfo(eventId, `subscription canceled user=${resolvedUserId}`);
+
+  // subscriptions tablosunda durumu kısıtla (best-effort).
+  if (subscriptionId) {
+    try {
+      const { error } = await supabase
+        .from("subscriptions")
+        .update({ status: "canceled", updated_at: new Date().toISOString() })
+        .eq("id", subscriptionId);
+      if (error) logError(eventId, "subscriptions cancel update failed (continuing)", error);
+    } catch (e) {
+      logError(eventId, "subscriptions cancel update failed (continuing)", e);
+    }
+  }
 
   // Affiliate: müşteri iptal etti → gelecekteki komisyonlar durur.
   if (subscriptionId && resolvedUserId) {
@@ -498,6 +541,42 @@ async function handleAdjustment(input: {
   );
   logInfo(eventId, `adjustment processed action=${action}`);
   return ok();
+}
+
+/**
+ * Paddle aboneliğini `subscriptions` tablosuna senkronize eder (upsert).
+ * Kanonik durum `profiles` üzerindedir; bu tablo raporlama/denetim için
+ * tutulur — hata webhook akışını bozmaz (log + devam).
+ */
+async function syncSubscription(
+  supabase: SupabaseLike,
+  eventId: string,
+  values: {
+    id: string;
+    user_id: string;
+    customer_id: string | null;
+    status: string;
+    price_id: string | null;
+    current_period_end: string | null;
+  },
+): Promise<void> {
+  try {
+    const { error } = await supabase.from("subscriptions").upsert(
+      {
+        id: values.id,
+        user_id: values.user_id,
+        customer_id: values.customer_id,
+        status: values.status,
+        price_id: values.price_id,
+        current_period_end: values.current_period_end,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+    if (error) logError(eventId, "subscriptions upsert failed (continuing)", error);
+  } catch (e) {
+    logError(eventId, "subscriptions upsert failed (continuing)", e);
+  }
 }
 
 /**
@@ -584,6 +663,10 @@ export interface SupabaseLike {
       eq(column: string, value: string): PromiseLike<{ error: { message: string } | null }>;
     };
     insert(values: unknown): PromiseLike<{ error: { message: string } | null }>;
+    upsert(
+      values: unknown,
+      opts?: { onConflict?: string },
+    ): PromiseLike<{ error: { message: string } | null }>;
   };
   rpc(
     fn: string,

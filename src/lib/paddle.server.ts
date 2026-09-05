@@ -4,7 +4,8 @@
  * Ortam değişkenleri:
  *   PADDLE_API_KEY          — Paddle Billing API anahtarı (Bearer auth)
  *   PADDLE_CLIENT_TOKEN     — İstemci tarafı token (Paddle.Initialize)
- *   PADDLE_WEBHOOK_SECRET   — Webhook imza doğrulama anahtarı
+ *   PADDLE_WEBHOOK_SECRET_KEY — Webhook imza doğrulama anahtarı
+ *                            (eski ad PADDLE_WEBHOOK_SECRET de çalışır)
  *   PADDLE_ENV              — "sandbox" veya "production" (varsayılan: sandbox)
  *   PADDLE_VENDOR_ID        — Vendor ID (isteğe bağlı, Price ID'lerden okunur)
  *
@@ -27,7 +28,9 @@ export type PaddleEnv = {
 export function getPaddleEnv(): PaddleEnv | null {
   const apiKey = process.env["PADDLE_API_KEY"];
   const clientToken = process.env["PADDLE_CLIENT_TOKEN"];
-  const webhookSecret = process.env["PADDLE_WEBHOOK_SECRET"];
+  // PADDLE_WEBHOOK_SECRET_KEY kanonik ad; PADDLE_WEBHOOK_SECRET geriye dönük uyumluluk.
+  const webhookSecret =
+    process.env["PADDLE_WEBHOOK_SECRET_KEY"] ?? process.env["PADDLE_WEBHOOK_SECRET"];
   if (!apiKey || !clientToken || !webhookSecret) return null;
   const env = (process.env["PADDLE_ENV"] || "sandbox") as "sandbox" | "production";
   return { apiKey, clientToken, webhookSecret, env };
@@ -239,7 +242,8 @@ export async function verifyPaddleWebhook(
   /** Test edilebilirlik için; gerçek çağrıda Date.now() kullanılır. */
   nowSeconds: number = Math.floor(Date.now() / 1000),
   /** Doğrulama anahtarı; verilmezse PADDLE_WEBHOOK_SECRET kullanılır. */
-  secret: string = process.env["PADDLE_WEBHOOK_SECRET"] ?? "",
+  secret: string =
+    process.env["PADDLE_WEBHOOK_SECRET_KEY"] ?? process.env["PADDLE_WEBHOOK_SECRET"] ?? "",
 ): Promise<boolean> {
   if (!secret) return false;
 
