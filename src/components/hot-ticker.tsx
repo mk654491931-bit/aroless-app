@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Flame, Loader2, TrendingUp } from "lucide-react";
-import { fetchHotProducts, HOT_FEED_QUERY_KEY, type HotProduct } from "@/lib/hot-products";
+import { fetchHotProducts, HOT_FEED_QUERY_KEY } from "@/lib/hot-products";
+import { type HotProduct, sanitizeHotFeed } from "@/lib/hot-feed";
 
 const KEY = "omni_hot_ticker_open";
 
@@ -60,7 +61,7 @@ export function HotTicker() {
     enabled: open,
   });
 
-  const items = data?.items ?? [];
+  const items = sanitizeHotFeed(data ?? {}).items;
 
   if (!open) {
     return (
