@@ -19,8 +19,13 @@ import {
   Target,
   Layers,
   Rocket,
+  Star,
+  FileText,
+  Shield,
+  CheckCircle,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { openCookiePreferences } from "@/components/cookie-banner";
 
 const FEATURES = [
   {
@@ -100,6 +105,33 @@ const FAQ = [
   {
     q: "Veriler gerçek mi?",
     a: "Tahminler kaynaklarıyla birlikte gösterilir: doğrulanmış sinyaller ve tahmini sinyaller panelde ayrı ayrı listelenir.",
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "Winner Score sayesinde sezon öncesi elediğim ürünlerin çoğu rakiplerimin vitrininde. Raporlar tek başına bir pazar ekibi gibi çalışıyor.",
+    name: "Mert K.",
+    role: "İstanbul · Amazon satıcısı",
+    initials: "MK",
+    gradient: "from-[var(--brand)] to-[var(--brand-2)]",
+  },
+  {
+    quote:
+      "Komisyon ve kargo hesabını ülke + platform bazında görmek, pazarlık masasında bize her sezon binlerce dolar kazandırdı.",
+    name: "Elif D.",
+    role: "İzmir · TikTok Shop satıcısı",
+    initials: "ED",
+    gradient: "from-emerald-500 to-teal-500",
+  },
+  {
+    quote:
+      "Tedarikçi analizi ve sertifika bariyeri uyarıları gümrük sürprizlerini neredeyse sıfırladı. Artık ürünü önce simülatörde test ediyoruz.",
+    name: "Can S.",
+    role: "Ankara · E-ticaret ihracatçısı",
+    initials: "CS",
+    gradient: "from-violet-500 to-fuchsia-500",
   },
 ];
 
@@ -631,6 +663,41 @@ export function MarketingLanding() {
         </div>
       </section>
 
+      {/* ---------- Testimonials ---------- */}
+      <section className="relative mx-auto max-w-6xl px-4 py-20">
+        <SectionHead sub="Aynı ekibi işe almadan, aynı veriye erişin.">
+          İhracatçılar Aroless ile hızlanıyor
+        </SectionHead>
+        <div className="mt-12 grid gap-4 md:grid-cols-3">
+          {TESTIMONIALS.map((t) => (
+            <figure
+              key={t.name}
+              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_20px_60px_-20px_oklch(0_0_0/0.6)]"
+            >
+              <div className="flex gap-0.5 text-amber-400">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Star key={i} size={13} className="fill-current" />
+                ))}
+              </div>
+              <blockquote className="mt-4 text-sm leading-relaxed text-foreground/90">
+                “{t.quote}”
+              </blockquote>
+              <figcaption className="mt-5 flex items-center gap-3 border-t border-white/10 pt-4">
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br ${t.gradient} text-xs font-bold text-white`}
+                >
+                  {t.initials}
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{t.name}</span>
+                  <span className="block text-[11px] text-muted-foreground">{t.role}</span>
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+
       {/* ---------- FAQ ---------- */}
       <section id="faq" className="mx-auto max-w-3xl px-4 py-20">
         <SectionHead>Sık sorulanlar</SectionHead>
@@ -667,16 +734,117 @@ export function MarketingLanding() {
             <p className="mt-2 text-sm text-muted-foreground">
               Kaydol, hedef pazarını seç, motoru çalıştır.
             </p>
-            <Link
-              to="/auth"
-              className="glow mt-8 inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-7 py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.04]"
-            >
-              <TrendingUp size={16} /> Ücretsiz hesap oluştur
-              <ArrowRight size={16} />
-            </Link>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              <Link
+                to="/auth"
+                className="glow inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-7 py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.04]"
+              >
+                <TrendingUp size={16} /> Ücretsiz hesap oluştur
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                to="/pricing"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-6 py-3.5 text-sm font-semibold backdrop-blur-sm transition-all hover:border-white/25 hover:bg-white/[0.08]"
+              >
+                Fiyatları gör
+              </Link>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* ---------- Footer ---------- */}
+      <footer className="relative border-t border-white/10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/30 to-transparent" />
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-3 md:px-6">
+          <div>
+            <BrandLogo />
+            <p className="mt-4 max-w-xs text-xs leading-relaxed text-muted-foreground">
+              B2B e-ticaret altyapısı: ürün istihbaratı, tedarikçi analizi ve uyum araçları tek bir
+              platformda.
+            </p>
+            <p className="mt-5 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> KVKK uyumlu veri işleme
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Ürün
+            </p>
+            <ul className="mt-4 space-y-2.5 text-sm">
+              <li>
+                <a
+                  href="#features"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  Özellikler
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#how"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  Nasıl çalışır
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/pricing"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  Fiyatlandırma
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="#faq"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  SSS
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <Shield className="h-3.5 w-3.5" /> Yasal & Uyum
+            </p>
+            <ul className="mt-4 space-y-2.5 text-sm">
+              <li>
+                <Link
+                  to="/legal/$slug"
+                  params={{ slug: "kullanim-kosullari" }}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  <FileText className="h-3.5 w-3.5" /> Kullanım Koşulları
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/legal/$slug"
+                  params={{ slug: "kvkk-aydinlatma-metni" }}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  <FileText className="h-3.5 w-3.5" /> KVKK Aydınlatma Metni
+                </Link>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={openCookiePreferences}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-all duration-200 hover:text-foreground hover:translate-x-0.5"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" /> Çerez Tercihleri
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-white/[0.06] px-4 py-5 text-center text-[11px] text-muted-foreground">
+          © {new Date().getFullYear()} Aroless. Tüm hakları saklıdır.
+        </div>
+      </footer>
     </div>
   );
 }
