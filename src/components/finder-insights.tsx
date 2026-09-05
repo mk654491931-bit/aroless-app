@@ -151,7 +151,7 @@ export function FilterPresets<T>({
       <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
         <Bookmark size={11} /> Filtre setleri
       </span>
-      {presets.map((p) => (
+      {Array.isArray(presets) && presets.map((p) => (
         <span
           key={p.name}
           className="group inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10"

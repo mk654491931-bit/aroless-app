@@ -44,6 +44,16 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-red-700">Bir şey yanlış gitti</h3>
                 <p className="text-sm text-red-600 mt-1">{this.state.error.message}</p>
+                {this.state.error.stack && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs font-medium text-red-700/80 select-none">
+                      Teknik detay
+                    </summary>
+                    <pre className="mt-1 max-h-40 overflow-auto rounded bg-black/25 p-2 text-[10px] leading-relaxed text-red-500 whitespace-pre-wrap">
+                      {this.state.error.stack}
+                    </pre>
+                  </details>
+                )}
                 <button
                   onClick={this.retry}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 hover:text-red-800"

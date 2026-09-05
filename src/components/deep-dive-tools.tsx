@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Download, FileDown, FileText, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { num } from "@/lib/deep-dive-complete";
+import { parsePersistedState } from "@/components/finder-extras";
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
@@ -15,8 +16,8 @@ export function useChecklist(scope: string) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setDone(JSON.parse(raw) as Record<string, boolean>);
+      const parsed = parsePersistedState(localStorage.getItem(storageKey), {});
+      if (parsed !== null) setDone(parsed as Record<string, boolean>);
     } catch {
       /* yoksay */
     }

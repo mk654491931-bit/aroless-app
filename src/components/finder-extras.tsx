@@ -1,6 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { History, Lightbulb, X } from "lucide-react";
 
+/**
+ * localStorage'dan okunan bir değeri `initial` ile aynı şekilde olduğunda
+ * döndürür; uyumsuz/bozuk değerlerde null (çağıran varsayılanını korur).
+ *
+ * Eski sürümlerden kalan yanlış tipteki değerler (örn. dizi bekleyen
+ * anahtarda string) `.map`/`.some` çağrılarında "x is not a function" ile
+ * tüm panonun kırmızı hataya düşmesine yol açıyordu.
+ */
+export function parsePersistedState<T>(raw: string | null, initial: T): T | null {
+  if (raw === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (Array.isArray(initial)) {
+    if (!Array.isArray(parsed)) return null;
+  } else if (initial !== null && typeof initial === "object") {
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  } else if (initial === null) {
+    if (parsed !== null) return null;
+  } else if (typeof parsed !== typeof initial) {
+    return null;
+  }
+  return parsed as T;
+}
+
 /** Persist any finder setting in localStorage so a search survives reloads. */
 export function usePersistentState<T>(
   key: string,
@@ -12,7 +40,8 @@ export function usePersistentState<T>(
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw) as T);
+      const parsed = parsePersistedState(raw, initial);
+      if (parsed !== null) setValue(parsed);
     } catch {
       /* ignore */
     }
@@ -81,7 +110,7 @@ export function FinderMemoryBar({
 }) {
   return (
     <div className="mx-auto mt-3 max-w-5xl space-y-2">
-      {recent.length > 0 && (
+      {Array.isArray(recent) && recent.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             <History size={11} /> Son aramalar
