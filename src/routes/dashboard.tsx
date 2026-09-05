@@ -39,6 +39,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
+import { asArray } from "@/lib/query-guards";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageHero } from "@/components/page-hero";
 
@@ -106,9 +107,9 @@ function DashboardPage() {
       </div>
     );
 
-  const favorites: FavoriteRow[] = (favQ.data as FavoriteRow[] | undefined) ?? [];
-  const analyses: AnalysisRow[] = (anaQ.data as AnalysisRow[] | undefined) ?? [];
-  const notifications: NotificationRow[] = (notifQ.data as NotificationRow[] | undefined) ?? [];
+  const favorites: FavoriteRow[] = asArray<FavoriteRow>(favQ.data);
+  const analyses: AnalysisRow[] = asArray<AnalysisRow>(anaQ.data);
+  const notifications: NotificationRow[] = asArray<NotificationRow>(notifQ.data);
   const profile = profileQ.data as
     { credits: number; credits_spent: number; subscription_tier: string } | undefined;
 

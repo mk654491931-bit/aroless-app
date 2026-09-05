@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, ArrowRight, Check, Loader2, Scale, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
+import { asArray } from "@/lib/query-guards";
 import {
   loadFavoritesForComparison,
   summarizeComparison,
@@ -39,7 +40,7 @@ function ComparePage() {
     queryFn: () => listFn(),
     enabled: !!user,
   });
-  const favorites: FavoriteRow[] = (favQ.data as FavoriteRow[] | undefined) ?? [];
+  const favorites: FavoriteRow[] = asArray<FavoriteRow>(favQ.data);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [compareData, setCompareData] = useState<ComparisonProduct[] | null>(null);

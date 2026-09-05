@@ -62,6 +62,7 @@ import {
   type ValidationReport,
 } from "@/lib/gemini.functions";
 import { validateProduct } from "@/lib/gemini.functions";
+import { asArray } from "@/lib/query-guards";
 import { ConsensusBadge, ConsensusReportModal } from "@/components/consensus-report";
 import { checkIsAdmin } from "@/lib/admin.functions";
 import { PricingModal } from "@/components/pricing-modal";
@@ -610,7 +611,9 @@ function Dashboard() {
   // Free (non-admin) accounts: product search only — everything else is locked.
   const locked = !isAdmin && !isPaidTier;
 
-  const favorites = favsQ.data ?? [];
+  // The server-fn client can resolve with a non-array on error responses (e.g. a
+  // JSON 500 without the start serialization header), so shape-check, not just `?? []`.
+  const favorites = asArray<FavoriteRow>(favsQ.data);
   const favoriteNames = new Set(favorites.map((f) => f.name));
 
   const tabDefs: { id: Tab; label: string; icon: typeof TrendingUp }[] = [
