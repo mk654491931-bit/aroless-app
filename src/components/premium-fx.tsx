@@ -46,7 +46,15 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     if (!coarse) window.addEventListener("mousemove", onMove);
 
     let t = 0;
-    const draw = () => {
+    let lastFrame = 0;
+    const draw = (ts: number) => {
+      // Dekoratif ağ: 60fps yerine ~30fps ile sınırla — her karedeki tam ekran
+      // clear+stroke düşük güçlü cihazlarda ana iş parçacığını yoruyordu.
+      if (ts - lastFrame < 33) {
+        if (!reduce && !coarse && !document.hidden) raf = requestAnimationFrame(draw);
+        return;
+      }
+      lastFrame = ts;
       t += 0.005;
       ctx.clearRect(0, 0, w, h);
       const swayX = (mouse.current.x - 0.5) * 24;
@@ -89,7 +97,7 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
       }
       if (!reduce && !coarse && !document.hidden) raf = requestAnimationFrame(draw);
     };
-    draw();
+    raf = requestAnimationFrame(draw);
 
     const onVisibility = () => {
       if (document.hidden) {

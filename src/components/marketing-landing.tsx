@@ -290,7 +290,7 @@ export function MarketingLanding() {
       {/* ---------- Hero ---------- */}
       <section className="relative mx-auto max-w-6xl px-4 pb-20 pt-20 text-center md:pt-28">
         {/* Floating orb */}
-        <div className="pointer-events-none absolute left-1/2 top-12 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,var(--brand)_0%,transparent_65%)] opacity-20 blur-3xl [animation:float-slow_7s_ease-in-out_infinite]" />
+        <div className="pointer-events-none absolute left-1/2 top-12 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,var(--brand)_0%,transparent_65%)] opacity-20 blur-xl [animation:float-slow_7s_ease-in-out_infinite]" />
 
         <div
           className={`mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-sm transition-all duration-700 ${heroReady ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}

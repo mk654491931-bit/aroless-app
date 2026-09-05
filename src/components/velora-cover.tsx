@@ -41,7 +41,7 @@ export function ArolessCover({ className = "" }: { className?: string }) {
       <div aria-hidden className="auth-shimmer absolute inset-0" />
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 -left-20 h-56 w-56 rounded-full blur-3xl animate-float-slow sm:h-80 sm:w-80"
+        className="pointer-events-none absolute -top-32 -left-20 h-56 w-56 rounded-full blur-xl animate-float-slow sm:h-80 sm:w-80"
         style={{
           background: "radial-gradient(circle, var(--color-brand), transparent 65%)",
           opacity: 0.22,
@@ -49,7 +49,7 @@ export function ArolessCover({ className = "" }: { className?: string }) {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -bottom-32 -right-16 h-64 w-64 rounded-full blur-3xl animate-float-slow sm:h-96 sm:w-96"
+        className="pointer-events-none absolute -bottom-32 -right-16 h-64 w-64 rounded-full blur-xl animate-float-slow sm:h-96 sm:w-96"
         style={{
           background: "radial-gradient(circle, var(--color-brand-2), transparent 65%)",
           opacity: 0.18,

@@ -740,7 +740,9 @@ input:focus, textarea:focus, select:focus {
   height: 62vh;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  filter: blur(90px);
+  /* 90px tam ekran blur + fare takipli transform her karede yeniden raster
+     üretiyordu; gradyan zaten yumuşak — hafif 30px yeterli. */
+  filter: blur(30px);
   background: radial-gradient(
     ellipse at center,
     color-mix(in oklab, var(--brand) 30%, transparent),
@@ -1382,7 +1384,9 @@ body,
     radial-gradient(36% 28% at 82% 28%, var(--brand-2) 0%, transparent 64%),
     radial-gradient(44% 32% at 52% 88%, var(--accent-active) 0%, transparent 66%);
   opacity: 0.55;
-  filter: blur(78px);
+  /* blur(78px) tam ekran katmanı her animasyon karesinde yeniden rasterleniyor ve
+     ana iş parçacığını kilitleyip "yanıt vermiyor" durumuna yol açıyordu — gradyanlar
+     zaten feather'lı olduğu için blur gerekmez (auth-sayfası düzeltmesiyle aynı mantık). */
   animation: aurora-swirl 26s ease-in-out infinite alternate;
   will-change: transform;
   translate: calc(var(--px) * 34px) calc(var(--py) * 26px - var(--sy) * 60px);
@@ -1396,7 +1400,8 @@ html.palette-aurora .amb-aurora {
 
 .amb-blob {
   border-radius: 9999px;
-  filter: blur(68px);
+  /* blur(68px) + scale animasyonu her karede yeniden raster üretiyordu; radial
+     gradyanlar %68'de zaten transparent'a iniyor — blur kaldırıldı. */
   opacity: 0.5;
 }
 .amb-blob-1 {
@@ -1474,7 +1479,9 @@ html.palette-aurora .amb-blob {
     color-mix(in oklab, var(--brand-2) 26%, transparent),
     transparent
   );
-  filter: blur(48px);
+  /* 48px tam ekran blur → hafif 18px (auth-beam ile aynı); süpürme animasyonu
+     artık yalnızca compositor'da çalışır. */
+  filter: blur(18px);
   rotate: 14deg;
   opacity: 0.75;
   animation: beam-sweep 18s ease-in-out infinite alternate;
@@ -1529,6 +1536,19 @@ html.light .amb-vignette {
     transparent 50%,
     oklch(0.35 0.05 265 / 0.1) 100%
   );
+}
+
+/* ── Perf: the original .amb-* rules defined later in this file carry
+   full-viewport blur(48–90px). Each such layer is rastered into a huge
+   texture (several are animated / mouse-followed), stalling the main thread
+   at mount and on resize — the "page stops responding after sign-in"
+   symptom. These !important overrides win the cascade regardless of order,
+   so the originals keep their geometry but lose the heavy blur. ── */
+.amb-swirl {
+  filter: blur(28px) !important;
+}
+.amb-scan {
+  filter: blur(14px) !important;
 }
 
 /* Smooth page transition — opacity only, so `position: fixed` children
