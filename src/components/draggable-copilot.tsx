@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Send, X } from "lucide-react";
 import { ArolessMark } from "@/components/velora-mark";
+import { parsePersistedState } from "@/components/finder-extras";
 import { askCopilot } from "@/lib/competitor.functions";
 
 type Msg = { role: "user" | "ai"; text: string };
@@ -23,8 +24,9 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) {
-        setPos(JSON.parse(raw) as { x: number; y: number });
+      const parsed = parsePersistedState(raw, { x: 0, y: 0 });
+      if (parsed !== null) {
+        setPos(parsed);
         return;
       }
     } catch {

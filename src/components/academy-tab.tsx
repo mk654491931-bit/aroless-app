@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { parsePersistedState } from "@/components/finder-extras";
 import {
   GraduationCap,
   Check,
@@ -858,7 +859,7 @@ export function AcademyTab() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      const p = raw ? (JSON.parse(raw) as Partial<Saved>) : {};
+      const p = parsePersistedState(raw, {} as Partial<Saved>) ?? {};
       setTasksDone(p.tasks ?? {});
       setAnswers(p.answers ?? {});
       setNotes(p.notes ?? {});

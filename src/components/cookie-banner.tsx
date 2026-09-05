@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Cookie, Shield, BarChart3, Megaphone } from "lucide-react";
+import { parsePersistedState } from "@/components/finder-extras";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -27,8 +28,7 @@ export function openCookiePreferences() {
 
 function read(): CookieConsent | null {
   try {
-    const raw = localStorage.getItem(COOKIE_KEY);
-    return raw ? (JSON.parse(raw) as CookieConsent) : null;
+    return parsePersistedState(localStorage.getItem(COOKIE_KEY), {} as CookieConsent);
   } catch {
     return null;
   }
