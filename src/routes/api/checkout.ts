@@ -5,10 +5,21 @@ import type { Database } from "@/integrations/supabase/types";
 
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
-  redirectUrl: z.string().url().max(500).optional(),
 });
 
-/** Oturum açmış kullanıcı için Paddle ödeme bağlantısı üretir. */
+function json(payload: unknown, status: number) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Oturum açmış kullanıcı için Paddle overlay checkout oturumu üretir.
+ * Yanıt: { transactionId, clientToken, environment, ... } — istemci bu veriyle
+ * Paddle.js overlay'ini açar. Client token yalnızca Paddle tarafında sınırlı
+ * yetkiye sahiptir (public by design), API anahtarı asla buraya dönmez.
+ */
 export const Route = createFileRoute("/api/checkout")({
   server: {
     handlers: {
@@ -25,26 +36,36 @@ export const Route = createFileRoute("/api/checkout")({
           const { data: userData, error } = await supabase.auth.getUser(token);
           if (error || !userData.user) return json({ error: "Unauthorized" }, 401);
 
-          const body = BodySchema.parse(await request.json().catch(() => ({})));
-          const { createPaddleCheckout } = await import("@/lib/paddle.server");
-          const { checkoutUrl } = await createPaddleCheckout({
+          const parsed = BodySchema.safeParse(await request.json().catch(() => ({})));
+          if (!parsed.success) {
+            return json({ error: "Geçersiz istek: plan Starter/Pro/Business olmalı." }, 400);
+          }
+
+          const { createPaddleCheckoutSession } = await import("@/lib/paddle.server");
+          const session = await createPaddleCheckoutSession({
             userId: userData.user.id,
             email: userData.user.email,
-            plan: body.plan,
-            redirectUrl: body.redirectUrl ?? new URL(request.url).origin + "/settings",
+            plan: parsed.data.plan,
           });
-          return json({ url: checkoutUrl }, 200);
+
+          return json(
+            {
+              transactionId: session.transactionId,
+              clientToken: session.clientToken,
+              environment: session.environment,
+              plan: session.plan,
+              priceId: session.priceId,
+              amountCents: session.amountCents,
+              currency: session.currency,
+              email: userData.user.email,
+            },
+            200,
+          );
         } catch (e) {
-          return json({ error: (e as Error).message }, 500);
+          console.error("[Checkout] Failed to create Paddle session:", e);
+          return json({ error: "Checkout oturumu oluşturulamadı." }, 500);
         }
       },
     },
   },
 });
-
-function json(payload: unknown, status: number) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}

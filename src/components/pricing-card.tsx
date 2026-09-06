@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { openPaddleOverlay } from "@/lib/paddle-checkout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -60,9 +61,23 @@ export function PricingCard({ className }: { className?: string }) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ plan: "Pro" }),
       });
-      const json = (await resp.json()) as { url?: string; error?: string };
-      if (!resp.ok || !json.url) throw new Error(json.error || "Ödeme bağlantısı alınamadı.");
-      window.location.href = json.url;
+      const json = (await resp.json()) as {
+        transactionId?: string;
+        clientToken?: string;
+        environment?: "sandbox" | "production";
+        email?: string | null;
+        error?: string;
+      };
+      if (!resp.ok || !json.transactionId || !json.clientToken) {
+        throw new Error(json.error || "Ödeme oturumu alınamadı.");
+      }
+      const opened = await openPaddleOverlay({
+        transactionId: json.transactionId,
+        clientToken: json.clientToken,
+        environment: json.environment ?? "production",
+        email: json.email ?? null,
+      });
+      if (!opened) throw new Error("Ödeme penceresi açılamadı.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

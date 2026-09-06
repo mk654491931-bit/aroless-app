@@ -138,7 +138,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
-        {/* Paddle client SDK (opsiyonel — checkout URL redirect ile yeterli) */}
+        {/* Paddle.js, checkout sırasında @/lib/paddle-checkout dinamik import'uyla yüklenir */}
         <Scripts />
       </body>
     </html>

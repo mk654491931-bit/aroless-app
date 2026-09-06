@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/paddle.functions";
+import { openPaddleOverlay } from "@/lib/paddle-checkout";
 import { validatePromoCode, getMyPromoCode } from "@/lib/promo.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown, Ticket, Loader2 } from "lucide-react";
@@ -74,11 +75,30 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   const subscribe = async (plan: PlanId) => {
     setLoading(plan);
     try {
-      const { url } = await checkout({ data: { plan } });
-      // Paddle checkout URL'sini aç (Paddle'ın kendi hosting'i, SDK wrapper gerekmez)
-      window.open(url, "_blank", "noopener");
+      // Sunucuda transaction oluşturulur (customData userId+plan ile) — güvenli;
+      // ardından overlay checkout bu transaction ile açılır.
+      const session = await checkout({ data: { plan } });
+      const opened = await openPaddleOverlay(
+        {
+          transactionId: session.transactionId,
+          clientToken: session.clientToken,
+          environment: session.environment,
+          email: session.email,
+        },
+        {
+          discountCode: discount > 0 ? promo : null,
+          onEvent: (event) => {
+            if (event?.name === "checkout.completed") {
+              toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
+            }
+          },
+        },
+      );
+      if (!opened) {
+        toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
+      }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Checkout failed");
+      toast.error(e instanceof Error ? e.message : "Checkout başlatılamadı");
     } finally {
       setLoading(null);
     }
