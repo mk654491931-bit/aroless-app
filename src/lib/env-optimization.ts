@@ -10,4 +10,217 @@ export interface EnvironmentConfig {
   enablePerformanceLogging: boolean;
   enableLongTaskWarnings: boolean;
   chunkSize: number;
-  cacheStrategy: "aggressive" | "moderate" | "conservative";\n  imageQuality: number;\n  enableServiceWorker: boolean;\n  enableAnalytics: boolean;\n}\n\nconst envConfigs: Record<Environment, EnvironmentConfig> = {\n  development: {\n    enableDebugger: true,\n    enablePerformanceLogging: true,\n    enableLongTaskWarnings: true,\n    chunkSize: 200 * 1024,\n    cacheStrategy: \"conservative\",\n    imageQuality: 85,\n    enableServiceWorker: false,\n    enableAnalytics: false,\n  },\n  staging: {\n    enableDebugger: false,\n    enablePerformanceLogging: true,\n    enableLongTaskWarnings: true,\n    chunkSize: 300 * 1024,\n    cacheStrategy: \"moderate\",\n    imageQuality: 80,\n    enableServiceWorker: true,\n    enableAnalytics: true,\n  },\n  production: {\n    enableDebugger: false,\n    enablePerformanceLogging: false,\n    enableLongTaskWarnings: false,\n    chunkSize: 500 * 1024,\n    cacheStrategy: \"aggressive\",\n    imageQuality: 75,\n    enableServiceWorker: true,\n    enableAnalytics: true,\n  },\n};\n\n/**\n * Environment Configuration Manager\n */\nexport const envManager = {\n  getCurrentEnvironment(): Environment {\n    if (typeof process === \"undefined\") return \"production\";\n\n    const env = process.env.NODE_ENV;\n    if (env === \"development\" || env === \"staging\") return env;\n    return \"production\";\n  },\n\n  getConfig(): EnvironmentConfig {\n    return envConfigs[envManager.getCurrentEnvironment()];\n  },\n\n  isProduction(): boolean {\n    return envManager.getCurrentEnvironment() === \"production\";\n  },\n\n  isDevelopment(): boolean {\n    return envManager.getCurrentEnvironment() === \"development\";\n  },\n\n  isStaging(): boolean {\n    return envManager.getCurrentEnvironment() === \"staging\";\n  },\n};\n\n/**\n * Runtime Performance Optimization\n */\nexport const runtimeOptimization = {\n  /**\n   * RequestIdleCallback shim\n   */\n  requestIdleCallback(\n    callback: (deadline: IdleDeadline) => void,\n    options?: IdleRequestOptions,\n  ): number {\n    if (typeof window !== \"undefined\" && \"requestIdleCallback\" in window) {\n      return window.requestIdleCallback(callback, options);\n    }\n\n    // Fallback to setTimeout\n    const start = Date.now();\n    return setTimeout(() => {\n      callback({\n        didTimeout: false,\n        timeRemaining: () => Math.max(0, 50 - (Date.now() - start)),\n      });\n    }, 0) as any;\n  },\n\n  /**\n   * CancelIdleCallback\n   */\n  cancelIdleCallback(id: number): void {\n    if (typeof window !== \"undefined\" && \"cancelIdleCallback\" in window) {\n      window.cancelIdleCallback(id);\n    } else {\n      clearTimeout(id);\n    }\n  },\n\n  /**\n   * Scheduled microtask\n   */\n  scheduleTask(\n    callback: () => void,\n    priority: \"high\" | \"normal\" | \"low\" = \"normal\",\n  ): () => void {\n    if (priority === \"high\") {\n      // High priority: hemen çalıştır\n      Promise.resolve().then(callback);\n      return () => {};\n    }\n\n    if (priority === \"normal\" && typeof window !== \"undefined\" && \"setTimeout\" in window) {\n      const id = setTimeout(callback, 0);\n      return () => clearTimeout(id);\n    }\n\n    // Low priority: requestIdleCallback\n    const id = runtimeOptimization.requestIdleCallback(() => callback());\n    return () => runtimeOptimization.cancelIdleCallback(id);\n  },\n};\n\n/**\n * React Hook - Environment Awareness\n */\nimport { useEffect, useRef } from \"react\";\n\nexport function useEnvironmentConfig() {\n  const config = envManager.getConfig();\n\n  useEffect(() => {\n    if (config.enablePerformanceLogging) {\n      console.log(\"📋 Environment Config:\", {\n        env: envManager.getCurrentEnvironment(),\n        ...config,\n      });\n    }\n  }, [config]);\n\n  return config;\n}\n\n/**\n * Async Task Scheduler\n */\nexport class TaskScheduler {\n  private taskQueue: Array<() => Promise<void>> = [];\n  private isProcessing = false;\n  private config: EnvironmentConfig;\n\n  constructor(config?: EnvironmentConfig) {\n    this.config = config || envManager.getConfig();\n  }\n\n  /**\n   * Kuyruğa görev ekle\n   */\n  async schedule(task: () => Promise<void>): Promise<void> {\n    this.taskQueue.push(task);\n    return this.process();\n  }\n\n  /**\n   * Görevleri işle\n   */\n  private async process(): Promise<void> {\n    if (this.isProcessing || this.taskQueue.length === 0) return;\n\n    this.isProcessing = true;\n\n    while (this.taskQueue.length > 0) {\n      const task = this.taskQueue.shift();\n      if (task) {\n        try {\n          await task();\n        } catch (error) {\n          console.error(\"Task execution failed:\", error);\n        }\n      }\n\n      // Yield to browser for other tasks\n      await new Promise((resolve) => {\n        runtimeOptimization.scheduleTask(resolve, \"low\");\n      });\n    }\n\n    this.isProcessing = false;\n  }\n\n  /**\n   * Kuyruğu temizle\n   */\n  clear(): void {\n    this.taskQueue = [];\n  }\n\n  /**\n   * Kuyruk boyutu\n   */\n  getSize(): number {\n    return this.taskQueue.length;\n  }\n}\n\n/**\n * Global Task Scheduler Instance\n */\nexport const globalScheduler = new TaskScheduler();\n"
+  cacheStrategy: "aggressive" | "moderate" | "conservative";
+  imageQuality: number;
+  enableServiceWorker: boolean;
+  enableAnalytics: boolean;
+}
+
+const envConfigs: Record<Environment, EnvironmentConfig> = {
+  development: {
+    enableDebugger: true,
+    enablePerformanceLogging: true,
+    enableLongTaskWarnings: true,
+    chunkSize: 200 * 1024,
+    cacheStrategy: "conservative",
+    imageQuality: 85,
+    enableServiceWorker: false,
+    enableAnalytics: false,
+  },
+  staging: {
+    enableDebugger: false,
+    enablePerformanceLogging: true,
+    enableLongTaskWarnings: true,
+    chunkSize: 300 * 1024,
+    cacheStrategy: "moderate",
+    imageQuality: 80,
+    enableServiceWorker: true,
+    enableAnalytics: true,
+  },
+  production: {
+    enableDebugger: false,
+    enablePerformanceLogging: false,
+    enableLongTaskWarnings: false,
+    chunkSize: 500 * 1024,
+    cacheStrategy: "aggressive",
+    imageQuality: 75,
+    enableServiceWorker: true,
+    enableAnalytics: true,
+  },
+};
+
+/**
+ * Environment Configuration Manager
+ */
+export const envManager = {
+  getCurrentEnvironment(): Environment {
+    if (typeof process === "undefined") return "production";
+
+    const env = process.env.NODE_ENV;
+    if (env === "development" || env === "staging") return env;
+    return "production";
+  },
+
+  getConfig(): EnvironmentConfig {
+    return envConfigs[envManager.getCurrentEnvironment()];
+  },
+
+  isProduction(): boolean {
+    return envManager.getCurrentEnvironment() === "production";
+  },
+
+  isDevelopment(): boolean {
+    return envManager.getCurrentEnvironment() === "development";
+  },
+
+  isStaging(): boolean {
+    return envManager.getCurrentEnvironment() === "staging";
+  },
+};
+
+/**
+ * Runtime Performance Optimization
+ */
+export const runtimeOptimization = {
+  /**
+   * RequestIdleCallback shim
+   */
+  requestIdleCallback(
+    callback: (deadline: IdleDeadline) => void,
+    options?: IdleRequestOptions,
+  ): number {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      return window.requestIdleCallback(callback, options);
+    }
+
+    // Fallback to setTimeout
+    const start = Date.now();
+    return setTimeout(() => {
+      callback({
+        didTimeout: false,
+        timeRemaining: () => Math.max(0, 50 - (Date.now() - start)),
+      });
+    }, 0) as any;
+  },
+
+  /**
+   * CancelIdleCallback
+   */
+  cancelIdleCallback(id: number): void {
+    if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
+      window.cancelIdleCallback(id);
+    } else {
+      clearTimeout(id);
+    }
+  },
+
+  /**
+   * Scheduled microtask
+   */
+  scheduleTask(
+    callback: () => void,
+    priority: "high" | "normal" | "low" = "normal",
+  ): () => void {
+    if (priority === "high") {
+      // High priority: hemen çalıştır
+      Promise.resolve().then(callback);
+      return () => {};
+    }
+
+    if (priority === "normal" && typeof window !== "undefined" && "setTimeout" in window) {
+      const id = setTimeout(callback, 0);
+      return () => clearTimeout(id);
+    }
+
+    // Low priority: requestIdleCallback
+    const id = runtimeOptimization.requestIdleCallback(() => callback());
+    return () => runtimeOptimization.cancelIdleCallback(id);
+  },
+};
+
+/**
+ * React Hook - Environment Awareness
+ */
+import { useEffect, useRef } from "react";
+
+export function useEnvironmentConfig() {
+  const config = envManager.getConfig();
+
+  useEffect(() => {
+    if (config.enablePerformanceLogging) {
+      console.log("📋 Environment Config:", {
+        env: envManager.getCurrentEnvironment(),
+        ...config,
+      });
+    }
+  }, [config]);
+
+  return config;
+}
+
+/**
+ * Async Task Scheduler
+ */
+export class TaskScheduler {
+  private taskQueue: Array<() => Promise<void>> = [];
+  private isProcessing = false;
+  private config: EnvironmentConfig;
+
+  constructor(config?: EnvironmentConfig) {
+    this.config = config || envManager.getConfig();
+  }
+
+  /**
+   * Kuyruğa görev ekle
+   */
+  async schedule(task: () => Promise<void>): Promise<void> {
+    this.taskQueue.push(task);
+    return this.process();
+  }
+
+  /**
+   * Görevleri işle
+   */
+  private async process(): Promise<void> {
+    if (this.isProcessing || this.taskQueue.length === 0) return;
+
+    this.isProcessing = true;
+
+    while (this.taskQueue.length > 0) {
+      const task = this.taskQueue.shift();
+      if (task) {
+        try {
+          await task();
+        } catch (error) {
+          console.error("Task execution failed:", error);
+        }
+      }
+
+      // Yield to browser for other tasks
+      await new Promise((resolve) => {
+        runtimeOptimization.scheduleTask(resolve, "low");
+      });
+    }
+
+    this.isProcessing = false;
+  }
+
+  /**
+   * Kuyruğu temizle
+   */
+  clear(): void {
+    this.taskQueue = [];
+  }
+
+  /**
+   * Kuyruk boyutu
+   */
+  getSize(): number {
+    return this.taskQueue.length;
+  }
+}
+
+/**
+ * Global Task Scheduler Instance
+ */
+export const globalScheduler = new TaskScheduler();

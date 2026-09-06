@@ -15,7 +15,7 @@ type PaddleWebhookPayload = {
  * Paddle Billing v2 webhook handler
  * Subscription events'ı dinle ve profile'ı güncelle
  */
-export const Route = createFileRoute("/api/public/webhook/paddle")({
+export const Route = createFileRoute("/api/public/webhook/lemon-squeezy")({
   server: {
     handlers: {
       POST: async ({ request }) => {

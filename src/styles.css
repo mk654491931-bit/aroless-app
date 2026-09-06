@@ -40,35 +40,35 @@
 
 :root {
   --radius: 0.75rem;
-  /* High-contrast dark SaaS — slate / navy */
-  --background: #0b0f17;
-  --foreground: oklch(0.97 0.005 260);
-  --surface: #0f172a;
-  --card: oklch(0.22 0.035 265 / 0.7);
-  --card-foreground: oklch(0.97 0.005 260);
-  --popover: #0f172a;
-  --popover-foreground: oklch(0.97 0.005 260);
-  --primary: oklch(0.68 0.2 265);
-  --primary-foreground: oklch(0.99 0.005 260);
-  --secondary: oklch(0.27 0.04 265);
-  --secondary-foreground: oklch(0.97 0.005 260);
-  --muted: oklch(0.25 0.035 265);
-  --muted-foreground: oklch(0.72 0.03 260);
-  --accent: oklch(0.3 0.06 285);
-  --accent-foreground: oklch(0.97 0.005 260);
-  --destructive: oklch(0.62 0.24 25);
-  --destructive-foreground: oklch(0.98 0.005 260);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.68 0.2 265);
-  --brand: oklch(0.68 0.2 265); /* electric blue */
-  --brand-2: oklch(0.66 0.24 305); /* violet */
-  /* Semantic accents */
-  --accent-active: oklch(0.8 0.14 200); /* cyan — active UI */
+  /* Corporate dark: near-black base + restrained blue system */
+  --background: #05070d;
+  --foreground: oklch(0.95 0.004 250);
+  --surface: #0a1020;
+  --card: oklch(0.14 0.025 260 / 0.78);
+  --card-foreground: oklch(0.95 0.004 250);
+  --popover: #0a1020;
+  --popover-foreground: oklch(0.95 0.004 250);
+  --primary: oklch(0.62 0.17 255);  /* royal blue — primary actions */
+  --primary-foreground: oklch(0.98 0.004 250);
+  --secondary: oklch(0.19 0.028 255);
+  --secondary-foreground: oklch(0.93 0.004 250);
+  --muted: oklch(0.18 0.025 255);
+  --muted-foreground: oklch(0.68 0.025 250);
+  --accent: oklch(0.22 0.045 250);
+  --accent-foreground: oklch(0.95 0.004 250);
+  --destructive: oklch(0.55 0.18 25);
+  --destructive-foreground: oklch(0.96 0.004 250);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.62 0.17 255);
+  --brand: oklch(0.62 0.17 255);   /* corporate blue */
+  --brand-2: oklch(0.58 0.16 262); /* deeper navy-blue accent */
+  /* Semantic accents — muted, corporate */
+  --accent-active: oklch(0.75 0.13 205); /* soft cyan — active UI only */
 
-  --profit: oklch(0.76 0.17 158); /* emerald — profit */
-  --warning: oklch(0.82 0.16 80); /* amber — warnings */
-  --ai: oklch(0.7 0.2 290); /* indigo/purple — AI */
+  --profit: oklch(0.7 0.14 155);  /* restrained green */
+  --warning: oklch(0.75 0.14 78);  /* restrained amber */
+  --ai: oklch(0.64 0.16 255);     /* blue-family, not purple */
 }
 
 /* ---------- Light (gündüz) teması ---------- */
@@ -134,12 +134,12 @@ html.light [class*="text-white/"] {
     background-image:
       radial-gradient(
         1200px 620px at 10% -12%,
-        color-mix(in oklab, var(--brand) 30%, transparent),
+        color-mix(in oklab, var(--brand) 22%, transparent),
         transparent 62%
       ),
       radial-gradient(
         1000px 520px at 100% 0%,
-        color-mix(in oklab, var(--brand-2) 22%, transparent),
+        color-mix(in oklab, var(--brand-2) 18%, transparent),
         transparent 62%
       );
     background-attachment: scroll;
@@ -947,9 +947,9 @@ html.palette-aurora {
   --border: oklch(0.85 0.12 180 / 18%);
   --input: oklch(0.85 0.12 180 / 20%);
   --ring: oklch(0.78 0.17 168);
-  --brand: oklch(0.78 0.17 168); /* emerald-teal */
-  --brand-2: oklch(0.8 0.15 205); /* aqua */
-  --accent-active: oklch(0.86 0.14 190);
+  --brand: oklch(0.62 0.16 255);  /* corporate blue */
+  --brand-2: oklch(0.58 0.15 262); /* navy-blue */
+  --accent-active: oklch(0.75 0.13 205);
   --profit: oklch(0.82 0.17 150);
   --warning: oklch(0.85 0.16 95);
   --ai: oklch(0.76 0.16 178);
