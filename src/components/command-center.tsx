@@ -415,9 +415,11 @@ export function CommandCenter() {
 
           {selected && econ && verdict && (
             <div className="flex flex-col gap-4 p-4 lg:flex-row">
-              {/* agents — two 7-agent columns side by side */}
-              <div className="min-w-0 flex-1">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 2xl:grid-cols-7">
+              {/* 14 agent — masaüstünde (md+) 7+7 iki kompakt sütun; panel görünür
+                  alana sığar, çözünürlük yetmezse taşma panel içinde kayar.
+                  Mobilde (base) önceki tek sütunlu görünüm aynen korunur. */}
+              <div className="min-w-0 flex-1 md:max-h-[calc(100vh-14rem)] md:overflow-y-auto md:overscroll-contain md:pr-1">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-1.5">
                   {agents.map((a, i) => {
                     const st = statusOf(i, a);
                     const Icon = AGENT_META[a.agent_id].icon;
@@ -425,22 +427,25 @@ export function CommandCenter() {
                       <button
                         key={a.agent_id}
                         onClick={() => setDrill(a.agent_id)}
+                        title={AGENT_META[a.agent_id].desc}
                         className={cn(
-                          "group relative flex h-full flex-col gap-2 rounded-xl border border-border bg-background/40 p-2.5 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60",
+                          "group relative flex h-full flex-col gap-2 rounded-xl border border-border bg-background/40 p-2.5 text-left transition-colors hover:border-[--ai]/50 hover:bg-background/60 md:gap-1.5 md:rounded-lg md:p-2",
                           st === "warning" && "border-destructive/40",
                         )}
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="grid size-7 shrink-0 place-items-center rounded-md border border-[--ai]/30 bg-[--ai]/10">
+                        <div className="flex items-start gap-2 md:gap-1.5">
+                          <div className="grid size-7 shrink-0 place-items-center rounded-md border border-[--ai]/30 bg-[--ai]/10 md:size-6">
                             <Icon className="size-3.5 text-[--ai]" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="truncate text-xs font-medium">{a.name}</span>
+                              <span className="truncate text-xs font-medium md:text-[11px] md:leading-tight">
+                                {a.name}
+                              </span>
                               <StatusPill status={st} />
                             </div>
                             {a.veto && (
-                              <span className="mt-1 inline-block rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[9px] text-destructive">
+                              <span className="mt-1 inline-block rounded-full border border-destructive/50 bg-destructive/15 px-1.5 py-0.5 text-[9px] text-destructive md:mt-0.5 md:px-1 md:py-px">
                                 VETO
                               </span>
                             )}
@@ -449,7 +454,7 @@ export function CommandCenter() {
                         <div className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
                           {AGENT_META[a.agent_id].desc}
                         </div>
-                        <div className="mt-auto flex items-center justify-between gap-1 border-t border-border/40 pt-1.5 font-mono text-[10px]">
+                        <div className="mt-auto flex items-center justify-between gap-1 border-t border-border/40 pt-1.5 font-mono text-[10px] md:pt-1">
                           <span className={cn(a.score < 40 ? "text-destructive" : "text-[--ai]")}>
                             {st === "processing" ? "··" : `${a.score}/100`}
                           </span>
