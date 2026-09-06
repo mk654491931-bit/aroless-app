@@ -2178,3 +2178,143 @@ html {
     display: none;
   }
 }
+
+
+/* ============================================================
+   Enterprise landing (agent console / simulator / topology)
+   ============================================================ */
+@keyframes console-log-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.console-log-in { animation: console-log-in 0.35s ease-out both; }
+
+@keyframes progress-stripe-move {
+  from { background-position: 0 0; }
+  to   { background-position: 12px 0; }
+}
+.progress-stripe {
+  background-image: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.28) 25%, transparent 25%,
+    transparent 50%, rgba(255,255,255,0.28) 50%,
+    rgba(255,255,255,0.28) 75%, transparent 75%, transparent
+  );
+  background-size: 12px 12px;
+  animation: progress-stripe-move 0.5s linear infinite;
+}
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: rgba(99,102,241,0.45) transparent; }
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+.scroll-thin::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(99,102,241,0.45);
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.7); }
+
+@keyframes ent-dash-flow {
+  to { stroke-dashoffset: -22; }
+}
+.ent-edge {
+  stroke-dasharray: 7 4;
+  animation: ent-dash-flow 1.1s linear infinite;
+}
+.ent-edge-lit {
+  filter: drop-shadow(0 0 5px rgba(99,102,241,0.85));
+  animation-duration: 0.45s;
+}
+
+@keyframes border-sweep {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.border-sweep {
+  background-image: linear-gradient(100deg, #6366f1, #10b981, #6366f1);
+  background-size: 220% 220%;
+  animation: border-sweep 3.2s ease infinite;
+}
+.premium-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px oklch(0.62 0.17 255 / 0.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-log-in, .progress-stripe, .ent-edge, .border-sweep {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   Enterprise hero atmosphere + CTA sweep frame
+   ============================================================ */
+@keyframes ent-orb-drift-a {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1); }
+  50%  { transform: translate3d(8%, 6%, 0) scale(1.12); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1); }
+}
+@keyframes ent-orb-drift-b {
+  0%   { transform: translate3d(5%, 3%, 0) scale(1.05); }
+  50%  { transform: translate3d(-7%, -5%, 0) scale(0.95); }
+  100% { transform: translate3d(5%, 3%, 0) scale(1.05); }
+}
+.ent-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  will-change: transform;
+  pointer-events: none;
+}
+.ent-orb-a {
+  top: -10rem; left: -8rem;
+  width: 34rem; height: 34rem;
+  background: radial-gradient(circle at 30% 30%, rgba(99,102,241,0.5), transparent 65%);
+  animation: ent-orb-drift-a 16s ease-in-out infinite;
+}
+.ent-orb-b {
+  top: -6rem; right: -10rem;
+  width: 30rem; height: 30rem;
+  background: radial-gradient(circle at 60% 40%, rgba(16,185,129,0.32), transparent 65%);
+  animation: ent-orb-drift-b 20s ease-in-out infinite;
+}
+@keyframes ent-grid-pan {
+  from { background-position: 0 0; }
+  to   { background-position: 0 56px; }
+}
+.ent-grid-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148,163,184,0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 0%, black 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 65% at 50% 0%, black 35%, transparent 78%);
+  animation: ent-grid-pan 6s linear infinite;
+}
+
+@keyframes sweep-rotate {
+  to { transform: rotate(360deg); }
+}
+.sweep-frame {
+  position: relative;
+  isolation: isolate;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(99,102,241,0.55), rgba(16,185,129,0.5), rgba(99,102,241,0.55));
+  background-size: 220% 220%;
+  animation: sweep-rotate 0s linear infinite, border-sweep 3.4s ease infinite;
+  box-shadow: 0 10px 40px -12px rgba(99,102,241,0.4);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.sweep-frame:hover {
+  box-shadow: 0 16px 52px -12px rgba(99,102,241,0.55);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ent-orb, .ent-orb-a, .ent-orb-b, .ent-grid-bg, .sweep-frame {
+    animation: none !important;
+  }
+}
