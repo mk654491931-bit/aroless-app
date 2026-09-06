@@ -2071,3 +2071,110 @@ html {
   outline: none;
   box-shadow: 0 0 0 3px oklch(0.62 0.17 255 / 0.4);
 }
+
+
+/* ---- Marketing landing v2: hero atmosphere, scroll reveals, marquee ---- */
+@keyframes hero-orb-a {
+  from { transform: translate3d(-4%, -3%, 0) scale(0.94); }
+  to   { transform: translate3d(5%, 5%, 0) scale(1.08); }
+}
+@keyframes hero-orb-b {
+  from { transform: translate3d(3%, 2%, 0) scale(1.05); }
+  to   { transform: translate3d(-6%, 9%, 0) scale(0.92); }
+}
+@keyframes hero-orb-c {
+  from { transform: translate3d(0, 4%, 0) scale(1); }
+  to   { transform: translate3d(8%, -6%, 0) scale(1.12); }
+}
+@keyframes hero-grid-pan {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 56px 56px, 56px 56px; }
+}
+.hero-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(96px);
+  pointer-events: none;
+  will-change: transform;
+}
+.hero-orb-a {
+  left: 50%;
+  top: -14rem;
+  width: 54rem;
+  height: 32rem;
+  margin-left: -27rem;
+  background: radial-gradient(closest-side, oklch(0.62 0.17 255 / 0.32), oklch(0.62 0.17 255 / 0.10) 55%, transparent 78%);
+  animation: hero-orb-a 17s ease-in-out infinite alternate;
+}
+.hero-orb-b {
+  right: -12rem;
+  top: 12rem;
+  width: 30rem;
+  height: 24rem;
+  background: radial-gradient(closest-side, oklch(0.72 0.12 235 / 0.22), transparent 72%);
+  animation: hero-orb-b 21s ease-in-out infinite alternate;
+}
+.hero-orb-c {
+  left: -11rem;
+  top: 30rem;
+  width: 26rem;
+  height: 21rem;
+  background: radial-gradient(closest-side, oklch(0.82 0.09 200 / 0.14), transparent 70%);
+  animation: hero-orb-c 24s ease-in-out infinite alternate;
+}
+.hero-grid-layer {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  top: 0;
+  height: 44rem;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, oklch(0.8 0.1 255 / 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.8 0.1 255 / 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 0%, black 25%, transparent 74%);
+  mask-image: radial-gradient(ellipse 72% 62% at 50% 0%, black 25%, transparent 74%);
+  animation: hero-grid-pan 26s linear infinite;
+}
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 26px, 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+@keyframes marquee-x {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+.marquee-mask {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-x 34s linear infinite;
+}
+.marquee-set {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-right: 0.6rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .marquee-track[data-dupe] > .marquee-set + .marquee-set {
+    display: none;
+  }
+}

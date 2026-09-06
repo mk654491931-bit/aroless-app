@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   Sparkles,
@@ -86,6 +86,26 @@ const FAQ = [
     q: "Veriler gerçek mi?",
     a: "Tahminler kaynaklarıyla birlikte gösterilir: doğrulanmış sinyaller ve tahmini sinyaller panelde ayrı ayrı listelenir.",
   },
+];
+
+/** Desteklenen pazaryerleri — hero altındaki kayan şerit için. */
+const MARKETS = [
+  "Amazon",
+  "Trendyol",
+  "Hepsiburada",
+  "Shopify",
+  "TikTok Shop",
+  "Etsy",
+  "eBay",
+  "Zalando",
+  "Allegro",
+  "Cdiscount",
+  "Otto",
+  "Fnac",
+  "Joom",
+  "eMAG",
+  "Wildberries",
+  "Mercado Libre",
 ];
 
 const DEMOS = [
@@ -198,6 +218,7 @@ const REVIEWS = [
 ];
 
 export function MarketingLanding() {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [demoIndex, setDemoIndex] = useState(0);
   const [niche, setNiche] = useState("");
   const [demoContext, setDemoContext] = useState("Ev yaşam");
@@ -218,8 +239,32 @@ export function MarketingLanding() {
     }
   };
 
+  // Aşağıdaki bölümler kaydırıldıkça yumuşakça belirir (scroll-reveal).
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const targets = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (typeof IntersectionObserver === "undefined") {
+      targets.forEach((el) => el.classList.add("is-visible"));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            (entry.target as HTMLElement).classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -6% 0px" },
+    );
+    targets.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="relative min-h-screen">
+    <div ref={rootRef} className="relative min-h-screen overflow-x-clip">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[var(--surface)]/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <BrandLogo />
@@ -258,19 +303,27 @@ export function MarketingLanding() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-4 pb-16 pt-16 text-center md:pt-24">
-        <div className="mx-auto mb-5 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
+      <section className="relative isolate mx-auto max-w-6xl px-4 pb-16 pt-16 text-center md:pt-24">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="hero-orb hero-orb-a" />
+          <div className="hero-orb hero-orb-b" />
+          <div className="hero-orb hero-orb-c" />
+          <div className="hero-grid-layer" />
+          <div className="absolute left-1/2 top-0 h-px w-[min(62rem,90%)] -translate-x-1/2 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        </div>
+        <div className="mx-auto mb-5 inline-flex animate-rise-in items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider [animation-delay:80ms]">
           <Sparkles size={12} className="text-[oklch(0.68_0.15_255)]" /> Yapay zekâ destekli ürün
           araştırması
         </div>
-        <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight md:text-6xl">
-          Kazandıran ürünü <span className="text-gradient">tahminle değil</span>, veriyle bul
+        <h1 className="mx-auto max-w-3xl animate-rise-in text-4xl font-extrabold leading-tight tracking-tight [animation-delay:160ms] md:text-6xl">
+          Kazandıran ürünü tahminle değil,{" "}
+          <span className="text-aurora mt-1 block">veriyle bul.</span>
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground md:text-lg">
+        <p className="mx-auto mt-5 max-w-2xl animate-rise-in text-base text-muted-foreground [animation-delay:260ms] md:text-lg">
           Aroless; ülke ve platform bazında komisyon, kargo, KDV ve reklam maliyetini hesaba katarak
           gerçekçi kâr projeksiyonu çıkarır. Ürünü bulur, doğrular, satış materyalini hazırlar.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-8 flex animate-rise-in flex-wrap items-center justify-center gap-3 [animation-delay:360ms]">
           <Link
             to="/auth"
             search={{ mode: "signup" }}
@@ -291,7 +344,7 @@ export function MarketingLanding() {
             Fiyatları gör
           </Link>
         </div>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+        <div className="mt-6 flex animate-rise-in flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground [animation-delay:460ms]">
           <span className="inline-flex items-center gap-1">
             <Check size={13} /> Kredi kartı gerekmez
           </span>
@@ -303,21 +356,28 @@ export function MarketingLanding() {
           </span>
         </div>
 
-        <div className="mx-auto mt-14 grid max-w-4xl grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mx-auto mt-14 grid max-w-4xl animate-rise-in grid-cols-2 gap-3 [animation-delay:560ms] md:grid-cols-4">
           {[
             { k: "22", v: "Platform" },
             { k: "21", v: "Ülke pazarı" },
             { k: "20", v: "Analiz açısı" },
             { k: "0–100", v: "Winner Score" },
           ].map((s) => (
-            <div key={s.v} className="glass rounded-2xl p-4">
+            <div
+              key={s.v}
+              className="glass card-lift group relative overflow-hidden rounded-2xl p-4 transition hover:-translate-y-1 hover:ring-1 hover:ring-primary/30"
+            >
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-0 transition duration-300 group-hover:opacity-100"
+              />
               <div className="text-2xl font-extrabold text-gradient">{s.k}</div>
               <div className="text-xs text-muted-foreground">{s.v}</div>
             </div>
           ))}
         </div>
 
-        <div id="demo" className="mx-auto mt-12 max-w-5xl scroll-mt-24 text-left">
+        <div id="demo" className="mx-auto mt-12 max-w-5xl animate-rise-in scroll-mt-24 text-left [animation-delay:760ms]">
           <div className="glass overflow-hidden rounded-3xl border-white/15 shadow-2xl shadow-black/20">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2 text-xs font-semibold text-foreground/90">
@@ -471,16 +531,50 @@ export function MarketingLanding() {
             </div>
           </div>
         </div>
+        <div data-reveal className="mx-auto mt-14 max-w-5xl">
+          <p className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/70">
+            {MARKETS.length} pazar yerinde · ülke bazında canlı tarama
+          </p>
+          <div className="marquee-mask mt-4">
+            <div className="marquee-track" data-dupe>
+              {[0, 1].map((copy) => (
+                <div key={copy} className="marquee-set" aria-hidden={copy === 1}>
+                  {MARKETS.map((m) => (
+                    <span
+                      key={`${copy}-${m}`}
+                      className="whitespace-nowrap rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-foreground/70"
+                    >
+                      {m}
+                    </span>
+                  ))}
+                  <span className="px-1 text-[oklch(0.62_0.17_255)]" aria-hidden>
+                    ✦
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="features" className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="text-center text-2xl font-bold md:text-3xl">
-          Bir araştırma ekibinin yaptığını tek panelde yapar
-        </h2>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div data-reveal className="text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+            <Sparkles size={12} /> Modüller
+          </span>
+          <h2 className="mt-4 text-2xl font-bold md:text-3xl">
+            Bir araştırma ekibinin yaptığını tek panelde yapar
+          </h2>
+        </div>
+        <div data-reveal className="mt-10 grid gap-4 md:grid-cols-3">
           {FEATURES.map((f) => (
-            <div key={f.title} className="glass rounded-2xl p-5">
-              <f.icon size={20} className="text-[oklch(0.68_0.15_255)]" />
+            <div
+              key={f.title}
+              className="glass card-lift group rounded-2xl p-5 transition duration-300 hover:-translate-y-1.5 hover:ring-1 hover:ring-primary/30 hover:shadow-[0_18px_50px_-24px_rgba(79,140,255,0.35)]"
+            >
+              <div className="grid size-10 place-items-center rounded-xl border border-primary/20 bg-primary/10 transition-colors duration-300 group-hover:bg-primary/15">
+                <f.icon size={18} className="text-[oklch(0.68_0.15_255)]" />
+              </div>
               <h3 className="mt-3 font-semibold">{f.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{f.text}</p>
             </div>
@@ -489,23 +583,41 @@ export function MarketingLanding() {
       </section>
 
       <section id="how" className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="text-center text-2xl font-bold md:text-3xl">Üç adımda sonuç</h2>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div data-reveal className="text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+            <Radar size={12} /> Akış
+          </span>
+          <h2 className="mt-4 text-2xl font-bold md:text-3xl">Üç adımda sonuç</h2>
+        </div>
+        <div data-reveal className="mt-10 grid gap-4 md:grid-cols-3">
           {STEPS.map((s) => (
-            <div key={s.n} className="glass rounded-2xl p-5">
-              <div className="text-xs font-bold tracking-widest text-[oklch(0.68_0.15_255)]">
+            <div
+              key={s.n}
+              className="glass card-lift group relative overflow-hidden rounded-2xl p-5 transition duration-300 hover:-translate-y-1.5 hover:ring-1 hover:ring-primary/30"
+            >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-4 -top-4 text-6xl font-extrabold text-white/[0.04] transition-colors duration-300 group-hover:text-primary/10"
+              >
                 {s.n}
               </div>
-              <h3 className="mt-2 font-semibold">{s.t}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{s.d}</p>
+              <div className="relative grid size-9 place-items-center rounded-lg bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.5_0.15_262)] text-sm font-bold text-white shadow-lg shadow-primary/25">
+                {s.n}
+              </div>
+              <h3 className="relative mt-3 font-semibold">{s.t}</h3>
+              <p className="relative mt-1 text-sm text-muted-foreground">{s.d}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <div className="glass rounded-3xl p-8 text-center">
-          <div className="mx-auto mb-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+      <section data-reveal className="mx-auto max-w-6xl px-4 py-16">
+        <div className="glass relative overflow-hidden rounded-3xl p-8 text-center">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[34rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl"
+          />
+          <div className="mx-auto relative mb-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <ShieldCheck size={14} /> Şeffaf skorlama
           </div>
           <h2 className="text-2xl font-bold md:text-3xl">Her puanın gerekçesi görünür</h2>
@@ -531,8 +643,13 @@ export function MarketingLanding() {
       </section>
 
       <section id="faq" className="mx-auto max-w-3xl px-4 py-16">
-        <h2 className="text-center text-2xl font-bold md:text-3xl">Sık sorulanlar</h2>
-        <div className="mt-8 space-y-3">
+        <div data-reveal className="text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+            <Sparkles size={12} /> Destek
+          </span>
+          <h2 className="mt-4 text-2xl font-bold md:text-3xl">Sık sorulanlar</h2>
+        </div>
+        <div data-reveal className="mt-8 space-y-3">
           {FAQ.map((f) => (
             <details key={f.q} className="glass rounded-2xl p-4">
               <summary className="cursor-pointer text-sm font-semibold">{f.q}</summary>
@@ -543,7 +660,7 @@ export function MarketingLanding() {
       </section>
 
       <section id="reviews" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-16">
-        <div className="text-center">
+        <div data-reveal className="text-center">
           <div className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
             <Star size={12} className="fill-amber-400 text-amber-400" /> Müşteri yorumları
           </div>
@@ -556,7 +673,7 @@ export function MarketingLanding() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div data-reveal className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {REVIEWS.map((r) => (
             <figure
               key={r.name}
@@ -607,7 +724,7 @@ export function MarketingLanding() {
           ))}
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-center">
+        <div data-reveal className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-center">
           {[
             ["12.400+", "ürün analizi"],
             ["22", "platform"],
@@ -621,8 +738,13 @@ export function MarketingLanding() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl px-4 pb-24">
-        <div className="glass rounded-3xl p-8 text-center">
+      <section data-reveal className="mx-auto max-w-4xl px-4 pb-24">
+        <div className="glass relative overflow-hidden rounded-3xl p-8 text-center">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-24 left-1/2 h-52 w-[30rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
+          />
+          <div className="relative">
           <Cpu size={22} className="mx-auto text-[oklch(0.68_0.15_255)]" />
           <h2 className="mt-3 text-2xl font-bold md:text-3xl">Bugün ilk kazandıran ürününü bul</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -635,6 +757,7 @@ export function MarketingLanding() {
           >
             <TrendingUp size={16} /> Ücretsiz hesap oluştur
           </Link>
+          </div>
         </div>
       </section>
     </div>
