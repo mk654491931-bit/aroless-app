@@ -128,8 +128,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // translate="no": tarayıcı otomatik çevirisini kapatır. Google Translate DOM
+  // metin düğümlerini <font> ile sarıp React ağacını bozabiliyor (onboarding
+  // akışında portal kaldırılırken client crash → hata ekranı).
   return (
-    <html lang="en">
+    <html lang="en" translate="no" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

@@ -149,6 +149,7 @@ import {
   OnboardingWizard,
   ActivationChecklist,
   useOnboarding,
+  sanitizeOnboardingResult,
 } from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
 
@@ -657,15 +658,35 @@ function Dashboard() {
         {onboarding.needsOnboarding && (
           <OnboardingWizard
             onSkip={onboarding.skip}
-            onComplete={(r) => {
-              setTargetCountry(r.country);
-              setCategory(r.category);
-              setBudget(r.budget as Budget);
-              setPlatforms([r.platform as Platform]);
-              onboarding.complete(r);
-              setTab("finder");
-              setTimeout(() => nicheInputRef.current?.focus(), 200);
-              toast.success("Hazır! Nişini yaz ve motoru çalıştır.");
+            onComplete={(raw) => {
+              // Payload doğrulaması: seçimler her zaman geçerli kümeye normalize edilir;
+              // null/undefined/garbage değerler varsayılanlara düşer, asla aşağı akamaz.
+              let r: {
+                country: string;
+                platform: string;
+                category: string;
+                budget: string;
+              };
+              try {
+                r = sanitizeOnboardingResult(raw);
+              } catch (err) {
+                console.error("Onboarding sonucu doğrulanamadı:", err);
+                toast.error("Onboarding kaydedilemedi. Lütfen tekrar dene.");
+                return;
+              }
+              try {
+                setTargetCountry(r.country);
+                setCategory(r.category);
+                setBudget(r.budget as Budget);
+                setPlatforms([r.platform as Platform]);
+                onboarding.complete(r);
+                setTab("finder");
+                setTimeout(() => nicheInputRef.current?.focus(), 200);
+                toast.success("Hazır! Nişini yaz ve motoru çalıştır.");
+              } catch (err) {
+                console.error("Onboarding tamamlanırken hata:", err);
+                toast.error("Onboarding kaydedilemedi. Lütfen tekrar dene.");
+              }
             }}
           />
         )}

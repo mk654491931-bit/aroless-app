@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Rocket, ArrowRight, ArrowLeft, Check, X } from "lucide-react";
+import { Rocket, ArrowRight, ArrowLeft, Check, X, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { TARGET_COUNTRIES, countryName } from "@/lib/countries";
 
 const KEY = "velora.onboarding.v1";
@@ -23,6 +24,36 @@ const CATEGORY_CHOICES = [
 ];
 const BUDGET_CHOICES = ["$0 - $500", "$500 - $2,000", "$2,000 - $10,000", "$10,000+"];
 
+const DEFAULTS = {
+  country: "US",
+  platform: "Shopify",
+  category: CATEGORY_CHOICES[0],
+  budget: BUDGET_CHOICES[1],
+} as const;
+
+/** UI seçenekleri — payload'ı göndermeden önce her alanı kısıtlı kümeye çeker. */
+export function sanitizeOnboardingResult(raw: Partial<OnboardingResult> | null | undefined): OnboardingResult {
+  const input = raw ?? {};
+  const country =
+    typeof input.country === "string" &&
+    TARGET_COUNTRIES.some((c) => c.code === input.country)
+      ? input.country
+      : DEFAULTS.country;
+  const platform =
+    typeof input.platform === "string" && PLATFORM_CHOICES.includes(input.platform)
+      ? input.platform
+      : DEFAULTS.platform;
+  const category =
+    typeof input.category === "string" && CATEGORY_CHOICES.includes(input.category)
+      ? input.category
+      : DEFAULTS.category;
+  const budget =
+    typeof input.budget === "string" && BUDGET_CHOICES.includes(input.budget)
+      ? input.budget
+      : DEFAULTS.budget;
+  return { country, platform, category, budget };
+}
+
 export function useOnboarding() {
   const [done, setDone] = useState(true);
   useEffect(() => {
@@ -36,7 +67,7 @@ export function useOnboarding() {
     needsOnboarding: !done,
     complete: (r: OnboardingResult) => {
       try {
-        window.localStorage.setItem(KEY, JSON.stringify(r));
+        window.localStorage.setItem(KEY, JSON.stringify(sanitizeOnboardingResult(r)));
       } catch {
         /* yoksay */
       }
@@ -65,6 +96,7 @@ export function OnboardingWizard({
   const [platform, setPlatform] = useState("Shopify");
   const [category, setCategory] = useState(CATEGORY_CHOICES[0]);
   const [budget, setBudget] = useState(BUDGET_CHOICES[1]);
+  const [error, setError] = useState<string | null>(null);
 
   const steps = [
     {
@@ -75,6 +107,7 @@ export function OnboardingWizard({
           {TARGET_COUNTRIES.slice(0, 24).map((c) => (
             <button
               key={c.code}
+              type="button"
               onClick={() => setCountry(c.code)}
               className={`rounded-lg border px-3 py-2 text-xs ${country === c.code ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
             >
@@ -92,6 +125,7 @@ export function OnboardingWizard({
           {PLATFORM_CHOICES.map((p) => (
             <button
               key={p}
+              type="button"
               onClick={() => setPlatform(p)}
               className={`rounded-lg border px-3 py-2 text-sm ${platform === p ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
             >
@@ -109,6 +143,7 @@ export function OnboardingWizard({
           {CATEGORY_CHOICES.map((c) => (
             <button
               key={c}
+              type="button"
               onClick={() => setCategory(c)}
               className={`rounded-lg border px-3 py-2 text-sm ${category === c ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
             >
@@ -126,6 +161,7 @@ export function OnboardingWizard({
           {BUDGET_CHOICES.map((b) => (
             <button
               key={b}
+              type="button"
               onClick={() => setBudget(b)}
               className={`rounded-lg border px-3 py-2 text-sm ${budget === b ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
             >
@@ -142,16 +178,53 @@ export function OnboardingWizard({
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
+  // Tek hata kaynağı: hangi buton basılırsa basılsın hata asla React ağacının
+  // dışına taşmaz — console.error + form içi uyarı + toast ile yakalanır.
+  const runSafely = (fn: () => void) => {
+    try {
+      setError(null);
+      fn();
+    } catch (err) {
+      console.error("Onboarding wizard hatası:", err);
+      const message =
+        err instanceof Error && err.message ? err.message : "Bilinmeyen bir hata oluştu.";
+      setError(message);
+      try {
+        toast.error("Onboarding kaydedilemedi. Lütfen tekrar dene.");
+      } catch {
+        /* toast da patlarsa yut */
+      }
+    }
+  };
+
+  const handlePrimary = () => {
+    if (last) {
+      const result = sanitizeOnboardingResult({ country, platform, category, budget });
+      runSafely(() => onComplete(result));
+    } else {
+      runSafely(() => setStep((s) => s + 1));
+    }
+  };
+
+  const handleBack = () => {
+    if (step === 0) {
+      runSafely(onSkip);
+    } else {
+      runSafely(() => setStep((s) => s - 1));
+    }
+  };
+
   const overlay = (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
-      <div className="glass w-full max-w-xl rounded-2xl p-6">
+      <div lang="tr" translate="no" className="glass w-full max-w-xl rounded-2xl p-6">
         <div className="flex items-start justify-between">
           <div className="inline-flex items-center gap-2">
             <Rocket size={18} className="text-[oklch(0.68_0.15_255)]" />
             <span className="text-sm font-semibold uppercase tracking-wide">Hızlı kurulum</span>
           </div>
           <button
-            onClick={onSkip}
+            type="button"
+            onClick={() => runSafely(onSkip)}
             className="rounded-lg p-1.5 hover:bg-white/10"
             aria-label="Kapat"
           >
@@ -172,9 +245,20 @@ export function OnboardingWizard({
         <p className="mt-1 text-sm text-muted-foreground">{steps[step].hint}</p>
         <div className="mt-4">{steps[step].body}</div>
 
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          >
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>Bir şeyler ters gitti. Lütfen tekrar dene.</span>
+          </div>
+        )}
+
         <div className="mt-6 flex items-center justify-between">
           <button
-            onClick={() => (step === 0 ? onSkip() : setStep((s) => s - 1))}
+            type="button"
+            onClick={handleBack}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/5"
           >
             {step === 0 ? (
@@ -186,9 +270,8 @@ export function OnboardingWizard({
             )}
           </button>
           <button
-            onClick={() =>
-              last ? onComplete({ country, platform, category, budget }) : setStep((s) => s + 1)
-            }
+            type="button"
+            onClick={handlePrimary}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
             {last ? (
@@ -233,6 +316,7 @@ export function ActivationChecklist({
           Başlangıç görevleri · {completed}/{items.length}
         </div>
         <button
+          type="button"
           onClick={() => {
             try {
               window.localStorage.setItem("velora.checklist.hidden", "1");
@@ -251,6 +335,7 @@ export function ActivationChecklist({
         {items.map((i) => (
           <button
             key={i.label}
+            type="button"
             onClick={i.action}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs ${i.done ? "border-primary/40 bg-primary/10" : "border-white/10 hover:bg-white/5"}`}
           >
