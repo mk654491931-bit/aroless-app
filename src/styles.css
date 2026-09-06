@@ -2022,3 +2022,52 @@ input:focus-visible {
 .animate-border-flow {
   animation: border-flow 2s ease-in-out infinite;
 }
+
+
+/* ── Premium: metin seçimi marka tonunda ── */
+::selection {
+  background: oklch(0.62 0.17 255 / 0.35);
+  color: oklch(0.98 0.01 255);
+}
+
+/* ── Premium: ince, temaya uyumlu kaydırma çubuğu ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.62 0.17 255 / 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: oklch(0.62 0.17 255 / 0.28);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.62 0.17 255 / 0.5);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Sabit üst çubukların altına kayarken hizalama */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* ── Premium: yumuşak odak halkası (buton / bağlantı) ── */
+.premium-focus {
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.premium-focus:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 34px -12px oklch(0.62 0.17 255 / 0.45);
+}
+.premium-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px oklch(0.62 0.17 255 / 0.4);
+}

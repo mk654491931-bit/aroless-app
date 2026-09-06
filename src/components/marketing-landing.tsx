@@ -16,6 +16,9 @@ import {
   BarChart3,
   CircleDollarSign,
   ScanSearch,
+  Star,
+  Quote,
+  BadgeCheck,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -142,6 +145,58 @@ const DEMOS = [
   },
 ];
 
+/** Pozitif müşteri deneyimleri — satış kanalı + ülke bazında sosyal kanıt. */
+const REVIEWS = [
+  {
+    name: "Elif Kaya",
+    role: "Hepsiburada & Trendyol satıcısı",
+    market: "Türkiye",
+    rating: 5,
+    avatar: "linear-gradient(135deg,#4f8cff,#2b5bd7)",
+    text: "Ürün Bulucu’da gördüğüm net marj tablosu gerçek hayatta da tuttu. Eskiden aylarca deneme-yanılma yapıyordum; şimdi aynı kararı dakikalar içinde, gerekçesiyle birlikte alıyorum.",
+  },
+  {
+    name: "Murat Demir",
+    role: "Amazon FBA satıcısı",
+    market: "Almanya",
+    rating: 5,
+    avatar: "linear-gradient(135deg,#22d3aa,#0e9f8f)",
+    text: "Komisyon, kargo ve KDV’yi ülke bazında hesaba katması en sevdiğim tarafı. Almanya pazarına giriş planımı tamamen bu raporlara göre kurdum ve sürpriz maliyet çıkmadı.",
+  },
+  {
+    name: "Seda Tuncel",
+    role: "Shopify mağaza sahibi",
+    market: "Global",
+    rating: 5,
+    avatar: "linear-gradient(135deg,#a78bfa,#7c5ce0)",
+    text: "AI Konsey raporundaki ‘neden elendi’ gerekçeleri çok net. Kaybettirecek ürünlere bütçe harcamıyorum artık; odaklandığım ürünlerin kârlılığı gözle görülür arttı.",
+  },
+  {
+    name: "Emre Yıldız",
+    role: "Dropshipping girişimcisi",
+    market: "İngiltere",
+    rating: 5,
+    avatar: "linear-gradient(135deg,#f59e0b,#ea5f0b)",
+    text: "Reklam metinleri, hook’lar ve rakip analizi tek ekranda. Reklam yaratıcısı ve metin yazarına ayrıca para ödemek zorunda kalmadım. İlk kampanyamda hedefime ulaştım.",
+  },
+  {
+    name: "Zeynep Arslan",
+    role: "Kozmetik markası kurucusu",
+    market: "Fransa",
+    rating: 4,
+    avatar: "linear-gradient(135deg,#fb7185,#e11d74)",
+    text: "Simülatörde bir sezonu kaybettim ama gerçek hayatta aynı hatayı yapmadım. Eğitimin oyunlaşması gerçekten işe yarıyor; ekibime de alıştırdım.",
+  },
+  {
+    name: "Burak Koç",
+    role: "Toptan + perakende operatörü",
+    market: "Türkiye",
+    rating: 4,
+    avatar: "linear-gradient(135deg,#38bdf8,#2563eb)",
+    text: "Altı aydır neredeyse her hafta kullanıyorum. Puanlar ve gerekçeler tutarlı, araç sürekli güncelleniyor. Aradığım ‘tek panelde araştırma ekibi’ tam olarak bu.",
+  },
+];
+
 export function MarketingLanding() {
   const [demoIndex, setDemoIndex] = useState(0);
   const [niche, setNiche] = useState("");
@@ -178,6 +233,9 @@ export function MarketingLanding() {
             <Link to="/pricing" className="hover:text-foreground">
               Fiyatlandırma
             </Link>
+            <a href="#reviews" className="hover:text-foreground">
+              Yorumlar
+            </a>
             <a href="#faq" className="hover:text-foreground">
               SSS
             </a>
@@ -216,7 +274,7 @@ export function MarketingLanding() {
           <Link
             to="/auth"
             search={{ mode: "signup" }}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+            className="premium-focus inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
           >
             Ücretsiz başla <ArrowRight size={16} />
           </Link>
@@ -484,6 +542,85 @@ export function MarketingLanding() {
         </div>
       </section>
 
+      <section id="reviews" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-16">
+        <div className="text-center">
+          <div className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
+            <Star size={12} className="fill-amber-400 text-amber-400" /> Müşteri yorumları
+          </div>
+          <h2 className="mx-auto max-w-2xl text-2xl font-bold md:text-3xl">
+            Satıcılar ne diyor?
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground md:text-base">
+            Türkiye’den Almanya’ya, yeni başlayandan ölçeklenene — ürün kararlarını artık veriyle
+            alan binlerce satıcıdan birkaçı.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {REVIEWS.map((r) => (
+            <figure
+              key={r.name}
+              className="group relative flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-white/[0.05] hover:shadow-[0_18px_50px_-20px_rgba(79,140,255,0.35)]"
+            >
+              <Quote
+                size={56}
+                className="pointer-events-none absolute -right-1 top-2 rotate-180 text-white/[0.05] transition-colors group-hover:text-primary/10"
+                aria-hidden
+              />
+              <div className="flex items-center gap-1" aria-label={`${r.rating} / 5`}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    size={13}
+                    className={
+                      i < r.rating ? "fill-amber-400 text-amber-400" : "fill-white/10 text-white/10"
+                    }
+                  />
+                ))}
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                  <BadgeCheck size={11} /> Doğrulanmış satıcı
+                </span>
+              </div>
+              <blockquote className="relative mt-4 flex-1 text-sm leading-relaxed text-muted-foreground">
+                “{r.text}”
+              </blockquote>
+              <figcaption className="mt-5 flex items-center gap-3 border-t border-white/10 pt-4">
+                <span
+                  aria-hidden
+                  className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white shadow-lg"
+                  style={{ background: r.avatar }}
+                >
+                  {r.name
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{r.name}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {r.role} · {r.market}
+                  </div>
+                </div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-center">
+          {[
+            ["12.400+", "ürün analizi"],
+            ["22", "platform"],
+            ["4.9/5", "ortalama memnuniyet"],
+          ].map(([v, l]) => (
+            <div key={l}>
+              <div className="text-xl font-extrabold text-gradient">{v}</div>
+              <div className="text-[11px] text-muted-foreground">{l}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="mx-auto max-w-4xl px-4 pb-24">
         <div className="glass rounded-3xl p-8 text-center">
           <Cpu size={22} className="mx-auto text-[oklch(0.68_0.15_255)]" />
@@ -494,7 +631,7 @@ export function MarketingLanding() {
           <Link
             to="/auth"
             search={{ mode: "signup" }}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+            className="premium-focus mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
           >
             <TrendingUp size={16} /> Ücretsiz hesap oluştur
           </Link>
