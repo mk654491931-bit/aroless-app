@@ -40,7 +40,11 @@ function SettingsPage() {
   const updateFn = useServerFn(updateProfilePrefs);
 
   useEffect(() => {
-    if (!loading && !user) nav({ to: "/auth" });
+    if (!loading && !user)
+      nav({
+        to: "/auth",
+        search: { redirect: `${window.location.pathname}${window.location.search}` },
+      });
   }, [user, loading, nav]);
 
   const profQ = useQuery({

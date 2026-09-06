@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/audit": "Store Auditor",
   "/studio": "Creative Studio",
   "/council": "AI Council",
+  "/trend-radar": "Trend Radar",
   "/competitor-analysis": "Competitor Analysis",
   "/viral-ads": "Viral Ads",
   "/notifications": "Notifications",
@@ -48,7 +49,13 @@ export function AppTopbar() {
   });
   const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
   const publicId = (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null;
-  const title = TITLES[pathname] ?? (pathname.startsWith("/tools") ? "Tools" : "Aroless");
+  const title =
+    TITLES[pathname] ??
+    (pathname.startsWith("/tools")
+      ? "Tools"
+      : pathname.startsWith("/hot/")
+        ? "Product"
+        : "Aroless");
 
   return (
     <div className="topbar" data-no-translate>

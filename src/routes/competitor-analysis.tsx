@@ -60,7 +60,11 @@ function CompetitorAnalysisPage() {
   const fn = useServerFn(analyzeCompetitors);
 
   useEffect(() => {
-    if (!loading && !user) nav({ to: "/auth" });
+    if (!loading && !user)
+      nav({
+        to: "/auth",
+        search: { redirect: `${window.location.pathname}${window.location.search}` },
+      });
   }, [user, loading, nav]);
 
   const mut = useMutation({

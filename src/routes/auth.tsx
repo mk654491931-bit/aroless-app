@@ -194,7 +194,13 @@ function useRipples() {
 function AuthPage() {
   const nav = useNavigate();
   const { user } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  // /auth?mode=signup → kayıt sekmesi açık gelir ("Ücretsiz başla" CTA'ları).
+  const [mode, setMode] = useState<"signin" | "signup">(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("mode") === "signup"
+      ? "signup"
+      : "signin",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -313,7 +319,7 @@ function AuthPage() {
           if (referral.ok) toast.success(`Davet bonusu uygulandı · +${referral.credits} kredi`);
         }
         toast.success("E-posta doğrulandı. Hesabınız hazır.");
-        nav({ to: "/" });
+        nav({ to: getRedirectPath() });
         return;
       }
       if (mode === "signup") {

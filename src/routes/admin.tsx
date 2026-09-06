@@ -45,7 +45,11 @@ function AdminPage() {
   const txFn = useServerFn(listAdminTransactions);
 
   useEffect(() => {
-    if (!loading && !user) nav({ to: "/auth" });
+    if (!loading && !user)
+      nav({
+        to: "/auth",
+        search: { redirect: `${window.location.pathname}${window.location.search}` },
+      });
   }, [user, loading, nav]);
 
   const adminQ = useQuery({
