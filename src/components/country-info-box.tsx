@@ -12,7 +12,8 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
   const fn = useServerFn(getCountryStrategy);
   const mut = useMutation({
     mutationFn: () => fn({ data: { niche, country: c.code } }),
-    onSuccess: (r) => setStrategy(r.strategy),
+    onSuccess: (r) => setStrategy(r?.strategy ?? ""),
+    onError: (err: Error) => console.error("Ülke stratejisi üretilemedi:", err),
   });
 
   return (
