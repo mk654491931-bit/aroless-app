@@ -7,7 +7,6 @@ const InputSchema = z.object({ plan: z.enum(["Starter", "Pro", "Business"]) });
 
 /**
  * Paddle checkout URL'si oluştur
- * Eskiden Lemon Squeezy, şimdi Paddle v2 üzerinden
  */
 export const createCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

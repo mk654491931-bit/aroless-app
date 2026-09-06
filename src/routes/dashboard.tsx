@@ -58,8 +58,8 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const COLORS = [
-  "oklch(0.68 0.20 265)",
-  "oklch(0.66 0.24 305)",
+  "oklch(0.62 0.17 255)",
+  "oklch(0.52 0.15 262)",
   "oklch(0.75 0.18 200)",
   "oklch(0.78 0.16 90)",
   "oklch(0.70 0.20 25)",
@@ -227,20 +227,20 @@ function DashboardPage() {
                 <AreaChart data={days}>
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="oklch(0.75 0.18 265)" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="oklch(0.75 0.18 265)" stopOpacity={0} />
+                      <stop offset="5%" stopColor="oklch(0.75 0.18 255)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="oklch(0.75 0.18 255)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis
                     dataKey="date"
-                    stroke="oklch(0.72 0.03 260)"
+                    stroke="oklch(0.72 0.03 255)"
                     fontSize={11}
                     tickLine={false}
                   />
-                  <YAxis stroke="oklch(0.72 0.03 260)" fontSize={11} allowDecimals={false} />
+                  <YAxis stroke="oklch(0.72 0.03 255)" fontSize={11} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
-                      background: "oklch(0.20 0.035 265)",
+                      background: "oklch(0.20 0.035 255)",
                       border: "1px solid oklch(1 0 0 / 0.1)",
                       borderRadius: 8,
                     }}
@@ -248,7 +248,7 @@ function DashboardPage() {
                   <Area
                     type="monotone"
                     dataKey="count"
-                    stroke="oklch(0.75 0.18 265)"
+                    stroke="oklch(0.75 0.18 255)"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorCount)"
@@ -275,13 +275,13 @@ function DashboardPage() {
                     innerRadius={60}
                     outerRadius={80}
                   >
-                    <Cell fill="oklch(0.75 0.18 265)" />
+                    <Cell fill="oklch(0.75 0.18 255)" />
                     <Cell fill="oklch(0.70 0.20 25)" />
                   </Pie>
                   <Legend />
                   <Tooltip
                     contentStyle={{
-                      background: "oklch(0.20 0.035 265)",
+                      background: "oklch(0.20 0.035 255)",
                       border: "1px solid oklch(1 0 0 / 0.1)",
                       borderRadius: 8,
                     }}
@@ -304,9 +304,9 @@ function DashboardPage() {
                 <ResponsiveContainer>
                   <RadarChart data={engineRadar}>
                     <PolarGrid stroke="oklch(1 0 0 / 0.1)" />
-                    <PolarAngleAxis dataKey="metric" stroke="oklch(0.72 0.03 260)" fontSize={11} />
+                    <PolarAngleAxis dataKey="metric" stroke="oklch(0.72 0.03 255)" fontSize={11} />
                     <PolarRadiusAxis
-                      stroke="oklch(0.72 0.03 260)"
+                      stroke="oklch(0.72 0.03 255)"
                       fontSize={10}
                       angle={30}
                       domain={[0, 100]}
@@ -314,13 +314,13 @@ function DashboardPage() {
                     <Radar
                       name="Avg Score"
                       dataKey="score"
-                      stroke="oklch(0.75 0.18 265)"
-                      fill="oklch(0.75 0.18 265)"
+                      stroke="oklch(0.75 0.18 255)"
+                      fill="oklch(0.75 0.18 255)"
                       fillOpacity={0.35}
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.20 0.035 265)",
+                        background: "oklch(0.20 0.035 255)",
                         border: "1px solid oklch(1 0 0 / 0.1)",
                         borderRadius: 8,
                       }}
@@ -349,7 +349,7 @@ function DashboardPage() {
                     <Legend />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.20 0.035 265)",
+                        background: "oklch(0.20 0.035 255)",
                         border: "1px solid oklch(1 0 0 / 0.1)",
                         borderRadius: 8,
                       }}
@@ -380,7 +380,7 @@ function DashboardPage() {
                     <Legend />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.20 0.035 265)",
+                        background: "oklch(0.20 0.035 255)",
                         border: "1px solid oklch(1 0 0 / 0.1)",
                         borderRadius: 8,
                       }}
@@ -405,22 +405,22 @@ function DashboardPage() {
                   <BarChart data={topBar}>
                     <XAxis
                       dataKey="name"
-                      stroke="oklch(0.72 0.03 260)"
+                      stroke="oklch(0.72 0.03 255)"
                       fontSize={10}
                       interval={0}
                       angle={-15}
                       textAnchor="end"
                       height={60}
                     />
-                    <YAxis stroke="oklch(0.72 0.03 260)" fontSize={11} allowDecimals={false} />
+                    <YAxis stroke="oklch(0.72 0.03 255)" fontSize={11} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.20 0.035 265)",
+                        background: "oklch(0.20 0.035 255)",
                         border: "1px solid oklch(1 0 0 / 0.1)",
                         borderRadius: 8,
                       }}
                     />
-                    <Bar dataKey="count" fill="oklch(0.68 0.20 265)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="oklch(0.62 0.17 255)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -459,7 +459,7 @@ function DashboardPage() {
             </ul>
             <Link
               to="/notifications"
-              className="mt-3 inline-block text-xs text-[oklch(0.85_0.15_265)] hover:underline"
+              className="mt-3 inline-block text-xs text-[oklch(0.85_0.15_255)] hover:underline"
             >
               View all notifications →
             </Link>
@@ -505,8 +505,8 @@ function Kpi({
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.20_265)]/25 to-[oklch(0.66_0.24_305)]/25 flex items-center justify-center">
-          <Icon size={14} className="text-[oklch(0.85_0.15_265)]" />
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 flex items-center justify-center">
+          <Icon size={14} className="text-[oklch(0.85_0.15_255)]" />
         </div>
       </div>
       <div className="mt-3 text-2xl font-bold">{value.toLocaleString()}</div>

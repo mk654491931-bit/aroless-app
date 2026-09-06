@@ -948,8 +948,8 @@ const dict: Record<string, string> = {
   "Lansmana özel · %50 indirim · 1 hafta geçerli": "Spécial lancement · -50% · valable 1 semaine",
   "Ödeme sayfası açılıyor…": "Ouverture du paiement…",
   "Satın al —": "Acheter —",
-  "Secure checkout by Lemon Squeezy. Cancel anytime.":
-    "Paiement sécurisé par Lemon Squeezy. Annulez à tout moment.",
+  "Secure checkout by Paddle. Cancel anytime.":
+    "Paiement sécurisé par Paddle. Annulez à tout moment.",
   "Pazar talebi (Groq)": "Demande du marché (Groq)",
   "Kâr & lojistik (Gemini)": "Profit & logistique (Gemini)",
   "Hibrit skor": "Score hybride",
@@ -2365,8 +2365,8 @@ const dict: Record<string, string> = {
     "Les services intégrés tels que les prestataires de paiement et d'authentification peuvent placer leurs propres cookies.",
   "Bu çerezler ilgili sağlayıcının gizlilik politikasına tabidir.":
     "Ces cookies sont soumis à la politique de confidentialité du fournisseur concerné.",
-  "Lemon Squeezy not configured": "Lemon Squeezy non configuré",
-  "Lemon Squeezy error:": "Erreur Lemon Squeezy :",
+  "Paddle not configured": "Paddle non configuré",
+  "Paddle error:": "Erreur Paddle :",
   "3. Hesap Oluşturma ve Güvenlik": "3. Création de compte et sécurité",
   "Kullanıcı, kayıt sırasında verdiği bilgilerin doğru, güncel ve eksiksiz olduğunu taahhüt eder.":
     "L'Utilisateur s'engage à ce que les informations fournies lors de l'inscription soient exactes, actuelles et complètes.",

@@ -186,31 +186,37 @@ export function verifyPaddleWebhookSignature(
 }
 
 /**
- * Subscription tier'ı Paddle event'ine göre belirle.
+ * Subscription tier'ı Paddle Billing v2 event'ine göre belirle.
+ * Active durumlarda checkout customData'sındaki plan'a (Starter/Pro/Business) göre döner.
  */
 export function getPaddleSubscriptionTier(
   eventType: string,
   status: string,
-  productId?: string,
+  requestedPlan?: string,
 ): string | null {
-  // Paddle event types: subscription.created, subscription.updated, subscription.cancelled
+  const plan = requestedPlan === "Starter" || requestedPlan === "Business" ? requestedPlan : "Pro";
+  const active = status === "active" || status === "trialing";
+
+  // Paddle Billing v2 event types
   switch (eventType) {
+    case "subscription.activated":
     case "subscription.created":
       // Yeni subscription = aktif
-      return status === "active" || status === "trial" ? "Pro" : null;
+      return active ? plan : null;
 
     case "subscription.updated":
       // Status değişikliği takip et
-      if (status === "active" || status === "trial") {
-        // Hangi tier olduğunu product ID'den belirle (opsiyonel)
-        return "Pro"; // Veya productId'ye göre tier belirle
-      }
-      // Diğer durumlar (paused, pastdue) → Free
-      return "Free";
+      return active ? plan : "Free";
 
+    case "transaction.completed":
+      // Başarılı ödeme — mevcut planı koru
+      return active ? plan : "Free";
+
+    case "subscription.canceled":
     case "subscription.cancelled":
     case "subscription.deleted":
     case "subscription.past_due":
+    case "subscription.paused":
       return "Free";
 
     default:

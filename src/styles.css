@@ -92,17 +92,17 @@ html.light {
   --input: oklch(0.25 0.04 265 / 16%);
   --ring: oklch(0.55 0.19 265);
   --brand: oklch(0.53 0.19 265);
-  --brand-2: oklch(0.52 0.22 305);
+  --brand-2: oklch(0.5 0.16 262);
   --accent-active: oklch(0.55 0.13 210);
   --profit: oklch(0.52 0.15 158);
   --warning: oklch(0.62 0.15 70);
-  --ai: oklch(0.52 0.19 290);
+  --ai: oklch(0.5 0.16 255);
 }
 
 html.light body {
   background-image:
     radial-gradient(1200px 600px at 10% -10%, oklch(0.55 0.19 265 / 0.1), transparent 60%),
-    radial-gradient(1000px 500px at 100% 0%, oklch(0.52 0.22 305 / 0.08), transparent 60%);
+    radial-gradient(1000px 500px at 100% 0%, oklch(0.5 0.16 262 / 0.08), transparent 60%);
 }
 
 /* Koyu tema için yazılmış yarı saydam beyaz katmanları gündüz temasında ters çevir */

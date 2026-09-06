@@ -103,7 +103,7 @@ export const PLATFORM_PRESETS: Record<SimPlatform, PlatformPreset> = {
     organicPull: 0.2,
     adEfficiency: 0.95,
     ratingSensitivity: 0.75,
-    accent: "oklch(0.68 0.18 300)",
+    accent: "oklch(0.62 0.17 255)",
     blurb: "Full control, lowest fees, zero free traffic. Everything is on you.",
   },
   eBay: {

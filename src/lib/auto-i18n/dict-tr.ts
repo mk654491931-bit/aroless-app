@@ -715,8 +715,8 @@ const dict: Record<string, string> = {
   "Achievements & Ranks": "Başarılar & Rütbeler",
   "Flight simulator for e-commerce": "E-ticaret için uçuş simülatörü",
   "Most popular": "En popüler",
-  "Secure checkout by Lemon Squeezy. Cancel anytime.":
-    "Lemon Squeezy ile güvenli ödeme. İstediğin zaman iptal et.",
+  "Secure checkout by Paddle. Cancel anytime.":
+    "Paddle ile güvenli ödeme. İstediğin zaman iptal et.",
   "Validating demand with evidence": "Talebin kanıtla doğrulanması",
   "Prove other people want this before you spend money on it.":
     "Para harcamadan önce başkalarının bunu istediğini kanıtlayın.",

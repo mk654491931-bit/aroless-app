@@ -44,7 +44,7 @@ export function ReferralPanel() {
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
-        <Gift size={18} className="text-[oklch(0.75_0.18_265)]" />
+        <Gift size={18} className="text-[oklch(0.68_0.15_255)]" />
         <h2 className="font-semibold">Arkadaşını davet et</h2>
       </div>
       <p className="text-sm text-muted-foreground">

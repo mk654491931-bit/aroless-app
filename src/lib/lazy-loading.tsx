@@ -3,8 +3,8 @@
  * Bileşenleri talep üzerine yükle, bundle boyutunu küçült
  */
 
-import { lazy, Suspense, ComponentType, ReactNode } from "react";
-import type { RenderErrorBoundary } from "@tanstack/react-router";
+import * as React from "react";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 /**
  * Güvenli lazy loading - Error boundary ile
@@ -264,9 +264,7 @@ export function ConditionalLazy<P extends object>({
 
   return (
     <Suspense fallback={fallback}>
-      <Component />
+      <Component {...({} as P)} />
     </Suspense>
   );
 }
-
-import React from "react";

@@ -30,8 +30,8 @@ export function Sparkline({
     >
       <defs>
         <linearGradient id="spark" x1="0" x2="1">
-          <stop offset="0%" stopColor="oklch(0.68 0.20 265)" />
-          <stop offset="100%" stopColor="oklch(0.66 0.24 305)" />
+          <stop offset="0%" stopColor="oklch(0.62 0.17 255)" />
+          <stop offset="100%" stopColor="oklch(0.52 0.15 262)" />
         </linearGradient>
       </defs>
       <polyline

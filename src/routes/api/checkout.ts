@@ -8,7 +8,7 @@ const BodySchema = z.object({
   redirectUrl: z.string().url().max(500).optional(),
 });
 
-/** Oturum açmış kullanıcı için Lemon Squeezy ödeme bağlantısı üretir. */
+/** Oturum açmış kullanıcı için Paddle ödeme bağlantısı üretir. */
 export const Route = createFileRoute("/api/checkout")({
   server: {
     handlers: {
@@ -26,14 +26,14 @@ export const Route = createFileRoute("/api/checkout")({
           if (error || !userData.user) return json({ error: "Unauthorized" }, 401);
 
           const body = BodySchema.parse(await request.json().catch(() => ({})));
-          const { createLemonCheckout } = await import("@/lib/lemonsqueezy.server");
-          const url = await createLemonCheckout({
+          const { createPaddleCheckout } = await import("@/lib/paddle.server");
+          const { checkoutUrl } = await createPaddleCheckout({
             userId: userData.user.id,
             email: userData.user.email,
             plan: body.plan,
             redirectUrl: body.redirectUrl ?? new URL(request.url).origin + "/settings",
           });
-          return json({ url }, 200);
+          return json({ url: checkoutUrl }, 200);
         } catch (e) {
           return json({ error: (e as Error).message }, 500);
         }

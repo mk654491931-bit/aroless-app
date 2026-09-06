@@ -50,7 +50,7 @@ export function CompareTray({
           type="button"
           onClick={onOpen}
           disabled={products.length < 2}
-          className="rounded-full bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          className="rounded-full bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
         >
           Yan yana karşılaştır ({products.length})
         </button>
@@ -108,7 +108,7 @@ export function CompareModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="inline-flex items-center gap-2 text-sm font-semibold">
-            <Columns3 size={15} className="text-[oklch(0.75_0.18_265)]" />
+            <Columns3 size={15} className="text-[oklch(0.68_0.15_255)]" />
             Yan yana karşılaştırma · {products.length} ürün
           </h3>
           <button

@@ -141,7 +141,7 @@ export const runtimeOptimization = {
 /**
  * React Hook - Environment Awareness
  */
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 export function useEnvironmentConfig() {
   const config = envManager.getConfig();
@@ -153,7 +153,8 @@ export function useEnvironmentConfig() {
         ...config,
       });
     }
-  }, [config]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return config;
 }
@@ -164,11 +165,6 @@ export function useEnvironmentConfig() {
 export class TaskScheduler {
   private taskQueue: Array<() => Promise<void>> = [];
   private isProcessing = false;
-  private config: EnvironmentConfig;
-
-  constructor(config?: EnvironmentConfig) {
-    this.config = config || envManager.getConfig();
-  }
 
   /**
    * Kuyruğa görev ekle
@@ -197,8 +193,8 @@ export class TaskScheduler {
       }
 
       // Yield to browser for other tasks
-      await new Promise((resolve) => {
-        runtimeOptimization.scheduleTask(resolve, "low");
+      await new Promise<void>((resolve) => {
+        runtimeOptimization.scheduleTask(() => resolve(), "low");
       });
     }
 

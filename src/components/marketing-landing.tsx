@@ -201,7 +201,7 @@ export function MarketingLanding() {
 
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-16 text-center md:pt-24">
         <div className="mx-auto mb-5 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
-          <Sparkles size={12} className="text-[oklch(0.75_0.18_265)]" /> Yapay zekâ destekli ürün
+          <Sparkles size={12} className="text-[oklch(0.68_0.15_255)]" /> Yapay zekâ destekli ürün
           araştırması
         </div>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight md:text-6xl">
@@ -420,7 +420,7 @@ export function MarketingLanding() {
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {FEATURES.map((f) => (
             <div key={f.title} className="glass rounded-2xl p-5">
-              <f.icon size={20} className="text-[oklch(0.75_0.18_265)]" />
+              <f.icon size={20} className="text-[oklch(0.68_0.15_255)]" />
               <h3 className="mt-3 font-semibold">{f.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{f.text}</p>
             </div>
@@ -433,7 +433,7 @@ export function MarketingLanding() {
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="glass rounded-2xl p-5">
-              <div className="text-xs font-bold tracking-widest text-[oklch(0.75_0.18_265)]">
+              <div className="text-xs font-bold tracking-widest text-[oklch(0.68_0.15_255)]">
                 {s.n}
               </div>
               <h3 className="mt-2 font-semibold">{s.t}</h3>
@@ -484,7 +484,7 @@ export function MarketingLanding() {
 
       <section className="mx-auto max-w-4xl px-4 pb-24">
         <div className="glass rounded-3xl p-8 text-center">
-          <Cpu size={22} className="mx-auto text-[oklch(0.75_0.18_265)]" />
+          <Cpu size={22} className="mx-auto text-[oklch(0.68_0.15_255)]" />
           <h2 className="mt-3 text-2xl font-bold md:text-3xl">Bugün ilk kazandıran ürününü bul</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Kaydol, hedef pazarını seç, motoru çalıştır.

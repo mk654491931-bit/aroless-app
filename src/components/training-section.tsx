@@ -24,7 +24,7 @@ export function TrainingSection({
           <button
             key={id}
             onClick={() => setMode(id)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${mode === id ? "bg-gradient-to-r from-[oklch(0.68_0.20_265)] to-[oklch(0.66_0.24_305)] text-white glow" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${mode === id ? "bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white glow" : "text-muted-foreground hover:text-foreground"}`}
           >
             <Icon size={15} />
             {label}
