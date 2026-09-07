@@ -15,6 +15,7 @@ import {
   Activity,
   Package,
   CreditCard,
+  ChevronRight,
 } from "lucide-react";
 import {
   BarChart,
@@ -57,13 +58,28 @@ export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
 });
 
-const COLORS = [
-  "oklch(0.62 0.17 255)",
-  "oklch(0.52 0.15 262)",
-  "oklch(0.75 0.18 200)",
-  "oklch(0.78 0.16 90)",
-  "oklch(0.70 0.20 25)",
+// ─── Design tokens ─────────────────────────────────────────────────────────────
+
+const CHART_COLORS = [
+  "#6366f1", // indigo-500
+  "#818cf8", // indigo-400
+  "#34d399", // emerald-400
+  "#a78bfa", // violet-400
+  "#f59e0b", // amber-400
+  "#38bdf8", // sky-400
 ];
+
+const TOOLTIP_STYLE = {
+  background: "#0f172a",
+  border: "1px solid rgba(99,102,241,0.25)",
+  borderRadius: 10,
+  fontSize: 12,
+  color: "#e2e8f0",
+};
+
+const AXIS_STYLE = { stroke: "#475569", fontSize: 11 };
+
+// ─── Page ───────────────────────────────────────────────────────────────────
 
 function DashboardPage() {
   const { t } = useTranslation();
@@ -82,31 +98,15 @@ function DashboardPage() {
       });
   }, [user, loading, nav]);
 
-  const favQ = useQuery({
-    queryKey: ["favorites", user?.id],
-    queryFn: () => favFn(),
-    enabled: !!user,
-  });
-  const anaQ = useQuery({
-    queryKey: ["analyses", user?.id],
-    queryFn: () => anaFn(),
-    enabled: !!user,
-  });
-  const profileQ = useQuery({
-    queryKey: ["profile", user?.id],
-    queryFn: () => profileFn(),
-    enabled: !!user,
-  });
-  const notifQ = useQuery({
-    queryKey: ["notifications", user?.id],
-    queryFn: () => notifFn(),
-    enabled: !!user,
-  });
+  const favQ = useQuery({ queryKey: ["favorites", user?.id], queryFn: () => favFn(), enabled: !!user });
+  const anaQ = useQuery({ queryKey: ["analyses", user?.id], queryFn: () => anaFn(), enabled: !!user });
+  const profileQ = useQuery({ queryKey: ["profile", user?.id], queryFn: () => profileFn(), enabled: !!user });
+  const notifQ = useQuery({ queryKey: ["notifications", user?.id], queryFn: () => notifFn(), enabled: !!user });
 
   if (loading || !user)
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin" />
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="animate-spin text-indigo-400" size={28} />
       </div>
     );
 
@@ -114,12 +114,13 @@ function DashboardPage() {
   const analyses: AnalysisRow[] = (anaQ.data as AnalysisRow[] | undefined) ?? [];
   const notifications: NotificationRow[] = (notifQ.data as NotificationRow[] | undefined) ?? [];
   const profile = profileQ.data as
-    { credits: number; credits_spent: number; subscription_tier: string } | undefined;
+    | { credits: number; credits_spent: number; subscription_tier: string }
+    | undefined;
 
   const credits = profile?.credits ?? 0;
-  const spent = profile?.credits_spent ?? 0;
+  const spent   = profile?.credits_spent ?? 0;
 
-  // by collection
+  // By collection
   const collectionCounts: Record<string, number> = {};
   for (const f of favorites) {
     const c = f.collection_name || "Default";
@@ -127,22 +128,20 @@ function DashboardPage() {
   }
   const collectionData = Object.entries(collectionCounts).map(([name, value]) => ({ name, value }));
 
-  // analyses over last 14 days
+  // Analyses over last 14 days
   const days: { date: string; count: number }[] = [];
   const now = new Date();
   for (let i = 13; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(now.getDate() - i);
-    const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    days.push({ date: label, count: 0 });
+    days.push({ date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: 0 });
   }
   for (const a of analyses) {
-    const d = new Date(a.created_at);
-    const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+    const diff = Math.floor((now.getTime() - new Date(a.created_at).getTime()) / 86_400_000);
     if (diff >= 0 && diff <= 13) days[13 - diff].count++;
   }
 
-  // top recommendations
+  // Top recommendations
   const topNames: Record<string, number> = {};
   for (const a of analyses) {
     const list = (a.results as { name?: string }[]) || [];
@@ -153,41 +152,40 @@ function DashboardPage() {
     .slice(0, 6)
     .map(([name, count]) => ({ name: name.length > 20 ? name.slice(0, 20) + "…" : name, count }));
 
-  // engine performance radar from favorites
+  // Engine performance radar
   const healthScores: number[] = [];
-  const viralScores: number[] = [];
-  const trendScores: number[] = [];
+  const viralScores:  number[] = [];
+  const trendScores:  number[] = [];
   const verdictCounts: Record<string, number> = {};
   for (const f of favorites) {
     const p = f.product;
-    if (typeof p.health_score === "number") healthScores.push(p.health_score);
-    if (typeof p.viral_probability_90d === "number") viralScores.push(p.viral_probability_90d);
-    if (typeof p.trend_score === "number") trendScores.push(p.trend_score);
+    if (typeof p.health_score           === "number") healthScores.push(p.health_score);
+    if (typeof p.viral_probability_90d  === "number") viralScores.push(p.viral_probability_90d);
+    if (typeof p.trend_score            === "number") trendScores.push(p.trend_score);
     const v = p.sellability_verdict || "Unknown";
     verdictCounts[v] = (verdictCounts[v] ?? 0) + 1;
   }
   const avg = (arr: number[]) =>
     arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
   const engineRadar = [
-    { metric: "Health", score: avg(healthScores) },
-    { metric: "Viral", score: avg(viralScores) },
-    { metric: "Trend", score: avg(trendScores) },
+    { metric: "Health",     score: avg(healthScores) },
+    { metric: "Viral",      score: avg(viralScores) },
+    { metric: "Trend",      score: avg(trendScores) },
     { metric: "Confidence", score: favorites.length ? Math.min(100, favorites.length * 10) : 0 },
-    {
-      metric: "Diversity",
-      score: collectionData.length ? Math.min(100, collectionData.length * 20) : 0,
-    },
+    { metric: "Diversity",  score: collectionData.length ? Math.min(100, collectionData.length * 20) : 0 },
   ];
 
-  const verdictPie = Object.entries(verdictCounts).map(([name, value]) => ({ name, value }));
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const verdictPie   = Object.entries(verdictCounts).map(([name, value]) => ({ name, value }));
+  const unreadCount  = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+
+        {/* Header */}
         <PageHero
-          icon={<Sparkles size={18} />}
+          icon={<Sparkles size={18} className="text-indigo-400" />}
           title={t("dashboard")}
           description="Analizleriniz, kayıtlı ürünleriniz ve kredi kullanımınızın canlı özeti."
           actions={
@@ -195,18 +193,18 @@ function DashboardPage() {
               <LanguageSwitcher />
               <Link
                 to="/notifications"
-                className="relative text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+                className="relative inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 transition hover:border-indigo-500/50 hover:bg-slate-800 hover:text-white"
               >
                 <Bell size={14} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] flex items-center justify-center font-semibold">
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </Link>
               <Link
                 to="/"
-                className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 transition hover:border-indigo-500/50 hover:bg-slate-800 hover:text-white"
               >
                 <ArrowLeft size={14} /> Back
               </Link>
@@ -214,248 +212,155 @@ function DashboardPage() {
           }
         />
 
-        <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Kpi icon={History} label="Analyses" value={analyses.length} />
-          <Kpi icon={Bookmark} label="Saved Items" value={favorites.length} />
-          <Kpi icon={TrendingUp} label="Collections" value={collectionData.length || 1} />
-          <Kpi icon={CreditCard} label="Credits Left" value={credits} />
+        {/* ―― KPI Cards ――――――――――――――――――――――――――――――――――――――――― */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard icon={History}    label="Toplam Analiz"   value={analyses.length}          accent="indigo" />
+          <KpiCard icon={Bookmark}   label="Kaydedilen"      value={favorites.length}          accent="emerald" />
+          <KpiCard icon={TrendingUp} label="Koleksiyon"      value={collectionData.length || 1} accent="violet" />
+          <KpiCard icon={CreditCard} label="Kalan Kredi"     value={credits}                   accent="amber" />
         </section>
 
+        {/* ―― Row 2: Area + Credit Donut ――――――――――――――――――――――――――― */}
         <section className="grid lg:grid-cols-3 gap-4">
-          <div className="glass rounded-2xl p-5 lg:col-span-2">
-            <h2 className="font-semibold mb-3 flex items-center gap-2">
-              <Activity size={16} /> Analyses (last 14 days)
-            </h2>
-            <div className="h-56">
+          <Card className="lg:col-span-2">
+            <CardHeader icon={<Activity size={15} className="text-indigo-400" />} title="Analiz Aktivitesi" subtitle="Son 14 gün" />
+            <div className="h-52 mt-4">
               <ResponsiveContainer>
                 <AreaChart data={days}>
                   <defs>
-                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="oklch(0.75 0.18 255)" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="oklch(0.75 0.18 255)" stopOpacity={0} />
+                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis
-                    dataKey="date"
-                    stroke="oklch(0.72 0.03 255)"
-                    fontSize={11}
-                    tickLine={false}
-                  />
-                  <YAxis stroke="oklch(0.72 0.03 255)" fontSize={11} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.20 0.035 255)",
-                      border: "1px solid oklch(1 0 0 / 0.1)",
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="count"
-                    stroke="oklch(0.75 0.18 255)"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorCount)"
-                  />
+                  <XAxis dataKey="date" {...AXIS_STYLE} tickLine={false} axisLine={false} />
+                  <YAxis {...AXIS_STYLE} allowDecimals={false} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: "#6366f1", strokeWidth: 1, strokeDasharray: "4 4" }} />
+                  <Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} fill="url(#areaGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Card>
 
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3 flex items-center gap-2">
-              <Zap size={16} /> Credit Balance
-            </h2>
-            <div className="h-56">
+          <Card>
+            <CardHeader icon={<Zap size={15} className="text-amber-400" />} title="Kredi Bakiyesi" subtitle={`${credits} kalan`} />
+            <div className="h-52 mt-4">
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie
-                    data={[
-                      { name: "Remaining", value: credits },
-                      { name: "Spent", value: spent },
-                    ]}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={60}
-                    outerRadius={80}
-                  >
-                    <Cell fill="oklch(0.75 0.18 255)" />
-                    <Cell fill="oklch(0.70 0.20 25)" />
+                  <Pie data={[{ name: "Kalan", value: credits }, { name: "Harcanan", value: spent }]}
+                    dataKey="value" nameKey="name" innerRadius={55} outerRadius={74} strokeWidth={0}>
+                    <Cell fill="#6366f1" />
+                    <Cell fill="#f59e0b" />
                   </Pie>
-                  <Legend />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.20 0.035 255)",
-                      border: "1px solid oklch(1 0 0 / 0.1)",
-                      borderRadius: 8,
-                    }}
-                  />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Card>
         </section>
 
+        {/* ―― Row 3: Radar + Verdict ――――――――――――――――――――――――――――――― */}
         <section className="grid lg:grid-cols-2 gap-4">
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3">Saved Product Quality Radar</h2>
-            <div className="h-64">
+          <Card>
+            <CardHeader title="Ürün Kalite Radarı" subtitle="Kaydedilen ürünlerin ortalama skorları" />
+            <div className="h-60 mt-4">
               {favorites.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  Save products to see AI quality scores.
-                </div>
+                <EmptyState text="Radar görmek için ürün kaydedin." />
               ) : (
                 <ResponsiveContainer>
                   <RadarChart data={engineRadar}>
-                    <PolarGrid stroke="oklch(1 0 0 / 0.1)" />
-                    <PolarAngleAxis dataKey="metric" stroke="oklch(0.72 0.03 255)" fontSize={11} />
-                    <PolarRadiusAxis
-                      stroke="oklch(0.72 0.03 255)"
-                      fontSize={10}
-                      angle={30}
-                      domain={[0, 100]}
-                    />
-                    <Radar
-                      name="Avg Score"
-                      dataKey="score"
-                      stroke="oklch(0.75 0.18 255)"
-                      fill="oklch(0.75 0.18 255)"
-                      fillOpacity={0.35}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: "oklch(0.20 0.035 255)",
-                        border: "1px solid oklch(1 0 0 / 0.1)",
-                        borderRadius: 8,
-                      }}
-                    />
+                    <PolarGrid stroke="rgba(99,102,241,0.15)" />
+                    <PolarAngleAxis dataKey="metric" stroke="#475569" fontSize={11} />
+                    <PolarRadiusAxis stroke="#334155" fontSize={10} angle={30} domain={[0, 100]} />
+                    <Radar name="Ort. Skor" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} strokeWidth={2} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
                   </RadarChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3">Sellability Verdicts</h2>
-            <div className="h-64">
+          <Card>
+            <CardHeader title="Satılabilirlik Kararları" subtitle="AI verdict dağılımı" />
+            <div className="h-60 mt-4">
               {verdictPie.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  Save products to see verdict distribution.
-                </div>
+                <EmptyState text="Verdict görmek için ürün kaydedin." />
               ) : (
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={verdictPie} dataKey="value" nameKey="name" outerRadius={80}>
+                    <Pie data={verdictPie} dataKey="value" nameKey="name" outerRadius={78} strokeWidth={0}>
                       {verdictPie.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Legend />
-                    <Tooltip
-                      contentStyle={{
-                        background: "oklch(0.20 0.035 255)",
-                        border: "1px solid oklch(1 0 0 / 0.1)",
-                        borderRadius: 8,
-                      }}
-                    />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </Card>
         </section>
 
+        {/* ―― Row 4: Collections pie + Top Recs bar ――――――――――――――――― */}
         <section className="grid lg:grid-cols-3 gap-4">
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3">Saves by Collection</h2>
-            <div className="h-56">
+          <Card>
+            <CardHeader title="Koleksiyona Göre Kaydedilenler" />
+            <div className="h-52 mt-4">
               {collectionData.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  Save a product to see this chart.
-                </div>
+                <EmptyState text="Koleksiyon görmek için ürün kaydedin." />
               ) : (
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={collectionData} dataKey="value" nameKey="name" outerRadius={80}>
+                    <Pie data={collectionData} dataKey="value" nameKey="name" outerRadius={72} strokeWidth={0}>
                       {collectionData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Legend />
-                    <Tooltip
-                      contentStyle={{
-                        background: "oklch(0.20 0.035 255)",
-                        border: "1px solid oklch(1 0 0 / 0.1)",
-                        borderRadius: 8,
-                      }}
-                    />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="glass rounded-2xl p-5 lg:col-span-2">
-            <h2 className="font-semibold mb-3 flex items-center gap-2">
-              <Package size={16} /> Top AI Recommendations
-            </h2>
-            <div className="h-64">
+          <Card className="lg:col-span-2">
+            <CardHeader icon={<Package size={15} className="text-emerald-400" />} title="Top AI Önerileri" subtitle="En sık önerilen ürünler" />
+            <div className="h-60 mt-4">
               {topBar.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  Run a search to populate this chart.
-                </div>
+                <EmptyState text="Arama yaparak önerileri görün." />
               ) : (
                 <ResponsiveContainer>
-                  <BarChart data={topBar}>
-                    <XAxis
-                      dataKey="name"
-                      stroke="oklch(0.72 0.03 255)"
-                      fontSize={10}
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis stroke="oklch(0.72 0.03 255)" fontSize={11} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "oklch(0.20 0.035 255)",
-                        border: "1px solid oklch(1 0 0 / 0.1)",
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Bar dataKey="count" fill="oklch(0.62 0.17 255)" radius={[4, 4, 0, 0]} />
+                  <BarChart data={topBar} barSize={24}>
+                    <XAxis dataKey="name" {...AXIS_STYLE} tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
+                    <YAxis {...AXIS_STYLE} allowDecimals={false} axisLine={false} tickLine={false} width={28} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(99,102,241,0.07)" }} />
+                    <Bar dataKey="count" fill="#6366f1" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </Card>
         </section>
 
+        {/* ―― Row 5: Notifications + Recent Queries ――――――――――――――― */}
         <section className="grid lg:grid-cols-2 gap-4">
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3">Recent Notifications</h2>
-            {notifQ.isLoading && (
-              <div className="text-sm text-muted-foreground py-6 flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Loading…
-              </div>
-            )}
+          <Card>
+            <CardHeader icon={<Bell size={15} className="text-slate-400" />} title="Son Bildirimler" />
+            {notifQ.isLoading && <LoadingRow />}
             {!notifQ.isLoading && notifications.length === 0 && (
-              <div className="text-sm text-muted-foreground py-6">No notifications yet.</div>
+              <EmptyState text="Henüz bildirim yok." className="mt-4" />
             )}
-            <ul className="divide-y divide-white/5">
+            <ul className="mt-3 divide-y divide-slate-800/60">
               {notifications.slice(0, 5).map((n) => (
-                <li
-                  key={n.id}
-                  className={`py-2.5 flex items-start justify-between gap-3 text-sm ${n.read ? "opacity-60" : ""}`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{n.title}</div>
-                    {n.body && (
-                      <div className="text-xs text-muted-foreground truncate">{n.body}</div>
-                    )}
+                <li key={n.id} className={`flex items-start justify-between gap-3 py-3 text-sm ${n.read ? "opacity-50" : ""}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-200">{n.title}</p>
+                    {n.body && <p className="truncate text-xs text-slate-500">{n.body}</p>}
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  <span className="whitespace-nowrap text-xs text-slate-600">
                     {new Date(n.created_at).toLocaleDateString()}
                   </span>
                 </li>
@@ -463,57 +368,117 @@ function DashboardPage() {
             </ul>
             <Link
               to="/notifications"
-              className="mt-3 inline-block text-xs text-[oklch(0.85_0.15_255)] hover:underline"
+              className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
             >
-              View all notifications →
+              Tüm bildirimler <ChevronRight size={12} />
             </Link>
-          </div>
+          </Card>
 
-          <div className="glass rounded-2xl p-5">
-            <h2 className="font-semibold mb-3">Recent Queries</h2>
-            {anaQ.isLoading && (
-              <div className="text-sm text-muted-foreground py-6 flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Loading…
-              </div>
-            )}
+          <Card>
+            <CardHeader icon={<History size={15} className="text-slate-400" />} title="Son Aramalar" />
+            {anaQ.isLoading && <LoadingRow />}
             {!anaQ.isLoading && analyses.length === 0 && (
-              <div className="text-sm text-muted-foreground py-6">No searches yet.</div>
+              <EmptyState text="Henüz arama yok." className="mt-4" />
             )}
-            <ul className="divide-y divide-white/5">
+            <ul className="mt-3 divide-y divide-slate-800/60">
               {analyses.slice(0, 8).map((a) => (
-                <li key={a.id} className="py-2.5 flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate">{a.search_query}</span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                <li key={a.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="truncate text-slate-300">{a.search_query}</span>
+                  <span className="whitespace-nowrap text-xs text-slate-600">
                     {new Date(a.created_at).toLocaleString()}
                   </span>
                 </li>
               ))}
             </ul>
-          </div>
+          </Card>
         </section>
       </main>
     </div>
   );
 }
 
-function Kpi({
+// ─── Reusable primitives ────────────────────────────────────────────────────────
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-lg shadow-black/30 backdrop-blur-sm ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between">
+      <div>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
+          {icon}
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+type AccentColor = "indigo" | "emerald" | "violet" | "amber";
+
+const ACCENT_MAP: Record<AccentColor, { bg: string; icon: string; value: string }> = {
+  indigo:  { bg: "bg-indigo-500/10",  icon: "text-indigo-400",  value: "text-indigo-100" },
+  emerald: { bg: "bg-emerald-500/10", icon: "text-emerald-400", value: "text-emerald-100" },
+  violet:  { bg: "bg-violet-500/10",  icon: "text-violet-400",  value: "text-violet-100" },
+  amber:   { bg: "bg-amber-500/10",   icon: "text-amber-400",   value: "text-amber-100" },
+};
+
+function KpiCard({
   icon: Icon,
   label,
   value,
+  accent = "indigo",
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   value: number;
+  accent?: AccentColor;
 }) {
+  const a = ACCENT_MAP[accent];
   return (
-    <div className="glass rounded-2xl p-5">
+    <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/30 backdrop-blur-sm">
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 flex items-center justify-center">
-          <Icon size={14} className="text-[oklch(0.85_0.15_255)]" />
+        <span className="text-[11px] font-medium uppercase tracking-widest text-slate-500">{label}</span>
+        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.bg}`}>
+          <Icon size={15} className={a.icon} />
         </div>
       </div>
-      <div className="mt-3 text-2xl font-bold">{value.toLocaleString()}</div>
+      <p className={`mt-3 text-3xl font-bold tabular-nums ${a.value}`}>
+        {value.toLocaleString()}
+      </p>
+    </div>
+  );
+}
+
+function EmptyState({ text, className = "" }: { text: string; className?: string }) {
+  return (
+    <div className={`flex h-full min-h-[80px] items-center justify-center text-xs text-slate-600 ${className}`}>
+      {text}
+    </div>
+  );
+}
+
+function LoadingRow() {
+  return (
+    <div className="mt-4 flex items-center gap-2 text-xs text-slate-600">
+      <Loader2 size={13} className="animate-spin" /> Yükleniyor…
     </div>
   );
 }
