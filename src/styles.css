@@ -2318,3 +2318,153 @@ html {
     animation: none !important;
   }
 }
+
+
+/* ============================================================
+   Auth page — matte, premium refinement (overrides at the end)
+   ============================================================ */
+.auth-stage {
+  background:
+    radial-gradient(1100px 500px at 15% -5%, color-mix(in oklab, var(--brand) 9%, transparent), transparent 60%),
+    radial-gradient(900px 480px at 90% 110%, color-mix(in oklab, var(--brand-2) 8%, transparent), transparent 62%),
+    oklch(0.02 0.004 260 / 0.72);
+}
+html.light .auth-stage {
+  background:
+    radial-gradient(1100px 500px at 15% -5%, color-mix(in oklab, var(--brand) 6%, transparent), transparent 60%),
+    radial-gradient(900px 480px at 90% 110%, color-mix(in oklab, var(--brand-2) 5%, transparent), transparent 62%),
+    oklch(0.99 0.002 250 / 0.9);
+}
+.auth-stage .auth-aurora {
+  opacity: 0.13;
+}
+.auth-stage .auth-grid {
+  opacity: 0.16;
+}
+.auth-stage .auth-beam {
+  opacity: 0.5;
+}
+.auth-stage .auth-shimmer {
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-stage .auth-aurora,
+  .auth-stage .auth-grid,
+  .auth-stage .auth-beam,
+  .auth-stage .auth-shimmer {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   Landing sections — chips inside always-dark glass cards.
+   (Stay glassy in light theme too: these sit on dark surfaces.)
+   ============================================================ */
+.ls-chip {
+  border: 1px solid oklch(1 0 0 / 0.16);
+  background: oklch(1 0 0 / 0.07);
+  color: oklch(0.87 0.01 250);
+}
+html.light .ls-chip {
+  border-color: oklch(1 0 0 / 0.18);
+  background: oklch(1 0 0 / 0.08);
+  color: oklch(0.9 0.01 250);
+}
+
+
+/* ---------- App header: keep every action reachable on mobile ---------- */
+.header-actions {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.header-actions::-webkit-scrollbar {
+  display: none;
+}
+.header-actions > * {
+  flex: 0 0 auto;
+}
+
+
+/* ---------- Finder tab strip: swipeable on mobile ---------- */
+.tab-switch-track {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-switch-track::-webkit-scrollbar {
+  display: none;
+}
+.tab-switch-track > button {
+  flex: 0 0 auto;
+}
+
+
+/* ---------- Auth card: matte premium surface ---------- */
+.auth-card-wrap {
+  isolation: isolate;
+}
+.auth-card-wrap .ambient-halo {
+  z-index: -1;
+}
+.matte-card {
+  background:
+    linear-gradient(180deg, oklch(0.17 0.035 260 / 0.92), oklch(0.1 0.02 262 / 0.96)),
+    oklch(0.12 0.025 262);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.06),
+    inset 0 0 0 1px oklch(1 0 0 / 0.04),
+    0 1px 0 oklch(1 0 0 / 0.04),
+    0 24px 70px -28px oklch(0 0 0 / 0.85);
+  backdrop-filter: blur(26px) saturate(120%);
+}
+html.light .matte-card {
+  background: linear-gradient(180deg, oklch(1 0 0 / 0.92), oklch(0.97 0.008 262 / 0.96));
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.7),
+    0 24px 70px -32px oklch(0.25 0.04 265 / 0.45);
+}
+.matte-card::before {
+  background: linear-gradient(
+    150deg,
+    oklch(1 0 0 / 0.14),
+    oklch(1 0 0 / 0.03) 30%,
+    transparent 55%,
+    color-mix(in oklab, var(--brand-2) 22%, transparent)
+  ) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .matte-card {
+    transition: none;
+  }
+}
+
+
+
+
+/* ============================================================
+   Shared landing sections (FAQ + reviews) — dark glass cards.
+   Theme-safe: the sections may be embedded in light pages too.
+   ============================================================ */
+.ls-darkglass {
+  background: oklch(0.15 0.028 262 / 0.92);
+}
+html.light .ls-darkglass {
+  background: oklch(1 0 0 / 0.94) !important;
+  box-shadow: 0 18px 50px -28px oklch(0.25 0.04 265 / 0.45);
+}
+html.light .ls-darkglass {
+  color: oklch(0.24 0.035 260);
+}
+html.light .ls-darkglass [class*="text-slate-400"],
+html.light .ls-darkglass [class*="text-white/6"],
+html.light .ls-darkglass [class*="text-slate-500"],
+html.light .ls-darkglass [class*="text-slate-600"] {
+  color: oklch(0.5 0.03 262) !important;
+}
+html.light .ls-darkglass [class*="text-white"]:not([class*="text-white/"]),
+html.light .ls-darkglass [class*="text-slate-100"],
+html.light .ls-darkglass [class*="text-slate-200"],
+html.light .ls-darkglass [class*="text-slate-300"] {
+  color: oklch(0.24 0.035 260) !important;
+}

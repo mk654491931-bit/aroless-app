@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ArolessMark } from "@/components/velora-mark";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
+import { FaqSection, type FaqItem } from "@/components/landing/sections";
 
 const FEATURES = [
   {
@@ -71,13 +72,41 @@ const STATS = [
   { k: "3x", v: "hibrit AI modeli" },
 ];
 
+const FAQ_ITEMS: FaqItem[] = [
+  {
+    q: "Aroless ne yapar?",
+    a: "Aroless; e-ticaret ürün araştırmasından reklam senaryosuna kadar tüm zinciri tek panelde toplar. Trend radarı, kâr/maliyet analizi, rakip ve mağaza denetimi, reklam kreatif stüdyosu ve eğitim simülatörü tek platformda çalışır.",
+  },
+  {
+    q: "Ücretsiz başlayabilir miyim?",
+    a: "Evet. Kayıt olur olmaz hoş geldin kredileri tanımlanır; Ürün Bulucu'yu gerçek analizlerde deneyebilirsin. Kart bilgisi gerekmez, PRO'ya istediğin zaman geçersin.",
+  },
+  {
+    q: "Kâr hesapları ne kadar gerçekçi?",
+    a: "Tedarik, kargo, komisyon, KDV, iade ve reklam maliyeti ülke + platform bazında modele işlenir. Tahmin değil, kaynaklı ve gerekçeli birim ekonomisi üretiriz — neden seçildi/elendi her üründe görünür.",
+  },
+  {
+    q: "Hangi ülkeler ve platformlar destekleniyor?",
+    a: "22 platform ve 21 ülke ekonomisi: Amazon, TikTok Shop, Shopify, Trendyol, Hepsiburada, eBay, Etsy, Zalando ve daha fazlası. Her pazarın komisyon, teslimat ve sertifika bariyerleri hesaba katılır.",
+  },
+  {
+    q: "Simülatör gerçek para riski taşır mı?",
+    a: "Hayır. Mağaza simülatörü 30 günlük sezonlar, rakipler ve nakit akışıyla tamamen sanal bir ortamda pratik yapmanı sağlar — hataların yalnızca oyunda kalır.",
+  },
+  {
+    q: "Ödemeler nasıl işliyor?",
+    a: "Ödeme altyapısı Paddle üzerinden güvenli biçimde yürür; abonelik, fatura ve iptal işlemleri şeffaf ve denetlenebilir bir kayıt altında tutulur.",
+  },
+];
+
+
 export function AuthShowcase() {
   const ref = useScrollReveal<HTMLDivElement>();
 
   return (
     <div ref={ref} className="relative mx-auto w-full max-w-6xl px-4 sm:px-5">
       {/* ---------- Intro cover ---------- */}
-      <section className="flex min-h-[80svh] flex-col items-center justify-center py-12 text-center sm:min-h-[86svh] sm:py-16">
+      <section className="flex min-h-[64svh] flex-col items-center justify-center py-10 text-center sm:min-h-[70svh] sm:py-12">
         <div className="animate-rise-in inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground backdrop-blur sm:px-3.5 sm:text-[11px] sm:tracking-[0.28em]">
           <Sparkles className="h-3.5 w-3.5 animate-pulse-soft" />
           AI Commerce OS
@@ -108,7 +137,7 @@ export function AuthShowcase() {
         </div>
 
         <p
-          className="animate-rise-in mx-auto mt-6 max-w-2xl text-balance text-sm text-muted-foreground sm:mt-7 sm:text-base md:text-xl"
+          className="animate-rise-in mx-auto mt-6 max-w-2xl text-balance text-sm text-muted-foreground sm:mt-7 sm:text-base md:text-lg"
           style={{ animationDelay: "160ms" }}
         >
           <span className="text-gradient block font-semibold">
@@ -140,7 +169,7 @@ export function AuthShowcase() {
           className="animate-rise-in card-lift mt-9 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-5 py-2.5 text-sm text-muted-foreground backdrop-blur hover:text-foreground sm:mt-10"
           style={{ animationDelay: "320ms" }}
         >
-          Keşfet, sonra giriş yap
+          Giriş & kayıt
           <ArrowDown className="h-4 w-4 animate-bounce" />
         </a>
       </section>
@@ -215,6 +244,13 @@ export function AuthShowcase() {
 
       {/* separator so the showcase never collides with the auth card */}
       <div aria-hidden className="mx-auto h-px w-full max-w-3xl bg-border/70" />
+
+      {/* ---------- FAQ ---------- */}
+      <FaqSection
+        items={FAQ_ITEMS}
+        title="Sıkça sorulan sorular"
+        subtitle="Aroless'i kullanmadan önce merak edilenler — cevaplarıyla."
+      />
     </div>
   );
 }

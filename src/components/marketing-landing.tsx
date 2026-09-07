@@ -2,13 +2,17 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   BadgeCheck,
+  Bot,
   Check,
   CircleDollarSign,
   FileText,
+  Gauge,
   Layers,
+  LineChart,
   Lock,
   Network,
   Rocket,
+  Search,
   ShieldCheck,
   Sparkles,
   Workflow,
@@ -19,6 +23,7 @@ import { AgentConsole } from "@/components/landing/agent-console";
 import { CapabilitySimulator } from "@/components/landing/capability-simulator";
 import { AgentTopology } from "@/components/landing/agent-topology";
 import { CountUp } from "@/components/landing/count-up";
+import { FaqSection, Testimonials, type FaqItem, type ReviewItem } from "@/components/landing/sections";
 
 const ECOSYSTEMS = [
   "Amazon",
@@ -67,6 +72,103 @@ const METRICS = [
   { value: <CountUp end={312} prefix="+" suffix="%" />, label: "Median ROI uplift in sim pilots", sim: true },
 ];
 
+/* What we do — animated capability cards (hover-follow spotlight) */
+const WHAT_WE_DO = [
+  {
+    icon: Search,
+    step: "01",
+    title: "Scan the market like an analyst",
+    text: "Trend agents watch 20+ platforms and 20+ country economies in real time — demand surges, seasonal shifts and margin anomalies surface before they become obvious.",
+    accent: "indigo",
+  },
+  {
+    icon: Gauge,
+    step: "02",
+    title: "Score products on real economics",
+    text: "Winner Scores combine demand signals with genuine unit economics — supplier cost, shipping, fees, VAT, returns and ad spend — so a +420% trend never hides a -12% margin.",
+    accent: "emerald",
+  },
+  {
+    icon: Workflow,
+    step: "03",
+    title: "Match merchants to the right creators",
+    text: "Our deal engine pairs verified sellers with tier-1 creators by audience fit, fee structure and compliance — then drafts hooks, ad copy and campaign briefs automatically.",
+    accent: "indigo",
+  },
+  {
+    icon: LineChart,
+    step: "04",
+    title: "Attribute, pay out, and prove ROI",
+    text: "Every conversion is mapped across networks on one auditable ledger. Creators get paid on time; you see exactly which dollar earned which return — no black boxes.",
+    accent: "emerald",
+  },
+];
+
+const FAQ_ITEMS: FaqItem[] = [
+  {
+    q: "Is this a real multi-agent system or just a simulation on the landing page?",
+    a: "The landing demos run deterministic, pre-loaded local payloads so you can feel the workflow instantly with zero setup. Inside the product, the same pipeline runs against live market data: trend scanning, scoring, matching and attribution agents orchestrate real workflows you can inspect step by step.",
+  },
+  {
+    q: "Which platforms and countries does Aroless cover?",
+    a: "Aroless models 20+ e-commerce platforms — Amazon, TikTok Shop, Shopify, Trendyol, Hepsiburada, eBay, Etsy, Zalando, Allegro and more — across 20+ country economies, each with its own commission, VAT, shipping and certification logic baked into the score.",
+  },
+  {
+    q: "How is a product score calculated?",
+    a: "Scores are a hybrid of demand momentum and real unit economics: historical and predicted demand, competition level, gross margin after supplier/shipping/fees/taxes, plus compliance and return-rate risk. Every score ships with the evidence behind it.",
+  },
+  {
+    q: "Do you handle payouts to creators and affiliates?",
+    a: "Yes — the payout infrastructure layer schedules settlements, negotiates fee overrides and keeps an immutable, auditable ledger per agent and merchant. You can run it end-to-end or plug Aroless into your existing stack via API.",
+  },
+  {
+    q: "What about security and compliance?",
+    a: "Agents run with least-privilege roles, all payloads are signed, every run is recorded on an immutable event log and replays are deterministic. Data can be region-pinned for EU/GDPR or Turkey/KVKK workflows.",
+  },
+  {
+    q: "Can I try it before paying?",
+    a: "Yes. Signing up starts you with welcome credits so you can run real analyses before choosing a plan — no credit card required to begin.",
+  },
+];
+
+const REVIEWS: ReviewItem[] = [
+  {
+    name: "Elif Kaya",
+    role: "E-commerce operator · Istanbul",
+    market: "TR",
+    initials: "EK",
+    quote: "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
+  },
+  {
+    name: "Jonas Weber",
+    role: "FBA seller · Berlin",
+    market: "DE",
+    initials: "JW",
+    quote: "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
+  },
+  {
+    name: "Marta Silva",
+    role: "DTC brand lead · Lisbon",
+    market: "EU",
+    initials: "MS",
+    quote: "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
+  },
+  {
+    name: "Ahmet Demir",
+    role: "Wholesale exporter · Gaziantep",
+    market: "TR",
+    initials: "AD",
+    quote: "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
+  },
+  {
+    name: "Sarah Mitchell",
+    role: "Dropshipping operator · Manchester",
+    market: "UK",
+    initials: "SM",
+    quote: "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
+  },
+];
+
 /**
  * Aroless — enterprise dark landing page.
  * All interactive demos stream deterministic, pre-loaded local simulation
@@ -93,6 +195,7 @@ export function MarketingLanding() {
             <a href="#platform" className="transition hover:text-slate-100">Platform</a>
             <a href="#architecture" className="transition hover:text-slate-100">Architecture</a>
             <a href="#metrics" className="transition hover:text-slate-100">Metrics</a>
+            <a href="#faq" className="transition hover:text-slate-100">FAQ</a>
             <Link to="/pricing" className="transition hover:text-slate-100">Pricing</Link>
           </nav>
           <div className="flex items-center gap-2">
@@ -200,6 +303,77 @@ export function MarketingLanding() {
                 </span>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── What we do ─────────────────────────────────────────── */}
+        <section className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+              <Bot size={12} /> What we do
+            </span>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+              Four agents. One outcome: revenue you can trace.
+            </h2>
+            <p className="mt-3 text-slate-400">
+              Aroless turns the affiliate &amp; e-commerce loop into a deterministic pipeline —
+              hover a card to see how each stage works.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {WHAT_WE_DO.map((card, i) => (
+              <div
+                key={card.title}
+                onMouseMove={(e) => {
+                  const el = e.currentTarget;
+                  const r = el.getBoundingClientRect();
+                  el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+                  el.style.setProperty("--my", `${e.clientY - r.top}px`);
+                }}
+                className={`wwd-card group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/70 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1.5 ${
+                  card.accent === "emerald"
+                    ? "hover:border-emerald-400/40"
+                    : "hover:border-indigo-400/40"
+                }`}
+                style={{ animationDelay: `${i * 90}ms` }}
+              >
+                {/* hover-follow spotlight + glow wash */}
+                <span
+                  aria-hidden
+                  className={`pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 ${
+                    card.accent === "emerald"
+                      ? "bg-[radial-gradient(240px_circle_at_var(--mx,50%)_var(--my,50%),rgba(16,185,129,0.14),transparent_70%)]"
+                      : "bg-[radial-gradient(240px_circle_at_var(--mx,50%)_var(--my,50%),rgba(99,102,241,0.16),transparent_70%)]"
+                  }`}
+                />
+                <span
+                  aria-hidden
+                  className={`pointer-events-none absolute -right-14 -top-14 size-36 rounded-full blur-3xl transition duration-500 group-hover:opacity-90 ${
+                    card.accent === "emerald" ? "bg-emerald-500/10" : "bg-indigo-500/15"
+                  }`}
+                />
+
+                <div className="relative flex items-start justify-between">
+                  <span
+                    className={`grid size-11 place-items-center rounded-xl border transition duration-300 group-hover:scale-110 ${
+                      card.accent === "emerald"
+                        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
+                        : "border-indigo-400/25 bg-indigo-400/10 text-indigo-300"
+                    }`}
+                  >
+                    <card.icon size={20} />
+                  </span>
+                  <span className="font-mono text-xs font-semibold tracking-widest text-slate-600 transition group-hover:text-slate-400">
+                    {card.step}
+                  </span>
+                </div>
+                <h3 className="relative mt-5 text-lg font-bold leading-snug text-white">
+                  {card.title}
+                </h3>
+                <p className="relative mt-2 text-sm leading-relaxed text-slate-400">{card.text}</p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -312,6 +486,15 @@ export function MarketingLanding() {
           </div>
         </section>
 
+        {/* ── FAQ ────────────────────────────────────────────────── */}
+        <div id="faq" className="scroll-mt-24">
+          <FaqSection
+            items={FAQ_ITEMS}
+            title="Questions, answered"
+            subtitle="Everything teams ask before deploying Aroless — and how it actually works."
+          />
+        </div>
+
         {/* ── Final CTA ──────────────────────────────────────────── */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/80 px-6 py-14 text-center backdrop-blur-xl sm:px-12">
@@ -349,6 +532,15 @@ export function MarketingLanding() {
             </div>
           </div>
         </section>
+
+        {/* ── Reviews ────────────────────────────────────────────── */}
+        <div id="reviews" className="scroll-mt-24">
+          <Testimonials
+            items={REVIEWS}
+            title="Loved by merchants and creator teams"
+            subtitle="Market operators across Europe and Turkey on running their loop with Aroless."
+          />
+        </div>
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────── */}
@@ -362,7 +554,8 @@ export function MarketingLanding() {
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <Link to="/auth" className="hover:text-slate-200">Sign in</Link>
             <Link to="/pricing" className="hover:text-slate-200">Pricing</Link>
-            <a href="#architecture" className="hover:text-slate-200">Docs</a>
+            <a href="#faq" className="hover:text-slate-200">FAQ</a>
+            <a href="#reviews" className="hover:text-slate-200">Reviews</a>
           </div>
         </div>
       </footer>

@@ -603,16 +603,18 @@ function Dashboard() {
         <HotTicker />
         <header className="relative z-40 border-b border-white/10 glass top-light sticky top-0 backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px divider-glow opacity-70" />
-          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-            <BrandLogo subtitle="Winning Product Intelligence" />
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
+            <div className="shrink-0">
+              <BrandLogo subtitle="Winning Product Intelligence" />
+            </div>
 
-            <div className="flex items-center gap-2">
+            <div className="header-actions flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
               <span className="morph-pill rounded-lg inline-flex">
                 <DataSourcesButton />
               </span>
               <span
                 title={`Active engine: ${engineLabel(engine).model}`}
-                className={`hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                className={`hidden lg:inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                   engine === "default"
                     ? "border-white/15 bg-white/5 text-muted-foreground"
                     : "border-[oklch(0.62_0.17_255)]/50 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.86_0.10_255)] glow"
@@ -625,12 +627,12 @@ function Dashboard() {
                 {engineLabel(engine).label}
               </span>
               <FxBadge />
-              <div className="morph-pill heartbeat hidden sm:flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5">
+              <div className="morph-pill heartbeat hidden md:flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5">
                 <Coins size={14} className="morph-icon text-[oklch(0.85_0.18_90)]" />
                 <span className="text-sm font-semibold">{credits}</span>
                 <span className="text-xs text-muted-foreground">{t("credits")}</span>
               </div>
-              <div className="morph-pill heartbeat hidden md:inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs">
+              <div className="morph-pill heartbeat hidden md:inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs">
                 <Zap size={12} className="morph-icon" /> {tier}
               </div>
               <span className="morph-pill heartbeat rounded-lg inline-flex">
@@ -638,14 +640,14 @@ function Dashboard() {
               </span>
               <Link
                 to="/dashboard"
-                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs"
+                className="morph-pill heartbeat inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs shrink-0"
                 title={t("dashboard")}
               >
                 <LayoutDashboard size={13} className="morph-icon" />
               </Link>
               <Link
                 to="/settings"
-                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs"
+                className="morph-pill heartbeat inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs shrink-0"
                 title={t("settings")}
               >
                 <SettingsIcon size={13} className="morph-icon" />
@@ -653,28 +655,28 @@ function Dashboard() {
               <Link
                 to="/competitor-analysis"
                 search={{ q: undefined, country: targetCountry }}
-                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs"
+                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs shrink-0"
                 title="Rakip Analizi"
               >
                 <Swords size={13} className="morph-icon" />
               </Link>
               <Link
                 to="/viral-ads"
-                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs"
+                className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs shrink-0"
                 title="Viral Ads"
               >
                 <Megaphone size={13} className="morph-icon" />
               </Link>
               <button
                 onClick={() => setShowPricing(true)}
-                className="morph-pill rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-1.5 text-xs font-semibold glow"
+                className="morph-pill shrink-0 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-1.5 text-xs font-semibold glow"
               >
                 {t("upgrade")}
               </button>
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="morph-pill heartbeat hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/50 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold"
+                  className="morph-pill heartbeat hidden lg:inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/50 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold shrink-0"
                   title="Admin Dashboard"
                 >
                   <Shield size={13} className="morph-icon" /> {t("admin")}
@@ -694,6 +696,8 @@ function Dashboard() {
               </button>
             </div>
           </div>
+          {/* subtle scroll affordance on touch devices */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent md:hidden" />
         </header>
 
         {onboarding.needsOnboarding && (
@@ -1600,6 +1604,19 @@ function TabSwitcher({
       if (!wrap || !el) return;
       const w = wrap.getBoundingClientRect();
       const b = el.getBoundingClientRect();
+      // keep the active tab in view when the user changes it while scrolled
+      if (b.left < w.left || b.right > w.right) {
+        el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }
+      // re-measure after any scroll settles (track is scrollable on mobile)
+      window.setTimeout(() => {
+        const w2 = wrapRef.current;
+        const el2 = btnRefs.current[tab];
+        if (!w2 || !el2) return;
+        const wr = w2.getBoundingClientRect();
+        const br = el2.getBoundingClientRect();
+        setPill({ left: br.left - wr.left, width: br.width, top: br.top - wr.top, height: br.height });
+      }, 80);
       setPill({ left: b.left - w.left, width: b.width, top: b.top - w.top, height: b.height });
     };
     measure();
@@ -1612,10 +1629,18 @@ function TabSwitcher({
   }, [tab, favoritesCount]);
 
   return (
-    <div className="flex justify-center mb-6">
+    <div className="tab-switch relative mx-auto mb-6 w-full max-w-4xl">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-[oklch(0.14_0.03_265)] to-transparent md:hidden"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-[oklch(0.14_0.03_265)] to-transparent md:hidden"
+      />
       <div
         ref={wrapRef}
-        className="premium-card relative rounded-full p-1 inline-flex text-sm flex-wrap justify-center"
+        className="tab-switch-track premium-card relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 text-sm md:justify-center"
       >
         {pill && (
           <span
@@ -1636,7 +1661,7 @@ function TabSwitcher({
               role="tab"
               aria-selected={on}
               onClick={() => onTab(td.id)}
-              className={`relative z-10 px-3 md:px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-colors duration-300 ${on ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
+              className={`relative z-10 shrink-0 px-3 md:px-4 py-1.5 rounded-full flex items-center gap-1.5 whitespace-nowrap transition-colors duration-300 ${on ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Icon size={14} /> {td.label}
               {td.id === "library" && favoritesCount > 0 && (

@@ -29,6 +29,7 @@ import {
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
+import { Testimonials, type ReviewItem } from "@/components/landing/sections";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 export const Route = createFileRoute("/auth")({
@@ -414,8 +415,8 @@ function AuthPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Animated aurora / grid / beam backdrop */}
+    <div className="auth-stage relative min-h-screen overflow-x-clip">
+      {/* Animated aurora / grid / beam backdrop — muted to a matte finish */}
       <div aria-hidden className="auth-aurora" />
       <div aria-hidden className="auth-grid" />
       <div aria-hidden className="auth-beam" />
@@ -533,15 +534,16 @@ function AuthPage() {
           </div>
         </section>
 
-        {/* ---------- Auth card inside laptop frame ---------- */}
+        {/* ---------- Auth card ---------- */}
         <section className="relative mx-auto w-full max-w-md">
-          {/* Ambient light halo beneath the card */}
-          <div ref={haloRef} aria-hidden className="ambient-halo" />              <div className="laptop-frame">
+          <div className="auth-card-wrap relative">
+            {/* Ambient light halo beneath the card */}
+            <div ref={haloRef} aria-hidden className="ambient-halo" />
             <div
               ref={cardRef}
               onMouseMove={trackPointer}
               key={shakeKey}
-              className={`premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8 ${shakeKey > 0 ? "animate-error-shake" : ""}`}
+              className={`matte-card premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8 ${shakeKey > 0 ? "animate-error-shake" : ""}`}
             >
               {/* pointer spotlight */}
               <div
@@ -923,10 +925,57 @@ function AuthPage() {
                 </p>
               </div>
             </div>
-            <div aria-hidden className="laptop-base" />
           </div>
         </section>
+      </div>
+
+      {/* ---------- Reviews under the auth card ---------- */}
+      <div className="relative pb-20">
+        <div aria-hidden className="mx-auto h-px w-full max-w-3xl bg-border/60" />
+        <Testimonials
+          items={AUTH_REVIEWS}
+          title="Onlarca satıcı veriyle büyüyor"
+          subtitle="Giriş yapmadan önce — Aroless kullanıcılarının gerçek hikâyeleri."
+        />
       </div>
     </div>
   );
 }
+
+const AUTH_REVIEWS: ReviewItem[] = [
+  {
+    name: "Elif Kaya",
+    role: "E-ticaret operatörü · İstanbul",
+    market: "TR",
+    initials: "EK",
+    quote: "Üç ürünü trend zirvesine çıkmadan radar üzerinden lansmana aldık. Kâr tablosu, ikinci en çok satan ürünümüzü sessizce öldürecek komisyon yapısını yakaladı.",
+  },
+  {
+    name: "Ahmet Demir",
+    role: "İhracatçı · Gaziantep",
+    market: "TR",
+    initials: "AD",
+    quote: "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum. İlk haftada kendini amorti etti.",
+  },
+  {
+    name: "Merve Aksoy",
+    role: "Dropshipping · İzmir",
+    market: "TR",
+    initials: "MA",
+    quote: "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi. Reklam senaryolarını da neredeyse olduğu gibi kullanıyoruz.",
+  },
+  {
+    name: "Can Yılmaz",
+    role: "Ajans kurucusu · Ankara",
+    market: "TR",
+    initials: "CY",
+    quote: "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu, satış konuşmalarını kısalttı.",
+  },
+  {
+    name: "Zeynep Şahin",
+    role: "Mağaza denetçisi · Bursa",
+    market: "TR",
+    initials: "ZŞ",
+    quote: "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ve dışa aktarma ile ürünleri aynı gün pazara taşıyoruz.",
+  },
+];

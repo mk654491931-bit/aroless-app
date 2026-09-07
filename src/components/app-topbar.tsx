@@ -67,6 +67,10 @@ export function AppTopbar() {
           <span className="hidden truncate text-xs font-semibold tracking-wide text-muted-foreground sm:inline">
             {title}
           </span>
+          {/* Compact breadcrumb for very small screens: keep the app name clear */}
+          <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground sm:hidden">
+            {title}
+          </span>
         </div>
 
         <div className="topbar-actions flex min-w-0 shrink-0 items-center gap-1.5">

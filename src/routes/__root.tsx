@@ -27,6 +27,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { AmbientBackground } from "@/components/ambient-background";
 import { DeviceGuard } from "@/components/device-guard";
 import { AppTopbar } from "@/components/app-topbar";
+import { DraggableSettingsBar } from "@/components/draggable-settings";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
@@ -218,11 +219,12 @@ function RootComponent() {
       <DeviceGuard />
       {chromeless ? (
         <>
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-(--surface)/80 px-2 py-1.5 backdrop-blur-xl shadow-lg">
+          {/* Draggable language / palette / theme bar (auth, pricing, legal, landing) */}
+          <DraggableSettingsBar>
             <LanguageSwitcher />
             <PaletteToggle />
             <ThemeToggle />
-          </div>
+          </DraggableSettingsBar>
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
             <Outlet />
           </div>
@@ -235,10 +237,11 @@ function RootComponent() {
               {pathname !== "/" && <AppTopbar />}
               {pathname === "/" && (
                 <>
-                  <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2">
+                  {/* Draggable palette / theme — position persists per user */}
+                  <DraggableSettingsBar anchor="bottom-right">
                     <PaletteToggle />
                     <ThemeToggle />
-                  </div>
+                  </DraggableSettingsBar>
                   <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-(--surface)/90 backdrop-blur hover:bg-white/10" />
                 </>
               )}
