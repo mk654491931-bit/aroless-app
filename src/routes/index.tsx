@@ -887,17 +887,33 @@ function Dashboard() {
                       <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
                         <Cpu size={12} className="text-[var(--accent-active)]" /> {t("ui.engine")}
                       </label>
-                      <select
-                        value={engine}
-                        onChange={(e) => setEngine(e.target.value as EngineId)}
-                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)] hover:bg-white/10"
+                      <div
+                        role="group"
+                        aria-label={t("ui.engine")}
+                        className="flex flex-wrap items-center gap-1.5"
                       >
-                        {ENGINES.map((e) => (
-                          <option key={e.id} value={e.id} className="bg-[oklch(0.20_0.035_255)]">
-                            {e.label}
-                          </option>
-                        ))}
-                      </select>
+                        {ENGINES.map((e) => {
+                          const on = engine === e.id;
+                          return (
+                            <button
+                              key={e.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setEngine(e.id)}
+                              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                                on
+                                  ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground shadow-[0_0_14px_-4px_color-mix(in_oklab,var(--brand)_85%,transparent)]"
+                                  : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                              }`}
+                            >
+                              {on && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.72_0.14_255)] animate-pulse-soft" />
+                              )}
+                              {e.label}
+                            </button>
+                          );
+                        })}
+                      </div>
 
                       <span className="text-[11px] text-muted-foreground">
                         {engineLabel(engine).hint}
@@ -957,7 +973,7 @@ function Dashboard() {
                         </span>
                       </label>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-2 gap-2 min-[560px]:grid-cols-3 md:grid-cols-4">
                         {PLATFORMS.map((p) => {
                           const on = platforms.includes(p);
                           const fit = countryFit(p, effectiveCountry);
@@ -970,33 +986,37 @@ function Dashboard() {
                               key={p}
                               onClick={() => togglePlatform(p)}
                               title={`${fitLabel(fit)} · komisyon %${c1}-%${c2} · teslimat ${d1}-${d2} gün`}
-                              className={`text-xs pl-1.5 pr-3 py-1 rounded-full border transition inline-flex items-center gap-1.5 ${
+                              className={`w-full min-w-0 justify-center text-xs pl-1.5 pr-2.5 py-1.5 rounded-full border transition inline-flex items-center gap-1.5 ${
                                 on
                                   ? blocked
                                     ? "border-amber-400/60 bg-amber-400/15 text-amber-200"
-                                    : "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground"
+                                    : "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground shadow-[0_0_18px_-6px_color-mix(in_oklab,var(--brand)_70%,transparent)]"
                                   : blocked
                                     ? "border-white/5 bg-white/[0.02] text-muted-foreground/50 line-through"
                                     : fit === "native"
-                                      ? "border-emerald-400/30 bg-emerald-400/[0.07] text-muted-foreground hover:text-foreground"
-                                      : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                                      ? "border-emerald-400/30 bg-emerald-400/[0.07] text-muted-foreground hover:text-foreground hover:border-emerald-400/60"
+                                      : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground hover:border-white/25"
                               }`}
                             >
                               <img
                                 src={PLATFORM_LOGO[p]}
                                 alt=""
                                 loading="lazy"
-                                className="h-5 w-5 rounded-full bg-white/90 p-0.5 object-contain"
+                                className="h-5 w-5 shrink-0 rounded-full bg-white/90 p-0.5 object-contain"
                                 onError={(e) =>
                                   ((e.currentTarget as HTMLImageElement).style.display = "none")
                                 }
                               />
-                              <span>{p}</span>
+                              <span className="min-w-0 truncate">{p}</span>
                               {fit === "native" && (
-                                <span className="text-[9px] text-emerald-300/80">yerel</span>
+                                <span className="chip-fit-badge border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
+                                  yerel
+                                </span>
                               )}
                               {fit === "cross-border" && (
-                                <span className="text-[9px] text-sky-300/70">sınır ötesi</span>
+                                <span className="chip-fit-badge border-sky-400/25 bg-sky-400/10 text-sky-300">
+                                  sınır ötesi
+                                </span>
                               )}
                             </button>
                           );
@@ -1064,15 +1084,27 @@ function Dashboard() {
                             {minScore}
                           </span>
                         </label>
-                        <input
-                          type="range"
-                          min={50}
-                          max={90}
-                          step={5}
-                          value={minScore}
-                          onChange={(e) => setMinScore(Number(e.target.value))}
-                          className="w-full accent-[oklch(0.62_0.17_255)]"
-                        />
+                        <div className="range-shell relative mt-1.5">
+                          <input
+                            type="range"
+                            min={50}
+                            max={90}
+                            step={5}
+                            value={minScore}
+                            onChange={(e) => setMinScore(Number(e.target.value))}
+                            className="range-fill w-full"
+                            style={
+                              {
+                                "--range-pct": `${
+                                  ((minScore - 50) / (90 - 50)) * 100
+                                }%`,
+                              } as React.CSSProperties
+                            }
+                          />
+                          <span aria-hidden className="range-tooltip">
+                            {minScore}
+                          </span>
+                        </div>
                         <p className="mt-1 text-[11px] text-muted-foreground">
                           Hibrit skor = Pazar talebi (%55) + Kâr &amp; lojistik (%45)
                         </p>
@@ -1113,7 +1145,7 @@ function Dashboard() {
                       <button
                         type="submit"
                         disabled={searching}
-                        className="rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="cta-sweep relative overflow-hidden rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {searching ? (
                           <>
@@ -1243,7 +1275,9 @@ function Dashboard() {
                           </div>
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-foreground">Kazananünü keşet</h3>
+                          <h3 className="text-lg font-bold text-foreground">
+                            Kazanan ürününü keşfet
+                          </h3>
                           <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
                             Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
                             gerçek zamanlı verilerle en kârlı ürünleri bulacak.
