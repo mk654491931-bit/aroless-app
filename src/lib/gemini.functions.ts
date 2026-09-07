@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callGemini, extractJson } from "@/lib/ai.server";
+import { callGemini, callLovableAI, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { RealEconomics } from "@/lib/real-economics";
 import {
@@ -656,6 +656,42 @@ JSON shape:
         }
       } catch {
         // HF fallback başarısız olsa da Gemini hatasıyla devam et
+      }
+    }
+    // ---- Son çare: 22 anahtarlık mesh — Gemini→Groq→Cerebras→SambaNova→
+    // HF→OpenRouter→PROVIDER_* zincirindeki ÇALIŞAN motorla minimal şemada bir
+    // kez daha dene; böylece "ürün bulunamadı" yalnızca gerçekten her motor
+    // tükendiğinde görünür. ----
+    if (products.length === 0) {
+      try {
+        const meshPrompt = `You are an e-commerce product researcher. Return STRICT JSON only.
+Find 3 REAL, specific, currently trending products for:
+- Niche: ${data.niche}
+- Category: ${data.category}
+- Audience: ${data.audience || "(none)"}
+- Platforms: ${data.platforms.join(", ")}
+- Budget: ${data.budget}
+
+JSON shape:
+{ "products": [ {
+  "name": string, "description": string, "why_winning": string,
+  "target_audience": string, "ad_angles": string[3],
+  "supplier_price_usd": string, "selling_price_usd": string,
+  "profit_margin_pct": number, "startup_cost_usd": string,
+  "platform_fit": string[], "competition_level": "Low"|"Medium"|"High",
+  "trend_score": number, "emoji": string,
+  "sales_tactic": string, "ai_insight": string,
+  "health_score": number, "viral_probability_90d": number,
+  "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
+} ] }`;
+        const meshText = await callLovableAI(meshPrompt, 0.7);
+        const parsed = extractJson<{ products?: WinningProduct[] }>(meshText, { products: [] });
+        if (parsed.products?.length) {
+          products = parsed.products;
+          fallbackEngine = "mesh";
+        }
+      } catch {
+        // tüm motorlar tükendi → aşağıda kredi iade + net hata
       }
     }
     if (products.length === 0) {

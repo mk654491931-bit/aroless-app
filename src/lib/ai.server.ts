@@ -1,5 +1,12 @@
 import { withEstimationRules } from "./ai-guidance";
-import { geminiEnvKeys, groqEnvKeys, openRouterEnvKeys } from "./ai-keys.server";
+import {
+  cerebrasEnvKeys,
+  geminiEnvKeys,
+  groqEnvKeys,
+  hfEnvKeys,
+  openRouterEnvKeys,
+  sambanovaEnvKeys,
+} from "./ai-keys.server";
 // Server-only AI helpers. Kept out of *.functions.ts so server-function
 // splitting never strips them.
 
@@ -152,87 +159,275 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
 }
 
 /**
- * Last-resort path that only uses the project's own provider keys (Gemini →
- * Groq → OpenRouter).
+ * Last-resort path that sweeps the project's OWN provider keys — every one of
+ * the 22-slot pool (Gemini, Groq, Cerebras, SambaNova, HuggingFace tokens,
+ * OpenRouter, optional PROVIDER_A..D) in reliability order. Each provider
+ * rotates through every configured key × model, parks spent keys for 60s and
+ * keeps going, so whichever key/provider is actually working at that moment
+ * answers instead of the feature failing with an empty result.
  */
 async function directFallback(prompt: string, temperature: number): Promise<string> {
-  if (
-    geminiKeyPool().length === 0 &&
-    groqKeyPool().length === 0 &&
-    openRouterKeyPool().length === 0
-  ) {
+  const pools = [
+    geminiKeyPool().length,
+    groqKeyPool().length,
+    cerebrasEnvKeys().length,
+    sambanovaEnvKeys().length,
+    hfEnvKeys().length,
+    openRouterEnvKeys().length,
+    customPoolKeys().length,
+  ];
+  if (pools.every((n) => n === 0)) {
     throw new Error(
-      "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
+      "AI anahtarı tanımlı değil. .env dosyasına GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 / HF_TOKEN_1 / CEREBRAS_API_KEY / SAMBANOVA_API_KEY veya AI_GATEWAY_* değerlerinden en az birini ekleyin.",
     );
   }
-  const geminiModels = GEMINI_MODELS_LATEST;
 
+  // 1) Gemini — en güçlü doğruluk (native REST, strict JSON).
   for (const k of scheduleKeys(geminiKeyPool(), geminiCursor++)) {
     try {
-      return await geminiOnce(prompt, k, temperature, false, geminiModels);
+      return await geminiOnce(prompt, k, temperature, false, GEMINI_MODELS_LATEST);
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("QUOTA:")) parkKey(k);
     }
   }
-  for (const k of scheduleKeys(groqKeyPool(), groqCursor++)) {
-    for (const model of GROQ_MODELS_LATEST) {
-      try {
-        const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${k}` },
-          body: JSON.stringify({
-            model,
-            temperature,
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-          }),
-        });
-        if (!resp.ok) {
-          const body = (await resp.text()).slice(0, 180);
-          if (isQuotaError(resp.status, body)) {
-            parkKey(k);
-            break;
-          }
-          continue;
-        }
-        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        return json.choices?.[0]?.message?.content ?? "{}";
-      } catch {
-        // try next model / key
-      }
-    }
+
+  // 2) Groq — hızlı, yüksek f/p.
+  const groqText = await tryOpenAIPool(
+    "groq",
+    groqEnvKeys(),
+    "https://api.groq.com/openai/v1/chat/completions",
+    GROQ_MODELS_LATEST,
+    prompt,
+    temperature,
+    { json: true },
+  );
+  if (groqText) return groqText;
+
+  // 3) Cerebras — çok hızlı, cömert ücretsiz kota.
+  const cerebrasText = await tryOpenAIPool(
+    "cerebras",
+    cerebrasEnvKeys(),
+    "https://api.cerebras.ai/v1/chat/completions",
+    ["llama-3.3-70b", "llama3.1-8b"],
+    prompt,
+    temperature,
+    { json: true, jsonOn400Retry: true },
+  );
+  if (cerebrasText) return cerebrasText;
+
+  // 4) SambaNova — yüksek bağlam; strict JSON desteklemediği için yalnızca
+  //    komut istemine güvenir (çağıranlar extractJson ile toparlar).
+  const sambaText = await tryOpenAIPool(
+    "sambanova",
+    sambanovaEnvKeys(),
+    "https://api.sambanova.ai/v1/chat/completions",
+    ["Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct"],
+    prompt,
+    temperature,
+    { json: false },
+  );
+  if (sambaText) return sambaText;
+
+  // 5) HuggingFace router token'ları — en dar kotalı, son çarelerden biri.
+  const hfText = await tryOpenAIPool(
+    "hf",
+    hfEnvKeys(),
+    "https://router.huggingface.co/v1/chat/completions",
+    ["Qwen/Qwen2.5-7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"],
+    prompt,
+    temperature,
+    { json: false },
+  );
+  if (hfText) return hfText;
+
+  // 6) OpenRouter — geniş model yelpazesi.
+  const orText = await tryOpenAIPool(
+    "openrouter",
+    openRouterEnvKeys(),
+    "https://openrouter.ai/api/v1/chat/completions",
+    OPENROUTER_MODELS_LATEST,
+    prompt,
+    temperature,
+    { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
+  );
+  if (orText) return orText;
+
+  // 7) PROVIDER_A..D — kullanıcı tanımlı OpenAI uyumlu havuzlar (BASE_URL + MODEL).
+  for (const group of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const) {
+    const { keys, url, model } = customPoolConfig(group);
+    if (!keys.length || !url) continue;
+    const text = await tryOpenAIPool(
+      group.toLowerCase(),
+      keys,
+      url,
+      [model],
+      prompt,
+      temperature,
+      { json: false },
+    );
+    if (text) return text;
   }
-  for (const k of openRouterKeyPool()) {
-    for (const model of OPENROUTER_MODELS_LATEST) {
-      try {
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${k}` },
-          body: JSON.stringify({
-            model,
-            temperature,
-            messages: [{ role: "user", content: prompt }],
-          }),
-        });
-        if (!resp.ok) {
-          const body = (await resp.text()).slice(0, 180);
-          if (isQuotaError(resp.status, body)) {
-            parkKey(k);
-            break;
-          }
-          continue;
-        }
-        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        const text = json.choices?.[0]?.message?.content;
-        if (text) return text;
-      } catch {
-        // try next model / key
-      }
-    }
-  }
+
   throw new Error(
     "Yapay zeka motorları şu anda meşgul, lütfen birkaç saniye sonra tekrar deneyin.",
   );
+}
+
+// ---------------------------------------------------------------------------
+// Generic OpenAI-compatible pool sweeper (Groq / Cerebras / SambaNova / HF /
+// OpenRouter / PROVIDER_*): her anahtar × her model denenir, kotalı anahtar
+// 60sn beklemeye alınır, tüm girişimler başarısız olursa "" döner.
+// ---------------------------------------------------------------------------
+
+type OpenAIPoolOptions = {
+  json?: boolean;
+  jsonOn400Retry?: boolean;
+  extraHeaders?: Record<string, string>;
+};
+
+async function tryOpenAIPool(
+  group: string,
+  keys: string[],
+  url: string,
+  models: string[],
+  prompt: string,
+  temperature: number,
+  opts: OpenAIPoolOptions,
+): Promise<string> {
+  if (!keys.length || !models.length) return "";
+  const ordered = scheduleKeys(keys, openAICursor(group));
+  for (const key of ordered) {
+    for (let attempt = 0; attempt < models.length; attempt++) {
+      const model = models[attempt];
+      try {
+        const text = await postOpenAICompat({
+          url,
+          key,
+          model,
+          prompt,
+          temperature,
+          json: opts.json ?? false,
+          extraHeaders: opts.extraHeaders,
+        });
+        if (text) return text;
+        throw new Error("empty payload");
+      } catch (e) {
+        const status = (e as { status?: number }).status ?? 0;
+        const body = e instanceof Error ? e.message : "";
+        if (isQuotaError(status, body)) {
+          parkKey(key);
+          break; // bu anahtar tükendi → sıradaki anahtara geç
+        }
+        // JSON mode desteklenmiyorsa (400) aynı modeli JSON'suz bir kez dene.
+        if (opts.json && opts.jsonOn400Retry && status === 400) {
+          try {
+            const retry = await postOpenAICompat({
+              url,
+              key,
+              model,
+              prompt,
+              temperature,
+              json: false,
+              extraHeaders: opts.extraHeaders,
+            });
+            if (retry) return retry;
+          } catch {
+            /* next */
+          }
+        }
+        await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+      }
+    }
+  }
+  return "";
+}
+
+async function postOpenAICompat(opts: {
+  url: string;
+  key: string;
+  model: string;
+  prompt: string;
+  temperature: number;
+  json: boolean;
+  extraHeaders?: Record<string, string>;
+}): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const resp = await fetch(opts.url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${opts.key}`,
+        ...(opts.extraHeaders ?? {}),
+      },
+      body: JSON.stringify({
+        model: opts.model,
+        temperature: opts.temperature,
+        messages: [{ role: "user", content: opts.prompt }],
+        ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      const err = new Error(
+        `${opts.model} ${resp.status}: ${body.slice(0, 160)}`,
+      ) as Error & { status?: number };
+      err.status = resp.status;
+      throw err;
+    }
+    const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return (json.choices?.[0]?.message?.content ?? "").trim();
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      const err = new Error("timeout") as Error & { status?: number };
+      throw err;
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const openAICursors = new Map<string, number>();
+function openAICursor(group: string): number {
+  const c = openAICursors.get(group) ?? 0;
+  openAICursors.set(group, c + 1);
+  return c;
+}
+
+function readEnv(name: string): string {
+  const v = process.env[name];
+  return v && v.trim() ? v.trim() : "";
+}
+
+/** Keys + endpoint + model of a custom PROVIDER_<X> pool (if configured). */
+function customPoolConfig(prefix: "PROVIDER_A" | "PROVIDER_B" | "PROVIDER_C" | "PROVIDER_D"): {
+  keys: string[];
+  url: string;
+  model: string;
+} {
+  const keys = Array.from(
+    new Set(
+      Array.from({ length: 5 }, (_, i) => readEnv(`${prefix}_${i + 1}`)).filter(Boolean),
+    ),
+  );
+  const url =
+    readEnv(`${prefix}_BASE_URL`) ||
+    readEnv(`${prefix}_URL`) ||
+    readEnv(`${prefix}_API_URL`) ||
+    readEnv(`${prefix}_HOST`);
+  const model = readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct";
+  return { keys, url, model };
+}
+
+/** Keys of every custom PROVIDER_* pool (endpoint optional) — for the empty check. */
+function customPoolKeys(): string[] {
+  const out: string[] = [];
+  for (const prefix of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const)
+    out.push(...customPoolConfig(prefix).keys);
+  return Array.from(new Set(out));
 }
 
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
