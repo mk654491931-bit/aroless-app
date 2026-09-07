@@ -106,8 +106,11 @@ export function AnalysisPipelineModal({
     const id = window.setInterval(() => {
       const ms = Date.now() - startedAt.current;
       setElapsed(ms / 1000);
-      const natural = Math.min(94, (ms / target) * 100);
-      const pct = done ? 100 : natural;
+      // Saturating curve: ~95% by the engine ETA, then a slow creep toward 99%
+      // so a long real 14-agent run never looks frozen at a flat percentage.
+      const pct = done
+        ? 100
+        : Math.min(99, Math.round(100 * (1 - Math.exp(-ms / (target / 3)))));
       setProgress(pct);
       setStepIdx(Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length)));
       if (done && pct >= 100) window.clearInterval(id);
@@ -134,9 +137,9 @@ export function AnalysisPipelineModal({
   const winner = finalScore > 85;
 
   return (
-    <div className="fixed inset-0 z-50 flex p-3 sm:p-5 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="m-auto w-full max-w-5xl grid gap-3 lg:grid-cols-2 lg:items-start">
-        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-5 md:p-6">
+    <div className="fixed inset-0 z-50 flex p-2 sm:p-4 lg:p-6 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="m-auto w-full max-w-5xl grid gap-2.5 sm:gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-4 sm:p-6">
           <div className="flex flex-shrink-0 items-center gap-3 mb-5">
             <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Sparkles size={18} className="text-white animate-pulse" />
@@ -148,7 +151,15 @@ export function AnalysisPipelineModal({
                 <span className="opacity-40">·</span>
                 <span>{elapsed.toFixed(1)}s</span>
                 <span className="opacity-40">·</span>
-                <span>~{remaining.toFixed(1)}s</span>
+                {done ? (
+                  <span className="text-emerald-300/90">tamamlandı</span>
+                ) : remaining > 0 ? (
+                  <span>~{remaining.toFixed(0)}s</span>
+                ) : (
+                  <span className="animate-pulse text-[oklch(0.88_0.10_255)]">
+                    son adımlar…
+                  </span>
+                )}
               </div>
             </div>
             {engine && (
@@ -167,7 +178,7 @@ export function AnalysisPipelineModal({
             <Loader2 size={12} className="animate-spin" />
             <span className="truncate">{steps[stepIdx]}</span>
           </div>
-          <ul className="space-y-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+          <ul className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {steps.map((s, i) => {
               const complete = i < stepIdx || (i === stepIdx && progress >= 100);
               const active = i === stepIdx && !complete;
@@ -195,14 +206,14 @@ export function AnalysisPipelineModal({
         </div>
 
         {/* RIGHT — 14-Agent AI Council live status (70% weight) */}
-        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-5 md:p-6">
+        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-4 sm:p-6">
           <div className="flex flex-shrink-0 items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-sm">14-Agent AI Council Real-Time Status</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-sm font-bold leading-tight">14-Agent AI Council Real-Time Status</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
                 Ağırlık %70 · {doneCount}/{COUNCIL_AGENTS.length} ajan tamamlandı
               </div>
             </div>
@@ -215,7 +226,7 @@ export function AnalysisPipelineModal({
               return (
                 <li
                   key={a.name}
-                  className={`rounded-xl border p-2 flex items-start gap-2.5 transition ${
+                  className={`rounded-xl border p-2 flex items-start gap-2 transition ${
                     complete
                       ? "border-emerald-400/40 bg-emerald-500/10"
                       : active

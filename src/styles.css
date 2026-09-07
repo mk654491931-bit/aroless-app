@@ -2640,3 +2640,14 @@ input[type="range"].range-fill {
 @media (prefers-reduced-motion: reduce) {
   .range-tooltip { transition: none; }
 }
+
+
+/* Mobile form fields keep >=16px text so iOS Safari never auto-zooms on
+   focus (a common "jumpy page" complaint). Buttons/checkboxes/range excluded. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
