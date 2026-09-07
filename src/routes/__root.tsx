@@ -13,6 +13,7 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { reloadOnceForStaleChunk } from "@/lib/deploy-race-recovery";
 import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
@@ -57,6 +58,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    // Yeni yayınla eskimiş bir sayfa (eski chunk adları) eşleştiğinde router
+    // bu hatayı yakalar; sayfayı bir kez tazeleyerek kullanıcıyı boş ekranda
+    // bırakmadan yeni sürüme taşır.
+    reloadOnceForStaleChunk(error);
   }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
