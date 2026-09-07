@@ -1,14 +1,19 @@
 /**
  * AI Smart Router — Ana modül
  *
- * Tek dışa aktarım: callSmartRouter({ prompt, taskType, maxTokens, temperature })
+ * Dışa aktarılan tek fonksiyon:
+ *   callSmartRouter({ prompt, taskType, maxTokens, temperature })
  *
  * İşleyiş:
  *  1. taskType'a göre provider öncelik listesi seçilir.
  *  2. Her provider için Round-Robin bazı key indeksinden başlanır.
- *  3.   • Key 429 / 5xx / timeout alırsa → aynı provider'daki sonraki key denenir.
- *  4.   • Tüm key'ler başarısız olursa → öncelik listesindeki sonraki provider'a geçilir.
- *  5. Hiçbir provider yanit vermezse hata fırlatılır.
+ *     • Key 429/5xx/timeout alırsa → aynı provider'daki sonraki key denenir.
+ *     • Tüm key'ler başarısız olursa → bir sonraki provider'a geçilir.
+ *  3. Hiçbir provider yanıt vermezse anlamlı hata fırlatılır.
+ *
+ * Vercel Edge & Serverless Runtime ile tam uyumlu:
+ *   - Standart Web Fetch API kullanılır.
+ *   - process.env: Edge'de globalThis.process, Serverless'ta Node process.
  */
 
 import {
@@ -20,25 +25,32 @@ import {
 } from './config';
 
 // ---------------------------------------------------------------------------
-// Tipler
+// Public types
 // ---------------------------------------------------------------------------
 
 export type { ProviderId, TaskType };
 
 export interface RouterInput {
+  /** Modele gönderilecek prompt */
   prompt: string;
+  /** İş türü: hızlı / karmaşık / genel (varsayılan: 'default') */
   taskType?: TaskType;
+  /** Maksimum token sayısı (varsayılan: 1024) */
   maxTokens?: number;
+  /** Yaratıcılık katsayısı 0-1 (varsayılan: 0.7) */
   temperature?: number;
 }
 
 export interface RouterOutput {
+  /** Üretilen metin */
   text: string;
+  /** Yanıt veren provider */
   provider: ProviderId;
+  /** Kullanılan model adı */
   model: string;
-  /** Kullanılan key numarası (1-tabanlı) */
+  /** Kullanılan key numarası, 1-tabanlı */
   keyIndex: number;
-  /** İlk başarılı yanıta kadar geçen süre (ms) */
+  /** İlk yanıta kadar geçen toplam süre (ms) */
   latencyMs: number;
 }
 
@@ -47,37 +59,45 @@ export interface RouterOutput {
 // ---------------------------------------------------------------------------
 
 const rrIndex: Record<ProviderId, number> = {
-  groq: 0, gemini: 0, openrouter: 0,
-  huggingface: 0, cerebras: 0, sambanova: 0,
+  groq: 0,
+  gemini: 0,
+  openrouter: 0,
+  huggingface: 0,
+  cerebras: 0,
+  sambanova: 0,
 };
 
 // ---------------------------------------------------------------------------
-// Yardımcılar
+// Fetch yardımcısı
 // ---------------------------------------------------------------------------
 
-const TIMEOUT_MS = 28_000; // Vercel 30 s limit altında
+/** Vercel 30 s limiti altında güvenli fetch timeout */
+const TIMEOUT_MS = 28_000;
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } finally {
-    clearTimeout(t);
+    clearTimeout(timer);
   }
 }
 
-function shouldRetryOnStatus(status: number): boolean {
+function isRetryable(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
 // ---------------------------------------------------------------------------
-// Tek provider çağrısı (tüm key'leri dener)
+// Provider denemesi: Round-Robin başlangıcından tüm key'leri dener
 // ---------------------------------------------------------------------------
 
 async function tryProvider(
   id: ProviderId,
-  keys: string[],
+  keys: readonly string[],
   prompt: string,
   maxTokens: number,
   temperature: number,
@@ -99,8 +119,8 @@ async function tryProvider(
 
       if (!res.ok) {
         console.warn(`[ai-router] ${id} key[${idx + 1}/${n}] → HTTP ${res.status}`);
-        if (shouldRetryOnStatus(res.status)) continue; // sonraki key
-        return null; // yeniden denenemez (4xx, 429 değil)
+        if (isRetryable(res.status)) continue; // sonraki key
+        return null; // 4xx (rate-limit dışı): yeniden deneme yapma
       }
 
       const raw: unknown = await res.json();
@@ -108,38 +128,42 @@ async function tryProvider(
 
       if (!text) {
         console.warn(`[ai-router] ${id} key[${idx + 1}] → boş yanıt`);
-        continue;
+        continue; // bir sonraki key'i dene
       }
 
-      // Başarılı: Round-Robin indeksini bir sonraki key'e ilerlet
+      // Başarı — Round-Robin indeksini bir sonraki key'e taşı
       rrIndex[id] = (idx + 1) % n;
       return { text, keyIndex: idx + 1 };
+
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[ai-router] ${id} key[${idx + 1}] → ${msg}`);
-      // timeout / ağ hatası → sonraki key
+      // timeout / ağ hatası → bir sonraki key
     }
   }
 
-  return null; // provider'daki tüm key'ler başarısız
+  return null; // bu provider'daki tüm key'ler başarısız
 }
 
 // ---------------------------------------------------------------------------
-// Dışa aktarılan ana fonksiyon
+// Ana export
 // ---------------------------------------------------------------------------
 
 /**
  * Akıllı çoklu sağlayıcı router.
  *
  * @example
- * const { text, provider, latencyMs } = await callSmartRouter({
- *   prompt: 'Bir ürün açıklaması yaz.',
+ * const result = await callSmartRouter({
+ *   prompt: 'Kısaca yapay zekayı açıkla.',
  *   taskType: 'fast',
- *   maxTokens: 512,
- *   temperature: 0.7,
+ *   maxTokens: 256,
+ *   temperature: 0.5,
  * });
+ * console.log(result.text, result.provider, result.latencyMs);
  */
-export async function callSmartRouter(input: RouterInput): Promise<RouterOutput> {
+export async function callSmartRouter(
+  input: RouterInput,
+): Promise<RouterOutput> {
   const {
     prompt,
     taskType    = 'default',
@@ -155,7 +179,7 @@ export async function callSmartRouter(input: RouterInput): Promise<RouterOutput>
     const keys = allKeys[id];
 
     if (!keys || keys.length === 0) {
-      console.warn(`[ai-router] ${id}: key tanımlı değil, atlanıyor.`);
+      console.warn(`[ai-router] ${id}: ortam değişkeni tanımlı değil, atlanıyor.`);
       continue;
     }
 
@@ -171,11 +195,13 @@ export async function callSmartRouter(input: RouterInput): Promise<RouterOutput>
       };
     }
 
-    console.warn(`[ai-router] ${id}: tüm key'ler başarısız — sonraki provider'a geçiliyor.`);
+    console.warn(
+      `[ai-router] ${id}: tüm key'ler başarısız — sonraki provider'a geçiliyor.`,
+    );
   }
 
   throw new Error(
-    `[ai-router] Tüm provider'lar başarısız (taskType=${taskType}). ` +
-    'Vercel ortam değişkenlerini ve API key limitlerini kontrol et.',
+    `[ai-router] Tüm provider'lar başarısız oldu (taskType=${taskType}). ` +
+    'Vercel ortam değişkenlerini (GROQ_KEY_1 … SAMBANOVA_KEY_1) kontrol edin.',
   );
 }
