@@ -23,6 +23,9 @@ const AI_KEYS = [
   "GROQ_API_KEY",
   "OPENROUTER_API_KEY1",
   "OPENROUTER_API_KEY",
+  "CEREBRAS_API_KEY",
+  "SAMBANOVA_API_KEY",
+  "PROVIDER_A_1",
 ] as const;
 
 /** İlk çağrıda eksik zorunlu değişkenleri konsola yazar (bir kez). */

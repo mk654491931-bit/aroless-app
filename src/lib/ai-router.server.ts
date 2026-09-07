@@ -12,12 +12,24 @@ import {
   groqKeyPool,
   openRouterKeyPool,
 } from "./ai.server";
+import {
+  parkPoolGroup,
+  poolGroupAvailable,
+  poolGroupConfig,
+  poolGroupConfigured,
+  readPoolGroupKeys,
+  type PoolGroup,
+} from "./ai-pool.server";
 import { withEstimationRules } from "./ai-guidance";
 
 /** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
 export const FAST_CHAIN: ProviderId[] = [
   "cerebras",
   "sambanova",
+  "pool_a",
+  "pool_b",
+  "pool_c",
+  "pool_d",
   "groq",
   "gemini",
   "openrouter",
@@ -27,7 +39,17 @@ export const FAST_CHAIN: ProviderId[] = [
 export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 export type ProviderId =
-  "cerebras" | "sambanova" | "groq" | "gemini" | "openrouter" | "huggingface" | "bedrock";
+  | "cerebras"
+  | "sambanova"
+  | "pool_a"
+  | "pool_b"
+  | "pool_c"
+  | "pool_d"
+  | "groq"
+  | "gemini"
+  | "openrouter"
+  | "huggingface"
+  | "bedrock";
 
 export type ProviderCall = (
   prompt: string,
@@ -42,7 +64,42 @@ function pool(...names: string[]): string[] {
   return Array.from(new Set(raw));
 }
 
-/** Basit OpenAI uyumlu chat-completions çağrısı. */
+/** Pool'da tanımlı ProviderId → tek tip havuz grubu eşlemesi. */
+const POOL_PROVIDER_GROUP: Partial<Record<ProviderId, PoolGroup>> = {
+  cerebras: "cerebras",
+  sambanova: "sambanova",
+  pool_a: "pool_a",
+  pool_b: "pool_b",
+  pool_c: "pool_c",
+  pool_d: "pool_d",
+};
+
+/** PROVIDER_A..D için OpenAI uyumlu sağlayıcı üretici (URL + model env'den). */
+function pooledProvider(group: PoolGroup): ProviderCall {
+  return async (prompt, temperature, signal) => {
+    const keys = readPoolGroupKeys(group);
+    const { baseUrl, model } = poolGroupConfig(group);
+    if (!keys.length || !baseUrl)
+      throw new Error(`no api key/endpoint configured for ${group}`);
+    const modelName = model || "Meta-Llama-3.3-70B-Instruct";
+    try {
+      return await rotate(keys, [modelName], (key, m) =>
+        openAICompatible({
+          url: baseUrl,
+          key,
+          model: m,
+          prompt,
+          temperature,
+          signal,
+        }),
+      );
+    } catch (e) {
+      // Rotasyon tamamen tükendi → grubu kısa devreye al, zincir diğerine geçsin.
+      parkPoolGroup(group, "server");
+      throw e;
+    }
+  };
+}
 async function openAICompatible(opts: {
   url: string;
   key: string;
@@ -95,7 +152,7 @@ async function rotate(
       } catch (e) {
         last = e;
         const status = (e as { status?: number }).status;
-        if (status === 429 || status === 402 || status === 401) break; // anahtar tükendi → rotasyon
+        if (status === 429 || status === 402 || status === 401 || status === 403) break; // anahtar tükendi → rotasyon
       }
     }
   }
@@ -116,7 +173,7 @@ const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Ins
 
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   cerebras: (prompt, temperature, signal) =>
-    rotate(pool("CEREBRAS_API_KEY", "CEREBRAS_API_KEY_2"), CEREBRAS_MODELS, (key, model) =>
+    rotate(readPoolGroupKeys("cerebras"), CEREBRAS_MODELS, (key, model) =>
       openAICompatible({
         url: "https://api.cerebras.ai/v1/chat/completions",
         key,
@@ -128,7 +185,7 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     ),
 
   sambanova: (prompt, temperature, signal) =>
-    rotate(pool("SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_2"), SAMBANOVA_MODELS, (key, model) =>
+    rotate(readPoolGroupKeys("sambanova"), SAMBANOVA_MODELS, (key, model) =>
       openAICompatible({
         url: "https://api.sambanova.ai/v1/chat/completions",
         key,
@@ -138,6 +195,11 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
         signal,
       }),
     ),
+
+  pool_a: pooledProvider("pool_a"),
+  pool_b: pooledProvider("pool_b"),
+  pool_c: pooledProvider("pool_c"),
+  pool_d: pooledProvider("pool_d"),
 
   groq: async (prompt, temperature, signal) => {
     const keys = groqKeyPool();
@@ -330,6 +392,11 @@ export async function executeAgentWithFallback(
 
   for (let round = 0; round < retries; round++) {
     for (const provider of chain) {
+      // Unified-pool providers: skip unconfigured / circuit-open groups so the
+      // availability router never wastes an attempt on a dead node.
+      const poolGroup = POOL_PROVIDER_GROUP[provider];
+      if (poolGroup && (!poolGroupConfigured(poolGroup) || !poolGroupAvailable(poolGroup)))
+        continue;
       attempts++;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

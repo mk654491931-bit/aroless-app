@@ -72,7 +72,15 @@ type AgentDef = {
   temperature: number;
 };
 
-const T1: ProviderId[] = ["cerebras", "sambanova", "groq"];
+const T1: ProviderId[] = [
+  "cerebras",
+  "sambanova",
+  "pool_a",
+  "pool_b",
+  "pool_c",
+  "pool_d",
+  "groq",
+];
 const T2: ProviderId[] = ["gemini", "groq", "openrouter"];
 const T3: ProviderId[] = ["openrouter", "huggingface", "groq"];
 const T4: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
@@ -205,11 +213,23 @@ function contextHeader(input: PipelineInput): string {
     .join("\n");
 }
 
+const TOP5_JSON_SHAPE = `{"topProducts":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":[string]}] (TAM 5 ADET — ne eksik ne fazla),
+ "executiveSummary": string (200-500 kelime, sayısal, uygulanabilir strateji raporu)}`;
+
+const TOP5_CRITERIA = `TOP 5 İÇİN ZORUNLU TİCARİ EŞİKLER (döndürdüğün HER ürün beşinin de tamamını geçmek zorunda):
+1. Yüksek kâr marjı potansiyeli: düşük tahmini tedarik maliyeti + yüksek algılanan değer (3x-5x kâr marjı hedefi).
+2. Güçlü sorun çözme faktörü: net ve can sıkıcı bir müşteri ağrısını doğrudan çözer ya da yoğun bir tutku/hobi ilgisini besler.
+3. Viral & reklam dostu: kısa video (TikTok / Reels / Shorts) için güçlü görsel WOW faktörü.
+4. Optimum doygunluk: talep yüksek, marka hakimiyeti düşük-orta — bağımsız bir e-ticaret markasının pazar payı kapmasına yer var.
+5. Müşteri memnuniyeti: kategori eşdeğeri inceleme ortalaması en az 4.4+.
+Bir ürün bu eşiklerden herhangi birinde başarısızsa onu AT; kaliteyi düşürüp sayıyı doldurma — ama mümkün olan en güçlü 5 ürünü bulmak için aday havuzunu geniş tut.`;
+
 function stageJsonHint(agent: AgentDef): string {
   if (agent.id === 14) {
     return `SADECE şu şekilde minified JSON döndür:
-{"topProducts":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":[string]}] (tam 5 adet),
- "executiveSummary": string (200-500 kelime, sayısal, uygulanabilir strateji raporu)}`;
+${TOP5_JSON_SHAPE}
+
+${TOP5_CRITERIA}`;
   }
   return `SADECE minified JSON döndür: {"findings":[string] (3-8 madde, somut ve sayısal),"candidates":[{"name":string,"note":string}] (en fazla 10)}`;
 }
@@ -293,23 +313,64 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
   logs.push(log);
   tierLatencyMs["tier4"] = Date.now() - tier4Start;
 
-  const parsed = parseAgentJson<{ topProducts?: unknown[]; executiveSummary?: string }>(text, {});
-  const topProducts = (Array.isArray(parsed.topProducts) ? parsed.topProducts : [])
-    .slice(0, 5)
-    .map((p) => ProductSchema.safeParse(p))
-    .filter((r): r is { success: true; data: Product } => r.success)
-    .map((r) => r.data);
+  const parseProducts = (raw: string) =>
+    parseAgentJson<{ topProducts?: unknown[] }>(raw, {})
+      .topProducts?.slice(0, 5)
+      .map((p) => ProductSchema.safeParse(p))
+      .filter((r): r is { success: true; data: Product } => r.success)
+      .map((r) => r.data) ?? [];
+
+  let products = parseProducts(text);
+  let finalText = text;
+
+  // Contract: exactly 5 winners. When synthesis returned 1-4 valid products
+  // (executiveSummary intact), run ONE repair pass that must keep the winners
+  // and only add the missing slots — never repeat a returned name.
+  if (products.length > 0 && products.length < 5) {
+    const names = products.map((p) => p.name).filter(Boolean);
+    const repairPrompt = `${buildAgentPrompt(finalAgent, input, summarize(collected))}
+
+ÖNCEKİ YANITINDA sadece ${products.length} geçerli ürün döndü. Şimdi SADECE şu kuralı uygula:
+- Daha önce döndürdüğün şu ürünleri AYNEN KORU: ${names.join(" | ")}
+- Aynı isimleri tekrar etme.
+- TOPLAM 5 ürüne ulaşana dek eksikleri doldur (yukarıdaki 5 ticari eşiğe uyan en güçlü adaylarla).
+- ${TOP5_CRITERIA}
+
+SADECE şu şekilde minified JSON döndür: ${TOP5_JSON_SHAPE}`;
+    const repair = await executeAgentWithFallback(
+      `${finalAgent.id}. ${finalAgent.name} (tamamlama)`,
+      repairPrompt,
+      finalAgent.chain,
+      { temperature: finalAgent.temperature, retries: 1 },
+    );
+    logs.push(repair.log);
+    if (repair.log.ok && repair.text.trim()) {
+      const more = parseProducts(repair.text);
+      if (more.length >= products.length) products = more;
+      finalText = repair.text;
+    }
+  }
 
   const providerHits: Record<string, number> = {};
   for (const l of logs) providerHits[l.provider] = (providerHits[l.provider] ?? 0) + 1;
 
-  if (!topProducts.length && !parsed.executiveSummary) {
+  const fallbackSummary =
+    products.length > 0
+      ? `En güçlü ${products.length} ürün seçildi.`
+      : "Sağlayıcılar bu sorgu için ürün üretemedi.";
+  const executiveSummary =
+    (parseAgentJson<{ executiveSummary?: string }>(finalText, {}).executiveSummary ?? "").slice(
+      0,
+      12_000,
+    ) || fallbackSummary;
+
+  if (!products.length && !parseAgentJson<{ executiveSummary?: string }>(text, {}).executiveSummary) {
     throw new Error("Tüm sağlayıcılar şu anda yanıt vermedi. Birkaç saniye sonra tekrar deneyin.");
   }
 
   return PipelineOutputSchema.parse({
-    topProducts,
-    executiveSummary: String(parsed.executiveSummary ?? "").slice(0, 12_000),
+    topProducts: products.slice(0, 5),
+    executiveSummary,
     metrics: {
       totalLatencyMs: Date.now() - started,
       agentCount: AGENTS.length,
