@@ -4,6 +4,16 @@ import { guardPublic } from "@/lib/api-guard.server";
 // Simple in-memory cache (per worker instance). Key: normalized query.
 const cache = new Map<string, { url: string; at: number }>();
 const TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const MAX_CACHE_ENTRIES = 2000; // bound memory under abusive unique queries
+
+function cacheSet(key: string, value: { url: string; at: number }) {
+  if (cache.size >= MAX_CACHE_ENTRIES) {
+    // Evict oldest entry (Map preserves insertion order).
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, value);
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -123,7 +133,7 @@ export const Route = createFileRoute("/api/public/product-image")({
           // No real image found — never return a fabricated/stock placeholder.
           return Response.json({ url: null, cached: false, source: "none" }, { headers: CORS });
         }
-        cache.set(key, { url: img, at: Date.now() });
+        cacheSet(key, { url: img, at: Date.now() });
         return Response.json({ url: img, cached: false, source }, { headers: CORS });
       },
     },

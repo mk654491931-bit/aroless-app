@@ -97,9 +97,11 @@ export function AnalysisPipelineModal({
       setProgress(0);
       setStepIdx(0);
       setElapsed(0);
+      document.body.style.overflow = "";
       return;
     }
     startedAt.current = Date.now();
+    document.body.style.overflow = "hidden";
     const target = Math.max(2000, etaMs);
     const id = window.setInterval(() => {
       const ms = Date.now() - startedAt.current;
@@ -110,7 +112,10 @@ export function AnalysisPipelineModal({
       setStepIdx(Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length)));
       if (done && pct >= 100) window.clearInterval(id);
     }, 100);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      document.body.style.overflow = "";
+    };
   }, [open, done, etaMs, steps.length]);
 
   if (!open) return null;
@@ -129,10 +134,10 @@ export function AnalysisPipelineModal({
   const winner = finalScore > 85;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-4xl grid gap-4 md:grid-cols-2">
-        <div className="glass rounded-2xl w-full p-6 md:p-7">
-          <div className="flex items-center gap-3 mb-5">
+    <div className="fixed inset-0 z-50 flex p-3 sm:p-5 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="m-auto w-full max-w-5xl grid gap-3 lg:grid-cols-2 lg:items-start">
+        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-5 md:p-6">
+          <div className="flex flex-shrink-0 items-center gap-3 mb-5">
             <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Sparkles size={18} className="text-white animate-pulse" />
             </div>
@@ -152,17 +157,17 @@ export function AnalysisPipelineModal({
               </span>
             )}
           </div>
-          <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden mb-3">
+          <div className="flex-shrink-0 h-2 w-full rounded-full bg-white/5 overflow-hidden mb-3">
             <div
               className="h-full bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] transition-all duration-200"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="mb-4 flex items-center gap-2 text-xs text-[oklch(0.88_0.10_255)]">
+          <div className="mb-4 flex flex-shrink-0 items-center gap-2 text-xs text-[oklch(0.88_0.10_255)]">
             <Loader2 size={12} className="animate-spin" />
             <span className="truncate">{steps[stepIdx]}</span>
           </div>
-          <ul className="space-y-2.5">
+          <ul className="space-y-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {steps.map((s, i) => {
               const complete = i < stepIdx || (i === stepIdx && progress >= 100);
               const active = i === stepIdx && !complete;
@@ -190,8 +195,8 @@ export function AnalysisPipelineModal({
         </div>
 
         {/* RIGHT — 14-Agent AI Council live status (70% weight) */}
-        <div className="glass rounded-2xl w-full p-6 md:p-7">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-5 md:p-6">
+          <div className="flex flex-shrink-0 items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
@@ -203,14 +208,14 @@ export function AnalysisPipelineModal({
             </div>
           </div>
 
-          <ul className="space-y-2">
+          <ul className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1.5">
             {COUNCIL_AGENTS.map((a, i) => {
               const complete = agentDone(i);
               const active = !complete && i === doneCount;
               return (
                 <li
                   key={a.name}
-                  className={`rounded-xl border p-2.5 flex items-start gap-2.5 transition ${
+                  className={`rounded-xl border p-2 flex items-start gap-2.5 transition ${
                     complete
                       ? "border-emerald-400/40 bg-emerald-500/10"
                       : active
@@ -244,7 +249,7 @@ export function AnalysisPipelineModal({
           </ul>
 
           <div
-            className={`mt-4 rounded-xl border p-3 ${
+            className={`mt-4 flex-shrink-0 rounded-xl border p-3 ${
               winner
                 ? "border-emerald-400/60 bg-emerald-500/15 shadow-[0_0_28px_-6px_oklch(0.75_0.18_150)]"
                 : "border-white/10 bg-white/5"
