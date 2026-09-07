@@ -608,7 +608,7 @@ function Dashboard() {
               <BrandLogo subtitle="Winning Product Intelligence" />
             </div>
 
-            <div className="header-actions flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            <div className="header-actions flex min-w-0 flex-1 items-center gap-2 overflow-x-auto md:flex-wrap md:justify-end md:overflow-visible">
               <span className="morph-pill rounded-lg inline-flex">
                 <DataSourcesButton />
               </span>
@@ -1640,7 +1640,7 @@ function TabSwitcher({
       />
       <div
         ref={wrapRef}
-        className="tab-switch-track premium-card relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 text-sm md:justify-center"
+        className="tab-switch-track premium-card relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 text-sm md:flex-wrap md:justify-center md:overflow-visible"
       >
         {pill && (
           <span
