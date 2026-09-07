@@ -9,6 +9,7 @@ import {
   geminiKeyPool,
   isQuotaError,
 } from "./ai.server";
+import { openRouterEnvKeys } from "./ai-keys.server";
 import { withEstimationRules } from "./ai-guidance";
 
 export type ToolResult = {
@@ -61,17 +62,7 @@ export const SCHEMA_HINT = `Think step by step internally (unit economics, bench
 
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 function openRouterKeyPool(): string[] {
-  const raw = [
-    process.env["OPENROUTER_API_KEY"],
-    process.env["OPENROUTER_API_KEY1"],
-    process.env["OPENROUTER_API_KEY_1"],
-    process.env["OPENROUTER_API_KEY2"],
-    process.env["OPENROUTER_API_KEY_2"],
-    process.env["OPENROUTER_2_API_KEY"],
-    process.env["OPENROUTER_API_KEY_3"],
-    process.env["OPENROUTER_API_KEY3"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return openRouterEnvKeys();
 }
 
 /** OpenAI-compatible OpenRouter call with key rotation and gateway fallback. */

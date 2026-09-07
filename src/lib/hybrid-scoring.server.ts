@@ -1,10 +1,13 @@
 // ============================================================================
 // Hybrid 4-API scoring engine (server only)
 //
-//   AI 1  — Groq            : Market demand & competition analyst   (55%)
-//   AI 2  — Gemini API 1    : Profit margin & logistics analyst     (45%)
-//   AI 3  — Gemini API 2    : Fallback & country cross-match engine
-//   AI 4  — Gemini API 3    : UI tooltip & card summary generator
+//   AI 1  — Groq                 : Market demand & competition analyst   (55%)
+//   AI 2  — Gemini (havuz 1..5)  : Profit margin & logistics analyst     (45%)
+//   AI 3  — Gemini (havuz 1..5)  : Fallback & country cross-match engine
+//   AI 4  — Gemini (havuz 1..5)  : UI tooltip & card summary generator
+//
+// Tüm Gemini çağrıları havuzdaki 5 anahtarı (GEMINI_API_KEY_1..5) round-robin
+// kullanır; paralel çağrılar farklı anahtarlara dağılır.
 //
 // Deadlock fix: no strict AND gate. Products are ranked by
 //   calculated_score = ai_1 * 0.55 + ai_2 * 0.45
@@ -18,18 +21,6 @@ import {
   type LocalCompetition,
 } from "./consensus-types";
 
-const GEMINI_1 = () =>
-  process.env["GEMINI_API_KEY_1"] ||
-  process.env["GEMINI_1_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
-const GEMINI_2 = () =>
-  process.env["GEMINI_API_KEY_2"] ||
-  process.env["GEMINI_2_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
-const GEMINI_3 = () =>
-  process.env["GEMINI_API_KEY_3"] ||
-  process.env["GEMINI_3_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
 const ALT_CODES = TARGET_COUNTRIES.filter((c) => c.code !== "GLOBAL")
   .map((c) => c.code)
   .join(", ");
@@ -79,7 +70,7 @@ Return ONLY JSON:
   } catch {
     // Groq unavailable — degrade to Gemini so scoring never deadlocks.
     try {
-      const text = await callGemini(prompt, GEMINI_1(), 0.4, true, FLASH);
+      const text = await callGemini(prompt, undefined, 0.4, true, FLASH);
       const raw = extractJson<Record<string, unknown>>(text, {});
       return {
         ai_1_score: clamp100(raw["ai_1_score"]),
@@ -111,7 +102,7 @@ Return ONLY JSON:
   "estimated_shipping_days": number (typical door-to-door delivery days),
   "logistics_note": string (1 short Turkish sentence on tax/shipping impact) }`;
   try {
-    const text = await callGemini(prompt, GEMINI_1(), 0.4, false, FLASH);
+    const text = await callGemini(prompt, undefined, 0.4, false, FLASH);
     const raw = extractJson<Record<string, unknown>>(text, {});
     const days = Number(raw["estimated_shipping_days"]);
     return {
@@ -144,7 +135,7 @@ Return ONLY JSON:
   "alt_country_name": string (country name in Turkish, e.g. "Almanya"),
   "alt_country_note": string (1 short Turkish sentence why that market is stronger) }`;
   try {
-    const text = await callGemini(prompt, GEMINI_2(), 0.5, true, FLASH);
+    const text = await callGemini(prompt, undefined, 0.5, true, FLASH);
     const raw = extractJson<Record<string, unknown>>(text, {});
     const code = String(raw["alt_country_code"] ?? "").toUpperCase();
     if (!code || code === country.toUpperCase()) return {};
@@ -174,7 +165,7 @@ Return ONLY JSON:
 { "tooltip": string (max 140 chars, Turkish, why this product fits/doesn't fit this market),
   "badge_note": string (max 40 chars, Turkish, a punchy card sub-label) }`;
   try {
-    const text = await callGemini(prompt, GEMINI_3(), 0.7, false, FLASH);
+    const text = await callGemini(prompt, undefined, 0.7, false, FLASH);
     const raw = extractJson<Record<string, unknown>>(text, {});
     return {
       tooltip: String(raw["tooltip"] ?? "").slice(0, 200),

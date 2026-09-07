@@ -1,4 +1,5 @@
 import { withEstimationRules } from "./ai-guidance";
+import { geminiEnvKeys, groqEnvKeys, openRouterEnvKeys } from "./ai-keys.server";
 // Server-only AI helpers. Kept out of *.functions.ts so server-function
 // splitting never strips them.
 
@@ -236,14 +237,7 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
 
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 export function openRouterKeyPool(): string[] {
-  const raw = [
-    process.env["OPENROUTER_API_KEY"],
-    process.env["OPENROUTER_API_KEY1"],
-    process.env["OPENROUTER_API_KEY_1"],
-    process.env["OPENROUTER_API_KEY2"],
-    process.env["OPENROUTER_API_KEY_2"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return openRouterEnvKeys();
 }
 
 /** Pull a JSON object out of a model response that may be fenced or prefixed. */
@@ -302,16 +296,7 @@ export function extractJson<T>(text: string, fallback: T): T {
 
 /** All configured Gemini keys, de-duplicated, in rotation order. */
 export function geminiKeyPool(): string[] {
-  const raw = [
-    process.env["GEMINI_API_KEY_1"],
-    process.env["GEMINI_1_API_KEY"],
-    process.env["GEMINI_API_KEY_2"],
-    process.env["GEMINI_2_API_KEY"],
-    process.env["GEMINI_API_KEY_3"],
-    process.env["GEMINI_3_API_KEY"],
-    process.env["GEMINI_API_KEY"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return geminiEnvKeys();
 }
 
 function isQuotaError(status: number, body: string): boolean {
@@ -469,17 +454,7 @@ export async function callGemini(
 
 /** All configured Groq keys, de-duplicated, in rotation order. */
 export function groqKeyPool(): string[] {
-  const raw = [
-    process.env["GROQ_API_KEY"],
-    process.env["GROQ_API_KEY_1"],
-    process.env["GROQ_API_KEY1"],
-    process.env["GROQ_API_KEY_2"],
-    process.env["GROQ_API_KEY2"],
-    process.env["GROQ_2_API_KEY"],
-    process.env["GROQ_API_KEY_3"],
-    process.env["GROQ_API_KEY3"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw));
+  return groqEnvKeys();
 }
 
 /**

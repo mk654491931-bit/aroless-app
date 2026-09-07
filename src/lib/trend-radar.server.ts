@@ -540,15 +540,12 @@ const ENGINES: { name: string; run: (p: string) => Promise<string> }[] = [
   {
     name: "gemini",
     run: (p) =>
-      callGemini(
-        p,
-        process.env["GEMINI_API_KEY_1"] ||
-          process.env["GEMINI_1_API_KEY"] ||
-          process.env["GEMINI_API_KEY"],
-        0.45,
-        false,
-        ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"],
-      ),
+      // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
+      callGemini(p, undefined, 0.45, false, [
+        "gemini-flash-latest",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+      ]),
   },
   { name: "groq", run: (p) => callGroq(p, 0.4) },
   { name: "openrouter", run: (p) => callOpenRouter(p, 0.4) },

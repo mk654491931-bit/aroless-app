@@ -11,20 +11,28 @@
 //   • round-robin start cursor so concurrent tasks fan out across nodes
 //   • zero secret leakage: health/summary APIs expose counts and labels only
 //
-// Slot layout (the "22-key pool"):
-//   CEREBRAS          keys CEREBRAS_API_KEY, CEREBRAS_API_KEY_1.._5   (fast)
-//   SAMBANOVA         keys SAMBANOVA_API_KEY, SAMBANOVA_API_KEY_1.._5  (deep)
-//   PROVIDER_A..D     keys PROVIDER_<X>_1.._5, OpenAI-compatible URL from
-//                     PROVIDER_<X>_BASE_URL (also accepts _URL / _API_URL),
-//                     optional PROVIDER_<X>_MODEL override. When no base URL is
-//                     configured the provider's keys are skipped automatically,
-//                     so the pool degrades cleanly to the remaining nodes.
+// Slot layout (the real 22-key pool):
+//   GROQ          keys GROQ_API_KEY_1.._5                       (fast · 5)
+//   GEMINI        keys GEMINI_API_KEY_1.._5                     (deep · 5)
+//   OPENROUTER    keys OPENROUTER_API_KEY_1.._5                 (fast · 5)
+//   HF            keys HF_TOKEN_1.._5                           (fast · 5)
+//   CEREBRAS      keys CEREBRAS_API_KEY (+ _1.._5)              (fast · 1)
+//   SAMBANOVA     keys SAMBANOVA_API_KEY (+ _1.._5)             (deep · 1)
+//   PROVIDER_A..D keys PROVIDER_<X>_1.._5 + PROVIDER_<X>_BASE_URL (optional)
+//
+// Base env names are also accepted everywhere (e.g. GROQ_API_KEY, CEREBRAS_API_KEY).
+// All naming conventions come from the shared ai-keys scanner, so whatever
+// suffix a deployment stores under is registered here automatically.
 //
 // No fetch to provider A–D happens until a base URL is configured — keys alone
 // are never enough to guess an endpoint, and the pool must never fabricate one.
 // ============================================================================
 
 export type PoolGroup =
+  | "groq"
+  | "gemini"
+  | "openrouter"
+  | "hf"
   | "cerebras"
   | "sambanova"
   | "pool_a"
@@ -53,6 +61,15 @@ export type PoolNodeOutcome =
   | "empty" // success but blank/unusable payload
   | "ok";
 
+import {
+  cerebrasEnvKeys,
+  geminiEnvKeys,
+  groqEnvKeys,
+  hfEnvKeys,
+  openRouterEnvKeys,
+  sambanovaEnvKeys,
+} from "./ai-keys.server";
+
 /** PROVIDER_<X> env prefix for the pool_a..pool_d groups. */
 function poolEnvPrefix(group: PoolGroup): string {
   if (group === "pool_a") return "PROVIDER_A";
@@ -62,33 +79,40 @@ function poolEnvPrefix(group: PoolGroup): string {
   return group.toUpperCase();
 }
 
-const SLOT_KEY_ENVS = {
-  cerebras: ["CEREBRAS_API_KEY", "CEREBRAS_API_KEY_1", "CEREBRAS_API_KEY_2", "CEREBRAS_API_KEY_3", "CEREBRAS_API_KEY_4", "CEREBRAS_API_KEY_5"],
-  sambanova: ["SAMBANOVA_API_KEY", "SAMBANOVA_API_KEY_1", "SAMBANOVA_API_KEY_2", "SAMBANOVA_API_KEY_3", "SAMBANOVA_API_KEY_4", "SAMBANOVA_API_KEY_5"],
-} as const;
-
 const GROUP_PRIORITY: Record<PoolGroup, PoolPriority> = {
+  groq: "fast",
+  openrouter: "fast",
+  hf: "fast",
   cerebras: "fast",
-  sambanova: "deep",
   pool_a: "fast",
   pool_b: "fast",
   pool_c: "fast",
   pool_d: "fast",
+  gemini: "deep",
+  sambanova: "deep",
 };
 
 /** Display order when a request has no class preference. */
 const ALL_ORDER: PoolGroup[] = [
   "cerebras",
   "sambanova",
+  "groq",
+  "gemini",
+  "openrouter",
+  "hf",
   "pool_a",
   "pool_b",
   "pool_c",
   "pool_d",
 ];
 
-/** "fast" sweep order: Cerebras + high-speed slots first. */
+/** "fast" sweep order (f/p): Groq 5 anahtar ilk, Cerebras/OpenRouter/HF, tek anahtarlı SambaNova en son. */
 const FAST_ORDER: PoolGroup[] = [
+  "groq",
   "cerebras",
+  "openrouter",
+  "hf",
+  "gemini",
   "pool_a",
   "pool_b",
   "pool_c",
@@ -96,14 +120,18 @@ const FAST_ORDER: PoolGroup[] = [
   "sambanova",
 ];
 
-/** "deep" reasoning order: SambaNova + high-context slots first. */
+/** "deep" reasoning order: Gemini + SambaNova yüksek bağlam önce. */
 const DEEP_ORDER: PoolGroup[] = [
+  "gemini",
   "sambanova",
+  "groq",
+  "cerebras",
+  "openrouter",
+  "hf",
   "pool_a",
   "pool_b",
   "pool_c",
   "pool_d",
-  "cerebras",
 ];
 
 // ------------------------------------------------------------------ cooldown
@@ -127,39 +155,54 @@ function readEnv(name: string): string {
 }
 
 function poolGroupKeys(group: PoolGroup): string[] {
-  if (group === "pool_a" || group === "pool_b" || group === "pool_c" || group === "pool_d") {
-    const prefix = poolEnvPrefix(group);
-    const keys: string[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const v = readEnv(`${prefix}_${i}`);
-      if (v) keys.push(v);
-    }
-    return Array.from(new Set(keys));
+  if (group === "cerebras") return cerebrasEnvKeys();
+  if (group === "sambanova") return sambanovaEnvKeys();
+  if (group === "groq") return groqEnvKeys();
+  if (group === "gemini") return geminiEnvKeys();
+  if (group === "openrouter") return openRouterEnvKeys();
+  if (group === "hf") return hfEnvKeys();
+  const prefix = poolEnvPrefix(group); // pool_a..pool_d
+  const keys: string[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const v = readEnv(`${prefix}_${i}`);
+    if (v) keys.push(v);
   }
-  const envs = SLOT_KEY_ENVS[group];
-  const keys = envs.map(readEnv).filter(Boolean);
   return Array.from(new Set(keys));
 }
 
-/** Optional OpenAI-compatible endpoint config for a PROVIDER_<X> group. */
+/** Endpoint + default model config per group (OpenAI-compatible). */
 export function poolGroupConfig(group: PoolGroup): {
   baseUrl: string;
   model: string;
 } {
-  if (group === "pool_a" || group === "pool_b" || group === "pool_c" || group === "pool_d") {
-    const prefix = poolEnvPrefix(group);
-    const baseUrl =
-      readEnv(`${prefix}_BASE_URL`) ||
-      readEnv(`${prefix}_URL`) ||
-      readEnv(`${prefix}_API_URL`) ||
-      readEnv(`${prefix}_HOST`);
-    const model = readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct";
-    return { baseUrl, model };
+  switch (group) {
+    case "pool_a":
+    case "pool_b":
+    case "pool_c":
+    case "pool_d": {
+      const prefix = poolEnvPrefix(group);
+      return {
+        baseUrl:
+          readEnv(`${prefix}_BASE_URL`) ||
+          readEnv(`${prefix}_URL`) ||
+          readEnv(`${prefix}_API_URL`) ||
+          readEnv(`${prefix}_HOST`),
+        model: readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct",
+      };
+    }
+    case "cerebras":
+      return { baseUrl: "https://api.cerebras.ai/v1/chat/completions", model: "" };
+    case "sambanova":
+      return { baseUrl: "https://api.sambanova.ai/v1/chat/completions", model: "" };
+    case "groq":
+      return { baseUrl: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" };
+    case "gemini":
+      return { baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/", model: "gemini-flash-latest" };
+    case "openrouter":
+      return { baseUrl: "https://openrouter.ai/api/v1/chat/completions", model: "meta-llama/llama-3.3-70b-instruct" };
+    case "hf":
+      return { baseUrl: "https://router.huggingface.co/v1/chat/completions", model: "Qwen/Qwen2.5-7B-Instruct" };
   }
-  if (group === "cerebras") {
-    return { baseUrl: "https://api.cerebras.ai/v1/chat/completions", model: "" };
-  }
-  return { baseUrl: "https://api.sambanova.ai/v1/chat/completions", model: "" };
 }
 
 /** All configured, cooled-down nodes, in priority-aware order. */
@@ -172,7 +215,9 @@ export function buildPoolNodes(
   for (const group of groups) {
     const keys = poolGroupKeys(group);
     if (!keys.length) continue;
-    if (group === "cerebras" || group === "sambanova") {
+    if (group !== "pool_a" && group !== "pool_b" && group !== "pool_c" && group !== "pool_d") {
+      // Built-in providers (Groq/Gemini/OpenRouter/HF/Cerebras/SambaNova) have
+      // known endpoints — every configured key is a usable node.
       keys.forEach((_, i) => {
         const slot = i + 1;
         if (!isNodeCool(group, slot)) return;
@@ -208,6 +253,16 @@ function isNodeCool(group: PoolGroup, slot: number): boolean {
   if ((cooldownUntil.get(id) ?? 0) > Date.now()) return false;
   if ((groupCooldownUntil.get(group) ?? 0) > Date.now()) return false;
   return true;
+}
+
+/**
+ * True when the group is configured AND not circuit-parked. Independent of any
+ * endpoint requirement — used to skip providers that are temporarily down
+ * without skipping a provider that still has working keys.
+ */
+export function poolGroupCool(group: PoolGroup): boolean {
+  if (!poolGroupConfigured(group)) return false;
+  return (groupCooldownUntil.get(group) ?? 0) <= Date.now();
 }
 
 function nodeId(group: PoolGroup, slot: number): string {

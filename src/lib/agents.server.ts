@@ -25,34 +25,22 @@ export type MarketScan = {
   market_note: string;
 };
 
-// Agent -> preferred key. Both naming styles are accepted; when a key is spent
-// callGemini rotates to the next one in the shared pool automatically.
-const AGENT3_KEY = () =>
-  process.env["GEMINI_API_KEY_3"] ||
-  process.env["GEMINI_3_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
-const AGENT1_KEY = () =>
-  process.env["GEMINI_API_KEY_1"] ||
-  process.env["GEMINI_1_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
-const AGENT2_KEY = () =>
-  process.env["GEMINI_API_KEY_2"] ||
-  process.env["GEMINI_2_API_KEY"] ||
-  process.env["GEMINI_API_KEY"];
-
 const FLASH = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 const PRO = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-flash-latest"];
 
-/** Resilient AI call: Gemini → Lovable AI Gateway → Groq. Never deadlocks. */
+/**
+ * Resilient AI call: Gemini → Lovable AI Gateway → Groq. Never deadlocks.
+ * apiKey undefined bırakılır: callGemini havuzdaki 5 Gemini anahtarını
+ * (GEMINI_API_KEY_1..5) round-robin kullanır, kotalı anahtarı beklemeye alır.
+ */
 async function agentCall(
   prompt: string,
-  preferredKey: string | undefined,
   temperature: number,
   grounded: boolean,
   models: string[],
 ): Promise<string> {
   try {
-    return await callGemini(prompt, preferredKey, temperature, grounded, models);
+    return await callGemini(prompt, undefined, temperature, grounded, models);
   } catch {
     // Gemini exhausted — try gateway
     try {
@@ -102,7 +90,7 @@ Return ONLY JSON:
 { "candidates": [ { "name": string, "why_now": string (1 sentence demand signal happening right now), "price_band_usd": string, "supplier_cost_usd": string, "demand_signal": string (search/social/marketplace evidence), "channel": string (best sales channel) } ] (6-10 candidates),
   "market_note": string (1 sentence on the overall market condition) }`;
   try {
-    const text = await agentCall(prompt, AGENT3_KEY(), 0.6, true, FLASH);
+    const text = await agentCall(prompt, 0.6, true, FLASH);
     const parsed = extractJson<MarketScan>(text, { candidates: [], market_note: "" });
     return {
       candidates: Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, 10) : [],
@@ -130,7 +118,7 @@ Return ONLY JSON:
   "points": string[3-4] (concrete growth angles: hook, audience, channel, differentiation) }`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await agentCall(prompt, AGENT1_KEY(), 0.8, false, FLASH);
+      const text = await agentCall(prompt, 0.8, false, FLASH);
       const raw = extractJson<Partial<AgentVerdict>>(text, {});
       if (raw && (raw.score || raw.summary)) return toVerdict(raw, "No growth thesis returned.");
     } catch {
@@ -169,7 +157,7 @@ Return ONLY JSON:
   "risk_flags": string[3] (the top 3 concrete risks, short) }`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await agentCall(prompt, AGENT2_KEY(), 0.4, false, attempt === 0 ? PRO : FLASH);
+      const text = await agentCall(prompt, 0.4, false, attempt === 0 ? PRO : FLASH);
       const raw = extractJson<Partial<AgentVerdict> & { risk_flags?: string[] }>(text, {});
       if (raw && (raw.score || raw.summary)) {
         const v = toVerdict(raw, "No audit returned.");

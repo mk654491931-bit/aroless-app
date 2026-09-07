@@ -15,18 +15,7 @@ const REQUIRED = [
   "VITE_SUPABASE_PUBLISHABLE_KEY",
 ] as const;
 
-const AI_KEYS = [
-  "LOVABLE_API_KEY",
-  "AI_GATEWAY_API_KEY",
-  "GEMINI_1_API_KEY",
-  "GEMINI_API_KEY_1",
-  "GROQ_API_KEY",
-  "OPENROUTER_API_KEY1",
-  "OPENROUTER_API_KEY",
-  "CEREBRAS_API_KEY",
-  "SAMBANOVA_API_KEY",
-  "PROVIDER_A_1",
-] as const;
+import { anyAiKeyConfigured } from "./ai-keys.server";
 
 /** İlk çağrıda eksik zorunlu değişkenleri konsola yazar (bir kez). */
 export function checkServerEnvOnce(): void {
@@ -40,9 +29,9 @@ export function checkServerEnvOnce(): void {
         `[env] Eksik zorunlu değişken(ler): ${missing.join(", ")} — .env dosyanızı kontrol edin (.env.example örnek alınabilir).`,
       );
     }
-    if (!AI_KEYS.some((k) => String(env[k] ?? "").trim())) {
+    if (!anyAiKeyConfigured()) {
       console.warn(
-        "[env] Hiçbir AI sağlayıcı anahtarı tanımlı değil; yapay zeka modülleri devre dışı kalacak (GEMINI_1_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY1 veya AI_GATEWAY_*).",
+        "[env] Hiçbir AI sağlayıcı anahtarı tanımlı değil; yapay zeka modülleri devre dışı kalacak (GEMINI_API_KEY_N / GROQ_API_KEY_N / OPENROUTER_API_KEY_N / HF_TOKEN_N / CEREBRAS_API_KEY / SAMBANOVA_API_KEY veya AI_GATEWAY_*).",
       );
     }
   } catch {

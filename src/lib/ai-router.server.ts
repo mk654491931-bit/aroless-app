@@ -12,7 +12,9 @@ import {
   groqKeyPool,
   openRouterKeyPool,
 } from "./ai.server";
+import { hfEnvKeys } from "./ai-keys.server";
 import {
+  markPoolGroupOutcome,
   parkPoolGroup,
   poolGroupAvailable,
   poolGroupConfig,
@@ -22,21 +24,40 @@ import {
 } from "./ai-pool.server";
 import { withEstimationRules } from "./ai-guidance";
 
-/** Tier 1-3 hızlı/sıfır maliyetli zincir — tüm yan modüller bunu kullanır (Bedrock YOK). */
+/**
+ * Ortak havuzdaki 22 anahtar için f/p + güvenilirlik sırası:
+ *   1. Groq        — 5 anahtar (GROQ_API_KEY_1..5), ücretsiz, en hızlı → her iş için ilk tercih
+ *   2. Cerebras    — 1 anahtar, ücretsiz, çok hızlı
+ *   3. Gemini      — 5 anahtar (GEMINI_API_KEY_1..5), ücretsiz kota, en güçlü doğruluk
+ *   4. SambaNova   — 1 anahtar, ücretsiz, yüksek bağlam
+ *   5. OpenRouter  — 5 anahtar (OPENROUTER_API_KEY_1..5), ücretsiz modeller (kota daha dar)
+ *   6. HuggingFace — 5 token (HF_TOKEN_1..5), en dar kotalı → yalnızca son çare
+ * Bedrock yalnızca AWS anahtarı tanımlıysa ve ücretsiz sağlayıcılar biterse denenir.
+ * Aynı sağlayıcının 5 anahtarı round-robin dağıtılır, kotalı anahtar 60sn beklemeye alınır.
+ */
 export const FAST_CHAIN: ProviderId[] = [
+  "groq",
   "cerebras",
+  "gemini",
   "sambanova",
   "pool_a",
   "pool_b",
   "pool_c",
   "pool_d",
-  "groq",
-  "gemini",
   "openrouter",
   "huggingface",
 ];
-/** Sadece Ürün Bulucu nihai sentez ajanı Bedrock Claude ile başlar. */
-export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
+/** Derin analiz / nihai sentez zinciri — kalite önce, ödeme yalnızca son çare. */
+export const DEEP_CHAIN: ProviderId[] = [
+  "gemini",
+  "groq",
+  "openrouter",
+  "sambanova",
+  "cerebras",
+  "huggingface",
+  "bedrock",
+];
+export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = DEEP_CHAIN;
 
 export type ProviderId =
   | "cerebras"
@@ -59,11 +80,6 @@ export type ProviderCall = (
 
 const TIMEOUT_MS = 45_000;
 
-function pool(...names: string[]): string[] {
-  const raw = names.map((n) => process.env[n]).filter((v): v is string => Boolean(v && v.trim()));
-  return Array.from(new Set(raw));
-}
-
 /** Pool'da tanımlı ProviderId → tek tip havuz grubu eşlemesi. */
 const POOL_PROVIDER_GROUP: Partial<Record<ProviderId, PoolGroup>> = {
   cerebras: "cerebras",
@@ -83,7 +99,7 @@ function pooledProvider(group: PoolGroup): ProviderCall {
       throw new Error(`no api key/endpoint configured for ${group}`);
     const modelName = model || "Meta-Llama-3.3-70B-Instruct";
     try {
-      return await rotate(keys, [modelName], (key, m) =>
+      const text = await rotate(group, keys, [modelName], (key, m) =>
         openAICompatible({
           url: baseUrl,
           key,
@@ -93,9 +109,11 @@ function pooledProvider(group: PoolGroup): ProviderCall {
           signal,
         }),
       );
+      markPoolGroupOutcome(group, 1, "ok");
+      return text;
     } catch (e) {
       // Rotasyon tamamen tükendi → grubu kısa devreye al, zincir diğerine geçsin.
-      parkPoolGroup(group, "server");
+      parkGroupAfterFailure(group, e);
       throw e;
     }
   };
@@ -137,22 +155,75 @@ async function openAICompatible(opts: {
   return json.choices?.[0]?.message?.content ?? "{}";
 }
 
-/** Havuzdaki her anahtar × her model kombinasyonunu sırayla dener. */
+// ------------------------------------------------------------------ key pool scheduling
+
+/** Her sağlayıcı grubu için round-robin başlangıç imleci. */
+const poolKeyCursor: Record<string, number> = {};
+/** `group:key` → beklemeye alma bitiş zamanı (quota sonrası 60sn). */
+const poolKeyCooldown = new Map<string, number>();
+
+function schedulePoolKeys(group: string, keys: string[]): string[] {
+  if (!keys.length) return keys;
+  const cursor = poolKeyCursor[group] ?? 0;
+  poolKeyCursor[group] = cursor + 1;
+  const rotated = keys.map((_, i) => keys[(cursor + i) % keys.length]);
+  const now = Date.now();
+  const ready = rotated.filter((k) => (poolKeyCooldown.get(`${group}:${k}`) ?? 0) <= now);
+  const parked = rotated.filter((k) => (poolKeyCooldown.get(`${group}:${k}`) ?? 0) > now);
+  return [...ready, ...parked];
+}
+
+function parkPoolKey(group: string, key: string, ms = 60_000): void {
+  poolKeyCooldown.set(`${group}:${key}`, Date.now() + ms);
+}
+
+/** Harici hata nesnesini havuz sonuç sınıfına çevirir. */
+function routerErrorKind(e: unknown): "quota" | "server" | "network" {
+  const status = (e as { status?: number }).status ?? 0;
+  const msg = e instanceof Error ? e.message : "";
+  if (
+    status === 429 || status === 401 || status === 402 || status === 403 ||
+    msg.startsWith("QUOTA:")
+  )
+    return "quota";
+  if (status >= 500) return "server";
+  return "network";
+}
+
+/** Grubu yalnızca gerçekten yapılandırılmışsa park eder (boş grubu kirletmez). */
+function parkGroupAfterFailure(group: PoolGroup, e: unknown): void {
+  if (!poolGroupConfigured(group)) return;
+  parkPoolGroup(group, routerErrorKind(e));
+}
+
+/**
+ * Bir grubun her anahtarını × her modeli dener. Anahtarlar round-robin
+ * başlatılır (8 paralel ajan 5 anahtara yayılır, hepsi 1. anahtara binmez);
+ * 429/401/402/403 alan anahtar 60sn beklemeye alınıp sonraki anahtara geçilir.
+ */
 async function rotate(
+  group: string,
   keys: string[],
   models: string[],
   run: (key: string, model: string) => Promise<string>,
 ): Promise<string> {
   if (!keys.length) throw new Error("no api key configured");
+  const ordered = schedulePoolKeys(group, keys);
   let last: unknown = null;
-  for (const key of keys) {
+  for (const key of ordered) {
     for (const model of models) {
       try {
         return await run(key, model);
       } catch (e) {
         last = e;
         const status = (e as { status?: number }).status;
-        if (status === 429 || status === 402 || status === 401 || status === 403) break; // anahtar tükendi → rotasyon
+        const isQuota =
+          status === 429 || status === 402 || status === 401 || status === 403 ||
+          (e instanceof Error && e.message.startsWith("QUOTA:"));
+        if (isQuota) {
+          parkPoolKey(group, key); // anahtar tükendi → beklemeye al, sonraki anahtara geç
+          break;
+        }
       }
     }
   }
@@ -163,6 +234,32 @@ async function rotate(
 
 const CEREBRAS_MODELS = ["llama3.1-8b", "llama-3.3-70b"];
 const SAMBANOVA_MODELS = ["Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct"];
+
+/**
+ * Direct OpenAI-compatible provider call (Cerebras / SambaNova) that reports
+ * the attempt back to the unified pool: success clears the group, a fully
+ * failed rotation parks the whole group so the next agent in the same run
+ * skips it instead of re-hammering a dead/quota'd provider.
+ */
+async function pooledDirectProvider(
+  group: PoolGroup,
+  url: string,
+  models: string[],
+  prompt: string,
+  temperature: number,
+  signal: AbortSignal,
+): Promise<string> {
+  try {
+    const text = await rotate(group, readPoolGroupKeys(group), models, (key, model) =>
+      openAICompatible({ url, key, model, prompt, temperature, signal }),
+    );
+    markPoolGroupOutcome(group, 1, "ok");
+    return text;
+  } catch (e) {
+    parkGroupAfterFailure(group, e);
+    throw e;
+  }
+}
 const OPENROUTER_FREE = [
   "meta-llama/llama-3.3-70b-instruct:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -173,27 +270,23 @@ const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Ins
 
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   cerebras: (prompt, temperature, signal) =>
-    rotate(readPoolGroupKeys("cerebras"), CEREBRAS_MODELS, (key, model) =>
-      openAICompatible({
-        url: "https://api.cerebras.ai/v1/chat/completions",
-        key,
-        model,
-        prompt,
-        temperature,
-        signal,
-      }),
+    pooledDirectProvider(
+      "cerebras",
+      "https://api.cerebras.ai/v1/chat/completions",
+      CEREBRAS_MODELS,
+      prompt,
+      temperature,
+      signal,
     ),
 
   sambanova: (prompt, temperature, signal) =>
-    rotate(readPoolGroupKeys("sambanova"), SAMBANOVA_MODELS, (key, model) =>
-      openAICompatible({
-        url: "https://api.sambanova.ai/v1/chat/completions",
-        key,
-        model,
-        prompt,
-        temperature,
-        signal,
-      }),
+    pooledDirectProvider(
+      "sambanova",
+      "https://api.sambanova.ai/v1/chat/completions",
+      SAMBANOVA_MODELS,
+      prompt,
+      temperature,
+      signal,
     ),
 
   pool_a: pooledProvider("pool_a"),
@@ -202,63 +295,87 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   pool_d: pooledProvider("pool_d"),
 
   groq: async (prompt, temperature, signal) => {
-    const keys = groqKeyPool();
-    if (!keys.length) return callGroq(prompt, temperature);
     try {
-      // Birincil → ikincil anahtar rotasyonu (429/401/402'de anında 2. anahtar).
-      return await rotate(keys, GROQ_MODELS, (key, model) =>
-        openAICompatible({
-          url: "https://api.groq.com/openai/v1/chat/completions",
-          key,
-          model,
-          prompt,
-          temperature,
-          signal,
-        }),
-      );
-    } catch {
-      return callGroq(prompt, temperature);
+      const keys = groqKeyPool();
+      const text = keys.length
+        ? await rotate("groq", keys, GROQ_MODELS, (key, model) =>
+            openAICompatible({
+              url: "https://api.groq.com/openai/v1/chat/completions",
+              key,
+              model,
+              prompt,
+              temperature,
+              signal,
+            }),
+          )
+        : await callGroq(prompt, temperature);
+      markPoolGroupOutcome("groq", 1, "ok");
+      return text;
+    } catch (e) {
+      parkGroupAfterFailure("groq", e);
+      throw e;
     }
   },
 
-  gemini: (prompt, temperature) =>
-    // Sıradaki anahtar 429/401/402 alırsa otomatik olarak 2./3. anahtara geçer.
-    rotate(geminiKeyPool(), ["gemini"], (key) => callGemini(prompt, key, temperature, true)),
+  gemini: async (prompt, temperature) => {
+    try {
+      // 5 Gemini anahtarı arasında round-robin; QUOTA alan anahtar otomatik beklemeye alınır.
+      const text = await rotate("gemini", geminiKeyPool(), ["gemini"], (key) =>
+        callGemini(prompt, key, temperature, true),
+      );
+      markPoolGroupOutcome("gemini", 1, "ok");
+      return text;
+    } catch (e) {
+      parkGroupAfterFailure("gemini", e);
+      throw e;
+    }
+  },
 
-  openrouter: (prompt, temperature, signal) =>
-    rotate(openRouterKeyPool(), OPENROUTER_FREE, (key, model) =>
-      openAICompatible({
-        url: "https://openrouter.ai/api/v1/chat/completions",
-        key,
-        model,
-        prompt,
-        temperature,
-        signal,
-        extraHeaders: { "X-Title": "Velora Agent Router" },
-      }),
-    ),
-
-  huggingface: (prompt, temperature, signal) =>
-    rotate(
-      pool(
-        "HF_TOKEN_1",
-        "HF_TOKEN",
-        "HUGGING_FACE_API_KEY1",
-        "HF_TOKEN_2",
-        "HUGGING_FACE_API_KEY2",
-      ),
-      HF_MODELS,
-      (key, model) =>
+  openrouter: async (prompt, temperature, signal) => {
+    try {
+      const text = await rotate("openrouter", openRouterKeyPool(), OPENROUTER_FREE, (key, model) =>
         openAICompatible({
-          url: "https://router.huggingface.co/v1/chat/completions",
+          url: "https://openrouter.ai/api/v1/chat/completions",
           key,
           model,
           prompt,
           temperature,
           signal,
-          json: false,
+          extraHeaders: { "X-Title": "Velora Agent Router" },
         }),
-    ),
+      );
+      markPoolGroupOutcome("openrouter", 1, "ok");
+      return text;
+    } catch (e) {
+      parkGroupAfterFailure("openrouter", e);
+      throw e;
+    }
+  },
+
+  huggingface: async (prompt, temperature, signal) => {
+    try {
+      const text = await rotate(
+        "huggingface",
+        hfEnvKeys(),
+        HF_MODELS,
+        (key, model) =>
+          openAICompatible({
+            url: "https://router.huggingface.co/v1/chat/completions",
+            key,
+            model,
+            prompt,
+            temperature,
+            signal,
+            json: false,
+          }),
+      );
+      markPoolGroupOutcome("hf", 1, "ok");
+      return text;
+    } catch (e) {
+      parkGroupAfterFailure("hf", e);
+      throw e;
+    }
+  },
 
   bedrock: (prompt, temperature, signal) => callBedrockClaude(prompt, temperature, signal),
 };

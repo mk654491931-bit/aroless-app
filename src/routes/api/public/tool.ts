@@ -32,11 +32,8 @@ export const Route = createFileRoute("/api/public/tool")({
           }
           if (tool === "news") {
             const { callGemini, extractJson } = await import("@/lib/ai.server");
-            const key =
-              process.env["GEMINI_API_KEY_1"] ||
-              process.env["GEMINI_1_API_KEY"] ||
-              process.env["GEMINI_API_KEY"];
-            const text = await callGemini(prompt, key, 0.5, true);
+            // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
+            const text = await callGemini(prompt, undefined, 0.5, true);
             const parsed = extractJson<{ items?: unknown[] }>(text, {});
             return Response.json({
               items: Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [],

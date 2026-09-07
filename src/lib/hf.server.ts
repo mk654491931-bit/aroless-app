@@ -2,6 +2,7 @@
 // server-function splitting never strips them).
 // Geliştirilmiş: Response caching, provider health tracking, error categorization
 import { extractJson } from "@/lib/ai.server";
+import { hfEnvKeys } from "./ai-keys.server";
 import { withEstimationRules } from "./ai-guidance";
 
 export const HF_MODELS = {
@@ -64,18 +65,9 @@ export function getHfMetrics() {
 
 /** Every configured HF token, de-duplicated, in rotation order (1, 2, 3 …). */
 export function hfTokenPool(override?: string): string[] {
-  const raw = [
-    override,
-    process.env["HUGGING_FACE_API_KEY1"],
-    process.env["HUGGING_FACE_API_KEY_1"],
-    process.env["HUGGING_FACE_API_KEY2"],
-    process.env["HUGGING_FACE_API_KEY_2"],
-    process.env["HUGGING_FACE_API_KEY3"],
-    process.env["HUGGING_FACE_API_KEY"],
-    process.env["HF_TOKEN"],
-    process.env["HUGGING_FACE_TOKEN"],
-  ].filter((k): k is string => Boolean(k && k.trim()));
-  return Array.from(new Set(raw.map((k) => k.trim())));
+  const keys = hfEnvKeys();
+  if (override?.trim()) return Array.from(new Set([override.trim(), ...keys]));
+  return keys;
 }
 
 export function hfToken(override?: string): string | null {

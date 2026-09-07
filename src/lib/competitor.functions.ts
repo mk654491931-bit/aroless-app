@@ -26,10 +26,6 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => AnalyzeInput.parse(i))
   .handler(async ({ data }): Promise<{ report: CompetitorReport }> => {
-    const g1 =
-      process.env["GEMINI_API_KEY_1"] ||
-      process.env["GEMINI_1_API_KEY"] ||
-      process.env["GEMINI_API_KEY"];
     const country = (data.country || "GLOBAL").toUpperCase();
 
     // Free external signals first — they ground the AI prompts (fewer tokens, real data).
@@ -52,7 +48,8 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
     type SellersRaw = { avg_price_usd?: number; sellers?: Partial<CompetitorSeller>[] };
     type SentimentRaw = { sentiment_summary?: string; weaknesses?: Partial<CompetitorWeakness>[] };
     const [sellersRaw, sentimentRaw] = await Promise.all([
-      callGemini(sellersPrompt(data.query, country, liveContext), g1, 0.4)
+      // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
+      callGemini(sellersPrompt(data.query, country, liveContext), undefined, 0.4)
         .then((t) => extractJson<SellersRaw>(t, {}))
         .catch((): SellersRaw => ({})),
       callGroq(sentimentPrompt(data.query, country, liveContext), 0.3)
@@ -127,7 +124,7 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
       .join("\n")
       .slice(0, 2500);
 
-    const strategy = await callGemini(strategyPrompt(data.query, country, context), g1, 0.6)
+    const strategy = await callGemini(strategyPrompt(data.query, country, context), undefined, 0.6)
       .then((t) => {
         const p = extractJson<Partial<CounterStrategy>>(t, {});
         if (!p.headline && !p.positioning) return null;
@@ -169,14 +166,10 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data }): Promise<{ strategy: string }> => {
-    const g1 =
-      process.env["GEMINI_API_KEY_1"] ||
-      process.env["GEMINI_1_API_KEY"] ||
-      process.env["GEMINI_API_KEY"];
     try {
       const text = await callGemini(
         countryStrategyPrompt(data.niche, data.country),
-        g1,
+        undefined,
         0.6,
         false,
       );
@@ -197,14 +190,10 @@ export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CopilotInput.parse(i))
   .handler(async ({ data }): Promise<{ reply: string }> => {
-    const g3 =
-      process.env["GEMINI_API_KEY_3"] ||
-      process.env["GEMINI_3_API_KEY"] ||
-      process.env["GEMINI_API_KEY"];
     try {
       const text = await callGemini(
         copilotPrompt(data.message, data.context, data.history),
-        g3,
+        undefined,
         0.8,
         false,
       );

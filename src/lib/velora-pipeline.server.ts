@@ -1,10 +1,14 @@
 /**
  * Velora 14 ajanlı çalışma hattı (Tier 1 → Tier 4).
  *
- * Tier 1 (Ajan 1-8)  : Cerebras → SambaNova → Groq   (hızlı ham işleme)
- * Tier 2 (Ajan 9-11) : Gemini Flash → Groq → OpenRouter free
- * Tier 3 (Ajan 12-13): OpenRouter free → Hugging Face → Groq
- * Tier 4 (Ajan 14)   : Bedrock Claude → Gemini → OpenRouter/Groq
+ * Sağlayıcı önceliği ortak 22 anahtarlık havuzun f/p sırasına uyar — önce
+ * ücretsiz + hızlı + çok anahtarlı motorlar, tek anahtarlılar sonra, ödemeli
+ * Bedrock yalnızca hepsi biterse (Tier 4 son çare).
+ *
+ * Tier 1 (Ajan 1-8)  : Groq → Cerebras → SambaNova → Gemini → OpenRouter → HF (hızlı ham işleme)
+ * Tier 2 (Ajan 9-11) : Gemini → Groq → OpenRouter → HF
+ * Tier 3 (Ajan 12-13): OpenRouter → Groq → Gemini → HF
+ * Tier 4 (Ajan 14)   : Gemini → Groq → OpenRouter → SambaNova → Cerebras → HF → Bedrock
  */
 import { z } from "zod";
 import {
@@ -72,18 +76,18 @@ type AgentDef = {
   temperature: number;
 };
 
-const T1: ProviderId[] = [
-  "cerebras",
-  "sambanova",
-  "pool_a",
-  "pool_b",
-  "pool_c",
-  "pool_d",
+const T1: ProviderId[] = ["groq", "cerebras", "sambanova", "gemini", "openrouter", "huggingface"];
+const T2: ProviderId[] = ["gemini", "groq", "openrouter", "huggingface"];
+const T3: ProviderId[] = ["openrouter", "groq", "gemini", "huggingface"];
+const T4: ProviderId[] = [
+  "gemini",
   "groq",
+  "openrouter",
+  "sambanova",
+  "cerebras",
+  "huggingface",
+  "bedrock",
 ];
-const T2: ProviderId[] = ["gemini", "groq", "openrouter"];
-const T3: ProviderId[] = ["openrouter", "huggingface", "groq"];
-const T4: ProviderId[] = ["bedrock", "gemini", "openrouter", "groq"];
 
 export const AGENTS: AgentDef[] = [
   {
