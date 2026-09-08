@@ -3,6 +3,8 @@
  * Type-safe error handling, retry logic, ve user-friendly messages
  */
 
+import { apiFetch } from "@/lib/api-client";
+
 export type ApiErrorCode =
   | "auth_required"
   | "auth_invalid"
@@ -83,7 +85,7 @@ export interface RetryOptions {
  */
 export async function apiCall<T = unknown>(url: string, options?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",

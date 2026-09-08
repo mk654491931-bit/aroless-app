@@ -1,24 +1,41 @@
 /**
  * Allowlisted browser configuration for Vite/TanStack Start.
  *
- * This is the only application-runtime module that reads `import.meta.env`.
- * Vite exposes only VITE_* values to the browser; server credentials (AI,
- * Paddle, service-role and webhook secrets) must never be added here.
+ * Client code reads only the build-injected public object below. The Vite
+ * config creates that object from the VITE_* allowlist; server credentials
+ * (AI, Paddle API, service-role and webhook secrets) are never included.
+ *
+ * Keeping this boundary free of framework-specific environment APIs also makes
+ * the browser bundle compatible with the managed Freebuff runtime.
  */
 
-const viteEnv = import.meta.env as ImportMetaEnv & Record<string, unknown>;
+export type PublicClientEnv = {
+  supabaseUrl: string;
+  supabasePublishableKey: string;
+  turnstileSiteKey: string;
+  apiBaseUrl: string;
+  appUrl: string;
+  mode: string;
+};
 
-function readPublicEnv(name: string): string {
-  const value = viteEnv[name];
-  return typeof value === "string" ? value.trim() : "";
-}
+/** Vite replaces this identifier with the allowlisted object at build time. */
+declare const __AROLESS_PUBLIC_ENV__: Partial<PublicClientEnv> | undefined;
 
-export const publicClientEnv = Object.freeze({
-  supabaseUrl: readPublicEnv("VITE_SUPABASE_URL"),
-  supabasePublishableKey: readPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY"),
-  turnstileSiteKey: readPublicEnv("VITE_TURNSTILE_SITE_KEY"),
-  apiBaseUrl: readPublicEnv("VITE_API_BASE_URL"),
-  appUrl: readPublicEnv("VITE_APP_URL"),
+const EMPTY_PUBLIC_ENV: PublicClientEnv = {
+  supabaseUrl: "",
+  supabasePublishableKey: "",
+  turnstileSiteKey: "",
+  apiBaseUrl: "",
+  appUrl: "",
+  mode: "",
+};
+
+const injectedEnv: Partial<PublicClientEnv> | undefined =
+  typeof __AROLESS_PUBLIC_ENV__ === "undefined" ? undefined : __AROLESS_PUBLIC_ENV__;
+
+export const publicClientEnv: PublicClientEnv = Object.freeze({
+  ...EMPTY_PUBLIC_ENV,
+  ...(injectedEnv ?? {}),
 });
 
 /** Names are safe to report; values are deliberately never logged. */
@@ -53,5 +70,5 @@ export function clientApiUrl(path: string): string {
 }
 
 export function isClientDevelopment(): boolean {
-  return viteEnv.DEV === true;
+  return publicClientEnv.mode === "development";
 }

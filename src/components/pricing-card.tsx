@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api-client";
 import { openPaddleOverlay } from "@/lib/paddle-checkout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -50,15 +50,9 @@ export function PricingCard({ className }: { className?: string }) {
   async function upgrade() {
     setLoading(true);
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) {
-        toast.error("Yükseltmek için önce giriş yapın.");
-        return;
-      }
-      const resp = await fetch("/api/checkout", {
+      const resp = await apiFetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: "Pro" }),
       });
       const json = (await resp.json()) as {

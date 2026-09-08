@@ -74,10 +74,16 @@ export default defineConfig(async ({ command, mode }) => {
     if (typeof value === "string" && value.trim()) buildEnv[name] = value;
   }
 
-  const define: Record<string, string> = {};
-  for (const [key, value] of Object.entries(buildEnv)) {
-    define[`import.meta.env.${key}`] = JSON.stringify(value);
-  }
+  const define = {
+    __AROLESS_PUBLIC_ENV__: JSON.stringify({
+      supabaseUrl: buildEnv.VITE_SUPABASE_URL ?? "",
+      supabasePublishableKey: buildEnv.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+      turnstileSiteKey: buildEnv.VITE_TURNSTILE_SITE_KEY ?? "",
+      apiBaseUrl: buildEnv.VITE_API_BASE_URL ?? "",
+      appUrl: buildEnv.VITE_APP_URL ?? "",
+      mode,
+    }),
+  };
 
   return {
     define,
@@ -105,7 +111,8 @@ export default defineConfig(async ({ command, mode }) => {
     server: {
       host: "::",
       port: 8080,
-      ...(isSandbox ? { strictPort: true, hmr: { overlay: false } } : {}),
+      ...(isSandbox ? { strictPort: true } : {}),
+      hmr: false,
       watch: {
         ignored: [
           "**/.workspace/**",
