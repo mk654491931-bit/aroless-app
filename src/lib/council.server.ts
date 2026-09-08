@@ -22,6 +22,7 @@ import { callOpenRouter } from "./tools-ai.server";
 import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
+import { describeFailure, runWithFallback } from "./agent-orchestration";
 
 export const COUNCIL_TEAMS = [
   "market",
@@ -107,6 +108,7 @@ const strArr = (v: unknown, n: number): string[] =>
   Array.isArray(v) ? v.slice(0, n).map((x) => String(x).slice(0, 300)) : [];
 
 type Runner = { engine: string; run: () => Promise<string> };
+const COUNCIL_CALL_TIMEOUT_MS = 45_000;
 
 /** Tries each engine in order; the first non-empty JSON answer wins. */
 async function withFallback(runners: Runner[], prompt?: string) {
@@ -114,16 +116,25 @@ async function withFallback(runners: Runner[], prompt?: string) {
     prompt && !runners.some((r) => r.engine === "Lovable AI Gateway")
       ? [...runners, { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) }]
       : runners;
-  for (const r of chain) {
-    try {
-      const text = await r.run();
-      const parsed = extractJson<Record<string, unknown>>(text, {});
-      if (parsed && Object.keys(parsed).length) return { engine: r.engine, raw: parsed };
-    } catch {
-      await sleep(200); // 429 / timeout → anında yedek modele geç
-    }
-  }
-  return { engine: "unavailable", raw: {} as Record<string, unknown> };
+  const result = await runWithFallback<Record<string, unknown>>(
+    chain.map((runner) => ({
+      name: runner.engine,
+      call: async () => {
+        const text = await runner.run();
+        const parsed = extractJson<Record<string, unknown>>(text, {});
+        if (!parsed || Object.keys(parsed).length === 0) throw new Error("empty JSON response");
+        return parsed;
+      },
+    })),
+    {
+      timeoutMs: COUNCIL_CALL_TIMEOUT_MS,
+      onFailure: (failure) => {
+        console.warn(`[council] fallback from ${failure.name}: ${describeFailure(failure.error)}`);
+      },
+    },
+  );
+  if (!result.ok) return { engine: "unavailable", raw: {} as Record<string, unknown> };
+  return { engine: result.provider, raw: result.value };
 }
 
 const SHAPE = `Return ONLY minified JSON:

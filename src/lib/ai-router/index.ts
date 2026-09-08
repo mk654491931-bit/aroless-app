@@ -23,6 +23,7 @@ import {
   PROVIDER_CONFIGS,
   ROUTING_PRIORITY,
 } from './config';
+import { describeFailure, runWithFallback, withTimeout } from '../agent-orchestration';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -78,13 +79,7 @@ async function fetchWithTimeout(
   url: string,
   init: RequestInit,
 ): Promise<Response> {
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return withTimeout(() => fetch(url, init), TIMEOUT_MS, `ai-router:${new URL(url).hostname}`);
 }
 
 function isRetryable(status: number): boolean {
@@ -174,30 +169,41 @@ export async function callSmartRouter(
   const allKeys      = loadProviderKeys();
   const priorityList = ROUTING_PRIORITY[taskType];
   const t0           = Date.now();
-
-  for (const id of priorityList) {
+  const configuredProviders = priorityList.filter((id) => {
     const keys = allKeys[id];
-
     if (!keys || keys.length === 0) {
       console.warn(`[ai-router] ${id}: ortam değişkeni tanımlı değil, atlanıyor.`);
-      continue;
+      return false;
     }
+    return true;
+  });
 
-    const result = await tryProvider(id, keys, prompt, maxTokens, temperature);
-
-    if (result) {
-      return {
-        text:      result.text,
-        provider:  id,
-        model:     PROVIDER_CONFIGS[id].model,
-        keyIndex:  result.keyIndex,
-        latencyMs: Date.now() - t0,
-      };
-    }
-
-    console.warn(
-      `[ai-router] ${id}: tüm key'ler başarısız — sonraki provider'a geçiliyor.`,
-    );
+  const result = await runWithFallback<{ text: string; keyIndex: number }>(
+    configuredProviders.map((id) => ({
+      name: id,
+      call: async () => {
+        const hit = await tryProvider(id, allKeys[id], prompt, maxTokens, temperature);
+        if (!hit) throw new Error("all keys failed");
+        return hit;
+      },
+    })),
+    {
+      onFailure: (failure) => {
+        console.warn(
+          `[ai-router] ${failure.name}: tüm key'ler başarısız — sonraki provider'a geçiliyor. (${describeFailure(failure.error)})`,
+        );
+      },
+    },
+  );
+  if (result.ok) {
+    const provider = result.provider as ProviderId;
+    return {
+      text: result.value.text,
+      provider,
+      model: PROVIDER_CONFIGS[provider].model,
+      keyIndex: result.value.keyIndex,
+      latencyMs: Date.now() - t0,
+    };
   }
 
   throw new Error(

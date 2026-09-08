@@ -13,7 +13,7 @@
  * - Circuit breaker pattern (temp disable on repeated failures)
  */
 
-import { z } from "zod";
+import { describeFailure, runWithFallback, withTimeout } from "./agent-orchestration";
 
 // ============================================================================
 // TYPES & CONFIGURATION
@@ -212,7 +212,7 @@ export function selectModelForTier(provider: ProviderType, tier: ModelTier = "ba
  * Task'a uygun ilk provider'ı seç
  * Varsayılan: Gemini (güçlü) → Groq (hızlı) → Together (backup)
  */
-export function selectPrimaryProvider(taskType?: string): ProviderType {
+export function selectPrimaryProvider(_taskType?: string): ProviderType {
   const state = getProviderState();
 
   // Circuit breaker kontrolü: açık olan provider'ı atla
@@ -316,25 +316,22 @@ async function callSingleProvider(opts: CallAPIOptions): Promise<APICallResult> 
         };
         break;
     }
-
     const timeoutMs = opts.timeoutMs ?? 30000;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(opts.provider === "gemini" && { "x-goog-api-key": key }),
-          ...(opts.provider === "groq" && { Authorization: `Bearer ${key}` }),
-          ...(opts.provider === "together" && { Authorization: `Bearer ${key}` }),
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+    const response = await withTimeout(
+      () =>
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(opts.provider === "gemini" && { "x-goog-api-key": key }),
+            ...(opts.provider === "groq" && { Authorization: "Bearer " + key }),
+            ...(opts.provider === "together" && { Authorization: "Bearer " + key }),
+          },
+          body: JSON.stringify(body),
+        }),
+      timeoutMs,
+      `ai-load-balancer:${opts.provider}`,
+    );
 
       if (!response.ok) {
         const detail = await response.text().catch(() => "unknown error");
@@ -368,15 +365,11 @@ async function callSingleProvider(opts: CallAPIOptions): Promise<APICallResult> 
           },
         };
       }
-
       recordSuccess(pool);
       return { success: true, content };
-    } finally {
-      clearTimeout(timeoutId);
-    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const isTimeout = message.includes("abort") || message.includes("timeout");
+    const message = describeFailure(err);
+    const isTimeout = message.includes("timed out") || message.includes("abort");
 
     recordError(pool, isTimeout ? 504 : 500, message);
     return {
@@ -407,46 +400,73 @@ export async function callAIWithFailover(opts: {
   const timeoutMs = opts.timeoutMs ?? 30000;
   const temperature = opts.temperature ?? 0.7;
 
+  const providerChain: ProviderType[] = [];
   let currentProvider: ProviderType | null = selectPrimaryProvider(opts.taskType);
-  const attemptedProviders = new Set<ProviderType>();
-
   while (currentProvider) {
-    attemptedProviders.add(currentProvider);
-
-    const model = selectModelForTier(currentProvider, tier);
-    const result = await callSingleProvider({
-      provider: currentProvider,
-      model,
-      messages: [{ role: "user", content: opts.prompt }],
-      temperature,
-      jsonMode,
-      timeoutMs,
-    });
-
-    if (result.success && result.content) {
-      console.log(`[AI] ✓ ${currentProvider}/${model} success`);
-      return result.content;
-    }
-
-    // If error is retriable and we have a fallback, try next
-    if (result.error?.retriable) {
-      const nextProvider = getNextProvider(currentProvider);
-      if (nextProvider && !attemptedProviders.has(nextProvider)) {
-        console.warn(
-          `[AI] ${currentProvider} failed (${result.error.status}), fallback to ${nextProvider}`,
-        );
-        currentProvider = nextProvider;
-        continue;
-      }
-    }
-
-    // Non-retriable error or no more fallback
-    throw new Error(
-      `[AI Provider] Call failed: ${currentProvider} (${result.error?.status}) - ${result.error?.message}`,
-    );
+    providerChain.push(currentProvider);
+    currentProvider = getNextProvider(currentProvider);
   }
 
-  throw new Error("[AI Provider] All providers exhausted - no fallback available");
+  const result = await runWithFallback<{
+    provider: ProviderType;
+    model: string;
+    content?: string;
+    status?: number;
+    message?: string;
+    terminal: boolean;
+  }>(
+    providerChain.map((provider) => ({
+      name: provider,
+      call: async () => {
+        const model = selectModelForTier(provider, tier);
+        const attempt = await callSingleProvider({
+          provider,
+          model,
+          messages: [{ role: "user", content: opts.prompt }],
+          temperature,
+          jsonMode,
+          timeoutMs,
+        });
+        if (attempt.success && attempt.content) {
+          return { provider, model, content: attempt.content, terminal: false };
+        }
+        if (attempt.error && !attempt.error.retriable) {
+          return {
+            provider,
+            model,
+            status: attempt.error.status,
+            message: attempt.error.message,
+            terminal: true,
+          };
+        }
+        throw new Error(
+          `[AI Provider] Call failed: ${provider} (${attempt.error?.status}) - ${attempt.error?.message}`,
+        );
+      },
+    })),
+    {
+      timeoutMs,
+      onFailure: (failure) => {
+        const nextProvider = getNextProvider(failure.name as ProviderType);
+        if (nextProvider) {
+          console.warn(
+            `[AI] ${failure.name} failed (${describeFailure(failure.error)}), fallback to ${nextProvider}`,
+          );
+        }
+      },
+    },
+  );
+
+  if (!result.ok) throw new Error("[AI Provider] All providers exhausted - no fallback available");
+
+  if (!result.value.terminal && result.value.content) {
+    console.log(`[AI] ✓ ${result.value.provider}/${result.value.model} success`);
+    return result.value.content;
+  }
+
+  throw new Error(
+    `[AI Provider] Call failed: ${result.value.provider} (${result.value.status}) - ${result.value.message}`,
+  );
 }
 
 // ============================================================================
