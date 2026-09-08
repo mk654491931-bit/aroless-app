@@ -4,9 +4,22 @@
  * - `requireUser`: Authorization: Bearer <supabase access token> doğrular.
  * - `rateLimit`: kullanıcı/IP başına kalıcı (veritabanı tabanlı) istek sınırı.
  * - `jsonError`: iç hata detaylarını sızdırmadan hata döndürür.
+ * - `readJsonBody`: gövdeyi bayt sınırıyla okur.
+ *
+ * Saf yardımcılar (IP seçimi, bayt sayımı, metin temizleme) test edilebilir
+ * olsun diye `request-hygiene.ts` içinde durur.
  */
 
+import {
+  declaredContentLength,
+  isWithinByteLimit,
+  pickClientIp,
+} from "@/lib/request-hygiene";
+
 export type GuardResult = { userId: string } | { response: Response };
+
+/** Cloudflare başlıklarına yalnızca gerçekten önde bir CF proxy varsa güvenilir. */
+const TRUST_CLOUDFLARE = process.env["TRUST_CLOUDFLARE_HEADERS"] === "true";
 
 function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -21,14 +34,18 @@ export function jsonError(status: number, message: string, internal?: unknown): 
   return json(status, { error: message });
 }
 
-/** İstemci IP'si (Cloudflare / proxy başlıkları). */
+/**
+ * İstemci IP'si.
+ *
+ * Sıralama güvenlik gereği: `x-vercel-forwarded-for` ve `x-real-ip` her istekte
+ * platform tarafından yazılır, taklit edilemez. `cf-connecting-ip` ise önde bir
+ * Cloudflare proxy yoksa sadece istemci girdisidir; bu değer rate-limit kovasının
+ * anahtarı olduğu için her istekte değiştirilerek sınır atlatılabilirdi.
+ */
 export function clientIp(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
-    "unknown"
-  );
+  return pickClientIp((name) => request.headers.get(name), {
+    trustCloudflare: TRUST_CLOUDFLARE,
+  });
 }
 
 /** Basit hash — IP'yi düz metin saklamamak için. */
@@ -71,14 +88,34 @@ export async function requireUser(request: Request): Promise<GuardResult> {
   }
 }
 
+function tooManyRequests(windowSeconds: number): Response {
+  return new Response(
+    JSON.stringify({
+      error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.",
+    }),
+    {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        "Retry-After": String(windowSeconds),
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
 /**
  * Kalıcı istek sınırı. Sınır aşıldıysa 429 yanıtı döner, aksi halde null.
- * Veritabanına ulaşılamazsa isteği engellemez (kullanılabilirlik önceliği).
+ *
+ * Varsayılan olarak veritabanına ulaşılamazsa isteği engellemez
+ * (kullanılabilirlik önceliği). Kredi harcayan veya para hareketi yaratan
+ * uçlar için `failClosed: true` geçerek tersini seçebilirsin.
  */
 export async function rateLimit(
   key: string,
   limit: number,
   windowSeconds: number,
+  options: { failClosed?: boolean } = {},
 ): Promise<Response | null> {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -89,27 +126,13 @@ export async function rateLimit(
     });
     if (error) {
       console.error("[rate-limit] rpc failed", error.message);
-      return null;
+      return options.failClosed ? tooManyRequests(windowSeconds) : null;
     }
-    if (data === false) {
-      return new Response(
-        JSON.stringify({
-          error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.",
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(windowSeconds),
-            "Cache-Control": "no-store",
-          },
-        },
-      );
-    }
+    if (data === false) return tooManyRequests(windowSeconds);
     return null;
   } catch (e) {
     console.error("[rate-limit] failed", e);
-    return null;
+    return options.failClosed ? tooManyRequests(windowSeconds) : null;
   }
 }
 
@@ -119,10 +142,11 @@ export async function guardAuthed(
   bucket: string,
   limit = 30,
   windowSeconds = 60,
+  options: { failClosed?: boolean } = {},
 ): Promise<{ userId: string } | { response: Response }> {
   const auth = await requireUser(request);
   if ("response" in auth) return auth;
-  const limited = await rateLimit(`${bucket}:u:${auth.userId}`, limit, windowSeconds);
+  const limited = await rateLimit(`${bucket}:u:${auth.userId}`, limit, windowSeconds, options);
   if (limited) return { response: limited };
   return { userId: auth.userId };
 }
@@ -133,15 +157,27 @@ export async function guardPublic(
   bucket: string,
   limit = 60,
   windowSeconds = 60,
+  options: { failClosed?: boolean } = {},
 ): Promise<Response | null> {
   const ip = await hashValue(clientIp(request));
-  return rateLimit(`${bucket}:ip:${ip}`, limit, windowSeconds);
+  return rateLimit(`${bucket}:ip:${ip}`, limit, windowSeconds, options);
 }
 
-/** İstek gövdesi boyut sınırı (varsayılan 64 KB). */
+/**
+ * İstek gövdesi boyut sınırı (varsayılan 64 KB).
+ *
+ * Sınır artik BAYT cinsinden uygulanır. Önceki sürüm `text.length` (UTF-16 kod
+ * birimi) karşılaştırıyordu; Türkçe karakter 2, emoji 4 bayt olduğu için "64 KB"
+ * sınırı pratikte ~192 KB'a kadar gövde kabul ediyordu.
+ *
+ * Content-Length varsa gövde hiç okunmadan reddedilir.
+ */
 export async function readJsonBody<T>(request: Request, maxBytes = 64 * 1024): Promise<T | null> {
+  const declared = declaredContentLength((name) => request.headers.get(name));
+  if (declared !== null && declared > maxBytes) return null;
+
   const text = await request.text();
-  if (text.length > maxBytes) return null;
+  if (!isWithinByteLimit(text, maxBytes)) return null;
   try {
     return JSON.parse(text) as T;
   } catch {
