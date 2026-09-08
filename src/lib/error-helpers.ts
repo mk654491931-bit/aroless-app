@@ -62,17 +62,76 @@ export function classifyServerError(error: unknown): {
 }
 
 /**
+ * Minimal structural shape of the Supabase clients we accept. Deliberately
+ * loose so both the user-scoped browser/server client and the admin client fit
+ * without importing the SDK types here.
+ */
+type RefundCapableClient = {
+  rpc?: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message?: string; code?: string } | null }>;
+  from: (table: string) => {
+    update: (vals: Record<string, number>) => {
+      eq: (col: string, val: string) => Promise<unknown>;
+    };
+  };
+};
+
+export type RefundOptions = {
+  /** Search credits to give back (profiles.credits). Defaults to 1. */
+  search?: number;
+  /** Simulation credits to give back (profiles.sim_credits). */
+  sim?: number;
+  /** Free-text reason, stored on the audit row. */
+  reason?: string;
+  /**
+   * Stable key for the failed operation. Passing one makes the refund
+   * idempotent: a retried handler cannot pay the same credit back twice.
+   */
+  idempotencyKey?: string;
+};
+
+/**
  * Attempts to refund a credit on error. Fire-and-forget — never throws.
+ *
+ * Prefers the server-side refund_engine_credits() RPC, which is bounded,
+ * idempotent and audited. Falls back to the legacy direct column UPDATE when
+ * that function is not deployed yet, so this helper behaves correctly both
+ * before and after the credit-column lock migration is applied.
  */
 export async function tryRefundCredit(
-  supabase: { from: (table: string) => { update: (vals: Record<string, number>) => { eq: (col: string, val: string) => Promise<unknown> } } },
+  supabase: RefundCapableClient,
   userId: string,
   currentCredits: number,
+  opts: RefundOptions = {},
 ): Promise<void> {
+  const search = Math.max(0, Math.round(opts.search ?? 1));
+  const sim = Math.max(0, Math.round(opts.sim ?? 0));
+  if (search === 0 && sim === 0) return;
+
   try {
+    if (typeof supabase.rpc === "function") {
+      const { error } = await supabase.rpc("refund_engine_credits", {
+        _search_credits: search,
+        _sim_credits: sim,
+        _reason: opts.reason ?? "engine_failure",
+        _idempotency_key: opts.idempotencyKey ?? null,
+      });
+      if (!error) return;
+
+      // PGRST202 = function not found in the schema cache. Anything else is a
+      // real failure (cap reached, duplicate key) and must NOT be retried via
+      // the legacy path, or the cap would be trivially bypassable.
+      if (error.code !== "PGRST202" && !/does not exist|could not find/i.test(error.message ?? "")) {
+        return;
+      }
+    }
+
+    // Legacy path — direct column write. Only reachable while the RPC is absent.
     await supabase
       .from("profiles")
-      .update({ credits: currentCredits + 1 })
+      .update({ credits: currentCredits + search })
       .eq("id", userId);
   } catch {
     /* kredi iadesi başarısız olsa da akış bozulmaz */

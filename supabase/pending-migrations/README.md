@@ -13,4 +13,4 @@ ordering still applies cleanly.
 
 | File | Blocked on |
 | --- | --- |
-| `20260908000100_lock_credit_columns.sql` | Moving the client-side credit-refund calls in `gemini.functions.ts` and `error-helpers.ts` onto the `refund_engine_credits()` RPC |
+| `20260908000100_lock_credit_columns.sql` | Routing the inline refund closure in `gemini.functions.ts` through `tryRefundCredit()` / `refund_engine_credits()` |
