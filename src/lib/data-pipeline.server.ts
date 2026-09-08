@@ -13,6 +13,7 @@ import { cached } from "./ai-cache.server";
 import { getGoogleTrends } from "./market-data.server";
 import { fetchGitHubTrendsForNiche } from "./github-trends.server";
 import { runScrapeJob } from "./trend-radar.server";
+import { settleAll, withTimeout } from "./agent-orchestration";
 
 export type RedditSignal = {
   title: string;
@@ -41,16 +42,14 @@ const UA =
 const SUBREDDITS = ["TikTokMadeMeBuyIt", "amazonfinds", "BuyItForLife"];
 
 async function timed(url: string, ms = 8000): Promise<Response> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, {
-      signal: ctrl.signal,
-      headers: { "user-agent": UA, accept: "application/json" },
-    });
-  } finally {
-    clearTimeout(t);
-  }
+  return withTimeout(
+    () =>
+      fetch(url, {
+        headers: { "user-agent": UA, accept: "application/json" },
+      }),
+    ms,
+    `data-pipeline:${new URL(url).hostname}`,
+  );
 }
 
 /** Public Reddit JSON API — consumer buying signals, no auth required. */
@@ -95,53 +94,63 @@ async function collect(
 ): Promise<PipelineSignals> {
   const sources: PipelineSignals["sources"] = [];
 
-  const [trendsRes, redditRes, scrapeRes, ghRes] = await Promise.allSettled([
-    getGoogleTrends(keyword, country),
-    fetchRedditSignals(keyword),
-    runScrapeJob({
-      region: country,
-      category,
-      sources: ["Google", "Amazon", "TikTok"],
-      niche: keyword,
-    }),
-    fetchGitHubTrendsForNiche(keyword),
+  const { values, failures } = await settleAll<unknown>([
+    { name: "Google Trends", call: () => getGoogleTrends(keyword, country) },
+    { name: "Reddit", call: () => fetchRedditSignals(keyword) },
+    {
+      name: "TikTok / Amazon scrape",
+      call: () =>
+        runScrapeJob({
+          region: country,
+          category,
+          sources: ["Google", "Amazon", "TikTok"],
+          niche: keyword,
+        }),
+    },
+    { name: "GitHub scrapers", call: () => fetchGitHubTrendsForNiche(keyword) },
   ]);
+  const byName = new Map(values.map((value) => [value.name, value.value]));
+  const failed = new Set(failures.map((failure) => failure.name));
 
+  const trendsValue = byName.get("Google Trends") as Awaited<ReturnType<typeof getGoogleTrends>> | undefined;
   const trends =
-    trendsRes.status === "fulfilled"
+    trendsValue
       ? {
-          yearly: trendsRes.value.yearly,
-          monthly: trendsRes.value.monthly,
-          momentum_pct: trendsRes.value.momentum_pct,
-          source: trendsRes.value.source,
+          yearly: trendsValue.yearly,
+          monthly: trendsValue.monthly,
+          momentum_pct: trendsValue.momentum_pct,
+          source: trendsValue.source,
         }
       : { yearly: [], monthly: [], momentum_pct: 0, source: "unavailable" };
   sources.push({
     name: "Google Trends",
-    status: trendsRes.status === "fulfilled" ? "active" : "error",
+    status: failed.has("Google Trends") ? "error" : "active",
     items: trends.yearly.length,
   });
 
-  const reddit = redditRes.status === "fulfilled" ? redditRes.value : [];
+  const reddit = ((byName.get("Reddit") as RedditSignal[] | undefined) ?? []);
   sources.push({
     name: "Reddit",
-    status: redditRes.status === "fulfilled" ? "active" : "error",
+    status: failed.has("Reddit") ? "error" : "active",
     items: reddit.length,
   });
 
   let tiktok: string[] = [];
   let amazon: string[] = [];
   let google_rising: string[] = [];
-  if (scrapeRes.status === "fulfilled") {
-    const byName = (s: string) =>
-      scrapeRes.value.trends
+  const scrape = byName.get("TikTok / Amazon scrape") as
+    | Awaited<ReturnType<typeof runScrapeJob>>
+    | undefined;
+  if (scrape) {
+    const pickByName = (s: string) =>
+      scrape.trends
         .filter((t) => t.source === s)
         .map((t) => t.trend_name)
         .slice(0, 10);
-    tiktok = byName("TikTok");
-    amazon = byName("Amazon");
-    google_rising = byName("Google");
-    for (const st of scrapeRes.value.statuses) {
+    tiktok = pickByName("TikTok");
+    amazon = pickByName("Amazon");
+    google_rising = pickByName("Google");
+    for (const st of scrape.statuses) {
       sources.push({
         name: st.source === "Amazon" ? "Amazon Movers & Shakers" : `${st.source} Creative/Public`,
         status: st.status,
@@ -153,17 +162,19 @@ async function collect(
   }
 
   const github =
-    ghRes.status === "fulfilled"
-      ? ghRes.value.slice(0, 6).map((r) => ({
+    !failed.has("GitHub scrapers")
+      ? ((byName.get("GitHub scrapers") as Awaited<ReturnType<typeof fetchGitHubTrendsForNiche>> | undefined)
+          ?.slice(0, 6)
+          .map((r) => ({
           full_name: r.full_name,
           stars: r.stargazers_count,
           description: (r.description ?? "").slice(0, 140),
           topics: r.topics.slice(0, 4),
-        }))
+        })) ?? [])
       : [];
   sources.push({
     name: "GitHub scrapers",
-    status: ghRes.status === "fulfilled" ? "active" : "error",
+    status: failed.has("GitHub scrapers") ? "error" : "active",
     items: github.length,
   });
 

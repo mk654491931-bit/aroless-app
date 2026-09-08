@@ -69,6 +69,7 @@ import {
   openRouterEnvKeys,
   sambanovaEnvKeys,
 } from "./ai-keys.server";
+import { describeFailure, runWithFallback, withTimeout } from "./agent-orchestration";
 
 /** PROVIDER_<X> env prefix for the pool_a..pool_d groups. */
 function poolEnvPrefix(group: PoolGroup): string {
@@ -144,8 +145,6 @@ const COOLDOWN_MS: Record<Exclude<PoolNodeOutcome, "ok">, number> = {
   network: 15_000,
   empty: 15_000,
 };
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------------ registry
 
@@ -385,23 +384,25 @@ export async function callPoolNode(
 ): Promise<string> {
   const { baseUrl, model } = poolGroupConfig(node.group);
   if (!baseUrl) throw new PoolNodeError("server", `no endpoint for ${node.group}`);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 45_000);
   try {
-    const resp = await fetch(baseUrl, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${readPoolGroupKeys(node.group)[node.slot - 1] ?? ""}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: opts.temperature ?? 0.3,
-        messages: [{ role: "user", content: opts.prompt }],
-        ...(opts.jsonMode === false ? {} : { response_format: { type: "json_object" } }),
-      }),
-    });
+    const resp = await withTimeout(
+      () =>
+        fetch(baseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + (readPoolGroupKeys(node.group)[node.slot - 1] ?? ""),
+          },
+          body: JSON.stringify({
+            model,
+            temperature: opts.temperature ?? 0.3,
+            messages: [{ role: "user", content: opts.prompt }],
+            ...(opts.jsonMode === false ? {} : { response_format: { type: "json_object" } }),
+          }),
+        }),
+      opts.timeoutMs ?? 45_000,
+      `ai-pool:${node.group}-${node.slot}`,
+    );
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");
       throw classify(resp.status, body);
@@ -414,11 +415,9 @@ export async function callPoolNode(
     return text;
   } catch (e) {
     if (e instanceof PoolNodeError) throw e;
-    if (e instanceof Error && e.name === "AbortError")
+    if (describeFailure(e).includes("timed out"))
       throw new PoolNodeError("network", "timeout");
     throw new PoolNodeError("network", e instanceof Error ? e.message : "network error");
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -433,24 +432,28 @@ export async function runPoolWithFailover(
 ): Promise<{ text: string; node: PoolNode | null }> {
   const nodes = buildPoolNodes(priority);
   if (!nodes.length) return { text: "", node: null };
-  let lastErr: unknown = null;
-  for (const node of nodes) {
-    try {
-      const text = await callPoolNode(node, opts);
-      markPoolGroupOutcome(node.group, node.slot, "ok");
-      return { text, node };
-    } catch (e) {
-      lastErr = e;
-      if (e instanceof PoolNodeError) {
-        markPoolGroupOutcome(node.group, node.slot, e.kind);
-      }
-      if (e instanceof PoolNodeError && e.kind === "quota") continue;
-      // 5xx / network / empty — quick hop to the next node, tiny stagger
-      await sleep(150);
-    }
-  }
-  if (lastErr instanceof Error) return { text: "", node: null };
-  return { text: "", node: null };
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const result = await runWithFallback<{ text: string; node: PoolNode }>(
+    nodes.map((node) => ({
+      name: node.id,
+      call: async () => ({ text: await callPoolNode(node, opts), node }),
+    })),
+    {
+      timeoutMs: opts.timeoutMs ?? 45_000,
+      onFailure: (failure) => {
+        const node = nodeById.get(failure.name);
+        if (!node) return;
+        if (failure.error instanceof PoolNodeError) {
+          markPoolGroupOutcome(node.group, node.slot, failure.error.kind);
+          return;
+        }
+        markPoolGroupOutcome(node.group, node.slot, "network");
+      },
+    },
+  );
+  if (!result.ok) return { text: "", node: null };
+  markPoolGroupOutcome(result.value.node.group, result.value.node.slot, "ok");
+  return result.value;
 }
 
 /** Test helper: clear all cooldowns (also used between tests). */

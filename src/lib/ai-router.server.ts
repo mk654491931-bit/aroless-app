@@ -23,6 +23,7 @@ import {
   type PoolGroup,
 } from "./ai-pool.server";
 import { withEstimationRules } from "./ai-guidance";
+import { describeFailure, runWithFallback } from "./agent-orchestration";
 
 /**
  * Ortak havuzdaki 22 anahtar için f/p + güvenilirlik sırası:
@@ -508,27 +509,39 @@ export async function executeAgentWithFallback(
   let lastError = "";
 
   for (let round = 0; round < retries; round++) {
-    for (const provider of chain) {
-      // Unified-pool providers: skip unconfigured / circuit-open groups so the
-      // availability router never wastes an attempt on a dead node.
-      const poolGroup = POOL_PROVIDER_GROUP[provider];
-      if (poolGroup && (!poolGroupConfigured(poolGroup) || !poolGroupAvailable(poolGroup)))
-        continue;
-      attempts++;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const text = await PROVIDERS[provider](prompt, temperature, controller.signal);
-        clearTimeout(timer);
-        if (!text || !text.trim()) throw new Error("empty response");
-        return {
-          text,
-          log: { agent: agentName, provider, attempts, latencyMs: Date.now() - started, ok: true },
-        };
-      } catch (e) {
-        clearTimeout(timer);
-        lastError = `${provider}: ${(e as Error).message}`.slice(0, 200);
-      }
+    const providers = chain
+      .filter((provider) => {
+        const poolGroup = POOL_PROVIDER_GROUP[provider];
+        if (!poolGroup) return true;
+        return poolGroupConfigured(poolGroup) && poolGroupAvailable(poolGroup);
+      })
+      .map((provider) => ({
+        name: provider,
+        call: async () => {
+          const text = await PROVIDERS[provider](prompt, temperature, new AbortController().signal);
+          if (!text || !text.trim()) throw new Error("empty response");
+          return text;
+        },
+      }));
+
+    const result = await runWithFallback<string>(providers, {
+      timeoutMs: TIMEOUT_MS,
+      onFailure: (failure) => {
+        lastError = `${failure.name}: ${describeFailure(failure.error)}`.slice(0, 200);
+      },
+    });
+    attempts += result.failures.length + (result.ok ? 1 : 0);
+    if (result.ok) {
+      return {
+        text: result.value,
+        log: {
+          agent: agentName,
+          provider: result.provider as ProviderId,
+          attempts,
+          latencyMs: Date.now() - started,
+          ok: true,
+        },
+      };
     }
     await sleep(400 * 2 ** round + Math.random() * 250); // üstel geri çekilme + jitter
   }

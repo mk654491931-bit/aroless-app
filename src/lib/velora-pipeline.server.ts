@@ -17,6 +17,7 @@ import {
   type AgentRunLog,
   type ProviderId,
 } from "./ai-router.server";
+import { mapWithConcurrency } from "./agent-orchestration";
 
 // ------------------------------------------------------------------ schemas
 
@@ -283,21 +284,19 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
     const tierStart = Date.now();
     const agents = AGENTS.filter((a) => a.tier === tier);
     const prior = summarize(collected);
-    const results = await Promise.all(
-      agents.map(async (agent) => {
-        const { text, log } = await executeAgentWithFallback(
-          `${agent.id}. ${agent.name}`,
-          buildAgentPrompt(agent, input, prior),
-          agent.chain,
-          { temperature: agent.temperature },
-        );
-        return {
-          agent,
-          log,
-          data: parseAgentJson<StageOutput>(text, { findings: [], candidates: [] }),
-        };
-      }),
-    );
+    const results = await mapWithConcurrency(agents, agents.length, async (agent) => {
+      const { text, log } = await executeAgentWithFallback(
+        `${agent.id}. ${agent.name}`,
+        buildAgentPrompt(agent, input, prior),
+        agent.chain,
+        { temperature: agent.temperature },
+      );
+      return {
+        agent,
+        log,
+        data: parseAgentJson<StageOutput>(text, { findings: [], candidates: [] }),
+      };
+    });
     for (const r of results) {
       logs.push(r.log);
       if (r.log.ok) collected.push({ agent: r.agent, data: r.data });
