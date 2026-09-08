@@ -1,97 +1,109 @@
 import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  BarChart3,
   Calculator,
-  FlaskConical,
-  Newspaper,
+  Megaphone,
   Radar,
   Search,
   Users,
+  type LucideIcon,
 } from "lucide-react";
-import { PANEL_ENTER, PANEL_SURFACE } from "@/components/dashboard/dashboard-tokens";
+import { ACCENT_MAP, PANEL_ENTER, type AccentColor } from "@/components/dashboard/dashboard-tokens";
 
 // ============================================================================
 // Quick actions.
 //
-// The dashboard previously had no path to any of the product's tools -- a user
-// landing here after login could only look at charts or press Back. These tiles
-// route to pages that already existed; nothing new is introduced behind them.
+// The dashboard previously ended every session in a dead end: the only way
+// out was the Back link. These are the tools that already exist in the app
+// but were reachable only from the landing page.
+//
+// Only routes that exist today are listed, and none of them take required
+// search params, so every link is type-safe against the generated route tree.
 // ============================================================================
 
 type QuickAction = {
-  to: "/" | "/trend-radar" | "/council" | "/studio" | "/roi" | "/news";
+  to: string;
   label: string;
-  description: string;
-  icon: typeof Search;
-  accent: string;
+  hint: string;
+  icon: LucideIcon;
+  accent: AccentColor;
 };
 
-const ACTIONS: QuickAction[] = [
+const ACTIONS: readonly QuickAction[] = [
   {
     to: "/",
     label: "Ürün Bul",
-    description: "AI ile kazanan ürün ara",
+    hint: "Yeni AI araması başlat",
     icon: Search,
-    accent: "text-indigo-400 bg-indigo-500/10",
+    accent: "indigo",
+  },
+  {
+    to: "/competitor-analysis",
+    label: "Rakip Analizi",
+    hint: "Pazarı karşılaştır",
+    icon: BarChart3,
+    accent: "sky",
   },
   {
     to: "/trend-radar",
-    label: "Trend Radar",
-    description: "Yükselen nişleri izle",
+    label: "Trend Radarı",
+    hint: "Yükselen nişleri gör",
     icon: Radar,
-    accent: "text-sky-400 bg-sky-500/10",
+    accent: "emerald",
   },
   {
     to: "/council",
     label: "AI Konseyi",
-    description: "Çok ajanlı değerlendirme",
+    hint: "Çoklu ajan değerlendirmesi",
     icon: Users,
-    accent: "text-violet-400 bg-violet-500/10",
-  },
-  {
-    to: "/studio",
-    label: "Stüdyo",
-    description: "Kreatif ve reklam üret",
-    icon: FlaskConical,
-    accent: "text-emerald-400 bg-emerald-500/10",
+    accent: "violet",
   },
   {
     to: "/roi",
     label: "ROI Hesabı",
-    description: "Kar marjını doğrula",
+    hint: "Kâr marjını modelle",
     icon: Calculator,
-    accent: "text-amber-400 bg-amber-500/10",
+    accent: "amber",
   },
   {
-    to: "/news",
-    label: "Pazar Haberleri",
-    description: "Günlük sektör özeti",
-    icon: Newspaper,
-    accent: "text-slate-300 bg-slate-700/40",
+    to: "/viral-ads",
+    label: "Viral Reklam",
+    hint: "Kreatif fikirleri üret",
+    icon: Megaphone,
+    accent: "indigo",
   },
-];
+] as const;
 
 export const DashboardQuickActions = memo(function DashboardQuickActions() {
   return (
-    <section aria-label="Hızlı işlemler" className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-      {ACTIONS.map((action) => {
-        const Icon = action.icon;
-        return (
-          <Link
-            key={action.to + action.label}
-            to={action.to}
-            className={`${PANEL_SURFACE} ${PANEL_ENTER} group flex flex-col gap-2 p-4 transition-transform duration-200 will-change-transform hover:border-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 motion-safe:hover:-translate-y-0.5`}
-          >
-            <span
-              className={`flex h-8 w-8 items-center justify-center rounded-lg ${action.accent}`}
+    <section aria-label="Hızlı işlemler">
+      <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
+        Hızlı işlemler
+      </h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {ACTIONS.map(({ to, label, hint, icon: Icon, accent }) => {
+          const a = ACCENT_MAP[accent];
+          return (
+            <Link
+              key={label}
+              to={to}
+              title={hint}
+              className={`group rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4 shadow-lg shadow-black/30 backdrop-blur-sm transition-transform duration-200 will-change-transform hover:border-indigo-500/40 motion-safe:hover:-translate-y-0.5 ${PANEL_ENTER}`}
             >
-              <Icon size={15} />
-            </span>
-            <span className="text-xs font-semibold text-slate-200">{action.label}</span>
-            <span className="text-[11px] leading-snug text-slate-500">{action.description}</span>
-          </Link>
-        );
-      })}
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.bg}`}
+              >
+                <Icon size={15} className={a.icon} />
+              </div>
+              <p className="mt-3 truncate text-sm font-semibold text-slate-200 group-hover:text-white">
+                {label}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-slate-500">{hint}</p>
+            </Link>
+          );
+        })}
+      </div>
     </section>
   );
 });

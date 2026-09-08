@@ -1,9 +1,4 @@
-import { memo } from "react";
-import {
-  Activity,
-  Package,
-  Zap,
-} from "lucide-react";
+import { memo, useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -23,6 +18,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Activity, Package, Zap } from "lucide-react";
 import { EmptyState, Panel, PanelHeader } from "@/components/dashboard/dashboard-primitives";
 import {
   AXIS_STYLE,
@@ -38,33 +34,42 @@ import type {
 } from "@/lib/dashboard-metrics";
 
 // ============================================================================
-// Dashboard chart panels.
+// Dashboard charts.
 //
-// Each panel is memoized and takes only the data it draws, so a change in one
-// query cannot re-render the other five charts. Recharts re-renders are the
-// most expensive thing on this page, which is why the boundaries are drawn
-// here rather than in the route.
+// Every chart from the previous route is preserved, including the areaGrad
+// gradient, the 14-day window, the credit donut colours, the radar domain and
+// the bar geometry (barSize 24, radius [6,6,0,0]).
+//
+// The difference is isolation: each panel is memoized, so one resolving query
+// no longer forces recharts to re-measure and re-render all six trees. The
+// datasets recharts receives are memoized too, because a new array identity
+// on every render defeats its own internal memoization.
 // ============================================================================
+
+const AREA_GRADIENT_ID = "areaGrad";
 
 export const ActivityPanel = memo(function ActivityPanel({
   data,
-  className = "",
+  className,
 }: {
-  data: ActivityPoint[];
+  data: readonly ActivityPoint[];
   className?: string;
 }) {
+  const series = useMemo(() => [...data], [data]);
+  const total = useMemo(() => series.reduce((sum, point) => sum + point.count, 0), [series]);
+
   return (
     <Panel className={className}>
       <PanelHeader
         icon={<Activity size={15} className="text-indigo-400" />}
         title="Analiz Aktivitesi"
-        subtitle="Son 14 gün"
+        subtitle={`Son 14 gün · ${total} analiz`}
       />
       <div className="mt-4 h-52">
         <ResponsiveContainer>
-          <AreaChart data={data}>
+          <AreaChart data={series}>
             <defs>
-              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={AREA_GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
               </linearGradient>
@@ -86,7 +91,7 @@ export const ActivityPanel = memo(function ActivityPanel({
               dataKey="count"
               stroke="#6366f1"
               strokeWidth={2}
-              fill="url(#areaGrad)"
+              fill={`url(#${AREA_GRADIENT_ID})`}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -98,39 +103,49 @@ export const ActivityPanel = memo(function ActivityPanel({
 export const CreditPanel = memo(function CreditPanel({
   remaining,
   spent,
+  className,
 }: {
   remaining: number;
   spent: number;
+  className?: string;
 }) {
-  const data = [
-    { name: "Kalan", value: remaining },
-    { name: "Harcanan", value: spent },
-  ];
+  const series = useMemo(
+    () => [
+      { name: "Kalan", value: remaining },
+      { name: "Harcanan", value: spent },
+    ],
+    [remaining, spent],
+  );
+
   return (
-    <Panel>
+    <Panel className={className}>
       <PanelHeader
         icon={<Zap size={15} className="text-amber-400" />}
         title="Kredi Bakiyesi"
         subtitle={`${remaining} kalan`}
       />
       <div className="mt-4 h-52">
-        <ResponsiveContainer>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={55}
-              outerRadius={74}
-              strokeWidth={0}
-            >
-              <Cell fill="#6366f1" />
-              <Cell fill="#f59e0b" />
-            </Pie>
-            <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} />
-          </PieChart>
-        </ResponsiveContainer>
+        {remaining === 0 && spent === 0 ? (
+          <EmptyState text="Kredi hareketi yok." />
+        ) : (
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={series}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={55}
+                outerRadius={74}
+                strokeWidth={0}
+              >
+                <Cell fill="#6366f1" />
+                <Cell fill="#f59e0b" />
+              </Pie>
+              <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </Panel>
   );
@@ -139,12 +154,16 @@ export const CreditPanel = memo(function CreditPanel({
 export const QualityRadarPanel = memo(function QualityRadarPanel({
   data,
   hasFavorites,
+  className,
 }: {
-  data: RadarPoint[];
+  data: readonly RadarPoint[];
   hasFavorites: boolean;
+  className?: string;
 }) {
+  const series = useMemo(() => [...data], [data]);
+
   return (
-    <Panel>
+    <Panel className={className}>
       <PanelHeader
         title="Ürün Kalite Radarı"
         subtitle="Kaydedilen ürünlerin ortalama skorları"
@@ -154,7 +173,7 @@ export const QualityRadarPanel = memo(function QualityRadarPanel({
           <EmptyState text="Radar görmek için ürün kaydedin." />
         ) : (
           <ResponsiveContainer>
-            <RadarChart data={data}>
+            <RadarChart data={series}>
               <PolarGrid stroke="rgba(99,102,241,0.15)" />
               <PolarAngleAxis dataKey="metric" stroke="#475569" fontSize={11} />
               <PolarRadiusAxis stroke="#334155" fontSize={10} angle={30} domain={[0, 100]} />
@@ -175,84 +194,87 @@ export const QualityRadarPanel = memo(function QualityRadarPanel({
   );
 });
 
-/** Shared pie panel — the verdict and collection charts differ only in labels. */
-const PiePanel = memo(function PiePanel({
-  title,
-  subtitle,
+/** Shared donut body for the verdict and collection breakdowns. */
+const BreakdownPie = memo(function BreakdownPie({
   data,
-  emptyText,
   outerRadius,
-  height,
 }: {
-  title: string;
-  subtitle?: string;
-  data: NamedValue[];
-  emptyText: string;
+  data: readonly NamedValue[];
   outerRadius: number;
-  height: string;
+}) {
+  const series = useMemo(() => [...data], [data]);
+  return (
+    <ResponsiveContainer>
+      <PieChart>
+        <Pie
+          data={series}
+          dataKey="value"
+          nameKey="name"
+          outerRadius={outerRadius}
+          strokeWidth={0}
+        >
+          {series.map((slice, index) => (
+            <Cell key={slice.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+          ))}
+        </Pie>
+        <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+});
+
+export const VerdictPanel = memo(function VerdictPanel({
+  data,
+  className,
+}: {
+  data: readonly NamedValue[];
+  className?: string;
 }) {
   return (
-    <Panel>
-      <PanelHeader title={title} subtitle={subtitle} />
-      <div className={`mt-4 ${height}`}>
+    <Panel className={className}>
+      <PanelHeader title="Satılabilirlik Kararları" subtitle="AI verdict dağılımı" />
+      <div className="mt-4 h-60">
         {data.length === 0 ? (
-          <EmptyState text={emptyText} />
+          <EmptyState text="Verdict görmek için ürün kaydedin." />
         ) : (
-          <ResponsiveContainer>
-            <PieChart>
-              <Pie
-                data={data}
-                dataKey="value"
-                nameKey="name"
-                outerRadius={outerRadius}
-                strokeWidth={0}
-              >
-                {data.map((entry, i) => (
-                  <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} />
-            </PieChart>
-          </ResponsiveContainer>
+          <BreakdownPie data={data} outerRadius={78} />
         )}
       </div>
     </Panel>
   );
 });
 
-export const VerdictPanel = memo(function VerdictPanel({ data }: { data: NamedValue[] }) {
+export const CollectionsPanel = memo(function CollectionsPanel({
+  data,
+  className,
+}: {
+  data: readonly NamedValue[];
+  className?: string;
+}) {
   return (
-    <PiePanel
-      title="Satılabilirlik Kararları"
-      subtitle="AI verdict dağılımı"
-      data={data}
-      emptyText="Verdict görmek için ürün kaydedin."
-      outerRadius={78}
-      height="h-60"
-    />
-  );
-});
-
-export const CollectionsPanel = memo(function CollectionsPanel({ data }: { data: NamedValue[] }) {
-  return (
-    <PiePanel
-      title="Koleksiyona Göre Kaydedilenler"
-      data={data}
-      emptyText="Koleksiyon görmek için ürün kaydedin."
-      outerRadius={72}
-      height="h-52"
-    />
+    <Panel className={className}>
+      <PanelHeader title="Koleksiyona Göre Kaydedilenler" />
+      <div className="mt-4 h-52">
+        {data.length === 0 ? (
+          <EmptyState text="Koleksiyon görmek için ürün kaydedin." />
+        ) : (
+          <BreakdownPie data={data} outerRadius={72} />
+        )}
+      </div>
+    </Panel>
   );
 });
 
 export const TopRecommendationsPanel = memo(function TopRecommendationsPanel({
   data,
-  className = "",
+  className,
 }: {
-  data: NamedCount[];
+  data: readonly NamedCount[];
   className?: string;
 }) {
+  const series = useMemo(() => [...data], [data]);
+
   return (
     <Panel className={className}>
       <PanelHeader
@@ -261,11 +283,11 @@ export const TopRecommendationsPanel = memo(function TopRecommendationsPanel({
         subtitle="En sık önerilen ürünler"
       />
       <div className="mt-4 h-60">
-        {data.length === 0 ? (
+        {series.length === 0 ? (
           <EmptyState text="Arama yaparak önerileri görün." />
         ) : (
           <ResponsiveContainer>
-            <BarChart data={data} barSize={24}>
+            <BarChart data={series} barSize={24}>
               <XAxis
                 dataKey="name"
                 {...AXIS_STYLE}
