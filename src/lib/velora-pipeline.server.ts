@@ -17,6 +17,7 @@ import {
   type AgentRunLog,
   type ProviderId,
 } from "./ai-router.server";
+import { createAgentBus } from "./agent-bus.server";
 
 // ------------------------------------------------------------------ schemas
 
@@ -274,23 +275,32 @@ function summarize(outputs: { agent: AgentDef; data: StageOutput }[]): string {
 /** 14 ajanı Tier 1→4 sırasıyla çalıştırır ve yapılandırılmış rapor döndürür. */
 export async function runVeloraAgentPipeline(rawInput: unknown): Promise<PipelineOutput> {
   const input = PipelineInputSchema.parse(rawInput);
+  const traceId = `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const bus = createAgentBus(traceId);
   const started = Date.now();
   const logs: AgentRunLog[] = [];
   const tierLatencyMs: Record<string, number> = {};
   const collected: { agent: AgentDef; data: StageOutput }[] = [];
 
+  bus.emit("pipeline:start", { traceId, query: input.userQuery.slice(0, 120) });
+
   for (const tier of [1, 2, 3] as const) {
     const tierStart = Date.now();
+    bus.emit("tier:start", { traceId, tier });
     const agents = AGENTS.filter((a) => a.tier === tier);
     const prior = summarize(collected);
     const results = await Promise.all(
       agents.map(async (agent) => {
+        bus.emit("agent:start", { traceId, agent: agent.name, tier: agent.tier });
+        const aStart = Date.now();
         const { text, log } = await executeAgentWithFallback(
           `${agent.id}. ${agent.name}`,
           buildAgentPrompt(agent, input, prior),
           agent.chain,
           { temperature: agent.temperature },
         );
+        bus.emit("agent:complete", { traceId, agent: agent.name, ok: log.ok, ms: Date.now() - aStart });
+        if (!log.ok) bus.emit("agent:error", { traceId, agent: agent.name, error: log.error ?? "unknown" });
         return {
           agent,
           log,
@@ -302,12 +312,16 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
       logs.push(r.log);
       if (r.log.ok) collected.push({ agent: r.agent, data: r.data });
     }
-    tierLatencyMs[`tier${tier}`] = Date.now() - tierStart;
+    const tierMs = Date.now() - tierStart;
+    tierLatencyMs[`tier${tier}`] = tierMs;
+    bus.emit("tier:complete", { traceId, tier, ms: tierMs });
   }
 
-  // Tier 4 — sentez
+  // Tier 4 — sentez (isolated, non-blocking: own bus span)
+  bus.emit("tier:start", { traceId, tier: 4 });
   const finalAgent = AGENTS[13];
   const tier4Start = Date.now();
+  bus.emit("agent:start", { traceId, agent: finalAgent.name, tier: 4 });
   const { text, log } = await executeAgentWithFallback(
     `${finalAgent.id}. ${finalAgent.name}`,
     buildAgentPrompt(finalAgent, input, summarize(collected)),
@@ -315,7 +329,10 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
     { temperature: finalAgent.temperature, retries: 3 },
   );
   logs.push(log);
+  bus.emit("agent:complete", { traceId, agent: finalAgent.name, ok: log.ok, ms: Date.now() - tier4Start });
+  if (!log.ok) bus.emit("agent:error", { traceId, agent: finalAgent.name, error: log.error ?? "unknown" });
   tierLatencyMs["tier4"] = Date.now() - tier4Start;
+  bus.emit("tier:complete", { traceId, tier: 4, ms: tierLatencyMs["tier4"] });
 
   const parseProducts = (raw: string) =>
     parseAgentJson<{ topProducts?: unknown[] }>(raw, {})
@@ -369,8 +386,11 @@ SADECE şu şekilde minified JSON döndür: ${TOP5_JSON_SHAPE}`;
     ) || fallbackSummary;
 
   if (!products.length && !parseAgentJson<{ executiveSummary?: string }>(text, {}).executiveSummary) {
+    bus.emit("pipeline:complete", { traceId, ok: false, ms: Date.now() - started });
     throw new Error("Tüm sağlayıcılar şu anda yanıt vermedi. Birkaç saniye sonra tekrar deneyin.");
   }
+
+  bus.emit("pipeline:complete", { traceId, ok: true, ms: Date.now() - started });
 
   return PipelineOutputSchema.parse({
     topProducts: products.slice(0, 5),

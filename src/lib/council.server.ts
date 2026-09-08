@@ -22,6 +22,7 @@ import { callOpenRouter } from "./tools-ai.server";
 import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
+import { createAgentBus } from "./agent-bus.server";
 
 export const COUNCIL_TEAMS = [
   "market",
@@ -464,14 +465,22 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, nede
 }
 
 async function build(query: string, country: string, category: string): Promise<CouncilReport> {
+  const traceId = `council_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const bus = createAgentBus(traceId);
+  bus.emit("pipeline:start", { traceId, query: query.slice(0, 80) });
+  const tSignals = Date.now();
   const { data: signals } = await collectSignals(query, country, category);
+  bus.emit("signals:collected", { traceId, coverage: 0, ms: Date.now() - tSignals });
   const block = signalsBlock(signals);
 
   const total = signals.sources.length || 1;
   const active = signals.sources.filter((s) => s.status === "active" && s.items > 0).length;
   const coverage = Math.round((active / total) * 100);
+  bus.emit("signals:collected", { traceId, coverage, ms: Date.now() - tSignals });
 
-  // 6 üretici ekip paralel başlar.
+  // 6 üretici ekip paralel başlar — her biri bus üzerinden izlenir, blocking yok.
+  bus.emit("tier:start", { traceId, tier: 1 });
+  const tTier1 = Date.now();
   const [market, finance, marketing, operations, compliance, creative] = await Promise.all([
     runMarketTeam(block),
     runFinanceTeam(block),
@@ -481,8 +490,11 @@ async function build(query: string, country: string, category: string): Promise<
     runCreativeTeam(block),
   ]);
 
+  bus.emit("tier:complete", { traceId, tier: 1, ms: Date.now() - tTier1 });
   const rawTeams = [market, finance, marketing, operations, compliance, creative];
 
+  bus.emit("tier:start", { traceId, tier: 2 });
+  const tTier2 = Date.now();
   // 6 hakem ekip, slot 6-11.
   const reviewed = await Promise.all([
     reviewTeam(market, block, 6),
@@ -521,10 +533,16 @@ async function build(query: string, country: string, category: string): Promise<
     };
   });
 
+  bus.emit("tier:complete", { traceId, tier: 2, ms: Date.now() - tTier2 });
   const weightSum = teams.reduce((s, t) => s + t.weight, 0) || 1;
   const directorVelora = Math.round(teams.reduce((s, t) => s + t.score * t.weight, 0) / weightSum);
 
+  bus.emit("tier:start", { traceId, tier: 3 });
+  const tTier3 = Date.now();
   const director = await runDirector(query, country, teams, block, directorVelora, coverage);
+  bus.emit("tier:complete", { traceId, tier: 3, ms: Date.now() - tTier3 });
+  bus.emit("tier:start", { traceId, tier: 4 });
+  const tTier4 = Date.now();
 
   // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
   const auditor = await runAuditor(
@@ -535,6 +553,7 @@ async function build(query: string, country: string, category: string): Promise<
     directorVelora,
     coverage,
   );
+  bus.emit("tier:complete", { traceId, tier: 4, ms: Date.now() - tTier4 });
   const finalVelora = Math.round((directorVelora + auditor.score) / 2);
 
   const scores = teams.map((t) => t.score);
@@ -551,6 +570,7 @@ async function build(query: string, country: string, category: string): Promise<
     ),
   );
 
+  bus.emit("pipeline:complete", { traceId, ok: true, ms: Date.now() - tSignals });
   return {
     query,
     country,
