@@ -32,6 +32,7 @@ import { DraggableSettingsBar } from "@/components/draggable-settings";
 import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
 
@@ -66,9 +67,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold">This page didn't load</h1>
+        <h1 className="text-xl font-semibold">Bu sayfa yüklenemedi</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong. Try again or head home.
+          Beklenmeyen bir sorun oluştu. Tekrar deneyebilir veya ana sayfaya dönebilirsiniz.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -78,14 +79,57 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
-            Try again
+            Tekrar dene
           </button>
           <a href="/" className="rounded-md border border-input px-4 py-2 text-sm font-medium">
-            Go home
+            Ana sayfaya dön
           </a>
         </div>
       </div>
     </div>
+  );
+}
+
+function RouteSectionBoundary({ boundary, children }: { boundary: string; children: ReactNode }) {
+  const router = useRouter();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  return (
+    <ErrorBoundary
+      key={`${boundary}:${pathname}`}
+      onError={(error) => reportLovableError(error, { boundary })}
+      fallback={(_, retry) => (
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-left shadow-sm">
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-red-100">
+                Bu bölüm geçici olarak açılamadı
+              </h2>
+              <p className="mt-1 text-sm text-red-100/80">
+                Verileriniz korunuyor. Lütfen tekrar deneyin; sorun sürerse ana sayfadan devam
+                edebilirsiniz.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  router.invalidate();
+                  retry();
+                }}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Tekrar dene
+              </button>
+              <a href="/" className="rounded-md border border-input px-4 py-2 text-sm font-medium">
+                Ana sayfaya dön
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    >
+      {children}
+    </ErrorBoundary>
   );
 }
 
@@ -231,7 +275,9 @@ function RootComponent() {
             <ThemeToggle />
           </DraggableSettingsBar>
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-            <Outlet />
+            <RouteSectionBoundary boundary="chromeless_route_section">
+              <Outlet />
+            </RouteSectionBoundary>
           </div>
         </>
       ) : (
@@ -251,7 +297,9 @@ function RootComponent() {
                 </>
               )}
               <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-                <Outlet />
+                <RouteSectionBoundary boundary="app_route_section">
+                  <Outlet />
+                </RouteSectionBoundary>
               </div>
               <div className="mx-auto w-full max-w-6xl px-4 md:px-6">
                 <AiDisclaimer />

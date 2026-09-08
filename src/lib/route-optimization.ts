@@ -5,6 +5,17 @@
 
 import { useEffect, useRef } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { requestIdleTask } from "@/lib/runtime-scheduling";
+
+declare global {
+  interface Window {
+    __routeCache?: Set<string>;
+    __routePreloadQueue?: Map<string, Promise<unknown>>;
+    __analytics?: {
+      trackEvent: (name: string, payload: Record<string, unknown>) => void;
+    };
+  }
+}
 
 interface RouteOptimizationConfig {
   preloadDistance?: number; // Kaç ms sonra preload başlasın
@@ -23,7 +34,7 @@ const defaultConfig: RouteOptimizationConfig = {
  */
 export function useRoutePreloading(config = defaultConfig) {
   const router = useRouterState();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!router.location) return;
@@ -89,21 +100,15 @@ export function useLinkPrefetch() {
       prefetchRef.current.set(href, true);
 
       // requestIdleCallback ile prefetch
-      if ("requestIdleCallback" in window) {
-        (window as any).requestIdleCallback(() => {
+      requestIdleTask(
+        () => {
           const link = document.createElement("link");
           link.rel = "prefetch";
           link.href = href;
           document.head.appendChild(link);
-        });
-      } else {
-        setTimeout(() => {
-          const link = document.createElement("link");
-          link.rel = "prefetch";
-          link.href = href;
-          document.head.appendChild(link);
-        }, 200);
-      }
+        },
+        { timeout: 200 },
+      );
     };
 
     const handleTouchStart = (e: Event) => {
@@ -166,11 +171,7 @@ export function useRoutePerformanceMonitoring() {
       // Performance API'ye kaydet
       if ("PerformanceObserver" in window && "mark" in performance) {
         performance.mark(`route-end-${route}`, { startTime });
-        performance.measure(
-          `route-navigation-${route}`,
-          `route-end-${route}`,
-          undefined
-        );
+        performance.measure(`route-navigation-${route}`, `route-end-${route}`, undefined);
 
         if (duration > 1000) {
           console.warn(`Slow route transition detected: ${route} (${duration}ms)`);
@@ -193,23 +194,12 @@ export function useRoutePerformanceMonitoring() {
  * Batch route preloading for better performance
  */
 export function batchPreloadRoutes(routes: string[], options = { delay: 100 }) {
-  if (!("requestIdleCallback" in window)) {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      routes.forEach((route) => preloadRouteChunk(route));
-    }, options.delay);
-    return;
-  }
-
-  (window as any).requestIdleCallback(
+  requestIdleTask(
     () => {
       routes.forEach((route, index) => {
-        setTimeout(
-          () => preloadRouteChunk(route),
-          index * (options.delay / routes.length)
-        );
+        setTimeout(() => preloadRouteChunk(route), index * (options.delay / routes.length));
       });
     },
-    { timeout: 5000 }
+    { timeout: 5000 },
   );
 }

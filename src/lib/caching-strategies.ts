@@ -1,6 +1,8 @@
 /**
  * Advanced Caching Strategies
- * Multi-tier caching: Memory -> IndexedDB -> LocalStorage -> Network
+ * Generic client cache: Memory -> IndexedDB -> LocalStorage -> SessionStorage.
+ * Intentionally separate from session-persistence.ts, which stores a single
+ * user session document with fixed keys and 24h restore semantics.
  */
 
 import { useEffect, useState } from "react";
@@ -19,6 +21,7 @@ export enum CacheTier {
  * Cache entry metadata
  */
 interface CacheEntry<T> {
+  key?: string;
   value: T;
   timestamp: number;
   ttl?: number; // Time to live in milliseconds
@@ -101,10 +104,9 @@ export class MultiTierCache {
       ttl?: number;
       tier?: CacheTier;
       size?: number;
-    } = {}
+    } = {},
   ) {
-    const { ttl, tier = CacheTier.MEMORY, size = this.estimateSize(value) } =
-      options;
+    const { ttl, tier = CacheTier.MEMORY, size = this.estimateSize(value) } = options;
 
     if (tier === CacheTier.MEMORY || tier === CacheTier.INDEXED_DB) {
       this.setMemory(key, value, ttl, size);
@@ -333,7 +335,7 @@ export function useCacheAside<T>(
   options: {
     ttl?: number;
     tier?: CacheTier;
-  } = {}
+  } = {},
 ) {
   const cache = getCache();
   const [data, setData] = useState<T | null>(null);

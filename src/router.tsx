@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { installStaleChunkRecovery } from "./lib/deploy-race-recovery";
+import { getDefaultMutationConfig, getDefaultQueryConfig } from "@/lib/performance";
 
 // Client-only (server'de window yok). Her yayında hash'li chunk adları
 // değiştiği için, eski bir sayfada kalan tarayıcı artık var olmayan chunk'ları
@@ -13,16 +14,11 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        // Ağır AI/veri çağrılarını gereksiz yere tekrarlamayalım.
-        staleTime: 5 * 60 * 1000,
-        gcTime: 30 * 60 * 1000,
-        retry: 1,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: "stale",
+        ...getDefaultQueryConfig(),
         // Arka planda sessiz revalidasyon
         refetchOnMount: false,
       },
-      mutations: { retry: 1, retryDelay: 1000 },
+      mutations: getDefaultMutationConfig(),
     },
   });
 

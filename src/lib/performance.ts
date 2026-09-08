@@ -14,7 +14,7 @@ export const getDefaultQueryConfig = () => ({
   retry: 1,
   retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
   refetchOnWindowFocus: false,
-  refetchOnReconnect: "stale", // Bağlantı sağlandığında stale veriyi yenile
+  refetchOnReconnect: (query: { isStale: () => boolean }) => query.isStale(),
   refetchOnMount: false, // Mount'da tekrar fetch etme
 });
 
@@ -23,8 +23,7 @@ export const getDefaultQueryConfig = () => ({
  */
 export const getDefaultMutationConfig = () => ({
   retry: 1,
-  retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
-  networkMode: "online", // Mutation sadece online modda çalışsın
+  retryDelay: 1000,
 });
 
 /**
@@ -153,8 +152,6 @@ export function useOptimizedImage(
     return src;
   }, [src, options?.width, options?.quality, options?.format]);
 }
-
-
 
 // Type definitions
 interface LayoutShiftEntry extends PerformanceEntry {

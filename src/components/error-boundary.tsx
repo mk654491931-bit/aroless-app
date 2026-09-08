@@ -38,12 +38,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError && this.state.error) {
       return (
         this.props.fallback?.(this.state.error, this.retry) || (
-          <div className="p-4 rounded-lg border border-red-500/30 bg-red-500/5">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-red-700">Bir şey yanlış gitti</h3>
-                <p className="text-sm text-red-600 mt-1">{this.state.error.message}</p>
+              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-red-700">Bu bölüm yüklenemedi</h3>
+                <p className="mt-1 text-sm text-red-600">
+                  Beklenmeyen bir sorun oluştu. Lütfen tekrar deneyin.
+                </p>
                 <button
                   onClick={this.retry}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 hover:text-red-800"
