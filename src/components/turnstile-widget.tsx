@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { publicClientEnv } from "@/lib/client-env";
 
 /**
  * Cloudflare Turnstile (invisible CAPTCHA).
@@ -15,7 +16,7 @@ declare global {
   }
 }
 
-const SITE_KEY = import.meta.env["VITE_TURNSTILE_SITE_KEY"] as string | undefined;
+const SITE_KEY = publicClientEnv.turnstileSiteKey;
 
 export function turnstileConfigured(): boolean {
   return Boolean(SITE_KEY);

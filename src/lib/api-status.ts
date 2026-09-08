@@ -1,15 +1,19 @@
 /**
- * Safe, read-only view of client-side API key configuration.
- * NEVER export, log, or render the key value itself — only whether it exists.
+ * Client-side API configuration status.
+ *
+ * Provider credentials intentionally stay on the server. The browser cannot
+ * determine whether an OpenRouter key exists and must call same-origin server
+ * functions instead of reading a secret from Vite env.
  */
 export function isOpenRouterConfigured(): boolean {
-  const raw = import.meta.env["VITE_OPENROUTER_API_KEY"];
-  return typeof raw === "string" && raw.trim().length > 0;
+  return false;
 }
 
 export type ApiStatus = { configured: boolean; label: string };
 
 export function openRouterStatus(): ApiStatus {
-  const configured = isOpenRouterConfigured();
-  return { configured, label: configured ? "API Connected" : "API Key Missing" };
+  return {
+    configured: false,
+    label: "Server-routed API (key is not exposed)",
+  };
 }

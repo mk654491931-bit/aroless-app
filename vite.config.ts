@@ -57,10 +57,25 @@ export default defineConfig(async ({ command, mode }) => {
     }
   }
 
-  // Expose VITE_* values through import.meta.env even when the host injects
-  // them as plain process env vars (Codespaces, Docker, CI).
+  // Vercel exposes project variables through process.env during the build, while
+  // local Vite values usually come from .env files. Merge only the public
+  // allowlist so server credentials can never be copied into the browser bundle.
+  const publicEnvNames = [
+    "VITE_SUPABASE_URL",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "VITE_TURNSTILE_SITE_KEY",
+    "VITE_API_BASE_URL",
+    "VITE_APP_URL",
+  ] as const;
+  const loadedEnv = loadEnv(mode, process.cwd(), "VITE_");
+  const buildEnv: Record<string, string> = {};
+  for (const name of publicEnvNames) {
+    const value = process.env[name] ?? loadedEnv[name];
+    if (typeof value === "string" && value.trim()) buildEnv[name] = value;
+  }
+
   const define: Record<string, string> = {};
-  for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), "VITE_"))) {
+  for (const [key, value] of Object.entries(buildEnv)) {
     define[`import.meta.env.${key}`] = JSON.stringify(value);
   }
 
