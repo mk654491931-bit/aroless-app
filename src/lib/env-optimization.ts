@@ -3,6 +3,13 @@
  * Development, staging, production'a göre farklı ayarlar
  */
 
+import { useEffect } from "react";
+import {
+  cancelIdleTask,
+  requestIdleTask,
+  scheduleTask as scheduleSharedTask,
+} from "@/lib/runtime-scheduling";
+
 export type Environment = "development" | "staging" | "production";
 
 export interface EnvironmentConfig {
@@ -89,59 +96,23 @@ export const runtimeOptimization = {
     callback: (deadline: IdleDeadline) => void,
     options?: IdleRequestOptions,
   ): number {
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      return window.requestIdleCallback(callback, options);
-    }
-
-    // Fallback to setTimeout
-    const start = Date.now();
-    return setTimeout(() => {
-      callback({
-        didTimeout: false,
-        timeRemaining: () => Math.max(0, 50 - (Date.now() - start)),
-      });
-    }, 0) as any;
+    return requestIdleTask(callback, options);
   },
 
   /**
    * CancelIdleCallback
    */
   cancelIdleCallback(id: number): void {
-    if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
-      window.cancelIdleCallback(id);
-    } else {
-      clearTimeout(id);
-    }
+    cancelIdleTask(id);
   },
 
   /**
    * Scheduled microtask
    */
-  scheduleTask(
-    callback: () => void,
-    priority: "high" | "normal" | "low" = "normal",
-  ): () => void {
-    if (priority === "high") {
-      // High priority: hemen çalıştır
-      Promise.resolve().then(callback);
-      return () => {};
-    }
-
-    if (priority === "normal" && typeof window !== "undefined" && "setTimeout" in window) {
-      const id = setTimeout(callback, 0);
-      return () => clearTimeout(id);
-    }
-
-    // Low priority: requestIdleCallback
-    const id = runtimeOptimization.requestIdleCallback(() => callback());
-    return () => runtimeOptimization.cancelIdleCallback(id);
+  scheduleTask(callback: () => void, priority: "high" | "normal" | "low" = "normal"): () => void {
+    return scheduleSharedTask(callback, priority);
   },
 };
-
-/**
- * React Hook - Environment Awareness
- */
-import { useEffect } from "react";
 
 export function useEnvironmentConfig() {
   const config = envManager.getConfig();

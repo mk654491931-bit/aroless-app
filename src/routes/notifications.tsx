@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Bell, Check, Loader2, Settings, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -10,8 +10,14 @@ import {
   markAllNotificationsRead,
   getNotificationPreferences,
   updateNotificationPreferences,
+  type NotificationPreferences,
   type NotificationRow,
 } from "@/lib/notifications.functions";
+import {
+  markAllNotificationsReadOptimistically,
+  markNotificationReadOptimistically,
+  toggleNotificationPreferenceOptimistically,
+} from "@/lib/optimistic-updates";
 import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/notifications")({
@@ -60,6 +66,8 @@ function NotificationsPage() {
     queryFn: () => prefsFn(),
     enabled: !!user,
   });
+  const notificationsQueryKey = ["notifications", user?.id] as const;
+  const preferencesQueryKey = ["notification-preferences", user?.id] as const;
 
   if (loading || !user)
     return (
@@ -70,27 +78,62 @@ function NotificationsPage() {
 
   const notifications: NotificationRow[] = (notifQ.data as NotificationRow[] | undefined) ?? [];
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const prefs = prefsQ.data as
-    | { low_credit: boolean; trend_alert: boolean; payment_success: boolean; marketing: boolean }
-    | undefined;
+  const prefs = prefsQ.data as NotificationPreferences | undefined;
 
-  const handleMarkRead = async (id: string) => {
-    await markFn({ data: { id } });
-    queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-  };
+  const markReadMut = useMutation({
+    mutationFn: (id: string) => markFn({ data: { id } }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previous = queryClient.getQueryData<NotificationRow[]>(notificationsQueryKey);
+      queryClient.setQueryData<NotificationRow[]>(notificationsQueryKey, (current) =>
+        markNotificationReadOptimistically(current, id),
+      );
+      return { previous };
+    },
+    onError: (_error, _id, context) => {
+      queryClient.setQueryData(notificationsQueryKey, context?.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+    },
+  });
 
-  const handleMarkAll = async () => {
-    await markAllFn({ data: {} });
-    queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-  };
+  const markAllMut = useMutation({
+    mutationFn: (type?: string) => markAllFn({ data: type ? { type } : {} }),
+    onMutate: async (type) => {
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previous = queryClient.getQueryData<NotificationRow[]>(notificationsQueryKey);
+      queryClient.setQueryData<NotificationRow[]>(notificationsQueryKey, (current) =>
+        markAllNotificationsReadOptimistically(current, type),
+      );
+      return { previous };
+    },
+    onError: (_error, _type, context) => {
+      queryClient.setQueryData(notificationsQueryKey, context?.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+    },
+  });
 
-  const togglePref = async (
-    key: "low_credit" | "trend_alert" | "payment_success" | "marketing",
-  ) => {
-    const current = prefs?.[key] ?? true;
-    await updatePrefsFn({ data: { [key]: !current } });
-    queryClient.invalidateQueries({ queryKey: ["notification-preferences", user.id] });
-  };
+  const updatePrefsMut = useMutation({
+    mutationFn: (key: keyof NotificationPreferences) =>
+      updatePrefsFn({ data: { [key]: !(prefs?.[key] ?? key !== "marketing") } }),
+    onMutate: async (key) => {
+      await queryClient.cancelQueries({ queryKey: preferencesQueryKey });
+      const previous = queryClient.getQueryData<NotificationPreferences>(preferencesQueryKey);
+      queryClient.setQueryData<NotificationPreferences>(preferencesQueryKey, (current) =>
+        toggleNotificationPreferenceOptimistically(current, key),
+      );
+      return { previous };
+    },
+    onError: (_error, _key, context) => {
+      queryClient.setQueryData(preferencesQueryKey, context?.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: preferencesQueryKey });
+    },
+  });
 
   return (
     <div className="min-h-screen">
@@ -123,22 +166,22 @@ function NotificationsPage() {
             <PrefRow
               label="Low credit alerts"
               checked={prefs?.low_credit ?? true}
-              onToggle={() => togglePref("low_credit")}
+              onToggle={() => updatePrefsMut.mutate("low_credit")}
             />
             <PrefRow
               label="Trend alerts"
               checked={prefs?.trend_alert ?? true}
-              onToggle={() => togglePref("trend_alert")}
+              onToggle={() => updatePrefsMut.mutate("trend_alert")}
             />
             <PrefRow
               label="Payment confirmations"
               checked={prefs?.payment_success ?? true}
-              onToggle={() => togglePref("payment_success")}
+              onToggle={() => updatePrefsMut.mutate("payment_success")}
             />
             <PrefRow
               label="Marketing updates"
               checked={prefs?.marketing ?? false}
-              onToggle={() => togglePref("marketing")}
+              onToggle={() => updatePrefsMut.mutate("marketing")}
             />
           </div>
         </div>
@@ -156,7 +199,7 @@ function NotificationsPage() {
             </div>
             {unreadCount > 0 && (
               <button
-                onClick={handleMarkAll}
+                onClick={() => markAllMut.mutate(undefined)}
                 className="text-xs flex items-center gap-1.5 text-[oklch(0.85_0.15_255)] hover:underline"
               >
                 <Check size={14} /> Mark all read
@@ -193,7 +236,7 @@ function NotificationsPage() {
                 </div>
                 {!n.read && (
                   <button
-                    onClick={() => handleMarkRead(n.id)}
+                    onClick={() => markReadMut.mutate(n.id)}
                     className="text-xs rounded-lg bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 flex items-center gap-1 shrink-0"
                   >
                     <Check size={12} /> Read

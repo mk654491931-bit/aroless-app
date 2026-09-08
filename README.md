@@ -9,8 +9,8 @@ Teknoloji: TanStack Start (React 19) + Vite + Tailwind v4 + Supabase.
 Gereken tek şey: bir Supabase projesi ve `.env` dosyası.
 
 ```sh
-# 1) Bağımlılıklar (bun veya npm)
-npm install          # ya da: bun install
+# 1) Bağımlılıklar
+npm install
 
 # 2) Ortam değişkenleri
 cp .env.example .env # değerleri doldur
@@ -23,7 +23,7 @@ npx supabase db push
 npm run dev          # http://localhost:8080
 ```
 
-Üretim derlemesi: `npm run build` → `dist/` (Cloudflare/Nitro çıktısı).
+Üretim derlemesi: `npm run build` → `dist/` (Vercel/Nitro çıktısı).
 
 ## Google ile giriş
 
@@ -73,16 +73,16 @@ ortam değişkenleri hedef platformun secret ekranına girilir. Sabit domain yaz
 hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üzerinden
 üretilir.
 
-| Hedef              | Adımlar                                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir)           |
-| Node sunucu / VPS  | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
-| Lovable            | Publish butonu; env değerleri proje secret'larından okunur                                                  |
+| Hedef             | Adımlar                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| Vercel            | `npm run build` → Vercel deploy akışı (`preset: "vercel"`)                                                  |
+| Node sunucu / VPS | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
+| Lovable           | Publish butonu; env değerleri proje secret'larından okunur                                                  |
 
 Notlar:
 
 - `nitro` kurulu değilse `npm run build` düz Vite SSR çıktısı üretir; geliştirme ve
-  `npm run preview` için bu yeterlidir, Cloudflare dağıtımı için `nitro` gerekir.
+  `npm run preview` için bu yeterlidir, Vercel dağıtımı için `nitro` gerekir.
 - Sunucu ilk isteği aldığında zorunlu değişkenleri kontrol eder ve eksikse konsola
   tek satırlık uyarı basar (`[env] Eksik zorunlu değişken(ler): ...`).
 - `.env` asla depoya girmez; `.env.example` güncel şablon olarak tutulur.

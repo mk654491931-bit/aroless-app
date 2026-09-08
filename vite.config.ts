@@ -92,7 +92,7 @@ export default defineConfig(async ({ command, mode }) => {
       rollupOptions: {
         output: {
           // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
-          manualChunks: (id) => {
+          manualChunks: (id: string) => {
             // Vendor chunks
             if (id.includes("node_modules/react") && !id.includes("react-dom")) {
               return "react-vendor";
@@ -131,8 +131,8 @@ export default defineConfig(async ({ command, mode }) => {
           // new name, so a stale cache entry can never be served.
           entryFileNames: "js/[name].[hash:8].js",
           chunkFileNames: "js/[name].[hash:8].js",
-          assetFileNames: (assetInfo) => {
-            const info = assetInfo.name.split(".");
+          assetFileNames: (assetInfo: { name?: string }) => {
+            const info = (assetInfo.name ?? "asset").split(".");
             const ext = info[info.length - 1];
             if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
               return `images/[name].[hash:8][extname]`;
@@ -147,9 +147,11 @@ export default defineConfig(async ({ command, mode }) => {
       chunkSizeWarningLimit: 600,
       reportCompressedSize: true,
       cssCodeSplit: true,
-      // Left disabled deliberately: the original comment says this avoids a
-      // lightningcss failure, and that cannot be verified without running a
-      // real build. Enabling it blind is how you ship a broken deploy.
+      // Verified with `npm run build -- --config /tmp/cssminify-test/vite.config.ts`:
+      // Vite 8 / Lightning CSS fails here with
+      // `[lightningcss minify] Unsupported target "ES2020"`.
+      // Leave CSS minification off until the build target or Vite/Lightning CSS
+      // combination is changed and re-verified.
       cssMinify: false,
     },
     plugins,

@@ -84,6 +84,7 @@ import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/l
 import { PLATFORM_LOGO, logoForStore } from "@/lib/platform-logos";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
+import { addOptimisticFavorite, removeOptimisticFavorite } from "@/lib/optimistic-updates";
 import { useTranslation } from "react-i18next";
 import { LayoutDashboard, Settings as SettingsIcon, FileText } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
@@ -332,6 +333,7 @@ function Dashboard() {
     enabled: !!user,
     staleTime: 5 * 60_000, // 5 dk cache — favoriler sık değişmez
   });
+  const favoritesQueryKey = ["favorites", user?.id] as const;
 
   const checkAdminFn = useServerFn(checkIsAdmin);
   const adminQ = useQuery({
@@ -458,24 +460,53 @@ function Dashboard() {
   const saveMut = useMutation({
     mutationFn: (p: WinningProduct) =>
       saveFavFn({ data: { name: p.name, collection_name: "Default", product: p } }),
+    onMutate: async (product) => {
+      await qc.cancelQueries({ queryKey: favoritesQueryKey });
+      const previous = qc.getQueryData<FavoriteRow[]>(favoritesQueryKey);
+      qc.setQueryData<FavoriteRow[]>(favoritesQueryKey, (current) =>
+        addOptimisticFavorite(current, product),
+      );
+      return { previous };
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["favorites"] });
       toast.success("Saved to library");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _product, context) => {
+      qc.setQueryData(favoritesQueryKey, context?.previous);
+      toast.error(err.message);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: favoritesQueryKey });
+    },
   });
   const delMut = useMutation({
     mutationFn: (id: string) => delFavFn({ data: { id } }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: favoritesQueryKey });
+      const previous = qc.getQueryData<FavoriteRow[]>(favoritesQueryKey);
+      qc.setQueryData<FavoriteRow[]>(favoritesQueryKey, (current) =>
+        removeOptimisticFavorite(current, id),
+      );
+      return { previous };
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["favorites"] });
       toast.success("Removed");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _id, context) => {
+      qc.setQueryData(favoritesQueryKey, context?.previous);
+      toast.error(err.message);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: favoritesQueryKey });
+    },
   });
 
-  const togglePlatform = useCallback((p: Platform) => {
-    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  }, [setPlatforms]);
+  const togglePlatform = useCallback(
+    (p: Platform) => {
+      setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    },
+    [setPlatforms],
+  );
 
   const searching = gen.isPending || hfGen.isPending;
 
@@ -491,15 +522,15 @@ function Dashboard() {
     // When ALL selected platforms are unavailable in the target country,
     // automatically add cross-border alternatives to avoid empty results.
     const effectivePlatforms = (() => {
-      const allBlocked = platforms.every(
-        (p) => countryFit(p, effectiveCountry) === "unavailable",
-      );
+      const allBlocked = platforms.every((p) => countryFit(p, effectiveCountry) === "unavailable");
       if (!allBlocked) return platforms;
       const cb = platforms
         .filter((p) => countryFit(p, effectiveCountry) === "cross-border")
         .slice(0, 3);
       if (cb.length > 0) {
-        toast.info(`All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`);
+        toast.info(
+          `All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`,
+        );
         return cb;
       }
       // Last resort: add global platforms (Shopify, Amazon)
@@ -544,7 +575,9 @@ function Dashboard() {
 
   // Cleanup search safety timer on unmount
   useEffect(() => {
-    return () => { if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current); };
+    return () => {
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    };
   }, []);
 
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
@@ -1095,9 +1128,7 @@ function Dashboard() {
                             className="range-fill w-full"
                             style={
                               {
-                                "--range-pct": `${
-                                  ((minScore - 50) / (90 - 50)) * 100
-                                }%`,
+                                "--range-pct": `${((minScore - 50) / (90 - 50)) * 100}%`,
                               } as React.CSSProperties
                             }
                           />
@@ -1279,8 +1310,8 @@ function Dashboard() {
                             Kazanan ürününü keşfet
                           </h3>
                           <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
-                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
-                            gerçek zamanlı verilerle en kârlı ürünleri bulacak.
+                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız gerçek
+                            zamanlı verilerle en kârlı ürünleri bulacak.
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
@@ -1321,20 +1352,26 @@ function Dashboard() {
                           return true;
                         };
 
-                        const filtered = useMemo(() =>
-                          applyFilters(results, filters)
-                            .filter(bandPass)
-                            .filter(
-                              (p) =>
-                                !q ||
-                                [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
-                                  .filter(Boolean)
-                                  .some((v) => String(v).toLowerCase().includes(q)),
-                            ),
+                        const filtered = useMemo(
+                          () =>
+                            applyFilters(results, filters)
+                              .filter(bandPass)
+                              .filter(
+                                (p) =>
+                                  !q ||
+                                  [
+                                    p.name,
+                                    p.description,
+                                    p.target_audience,
+                                    ...(p.platform_fit ?? []),
+                                  ]
+                                    .filter(Boolean)
+                                    .some((v) => String(v).toLowerCase().includes(q)),
+                              ),
                           [results, filters, band, q, onlyLaunch],
                         );
-                        const shown = useMemo(() =>
-                          sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
+                        const shown = useMemo(
+                          () => sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
                           [filtered, sortBy, onlyLaunch, sortDesc],
                         );
                         const bands = [
@@ -1649,7 +1686,12 @@ function TabSwitcher({
         if (!w2 || !el2) return;
         const wr = w2.getBoundingClientRect();
         const br = el2.getBoundingClientRect();
-        setPill({ left: br.left - wr.left, width: br.width, top: br.top - wr.top, height: br.height });
+        setPill({
+          left: br.left - wr.left,
+          width: br.width,
+          top: br.top - wr.top,
+          height: br.height,
+        });
       }, 80);
       setPill({ left: b.left - w.left, width: b.width, top: b.top - w.top, height: b.height });
     };
@@ -2787,10 +2829,19 @@ function ConsistencyBadge({ p }: { p: WinningProduct }) {
 }
 
 function ScorePill({ label, value }: { label: string; value: number }) {
-  const color = value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : value >= 40 ? "text-blue-400" : "text-muted-foreground";
+  const color =
+    value >= 80
+      ? "text-emerald-400"
+      : value >= 60
+        ? "text-amber-400"
+        : value >= 40
+          ? "text-blue-400"
+          : "text-muted-foreground";
   const glow = value >= 80 ? "shadow-[0_0_8px_-2px_oklch(0.75_0.18_155/0.4)]" : "";
   return (
-    <div className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}>
+    <div
+      className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}
+    >
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`text-xs font-bold ${color}`}>{value}</div>
     </div>
