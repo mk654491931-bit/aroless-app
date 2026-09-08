@@ -226,8 +226,30 @@ const SUBSCRIPTION_EVENTS = new Set([
   "subscription.paused",
 ]);
 
+/** Transaction events handled for payment attribution / credit grants. */
+const TRANSACTION_EVENTS = new Set([
+  "transaction.completed",
+  "transaction.updated",
+]);
+
 /** Statuses that must revoke entitlements (payment stopped / failing). */
-const REVOKING_STATUSES = new Set(["canceled", "past_due", "paused"]);
+const REVOKING_STATUSES = new Set(["canceled", "past_due", "paused", "refunded", "reversed"]);
+
+/** True for refund / chargeback / reversal payloads that must never grant credits. */
+export function isRefundPayload(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  const status = typeof d["status"] === "string" ? (d["status"] as string).toLowerCase() : "";
+  if (["refunded", "reversed", "failed"].includes(status)) return true;
+  const details = d["details"] as Record<string, unknown> | undefined;
+  const totals = details?.["totals"] as Record<string, unknown> | undefined;
+  const gt = totals?.["grandTotal"];
+  if (typeof gt === "string" && gt.trim().startsWith("-")) return true;
+  if (typeof gt === "number" && gt < 0) return true;
+  const adj = d["adjustment"] as Record<string, unknown> | undefined;
+  if (adj && typeof adj["type"] === "string" && adj["type"].toLowerCase().includes("refund")) return true;
+  return false;
+}
 
 export type PaddleEventCommand = {
   eventId: string;
@@ -331,8 +353,18 @@ export function mapPaddleEvent(
     };
   }
 
+  // ---- Refund / reversal guard (self-healing: never grant credits on refunds) ----
+  if (isRefundPayload(data)) {
+    // Acknowledge but produce no entitlement change — the subscription lifecycle
+    // event (subscription.canceled / past_due) is the source of truth for
+    // revocation. This prevents a refund retry from re-granting credits.
+    // For transaction-scoped refunds we still want the transaction ledger row
+    // without credit top-up — handled via the subscription event path.
+    if (TRANSACTION_EVENTS.has(eventType)) return null;
+  }
+
   // ---- Successful payments -----------------------------------------
-  if (eventType === "transaction.completed") {
+  if (TRANSACTION_EVENTS.has(eventType)) {
     const subId: string | null =
       typeof data?.subscriptionId === "string" ? data.subscriptionId : null;
     const txnId: string | null = typeof data?.id === "string" ? data.id : null;
@@ -351,9 +383,23 @@ export function mapPaddleEvent(
     const tier: PlanId | null =
       planForPriceId(settings, priceId) ?? requestedPlan ?? null;
 
+    // Out-of-order guard: a refund/reversal that arrives with a positive
+    // grandTotal due to Paddle's eventual consistency still must not mint
+    // credits — the isRefundPayload check above already handled explicit
+    // refund signals; this second net catches amount-less retries.
+    if (eventType === "transaction.updated" && !subId && !requestedPlan) return null;
+
     const isSubscriptionPayment = Boolean(subId || requestedPlan);
     // One-time/non-subscription purchases are not part of the catalog.
     if (!isSubscriptionPayment) return null;
+    // Self-healing: a retried transaction.completed that arrives after a
+    // subscription.canceled must not resurrect entitlements — DB function
+    // guards via the live-subscription lookup, but we avoid emitting a
+    // credit-bearing command when the payload already looks revoked.
+    if (typeof (data as Record<string, unknown>)["status"] === "string") {
+      const s = String((data as Record<string, unknown>)["status"]).toLowerCase();
+      if (REVOKING_STATUSES.has(s)) return null;
+    }
 
     const grants = tier ? SUBSCRIPTION_CREDIT_GRANTS[tier] : null;
 

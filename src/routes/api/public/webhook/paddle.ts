@@ -4,7 +4,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const MAX_BODY_BYTES = 1_000_000;
-const TRANSACTION_COMPLETED = "transaction.completed";
+const TRANSACTION_EVENTS = new Set(["transaction.completed", "transaction.updated"]);
+const MAX_RPC_RETRIES = 3;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -103,8 +104,9 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
 
           // 7. For successful payments where the price/customData didn't reveal the
           //    plan (defensive), fall back to the user's current profile tier.
+          //    Covers both transaction.completed and transaction.updated (self-healing).
           if (
-            event.eventType === TRANSACTION_COMPLETED &&
+            TRANSACTION_EVENTS.has(event.eventType) &&
             (!command.tier || command.tier === "Free") &&
             (command.amountCents ?? 0) > 0
           ) {
@@ -125,12 +127,14 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           }
 
           // 8. Atomic, idempotent database processing — single transaction.
+          //    Self-healing: transient DB / network errors are retried with backoff;
+          //    a duplicate event_id returns 'duplicate' and is a no-op (idempotent).
           const rpc = supabaseAdmin.rpc as unknown as (
             name: string,
             args: Record<string, unknown>,
-          ) => Promise<{ data: string | null; error: { message: string } | null }>;
+          ) => Promise<{ data: string | null; error: { message: string; code?: string } | null }>;
 
-          const { data: result, error: dbError } = await rpc("process_paddle_event", {
+          const args = {
             _event_id: command.eventId,
             _event_type: command.eventType,
             _occurred_at: command.occurredAt,
@@ -150,12 +154,36 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
             _search_credits: command.searchCredits,
             _sim_credits: command.simCredits,
             _payload: auditPayload,
-          });
+          } as Record<string, unknown>;
 
-          if (dbError) {
+          let lastDbError: { message: string } | null = null;
+          let result: string | null = null;
+          for (let attempt = 0; attempt < MAX_RPC_RETRIES; attempt++) {
+            const res = await rpc("process_paddle_event", args);
+            if (!res.error) {
+              result = res.data;
+              lastDbError = null;
+              break;
+            }
+            lastDbError = res.error;
+            // Duplicate is a success (idempotent) — never retry.
+            if (res.data === "duplicate") {
+              result = res.data;
+              lastDbError = null;
+              break;
+            }
+            // Only retry on transient errors (connection / timeout / 5xx).
+            const transient =
+              /timeout|connection|temporarily|deadlock|serialization/i.test(res.error.message) ||
+              (res.error as { code?: string }).code === "54000";
+            if (!transient || attempt === MAX_RPC_RETRIES - 1) break;
+            await new Promise((r) => setTimeout(r, 400 * 2 ** attempt + Math.random() * 200));
+          }
+
+          if (lastDbError) {
             console.error(
               `[Paddle Webhook] process_paddle_event failed (${event.eventId}):`,
-              dbError.message,
+              lastDbError.message,
             );
             return text("Webhook islenemedi", 500);
           }
