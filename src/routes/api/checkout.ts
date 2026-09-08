@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { sanitizeLine } from "@/lib/request-hygiene";
 
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
@@ -36,7 +37,12 @@ export const Route = createFileRoute("/api/checkout")({
           const { data: userData, error } = await supabase.auth.getUser(token);
           if (error || !userData.user) return json({ error: "Unauthorized" }, 401);
 
-          const parsed = BodySchema.safeParse(await request.json().catch(() => ({})));
+          const rawBody = ((await request.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+          const sanitizedPlan = sanitizeLine(rawBody["plan"], 20);
+          const parsed = BodySchema.safeParse({
+            ...rawBody,
+            ...(sanitizedPlan ? { plan: sanitizedPlan } : {}),
+          });
           if (!parsed.success) {
             return json({ error: "Geçersiz istek: plan Starter/Pro/Business olmalı." }, 400);
           }

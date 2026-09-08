@@ -1,5 +1,6 @@
 // Server-only prompt builders for the 19 Aroless tools.
 import type { Provider } from "./tools-ai.server";
+import { sanitizeLine, sanitizeText } from "./request-hygiene";
 
 export type ToolId =
   | "supplier-negotiator"
@@ -23,7 +24,10 @@ export type ToolId =
   | "news";
 
 type Ctx = Record<string, string>;
-const f = (c: Ctx, k: string, fb = "-") => (c[k]?.trim() ? c[k].trim().slice(0, 4000) : fb);
+const f = (c: Ctx, k: string, fb = "-") => {
+  const value = sanitizeText(c[k], 4000);
+  return value ? value : fb;
+};
 
 const BASE = `You are Aroless, a senior cross-border e-commerce operator with 10+ years of Amazon/TikTok Shop/Alibaba sourcing experience.
 Method (do this internally, never print it):
@@ -66,7 +70,7 @@ const LANG_NAMES: Record<string, string> = {
 
 /** Appends the "answer in the user's language" directive to any built prompt. */
 export function withOutputLanguage(prompt: string, lang?: string): string {
-  const name = LANG_NAMES[(lang ?? "en").slice(0, 2)] ?? "English";
+  const name = LANG_NAMES[sanitizeLine(lang ?? "en", 2)] ?? "English";
   return `${prompt}
 
 - OUTPUT LANGUAGE: write EVERY human-readable string (headline, metrics labels, bullets, table cells, document, risks, actions, assumptions, verdict) in ${name}. Keep URLs, numbers, currency codes and brand/product names as they are.`;

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed } from "@/lib/api-guard.server";
+import { sanitizeCountry, sanitizeTrendView } from "@/lib/api-request-sanitizers";
 
 /**
  * Predictive Trends & Seasonality engine.
@@ -175,9 +176,8 @@ export const Route = createFileRoute("/api/public/predictive-trends")({
         const guard = await guardAuthed(request, "predictive-trends", 30, 60);
         if ("response" in guard) return guard.response;
         const url = new URL(request.url);
-        const rawView = url.searchParams.get("view") ?? "now";
-        const view: TrendView = rawView === "next" || rawView === "season" ? rawView : "now";
-        const country = (url.searchParams.get("country") ?? "GLOBAL").toUpperCase().slice(0, 8);
+        const view: TrendView = sanitizeTrendView(url.searchParams.get("view"));
+        const country = sanitizeCountry(url.searchParams.get("country"));
         try {
           const payload = await getPayload(view, country);
           return new Response(JSON.stringify(payload), {

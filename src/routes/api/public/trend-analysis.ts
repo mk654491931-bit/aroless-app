@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { sanitizeTrendAnalysisInput } from "@/lib/api-request-sanitizers";
 import type { HybridScore } from "@/lib/consensus-types";
 
 /**
@@ -147,25 +148,9 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
         try {
           const body = await readJsonBody<Record<string, unknown>>(request);
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
-          const name = String(body["name"] ?? "")
-            .trim()
-            .slice(0, 120);
+          const input = sanitizeTrendAnalysisInput(body);
+          const name = input.name;
           if (!name) return jsonError(400, "Ürün adı gerekli.");
-          const input = {
-            name,
-            keyword: String(body["keyword"] ?? name).slice(0, 90),
-            country: String(body["country"] ?? "GLOBAL")
-              .toUpperCase()
-              .slice(0, 8),
-            category: String(body["category"] ?? "").slice(0, 80),
-            peak_month: String(body["peak_month"] ?? "").slice(0, 20),
-            spike_window: String(body["spike_window"] ?? "").slice(0, 40),
-            why: String(body["why"] ?? "").slice(0, 400),
-            marketplace: String(body["marketplace"] ?? "").slice(0, 40),
-            audience: String(body["audience"] ?? "").slice(0, 160),
-            competition: String(body["competition"] ?? "Medium").slice(0, 12),
-            score: Number(body["score"]) || 0,
-          };
           const ck = `${input.country}|${input.name}`;
           const hit = cache.get(ck);
           if (hit && Date.now() - hit.at < TTL) {

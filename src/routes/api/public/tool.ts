@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { sanitizeToolId, sanitizeToolInputMap } from "@/lib/api-request-sanitizers";
 
 /** Single AI endpoint powering all Aroless tool cards. Requires a signed-in user. */
 export const Route = createFileRoute("/api/public/tool")({
@@ -14,14 +15,10 @@ export const Route = createFileRoute("/api/public/tool")({
             request,
           );
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
-          const tool = String(body.tool ?? "") as import("@/lib/tools-prompts.server").ToolId;
+          const tool = sanitizeToolId(body.tool) as import("@/lib/tools-prompts.server").ToolId;
           if (!tool) return jsonError(400, "Araç seçilmedi.");
 
-          const raw = body.input ?? {};
-          const input: Record<string, string> = {};
-          for (const [k, v] of Object.entries(raw).slice(0, 20)) {
-            input[String(k).slice(0, 40)] = String(v ?? "").slice(0, 6000);
-          }
+          const input = sanitizeToolInputMap(body.input ?? {});
 
           const { buildPrompt, TOOL_PROVIDER } = await import("@/lib/tools-prompts.server");
           const { runTool, runConsensus } = await import("@/lib/tools-ai.server");

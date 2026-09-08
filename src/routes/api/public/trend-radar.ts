@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, guardPublic, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import {
+  sanitizeCountry,
+  sanitizeStringArray,
+  sanitizeTrendRadarAction,
+  sanitizeTrendRadarCategory,
+  sanitizeTrendRadarMode,
+  sanitizeHotProductsNiche,
+} from "@/lib/api-request-sanitizers";
 
 /**
  * Aroless — Multi-Platform Automated AI Trend Discovery endpoint.
@@ -16,11 +24,9 @@ export const Route = createFileRoute("/api/public/trend-radar")({
         try {
           const body = await readJsonBody<Record<string, unknown>>(request, 256 * 1024);
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
-          const action = String(body["action"] ?? "scrape");
-          const region = String(body["region"] ?? "GLOBAL")
-            .toUpperCase()
-            .slice(0, 8);
-          const category = String(body["category"] ?? "General").slice(0, 40);
+          const action = sanitizeTrendRadarAction(body["action"]);
+          const region = sanitizeCountry(body["region"]);
+          const category = sanitizeTrendRadarCategory(body["category"]);
 
           if (action === "webhook") {
             // Dış kaynaklı besleme: yalnızca paylaşılan gizli anahtarla.
@@ -37,13 +43,9 @@ export const Route = createFileRoute("/api/public/trend-radar")({
           const mod = await import("@/lib/trend-radar.server");
 
           if (action === "scrape") {
-            const sources = (Array.isArray(body["sources"]) ? body["sources"] : []).map(
-              String,
-            ) as import("@/lib/trend-radar.server").TrendSource[];
-            const rssFeeds = (Array.isArray(body["rss_feeds"]) ? body["rss_feeds"] : []).map(
-              String,
-            );
-            const niche = body["niche"] ? String(body["niche"]).slice(0, 60) : undefined;
+            const sources = sanitizeStringArray(body["sources"], 20, 20) as import("@/lib/trend-radar.server").TrendSource[];
+            const rssFeeds = sanitizeStringArray(body["rss_feeds"], 50, 200);
+            const niche = body["niche"] ? sanitizeHotProductsNiche(body["niche"]) : undefined;
             const job = await mod.runScrapeJob({ region, category, sources, rssFeeds, niche });
 
             // Persist to scraped_platform_trends (best-effort — UI works regardless).
@@ -79,11 +81,8 @@ export const Route = createFileRoute("/api/public/trend-radar")({
             const trends = (
               Array.isArray(body["trends"]) ? body["trends"] : []
             ) as import("@/lib/trend-radar.server").ScrapedTrend[];
-            const mode = (
-              ["fast", "deep", "strategy"].includes(String(body["mode"]))
-                ? String(body["mode"])
-                : "fast"
-            ) as import("@/lib/trend-radar.server").AiMode;
+            const mode =
+              sanitizeTrendRadarMode(body["mode"]) as import("@/lib/trend-radar.server").AiMode;
             if (!trends.length) {
               return new Response(JSON.stringify({ error: "no trends to analyze" }), {
                 status: 400,
@@ -93,7 +92,7 @@ export const Route = createFileRoute("/api/public/trend-radar")({
           }
 
           if (action === "brief") {
-            const trend = String(body["trend"] ?? "").slice(0, 160);
+            const trend = sanitizeStringArray([body["trend"]], 1, 160)[0] ?? "";
             if (!trend)
               return new Response(JSON.stringify({ error: "trend required" }), { status: 400 });
             return Response.json(await mod.runProductBrief(trend, region, category));
