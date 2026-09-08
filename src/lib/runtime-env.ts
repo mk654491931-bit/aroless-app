@@ -2,17 +2,21 @@
  * Tek noktadan ortam algılama.
  *
  * Aynı kod tabanı üç ortamda çalışır:
- *  - `managed`  → Lovable editör/preview veya Lovable publish (köprüler mevcut)
- *  - `local`    → VS Code / localhost / kendi sunucun (bağımlılık yok)
+ *  - `managed`  → platformun atadığı dagıtım/preview domaini (*.vercel.app)
+ *  - `local`    → VS Code / localhost / kendi domainin (ör. aroless.tech)
  *  - `unknown`  → sunucu tarafı, henüz host bilgisi yok
  *
- * Dağınık `typeof window` / `LOVABLE_*` kontrolleri yerine buradaki
- * yardımcılar kullanılır.
+ * Dağınık `typeof window` kontrolleri yerine buradaki yardımcılar kullanılır.
+ *
+ * Not: "managed" eskiden "lovable domaininde çalışıyoruz" anlamına geliyordu.
+ * Dağıtım artık yalnızca Vercel olduğu için o kontrol her zaman false dönüyordu;
+ * bugün ayrım "geçici preview URL'i mi, kalıcı domain mi" üzerinden yapılır.
  */
 
 export type RuntimeHost = "managed" | "local" | "unknown";
 
-const MANAGED_HOST_PATTERN = /(^|\.)lovable(project)?\.(app|dev)$/i;
+/** Vercel'in atadığı dağıtım domainleri: proje.vercel.app, dal-hash.vercel.app. */
+const MANAGED_HOST_PATTERN = /(^|\.)vercel\.app$/i;
 
 /** Tarayıcıda mı çalışıyoruz? */
 export function isBrowser(): boolean {
@@ -27,12 +31,12 @@ export function runtimeHost(): RuntimeHost {
   return "local";
 }
 
-/** Lovable köprüleri (OAuth broker, telemetri) bu ortamda var mı? */
+/** Platformun atadığı geçici dağıtım domaininde miyiz? */
 export function isManagedHost(): boolean {
   return runtimeHost() === "managed";
 }
 
-/** Yerel geliştirme / kendi sunucun. */
+/** Yerel geliştirme veya kendi kalıcı domainin. */
 export function isSelfHosted(): boolean {
   return runtimeHost() === "local";
 }
