@@ -5,12 +5,11 @@ import viteReact from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
 // Portable Vite config — no proprietary wrapper required.
-// Works locally, in Codespaces, in CI and inside a hosted preview sandbox.
-
-const isSandbox =
-  process.env["LOVABLE_SANDBOX"] === "1" || !!process.env["DEV_SERVER__PROJECT_PATH"];
+// Works locally, in Codespaces, in CI and on Vercel.
 
 export default defineConfig(async ({ command, mode }) => {
+  const isProduction = mode === "production";
+
   const plugins: PluginOption[] = [
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
@@ -40,25 +39,8 @@ export default defineConfig(async ({ command, mode }) => {
 
   plugins.push(viteReact());
 
-  // Optional hosted-preview helpers. Absent outside the sandbox; never required.
-  if (command === "serve" && isSandbox) {
-    for (const spec of [
-      "@lovable.dev/vite-tanstack-config/hmr-gate",
-      "@lovable.dev/vite-tanstack-config/dev-server-bridge",
-    ]) {
-      try {
-        const mod: Record<string, unknown> = await import(/* @vite-ignore */ spec);
-        const factory = (mod["hmrGatePlugin"] ?? mod["devServerBridgePlugin"]) as
-          ((opts?: unknown) => PluginOption) | undefined;
-        if (factory) plugins.push(factory({}));
-      } catch {
-        // not installed → skip
-      }
-    }
-  }
-
   // Expose VITE_* values through import.meta.env even when the host injects
-  // them as plain process env vars (Codespaces, Docker, CI).
+  // them as plain process env vars (Codespaces, Docker, CI, Vercel).
   const define: Record<string, string> = {};
   for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), "VITE_"))) {
     define[`import.meta.env.${key}`] = JSON.stringify(value);
@@ -85,12 +67,10 @@ export default defineConfig(async ({ command, mode }) => {
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
       ],
-      exclude: ["@lovable.dev/cloud-auth-js"],
     },
     server: {
       host: "::",
       port: 8080,
-      ...(isSandbox ? { strictPort: true, hmr: { overlay: false } } : {}),
       watch: {
         ignored: [
           "**/.workspace/**",
@@ -103,8 +83,12 @@ export default defineConfig(async ({ command, mode }) => {
     },
     build: {
       target: "ES2020",
-      minify: false,
-      sourcemap: mode !== "production",
+      // Production shipped UNMINIFIED until now: this was `false`
+      // unconditionally, so real users downloaded commented source with
+      // original identifier names. Dev stays unminified on purpose — it only
+      // slows rebuilds and ruins stack traces there.
+      minify: isProduction ? ("esbuild" as const) : false,
+      sourcemap: !isProduction,
       rollupOptions: {
         output: {
           // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
@@ -125,17 +109,26 @@ export default defineConfig(async ({ command, mode }) => {
             if (id.includes("node_modules/@supabase")) {
               return "supabase-vendor";
             }
-            if (id.includes("node_modules/react-hook-form") || 
-                id.includes("node_modules/@hookform")) {
+            if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {
+              return "charts-vendor";
+            }
+            if (
+              id.includes("node_modules/react-hook-form") ||
+              id.includes("node_modules/@hookform")
+            ) {
               return "form-vendor";
             }
-            if (id.includes("node_modules") && 
-                (id.includes("clsx") || id.includes("tailwind-merge"))) {
+            if (
+              id.includes("node_modules") &&
+              (id.includes("clsx") || id.includes("tailwind-merge"))
+            ) {
               return "utils-vendor";
             }
             return undefined;
           },
-          // Gzip compression için optimize edilmiş chunk boyutları
+          // Content-hashed filenames. These names are what make the immutable
+          // Cache-Control headers in vercel.json safe: a changed file gets a
+          // new name, so a stale cache entry can never be served.
           entryFileNames: "js/[name].[hash:8].js",
           chunkFileNames: "js/[name].[hash:8].js",
           assetFileNames: (assetInfo) => {
@@ -152,10 +145,12 @@ export default defineConfig(async ({ command, mode }) => {
       },
       // Daha büyük chunk boyutu sınırı (çünkü daha iyi tree-shaking)
       chunkSizeWarningLimit: 600,
-      // Gzip compression
       reportCompressedSize: true,
       cssCodeSplit: true,
-      cssMinify: false, // Disable CSS minification to avoid lightningcss issues
+      // Left disabled deliberately: the original comment says this avoids a
+      // lightningcss failure, and that cannot be verified without running a
+      // real build. Enabling it blind is how you ship a broken deploy.
+      cssMinify: false,
     },
     plugins,
   };
