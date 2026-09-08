@@ -19,6 +19,7 @@ export enum CacheTier {
  * Cache entry metadata
  */
 interface CacheEntry<T> {
+  key: string;
   value: T;
   timestamp: number;
   ttl?: number; // Time to live in milliseconds
@@ -160,6 +161,7 @@ export class MultiTierCache {
 
   private setMemory<T>(key: string, value: T, ttl?: number, size = 0) {
     const entry: CacheEntry<T> = {
+      key,
       value,
       timestamp: Date.now(),
       ttl,
@@ -253,6 +255,7 @@ export class MultiTierCache {
   private setInLocalStorage<T>(key: string, value: T, ttl?: number) {
     try {
       const entry: CacheEntry<T> = {
+        key,
         value,
         timestamp: Date.now(),
         ttl,

@@ -108,7 +108,7 @@ export default defineConfig(async ({ command, mode }) => {
       rollupOptions: {
         output: {
           // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
-          manualChunks: (id) => {
+          manualChunks: (id: string) => {
             // Vendor chunks
             if (id.includes("node_modules/react") && !id.includes("react-dom")) {
               return "react-vendor";
@@ -138,8 +138,8 @@ export default defineConfig(async ({ command, mode }) => {
           // Gzip compression için optimize edilmiş chunk boyutları
           entryFileNames: "js/[name].[hash:8].js",
           chunkFileNames: "js/[name].[hash:8].js",
-          assetFileNames: (assetInfo) => {
-            const info = assetInfo.name.split(".");
+          assetFileNames: (assetInfo: { name?: string }) => {
+            const info = (assetInfo.name ?? "").split(".");
             const ext = info[info.length - 1];
             if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
               return `images/[name].[hash:8][extname]`;

@@ -3,7 +3,7 @@
  * Subscriptions, event listeners, intervals otomatik temizle
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Memory leak prevention context manager
@@ -169,9 +169,10 @@ export function setupMemoryLeakDetection() {
   let previousMemory = 0;
 
   const checkMemory = () => {
-    if (!performance.memory) return;
+    const perf = performance as Performance & { memory?: { usedJSHeapSize: number } };
+    if (!perf.memory) return;
 
-    const currentMemory = performance.memory.usedJSHeapSize;
+    const currentMemory = perf.memory.usedJSHeapSize;
     const diff = currentMemory - previousMemory;
 
     if (diff > threshold) {
@@ -311,9 +312,11 @@ export class StyleCache {
     // Memory management
     if (this.cache.size > this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      const firstStyle = document.getElementById(firstKey);
-      if (firstStyle) firstStyle.remove();
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        const firstStyle = document.getElementById(firstKey);
+        if (firstStyle) firstStyle.remove();
+        this.cache.delete(firstKey);
+      }
     }
 
     return sheet || null;

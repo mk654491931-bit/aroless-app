@@ -10,6 +10,9 @@ interface SessionData {
   scrollPositions?: Record<string, number>;
   preferences?: Record<string, unknown>;
   timestamp?: number;
+  version?: number;
+  lastWebVitals?: Record<string, number>;
+  isOnline?: boolean;
 }
 
 const SESSION_KEY = "aroless_session";
@@ -413,7 +416,7 @@ export const cacheManager = {
         const db = request.result;
         const transaction = db.transaction(["cache"], "readwrite");
         const store = transaction.objectStore("cache");
-        const deleteRequest = store.delete(key);
+        store.delete(key);
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
@@ -436,7 +439,7 @@ export const cacheManager = {
         const db = request.result;
         const transaction = db.transaction(["cache"], "readwrite");
         const store = transaction.objectStore("cache");
-        const clearRequest = store.clear();
+        store.clear();
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);

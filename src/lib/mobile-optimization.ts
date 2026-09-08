@@ -14,7 +14,7 @@ export const mobileOptimization = {
     if (typeof document === "undefined") return;
 
     // Viewport meta tag'ı kontrol et
-    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    let viewportMeta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
     if (!viewportMeta) {
       viewportMeta = document.createElement("meta");
       viewportMeta.name = "viewport";
@@ -119,7 +119,7 @@ export const mobileOptimization = {
   enablePassiveScrollListener(): () => void {
     if (typeof window === "undefined") return () => {};
 
-    const options = { passive: true };
+    const options: AddEventListenerOptions = { passive: true };
 
     const handleScroll = () => {
       // Scroll event handler - lightweight

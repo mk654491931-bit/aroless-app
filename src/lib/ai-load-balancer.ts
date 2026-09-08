@@ -13,8 +13,6 @@
  * - Circuit breaker pattern (temp disable on repeated failures)
  */
 
-import { z } from "zod";
-
 // ============================================================================
 // TYPES & CONFIGURATION
 // ============================================================================
@@ -212,7 +210,7 @@ export function selectModelForTier(provider: ProviderType, tier: ModelTier = "ba
  * Task'a uygun ilk provider'ı seç
  * Varsayılan: Gemini (güçlü) → Groq (hızlı) → Together (backup)
  */
-export function selectPrimaryProvider(taskType?: string): ProviderType {
+export function selectPrimaryProvider(_taskType?: string): ProviderType {
   const state = getProviderState();
 
   // Circuit breaker kontrolü: açık olan provider'ı atla

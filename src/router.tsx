@@ -18,7 +18,8 @@ export const getRouter = () => {
         gcTime: 30 * 60 * 1000,
         retry: 1,
         refetchOnWindowFocus: false,
-        refetchOnReconnect: "stale",
+        // v5 semantics: `true` refetches only stale queries on reconnect.
+        refetchOnReconnect: true,
         // Arka planda sessiz revalidasyon
         refetchOnMount: false,
       },

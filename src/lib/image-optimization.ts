@@ -51,7 +51,6 @@ export function createPictureElement(
   options = defaultOptions
 ): string {
   const formats = options.formats || ["avif", "webp", "jpg"];
-  const quality = options.quality || 75;
 
   let pictureHTML = "<picture>";
 
@@ -168,7 +167,7 @@ class ImageCache {
   set(key: string, value: string) {
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) this.cache.delete(firstKey);
     }
     this.cache.set(key, value);
   }
@@ -253,7 +252,7 @@ export class ImageObserver {
       // Queue'daki sonraki image'i yükle
       if (this.loadingQueue.size > 0) {
         const nextImg = this.loadingQueue.values().next().value;
-        this.queueImageLoad(nextImg);
+        if (nextImg) this.queueImageLoad(nextImg);
       }
     }
   }

@@ -92,7 +92,7 @@ export function initializeWebVitalsTracking(
         const interaction = entry as FirstInput | PerformanceEventTiming;
         const duration = "processingDuration" in interaction
           ? interaction.processingDuration
-          : interaction.duration;
+          : (entry as PerformanceEntry).duration;
         callback?.({
           name: "FID",
           value: duration,
@@ -269,8 +269,6 @@ export interface PerformanceReport {
 }
 
 export function generatePerformanceReport(): PerformanceReport {
-  const metrics = initializeWebVitalsTracking();
-
   const vitalsMetrics: Record<string, WebVitalsMetric | undefined> = {
     LCP: undefined,
     FID: undefined,

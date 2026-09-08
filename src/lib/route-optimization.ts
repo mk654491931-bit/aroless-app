@@ -22,11 +22,11 @@ const defaultConfig: RouteOptimizationConfig = {
  * Route chunk preloading
  */
 export function useRoutePreloading(config = defaultConfig) {
-  const router = useRouterState();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const location = useRouterState({ select: (s) => s.location });
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
-    if (!router.location) return;
+    if (!location) return;
 
     const preload = () => {
       // Sonraki route'ları tahmin et ve preload et
@@ -38,7 +38,7 @@ export function useRoutePreloading(config = defaultConfig) {
         if (!href || href.startsWith("http")) return;
 
         // Link zaten cache'de mi kontrol et
-        if (window.__routeCache?.has(href)) return;
+        if ((window as any).__routeCache?.has(href)) return;
 
         // Route'u preload et
         const preloadLink = document.createElement("link");
@@ -68,7 +68,7 @@ export function useRoutePreloading(config = defaultConfig) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [router.location, config]);
+  }, [location, config]);
 }
 
 /**
@@ -125,7 +125,7 @@ export function useLinkPrefetch() {
 /**
  * Cache store for routes
  */
-if (typeof window !== "undefined" && !window.__routeCache) {
+if (typeof window !== "undefined" && !(window as any).__routeCache) {
   (window as any).__routeCache = new Set<string>();
   (window as any).__routePreloadQueue = new Map<string, Promise<any>>();
 }

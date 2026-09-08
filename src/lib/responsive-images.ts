@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useEffect, useRef } from "react";
-import { deviceDetection, networkAwareness } from "./session-persistence";
+import { networkAwareness } from "./session-persistence";
 
 export interface ResponsiveImageConfig {
   baseSrc: string;
