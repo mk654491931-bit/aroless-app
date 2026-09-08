@@ -4,11 +4,8 @@ import tsConfigPaths from "vite-tsconfig-paths";
 import viteReact from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
-// Portable Vite config — no proprietary wrapper required.
-// Works locally, in Codespaces, in CI and inside a hosted preview sandbox.
-
-const isSandbox =
-  process.env["LOVABLE_SANDBOX"] === "1" || !!process.env["DEV_SERVER__PROJECT_PATH"];
+// Portable Vite config. No vendor wrapper, no hosted-preview bridges: the same
+// config runs locally, in CI and on Vercel.
 
 export default defineConfig(async ({ command, mode }) => {
   const plugins: PluginOption[] = [
@@ -24,41 +21,20 @@ export default defineConfig(async ({ command, mode }) => {
     }),
   ];
 
-  // Nitro is only needed to produce the deployable server bundle.
+  // Nitro produces the deployable server bundle (nitro.config.ts pins the
+  // Vercel preset). This used to be a swallowed optional import; it is now
+  // fatal, because a build that silently ships no server bundle is a broken
+  // deploy that still exits 0 -- every server function and /api route would
+  // 404 in production while CI stayed green.
   if (command === "build") {
-    try {
-      const { nitro } = await import("nitro/vite");
-      plugins.push(
-        nitro({
-          preset: "vercel",
-        }) as PluginOption,
-      );
-    } catch {
-      // nitro not installed → plain Vite SSR build, still fine for local dev/preview.
-    }
+    const { nitro } = await import("nitro/vite");
+    plugins.push(nitro() as PluginOption);
   }
 
   plugins.push(viteReact());
 
-  // Optional hosted-preview helpers. Absent outside the sandbox; never required.
-  if (command === "serve" && isSandbox) {
-    for (const spec of [
-      "@lovable.dev/vite-tanstack-config/hmr-gate",
-      "@lovable.dev/vite-tanstack-config/dev-server-bridge",
-    ]) {
-      try {
-        const mod: Record<string, unknown> = await import(/* @vite-ignore */ spec);
-        const factory = (mod["hmrGatePlugin"] ?? mod["devServerBridgePlugin"]) as
-          ((opts?: unknown) => PluginOption) | undefined;
-        if (factory) plugins.push(factory({}));
-      } catch {
-        // not installed → skip
-      }
-    }
-  }
-
   // Expose VITE_* values through import.meta.env even when the host injects
-  // them as plain process env vars (Codespaces, Docker, CI).
+  // them as plain process env vars (Vercel, Docker, CI).
   const define: Record<string, string> = {};
   for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), "VITE_"))) {
     define[`import.meta.env.${key}`] = JSON.stringify(value);
@@ -85,20 +61,12 @@ export default defineConfig(async ({ command, mode }) => {
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
       ],
-      exclude: ["@lovable.dev/cloud-auth-js"],
     },
     server: {
       host: "::",
       port: 8080,
-      ...(isSandbox ? { strictPort: true, hmr: { overlay: false } } : {}),
       watch: {
-        ignored: [
-          "**/.workspace/**",
-          "**/.agents/**",
-          "**/.claude/**",
-          "**/.lovable/**",
-          "**/.tanstack/tmp/**",
-        ],
+        ignored: ["**/.workspace/**", "**/.agents/**", "**/.claude/**", "**/.tanstack/tmp/**"],
       },
     },
     build: {

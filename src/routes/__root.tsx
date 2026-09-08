@@ -12,13 +12,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
+import { reportClientError } from "@/lib/error-reporting";
 import { reloadOnceForStaleChunk } from "@/lib/deploy-race-recovery";
 import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
 import i18n from "@/lib/i18n";
 import { usePerformanceInit } from "@/lib/performance-init";
+import { useCaptureSearchHandoff } from "@/hooks/use-search-handoff";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -57,7 +58,11 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportClientError(
+      error,
+      { boundary: "tanstack_root_error_component" },
+      { mechanism: "react_error_boundary", handled: false, severity: "error" },
+    );
     // Yeni yayınla eskimiş bir sayfa (eski chunk adları) eşleştiğinde router
     // bu hatayı yakalar; sayfayı bir kez tazeleyerek kullanıcıyı boş ekranda
     // bırakmadan yeni sürüme taşır.
@@ -171,6 +176,10 @@ function RootComponent() {
     enableNetworkAwareness: true,
     debug: process.env.NODE_ENV === "development",
   });
+
+  // Devredilen arama terimi (?q=…) — park edilir ve adres çubuğundan temizlenir,
+  // böylece yenileme kredi harcayan bir aramayı tekrar başlatmaz.
+  useCaptureSearchHandoff(pathname);
 
   useEffect(() => {
     initI18n();
