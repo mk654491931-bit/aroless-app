@@ -3,6 +3,10 @@
  *
  * 22 API key: Groq×5 | Gemini×5 | OpenRouter×5 | HuggingFace×5 | Cerebras×1 | SambaNova×1
  * Vercel Edge & Serverless Runtime ile tam uyumlu (Node 18+, Web Fetch API)
+ *
+ * CHANGELOG:
+ *   fix: siteOrigin() template literal düzeltildi (https:// → https://)
+ *   feat: CircuitBreakerState tipi eklendi
  */
 
 // ---------------------------------------------------------------------------
@@ -29,6 +33,12 @@ export interface ProviderConfig {
   buildBody: (prompt: string, maxTokens: number, temperature: number) => unknown;
   /** Ham API yanıtından metin çıkarır */
   extractText: (raw: unknown) => string;
+}
+
+/** Circuit breaker durumu — 3 ardışık hata sonrası 60 sn devre dışı */
+export interface CircuitBreakerState {
+  failures: number;
+  openUntil: number; // Date.now() cinsinden
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +99,7 @@ function extractOpenAiText(raw: unknown): string {
 // Provider tanımları
 // ---------------------------------------------------------------------------
 
+/** Vercel'de VERCEL_URL otomatik set edilir (protokolsüz), yoksa localhost. */
 const siteOrigin = (): string => {
   const v = (process.env as Record<string, string | undefined>)['VERCEL_URL'];
   return v ? `https://${v}` : 'http://localhost:8080';
