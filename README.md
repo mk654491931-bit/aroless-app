@@ -2,15 +2,15 @@
 
 E-ticaret büyüme paneli: ürün bulucu, kazanan ürün radarı, ROI takibi, mağaza denetçisi, reklam kreatif stüdyosu ve eğitim simülatörü.
 
-Teknoloji: TanStack Start (React 19) + Vite + Tailwind v4 + Supabase.
+Teknoloji: TanStack Start (React 19) + Vite + Tailwind v4 + Supabase. Dağıtım: **Vercel**.
 
 ## Hızlı kurulum (VS Code / Codespaces / herhangi bir makine)
 
 Gereken tek şey: bir Supabase projesi ve `.env` dosyası.
 
 ```sh
-# 1) Bağımlılıklar (bun veya npm)
-npm install          # ya da: bun install
+# 1) Bağımlılıklar
+npm install
 
 # 2) Ortam değişkenleri
 cp .env.example .env # değerleri doldur
@@ -23,7 +23,8 @@ npx supabase db push
 npm run dev          # http://localhost:8080
 ```
 
-Üretim derlemesi: `npm run build` → `dist/` (Cloudflare/Nitro çıktısı).
+`.env` yalnızca yerel geliştirme içindir ve depoya **girmez**. Canlı ve preview
+değerleri Vercel proje ayarlarından okunur.
 
 ## Google ile giriş
 
@@ -37,7 +38,7 @@ Uygulama `supabase.auth.signInWithOAuth` kullanır — hiçbir üçüncü parti 
 
 ## Opsiyonel servisler
 
-Aşağıdakiler `.env`'de boş bırakılırsa özellik otomatik devre dışı kalır, uygulama çalışmaya devam eder:
+Aşağıdakiler boş bırakılırsa özellik otomatik devre dışı kalır, uygulama çalışmaya devam eder:
 
 | Değişken                                               | Etki                                                              |
 | ------------------------------------------------------ | ----------------------------------------------------------------- |
@@ -50,12 +51,14 @@ En az bir AI anahtarı önerilir; hiçbiri yoksa AI özellikleri hata yerine "ya
 
 ## Komutlar
 
-| Komut             | Açıklama                   |
-| ----------------- | -------------------------- |
-| `npm run dev`     | Geliştirme sunucusu (8080) |
-| `npm run build`   | Üretim derlemesi           |
-| `npm run preview` | Derlemeyi yerelde çalıştır |
-| `npm run lint`    | ESLint                     |
+| Komut               | Açıklama                     |
+| ------------------- | ---------------------------- |
+| `npm run dev`       | Geliştirme sunucusu (8080)   |
+| `npm run build`     | Üretim derlemesi (Vercel)    |
+| `npm run preview`   | Derlemeyi yerelde çalıştır   |
+| `npm run typecheck` | TypeScript kontrolü          |
+| `npm test`          | Birim testleri (vitest)      |
+| `npm run lint`      | ESLint                       |
 
 ## GitHub Codespaces
 
@@ -64,28 +67,33 @@ Node 22 kurar, `.env` dosyasını `.env.example`'dan oluşturur, bağımlılıkl
 ve 8080 portunu yönlendirir. Sonrasında tek yapman gereken `.env` içindeki
 Supabase ve AI anahtarlarını doldurup `npm run dev` demek.
 
-Ek komutlar: `npm run setup` (env + install), `npm run typecheck` (TypeScript kontrolü).
+## Üretime alma — yalnızca Vercel
 
-## Üretime alma (canlı)
+Tek desteklenen hedef Vercel'dir. `nitro.config.ts` `vercel` preset'ini sabitler;
+`npm run build` istemci paketini ve SSR handler'ı, tüm sunucu fonksiyonlarını ve
+`src/routes/api/` altındaki tüm rotaları birer Vercel function olarak üretir.
+Ayrı bir API sunucusu, Cloudflare preset'i veya editör üzerinden yayın yoktur.
 
-Aynı kod tabanı lokal, preview ve canlıda değişiklik gerektirmeden çalışır; sadece
-ortam değişkenleri hedef platformun secret ekranına girilir. Sabit domain yazılı
-hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üzerinden
-üretilir.
+| | |
+| --- | --- |
+| Build komutu | `npm run build` (`vercel.json` içinde tanımlı) |
+| Node | >= 20 |
+| Çıktı | `.vercel/output` (Nitro Vercel preset'i) |
+| Webhook adresi | `https://<alan-adınız>/api/public/webhook/paddle` |
 
-| Hedef              | Adımlar                                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir)           |
-| Node sunucu / VPS  | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
-| Lovable            | Publish butonu; env değerleri proje secret'larından okunur                                                  |
+Tüm değişken listesi ve ayrıntılar için: **`docs/VERCEL-DEPLOYMENT.md`**.
 
 Notlar:
 
-- `nitro` kurulu değilse `npm run build` düz Vite SSR çıktısı üretir; geliştirme ve
-  `npm run preview` için bu yeterlidir, Cloudflare dağıtımı için `nitro` gerekir.
-- Sunucu ilk isteği aldığında zorunlu değişkenleri kontrol eder ve eksikse konsola
-  tek satırlık uyarı basar (`[env] Eksik zorunlu değişken(ler): ...`).
-- `.env` asla depoya girmez; `.env.example` güncel şablon olarak tutulur.
+- `vite build`, Nitro yüklenemezse artık **hata verir**. Önceden bu import bir
+  `try/catch` içindeydi ve sessizce atlanıyordu; sonuç yeşil görünen ama sunucu
+  paketi olmayan bir derleme, yani canlıda 404 veren tüm `/api` rotalarıydı.
+- Sabit domain yazılı hiçbir yer yoktur — OAuth ve paylaşım linkleri
+  `window.location.origin` üzerinden üretilir.
+- Sunucu ilk isteği aldığında zorunlu değişkenleri kontrol eder ve eksikse
+  konsola tek satırlık uyarı basar (`[env] Eksik zorunlu değişken(ler): ...`).
+- Veritabanı migration'ları Vercel derlemesiyle değil, Supabase CLI ile uygulanır
+  (`supabase db push`).
 
 ### Supabase Auth adresleri
 
@@ -101,6 +109,7 @@ Google Cloud OAuth istemcisine de aynı iki origin ve
 
 ```sh
 npm run typecheck
+npm test
 npm run build
 npm run dev      # Google girişi, ürün bulucu, admin paneli akışlarını elle dene
 ```
