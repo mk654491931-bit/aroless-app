@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   isNoCreditsError,
   isJwtError,
   classifyServerError,
+  tryRefundCredit,
 } from "./error-helpers";
 
 describe("isNoCreditsError", () => {
@@ -81,5 +82,49 @@ describe("classifyServerError", () => {
   it("handles non-Error objects", () => {
     const result = classifyServerError({ message: "JWT invalid" });
     expect(result.type).toBe("jwt");
+  });
+});
+
+describe("tryRefundCredit", () => {
+  it("calls refund_engine_credits with default payload", async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    await tryRefundCredit({ rpc }, "user-1", 2);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("refund_engine_credits", {
+      _search_credits: 1,
+      _sim_credits: 0,
+      _reason: "engine_failure",
+      _idempotency_key: null,
+    });
+  });
+
+  it("sanitizes and forwards custom refund options", async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    await tryRefundCredit({ rpc }, "user-1", 2, {
+      search: 1.8,
+      sim: -2,
+      reason: "manual_retry",
+      idempotencyKey: "op-123",
+    });
+
+    expect(rpc).toHaveBeenCalledWith("refund_engine_credits", {
+      _search_credits: 2,
+      _sim_credits: 0,
+      _reason: "manual_retry",
+      _idempotency_key: "op-123",
+    });
+  });
+
+  it("returns early when no refund amount is requested", async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    await tryRefundCredit({ rpc }, "user-1", 2, { search: 0, sim: 0 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("never throws when rpc is missing or fails", async () => {
+    await expect(tryRefundCredit({}, "user-1", 2)).resolves.toBeUndefined();
+    const rpc = vi.fn().mockRejectedValue(new Error("boom"));
+    await expect(tryRefundCredit({ rpc }, "user-1", 2)).resolves.toBeUndefined();
   });
 });

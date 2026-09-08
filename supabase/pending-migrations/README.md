@@ -13,15 +13,4 @@ ordering still applies cleanly.
 
 | File | Status | Blocked on |
 | --- | --- | --- |
-| `20260908000100_lock_credit_columns.sql` | Optional defence-in-depth | Routing the inline refund closure in `gemini.functions.ts` through `tryRefundCredit()` / `refund_engine_credits()` |
-
-### Why the credit lock is no longer urgent
-
-The self-escalation hole it was written for is already closed by
-`20260908002000_guard_profile_credit_changes.sql`, which bounds and audits
-user-originated credit increases with a trigger instead of removing the grant.
-That needed no application change, so it could ship immediately.
-
-Applying the REVOKE as well would remove the direct-write path entirely, which
-is stricter and slightly cheaper at runtime (no trigger on those updates). It is
-worth doing eventually, but it is now an improvement rather than a fix.
+| _No pending migrations currently._ |  |  |

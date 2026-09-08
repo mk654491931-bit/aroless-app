@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini, callLovableAI, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { RealEconomics } from "@/lib/real-economics";
+import { tryRefundCredit } from "@/lib/error-helpers";
 import {
   HYBRID_RELAXED_MIN_SCORE,
   type ConsensusResult,
@@ -513,14 +514,9 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
 } ] }`;
 
     const refund = async () => {
-      try {
-        await context.supabase
-          .from("profiles")
-          .update({ credits: (remaining as number) + 1 })
-          .eq("id", context.userId);
-      } catch {
-        /* kredi iadesi başarısız olsa da akış bozulmaz */
-      }
+      await tryRefundCredit(context.supabase, context.userId, remaining as number, {
+        search: 1,
+      });
     };
 
     // Run parallel Gemini calls with DIFFERENT angles to (a) multiply the
