@@ -67,10 +67,7 @@ export function classifyServerError(error: unknown): {
  * without importing the SDK types here.
  */
 type RefundCapableClient = {
-  rpc?: (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ error: { message?: string; code?: string } | null }>;
+  rpc?: unknown;
 };
 
 export type RefundOptions = {
@@ -95,8 +92,8 @@ export type RefundOptions = {
  */
 export async function tryRefundCredit(
   supabase: RefundCapableClient,
-  userId: string,
-  currentCredits: number,
+  _userId: string,
+  _currentCredits: number,
   opts: RefundOptions = {},
 ): Promise<void> {
   const search = Math.max(0, Math.round(opts.search ?? 1));
@@ -105,7 +102,11 @@ export async function tryRefundCredit(
   if (typeof supabase.rpc !== "function") return;
 
   try {
-    await supabase.rpc("refund_engine_credits", {
+    const refundRpc = supabase.rpc as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<unknown>;
+    await refundRpc("refund_engine_credits", {
       _search_credits: search,
       _sim_credits: sim,
       _reason: opts.reason ?? "engine_failure",
