@@ -8,6 +8,75 @@ export type Database = {
   };
   public: {
     Tables: {
+      affiliate_commissions: {
+        Row: {
+          affiliate_id: string;
+          commission_cents: number;
+          commission_rate_pct: number;
+          created_at: string;
+          gross_amount_cents: number;
+          id: string;
+          referred_user_id: string | null;
+          subscription_id: string | null;
+          tier: string | null;
+          transaction_id: string | null;
+        };
+        Insert: {
+          affiliate_id: string;
+          commission_cents?: number;
+          commission_rate_pct?: number;
+          created_at?: string;
+          gross_amount_cents?: number;
+          id?: string;
+          referred_user_id?: string | null;
+          subscription_id?: string | null;
+          tier?: string | null;
+          transaction_id?: string | null;
+        };
+        Update: {
+          affiliate_id?: string;
+          commission_cents?: number;
+          commission_rate_pct?: number;
+          created_at?: string;
+          gross_amount_cents?: number;
+          id?: string;
+          referred_user_id?: string | null;
+          subscription_id?: string | null;
+          tier?: string | null;
+          transaction_id?: string | null;
+        };
+        Relationships: [];
+      };
+      affiliates: {
+        Row: {
+          commission_rate_pct: number;
+          created_at: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+          verified_at: string | null;
+          verified_by: string | null;
+        };
+        Insert: {
+          commission_rate_pct?: number;
+          created_at?: string;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
+        Update: {
+          commission_rate_pct?: number;
+          created_at?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
+        Relationships: [];
+      };
       ai_cache: {
         Row: {
           cache_key: string;
@@ -1077,6 +1146,15 @@ export type Database = {
         Returns: boolean;
       };
       is_admin_email: { Args: { _email: string }; Returns: boolean };
+      verify_affiliate: {
+        Args: {
+          _admin_id: string;
+          _rate_pct: number | null;
+          _status: string;
+          _user_id: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       app_role: "admin" | "user";

@@ -11,6 +11,7 @@ import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
 import { ReferralPanel } from "@/components/referral-panel";
+import { AffiliatePanel } from "@/components/affiliate-panel";
 import { SupportPanel } from "@/components/support-panel";
 import { AccountDataPanel } from "@/components/account-data-panel";
 
@@ -209,6 +210,7 @@ function SettingsPage() {
         </section>
 
         <ReferralPanel />
+        <AffiliatePanel />
         <SupportPanel />
         <AccountDataPanel />
       </main>

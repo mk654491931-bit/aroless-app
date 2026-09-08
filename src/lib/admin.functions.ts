@@ -6,7 +6,12 @@ async function assertAdmin(context: { supabase: any; userId: string; claims: any
     _user_id: context.userId,
     _role: "admin",
   });
-  if (error || !data) throw new Error("Forbidden");
+  if (error || !data) {
+    // 403, not 500 — TanStack Start serializes statusCode into the response.
+    const err = new Error("Forbidden") as Error & { statusCode: number };
+    err.statusCode = 403;
+    throw err;
+  }
 }
 
 export type AdminStats = {
