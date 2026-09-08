@@ -1,7 +1,7 @@
 import { ArolessCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -40,15 +40,14 @@ import {
   Lock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
 
 import { useAuth } from "@/hooks/use-auth";
+import { useFinderData } from "@/hooks/use-finder-data";
+import { useSearchHandoff } from "@/hooks/use-search-handoff";
 import {
   generateProducts,
-  getProfile,
   generateSeoKit,
   generateCreativeScripts,
-  listFavorites,
   saveFavorite,
   deleteFavorite,
   PLATFORMS,
@@ -63,7 +62,6 @@ import {
 } from "@/lib/gemini.functions";
 import { validateProduct } from "@/lib/gemini.functions";
 import { ConsensusBadge, ConsensusReportModal } from "@/components/consensus-report";
-import { checkIsAdmin } from "@/lib/admin.functions";
 import { PricingModal } from "@/components/pricing-modal";
 import { AnalysisPipelineModal } from "@/components/analysis-pipeline-modal";
 import { ReportModal } from "@/components/report-modal";
@@ -76,7 +74,6 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   enrichProduct,
   recommendationStyle,
-  formatCurrency,
   reliabilityStyle,
 } from "@/lib/recommendation";
 import { CurrencyProvider, useMoney } from "@/lib/currency";
@@ -143,7 +140,7 @@ import {
 } from "@/components/deep-search-panel";
 import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
 
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
+import { X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
 import {
   OnboardingWizard,
@@ -152,6 +149,10 @@ import {
   sanitizeOnboardingResult,
 } from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
+import { FxBadge, RotatingSlogan, TabSwitcher } from "@/components/finder/finder-chrome";
+import { ResultsToolbar, type SortKey } from "@/components/finder/results-toolbar";
+import { sortProducts, toProductList } from "@/lib/finder-derivations";
+import { buildShopifyCsv, netMarginView, resolveProductImage } from "@/lib/finder-formatting";
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -170,37 +171,14 @@ export const Route = createFileRoute("/")({
 
 type Tab = "finder" | "trends" | "seo" | "creative" | "library" | "training" | "academy";
 
-/**
- * Motor/agent yanıtlarından ürün listesini güvenle çıkarır.
- * Desteklenen şekiller: doğrudan dizi, { products }, { results },
- * { data: [...] }, { data: { products } }. Boş/null → [] döner, asla patlamaz.
- */
-function toProductList(res: unknown): WinningProduct[] {
-  if (Array.isArray(res)) {
-    return res.filter((x) => x !== null && typeof x === "object") as WinningProduct[];
-  }
-  if (!res || typeof res !== "object") return [];
-  const obj = res as Record<string, unknown>;
-  for (const cand of [obj.products, obj.results, obj.data]) {
-    if (Array.isArray(cand)) return cand as WinningProduct[];
-    if (cand && typeof cand === "object") {
-      const inner = (cand as Record<string, unknown>).products;
-      if (Array.isArray(inner)) return inner as WinningProduct[];
-    }
-  }
-  return [];
-}
-
 function Dashboard() {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
   const { user, loading } = useAuth();
   const qc = useQueryClient();
-  const getProfileFn = useServerFn(getProfile);
   const generateFn = useServerFn(generateProducts);
   const seoFn = useServerFn(generateSeoKit);
   const scriptsFn = useServerFn(generateCreativeScripts);
-  const listFavFn = useServerFn(listFavorites);
   const saveFavFn = useServerFn(saveFavorite);
   const delFavFn = useServerFn(deleteFavorite);
   const saveAnalysisFn = useServerFn(saveAnalysis);
@@ -318,29 +296,7 @@ function Dashboard() {
       })
       .catch(() => {});
   }, [user, claimReferralFn, qc]);
-
-  const profileQ = useQuery({
-    queryKey: ["profile", user?.id],
-    queryFn: () => getProfileFn(),
-    enabled: !!user,
-    staleTime: 2 * 60_000, // 2 dk cache — profil her sorguda yeniden çekilmesin
-  });
-
-  const favsQ = useQuery({
-    queryKey: ["favorites", user?.id],
-    queryFn: () => listFavFn(),
-    enabled: !!user,
-    staleTime: 5 * 60_000, // 5 dk cache — favoriler sık değişmez
-  });
-
-  const checkAdminFn = useServerFn(checkIsAdmin);
-  const adminQ = useQuery({
-    queryKey: ["is-admin", user?.id],
-    queryFn: () => checkAdminFn(),
-    enabled: !!user,
-    staleTime: 10 * 60_000, // 10 dk cache — admin statüsü çok nadir değişir
-  });
-  const isAdmin = !!adminQ.data?.isAdmin;
+  const { profileQ, favsQ, profile, favorites, isAdmin } = useFinderData(user?.id);
 
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -363,7 +319,7 @@ function Dashboard() {
     onSuccess: (res, vars) => {
       try {
         // Yanıt şekli her zaman doğrulanır (dizi / products / results / data).
-        const products = toProductList(res);
+        const products = toProductList<WinningProduct>(res);
         setResults(products.length > 0 ? attachWinnerScores(products) : []);
         setRejected((res as { rejected?: RejectedCandidate[] } | undefined)?.rejected ?? []);
         setFallbackNotice(
@@ -423,7 +379,7 @@ function Dashboard() {
       }),
     onSuccess: (res) => {
       try {
-        const products = toProductList(res);
+        const products = toProductList<WinningProduct>(res);
         setResults(products.length > 0 ? attachWinnerScores(products) : []);
         setRejected([]);
         setFallbackNotice(null);
@@ -542,6 +498,11 @@ function Dashboard() {
     runSearch(niche);
   };
 
+  useSearchHandoff((query) => {
+    setNiche(query);
+    runSearch(query);
+  });
+
   // Cleanup search safety timer on unmount
   useEffect(() => {
     return () => { if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current); };
@@ -573,15 +534,14 @@ function Dashboard() {
   }
   if (!user) return <MarketingLanding />;
 
-  const credits = profileQ.data?.credits ?? 0;
-  const tier = profileQ.data?.subscription_tier ?? "Free";
+  const credits = profile?.credits ?? 0;
+  const tier = profile?.subscription_tier ?? "Free";
   const isPaidTier = ["starter", "pro", "business", "enterprise"].includes(
     String(tier).toLowerCase(),
   );
   // Free (non-admin) accounts: product search only — everything else is locked.
   const locked = !isAdmin && !isPaidTier;
 
-  const favorites = favsQ.data ?? [];
   const favoriteNames = new Set(favorites.map((f) => f.name));
 
   const tabDefs: { id: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -594,6 +554,69 @@ function Dashboard() {
     { id: "academy", label: t("ui.tab_academy"), icon: GraduationCap },
   ];
   const etaMs = engineLabel(engine).etaMs;
+  const resultSearchQuery = resultQuery.trim().toLowerCase();
+  const bandPass = useCallback(
+    (product: WinningProduct) => {
+      if (band === "winner") return (product.winner_score ?? 0) >= 70;
+      if (band === "high") return enrichProduct(product).ai_score >= 80;
+      if (band === "lowcomp") return product.competition_level === "Low";
+      if (band === "margin")
+        return (product.cost_breakdown?.net_margin_pct ?? product.profit_margin_pct ?? 0) >= 40;
+      if (band === "saved") return favoriteNames.has(product.name);
+      if (band === "verified")
+        return product.evidence_level === "verified" || (product.realism_score ?? 0) >= 75;
+      if (band === "rising") return (product.market_evidence?.trend_momentum_pct ?? 0) > 0;
+      if (band === "shippable")
+        return (
+          (product.score_breakdown?.components.find((component) => component.key === "logistics")
+            ?.score ?? 0) >= 70
+        );
+      return true;
+    },
+    [band, favoriteNames],
+  );
+  const filteredResults = useMemo(
+    () =>
+      applyFilters(results, filters)
+        .filter(bandPass)
+        .filter(
+          (product) =>
+            !resultSearchQuery ||
+            [product.name, product.description, product.target_audience, ...(product.platform_fit ?? [])]
+              .filter(Boolean)
+              .some((value) => String(value).toLowerCase().includes(resultSearchQuery)),
+        ),
+    [results, filters, bandPass, resultSearchQuery],
+  );
+  const shownResults = useMemo(
+    () =>
+      sortProducts(filteredResults, sortBy, onlyLaunch, sortDesc, {
+        enrichProduct: (product) => enrichProduct(product as never),
+        buyersPer1000: (product) => buyersPer1000(product as never).value,
+      }) as WinningProduct[],
+    [filteredResults, sortBy, onlyLaunch, sortDesc],
+  );
+  const bands = useMemo(
+    () =>
+      [
+        { id: "all", label: `Tümü (${results.length})` },
+        {
+          id: "winner",
+          label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})`,
+        },
+        { id: "high", label: "80+ AI skoru" },
+        { id: "lowcomp", label: "Düşük rekabet" },
+        { id: "margin", label: "Marj %40+" },
+        { id: "saved", label: "Kaydedilenler" },
+        {
+          id: "verified",
+          label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})`,
+        },
+        { id: "rising", label: "Canlı yükselişte" },
+        { id: "shippable", label: "Kargoya uygun" },
+      ] as const,
+    [results],
+  );
 
   return (
     <CurrencyProvider country={targetCountry}>
@@ -766,7 +789,7 @@ function Dashboard() {
             <TabSwitcher
               tabDefs={tabDefs}
               tab={tab}
-              onTab={setTab}
+              onTab={(nextTab) => setTab(nextTab as Tab)}
               favoritesCount={favorites.length}
             />
             <div key={tab} className="surface-morph">
@@ -1296,182 +1319,115 @@ function Dashboard() {
                         </div>
                       </div>
                     )}
-                    {!searching &&
-                      results.length > 0 &&
-                      (() => {
-                        const q = resultQuery.trim().toLowerCase();
-                        const bandPass = (p: WinningProduct) => {
-                          if (band === "winner") return (p.winner_score ?? 0) >= 70;
-                          if (band === "high") return enrichProduct(p).ai_score >= 80;
-                          if (band === "lowcomp") return p.competition_level === "Low";
-                          if (band === "margin")
-                            return (
-                              (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40
-                            );
-                          if (band === "saved") return favoriteNames.has(p.name);
-                          if (band === "verified")
-                            return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
-                          if (band === "rising")
-                            return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
-                          if (band === "shippable")
-                            return (
-                              (p.score_breakdown?.components.find((c) => c.key === "logistics")
-                                ?.score ?? 0) >= 70
-                            );
-                          return true;
-                        };
+                    {!searching && results.length > 0 && (
+                      <>
+                        <FinderInsights products={filteredResults} />
 
-                        const filtered = useMemo(() =>
-                          applyFilters(results, filters)
-                            .filter(bandPass)
-                            .filter(
-                              (p) =>
-                                !q ||
-                                [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
-                                  .filter(Boolean)
-                                  .some((v) => String(v).toLowerCase().includes(q)),
-                            ),
-                          [results, filters, band, q, onlyLaunch],
-                        );
-                        const shown = useMemo(() =>
-                          sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
-                          [filtered, sortBy, onlyLaunch, sortDesc],
-                        );
-                        const bands = [
-                          { id: "all", label: `Tümü (${results.length})` },
-                          {
-                            id: "winner",
-                            label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})`,
-                          },
-                          { id: "high", label: "80+ AI skoru" },
-                          { id: "lowcomp", label: "Düşük rekabet" },
-                          { id: "margin", label: "Marj %40+" },
-                          { id: "saved", label: "Kaydedilenler" },
-                          {
-                            id: "verified",
-                            label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})`,
-                          },
-                          { id: "rising", label: "Canlı yükselişte" },
-                          { id: "shippable", label: "Kargoya uygun" },
-                        ] as const;
+                        <AdvancedFilters
+                          products={results}
+                          filters={filters}
+                          onChange={setFilters}
+                          onReset={() => setFilters(DEFAULT_FILTERS)}
+                        />
+                        <FilterPresets
+                          current={{ filters, band, sortBy, sortDesc, onlyLaunch }}
+                          onApply={(s) => {
+                            setFilters(s.filters);
+                            setBand(s.band);
+                            setSortBy(s.sortBy);
+                            setSortDesc(s.sortDesc);
+                            setOnlyLaunch(s.onlyLaunch);
+                          }}
+                        />
 
-                        return (
-                          <>
-                            <FinderInsights products={filtered} />
+                        <div className="mb-3 flex flex-wrap gap-1.5">
+                          {bands.map((b) => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setBand(b.id)}
+                              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                                band === b.id
+                                  ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.78_0.13_255)]"
+                                  : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                        </div>
 
-                            <AdvancedFilters
-                              products={results}
-                              filters={filters}
-                              onChange={setFilters}
-                              onReset={() => setFilters(DEFAULT_FILTERS)}
-                            />
-                            <FilterPresets
-                              current={{ filters, band, sortBy, sortDesc, onlyLaunch }}
-                              onApply={(s) => {
-                                setFilters(s.filters);
-                                setBand(s.band);
-                                setSortBy(s.sortBy);
-                                setSortDesc(s.sortDesc);
-                                setOnlyLaunch(s.onlyLaunch);
+                        <ResultsToolbar
+                          products={filteredResults}
+                          sortBy={sortBy}
+                          onSortBy={setSortBy}
+                          onlyLaunch={onlyLaunch}
+                          onToggleLaunch={() => setOnlyLaunch((v) => !v)}
+                          sortDesc={sortDesc}
+                          onToggleDir={() => setSortDesc((v) => !v)}
+                          query={resultQuery}
+                          onQuery={setResultQuery}
+                          niche={niche}
+                          country={targetCountry}
+                        />
+
+                        {shownResults.length === 0 && (
+                          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+                            <AlertTriangle size={14} className="shrink-0" />
+                            <span>Analiz {results.length} ürün buldu ama aktif filtreler hepsini gizliyor.</span>
+                            <button
+                              onClick={() => {
+                                setFilters(DEFAULT_FILTERS);
+                                setOnlyLaunch(false);
                               }}
+                              className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-semibold hover:bg-amber-400/20"
+                            >
+                              Filtreleri sıfırla
+                            </button>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                          {shownResults.map((p, i) => (
+                            <ProductCard
+                              key={i}
+                              p={p}
+                              selected={compareNames.includes(p.name)}
+                              onToggleSelect={() => toggleCompare(p.name)}
+                              saved={favoriteNames.has(p.name)}
+                              onSave={() => saveMut.mutate(p)}
+                              onSeo={(name) => {
+                                setTab("seo");
+                                requestRun("seo", name);
+                              }}
+                              onCreative={(name) => {
+                                setTab("creative");
+                                requestRun("creative", name);
+                              }}
+                              onReport={() => setReportProduct(p)}
+                              onOpen={() => setDeepDiveProduct(p)}
+
+                              locked={false}
+                              onUpgrade={() => setShowPricing(true)}
                             />
+                          ))}
+                        </div>
+                        <RejectedPanel items={rejected} />
 
-                            <div className="mb-3 flex flex-wrap gap-1.5">
-                              {bands.map((b) => (
-                                <button
-                                  key={b.id}
-                                  type="button"
-                                  onClick={() => setBand(b.id)}
-                                  className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
-                                    band === b.id
-                                      ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.78_0.13_255)]"
-                                      : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-                                  }`}
-                                >
-                                  {b.label}
-                                </button>
-                              ))}
-                            </div>
-
-                            <ResultsToolbar
-                              products={filtered}
-                              sortBy={sortBy}
-                              onSortBy={setSortBy}
-                              onlyLaunch={onlyLaunch}
-                              onToggleLaunch={() => setOnlyLaunch((v) => !v)}
-                              sortDesc={sortDesc}
-                              onToggleDir={() => setSortDesc((v) => !v)}
-                              query={resultQuery}
-                              onQuery={setResultQuery}
-                              niche={niche}
-                              country={targetCountry}
-                            />
-
-                            {shown.length === 0 && (
-                              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-                                <AlertTriangle size={14} className="shrink-0" />
-                                <span>
-                                  Analiz {results.length} ürün buldu ama aktif filtreler hepsini
-                                  gizliyor.
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    setFilters(DEFAULT_FILTERS);
-                                    setOnlyLaunch(false);
-                                  }}
-                                  className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-semibold hover:bg-amber-400/20"
-                                >
-                                  Filtreleri sıfırla
-                                </button>
-                              </div>
-                            )}
-                            <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                              {shown.map((p, i) => (
-                                <ProductCard
-                                  key={i}
-                                  p={p}
-                                  selected={compareNames.includes(p.name)}
-                                  onToggleSelect={() => toggleCompare(p.name)}
-                                  saved={favoriteNames.has(p.name)}
-                                  onSave={() => saveMut.mutate(p)}
-                                  onSeo={(name) => {
-                                    setTab("seo");
-                                    requestRun("seo", name);
-                                  }}
-                                  onCreative={(name) => {
-                                    setTab("creative");
-                                    requestRun("creative", name);
-                                  }}
-                                  onReport={() => setReportProduct(p)}
-                                  onOpen={() => setDeepDiveProduct(p)}
-
-                                  locked={false}
-                                  onUpgrade={() => setShowPricing(true)}
-                                />
-                              ))}
-                            </div>
-                            <RejectedPanel items={rejected} />
-
-                            <CompareTray
-                              products={compareProducts}
-                              onRemove={(n) =>
-                                setCompareNames((prev) => prev.filter((x) => x !== n))
-                              }
-                              onClear={() => setCompareNames([])}
-                              onOpen={() => setCompareOpen(true)}
-                            />
-                            {compareOpen && compareProducts.length >= 2 && (
-                              <CompareModal
-                                products={compareProducts}
-                                onClose={() => setCompareOpen(false)}
-                                onRemove={(n) =>
-                                  setCompareNames((prev) => prev.filter((x) => x !== n))
-                                }
-                              />
-                            )}
-                          </>
-                        );
-                      })()}
+                        <CompareTray
+                          products={compareProducts}
+                          onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                          onClear={() => setCompareNames([])}
+                          onOpen={() => setCompareOpen(true)}
+                        />
+                        {compareOpen && compareProducts.length >= 2 && (
+                          <CompareModal
+                            products={compareProducts}
+                            onClose={() => setCompareOpen(false)}
+                            onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                          />
+                        )}
+                      </>
+                    )}
                   </section>
                 </>
               )}
@@ -1586,128 +1542,6 @@ function Dashboard() {
         <ConsensusReportModal report={validationReport} onClose={() => setValidationReport(null)} />
       </div>
     </CurrencyProvider>
-  );
-}
-
-/* Live FX badge — shows the active target-country currency and the USD rate. */
-function FxBadge() {
-  const { currency, rate, isLive, updated, fmt } = useMoney();
-  if (currency === "USD") return null;
-  return (
-    <span
-      title={`1 USD = ${rate.toFixed(2)} ${currency} · ${isLive ? `canlı kur (${updated})` : "yedek kur"}`}
-      className="morph-pill heartbeat hidden md:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-emerald-400" : "bg-amber-400"} animate-pulse-soft`}
-      />
-      {currency} · {fmt(rate, currency)}/$
-    </span>
-  );
-}
-
-/* Liquid-mercury main menu switcher — the highlight morphs and flows between tabs. */
-function TabSwitcher({
-  tabDefs,
-  tab,
-  onTab,
-  favoritesCount,
-}: {
-  tabDefs: {
-    id: Tab;
-    label: string;
-    icon: React.ComponentType<{ size?: number; className?: string }>;
-  }[];
-  tab: Tab;
-  onTab: (t: Tab) => void;
-  favoritesCount: number;
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [pill, setPill] = useState<{
-    left: number;
-    width: number;
-    top: number;
-    height: number;
-  } | null>(null);
-
-  useEffect(() => {
-    const measure = () => {
-      const wrap = wrapRef.current;
-      const el = btnRefs.current[tab];
-      if (!wrap || !el) return;
-      const w = wrap.getBoundingClientRect();
-      const b = el.getBoundingClientRect();
-      // keep the active tab in view when the user changes it while scrolled
-      if (b.left < w.left || b.right > w.right) {
-        el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      }
-      // re-measure after any scroll settles (track is scrollable on mobile)
-      window.setTimeout(() => {
-        const w2 = wrapRef.current;
-        const el2 = btnRefs.current[tab];
-        if (!w2 || !el2) return;
-        const wr = w2.getBoundingClientRect();
-        const br = el2.getBoundingClientRect();
-        setPill({ left: br.left - wr.left, width: br.width, top: br.top - wr.top, height: br.height });
-      }, 80);
-      setPill({ left: b.left - w.left, width: b.width, top: b.top - w.top, height: b.height });
-    };
-    measure();
-    const id = window.setTimeout(measure, 120);
-    window.addEventListener("resize", measure);
-    return () => {
-      window.clearTimeout(id);
-      window.removeEventListener("resize", measure);
-    };
-  }, [tab, favoritesCount]);
-
-  return (
-    <div className="tab-switch relative mx-auto mb-6 w-full max-w-4xl">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-[oklch(0.14_0.03_265)] to-transparent md:hidden"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-[oklch(0.14_0.03_265)] to-transparent md:hidden"
-      />
-      <div
-        ref={wrapRef}
-        className="tab-switch-track premium-card relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 text-sm md:flex-wrap md:justify-center md:overflow-visible"
-      >
-        {pill && (
-          <span
-            aria-hidden
-            className="mercury-pill"
-            style={{ left: pill.left, width: pill.width, top: pill.top, height: pill.height }}
-          />
-        )}
-        {tabDefs.map((td) => {
-          const Icon = td.icon;
-          const on = tab === td.id;
-          return (
-            <button
-              key={td.id}
-              ref={(el) => {
-                btnRefs.current[td.id] = el;
-              }}
-              role="tab"
-              aria-selected={on}
-              onClick={() => onTab(td.id)}
-              className={`relative z-10 shrink-0 px-3 md:px-4 py-1.5 rounded-full flex items-center gap-1.5 whitespace-nowrap transition-colors duration-300 ${on ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Icon size={14} /> {td.label}
-              {td.id === "library" && favoritesCount > 0 && (
-                <span className="ml-1 text-[10px] rounded-full bg-white/15 px-1.5 py-0.5">
-                  {favoritesCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -2400,291 +2234,6 @@ function ProductCard({
         Report {locked && <span className="text-amber-300">· Kilitli</span>}
       </button>
     </article>
-  );
-}
-
-type SortKey = "winner" | "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
-
-const SORTS: { id: SortKey; label: string }[] = [
-  { id: "winner", label: "Winner Score" },
-  { id: "ai", label: "AI score" },
-  { id: "buyers", label: "Buyers / 1k" },
-  { id: "margin", label: "Margin" },
-  { id: "trend", label: "Trend" },
-  { id: "profit", label: "Est. profit" },
-  { id: "realism", label: "Doğrulanmışlık" },
-  { id: "momentum", label: "Canlı momentum" },
-];
-
-function sortValue(p: WinningProduct, key: SortKey): number {
-  const e = enrichProduct(p);
-  if (key === "winner") return p.winner_score ?? e.ai_score;
-  if (key === "buyers") return buyersPer1000(p).value;
-  if (key === "margin") return p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0;
-  if (key === "trend") return e.trend_score;
-  if (key === "profit") return e.est_monthly_net_profit_usd;
-  if (key === "realism") return p.realism_score ?? 0;
-  if (key === "momentum") return p.market_evidence?.trend_momentum_pct ?? 0;
-  return e.ai_score;
-}
-
-function sortProducts(
-  list: WinningProduct[],
-  key: SortKey,
-  onlyLaunch: boolean,
-  desc = true,
-): WinningProduct[] {
-  const filtered = onlyLaunch
-    ? list.filter((p) => enrichProduct(p).recommendation === "Launch")
-    : list;
-  const dir = desc ? 1 : -1;
-  return [...filtered].sort((a, b) => (sortValue(b, key) - sortValue(a, key)) * dir);
-}
-
-function toCsv(list: WinningProduct[]): string {
-  const head = [
-    "Product",
-    "Supplier price",
-    "Selling price",
-    "Margin %",
-    "AI score",
-    "Trend",
-    "Buyers per 1000",
-    "CVR %",
-    "Recommendation",
-    "Est. monthly profit USD",
-  ];
-  const rows = list.map((p) => {
-    const e = enrichProduct(p);
-    const b = buyersPer1000(p).value;
-    return [
-      p.name,
-      p.supplier_price_usd,
-      p.selling_price_usd,
-      p.profit_margin_pct,
-      e.ai_score,
-      e.trend_score,
-      b,
-      (b / 10).toFixed(1),
-      e.recommendation,
-      e.est_monthly_net_profit_usd,
-    ];
-  });
-  return [head, ...rows]
-    .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-}
-
-function ResultsToolbar({
-  products,
-  sortBy,
-  onSortBy,
-  onlyLaunch,
-  onToggleLaunch,
-  sortDesc,
-  onToggleDir,
-  query,
-  onQuery,
-  niche,
-  country,
-}: {
-  products: WinningProduct[];
-  sortBy: SortKey;
-  onSortBy: (k: SortKey) => void;
-  onlyLaunch: boolean;
-  onToggleLaunch: () => void;
-  sortDesc: boolean;
-  onToggleDir: () => void;
-  query: string;
-  onQuery: (v: string) => void;
-  niche: string;
-  country: string;
-}) {
-  const shown = sortProducts(products, sortBy, onlyLaunch, sortDesc);
-  const avgBuyers = shown.length
-    ? Math.round(shown.reduce((a, p) => a + buyersPer1000(p).value, 0) / shown.length)
-    : 0;
-  const totalProfit = shown.reduce((a, p) => a + enrichProduct(p).est_monthly_net_profit_usd, 0);
-  const launches = products.filter((p) => enrichProduct(p).recommendation === "Launch").length;
-  const avgScore = shown.length
-    ? Math.round(shown.reduce((a, p) => a + enrichProduct(p).ai_score, 0) / shown.length)
-    : 0;
-  const avgMargin = shown.length
-    ? Math.round(
-        shown.reduce(
-          (a, p) => a + (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0),
-          0,
-        ) / shown.length,
-      )
-    : 0;
-  const stamp = new Date().toISOString().slice(0, 10);
-
-  const download = () => {
-    const blob = new Blob([toCsv(shown)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `aroless-winners-${stamp}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadJson = () => {
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          { niche, country, generated_at: new Date().toISOString(), products: shown },
-          null,
-          2,
-        ),
-      ],
-      {
-        type: "application/json;charset=utf-8",
-      },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `aroless-winners-${stamp}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const copySummary = async () => {
-    const lines = shown.slice(0, 20).map((p, i) => {
-      const e = enrichProduct(p);
-      return `${i + 1}. ${p.name} — AI ${e.ai_score} · ${p.selling_price_usd ?? "?"} · marj ${p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? "?"}% · ${e.recommendation}`;
-    });
-    await navigator.clipboard.writeText(
-      [`Aroless — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"),
-    );
-    toast.success("Özet panoya kopyalandı");
-  };
-
-  return (
-    <div className="premium-card grain rounded-2xl p-4 mb-4 flex flex-col gap-3">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        <SummaryStat label="Products" value={String(shown.length)} />
-        <SummaryStat
-          label="Avg Winner Score"
-          value={String(
-            shown.length
-              ? Math.round(shown.reduce((s, p) => s + (p.winner_score ?? 0), 0) / shown.length)
-              : 0,
-          )}
-          highlight
-        />
-        <SummaryStat label="Launch-ready" value={String(launches)} />
-
-        <SummaryStat label="Avg AI score" value={String(avgScore)} />
-        <SummaryStat label="Avg net margin" value={`${avgMargin}%`} />
-        <SummaryStat label="Avg buyers / 1k" value={String(avgBuyers)} />
-        <SummaryStat
-          label="Doğrulanmış"
-          value={`${shown.filter((p) => (p.realism_score ?? 0) >= 75).length}/${shown.length}`}
-        />
-        <SummaryStat label="Est. monthly profit" value={formatCurrency(totalProfit)} highlight />
-      </div>
-
-      <div className="relative">
-        <Search
-          size={13}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          placeholder="Sonuçlarda ara — ürün adı, kitle veya platform"
-          className="w-full rounded-lg border border-white/10 bg-white/5 pl-8 pr-8 py-2 text-xs outline-none focus:border-[oklch(0.62_0.17_255)]"
-        />
-        {query && (
-          <button
-            type="button"
-            aria-label="Aramayı temizle"
-            onClick={() => onQuery("")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-          >
-            <XIcon size={11} />
-          </button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mr-1">
-          Sort
-        </span>
-        {SORTS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onSortBy(s.id)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition ${
-              sortBy === s.id
-                ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground"
-                : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-        <button
-          onClick={onToggleDir}
-          title={sortDesc ? "Yüksekten düşüğe" : "Düşükten yükseğe"}
-          className="text-xs px-2.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
-        >
-          {sortDesc ? <ArrowDownWideNarrow size={12} /> : <ArrowUpWideNarrow size={12} />}
-          {sortDesc ? "Azalan" : "Artan"}
-        </button>
-        <button
-          onClick={onToggleLaunch}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            onlyLaunch
-              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-              : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          🟢 Launch only
-        </button>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button
-            onClick={copySummary}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
-          >
-            <Copy size={12} /> Özet kopyala
-          </button>
-          <button
-            onClick={downloadJson}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
-          >
-            <FileJson size={12} /> JSON
-          </button>
-          <button
-            onClick={download}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
-          >
-            <Download size={12} /> Export CSV
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SummaryStat({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-xl border px-3 py-2 ${highlight ? "border-emerald-500/25 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5" : "border-white/10 bg-white/[0.04]"}`}
-    >
-      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
-      <div className="text-lg font-black tracking-tight">{value}</div>
-    </div>
   );
 }
 
@@ -3420,36 +2969,6 @@ function LibraryTab({
   );
 }
 
-/**
- * ACTUAL net margin for the MARGIN badge: (net profit / selling price) * 100.
- * Falls back to the derived cost stack when the AI omitted a cost breakdown.
- */
-function netMarginView(p: WinningProduct): { text: string; bad: boolean } {
-  const cb = p.cost_breakdown;
-  const sell = parseMoney(p.selling_price_usd);
-  let net: number;
-  if (cb) {
-    net = parseMoney(cb.net_profit);
-    if (!net)
-      net =
-        sell -
-        (parseMoney(cb.supplier_cost) +
-          parseMoney(cb.shipping_cost) +
-          parseMoney(cb.platform_fee) +
-          parseMoney(cb.ad_spend));
-  } else {
-    net = computeUnitEconomics({
-      retail_price: sell,
-      supplier_cost: p.supplier_price_usd,
-    }).net_profit;
-  }
-  const pct = sell > 0 ? (net / sell) * 100 : 0;
-  if (net <= 0 || pct <= 0) return { text: "0% (UNPROFITABLE)", bad: true };
-  if (pct < MIN_NET_MARGIN_PCT)
-    return { text: `${pct.toFixed(0)}% (BELOW ${MIN_NET_MARGIN_PCT}%)`, bad: true };
-  return { text: `${pct.toFixed(0)}%`, bad: false };
-}
-
 function Stat({
   label,
   value,
@@ -3477,162 +2996,6 @@ function Stat({
       </div>
     </div>
   );
-}
-
-// ---------- Shopify CSV export ----------
-
-function parsePriceNumber(s: string | undefined): string {
-  if (!s) return "";
-  const m = s.replace(/,/g, "").match(/(\d+(\.\d+)?)/);
-  return m ? m[1] : "";
-}
-
-function csvEscape(v: string | number | undefined | null): string {
-  if (v === undefined || v === null) return "";
-  const s = String(v);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 80);
-}
-
-function buildShopifyCsv(products: WinningProduct[]): string {
-  // Shopify Products CSV columns (core set required for import)
-  const headers = [
-    "Handle",
-    "Title",
-    "Body (HTML)",
-    "Vendor",
-    "Product Category",
-    "Type",
-    "Tags",
-    "Published",
-    "Option1 Name",
-    "Option1 Value",
-    "Variant SKU",
-    "Variant Grams",
-    "Variant Inventory Tracker",
-    "Variant Inventory Qty",
-    "Variant Inventory Policy",
-    "Variant Fulfillment Service",
-    "Variant Price",
-    "Variant Compare At Price",
-    "Variant Requires Shipping",
-    "Variant Taxable",
-    "Variant Barcode",
-    "Image Src",
-    "Image Position",
-    "Image Alt Text",
-    "Gift Card",
-    "SEO Title",
-    "SEO Description",
-    "Status",
-  ];
-  const rows: string[] = [headers.join(",")];
-  for (const p of products) {
-    const handle = slugify(p.name || "product");
-    const bodyHtml =
-      `<p>${(p.description || "").replace(/</g, "&lt;")}</p>` +
-      (p.why_winning
-        ? `<p><strong>Why it wins:</strong> ${p.why_winning.replace(/</g, "&lt;")}</p>`
-        : "") +
-      (p.target_audience
-        ? `<p><strong>For:</strong> ${p.target_audience.replace(/</g, "&lt;")}</p>`
-        : "") +
-      (p.ad_angles?.length
-        ? `<ul>${p.ad_angles.map((a) => `<li>${a.replace(/</g, "&lt;")}</li>`).join("")}</ul>`
-        : "");
-    const tags = [
-      ...(p.platform_fit ?? []),
-      p.competition_level ? `competition:${p.competition_level}` : "",
-      `trend:${p.trend_score ?? ""}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
-    const price = parsePriceNumber(p.selling_price_usd);
-    const cost = parsePriceNumber(p.supplier_price_usd);
-    const row = [
-      handle,
-      p.name,
-      bodyHtml,
-      "Aroless",
-      "",
-      "",
-      tags,
-      "TRUE",
-      "Title",
-      "Default Title",
-      `OC-${handle}`.slice(0, 40),
-      "0",
-      "shopify",
-      "10",
-      "deny",
-      "manual",
-      price,
-      cost,
-      "TRUE",
-      "TRUE",
-      "",
-      "",
-      "",
-      p.name,
-      "FALSE",
-      p.name.slice(0, 70),
-      (p.description || "").slice(0, 320),
-      "active",
-    ]
-      .map(csvEscape)
-      .join(",");
-    rows.push(row);
-  }
-  return rows.join("\n");
-}
-
-const SLOGANS = [
-  "Real data in. Winning products out.",
-  "Stop guessing. Start sourcing.",
-  "Every number verified on the live web.",
-  "From trend signal to first sale.",
-];
-
-function RotatingSlogan() {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setI((v) => (v + 1) % SLOGANS.length), 3600);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="mt-6 flex justify-center">
-      <div className="premium-card rounded-full px-5 py-2 h-10 flex items-center gap-2 overflow-hidden">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[oklch(0.66_0.15_255)] animate-pulse-soft" />
-        <span
-          key={i}
-          className="text-sm font-semibold text-foreground/90 animate-rise-in whitespace-nowrap"
-        >
-          {SLOGANS[i]}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** Only accepts a real, verifiable product image URL returned by the model. */
-function resolveProductImage(p: WinningProduct): string | null {
-  const u = p.image_url?.trim();
-  if (!u || !/^https?:\/\//i.test(u)) return null;
-  if (
-    /source\.unsplash\.com|loremflickr|picsum\.photos|placehold|via\.placeholder|dummyimage/i.test(
-      u,
-    )
-  )
-    return null;
-  return u;
 }
 
 // Client-side cache to avoid refetching the same product image.

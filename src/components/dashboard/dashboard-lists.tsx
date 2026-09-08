@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bell, ChevronRight, History } from "lucide-react";
+import { buildFinderPath } from "@/lib/search-handoff";
 import {
   EmptyState,
   Panel,
@@ -102,7 +103,7 @@ export const RecentSearchesPanel = memo(function RecentSearchesPanel({
   // parameter arrives with the index.tsx decomposition; until then this is a
   // plain route change, which is why it is safe to ship now.
   const openSearch = (query: string) => {
-    nav({ to: "/", search: { q: query } as never });
+    nav({ to: buildFinderPath(query) });
   };
 
   return (
