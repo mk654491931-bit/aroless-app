@@ -7,7 +7,6 @@ import {
   Radar,
   Search,
   Users,
-  type LucideIcon,
 } from "lucide-react";
 import { ACCENT_MAP, PANEL_ENTER, type AccentColor } from "@/components/dashboard/dashboard-tokens";
 
@@ -15,22 +14,17 @@ import { ACCENT_MAP, PANEL_ENTER, type AccentColor } from "@/components/dashboar
 // Quick actions.
 //
 // The dashboard previously ended every session in a dead end: the only way
-// out was the Back link. These are the tools that already exist in the app
-// but were reachable only from the landing page.
+// out was the Back link. These are tools that already exist in the app but
+// were reachable only from the landing page.
 //
-// Only routes that exist today are listed, and none of them take required
-// search params, so every link is type-safe against the generated route tree.
+// The list is declared `as const` and NOT annotated with a wider type, so
+// each `to` stays a literal path. TanStack Router's Link only accepts paths
+// from the generated route tree, which means a renamed or deleted route
+// fails typecheck here rather than 404-ing for a user. Only routes without
+// required search params are listed, for the same reason.
 // ============================================================================
 
-type QuickAction = {
-  to: string;
-  label: string;
-  hint: string;
-  icon: LucideIcon;
-  accent: AccentColor;
-};
-
-const ACTIONS: readonly QuickAction[] = [
+const ACTIONS = [
   {
     to: "/",
     label: "Ürün Bul",
@@ -73,7 +67,13 @@ const ACTIONS: readonly QuickAction[] = [
     icon: Megaphone,
     accent: "indigo",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  to: string;
+  label: string;
+  hint: string;
+  icon: unknown;
+  accent: AccentColor;
+}>;
 
 export const DashboardQuickActions = memo(function DashboardQuickActions() {
   return (
@@ -91,9 +91,7 @@ export const DashboardQuickActions = memo(function DashboardQuickActions() {
               title={hint}
               className={`group rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4 shadow-lg shadow-black/30 backdrop-blur-sm transition-transform duration-200 will-change-transform hover:border-indigo-500/40 motion-safe:hover:-translate-y-0.5 ${PANEL_ENTER}`}
             >
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.bg}`}
-              >
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.bg}`}>
                 <Icon size={15} className={a.icon} />
               </div>
               <p className="mt-3 truncate text-sm font-semibold text-slate-200 group-hover:text-white">
