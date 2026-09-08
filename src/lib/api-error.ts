@@ -78,6 +78,14 @@ export interface RetryOptions {
   backoffMultiplier?: number;
 }
 
+export type ApiErrorReporter = (error: Error, context?: Record<string, unknown>) => void;
+
+let apiErrorReporter: ApiErrorReporter = () => {};
+
+export function setApiErrorReporter(reporter?: ApiErrorReporter): void {
+  apiErrorReporter = reporter ?? (() => {});
+}
+
 /**
  * Hata işleme ile API çağrısı
  */
@@ -157,8 +165,5 @@ export function logApiError(error: ApiError, context?: Record<string, unknown>):
     console.warn("[API Warning]", errorObj);
   }
 
-  // Optionally send to error tracking service
-  if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING) {
-    ((window as unknown as Record<string, unknown>).__LOVABLE_ERROR_TRACKING as { captureException?: (err: Error, ctx?: Record<string, unknown>) => void }).captureException?.(error, { extra: context });
-  }
+  apiErrorReporter(error, context);
 }

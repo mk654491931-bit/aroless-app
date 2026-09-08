@@ -11,6 +11,7 @@
  * Tier 4 (Ajan 14)   : Gemini → Groq → OpenRouter → SambaNova → Cerebras → HF → Bedrock
  */
 import { z } from "zod";
+import { sanitizeLine, sanitizeText } from "./request-hygiene";
 import {
   executeAgentWithFallback,
   parseAgentJson,
@@ -64,6 +65,24 @@ export const PipelineOutputSchema = z.object({
   }),
 });
 export type PipelineOutput = z.infer<typeof PipelineOutputSchema>;
+
+function sanitizeOptionalLine(input: unknown, maxLength: number): string | undefined {
+  if (input === undefined || input === null) return undefined;
+  const value = sanitizeLine(input, maxLength);
+  return value || undefined;
+}
+
+export function sanitizePipelineInput(rawInput: unknown): unknown {
+  if (!rawInput || typeof rawInput !== "object") return rawInput;
+  const raw = rawInput as Record<string, unknown>;
+  return {
+    ...raw,
+    userQuery: sanitizeText(raw["userQuery"], 2000),
+    country: sanitizeOptionalLine(raw["country"], 60),
+    platform: sanitizeOptionalLine(raw["platform"], 60),
+    language: sanitizeOptionalLine(raw["language"], 10),
+  };
+}
 
 // ------------------------------------------------------------------ agents
 
@@ -273,7 +292,7 @@ function summarize(outputs: { agent: AgentDef; data: StageOutput }[]): string {
 
 /** 14 ajanı Tier 1→4 sırasıyla çalıştırır ve yapılandırılmış rapor döndürür. */
 export async function runVeloraAgentPipeline(rawInput: unknown): Promise<PipelineOutput> {
-  const input = PipelineInputSchema.parse(rawInput);
+  const input = PipelineInputSchema.parse(sanitizePipelineInput(rawInput));
   const started = Date.now();
   const logs: AgentRunLog[] = [];
   const tierLatencyMs: Record<string, number> = {};

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardPublic } from "@/lib/api-guard.server";
+import { sanitizeHotProductsNiche } from "@/lib/api-request-sanitizers";
 import type { HotProduct, ProductSignals } from "@/lib/hot-products";
 
 /**
@@ -195,7 +196,7 @@ export const Route = createFileRoute("/api/public/hot-products")({
       GET: async ({ request }) => {
         const limited = await guardPublic(request, "hot-products", 40, 60);
         if (limited) return limited;
-        const niche = (new URL(request.url).searchParams.get("niche") ?? "").slice(0, 60).trim();
+        const niche = sanitizeHotProductsNiche(new URL(request.url).searchParams.get("niche"));
         try {
           const payload = await getPayload(niche);
           return new Response(JSON.stringify(payload), {

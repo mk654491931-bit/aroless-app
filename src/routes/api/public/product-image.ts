@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardPublic } from "@/lib/api-guard.server";
+import { sanitizeProductImageQuery } from "@/lib/api-request-sanitizers";
 
 // Simple in-memory cache (per worker instance). Key: normalized query.
 const cache = new Map<string, { url: string; at: number }>();
@@ -104,7 +105,7 @@ export const Route = createFileRoute("/api/public/product-image")({
         const limited = await guardPublic(request, "product-image", 240, 60);
         if (limited) return limited;
         const url = new URL(request.url);
-        const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
+        const q = sanitizeProductImageQuery(url.searchParams.get("q"));
         if (!q) {
           return Response.json({ error: "missing q" }, { status: 400, headers: CORS });
         }
