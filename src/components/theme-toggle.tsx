@@ -3,7 +3,16 @@ import { Moon, Sun } from "lucide-react";
 
 const KEY = "velora-theme";
 
-function applyTheme(theme: "dark" | "light") {
+type Theme = "dark" | "light";
+
+function preferredTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+  const saved = localStorage.getItem(KEY);
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle("light", theme === "light");
   root.classList.toggle("dark", theme === "dark");
@@ -11,12 +20,20 @@ function applyTheme(theme: "dark" | "light") {
 
 /** Karanlık / gündüz teması anahtarı — sitenin ana rengini değiştirir. */
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const saved = (localStorage.getItem(KEY) as "dark" | "light" | null) ?? "dark";
-    setTheme(saved);
-    applyTheme(saved);
+    const initial = preferredTheme();
+    setTheme(initial);
+    applyTheme(initial);
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== KEY || (event.newValue !== "light" && event.newValue !== "dark")) return;
+      setTheme(event.newValue);
+      applyTheme(event.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const toggle = () => {
