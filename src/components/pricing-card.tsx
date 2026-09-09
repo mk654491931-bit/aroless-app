@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
-import { openPaddleOverlay } from "@/lib/paddle-checkout";
+import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ export function PricingCard({ className }: { className?: string }) {
 
   async function upgrade() {
     setLoading(true);
+    let opened = false;
     try {
       const resp = await apiFetch("/api/checkout", {
         method: "POST",
@@ -59,24 +60,28 @@ export function PricingCard({ className }: { className?: string }) {
         transactionId?: string;
         clientToken?: string;
         environment?: "sandbox" | "production";
+        priceId?: string | null;
         email?: string | null;
         error?: string;
       };
-      if (!resp.ok || !json.transactionId || !json.clientToken) {
-        throw new Error(json.error || "Ödeme oturumu alınamadı.");
+      if (resp.ok && json.transactionId) {
+        opened = await openPaddleOverlay({
+          transactionId: json.transactionId,
+          clientToken: json.clientToken,
+          environment: json.environment,
+          priceId: json.priceId,
+          email: json.email ?? null,
+        });
       }
-      const opened = await openPaddleOverlay({
-        transactionId: json.transactionId,
-        clientToken: json.clientToken,
-        environment: json.environment ?? "production",
-        email: json.email ?? null,
-      });
-      if (!opened) throw new Error("Ödeme penceresi açılamadı.");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.warn("[Paddle] Server checkout unavailable; using Vite price checkout.", error);
     }
+
+    if (!opened) {
+      opened = await openPaddlePlanCheckout("Pro");
+    }
+    if (!opened) toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
+    setLoading(false);
   }
 
   return (

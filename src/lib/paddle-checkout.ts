@@ -6,20 +6,44 @@
  * via dynamic import.
  */
 
+import type { PlanId } from "@/lib/plans";
+
 export type CheckoutSessionClient = {
-  transactionId: string;
-  clientToken: string;
-  environment: "sandbox" | "production";
+  transactionId?: string;
+  clientToken?: string | null;
+  environment?: "sandbox" | "production";
+  priceId?: string | null;
   email?: string | null;
 };
 
 export type OpenCheckoutOptions = {
   /** Validated discount code (Paddle discount or app code mirrored in Paddle). */
   discountCode?: string | null;
+  /** Customer email to prefill in a price-based checkout. */
+  email?: string | null;
+  /** Plan whose Vite price ID should be used when no transaction ID is supplied. */
+  plan?: PlanId;
   /** Called for every Paddle.js checkout event (e.g. checkout.completed). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onEvent?: (event: any) => void;
 };
+
+function paddlePriceIdForPlan(plan: PlanId): string | undefined {
+  switch (plan) {
+    case "Starter":
+      return import.meta.env.VITE_PADDLE_PRICE_STARTER_MONTHLY;
+    case "Pro":
+      return import.meta.env.VITE_PADDLE_PRICE_PRO_MONTHLY;
+    case "Business":
+      return import.meta.env.VITE_PADDLE_PRICE_BUSINESS_MONTHLY;
+  }
+}
+
+function reportMissingClientToken(): void {
+  console.error(
+    "Paddle Client Token bulunamadı. Lütfen VITE_PADDLE_CLIENT_TOKEN değişkenini kontrol edin.",
+  );
+}
 
 /** Detect the app's active theme to mirror it in the overlay checkout. */
 function detectTheme(): "light" | "dark" {
@@ -30,40 +54,79 @@ function detectTheme(): "light" | "dark" {
 }
 
 /**
- * Open the Paddle overlay checkout for a server-created transaction.
- * Returns true when the overlay was successfully opened.
+ * Open the Paddle overlay checkout for a server-created transaction or a
+ * configured plan price. The server transaction remains the preferred path
+ * because it carries trusted user/plan metadata to the webhook processor.
+ *
+ * When only a price ID is available, Paddle.js opens an item checkout directly.
+ * This is useful for public pricing surfaces and keeps all browser config in
+ * Vite's `import.meta.env` boundary.
  */
 export async function openPaddleOverlay(
-  session: CheckoutSessionClient,
+  session: CheckoutSessionClient = {},
   options?: OpenCheckoutOptions,
 ): Promise<boolean> {
-  if (!session?.transactionId || !session.clientToken) return false;
+  const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+  const paddleEnv = import.meta.env.VITE_PADDLE_ENV || "sandbox";
 
-  const { initializePaddle } = await import("@paddle/paddle-js");
-  const paddle = await initializePaddle({
-    token: session.clientToken,
-    environment: session.environment,
-    eventCallback: options?.onEvent,
-  });
-
-  if (!paddle) {
-    console.error("[Paddle] initializePaddle returned no instance (token/environment?)");
+  if (!clientToken) {
+    reportMissingClientToken();
     return false;
   }
 
-  const origin = window.location.origin;
-  paddle.Checkout.open({
-    transactionId: session.transactionId,
-    settings: {
-      displayMode: "overlay",
-      theme: detectTheme(),
-      locale: "tr",
-      successUrl: `${origin}/settings?paid=1`,
-      allowLogout: false,
-    },
-    ...(session.email ? { customer: { email: session.email } } : {}),
-    ...(options?.discountCode ? { discountCode: options.discountCode } : {}),
-  });
+  const priceId = session.priceId ?? (options?.plan ? paddlePriceIdForPlan(options.plan) : undefined);
+  if (!session.transactionId && !priceId) {
+    console.error("Paddle fiyat ID bulunamadı. İlgili VITE_PADDLE_PRICE_* değişkenini kontrol edin.");
+    return false;
+  }
 
-  return true;
+  try {
+    const { initializePaddle } = await import("@paddle/paddle-js");
+    const paddle = await initializePaddle({
+      token: clientToken,
+      environment: paddleEnv === "production" ? "production" : "sandbox",
+      eventCallback: options?.onEvent,
+    });
+
+    if (!paddle) {
+      console.error("[Paddle] initializePaddle returned no instance (token/environment?)");
+      return false;
+    }
+
+    const origin = window.location.origin;
+    const checkout = session.transactionId
+      ? { transactionId: session.transactionId }
+      : { items: [{ priceId: priceId!, quantity: 1 }] };
+
+    paddle.Checkout.open({
+      ...checkout,
+      settings: {
+        displayMode: "overlay",
+        theme: detectTheme(),
+        locale: "tr",
+        successUrl: `${origin}/settings?paid=1`,
+        allowLogout: false,
+      },
+      ...((session.email ?? options?.email)
+        ? { customer: { email: session.email ?? options?.email! } }
+        : {}),
+      ...(options?.discountCode ? { discountCode: options.discountCode } : {}),
+    });
+
+    return true;
+  } catch (error) {
+    console.error("[Paddle] Checkout initialization failed:", error);
+    return false;
+  }
 }
+
+/** Open a configured Vite Paddle price directly for a plan. */
+export function openPaddlePlanCheckout(
+  plan: PlanId,
+  options?: Omit<OpenCheckoutOptions, "plan">,
+): Promise<boolean> {
+  return openPaddleOverlay({}, { ...options, plan });
+}
+
+/** Public price lookup used by checkout buttons and client-side fallbacks. */
+export { paddlePriceIdForPlan };

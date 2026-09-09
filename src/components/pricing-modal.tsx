@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/paddle.functions";
-import { openPaddleOverlay } from "@/lib/paddle-checkout";
+import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { validatePromoCode, getMyPromoCode } from "@/lib/promo.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown, Ticket, Loader2 } from "lucide-react";
@@ -74,34 +74,64 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const subscribe = async (plan: PlanId) => {
     setLoading(plan);
+    let opened = false;
+    let email: string | null | undefined;
+
     try {
-      // Sunucuda transaction oluşturulur (customData userId+plan ile) — güvenli;
-      // ardından overlay checkout bu transaction ile açılır.
+      // Önce server transaction'ı kullanılır; userId + plan metadata'sı
+      // güvenilir biçimde webhook'a taşınır.
       const session = await checkout({ data: { plan } });
-      const opened = await openPaddleOverlay(
+      email = session.email;
+      opened = await openPaddleOverlay(
         {
           transactionId: session.transactionId,
           clientToken: session.clientToken,
           environment: session.environment,
+          priceId: session.priceId,
           email: session.email,
         },
         {
           discountCode: discount > 0 ? promo : null,
-          onEvent: (event) => {
-            if (event?.name === "checkout.completed") {
+          email: session.email,
+          onEvent: (event: unknown) => {
+            if (
+              event &&
+              typeof event === "object" &&
+              "name" in event &&
+              event.name === "checkout.completed"
+            ) {
               toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
             }
           },
         },
       );
-      if (!opened) {
-        toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
-      }
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Checkout başlatılamadı");
-    } finally {
-      setLoading(null);
+    } catch (error) {
+      console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
     }
+
+    // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
+    // doğrudan ilgili planın public price ID'siyle açılır.
+    if (!opened) {
+      opened = await openPaddlePlanCheckout(plan, {
+        discountCode: discount > 0 ? promo : null,
+        email,
+        onEvent: (event: unknown) => {
+          if (
+            event &&
+            typeof event === "object" &&
+            "name" in event &&
+            event.name === "checkout.completed"
+          ) {
+            toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
+          }
+        },
+      });
+    }
+
+    if (!opened) {
+      toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
+    }
+    setLoading(null);
   };
 
   return createPortal(

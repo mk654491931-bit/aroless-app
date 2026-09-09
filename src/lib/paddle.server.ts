@@ -9,9 +9,12 @@
  *   PADDLE_API_KEY                      required — Billing API key (pl_...)
  *   PADDLE_WEBHOOK_SECRET_KEY           required — webhook endpoint secret (falls back to PADDLE_WEBHOOK_SECRET)
  *   PADDLE_CLIENT_TOKEN                 required — client-side token for Paddle.js (public by design, proxied to the browser)
+ *                                       VITE_PADDLE_CLIENT_TOKEN is also accepted for Vite deployments.
  *   PADDLE_ENV                          optional — "sandbox" | "production" (auto-detected from key/token prefix when absent)
+ *                                       VITE_PADDLE_ENV is the browser-side equivalent.
  *   PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID / PADDLE_BUSINESS_PRICE_ID
- *                                       price IDs for each plan. Legacy aliases PADDLE_*_PRODUCT_ID and
+ *                                       price IDs for each plan. VITE_PADDLE_PRICE_*_MONTHLY aliases are
+ *                                       accepted for Vite deployments. Legacy PADDLE_*_PRODUCT_ID and
  *                                       PADDLE_PRODUCT_ID are still honoured for backwards compatibility.
  */
 
@@ -37,9 +40,22 @@ export type PaddleSettings = {
 };
 
 const PLAN_PRICE_ENV: Record<PlanId, readonly string[]> = {
-  Starter: ["PADDLE_STARTER_PRICE_ID", "PADDLE_STARTER_PRODUCT_ID"],
-  Pro: ["PADDLE_PRO_PRICE_ID", "PADDLE_PRO_PRODUCT_ID", "PADDLE_PRODUCT_ID"],
-  Business: ["PADDLE_BUSINESS_PRICE_ID", "PADDLE_BUSINESS_PRODUCT_ID"],
+  Starter: [
+    "PADDLE_STARTER_PRICE_ID",
+    "VITE_PADDLE_PRICE_STARTER_MONTHLY",
+    "PADDLE_STARTER_PRODUCT_ID",
+  ],
+  Pro: [
+    "PADDLE_PRO_PRICE_ID",
+    "VITE_PADDLE_PRICE_PRO_MONTHLY",
+    "PADDLE_PRO_PRODUCT_ID",
+    "PADDLE_PRODUCT_ID",
+  ],
+  Business: [
+    "PADDLE_BUSINESS_PRICE_ID",
+    "VITE_PADDLE_PRICE_BUSINESS_MONTHLY",
+    "PADDLE_BUSINESS_PRODUCT_ID",
+  ],
 };
 
 function firstDefined(...names: string[]): string | undefined {
@@ -56,13 +72,14 @@ function isPlanId(value: unknown): value is PlanId {
 
 /** Normalize "sandbox"/"production"/"test" (or key/token prefixes) into a Paddle environment. */
 export function resolvePaddleEnvironment(): PaddleEnvironment {
-  const raw = (process.env["PADDLE_ENV"] ?? "").toLowerCase();
+  const raw = (process.env["PADDLE_ENV"] ?? process.env["VITE_PADDLE_ENV"] ?? "").toLowerCase();
   if (raw === "sandbox" || raw === "test" || raw === "dev") return "sandbox";
   if (raw === "production" || raw === "prod" || raw === "live") return "production";
   // Auto-detect: sandbox keys/tokens carry test markers.
   const probe = [
     process.env["PADDLE_API_KEY"],
     process.env["PADDLE_CLIENT_TOKEN"],
+    process.env["VITE_PADDLE_CLIENT_TOKEN"],
   ].filter(Boolean).join(" ");
   return /test_|_sdbx_|sandbox/i.test(probe) ? "sandbox" : "production";
 }
@@ -74,7 +91,9 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
 export function paddleSettings(): PaddleSettings | null {
   const apiKey = process.env["PADDLE_API_KEY"];
   const webhookSecret = firstDefined("PADDLE_WEBHOOK_SECRET_KEY", "PADDLE_WEBHOOK_SECRET");
-  const clientToken = process.env["PADDLE_CLIENT_TOKEN"];
+  // Client tokens and price IDs are public Vite configuration. Keep the
+  // server-only API key and webhook secret on their unprefixed names.
+  const clientToken = firstDefined("PADDLE_CLIENT_TOKEN", "VITE_PADDLE_CLIENT_TOKEN");
 
   const priceIds: Partial<Record<PlanId, string>> = {};
   for (const plan of ["Starter", "Pro", "Business"] as const) {
