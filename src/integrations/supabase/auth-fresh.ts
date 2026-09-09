@@ -24,12 +24,24 @@ function tokenIssues(token: string): boolean {
  */
 export const attachFreshSupabaseAuth = createMiddleware({ type: "function" }).client(
   async ({ next }) => {
-    const { data } = await supabase.auth.getSession();
-    let token = data.session?.access_token;
-    if (token && tokenIssues(token)) {
-      const { data: refreshed } = await supabase.auth.refreshSession();
-      token = refreshed.session?.access_token ?? token;
+    // Never stop the RPC before fetch() is reached. If the public Supabase
+    // configuration is missing or the broker is temporarily unavailable, the
+    // request must still leave the browser so the server can return a useful
+    // 401/500 response instead of making the UI look as if nothing happened.
+    try {
+      const { data } = await supabase.auth.getSession();
+      let token = data.session?.access_token;
+      if (token && tokenIssues(token)) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed.session?.access_token ?? token;
+      }
+      return next({ headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    } catch (error) {
+      console.error(
+        "[auth] Could not prepare the Supabase bearer token; sending the server request without auth.",
+        error,
+      );
+      return next({ headers: {} });
     }
-    return next({ headers: token ? { Authorization: `Bearer ${token}` } : {} });
   },
 );

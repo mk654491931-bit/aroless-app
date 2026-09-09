@@ -172,23 +172,39 @@ type Tab = "finder" | "trends" | "seo" | "creative" | "library" | "training" | "
 
 /**
  * Motor/agent yanıtlarından ürün listesini güvenle çıkarır.
- * Desteklenen şekiller: doğrudan dizi, { products }, { results },
- * { data: [...] }, { data: { products } }. Boş/null → [] döner, asla patlamaz.
+ * Server-function adaptörleri sürüme göre sonucu doğrudan veya `result`,
+ * `data` ya da `value` zarfı içinde döndürebilir; hepsini tek noktada açarız.
+ * Boş/null → [] döner, asla patlamaz.
  */
 function toProductList(res: unknown): WinningProduct[] {
-  if (Array.isArray(res)) {
-    return res.filter((x) => x !== null && typeof x === "object") as WinningProduct[];
-  }
-  if (!res || typeof res !== "object") return [];
-  const obj = res as Record<string, unknown>;
-  for (const cand of [obj.products, obj.results, obj.data]) {
-    if (Array.isArray(cand)) return cand as WinningProduct[];
-    if (cand && typeof cand === "object") {
-      const inner = (cand as Record<string, unknown>).products;
-      if (Array.isArray(inner)) return inner as WinningProduct[];
+  const seen = new Set<object>();
+
+  const visit = (value: unknown, depth: number): WinningProduct[] => {
+    if (depth > 6 || value === null || typeof value !== "object") return [];
+    if (Array.isArray(value)) {
+      return value.filter((item) => item !== null && typeof item === "object") as WinningProduct[];
     }
-  }
-  return [];
+
+    const object = value as Record<string, unknown>;
+    if (seen.has(object)) return [];
+    seen.add(object);
+
+    for (const key of ["products", "results"]) {
+      const candidate = object[key];
+      if (Array.isArray(candidate)) {
+        return candidate.filter((item) => item !== null && typeof item === "object") as WinningProduct[];
+      }
+    }
+
+    // TanStack Start/server adapters may add one or more response envelopes.
+    for (const key of ["result", "data", "value", "response"]) {
+      const products = visit(object[key], depth + 1);
+      if (products.length > 0) return products;
+    }
+    return [];
+  };
+
+  return visit(res, 0);
 }
 
 function Dashboard() {
@@ -482,7 +498,10 @@ function Dashboard() {
   const runSearch = (nicheValue: string) => {
     if (!nicheValue.trim()) return toast.error(t("ui.enter_niche"));
     if (platforms.length === 0) return toast.error(t("ui.select_platform"));
-    if ((profileQ.data?.credits ?? 0) <= 0) {
+    // Do not treat a still-loading/failed profile request as zero credits.
+    // The server function performs the authoritative atomic credit check; this
+    // client guard only opens pricing after a successful profile response.
+    if (profileQ.isSuccess && (profileQ.data?.credits ?? 0) <= 0) {
       setShowPricing(true);
       return;
     }

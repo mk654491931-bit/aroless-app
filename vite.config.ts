@@ -58,20 +58,27 @@ export default defineConfig(async ({ command, mode }) => {
   }
 
   // Vercel exposes project variables through process.env during the build, while
-  // local Vite values usually come from .env files. Merge only the public
-  // allowlist so server credentials can never be copied into the browser bundle.
-  const publicEnvNames = [
-    "VITE_SUPABASE_URL",
-    "VITE_SUPABASE_PUBLISHABLE_KEY",
-    "VITE_TURNSTILE_SITE_KEY",
-    "VITE_API_BASE_URL",
-    "VITE_APP_URL",
-  ] as const;
+  // local Vite values usually come from .env files. Prefer the VITE_* names for
+  // browser configuration, but accept the existing unprefixed public Supabase /
+  // app names as a migration bridge. Only this explicit public allowlist is
+  // copied into the browser bundle; AI, Paddle and service-role secrets never are.
+  const publicEnvSources = {
+    VITE_SUPABASE_URL: ["VITE_SUPABASE_URL", "SUPABASE_URL"],
+    VITE_SUPABASE_PUBLISHABLE_KEY: [
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "SUPABASE_PUBLISHABLE_KEY",
+    ],
+    VITE_TURNSTILE_SITE_KEY: ["VITE_TURNSTILE_SITE_KEY", "TURNSTILE_SITE_KEY"],
+    VITE_API_BASE_URL: ["VITE_API_BASE_URL", "API_BASE_URL"],
+    VITE_APP_URL: ["VITE_APP_URL", "APP_URL"],
+  } as const;
   const loadedEnv = loadEnv(mode, process.cwd(), "VITE_");
   const buildEnv: Record<string, string> = {};
-  for (const name of publicEnvNames) {
-    const value = process.env[name] ?? loadedEnv[name];
-    if (typeof value === "string" && value.trim()) buildEnv[name] = value;
+  for (const [publicName, sources] of Object.entries(publicEnvSources)) {
+    const value = sources.map((name) => process.env[name] ?? loadedEnv[name]).find(
+      (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
+    );
+    if (value) buildEnv[publicName] = value;
   }
 
   const define = {
