@@ -23,6 +23,7 @@ export type AgentBusEvent =
   | { type: "cache:miss"; payload: { traceId: string; scope: string } };
 
 export type BusEventType = AgentBusEvent["type"];
+export type AgentBusObserver = (event: AgentBusEvent) => void;
 
 // Keep handler typed externally, but bus internals use the union payload to avoid
 // generic-Extract distribution pitfalls that make `emit` fail under strict tsc.
@@ -35,14 +36,16 @@ const MAX_HANDLERS_PER_EVENT = 20;
 
 class AgentBus {
   private readonly traceId: string;
+  private readonly observer?: AgentBusObserver;
   private readonly handlers = new Map<string, Set<(p: unknown) => void | Promise<void>>>();
   private queue: AgentBusEvent[] = [];
   private draining = false;
   private emitted = 0;
   private dropped = 0;
 
-  constructor(traceId: string) {
+  constructor(traceId: string, observer?: AgentBusObserver) {
     this.traceId = traceId;
+    this.observer = observer;
   }
 
   on<T extends BusEventType>(type: T, handler: Handler<T>): () => void {
@@ -61,9 +64,8 @@ class AgentBus {
   }
 
   once<T extends BusEventType>(type: T, handler: Handler<T>): () => void {
-    let off: (() => void) | undefined;
-    off = this.on(type, ((payload: unknown) => {
-      off?.();
+    const off = this.on(type, ((payload: unknown) => {
+      off();
       return (handler as (p: unknown) => void | Promise<void>)(payload);
     }) as Handler<T>);
     return off;
@@ -78,9 +80,17 @@ class AgentBus {
   // union at their call sites. This avoids the Extract<T> & Extract<U>
   // intersection trap that strict tsc flags on generic forwarding.
   emit(type: BusEventType, payload: AgentBusEvent["payload"]): void {
-    const event = { type, payload } as unknown as AgentBusEvent;
+    const event = {
+      type,
+      payload: { ...payload, traceId: this.traceId },
+    } as unknown as AgentBusEvent;
     (event as unknown as Record<string, unknown>).__traceId = this.traceId;
     (event as unknown as Record<string, unknown>).__at = Date.now();
+    try {
+      this.observer?.(event);
+    } catch (error) {
+      console.error(`[agent-bus:${this.traceId}] observer threw`, error);
+    }
     this.enqueue(event);
   }
 
@@ -122,13 +132,19 @@ class AgentBus {
   }
 
   getStats(): { traceId: string; emitted: number; dropped: number; pending: number } {
-    return { traceId: this.traceId, emitted: this.emitted, dropped: this.dropped, pending: this.queue.length };
+    return {
+      traceId: this.traceId,
+      emitted: this.emitted,
+      dropped: this.dropped,
+      pending: this.queue.length,
+    };
   }
 }
 
-export function createAgentBus(traceId?: string): AgentBus {
-  const id = traceId ?? `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  return new AgentBus(id);
+export function createAgentBus(traceId?: string, observer?: AgentBusObserver): AgentBus {
+  const id =
+    traceId ?? `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  return new AgentBus(id, observer);
 }
 
 let globalBus: AgentBus | null = null;

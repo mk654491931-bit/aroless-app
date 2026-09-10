@@ -5,7 +5,7 @@ import {
   parseAgentJson,
   type AgentRunLog,
 } from "./ai-router.server";
-import { createAgentBus } from "./agent-bus.server";
+import { createAgentBus, type AgentBusObserver } from "./agent-bus.server";
 import {
   COUNCIL_AGENTS,
   emitDebugLog,
@@ -111,9 +111,7 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
           estimatedMarginPct: Number.isFinite(Number(value.estimatedMarginPct))
             ? Number(value.estimatedMarginPct)
             : 0,
-          demandScore: Number.isFinite(Number(value.demandScore))
-            ? Number(value.demandScore)
-            : 50,
+          demandScore: Number.isFinite(Number(value.demandScore)) ? Number(value.demandScore) : 50,
           competitionScore: Number.isFinite(Number(value.competitionScore))
             ? Number(value.competitionScore)
             : 50,
@@ -137,10 +135,14 @@ Do not require every filter to match. Prefer broad keyword/semantic matches and 
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":string[]}],"search_note":string}`;
 }
 
+type AgentBusEmitter = Pick<ReturnType<typeof createAgentBus>, "emit">;
+
 async function retrieveCandidates(
   input: PipelineInput,
   logs: AgentRunLog[],
   councilLogs: CouncilDebugLog[],
+  bus?: AgentBusEmitter,
+  traceId?: string,
 ): Promise<{ candidates: RetrieverCandidate[]; attempts: number }> {
   const queries = relaxSearchQuery(input.userQuery);
   let attempts = 0;
@@ -149,13 +151,36 @@ async function retrieveCandidates(
 
   for (const query of queries) {
     attempts++;
-    const result = await executeAgentWithFallback(
-      `Product Retriever (${attempts})`,
-      retrieverPrompt(input, query),
-      DEEP_CHAIN,
-      { temperature: 0.35, retries: 2 },
-    );
+    const agent = `Product Retriever (${attempts})`;
+    const agentStart = Date.now();
+    bus?.emit("agent:start", { traceId: traceId ?? "", agent, tier: 1 });
+    let result;
+    try {
+      result = await executeAgentWithFallback(agent, retrieverPrompt(input, query), DEEP_CHAIN, {
+        temperature: 0.35,
+        retries: 2,
+      });
+    } catch (error) {
+      bus?.emit("agent:error", {
+        traceId: traceId ?? "",
+        agent,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      bus?.emit("agent:complete", {
+        traceId: traceId ?? "",
+        agent,
+        ok: false,
+        ms: Date.now() - agentStart,
+      });
+      throw error;
+    }
     logs.push(result.log);
+    bus?.emit("agent:complete", {
+      traceId: traceId ?? "",
+      agent,
+      ok: result.log.ok,
+      ms: Date.now() - agentStart,
+    });
     const parsed = parseAgentJson<{ candidates?: unknown[] }>(result.text, {});
     const candidates = normalizeRetrieverCandidates(parsed);
     for (const candidate of candidates) {
@@ -272,10 +297,13 @@ function toPipelineProducts(
 }
 
 /** 14 agents receive the prior JSON state sequentially; no member can erase it. */
-export async function runVeloraAgentPipeline(rawInput: unknown): Promise<PipelineOutput> {
+export async function runVeloraAgentPipeline(
+  rawInput: unknown,
+  options: { onEvent?: AgentBusObserver } = {},
+): Promise<PipelineOutput> {
   const input = PipelineInputSchema.parse(rawInput);
   const traceId = `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  const bus = createAgentBus(traceId);
+  const bus = createAgentBus(traceId, options.onEvent);
   const started = Date.now();
   const logs: AgentRunLog[] = [];
   const councilLogs: CouncilDebugLog[] = [];
@@ -284,7 +312,7 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
   bus.emit("pipeline:start", { traceId, query: input.userQuery.slice(0, 120) });
   const retrievalStart = Date.now();
   bus.emit("tier:start", { traceId, tier: 1 });
-  const retrieval = await retrieveCandidates(input, logs, councilLogs);
+  const retrieval = await retrieveCandidates(input, logs, councilLogs, bus, traceId);
   tierLatencyMs.tier1 = Date.now() - retrievalStart;
   bus.emit("tier:complete", { traceId, tier: 1, ms: tierLatencyMs.tier1 });
 
@@ -302,31 +330,41 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
     run: async (agent, prompt) => {
       bus.emit("agent:start", { traceId, agent: agent.name, tier: 2 });
       const agentStart = Date.now();
-      const result = await executeAgentWithFallback(
-        `Council ${agent.name}`,
-        prompt,
-        DEEP_CHAIN,
-        { temperature: 0.3, retries: 2 },
-      );
-      logs.push(result.log);
-      bus.emit("agent:complete", {
-        traceId,
-        agent: agent.name,
-        ok: result.log.ok,
-        ms: Date.now() - agentStart,
-      });
-      if (!result.log.ok) {
-        bus.emit("agent:error", {
+      try {
+        const result = await executeAgentWithFallback(`Council ${agent.name}`, prompt, DEEP_CHAIN, {
+          temperature: 0.3,
+          retries: 2,
+        });
+        logs.push(result.log);
+        bus.emit("agent:complete", {
           traceId,
           agent: agent.name,
-          error: result.log.error ?? "unknown",
+          ok: result.log.ok,
+          ms: Date.now() - agentStart,
         });
+        if (!result.log.ok) {
+          bus.emit("agent:error", {
+            traceId,
+            agent: agent.name,
+            error: result.log.error ?? "unknown",
+          });
+        }
+        return {
+          raw: parseAgentJson<Record<string, unknown>>(result.text, {}),
+          ok: result.log.ok,
+          error: result.log.error,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        bus.emit("agent:error", { traceId, agent: agent.name, error: message });
+        bus.emit("agent:complete", {
+          traceId,
+          agent: agent.name,
+          ok: false,
+          ms: Date.now() - agentStart,
+        });
+        return { raw: {}, ok: false, error: message };
       }
-      return {
-        raw: parseAgentJson<Record<string, unknown>>(result.text, {}),
-        ok: result.log.ok,
-        error: result.log.error,
-      };
     },
   });
   councilLogs.push(...chain.logs);
