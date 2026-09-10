@@ -1,30 +1,24 @@
-/**
- * Velora 14 ajanlı çalışma hattı (Tier 1 → Tier 4).
- *
- * Sağlayıcı önceliği ortak 22 anahtarlık havuzun f/p sırasına uyar — önce
- * ücretsiz + hızlı + çok anahtarlı motorlar, tek anahtarlılar sonra, ödemeli
- * Bedrock yalnızca hepsi biterse (Tier 4 son çare).
- *
- * Tier 1 (Ajan 1-8)  : Groq → Cerebras → SambaNova → Gemini → OpenRouter → HF (hızlı ham işleme)
- * Tier 2 (Ajan 9-11) : Gemini → Groq → OpenRouter → HF
- * Tier 3 (Ajan 12-13): OpenRouter → Groq → Gemini → HF
- * Tier 4 (Ajan 14)   : Gemini → Groq → OpenRouter → SambaNova → Cerebras → HF → Bedrock
- */
 import { z } from "zod";
 import {
+  DEEP_CHAIN,
   executeAgentWithFallback,
   parseAgentJson,
   type AgentRunLog,
-  type ProviderId,
 } from "./ai-router.server";
 import { createAgentBus } from "./agent-bus.server";
-
-// ------------------------------------------------------------------ schemas
+import {
+  COUNCIL_AGENTS,
+  emitDebugLog,
+  makeDebugLog,
+  relaxSearchQuery,
+  runStrictCouncilChain,
+  type CouncilDebugLog,
+} from "./council-chain.server";
 
 export const PipelineInputSchema = z.object({
-  userQuery: z.string().min(2).max(2000),
-  country: z.string().max(60).optional(),
-  platform: z.string().max(60).optional(),
+  userQuery: z.string().trim().min(2).max(2000),
+  country: z.string().trim().max(60).optional(),
+  platform: z.string().trim().max(60).optional(),
   language: z.string().max(10).default("tr"),
 });
 export type PipelineInput = z.infer<typeof PipelineInputSchema>;
@@ -39,6 +33,8 @@ export const ProductSchema = z.object({
   sentiment: z.string().default(""),
   whyNow: z.string().default(""),
   risks: z.array(z.string()).default([]),
+  councilScore: z.number().min(0).max(100).default(50),
+  councilDecision: z.string().default("NEUTRAL"),
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -62,347 +58,313 @@ export const PipelineOutputSchema = z.object({
         error: z.string().optional(),
       }),
     ),
+    councilLogs: z.array(
+      z.object({
+        step: z.string(),
+        input: z.string(),
+        output: z.string(),
+        item_count: z.number(),
+        status: z.enum(["SUCCESS", "EMPTY", "FALLBACK_TRIGGERED"]),
+      }),
+    ),
+    councilAverage: z.number().min(0).max(100),
+    productFingerprint: z.number().min(0).max(100),
+    finalScore: z.number().min(0).max(100),
+    listed: z.boolean(),
+    councilOutputs: z.string(),
+    retrieverAttempts: z.number().int().min(0),
   }),
 });
 export type PipelineOutput = z.infer<typeof PipelineOutputSchema>;
 
-// ------------------------------------------------------------------ agents
-
-type AgentDef = {
-  id: number;
+type RetrieverCandidate = {
   name: string;
-  tier: 1 | 2 | 3 | 4;
-  chain: ProviderId[];
-  role: string;
-  temperature: number;
+  category?: string;
+  priceRange?: string;
+  estimatedMarginPct?: number;
+  demandScore?: number;
+  competitionScore?: number;
+  sentiment?: string;
+  whyNow?: string;
+  risks?: string[];
+  [key: string]: unknown;
 };
 
-const T1: ProviderId[] = ["groq", "cerebras", "sambanova", "gemini", "openrouter", "huggingface"];
-const T2: ProviderId[] = ["gemini", "groq", "openrouter", "huggingface"];
-const T3: ProviderId[] = ["openrouter", "groq", "gemini", "huggingface"];
-const T4: ProviderId[] = [
-  "gemini",
-  "groq",
-  "openrouter",
-  "sambanova",
-  "cerebras",
-  "huggingface",
-  "bedrock",
-];
-
-export const AGENTS: AgentDef[] = [
-  {
-    id: 1,
-    name: "Web Scraping Cleaner",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Sorguyla ilgili pazar yerlerinden gelebilecek ham listeleme metinlerini temizle; gürültüyü, HTML kalıntılarını ve tekrarları at.",
-  },
-  {
-    id: 2,
-    name: "Raw Data Normalizer",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Ürün adları, birimler, para birimleri ve ölçüleri tek standarda normalize et.",
-  },
-  {
-    id: 3,
-    name: "Product Spec Extractor",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Her aday ürün için teknik/fiziksel spesifikasyonları (malzeme, boyut, ağırlık, güç) çıkar.",
-  },
-  {
-    id: 4,
-    name: "Entity Resolver",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Aynı ürünün farklı adlandırmalarını tek varlıkta birleştir, marka/model ayrıştır.",
-  },
-  {
-    id: 5,
-    name: "Price Parser",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Tedarik ve perakende fiyat aralıklarını sayısallaştır; kargo ve komisyonu ayrı kalem yaz.",
-  },
-  {
-    id: 6,
-    name: "Attribute Standardizer",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Renk, beden, paket adedi gibi varyant niteliklerini standart anahtarlara oturt.",
-  },
-  {
-    id: 7,
-    name: "Noise Filter",
-    tier: 1,
-    chain: T1,
-    temperature: 0.2,
-    role: "Doygun, yasaklı, kırılgan, patentli veya kâr etmeyen adayları ele; nedenini yaz.",
-  },
-  {
-    id: 8,
-    name: "Initial Ranker",
-    tier: 1,
-    chain: T1,
-    temperature: 0.3,
-    role: "Kalan adayları talep, marj ve lojistik kolaylığına göre ilk kez sırala (0-100).",
-  },
-  {
-    id: 9,
-    name: "Category Matcher",
-    tier: 2,
-    chain: T2,
-    temperature: 0.3,
-    role: "Her ürünü hedef platformun gerçek kategori ağacına ve komisyon oranına eşle.",
-  },
-  {
-    id: 10,
-    name: "Trend Analyzer",
-    tier: 2,
-    chain: T2,
-    temperature: 0.4,
-    role: "Mevsimsellik, arama trendi yönü ve 90 günlük momentum tahmini üret.",
-  },
-  {
-    id: 11,
-    name: "Niche Grouping Agent",
-    tier: 2,
-    chain: T2,
-    temperature: 0.4,
-    role: "Ürünleri nişlere kümele; her niş için hedef kitle ve giriş bariyerini belirt.",
-  },
-  {
-    id: 12,
-    name: "Customer Sentiment Analyzer",
-    tier: 3,
-    chain: T3,
-    temperature: 0.3,
-    role: "Tipik müşteri şikâyet/övgü temalarını ve iade risklerini duygu analiziyle özetle.",
-  },
-  {
-    id: 13,
-    name: "Competitor Price Benchmarker",
-    tier: 3,
-    chain: T3,
-    temperature: 0.3,
-    role: "Rakip fiyat bandını, satıcı yoğunluğunu ve fiyat kırma riskini kıyasla.",
-  },
-  {
-    id: 14,
-    name: "Executive Synthesis Engine",
-    tier: 4,
-    chain: T4,
-    temperature: 0.35,
-    role: "Tüm katman çıktılarını sentezleyip en iyi 5 ürünü ve stratejik yönetici raporunu üret.",
-  },
-];
-
-// ------------------------------------------------------------------ prompts
-
-function contextHeader(input: PipelineInput): string {
-  return [
-    `Kullanıcı sorgusu: ${input.userQuery}`,
-    input.country ? `Hedef ülke: ${input.country}` : "",
-    input.platform ? `Hedef platform: ${input.platform}` : "",
-    `Yanıt dili: ${input.language}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
+  const source =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as { candidates?: unknown[] })
+      : {};
+  if (!Array.isArray(source.candidates)) return [];
+  return source.candidates
+    .flatMap((item): RetrieverCandidate[] => {
+      if (!item || typeof item !== "object") return [];
+      const value = item as Record<string, unknown>;
+      const name = String(value.name ?? value.title ?? "").trim();
+      if (!name) return [];
+      return [
+        {
+          ...value,
+          name: name.slice(0, 180),
+          category: String(value.category ?? "").slice(0, 80),
+          priceRange: String(value.priceRange ?? value.price_band_usd ?? "").slice(0, 80),
+          estimatedMarginPct: Number.isFinite(Number(value.estimatedMarginPct))
+            ? Number(value.estimatedMarginPct)
+            : 0,
+          demandScore: Number.isFinite(Number(value.demandScore))
+            ? Number(value.demandScore)
+            : 50,
+          competitionScore: Number.isFinite(Number(value.competitionScore))
+            ? Number(value.competitionScore)
+            : 50,
+          sentiment: String(value.sentiment ?? "").slice(0, 240),
+          whyNow: String(value.whyNow ?? value.why_now ?? "").slice(0, 400),
+          risks: Array.isArray(value.risks) ? value.risks.slice(0, 5).map(String) : [],
+        },
+      ];
+    })
+    .slice(0, 12);
 }
 
-const TOP5_JSON_SHAPE = `{"topProducts":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":[string]}] (TAM 5 ADET — ne eksik ne fazla),
- "executiveSummary": string (200-500 kelime, sayısal, uygulanabilir strateji raporu)}`;
+function retrieverPrompt(input: PipelineInput, query: string): string {
+  return `You are the Product Retriever for Aroless. Search broadly for real, specific, nameable products related to the query.
 
-const TOP5_CRITERIA = `TOP 5 İÇİN ZORUNLU TİCARİ EŞİKLER (döndürdüğün HER ürün beşinin de tamamını geçmek zorunda):
-1. Yüksek kâr marjı potansiyeli: düşük tahmini tedarik maliyeti + yüksek algılanan değer (3x-5x kâr marjı hedefi).
-2. Güçlü sorun çözme faktörü: net ve can sıkıcı bir müşteri ağrısını doğrudan çözer ya da yoğun bir tutku/hobi ilgisini besler.
-3. Viral & reklam dostu: kısa video (TikTok / Reels / Shorts) için güçlü görsel WOW faktörü.
-4. Optimum doygunluk: talep yüksek, marka hakimiyeti düşük-orta — bağımsız bir e-ticaret markasının pazar payı kapmasına yer var.
-5. Müşteri memnuniyeti: kategori eşdeğeri inceleme ortalaması en az 4.4+.
-Bir ürün bu eşiklerden herhangi birinde başarısızsa onu AT; kaliteyi düşürüp sayıyı doldurma — ama mümkün olan en güçlü 5 ürünü bulmak için aday havuzunu geniş tut.`;
+QUERY: ${query}
+COUNTRY: ${input.country ?? "GLOBAL"}
+PLATFORM: ${input.platform ?? "any"}
 
-function stageJsonHint(agent: AgentDef): string {
-  if (agent.id === 14) {
-    return `SADECE şu şekilde minified JSON döndür:
-${TOP5_JSON_SHAPE}
+Do not require every filter to match. Prefer broad keyword/semantic matches and return the three strongest alternatives even when the exact query has no result. Never return markdown. Return ONLY JSON:
+{"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":string[]}],"search_note":string}`;
+}
 
-${TOP5_CRITERIA}`;
+async function retrieveCandidates(
+  input: PipelineInput,
+  logs: AgentRunLog[],
+  councilLogs: CouncilDebugLog[],
+): Promise<{ candidates: RetrieverCandidate[]; attempts: number }> {
+  const queries = relaxSearchQuery(input.userQuery);
+  let attempts = 0;
+  const collected: RetrieverCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const query of queries) {
+    attempts++;
+    const result = await executeAgentWithFallback(
+      `Product Retriever (${attempts})`,
+      retrieverPrompt(input, query),
+      DEEP_CHAIN,
+      { temperature: 0.35, retries: 2 },
+    );
+    logs.push(result.log);
+    const parsed = parseAgentJson<{ candidates?: unknown[] }>(result.text, {});
+    const candidates = normalizeRetrieverCandidates(parsed);
+    for (const candidate of candidates) {
+      const identity = candidate.name.toLocaleLowerCase("tr-TR");
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        collected.push(candidate);
+      }
+    }
+    const status = candidates.length
+      ? "SUCCESS"
+      : attempts < queries.length
+        ? "FALLBACK_TRIGGERED"
+        : "EMPTY";
+    const debug = makeDebugLog(
+      "Product Retriever",
+      { query, attempt: attempts },
+      parsed,
+      candidates.length,
+      status,
+    );
+    councilLogs.push(debug);
+    emitDebugLog(debug);
+    if (collected.length >= 3) break;
   }
-  return `SADECE minified JSON döndür: {"findings":[string] (3-8 madde, somut ve sayısal),"candidates":[{"name":string,"note":string}] (en fazla 10)}`;
+
+  const queryLabel = input.userQuery.trim();
+  const fallbackNames = [
+    queryLabel,
+    `${queryLabel} için taşınabilir alternatif`,
+    `${queryLabel} için premium alternatif`,
+  ];
+  const fallbackAlternatives = fallbackNames.slice(1).map((name) => ({
+    name,
+    category: "Broad match",
+    priceRange: "",
+    estimatedMarginPct: 0,
+    demandScore: 50,
+    competitionScore: 50,
+    sentiment: "Neutral fallback; manual validation required.",
+    whyNow: "Alternative retained for manual validation after broad query relaxation.",
+    risks: ["Live evidence unavailable"],
+  }));
+
+  if (collected.length) {
+    const merged = [...collected];
+    for (const candidate of fallbackAlternatives) {
+      if (merged.length >= 3) break;
+      const identity = candidate.name.toLocaleLowerCase("tr-TR");
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        merged.push(candidate);
+      }
+    }
+    const debug = makeDebugLog(
+      "Product Retriever",
+      { queries, attempts, collected: collected.length },
+      merged.slice(0, 3),
+      Math.min(3, merged.length),
+      merged.length > collected.length ? "FALLBACK_TRIGGERED" : "SUCCESS",
+    );
+    councilLogs.push(debug);
+    emitDebugLog(debug);
+    return { candidates: merged.slice(0, 12), attempts };
+  }
+
+  const fallbackCandidates: RetrieverCandidate[] = fallbackNames.map((name, index) => ({
+    name,
+    category: "Broad match",
+    priceRange: "",
+    estimatedMarginPct: 0,
+    demandScore: 50,
+    competitionScore: 50,
+    sentiment: "Neutral fallback; manual validation required.",
+    whyNow:
+      index === 0
+        ? "Exact live match unavailable; retained as the closest query candidate."
+        : "Alternative retained for manual validation after broad query relaxation.",
+    risks: ["Live evidence unavailable"],
+  }));
+  const debug = makeDebugLog(
+    "Product Retriever",
+    { queries, attempts },
+    fallbackCandidates,
+    fallbackCandidates.length,
+    "FALLBACK_TRIGGERED",
+  );
+  councilLogs.push(debug);
+  emitDebugLog(debug);
+  return { candidates: fallbackCandidates, attempts };
 }
 
-type StageOutput = { findings: string[]; candidates: { name: string; note: string }[] };
-
-function buildAgentPrompt(agent: AgentDef, input: PipelineInput, prior: string): string {
-  return `Sen Velora ürün istihbarat sisteminde Ajan ${agent.id} — ${agent.name}.
-Görevin: ${agent.role}
-
-${contextHeader(input)}
-
-Önceki katmanların çıktı özeti:
-${prior || "(ilk katman — önceki çıktı yok)"}
-
-${stageJsonHint(agent)}`;
+function toPipelineProducts(
+  candidates: RetrieverCandidate[],
+  finalScore: number,
+  councilAverage: number,
+  listed: boolean,
+): Product[] {
+  return candidates.slice(0, 5).map((candidate) =>
+    ProductSchema.parse({
+      name: candidate.name,
+      category: candidate.category ?? "",
+      priceRange: candidate.priceRange ?? "",
+      estimatedMarginPct: Number(candidate.estimatedMarginPct ?? 0),
+      demandScore: Math.max(0, Math.min(100, Number(candidate.demandScore ?? 50))),
+      competitionScore: Math.max(0, Math.min(100, Number(candidate.competitionScore ?? 50))),
+      sentiment: candidate.sentiment ?? "",
+      whyNow: candidate.whyNow ?? "",
+      risks: candidate.risks ?? [],
+      councilScore: finalScore,
+      councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
+    }),
+  );
 }
 
-function summarize(outputs: { agent: AgentDef; data: StageOutput }[]): string {
-  return outputs
-    .map(
-      ({ agent, data }) =>
-        `#${agent.id} ${agent.name}: ${(data.findings ?? []).slice(0, 5).join(" | ")}${
-          data.candidates?.length
-            ? `\n  adaylar: ${data.candidates
-                .slice(0, 10)
-                .map((c) => `${c.name} (${c.note})`)
-                .join("; ")}`
-            : ""
-        }`,
-    )
-    .join("\n")
-    .slice(0, 12_000);
-}
-
-// ------------------------------------------------------------------ pipeline
-
-/** 14 ajanı Tier 1→4 sırasıyla çalıştırır ve yapılandırılmış rapor döndürür. */
+/** 14 agents receive the prior JSON state sequentially; no member can erase it. */
 export async function runVeloraAgentPipeline(rawInput: unknown): Promise<PipelineOutput> {
   const input = PipelineInputSchema.parse(rawInput);
   const traceId = `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const bus = createAgentBus(traceId);
   const started = Date.now();
   const logs: AgentRunLog[] = [];
+  const councilLogs: CouncilDebugLog[] = [];
   const tierLatencyMs: Record<string, number> = {};
-  const collected: { agent: AgentDef; data: StageOutput }[] = [];
 
   bus.emit("pipeline:start", { traceId, query: input.userQuery.slice(0, 120) });
+  const retrievalStart = Date.now();
+  bus.emit("tier:start", { traceId, tier: 1 });
+  const retrieval = await retrieveCandidates(input, logs, councilLogs);
+  tierLatencyMs.tier1 = Date.now() - retrievalStart;
+  bus.emit("tier:complete", { traceId, tier: 1, ms: tierLatencyMs.tier1 });
 
-  for (const tier of [1, 2, 3] as const) {
-    const tierStart = Date.now();
-    bus.emit("tier:start", { traceId, tier });
-    const agents = AGENTS.filter((a) => a.tier === tier);
-    const prior = summarize(collected);
-    const results = await Promise.all(
-      agents.map(async (agent) => {
-        bus.emit("agent:start", { traceId, agent: agent.name, tier: agent.tier });
-        const aStart = Date.now();
-        const { text, log } = await executeAgentWithFallback(
-          `${agent.id}. ${agent.name}`,
-          buildAgentPrompt(agent, input, prior),
-          agent.chain,
-          { temperature: agent.temperature },
-        );
-        bus.emit("agent:complete", { traceId, agent: agent.name, ok: log.ok, ms: Date.now() - aStart });
-        if (!log.ok) bus.emit("agent:error", { traceId, agent: agent.name, error: log.error ?? "unknown" });
-        return {
-          agent,
-          log,
-          data: parseAgentJson<StageOutput>(text, { findings: [], candidates: [] }),
-        };
-      }),
-    );
-    for (const r of results) {
-      logs.push(r.log);
-      if (r.log.ok) collected.push({ agent: r.agent, data: r.data });
-    }
-    const tierMs = Date.now() - tierStart;
-    tierLatencyMs[`tier${tier}`] = tierMs;
-    bus.emit("tier:complete", { traceId, tier, ms: tierMs });
-  }
+  const councilStart = Date.now();
+  bus.emit("tier:start", { traceId, tier: 2 });
+  const chain = await runStrictCouncilChain({
+    query: input.userQuery,
+    context: [
+      input.country ? `COUNTRY: ${input.country}` : "",
+      input.platform ? `PLATFORM: ${input.platform}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    candidates: retrieval.candidates,
+    run: async (agent, prompt) => {
+      bus.emit("agent:start", { traceId, agent: agent.name, tier: 2 });
+      const agentStart = Date.now();
+      const result = await executeAgentWithFallback(
+        `Council ${agent.name}`,
+        prompt,
+        DEEP_CHAIN,
+        { temperature: 0.3, retries: 2 },
+      );
+      logs.push(result.log);
+      bus.emit("agent:complete", {
+        traceId,
+        agent: agent.name,
+        ok: result.log.ok,
+        ms: Date.now() - agentStart,
+      });
+      if (!result.log.ok) {
+        bus.emit("agent:error", {
+          traceId,
+          agent: agent.name,
+          error: result.log.error ?? "unknown",
+        });
+      }
+      return {
+        raw: parseAgentJson<Record<string, unknown>>(result.text, {}),
+        ok: result.log.ok,
+        error: result.log.error,
+      };
+    },
+  });
+  councilLogs.push(...chain.logs);
+  tierLatencyMs.tier2 = Date.now() - councilStart;
+  bus.emit("tier:complete", { traceId, tier: 2, ms: tierLatencyMs.tier2 });
 
-  // Tier 4 — sentez (isolated, non-blocking: own bus span)
-  bus.emit("tier:start", { traceId, tier: 4 });
-  const finalAgent = AGENTS[13];
-  const tier4Start = Date.now();
-  bus.emit("agent:start", { traceId, agent: finalAgent.name, tier: 4 });
-  const { text, log } = await executeAgentWithFallback(
-    `${finalAgent.id}. ${finalAgent.name}`,
-    buildAgentPrompt(finalAgent, input, summarize(collected)),
-    finalAgent.chain,
-    { temperature: finalAgent.temperature, retries: 3 },
+  const products = toPipelineProducts(
+    retrieval.candidates,
+    chain.finalScore,
+    chain.councilAverage,
+    chain.shouldList,
   );
-  logs.push(log);
-  bus.emit("agent:complete", { traceId, agent: finalAgent.name, ok: log.ok, ms: Date.now() - tier4Start });
-  if (!log.ok) bus.emit("agent:error", { traceId, agent: finalAgent.name, error: log.error ?? "unknown" });
-  tierLatencyMs["tier4"] = Date.now() - tier4Start;
-  bus.emit("tier:complete", { traceId, tier: 4, ms: tierLatencyMs["tier4"] });
-
-  const parseProducts = (raw: string) =>
-    parseAgentJson<{ topProducts?: unknown[] }>(raw, {})
-      .topProducts?.slice(0, 5)
-      .map((p) => ProductSchema.safeParse(p))
-      .filter((r): r is { success: true; data: Product } => r.success)
-      .map((r) => r.data) ?? [];
-
-  let products = parseProducts(text);
-  let finalText = text;
-
-  // Contract: exactly 5 winners. When synthesis returned 1-4 valid products
-  // (executiveSummary intact), run ONE repair pass that must keep the winners
-  // and only add the missing slots — never repeat a returned name.
-  if (products.length > 0 && products.length < 5) {
-    const names = products.map((p) => p.name).filter(Boolean);
-    const repairPrompt = `${buildAgentPrompt(finalAgent, input, summarize(collected))}
-
-ÖNCEKİ YANITINDA sadece ${products.length} geçerli ürün döndü. Şimdi SADECE şu kuralı uygula:
-- Daha önce döndürdüğün şu ürünleri AYNEN KORU: ${names.join(" | ")}
-- Aynı isimleri tekrar etme.
-- TOPLAM 5 ürüne ulaşana dek eksikleri doldur (yukarıdaki 5 ticari eşiğe uyan en güçlü adaylarla).
-- ${TOP5_CRITERIA}
-
-SADECE şu şekilde minified JSON döndür: ${TOP5_JSON_SHAPE}`;
-    const repair = await executeAgentWithFallback(
-      `${finalAgent.id}. ${finalAgent.name} (tamamlama)`,
-      repairPrompt,
-      finalAgent.chain,
-      { temperature: finalAgent.temperature, retries: 1 },
-    );
-    logs.push(repair.log);
-    if (repair.log.ok && repair.text.trim()) {
-      const more = parseProducts(repair.text);
-      if (more.length >= products.length) products = more;
-      finalText = repair.text;
-    }
-  }
-
+  const executiveSummary = `14-agent council tamamlandı. Council average: ${chain.councilAverage}/100, product fingerprint: ${chain.productFingerprint}/100, final score: ${chain.finalScore}/100. ${chain.shouldList ? "Ürünler listeleniyor." : "Nötr sonuçlar korunarak incelemeye bırakıldı."}`;
   const providerHits: Record<string, number> = {};
-  for (const l of logs) providerHits[l.provider] = (providerHits[l.provider] ?? 0) + 1;
-
-  const fallbackSummary =
-    products.length > 0
-      ? `En güçlü ${products.length} ürün seçildi.`
-      : "Sağlayıcılar bu sorgu için ürün üretemedi.";
-  const executiveSummary =
-    (parseAgentJson<{ executiveSummary?: string }>(finalText, {}).executiveSummary ?? "").slice(
-      0,
-      12_000,
-    ) || fallbackSummary;
-
-  if (!products.length && !parseAgentJson<{ executiveSummary?: string }>(text, {}).executiveSummary) {
-    bus.emit("pipeline:complete", { traceId, ok: false, ms: Date.now() - started });
-    throw new Error("Tüm sağlayıcılar şu anda yanıt vermedi. Birkaç saniye sonra tekrar deneyin.");
+  for (const log of logs) {
+    providerHits[log.provider] = (providerHits[log.provider] ?? 0) + 1;
   }
+  const succeeded = logs.filter((log) => log.ok).length;
 
   bus.emit("pipeline:complete", { traceId, ok: true, ms: Date.now() - started });
-
   return PipelineOutputSchema.parse({
-    topProducts: products.slice(0, 5),
+    topProducts: products,
     executiveSummary,
     metrics: {
       totalLatencyMs: Date.now() - started,
-      agentCount: AGENTS.length,
-      succeeded: logs.filter((l) => l.ok).length,
-      failed: logs.filter((l) => !l.ok).length,
+      agentCount: COUNCIL_AGENTS.length,
+      succeeded,
+      failed: logs.length - succeeded,
       providerHits,
       tierLatencyMs,
       logs,
+      councilLogs,
+      councilAverage: chain.councilAverage,
+      productFingerprint: chain.productFingerprint,
+      finalScore: chain.finalScore,
+      listed: chain.shouldList,
+      councilOutputs: JSON.stringify(chain.outputs),
+      retrieverAttempts: retrieval.attempts,
     },
   });
 }
