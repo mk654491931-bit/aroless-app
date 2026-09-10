@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
@@ -44,12 +44,18 @@ const TIERS: Tier[] = [
 ];
 
 /** Minimalist FREE / PRO fiyatlandırma kartları. */
-export function PricingCard({ className }: { className?: string }) {
+interface PricingCardProps {
+  className?: string;
+}
+
+export function PricingCard({ className }: PricingCardProps): React.ReactElement {
   const [loading, setLoading] = useState(false);
 
-  async function upgrade() {
+  async function upgrade(): Promise<void> {
     setLoading(true);
     let opened = false;
+    let misconfigured = false;
+
     try {
       const resp = await apiFetch("/api/checkout", {
         method: "POST",
@@ -57,13 +63,38 @@ export function PricingCard({ className }: { className?: string }) {
         body: JSON.stringify({ plan: "Pro" }),
       });
       const json = (await resp.json()) as {
-        transactionId?: string;
-        clientToken?: string;
+        transactionId?: string | null;
+        clientToken?: string | null;
         environment?: "sandbox" | "production";
         priceId?: string | null;
         email?: string | null;
-        error?: string;
+        error?: unknown;
       };
+
+      if (!resp.ok || json.error) {
+        let serverErrorBody: string | null = null;
+        if (json.error) {
+          if (typeof json.error === "string" && json.error.trim().length > 0) {
+            serverErrorBody = json.error;
+          } else {
+            serverErrorBody = JSON.stringify(json.error);
+          }
+          misconfigured = serverErrorBody.toLowerCase().includes("no default payment link");
+          misconfigured = misconfigured || false;
+        }
+
+        console.warn("[Paddle] Server checkout rejected:", json.error ?? resp.status);
+
+        toast.error(
+          misconfigured
+            ? serverErrorBody ||
+                "Paddle Checkout ayarları eksik. Lütfen panonuzdaki Checkout Settings kısmını kontrol edin."
+            : serverErrorBody || "Ödeme başlatılamadı. Paddle ayarlarınızı kontrol edin.",
+        );
+        setLoading(false);
+        return;
+      }
+
       if (resp.ok && json.transactionId) {
         opened = await openPaddleOverlay({
           transactionId: json.transactionId,
@@ -74,13 +105,20 @@ export function PricingCard({ className }: { className?: string }) {
         });
       }
     } catch (error) {
-      console.warn("[Paddle] Server checkout unavailable; using Vite price checkout.", error);
+      console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
     }
 
     if (!opened) {
       opened = await openPaddlePlanCheckout("Pro");
     }
-    if (!opened) toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
+
+    if (!opened) {
+      toast.error(
+        misconfigured
+          ? "Ödeme penceresi açılamadı. Paddle Checkout ayarlarını kontrol edin."
+          : "Ödeme penceresi açılamadı. Lütfen tekrar deneyin.",
+      );
+    }
     setLoading(false);
   }
 

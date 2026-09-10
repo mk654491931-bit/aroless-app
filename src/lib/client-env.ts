@@ -15,6 +15,11 @@ export type PublicClientEnv = {
   turnstileSiteKey: string;
   apiBaseUrl: string;
   appUrl: string;
+  paddleClientToken: string;
+  paddleEnvironment: "sandbox" | "production";
+  paddlePriceStarterMonthly: string;
+  paddlePriceProMonthly: string;
+  paddlePriceBusinessMonthly: string;
   mode: string;
 };
 
@@ -27,6 +32,11 @@ const EMPTY_PUBLIC_ENV: PublicClientEnv = {
   turnstileSiteKey: "",
   apiBaseUrl: "",
   appUrl: "",
+  paddleClientToken: "",
+  paddleEnvironment: "sandbox",
+  paddlePriceStarterMonthly: "",
+  paddlePriceProMonthly: "",
+  paddlePriceBusinessMonthly: "",
   mode: "",
 };
 

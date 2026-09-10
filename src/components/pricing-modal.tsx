@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -11,7 +11,7 @@ import { PLANS, type PlanId } from "@/lib/plans";
 
 const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
-export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }): ReactNode {
   const checkout = useServerFn(createCheckout);
   const validateFn = useServerFn(validatePromoCode);
   const myPromoFn = useServerFn(getMyPromoCode);
@@ -22,7 +22,6 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   const [discount, setDiscount] = useState(0);
   const [autoApplied, setAutoApplied] = useState(false);
 
-  // Kayıt sırasında girilen promosyon kodunu otomatik uygula.
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
@@ -76,42 +75,90 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     setLoading(plan);
     let opened = false;
     let email: string | null | undefined;
+    let serverMisconfigured = false;
 
     try {
-      // Önce server transaction'ı kullanılır; userId + plan metadata'sı
-      // güvenilir biçimde webhook'a taşınır.
       const session = await checkout({ data: { plan } });
-      email = session.email;
-      opened = await openPaddleOverlay(
-        {
-          transactionId: session.transactionId,
-          clientToken: session.clientToken,
-          environment: session.environment,
-          priceId: session.priceId,
-          email: session.email,
-        },
-        {
-          discountCode: discount > 0 ? promo : null,
-          email: session.email,
-          onEvent: (event: unknown) => {
-            if (
-              event &&
-              typeof event === "object" &&
-              "name" in event &&
-              event.name === "checkout.completed"
-            ) {
-              toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
+
+      if (typeof session === "object" && session !== null && "ok" in session) {
+        if (!session.ok) {
+          if ("error" in session && session.error) {
+            const message = (session as { message?: unknown }).message;
+            const paddleMessage = (session as { paddleMessage?: unknown }).paddleMessage;
+            const misconfigured = (session as { misconfigured?: unknown }).misconfigured;
+
+            console.warn(
+              `[Paddle] Server checkout rejected for plan ${plan}:`,
+              paddleMessage ?? message,
+            );
+
+            serverMisconfigured = !!(misconfigured === true);
+
+            if (serverMisconfigured) {
+              toast.error(
+                typeof paddleMessage === "string"
+                  ? `Paddle ayarları eksik: ${paddleMessage}`
+                  : "Paddle Checkout ayarları eksik. Lütfen panonuzdaki Checkout Settings kısmını kontrol edin.",
+              );
+              setLoading(null);
+              return;
             }
+
+            toast.error(
+              typeof paddleMessage === "string"
+                ? `Paddle hatası: ${paddleMessage}`
+                : "Ödeme başlatılamadı. Paddle ayarlarınızı kontrol edin.",
+            );
+            setLoading(null);
+            return;
+          }
+        }
+
+        email =
+          typeof (session as { email?: unknown }).email === "string"
+            ? (session as { email: string }).email
+            : null;
+        opened = await openPaddleOverlay(
+          {
+            transactionId:
+              typeof (session as { transactionId?: unknown }).transactionId === "string"
+                ? (session as { transactionId: string }).transactionId
+                : undefined,
+            clientToken:
+              typeof (session as { clientToken?: unknown }).clientToken === "string"
+                ? (session as { clientToken: string }).clientToken
+                : null,
+            environment:
+              typeof (session as { environment?: unknown }).environment === "string"
+                ? (session as { environment: "sandbox" | "production" }).environment
+                : "sandbox",
+            priceId:
+              typeof (session as { priceId?: unknown }).priceId === "string"
+                ? (session as { priceId: string }).priceId
+                : null,
+            email,
           },
-        },
-      );
+          {
+            discountCode: discount > 0 ? promo : null,
+            email,
+            onEvent: (event: unknown) => {
+              if (
+                event &&
+                typeof event === "object" &&
+                "name" in event &&
+                (event as { name?: unknown }).name === "checkout.completed"
+              ) {
+                toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
+              }
+            },
+          },
+        );
+      }
     } catch (error) {
       console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
     }
 
-    // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
-    // doğrudan ilgili planın public price ID'siyle açılır.
-    if (!opened) {
+    if (!opened && !serverMisconfigured) {
       opened = await openPaddlePlanCheckout(plan, {
         discountCode: discount > 0 ? promo : null,
         email,
@@ -120,7 +167,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
             event &&
             typeof event === "object" &&
             "name" in event &&
-            event.name === "checkout.completed"
+            (event as { name?: unknown }).name === "checkout.completed"
           ) {
             toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
           }
@@ -129,7 +176,11 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     }
 
     if (!opened) {
-      toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
+      toast.error(
+        serverMisconfigured
+          ? "Ödeme penceresi açılamadı. Paddle Checkout ayarlarını kontrol edin."
+          : "Ödeme penceresi açılamadı. Lütfen tekrar deneyin.",
+      );
     }
     setLoading(null);
   };
@@ -244,7 +295,6 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 <button
                   onClick={() => subscribe(p.id)}
                   disabled={loading !== null}
-
                   className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
                 >
                   {loading === p.id

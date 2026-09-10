@@ -14,8 +14,8 @@
  *                                       VITE_PADDLE_ENV is the browser-side equivalent.
  *   PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID / PADDLE_BUSINESS_PRICE_ID
  *                                       price IDs for each plan. VITE_PADDLE_PRICE_*_MONTHLY aliases are
- *                                       accepted for Vite deployments. Legacy PADDLE_*_PRODUCT_ID and
- *                                       PADDLE_PRODUCT_ID are still honoured for backwards compatibility.
+ *                                       accepted for Vite deployments. Product IDs are never accepted as
+ *                                       checkout items; Paddle price IDs must begin with `pri_`.
  */
 
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
@@ -40,30 +40,22 @@ export type PaddleSettings = {
 };
 
 const PLAN_PRICE_ENV: Record<PlanId, readonly string[]> = {
-  Starter: [
-    "PADDLE_STARTER_PRICE_ID",
-    "VITE_PADDLE_PRICE_STARTER_MONTHLY",
-    "PADDLE_STARTER_PRODUCT_ID",
-  ],
-  Pro: [
-    "PADDLE_PRO_PRICE_ID",
-    "VITE_PADDLE_PRICE_PRO_MONTHLY",
-    "PADDLE_PRO_PRODUCT_ID",
-    "PADDLE_PRODUCT_ID",
-  ],
-  Business: [
-    "PADDLE_BUSINESS_PRICE_ID",
-    "VITE_PADDLE_PRICE_BUSINESS_MONTHLY",
-    "PADDLE_BUSINESS_PRODUCT_ID",
-  ],
+  Starter: ["PADDLE_STARTER_PRICE_ID", "VITE_PADDLE_PRICE_STARTER_MONTHLY"],
+  Pro: ["PADDLE_PRO_PRICE_ID", "VITE_PADDLE_PRICE_PRO_MONTHLY"],
+  Business: ["PADDLE_BUSINESS_PRICE_ID", "VITE_PADDLE_PRICE_BUSINESS_MONTHLY"],
 };
 
 function firstDefined(...names: string[]): string | undefined {
   for (const name of names) {
-    const value = process.env[name];
+    const value = process.env[name]?.trim();
     if (value) return value;
   }
   return undefined;
+}
+
+/** Paddle product IDs (`pro_*`) are not valid checkout line items. */
+export function isPaddlePriceId(value: unknown): value is string {
+  return typeof value === "string" && /^pri_[A-Za-z0-9_-]+$/.test(value.trim());
 }
 
 function isPlanId(value: unknown): value is PlanId {
@@ -80,7 +72,9 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
     process.env["PADDLE_API_KEY"],
     process.env["PADDLE_CLIENT_TOKEN"],
     process.env["VITE_PADDLE_CLIENT_TOKEN"],
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
   return /test_|_sdbx_|sandbox/i.test(probe) ? "sandbox" : "production";
 }
 
@@ -96,12 +90,23 @@ export function paddleSettings(): PaddleSettings | null {
   const clientToken = firstDefined("PADDLE_CLIENT_TOKEN", "VITE_PADDLE_CLIENT_TOKEN");
 
   const priceIds: Partial<Record<PlanId, string>> = {};
+  const invalidPriceIds: string[] = [];
   for (const plan of ["Starter", "Pro", "Business"] as const) {
     const id = firstDefined(...PLAN_PRICE_ENV[plan]);
-    if (id) priceIds[plan] = id;
+    if (!id) continue;
+    if (isPaddlePriceId(id)) priceIds[plan] = id;
+    else invalidPriceIds.push(plan);
   }
 
-  if (!apiKey || !webhookSecret || !clientToken || !priceIds.Starter || !priceIds.Pro || !priceIds.Business) {
+  if (
+    !apiKey ||
+    !webhookSecret ||
+    !clientToken ||
+    !priceIds.Starter ||
+    !priceIds.Pro ||
+    !priceIds.Business ||
+    invalidPriceIds.length > 0
+  ) {
     const missing = [
       ...(!apiKey ? ["PADDLE_API_KEY"] : []),
       ...(!webhookSecret ? ["PADDLE_WEBHOOK_SECRET_KEY"] : []),
@@ -109,6 +114,7 @@ export function paddleSettings(): PaddleSettings | null {
       ...(!priceIds.Starter ? ["PADDLE_STARTER_PRICE_ID"] : []),
       ...(!priceIds.Pro ? ["PADDLE_PRO_PRICE_ID"] : []),
       ...(!priceIds.Business ? ["PADDLE_BUSINESS_PRICE_ID"] : []),
+      ...(invalidPriceIds.length ? [`invalid price ID for ${invalidPriceIds.join(", ")}`] : []),
     ];
     console.error(`[Paddle] Missing environment variable(s): ${missing.join(", ")}`);
     return null;
@@ -168,6 +174,15 @@ export type CheckoutSession = {
   currency: string;
 };
 
+export type CheckoutSessionError = {
+  error: true;
+  plan: PlanId;
+  paddleMessage?: string;
+  message: string;
+};
+
+export type CheckoutSessionResult = CheckoutSession | CheckoutSessionError;
+
 /**
  * Create a server-side Paddle transaction for a plan and return the data needed to
  * open the Paddle.js overlay checkout (transactionId + client-side token).
@@ -175,18 +190,25 @@ export type CheckoutSession = {
  * customData is attached server-side — it cannot be tampered with by the browser —
  * and Paddle copies it onto the subscription and every renewal transaction, which
  * is what lets the webhook attribute payments to the right user.
+ *
+ * When the account is misconfigured (for example no default payment link) or the
+ * request is rejected by Paddle, this function returns a `{ error: true }` result
+ * instead of throwing, so the API and client layers can decide how to surface it.
  */
 export async function createPaddleCheckoutSession(opts: {
   userId: string;
   email?: string | null;
   plan?: PlanId;
-}): Promise<CheckoutSession> {
+}): Promise<CheckoutSessionResult> {
   const plan = isPlanId(opts.plan) ? opts.plan : "Pro";
   const settings = paddleSettings();
   if (!settings) {
-    throw new Error(
-      "Ödeme sağlayıcısı yapılandırılmamış (Paddle env değişkenleri eksik). Lütfen yöneticiyle iletişime geçin.",
-    );
+    return {
+      error: true,
+      plan,
+      message:
+        "Ödeme sağlayıcısı yapılandırılmamış (Paddle env değişkenleri eksik). Lütfen yöneticiyle iletişime geçin.",
+    } satisfies CheckoutSessionError;
   }
 
   const priceId = priceIdForPlan(settings, plan);
@@ -199,7 +221,11 @@ export async function createPaddleCheckoutSession(opts: {
     });
 
     if (!transaction?.id) {
-      throw new Error("Paddle transaction oluşturulamadı (yanıtta id yok).");
+      return {
+        error: true,
+        plan,
+        message: "Paddle transaction oluşturulamadı (yanıtta id yok).",
+      } satisfies CheckoutSessionError;
     }
 
     const amountCents = PLAN_PRICE_CENTS[plan];
@@ -213,8 +239,20 @@ export async function createPaddleCheckoutSession(opts: {
       currency: "USD",
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("[Paddle] Checkout transaction creation failed:", error);
-    throw error;
+
+    const isMisconfigured =
+      typeof message === "string" && message.toLowerCase().includes("no default payment link");
+
+    return {
+      error: true,
+      plan,
+      paddleMessage: typeof message === "string" ? message : undefined,
+      message: isMisconfigured
+        ? "Paddle Checkout ayarları eksik. Lütfen pano ayarlarını kontrol edin."
+        : "Paddle checkout tetiklenemedi. Lütfen sonrasında tekrar deneyin.",
+    } satisfies CheckoutSessionError;
   }
 }
 
@@ -246,10 +284,7 @@ const SUBSCRIPTION_EVENTS = new Set([
 ]);
 
 /** Transaction events handled for payment attribution / credit grants. */
-const TRANSACTION_EVENTS = new Set([
-  "transaction.completed",
-  "transaction.updated",
-]);
+const TRANSACTION_EVENTS = new Set(["transaction.completed", "transaction.updated"]);
 
 /** Statuses that must revoke entitlements (payment stopped / failing). */
 const REVOKING_STATUSES = new Set(["canceled", "past_due", "paused", "refunded", "reversed"]);
@@ -266,7 +301,8 @@ export function isRefundPayload(data: unknown): boolean {
   if (typeof gt === "string" && gt.trim().startsWith("-")) return true;
   if (typeof gt === "number" && gt < 0) return true;
   const adj = d["adjustment"] as Record<string, unknown> | undefined;
-  if (adj && typeof adj["type"] === "string" && adj["type"].toLowerCase().includes("refund")) return true;
+  if (adj && typeof adj["type"] === "string" && adj["type"].toLowerCase().includes("refund"))
+    return true;
   return false;
 }
 
@@ -307,11 +343,11 @@ export function mapPaddleEvent(
     data && typeof data === "object" && data.customData && typeof data.customData === "object"
       ? data.customData
       : {};
-  const items: Array<{ price?: { id?: string } | null }> =
-    Array.isArray(data?.items) ? data.items : [];
+  const items: Array<{ price?: { id?: string } | null }> = Array.isArray(data?.items)
+    ? data.items
+    : [];
   const priceId: string | null = items[0]?.price?.id ?? null;
-  const customerId: string | null =
-    typeof data?.customerId === "string" ? data.customerId : null;
+  const customerId: string | null = typeof data?.customerId === "string" ? data.customerId : null;
   const requestedPlan: PlanId | null = isPlanId(customData.plan) ? customData.plan : null;
   const rawUserId: string | null =
     typeof customData.userId === "string" && customData.userId ? customData.userId : null;
@@ -399,8 +435,7 @@ export function mapPaddleEvent(
 
     // Tier is taken from the active price, then customData (copied to renewals by
     // Paddle), then left null so the DB preserves the user's current plan.
-    const tier: PlanId | null =
-      planForPriceId(settings, priceId) ?? requestedPlan ?? null;
+    const tier: PlanId | null = planForPriceId(settings, priceId) ?? requestedPlan ?? null;
 
     // Out-of-order guard: a refund/reversal that arrives with a positive
     // grandTotal due to Paddle's eventual consistency still must not mint
@@ -415,8 +450,8 @@ export function mapPaddleEvent(
     // subscription.canceled must not resurrect entitlements — DB function
     // guards via the live-subscription lookup, but we avoid emitting a
     // credit-bearing command when the payload already looks revoked.
-    if (typeof (data as Record<string, unknown>)["status"] === "string") {
-      const s = String((data as Record<string, unknown>)["status"]).toLowerCase();
+    if (typeof data?.status === "string") {
+      const s = data.status.toLowerCase();
       if (REVOKING_STATUSES.has(s)) return null;
     }
 
@@ -453,8 +488,7 @@ export async function verifyPaddleWebhook(
   eventType: string;
   occurredAt: string;
   // Event data differs per event type; handlers narrow it structurally.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
+  data: unknown;
 }> {
   const settings = paddleSettings();
   if (!settings) {

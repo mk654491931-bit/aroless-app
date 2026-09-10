@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -39,6 +39,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { DEFAULT_MEDIA_FALLBACK, normalizeMediaUrl } from "@/lib/media-url";
 import {
   computeUnitEconomics,
   hybridVerdict,
@@ -156,6 +157,52 @@ function econOf(p: HotProduct): UnitEconomics {
   });
 }
 
+function ProductImage({ name }: { name: string }) {
+  const [src, setSrc] = useState(DEFAULT_MEDIA_FALLBACK);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 6000);
+    let cancelled = false;
+
+    fetch(`/api/public/product-image?q=${encodeURIComponent(name)}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { url?: unknown };
+      })
+      .then((result) => {
+        if (!cancelled && result?.url) setSrc(normalizeMediaUrl(result.url));
+      })
+      .catch(() => {
+        // The card remains usable with the local fallback when image search is unavailable.
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [name]);
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      loading="lazy"
+      onError={(event) => {
+        const image = event.currentTarget;
+        if (image.src.endsWith(DEFAULT_MEDIA_FALLBACK)) return;
+        image.src = DEFAULT_MEDIA_FALLBACK;
+      }}
+      className="size-11 shrink-0 rounded-lg border border-border object-cover"
+    />
+  );
+}
+
 /** Product Finger score — market-stream side, weighted 30%. */
 function fingerScore(p: HotProduct, e: UnitEconomics) {
   const compPenalty = p.competition === "High" ? 18 : p.competition === "Medium" ? 8 : 0;
@@ -165,7 +212,11 @@ function fingerScore(p: HotProduct, e: UnitEconomics) {
 }
 
 /** Live market metrics — rendered only from grounded signals, never simulated. */
-function marketMetrics(p: HotProduct) {
+function marketMetrics(p: HotProduct): Array<{
+  label: string;
+  value: string;
+  icon: typeof Activity;
+}> {
   const s = p.signals ?? {};
   const fmt = (v?: number, suffix = "") =>
     typeof v === "number" && Number.isFinite(v)
@@ -185,7 +236,7 @@ function marketMetrics(p: HotProduct) {
 
 /* -------------------------------------------------------------------- panel */
 
-export function CommandCenter() {
+export function CommandCenter(): ReactElement {
   const [query, setQuery] = useState("");
   const [niche, setNiche] = useState<string | null>(null);
   const feed = useQuery({
@@ -365,12 +416,7 @@ export function CommandCenter() {
                           "bg-[--accent-active]/10 shadow-[inset_2px_0_0_0_var(--accent-active)]",
                       )}
                     >
-                      <img
-                        src={`/api/public/product-image?q=${encodeURIComponent(p.name)}`}
-                        alt={p.name}
-                        loading="lazy"
-                        className="size-11 shrink-0 rounded-lg border border-border object-cover"
-                      />
+                      <ProductImage name={p.name} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{p.name}</div>
                         <div className="truncate text-[11px] text-muted-foreground">

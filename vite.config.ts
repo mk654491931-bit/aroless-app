@@ -71,6 +71,11 @@ export default defineConfig(async ({ command, mode }) => {
     VITE_TURNSTILE_SITE_KEY: ["VITE_TURNSTILE_SITE_KEY", "TURNSTILE_SITE_KEY"],
     VITE_API_BASE_URL: ["VITE_API_BASE_URL", "API_BASE_URL"],
     VITE_APP_URL: ["VITE_APP_URL", "APP_URL"],
+    VITE_PADDLE_CLIENT_TOKEN: ["VITE_PADDLE_CLIENT_TOKEN"],
+    VITE_PADDLE_ENV: ["VITE_PADDLE_ENV"],
+    VITE_PADDLE_PRICE_STARTER_MONTHLY: ["VITE_PADDLE_PRICE_STARTER_MONTHLY"],
+    VITE_PADDLE_PRICE_PRO_MONTHLY: ["VITE_PADDLE_PRICE_PRO_MONTHLY"],
+    VITE_PADDLE_PRICE_BUSINESS_MONTHLY: ["VITE_PADDLE_PRICE_BUSINESS_MONTHLY"],
   } as const;
   const loadedEnv = loadEnv(mode, process.cwd(), "VITE_");
   const buildEnv: Record<string, string> = {};
@@ -88,6 +93,12 @@ export default defineConfig(async ({ command, mode }) => {
       turnstileSiteKey: buildEnv.VITE_TURNSTILE_SITE_KEY ?? "",
       apiBaseUrl: buildEnv.VITE_API_BASE_URL ?? "",
       appUrl: buildEnv.VITE_APP_URL ?? "",
+      paddleClientToken: buildEnv.VITE_PADDLE_CLIENT_TOKEN ?? "",
+      paddleEnvironment:
+        buildEnv.VITE_PADDLE_ENV === "production" ? "production" : "sandbox",
+      paddlePriceStarterMonthly: buildEnv.VITE_PADDLE_PRICE_STARTER_MONTHLY ?? "",
+      paddlePriceProMonthly: buildEnv.VITE_PADDLE_PRICE_PRO_MONTHLY ?? "",
+      paddlePriceBusinessMonthly: buildEnv.VITE_PADDLE_PRICE_BUSINESS_MONTHLY ?? "",
       mode,
     }),
   };

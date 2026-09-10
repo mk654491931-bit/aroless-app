@@ -56,17 +56,33 @@ export type HotFeed = {
 export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
   const niche = typeof arg === "string" ? arg : "";
   const qs = niche.trim() ? `?niche=${encodeURIComponent(niche.trim())}` : "";
-
-  const res = await fetch(`/api/public/hot-products${qs}`);
-  if (!res.ok) throw new Error("Failed to load live feed");
-  const json = (await res.json()) as Partial<HotFeed>;
-  if (json.error && !(json.items ?? []).length) throw new Error(json.error);
-  return {
-    hour: json.hour ?? "",
-    refreshed_at: json.refreshed_at ?? new Date().toISOString(),
-    next_refresh_at: json.next_refresh_at ?? new Date().toISOString(),
-    items: json.items ?? [],
+  const now = new Date().toISOString();
+  const fallback: HotFeed = {
+    hour: "",
+    refreshed_at: now,
+    next_refresh_at: now,
+    items: [],
+    error: "Live market feed temporarily unavailable",
   };
+
+  try {
+    const res = await fetch(`/api/public/hot-products${qs}`, {
+      signal: AbortSignal.timeout(8000),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return fallback;
+    const json = (await res.json()) as Partial<HotFeed>;
+    return {
+      hour: json.hour ?? "",
+      refreshed_at: json.refreshed_at ?? now,
+      next_refresh_at: json.next_refresh_at ?? now,
+      items: json.items ?? [],
+      ...(json.error ? { error: json.error } : {}),
+    };
+  } catch (error) {
+    console.warn("[hot-products] live feed unavailable; rendering an empty state", error);
+    return fallback;
+  }
 }
 
 export const HOT_FEED_QUERY_KEY = ["hot-products"] as const;

@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardPublic } from "@/lib/api-guard.server";
+import { normalizeExternalMediaUrl } from "@/lib/media-url";
 
 // Simple in-memory cache (per worker instance). Key: normalized query.
 const cache = new Map<string, { url: string; at: number }>();
 const TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const UPSTREAM_TIMEOUT_MS = 5000;
 const MAX_CACHE_ENTRIES = 2000; // bound memory under abusive unique queries
 
 function cacheSet(key: string, value: { url: string; at: number }) {
@@ -28,6 +30,7 @@ async function ddgToken(q: string): Promise<string | null> {
       "user-agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
     },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
   const html = await r.text();
   const m = html.match(/vqd=(?:"|&quot;|')?([\d-]+)(?:"|&quot;|')?/);
@@ -47,13 +50,14 @@ async function ddgFirstImage(q: string): Promise<string | null> {
       referer: "https://duckduckgo.com/",
       accept: "application/json, text/javascript, */*; q=0.01",
     },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
   if (!r.ok) return null;
   const data = (await r.json().catch(() => null)) as {
     results?: Array<{ image?: string; thumbnail?: string }>;
   } | null;
   const first = data?.results?.find((x) => x.image || x.thumbnail);
-  return first?.image || first?.thumbnail || null;
+  return normalizeExternalMediaUrl(first?.image || first?.thumbnail);
 }
 
 const UA =
@@ -64,7 +68,10 @@ async function bingFirstImage(q: string): Promise<string | null> {
   try {
     const r = await fetch(
       `https://www.bing.com/images/search?q=${encodeURIComponent(q)}&form=HDRSC2&first=1`,
-      { headers: { "user-agent": UA, accept: "text/html" } },
+      {
+        headers: { "user-agent": UA, accept: "text/html" },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
     );
     if (!r.ok) return null;
     const html = await r.text();
@@ -84,13 +91,16 @@ async function wikimediaFirstImage(q: string): Promise<string | null> {
       `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=1&gsrsearch=${encodeURIComponent(
         q,
       )}&prop=imageinfo&iiprop=url&iiurlwidth=800`,
-      { headers: { "user-agent": UA } },
+      {
+        headers: { "user-agent": UA },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
     );
     if (!r.ok) return null;
     const data = (await r.json().catch(() => null)) as any;
     const pages = data?.query?.pages ? Object.values<any>(data.query.pages) : [];
     const info = pages[0]?.imageinfo?.[0];
-    return info?.thumburl || info?.url || null;
+    return normalizeExternalMediaUrl(info?.thumburl || info?.url);
   } catch {
     return null;
   }
@@ -133,7 +143,11 @@ export const Route = createFileRoute("/api/public/product-image")({
           // No real image found — never return a fabricated/stock placeholder.
           return Response.json({ url: null, cached: false, source: "none" }, { headers: CORS });
         }
-        cacheSet(key, { url: img, at: Date.now() });
+        const normalizedImage = normalizeExternalMediaUrl(img);
+        if (!normalizedImage) {
+          return Response.json({ url: null, cached: false, source: "invalid" }, { headers: CORS });
+        }
+        cacheSet(key, { url: normalizedImage, at: Date.now() });
         return Response.json({ url: img, cached: false, source }, { headers: CORS });
       },
     },

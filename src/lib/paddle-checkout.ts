@@ -6,6 +6,7 @@
  * via dynamic import.
  */
 
+import type { PaddleEventData } from "@paddle/paddle-js";
 import type { PlanId } from "@/lib/plans";
 
 export type CheckoutSessionClient = {
@@ -24,18 +25,32 @@ export type OpenCheckoutOptions = {
   /** Plan whose Vite price ID should be used when no transaction ID is supplied. */
   plan?: PlanId;
   /** Called for every Paddle.js checkout event (e.g. checkout.completed). */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onEvent?: (event: any) => void;
+  onEvent?: (event: PaddleEventData) => void;
 };
+
+/** Paddle Billing price IDs are distinct from product IDs (pri_* vs pro_*). */
+export function isPaddlePriceId(value: unknown): value is string {
+  return typeof value === "string" && /^pri_[A-Za-z0-9_-]+$/.test(value.trim());
+}
+
+function validPaddlePriceId(value: unknown, source: string): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (isPaddlePriceId(trimmed)) return trimmed;
+  console.error(
+    `[Paddle] Geçersiz Price ID yok sayıldı (${source}). Paddle Price ID pri_ ile başlamalıdır.`,
+  );
+  return undefined;
+}
 
 function paddlePriceIdForPlan(plan: PlanId): string | undefined {
   switch (plan) {
     case "Starter":
-      return import.meta.env.VITE_PADDLE_PRICE_STARTER_MONTHLY;
+      return validPaddlePriceId(import.meta.env.VITE_PADDLE_PRICE_STARTER_MONTHLY, "Starter");
     case "Pro":
-      return import.meta.env.VITE_PADDLE_PRICE_PRO_MONTHLY;
+      return validPaddlePriceId(import.meta.env.VITE_PADDLE_PRICE_PRO_MONTHLY, "Pro");
     case "Business":
-      return import.meta.env.VITE_PADDLE_PRICE_BUSINESS_MONTHLY;
+      return validPaddlePriceId(import.meta.env.VITE_PADDLE_PRICE_BUSINESS_MONTHLY, "Business");
   }
 }
 
@@ -57,26 +72,29 @@ function detectTheme(): "light" | "dark" {
  * Open the Paddle overlay checkout for a server-created transaction or a
  * configured plan price. The server transaction remains the preferred path
  * because it carries trusted user/plan metadata to the webhook processor.
- *
- * When only a price ID is available, Paddle.js opens an item checkout directly.
- * This is useful for public pricing surfaces and keeps all browser config in
- * Vite's `import.meta.env` boundary.
  */
 export async function openPaddleOverlay(
   session: CheckoutSessionClient = {},
   options?: OpenCheckoutOptions,
 ): Promise<boolean> {
-  const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
-  const paddleEnv = import.meta.env.VITE_PADDLE_ENV || "sandbox";
+  // A server-created session is authoritative. Vite values are only used by
+  // the public inline-price fallback and never override its environment/token.
+  const clientToken = session.clientToken?.trim() || import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+  const configuredEnvironment = session.environment || import.meta.env.VITE_PADDLE_ENV || "sandbox";
+  const paddleEnv = configuredEnvironment === "production" ? "production" : "sandbox";
 
   if (!clientToken) {
     reportMissingClientToken();
     return false;
   }
 
-  const priceId = session.priceId ?? (options?.plan ? paddlePriceIdForPlan(options.plan) : undefined);
+  const sessionPriceId = validPaddlePriceId(session.priceId, "server session");
+  const priceId =
+    sessionPriceId ?? (options?.plan ? paddlePriceIdForPlan(options.plan) : undefined);
   if (!session.transactionId && !priceId) {
-    console.error("Paddle fiyat ID bulunamadı. İlgili VITE_PADDLE_PRICE_* değişkenini kontrol edin.");
+    console.error(
+      "Paddle fiyat ID bulunamadı. İlgili VITE_PADDLE_PRICE_* değişkenini kontrol edin.",
+    );
     return false;
   }
 
@@ -84,7 +102,7 @@ export async function openPaddleOverlay(
     const { initializePaddle } = await import("@paddle/paddle-js");
     const paddle = await initializePaddle({
       token: clientToken,
-      environment: paddleEnv === "production" ? "production" : "sandbox",
+      environment: paddleEnv,
       eventCallback: options?.onEvent,
     });
 
@@ -96,7 +114,8 @@ export async function openPaddleOverlay(
     const origin = window.location.origin;
     const checkout = session.transactionId
       ? { transactionId: session.transactionId }
-      : { items: [{ priceId: priceId!, quantity: 1 }] };
+      : { items: [{ priceId: priceId ?? "", quantity: 1 }] };
+    const email = session.email ?? options?.email;
 
     paddle.Checkout.open({
       ...checkout,
@@ -107,9 +126,7 @@ export async function openPaddleOverlay(
         successUrl: `${origin}/settings?paid=1`,
         allowLogout: false,
       },
-      ...((session.email ?? options?.email)
-        ? { customer: { email: session.email ?? options?.email! } }
-        : {}),
+      ...(email ? { customer: { email } } : {}),
       ...(options?.discountCode ? { discountCode: options.discountCode } : {}),
     });
 

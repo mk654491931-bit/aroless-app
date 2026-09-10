@@ -1,4 +1,5 @@
 import type { Platform } from "./gemini.functions";
+import { DEFAULT_MEDIA_FALLBACK, normalizeMediaUrl } from "./media-url";
 
 // Clearbit brand logos — fast CDN, no auth required.
 export const PLATFORM_LOGO: Record<Platform, string> = {
@@ -50,16 +51,19 @@ export function logoForStore(store: string): string {
   if (s.includes("tmall")) return PLATFORM_LOGO.Tmall;
   if (s.includes("pinduoduo") || s.includes("pdd")) return PLATFORM_LOGO.Pinduoduo;
   if (s.includes("tiktok")) return PLATFORM_LOGO["TikTok Shop"];
-  if (s.includes("trendyol")) return "https://logo.clearbit.com/trendyol.com";
-  if (s.includes("alibaba")) return "https://logo.clearbit.com/alibaba.com";
-  if (s.includes("target")) return "https://logo.clearbit.com/target.com";
-  if (s.includes("wayfair")) return "https://logo.clearbit.com/wayfair.com";
+  if (s.includes("alibaba")) return normalizeMediaUrl("https://logo.clearbit.com/alibaba.com");
+  if (s.includes("target")) return normalizeMediaUrl("https://logo.clearbit.com/target.com");
+  if (s.includes("wayfair")) return normalizeMediaUrl("https://logo.clearbit.com/wayfair.com");
   if (s.includes("best buy") || s.includes("bestbuy"))
-    return "https://logo.clearbit.com/bestbuy.com";
-  if (s.includes("flipkart")) return "https://logo.clearbit.com/flipkart.com";
-  if (s.includes("wildberries")) return "https://logo.clearbit.com/wildberries.ru";
-  if (s.includes("coupang")) return "https://logo.clearbit.com/coupang.com";
+    return normalizeMediaUrl("https://logo.clearbit.com/bestbuy.com");
+  if (s.includes("flipkart")) return normalizeMediaUrl("https://logo.clearbit.com/flipkart.com");
+  if (s.includes("wildberries"))
+    return normalizeMediaUrl("https://logo.clearbit.com/wildberries.ru");
+  if (s.includes("coupang")) return normalizeMediaUrl("https://logo.clearbit.com/coupang.com");
   // Fallback: try domain-like transform (e.g., "Nike" -> nike.com)
   const slug = s.replace(/[^a-z0-9]/g, "");
-  return slug ? `https://logo.clearbit.com/${slug}.com` : "";
+  return normalizeMediaUrl(
+    slug ? `https://logo.clearbit.com/${slug}.com` : "",
+    DEFAULT_MEDIA_FALLBACK,
+  );
 }

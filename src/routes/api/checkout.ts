@@ -48,6 +48,50 @@ export const Route = createFileRoute("/api/checkout")({
             plan: parsed.data.plan,
           });
 
+          const createCheckoutError = (
+            plan: string,
+            message: string,
+            paddleMessage: string | null = null,
+          ) => {
+            console.warn(
+              `[Checkout] Paddle rejected checkout for plan ${plan}:`,
+              paddleMessage ?? message,
+            );
+            return json(
+              {
+                error: message,
+                plan,
+                paddleMessage,
+              },
+              409,
+            );
+          };
+
+          if ("error" in session) {
+            const sessionWithError = session as {
+              error?: boolean;
+              plan?: unknown;
+              paddleMessage?: unknown;
+              message?: unknown;
+            };
+            const checkoutPlan =
+              typeof sessionWithError.plan === "string" && sessionWithError.plan.trim().length > 0
+                ? sessionWithError.plan
+                : parsed.data.plan;
+            const checkoutMessage =
+              typeof sessionWithError.message === "string" &&
+              sessionWithError.message.trim().length > 0
+                ? sessionWithError.message
+                : "Checkout yanıtı beklenmedik biçimde.";
+            const checkoutPaddleMessage =
+              typeof sessionWithError.paddleMessage === "string" &&
+              sessionWithError.paddleMessage.trim().length > 0
+                ? sessionWithError.paddleMessage
+                : null;
+
+            return createCheckoutError(checkoutPlan, checkoutMessage, checkoutPaddleMessage);
+          }
+
           return json(
             {
               transactionId: session.transactionId,
