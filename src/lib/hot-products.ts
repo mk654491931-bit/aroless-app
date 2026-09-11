@@ -53,6 +53,35 @@ export type HotFeed = {
   error?: string;
 };
 
+/** Builds the feed envelope from products streamed by the discovery endpoint. */
+export function buildHotFeedFromItems(items: HotProduct[], now = new Date()): HotFeed {
+  const iso = now.toISOString();
+  const next = new Date(now);
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return {
+    hour: iso.slice(0, 13),
+    refreshed_at: iso,
+    next_refresh_at: next.toISOString(),
+    items,
+  };
+}
+
+/**
+ * Last-resort reader: consumes the streaming discovery endpoint so a slow scan
+ * (the one that used to die with HTTP 524) still fills the feed instead of
+ * leaving the UI on an empty state.
+ */
+async function fetchHotProductsStreamed(niche: string): Promise<HotProduct[]> {
+  const { streamProductDiscovery } = await import("./product-stream.client");
+  const result = await streamProductDiscovery(
+    { niche: niche.trim() || undefined },
+    {},
+    AbortSignal.timeout(180_000),
+  );
+  return result.items;
+}
+
 export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
   const niche = typeof arg === "string" ? arg : "";
   const qs = niche.trim() ? `?niche=${encodeURIComponent(niche.trim())}` : "";
@@ -70,19 +99,30 @@ export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
       signal: AbortSignal.timeout(8000),
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) return fallback;
-    const json = (await res.json()) as Partial<HotFeed>;
-    return {
-      hour: json.hour ?? "",
-      refreshed_at: json.refreshed_at ?? now,
-      next_refresh_at: json.next_refresh_at ?? now,
-      items: json.items ?? [],
-      ...(json.error ? { error: json.error } : {}),
-    };
+    if (res.ok) {
+      const json = (await res.json()) as Partial<HotFeed>;
+      return {
+        hour: json.hour ?? "",
+        refreshed_at: json.refreshed_at ?? now,
+        next_refresh_at: json.next_refresh_at ?? now,
+        items: json.items ?? [],
+        ...(json.error ? { error: json.error } : {}),
+      };
+    }
   } catch (error) {
-    console.warn("[hot-products] live feed unavailable; rendering an empty state", error);
-    return fallback;
+    console.warn("[hot-products] live feed unavailable; falling back to the stream", error);
   }
+
+  // The JSON route can exceed the gateway window — read the same scan as a
+  // stream so products arrive (and get persisted) incrementally.
+  try {
+    const items = await fetchHotProductsStreamed(niche);
+    if (items.length > 0) return buildHotFeedFromItems(items);
+  } catch (error) {
+    console.warn("[hot-products] streaming fallback failed; rendering an empty state", error);
+  }
+
+  return fallback;
 }
 
 export const HOT_FEED_QUERY_KEY = ["hot-products"] as const;
