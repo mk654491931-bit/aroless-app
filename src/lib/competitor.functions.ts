@@ -28,6 +28,12 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ report: CompetitorReport }> => {
     const country = (data.country || "GLOBAL").toUpperCase();
 
+    // Cloudflare 100s'yi aşan isteği 524 ile keser. Hattı bir bütçeye bağla:
+    // süre dolarsa hata yerine o ana kadar toplanan rapor döner (partial).
+    const { createDeadline, JSON_BUDGET_MS } = await import("@/lib/deadline.server");
+    const deadline = createDeadline(JSON_BUDGET_MS);
+    let partial = false;
+
     // Free external signals first — they ground the AI prompts (fewer tokens, real data).
     const [scraped, trends] = await Promise.all([
       scrapeMarketplaceSellers(data.query, country),
@@ -47,15 +53,20 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
 
     type SellersRaw = { avg_price_usd?: number; sellers?: Partial<CompetitorSeller>[] };
     type SentimentRaw = { sentiment_summary?: string; weaknesses?: Partial<CompetitorWeakness>[] };
-    const [sellersRaw, sentimentRaw] = await Promise.all([
-      // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
-      callGemini(sellersPrompt(data.query, country, liveContext), undefined, 0.4)
-        .then((t) => extractJson<SellersRaw>(t, {}))
-        .catch((): SellersRaw => ({})),
-      callGroq(sentimentPrompt(data.query, country, liveContext), 0.3)
-        .then((t) => extractJson<SentimentRaw>(t, {}))
-        .catch((): SentimentRaw => ({})),
-    ]);
+    const aiPair = await deadline.race(
+      Promise.all([
+        // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
+        callGemini(sellersPrompt(data.query, country, liveContext), undefined, 0.4)
+          .then((t) => extractJson<SellersRaw>(t, {}))
+          .catch((): SellersRaw => ({})),
+        callGroq(sentimentPrompt(data.query, country, liveContext), 0.3)
+          .then((t) => extractJson<SentimentRaw>(t, {}))
+          .catch((): SentimentRaw => ({})),
+      ]),
+    );
+    if (!aiPair) partial = true;
+    const sellersRaw: SellersRaw = aiPair?.[0] ?? {};
+    const sentimentRaw: SentimentRaw = aiPair?.[1] ?? {};
 
     const aiSellers = (sellersRaw.sellers ?? []).slice(0, 5).map((s) => ({
       seller: String(s.seller ?? "Bilinmeyen satıcı"),
@@ -124,19 +135,30 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
       .join("\n")
       .slice(0, 2500);
 
-    const strategy = await callGemini(strategyPrompt(data.query, country, context), undefined, 0.6)
-      .then((t) => {
-        const p = extractJson<Partial<CounterStrategy>>(t, {});
-        if (!p.headline && !p.positioning) return null;
-        return {
-          headline: String(p.headline ?? ""),
-          positioning: String(p.positioning ?? ""),
-          price_advice: String(p.price_advice ?? ""),
-          playbook: Array.isArray(p.playbook) ? p.playbook.slice(0, 5).map(String) : [],
-          ad_angle: String(p.ad_angle ?? ""),
-        } as CounterStrategy;
-      })
-      .catch(() => null);
+    let strategy: CounterStrategy | null = null;
+    if (deadline.expired()) {
+      // Karşı strateji turu başlatılmaz — rapor eldeki bölümlerle döner.
+      partial = true;
+    } else {
+      const strategyText = await deadline
+        .race(callGemini(strategyPrompt(data.query, country, context), undefined, 0.6))
+        .catch(() => null);
+      if (strategyText === null) {
+        partial = true;
+      } else {
+        const p = extractJson<Partial<CounterStrategy>>(strategyText, {});
+        if (p.headline || p.positioning) {
+          strategy = {
+            headline: String(p.headline ?? ""),
+            positioning: String(p.positioning ?? ""),
+            price_advice: String(p.price_advice ?? ""),
+            playbook: Array.isArray(p.playbook) ? p.playbook.slice(0, 5).map(String) : [],
+            ad_angle: String(p.ad_angle ?? ""),
+          };
+        }
+      }
+    }
+    deadline.dispose();
 
     const priced = sellers.filter((s) => s.price_usd > 0);
     return {
@@ -153,6 +175,7 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
         trend_momentum_pct: trends.momentum_pct,
         trend_monthly: trends.monthly,
         trend_source: trends.source,
+        partial,
       },
     };
   });

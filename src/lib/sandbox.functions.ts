@@ -29,9 +29,13 @@ export const startSimulation = createServerFn({ method: "POST" })
     // Simülasyon modülü tüm paketlerde ücretsiz ve sınırsızdır — jeton düşülmez.
     const key = process.env.GEMINI_API_KEY;
     // Statik/mock baseline yok: veriler yalnızca canlı AI pazar taramasından gelir.
-    const text = await callGemini(baselinePrompt(data), key, 0.4);
+    // Gateway bütçesi: çağrı 90s'yi aşarsa 524 yerine aşağıdaki anlaşılır
+    // hataya düşer.
+    const { raceBudget } = await import("@/lib/deadline.server");
+    const text = (await raceBudget(() => callGemini(baselinePrompt(data), key, 0.4))) ?? "";
     const parsed = extractJson<Partial<MarketBaseline>>(text, {});
-    if (parsed.cvr_pct == null || parsed.cpc_usd == null) {
+    const isNil = (v: unknown): boolean => v === null || v === undefined;
+    if (isNil(parsed.cvr_pct) || isNil(parsed.cpc_usd)) {
       throw new Error("Canlı pazar verisi alınamadı. Lütfen tekrar deneyin.");
     }
     const baseline: MarketBaseline = {
@@ -67,7 +71,11 @@ export const getSimCrisis = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CrisisInput.parse(i))
   .handler(async ({ data }): Promise<{ crisis: Crisis | null }> => {
     try {
-      const text = await callGemini(crisisPrompt(data), process.env.GEMINI_API_KEY, 1.0);
+      const { raceBudget } = await import("@/lib/deadline.server");
+      const text = await raceBudget(() =>
+        callGemini(crisisPrompt(data), process.env.GEMINI_API_KEY, 1.0),
+      );
+      if (text === null) return { crisis: null };
       const parsed = extractJson<Partial<Crisis>>(text, {});
       if (!parsed.title || !Array.isArray(parsed.choices) || parsed.choices.length < 2)
         return { crisis: null };
@@ -109,7 +117,11 @@ export const getSimReviews = createServerFn({ method: "POST" })
   .handler(
     async ({ data }): Promise<{ reviews: { stars: number; author: string; text: string }[] }> => {
       try {
-        const text = await callGemini(reviewsPrompt(data), process.env.GEMINI_API_KEY, 1.0);
+        const { raceBudget } = await import("@/lib/deadline.server");
+        const text = await raceBudget(() =>
+          callGemini(reviewsPrompt(data), process.env.GEMINI_API_KEY, 1.0),
+        );
+        if (text === null) return { reviews: [] };
         const parsed = extractJson<{
           reviews?: { stars?: number; author?: string; text?: string }[];
         }>(text, {});
@@ -142,7 +154,11 @@ export const getSimCoach = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CoachInput.parse(i))
   .handler(async ({ data }): Promise<{ advice: CoachAdvice | null }> => {
     try {
-      const text = await callGemini(coachPrompt(data), process.env.GEMINI_API_KEY, 0.7);
+      const { raceBudget } = await import("@/lib/deadline.server");
+      const text = await raceBudget(() =>
+        callGemini(coachPrompt(data), process.env.GEMINI_API_KEY, 0.7),
+      );
+      if (text === null) return { advice: null };
       const p = extractJson<Partial<CoachAdvice>>(text, {});
       if (!p.verdict && !p.why) return { advice: null };
       return {

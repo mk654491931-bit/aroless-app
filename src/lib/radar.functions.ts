@@ -35,13 +35,17 @@ export const getRadar = createServerFn({ method: "POST" })
     // Üret ve kaydet
     let seeds: RadarSeed[] = [];
     try {
-      const text = await callGemini(radarPrompt(data.country), undefined, 0.85);
-      const parsed = extractJson<{ items?: unknown }>(text, { items: [] });
-      seeds = sanitizeRadar(parsed.items, data.country);
+      // 524 yerine hızlı, boş bir radar akışı döndür.
+      const { raceBudget } = await import("@/lib/deadline.server");
+      const text = await raceBudget(() => callGemini(radarPrompt(data.country), undefined, 0.85));
+      if (text !== null) {
+        const parsed = extractJson<{ items?: unknown }>(text, { items: [] });
+        seeds = sanitizeRadar(parsed.items, data.country);
 
-      // Aylık trend radar taraması sayacı.
-      const { recordUsage } = await import("@/lib/usage.server");
-      await recordUsage(context.supabase, "trend_radar");
+        // Aylık trend radar taraması sayacı.
+        const { recordUsage } = await import("@/lib/usage.server");
+        await recordUsage(context.supabase, "trend_radar");
+      }
     } catch {
       seeds = [];
     }

@@ -115,6 +115,25 @@ export function createDeadline(
 }
 
 /**
+ * Bounds a single expensive call (LLM, scrape, …) with the JSON budget.
+ *
+ * Returns `work()`'s result, or `null` when the budget is spent — never throws
+ * for the timeout itself, so callers keep their existing "no data" branch.
+ * The timer is always cleared, so a fast call leaks nothing.
+ */
+export async function raceBudget<T>(
+  work: () => Promise<T>,
+  budgetMs: number = JSON_BUDGET_MS,
+): Promise<T | null> {
+  const deadline = createDeadline(budgetMs);
+  try {
+    return await deadline.race(work());
+  } finally {
+    deadline.dispose();
+  }
+}
+
+/**
  * Runs `work` under a budget and falls back to `partial` when the budget is
  * spent. Used by JSON endpoints that must answer 200 with whatever they have
  * instead of letting the gateway return a 524 to the client.

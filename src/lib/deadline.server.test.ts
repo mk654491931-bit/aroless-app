@@ -4,6 +4,7 @@ import {
   JSON_BUDGET_MS,
   STREAM_BUDGET_MS,
   createDeadline,
+  raceBudget,
   withDeadline,
 } from "./deadline.server";
 
@@ -64,6 +65,23 @@ describe("createDeadline", () => {
     parent.abort();
     expect(deadline.signal.aborted).toBe(true);
     deadline.dispose();
+  });
+});
+
+describe("raceBudget", () => {
+  it("returns the call result when it finishes in time", async () => {
+    await expect(raceBudget(async () => "text", 500)).resolves.toBe("text");
+  });
+
+  it("resolves null instead of throwing when the call outlives the budget", async () => {
+    const never = () => new Promise<string>(() => undefined);
+    await expect(raceBudget(never, 60)).resolves.toBeNull();
+  });
+
+  it("still surfaces real failures so callers can fall back explicitly", async () => {
+    await expect(raceBudget(() => Promise.reject(new Error("provider 500")), 500)).rejects.toThrow(
+      "provider 500",
+    );
   });
 });
 

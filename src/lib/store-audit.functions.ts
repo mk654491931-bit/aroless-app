@@ -22,6 +22,10 @@ export type StoreAuditRow = {
   created_at: string;
 };
 
+/** Kullanıcıya gösterilecek, anlaşılır zaman aşımı mesajı. */
+const AUDIT_TIMEOUT_MESSAGE =
+  "Mağaza taraması 90 saniyelik sunucu sınırına takıldı. Krediniz iade edildi — lütfen tekrar deneyin.";
+
 export const auditStore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => AuditInput.parse(input))
@@ -29,7 +33,8 @@ export const auditStore = createServerFn({ method: "POST" })
     const url = data.url.startsWith("http") ? data.url : `https://${data.url}`;
     if (!/^https?:\/\//i.test(url)) throw new Error("INVALID_URL");
 
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
+    const { data: remainingAfterDeduct, error: deductErr } =
+      await context.supabase.rpc("deduct_credit");
     if (deductErr) {
       if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
       throw new Error(deductErr.message);
@@ -39,17 +44,44 @@ export const auditStore = createServerFn({ method: "POST" })
     const { recordUsage } = await import("@/lib/usage.server");
     await recordUsage(context.supabase, "ai_tools");
 
-    let page: { html: string; status: number; ms: number };
+    // Cloudflare 100s'yi aşan isteği 524 ile keser. Ağ + LLM çağrısını bir
+    // bütçeye bağla; süre dolarsa krediyi iade edip anlaşılır bir hata ver.
+    const { createDeadline, JSON_BUDGET_MS } = await import("@/lib/deadline.server");
+    const deadline = createDeadline(JSON_BUDGET_MS);
+
+    const refund = async () => {
+      if (typeof remainingAfterDeduct !== "number") return;
+      try {
+        await context.supabase
+          .from("profiles")
+          .update({ credits: remainingAfterDeduct + 1 })
+          .eq("id", context.userId);
+      } catch {
+        /* iade başarısız olsa da istek bozulmaz */
+      }
+    };
+
+    let page: { html: string; status: number; ms: number } | null = null;
     try {
-      page = await fetchStorePage(url);
+      page = await deadline.race(fetchStorePage(url));
     } catch {
-      throw new Error("FETCH_FAILED");
+      page = null;
+    }
+    if (!page) {
+      const expired = deadline.expired();
+      deadline.dispose();
+      await refund();
+      throw new Error(expired ? AUDIT_TIMEOUT_MESSAGE : "FETCH_FAILED");
     }
     const signals = extractSignals(page.html);
-    const text = await callPremiumAI(
-      auditPrompt(url, signals, page.status, page.ms, data.lang),
-      0.3,
+    const text = await deadline.race(
+      callPremiumAI(auditPrompt(url, signals, page.status, page.ms, data.lang), 0.3),
     );
+    deadline.dispose();
+    if (text === null) {
+      await refund();
+      throw new Error(AUDIT_TIMEOUT_MESSAGE);
+    }
     const report = extractJson<AuditReport>(text, {
       health_score: 0,
       summary: "",
