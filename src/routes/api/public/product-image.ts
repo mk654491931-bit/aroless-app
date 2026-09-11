@@ -97,8 +97,12 @@ async function wikimediaFirstImage(q: string): Promise<string | null> {
       },
     );
     if (!r.ok) return null;
-    const data = (await r.json().catch(() => null)) as any;
-    const pages = data?.query?.pages ? Object.values<any>(data.query.pages) : [];
+    const data = (await r.json().catch(() => null)) as {
+      query?: {
+        pages?: Record<string, { imageinfo?: Array<{ thumburl?: string; url?: string }> }>;
+      };
+    } | null;
+    const pages = data?.query?.pages ? Object.values(data.query.pages) : [];
     const info = pages[0]?.imageinfo?.[0];
     return normalizeExternalMediaUrl(info?.thumburl || info?.url);
   } catch {
@@ -148,7 +152,9 @@ export const Route = createFileRoute("/api/public/product-image")({
           return Response.json({ url: null, cached: false, source: "invalid" }, { headers: CORS });
         }
         cacheSet(key, { url: normalizedImage, at: Date.now() });
-        return Response.json({ url: img, cached: false, source }, { headers: CORS });
+        // Always answer with the normalized (absolute, protocol-safe) URL: the
+        // raw scrape result can be protocol-relative and would fail in <img>.
+        return Response.json({ url: normalizedImage, cached: false, source }, { headers: CORS });
       },
     },
   },

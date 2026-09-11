@@ -45,11 +45,11 @@ const DEDUP_WINDOW = 60_000; // 1 dakika — aynı e-postayı tekrar gönderme
 const EMAIL_TIMEOUT = 10_000; // 10 saniye
 
 // Provider health tracking
-type ProviderStats = { 
-  successCount: number; 
-  failureCount: number; 
-  lastSuccess?: number; 
-  lastFailure?: number; 
+type ProviderStats = {
+  successCount: number;
+  failureCount: number;
+  lastSuccess?: number;
+  lastFailure?: number;
 };
 const providerStats = {
   resend: { successCount: 0, failureCount: 0 } as ProviderStats,
@@ -62,7 +62,11 @@ function getEmailHash(to: string | string[], subject: string): string {
   return `${recipients.slice(0, 20)}:${subject.slice(0, 20)}`.replace(/[^a-z0-9:]/gi, "");
 }
 
-export function getEmailStats() {
+export function getEmailStats(): {
+  queuedCount: number;
+  dedupLogSize: number;
+  providers: typeof providerStats;
+} {
   return {
     queuedCount: emailQueue.size,
     dedupLogSize: sentLog.size,
@@ -107,7 +111,7 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), EMAIL_TIMEOUT);
-      
+
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -128,14 +132,14 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
         const json = (await res.json().catch(() => ({}))) as { id?: string };
         providerStats.resend.successCount++;
         providerStats.resend.lastSuccess = Date.now();
-        console.log(`[resend] Email sent successfully to ${to.join(", ")}`);
+        console.log(`[resend] Email sent successfully to ${maskRecipients(to)}`);
         return { sent: true, messageId: json.id };
       }
 
       lastStatus = res.status;
       const body = await res.text();
       console.warn(`[resend] send failed [${res.status}]: ${body.slice(0, 150)}`);
-      
+
       // 429 (rate limit) veya 5xx → sıradaki anahtarı dene; diğer hatalarda dur.
       if (res.status !== 429 && res.status < 500) break;
     } catch (e) {
@@ -155,10 +159,7 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
 
 // ─── AWS SES v2 (SDK'sız SigV4) ──────────────────────────────────────────────
 
-async function hmacSign(
-  key: ArrayBuffer | Uint8Array,
-  data: string,
-): Promise<ArrayBuffer> {
+async function hmacSign(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
   const k = await crypto.subtle.importKey(
     "raw",
     key as BufferSource,
@@ -240,7 +241,7 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), EMAIL_TIMEOUT);
-    
+
     const res = await fetch(`https://${host}${path}`, {
       method: "POST",
       headers: {
@@ -265,7 +266,7 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
     const json = (await res.json().catch(() => ({}))) as { MessageId?: string };
     providerStats.ses.successCount++;
     providerStats.ses.lastSuccess = Date.now();
-    console.log(`[ses] Email sent successfully to ${to.join(", ")}`);
+    console.log(`[ses] Email sent successfully to ${maskRecipients(to)}`);
     return { sent: true, ...(json.MessageId ? { messageId: json.MessageId } : {}) };
   } catch (e) {
     const isTimeout = e instanceof Error && e.name === "AbortError";
@@ -276,22 +277,41 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
   }
 }
 
+// ─── Log hygiene ───────────────────────────────────────────────────────────
+
+/**
+ * Masks recipient addresses for logs: `ada.lovelace@example.com` → `ad***@example.com`.
+ * Addresses are personal data, so they must never land in plain-text logs.
+ */
+function maskRecipient(value: string): string {
+  const at = value.lastIndexOf("@");
+  if (at <= 0) return "***";
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+
+function maskRecipients(to: string | string[]): string {
+  const list = Array.isArray(to) ? to : [to];
+  return list.map(maskRecipient).join(", ");
+}
+
 // ─── Fallback console log ──────────────────────────────────────────────────
 
 /** Development/fallback mode: console'a log ve simüle et. */
 async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
   const to = (Array.isArray(args.to) ? args.to : [args.to]).filter(Boolean);
   const messageId = `console-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  
+
   console.log("[email-fallback] Development mode — e-posta gönderimi simüle ediliyor:");
   console.log(`  MessageID: ${messageId}`);
-  console.log(`  To: ${to.join(", ")}`);
+  console.log(`  To: ${maskRecipients(to)}`);
   console.log(`  Subject: ${args.subject}`);
   console.log(`  Body preview: ${(args.html ?? args.text ?? "").slice(0, 150)}...`);
-  
+
   providerStats.console.successCount++;
   providerStats.console.lastSuccess = Date.now();
-  
+
   // Geliştirme ortamında başarılı gibi göster — böylece kayıt/giriş akışı devam eder
   return { sent: true, messageId };
 }
@@ -302,12 +322,14 @@ async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
 function isDuplicate(to: string | string[], subject: string): boolean {
   const hash = getEmailHash(to, subject);
   const lastSent = sentLog.get(hash);
-  
+
   if (!lastSent) return false;
-  
+
   const isDup = Date.now() - lastSent < DEDUP_WINDOW;
   if (isDup) {
-    console.log(`[email] Duplicate prevention: email to ${Array.isArray(to) ? to[0] : to} already sent within ${DEDUP_WINDOW}ms`);
+    console.log(
+      `[email] Duplicate prevention: email to ${maskRecipient(Array.isArray(to) ? (to[0] ?? "") : to)} already sent within ${DEDUP_WINDOW}ms`,
+    );
   }
   return isDup;
 }
@@ -316,7 +338,7 @@ function isDuplicate(to: string | string[], subject: string): boolean {
 function recordSent(to: string | string[], subject: string): void {
   const hash = getEmailHash(to, subject);
   sentLog.set(hash, Date.now());
-  
+
   // Cleanup: 5 dakikadan eski logları sil
   for (const [key, timestamp] of sentLog.entries()) {
     if (Date.now() - timestamp > DEDUP_WINDOW) {
@@ -388,10 +410,7 @@ export async function trySendEmail(args: SendEmailArgs): Promise<SendEmailResult
 // ─── Hazır tetikleyiciler ─────────────────────────────────────────────────────
 
 /** Kayıt sonrası hoş geldiniz e-postası. */
-export async function sendWelcomeEmail(
-  to: string,
-  publicId: string,
-): Promise<SendEmailResult> {
+export async function sendWelcomeEmail(to: string, publicId: string): Promise<SendEmailResult> {
   const { subject, html } = welcomeEmail({ publicId, email: to });
   return trySendEmail({
     to,
@@ -402,28 +421,19 @@ export async function sendWelcomeEmail(
 }
 
 /** Şifre sıfırlama bağlantısı. */
-export async function sendPasswordResetEmail(
-  to: string,
-  link: string,
-): Promise<SendEmailResult> {
+export async function sendPasswordResetEmail(to: string, link: string): Promise<SendEmailResult> {
   const { subject, html } = passwordResetEmail({ link });
   return sendUnified({ to, subject, html, text: `Şifrenizi sıfırlayın: ${link}` });
 }
 
 /** E-posta doğrulama bağlantısı. */
-export async function sendVerificationEmail(
-  to: string,
-  link: string,
-): Promise<SendEmailResult> {
+export async function sendVerificationEmail(to: string, link: string): Promise<SendEmailResult> {
   const { subject, html } = verificationEmail({ link });
   return sendUnified({ to, subject, html, text: `Hesabınızı doğrulayın: ${link}` });
 }
 
 /** 6 haneli doğrulama kodu — asla fırlatmaz. */
-export async function sendOtpCodeEmail(
-  to: string,
-  code: string,
-): Promise<SendEmailResult> {
+export async function sendOtpCodeEmail(to: string, code: string): Promise<SendEmailResult> {
   const { subject, html } = otpEmail({ code });
   return sendUnified({
     to,

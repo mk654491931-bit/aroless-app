@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { Database, KeyRound, ShieldCheck, TriangleAlert } from "lucide-react";
 import { openRouterStatus } from "@/lib/api-status";
 import {
@@ -21,11 +21,15 @@ const SOURCES = [
 ];
 
 /** API key status badge — reports configuration state only, never the value. */
-export function ApiKeyBadge() {
+export function ApiKeyBadge(): ReactElement {
   const { configured, label } = openRouterStatus();
   return (
     <span
-      title={configured ? "OpenRouter anahtarı tanımlı" : "VITE_OPENROUTER_API_KEY tanımlı değil"}
+      title={
+        configured
+          ? "OpenRouter anahtarı tanımlı"
+          : "Sunucuda OPENROUTER_API_KEY_1..N tanımlı değil (anahtar istemciye asla gönderilmez)"
+      }
       className={`hidden md:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
         configured
           ? "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/10 text-[var(--accent-active)]"
@@ -40,7 +44,7 @@ export function ApiKeyBadge() {
 }
 
 /** [Veri Kaynakları] info button. */
-export function DataSourcesButton() {
+export function DataSourcesButton(): ReactElement {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>

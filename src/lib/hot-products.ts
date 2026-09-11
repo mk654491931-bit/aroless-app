@@ -75,7 +75,7 @@ export function buildHotFeedFromItems(items: HotProduct[], now = new Date()): Ho
  * leaving the UI on an empty state.
  */
 async function fetchHotProductsStreamed(niche: string): Promise<HotProduct[]> {
-  const { streamProductDiscovery } = await import("./product-stream.client");
+  const { streamProductDiscovery } = await import("./product-stream");
   const result = await streamProductDiscovery(
     { niche: niche.trim() || undefined },
     {},

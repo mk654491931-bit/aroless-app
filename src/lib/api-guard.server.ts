@@ -138,10 +138,43 @@ export async function guardPublic(
   return rateLimit(`${bucket}:ip:${ip}`, limit, windowSeconds);
 }
 
-/** İstek gövdesi boyut sınırı (varsayılan 64 KB). */
+/**
+ * İstek gövdesi boyut sınırı (varsayılan 64 KB).
+ *
+ * Gövde tamamen belleğe alınmadan okunur: `Content-Length` varsa önce ona
+ * bakılır, yoksa akış parça parça tüketilip sınır aşıldığında hemen kesilir.
+ * Böylece devasa bir gövde sunucuyu şişiremez (DoS).
+ */
 export async function readJsonBody<T>(request: Request, maxBytes = 64 * 1024): Promise<T | null> {
-  const text = await request.text();
-  if (text.length > maxBytes) return null;
+  const declared = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+
+  const body = request.body;
+  if (!body) return null;
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+
   try {
     return JSON.parse(text) as T;
   } catch {
