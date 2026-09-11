@@ -287,6 +287,13 @@ export const generateProducts = createServerFn({ method: "POST" })
     const { recordUsage } = await import("@/lib/usage.server");
     await recordUsage(context.supabase, "product_finder");
 
+    // Cloudflare her 100 saniyeyi aşan isteği `524 A Timeout Occurred` ile
+    // keser. Tüm hattı bir bütçeye bağla: süre dolarsa hata fırlatmak yerine
+    // "o ana kadar doğrulanmış" ürünleri 200 ile döndür (partial sonuç).
+    const { createDeadline, JSON_BUDGET_MS } = await import("@/lib/deadline.server");
+    const deadline = createDeadline(JSON_BUDGET_MS);
+    let partial = false;
+
     const apiKey = process.env.GEMINI_API_KEY;
 
     // Fetch GitHub public repo trends as an additional confidence signal.
@@ -786,7 +793,7 @@ JSON shape:
     });
 
     let finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= minScore);
-    let fallback: { type: "relaxed"; message: string } | null = null;
+    let fallback: { type: "relaxed" | "partial"; message: string } | null = null;
 
     if (finalProducts.length === 0) {
       // Fallback A — relax the threshold and show the best available.
@@ -801,18 +808,27 @@ JSON shape:
     }
 
     // Fallback B — country cross-match for below-threshold survivors.
-    finalProducts = await Promise.all(
-      finalProducts.map(async (p) => {
-        if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
-        const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(() => ({}));
-        return { ...p, hybrid: { ...p.hybrid, ...alt } };
-      }),
-    );
+    // Bütçe dolduysa bu ek tur atlanır: eldeki ürünler olduğu gibi döner.
+    if (deadline.expired()) {
+      partial = true;
+    } else {
+      finalProducts = await Promise.all(
+        finalProducts.map(async (p) => {
+          if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
+          const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(
+            () => ({}),
+          );
+          return { ...p, hybrid: { ...p.hybrid, ...alt } };
+        }),
+      );
+    }
 
     if (finalProducts.length === 0) {
       await refund();
       throw new Error(
-        "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
+        deadline.expired()
+          ? "Arama 90 saniyelik sunucu sınırına takıldı ve tamamlanamadı. Krediniz iade edildi — lütfen tekrar deneyin."
+          : "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
       );
     }
 
@@ -821,6 +837,12 @@ JSON shape:
     const COUNCIL_LIMIT = 8;
     const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
     const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
+      // Süre dolduysa 14'lü konsey turunu başlatma — ürün ham hâliyle kalır
+      // ama istek zamanında döner.
+      if (deadline.expired()) {
+        partial = true;
+        return p;
+      }
       try {
         const report = await runCouncil(p.name, country, data.category);
         const council: CouncilSummary = {
@@ -882,6 +904,10 @@ JSON shape:
     {
       const { verifyProduct } = await import("@/lib/market-verify.server");
       const verified = await mapWithConcurrency(finalProducts, 2, async (p) => {
+        if (deadline.expired()) {
+          partial = true;
+          return p;
+        }
         try {
           const { market_evidence, realism_score } = await verifyProduct(p, country);
           const base = p.unified_score ?? 0;
@@ -923,6 +949,18 @@ JSON shape:
         );
     }
 
+    deadline.dispose();
+
+    // Süre dolduysa kullanıcıya neden daha az/az zenginleştirilmiş sonuç
+    // geldiğini söyle (mevcut fallback metnini ezmeden).
+    if (partial && !fallback) {
+      fallback = {
+        type: "partial",
+        message:
+          "Analiz 90 saniyelik sunucu sınırına takıldı — o ana kadar doğrulanan sonuçlar gösteriliyor. Daha derin analiz için tekrar dene.",
+      };
+    }
+
     return {
       products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),
       rejected: rejectedCandidates,
@@ -931,6 +969,7 @@ JSON shape:
       min_score: minScore,
       fallback,
       fallback_engine: fallbackEngine,
+      partial,
     };
   });
 
@@ -1013,8 +1052,7 @@ export const getProfile = createServerFn({ method: "GET" })
 
 // ---------- SEO & Marketing generator ----------
 
-const SEO_PLATFORMS = ["TikTok", "Facebook", "Google Ads", "Instagram"] as const;
-export type AdPlatform = (typeof SEO_PLATFORMS)[number];
+export type AdPlatform = "TikTok" | "Facebook" | "Google Ads" | "Instagram";
 
 const SeoInput = z.object({
   product: z.string().min(2).max(160),
@@ -1066,8 +1104,7 @@ Return STRICT JSON only:
 
 // ---------- Creative Studio (TikTok / Reels scripts) ----------
 
-const SCRIPT_FORMATS = ["TikTok", "Instagram Reels"] as const;
-export type ScriptFormat = (typeof SCRIPT_FORMATS)[number];
+export type ScriptFormat = "TikTok" | "Instagram Reels";
 
 const ScriptInput = z.object({
   product: z.string().min(2).max(160),

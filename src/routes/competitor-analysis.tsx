@@ -22,6 +22,7 @@ import { CountryInfoBox } from "@/components/country-info-box";
 import { CountryFlag } from "@/components/country-flag";
 import { Sparkline } from "@/components/sparkline";
 import { DraggableCopilot } from "@/components/draggable-copilot";
+import { StreamNotice } from "@/components/stream-error-boundary";
 
 type SearchParams = { q?: string; country?: string };
 
@@ -157,6 +158,17 @@ function CompetitorAnalysisPage() {
 
         {report && (
           <>
+            {report.partial ? (
+              <StreamNotice
+                tone="warning"
+                message="Analiz 90 saniyelik sunucu sınırına takıldı."
+                detail="O ana kadar toplanan rakip verileri gösteriliyor; karşı strateji ve duygu analizi eksik olabilir. Tekrar dene."
+                onRetry={() => {
+                  const q = query.trim();
+                  if (q.length >= 2) mut.mutate(q);
+                }}
+              />
+            ) : null}
             <section className="premium-card grain rounded-2xl p-5">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <h2 className="text-sm font-semibold flex items-center gap-2">

@@ -40,9 +40,15 @@ export type CompetitorReport = {
   trend_momentum_pct?: number;
   trend_monthly?: number[];
   trend_source?: string;
+  /**
+   * True when the gateway budget ran out before every enrichment stage
+   * (counter-strategy, sentiment, …) finished. The report is still valid —
+   * it just holds fewer sections than a full run.
+   */
+  partial?: boolean;
 };
 
-export function sellersPrompt(query: string, country: string, liveContext = "") {
+export function sellersPrompt(query: string, country: string, liveContext = ""): string {
   return `You are a competitive-intelligence analyst for e-commerce. Use live web knowledge.
 Target market: ${countryName(country)}.
 ${liveContext ? `Live scraped signals (trust these over memory):\n${liveContext}\n` : ""}
@@ -60,7 +66,7 @@ Return ONLY JSON:
     "margin_note": string (1 short Turkish sentence on their likely margin) } ] }`;
 }
 
-export function sentimentPrompt(query: string, country: string, liveContext = "") {
+export function sentimentPrompt(query: string, country: string, liveContext = ""): string {
   return `You are a review-sentiment analyst. Product/store: "${query}". Market: ${countryName(country)}.
 ${liveContext ? `Live search-interest & seller signals:\n${liveContext}\n` : ""}
 Analyse the NEGATIVE reviews competitors receive for this product and extract the recurring product
@@ -72,7 +78,7 @@ Return ONLY JSON:
                     "opportunity": string (Turkish, how we exploit it) } ] }`;
 }
 
-export function strategyPrompt(query: string, country: string, context: string) {
+export function strategyPrompt(query: string, country: string, context: string): string {
   return `You are AI 2 — the COUNTER-STRATEGY GENERATOR (logistics, VAT and pricing specialist).
 Product/store: "${query}" · Market: ${countryName(country)}
 Competitor intelligence:
@@ -89,7 +95,7 @@ Return ONLY JSON:
   "ad_angle": string (1 Turkish ad hook) }`;
 }
 
-export function countryStrategyPrompt(niche: string, country: string) {
+export function countryStrategyPrompt(niche: string, country: string): string {
   return `You are an e-commerce market strategist. Niche/product: "${niche || "genel e-ticaret"}".
 Target market: ${countryName(country)}.
 Give ONE actionable, specific strategy for succeeding with this niche in this exact country
@@ -98,7 +104,7 @@ Give ONE actionable, specific strategy for succeeding with this niche in this ex
 Return ONLY JSON: { "strategy": string }`;
 }
 
-export function copilotPrompt(message: string, context: string, history: string) {
+export function copilotPrompt(message: string, context: string, history: string): string {
   return `You are the Aroless Co-Pilot — a live e-commerce mentor embedded in a SaaS dashboard
 and training sandbox. Answer in Turkish, short and concrete (max 120 words), with numbers where useful.
 If the user is making a mistake in the sandbox, warn them directly.
