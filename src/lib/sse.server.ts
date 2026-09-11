@@ -25,5 +25,6 @@ export function sseHeaders(): Headers {
     Connection: "keep-alive",
     "Content-Type": "text/event-stream; charset=utf-8",
     "X-Accel-Buffering": "no",
+    "X-Content-Type-Options": "nosniff",
   });
 }
