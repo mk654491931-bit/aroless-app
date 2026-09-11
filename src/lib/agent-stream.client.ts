@@ -11,7 +11,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { CouncilReport } from "@/lib/council.server";
 
-export type AgentStreamStatus = "status" | "complete" | "error";
+export type AgentStreamStatus = "status" | "complete" | "partial" | "error";
+
+/**
+ * Payload of the `partial` frame the server sends when the run was cut at the
+ * gateway budget (Cloudflare 100s wall) — a successful answer, not an error.
+ */
+export type AgentPartialInfo = {
+  partial: true;
+  mode?: string;
+  completed: AgentProgress[];
+  elapsedMs: number;
+  reason: "gateway_budget" | string;
+};
+
+/** Client-side watchdog: stop reading just before the server's own budget. */
+export const CLIENT_AGENT_TIMEOUT_MS = 99_000;
 
 /** Raw SSE payload as emitted by the backend. */
 export type AgentStreamEvent = {
@@ -52,6 +67,13 @@ export type AgentStreamHandlers = {
   onAgent?: (agent: AgentProgress) => void;
   onStage?: (stage: StageProgress) => void;
   onComplete?: (data: unknown) => void;
+  /** Fired when the run was cut at the budget; live progress stays valid. */
+  onPartial?: (info: AgentPartialInfo) => void;
+};
+
+export type AgentStreamOptions = {
+  /** Client watchdog for the whole read. Defaults to 99s. */
+  timeoutMs?: number;
 };
 
 /**
@@ -137,76 +159,155 @@ export function mapAgentEvent(event: AgentStreamEvent): {
   }
 }
 
+function upsertProgress(list: AgentProgress[], update: AgentProgress): AgentProgress[] {
+  const index = list.findIndex((a) => a.agent === update.agent);
+  return index < 0
+    ? [...list, update]
+    : list.map((a, i) => (i === index ? { ...a, ...update } : a));
+}
+
 /**
  * Reads a streamed agent run and resolves with the final `complete` payload.
+ *
+ * Resolves `null` (never throws) when the run is cut at the gateway budget: the
+ * agents that finished are delivered through `handlers.onPartial`, so the UI
+ * keeps its live progress instead of dying on a timeout.
  */
 export async function streamAgentRun<T = unknown>(
   input: AgentStreamRequest,
   handlers: AgentStreamHandlers = {},
   signal?: AbortSignal,
-): Promise<T> {
-  const response = await apiFetch("/api/public/agent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(input),
-    signal,
-  });
+  options: AgentStreamOptions = {},
+): Promise<T | null> {
+  const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs ?? CLIENT_AGENT_TIMEOUT_MS;
+  const controller = new AbortController();
+  let timedOut = false;
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    const message = asRecord(payload)["error"];
-    throw new Error(
-      typeof message === "string" && message.trim() ? message : "Analiz başlatılamadı.",
-    );
+  const abort = (): void => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", abort, { once: true });
   }
-  if (!response.body) throw new Error("Analiz akışı başlatılamadı.");
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+  let completed: AgentProgress[] = [];
+  let partialInfo: AgentPartialInfo | null = null;
   let complete: T | undefined;
 
-  const consumeFrame = (frame: string): void => {
-    const event = parseAgentSseFrame(frame);
-    if (!event) return; // heartbeat or comment
-    handlers.onEvent?.(event);
-
-    if (event.status === "error") {
-      throw new Error(event.error ?? "Analiz tamamlanamadı.");
-    }
-    if (event.status === "complete") {
-      complete = event.data as T;
-      handlers.onComplete?.(event.data);
-      return;
-    }
-
-    const mapped = mapAgentEvent(event);
-    if (mapped.agent) handlers.onAgent?.(mapped.agent);
-    if (mapped.stage) handlers.onStage?.(mapped.stage);
-  };
-
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    const response = await apiFetch("/api/public/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    });
 
-      let boundary = buffer.indexOf("\n\n");
-      while (boundary >= 0) {
-        consumeFrame(buffer.slice(0, boundary));
-        buffer = buffer.slice(boundary + 2);
-        boundary = buffer.indexOf("\n\n");
-      }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const message = asRecord(payload)["error"];
+      throw new Error(
+        typeof message === "string" && message.trim() ? message : "Analiz başlatılamadı.",
+      );
     }
+    if (!response.body) throw new Error("Analiz akışı başlatılamadı.");
 
-    buffer += decoder.decode();
-    if (buffer.trim()) consumeFrame(buffer);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const consumeFrame = (frame: string): void => {
+      const event = parseAgentSseFrame(frame);
+      if (!event) return; // heartbeat or comment
+      handlers.onEvent?.(event);
+
+      if (event.status === "error") {
+        throw new Error(event.error ?? "Analiz tamamlanamadı.");
+      }
+      if (event.status === "partial") {
+        const payload = asRecord(event.data);
+        const reported = Array.isArray(payload["completed"])
+          ? (payload["completed"] as AgentProgress[])
+          : completed;
+        partialInfo = {
+          partial: true,
+          mode: typeof payload["mode"] === "string" ? payload["mode"] : input.mode,
+          completed: reported,
+          elapsedMs:
+            typeof payload["elapsedMs"] === "number"
+              ? payload["elapsedMs"]
+              : Date.now() - startedAt,
+          reason:
+            typeof payload["partialReason"] === "string"
+              ? payload["partialReason"]
+              : "gateway_budget",
+        };
+        return;
+      }
+      if (event.status === "complete") {
+        complete = event.data as T;
+        handlers.onComplete?.(event.data);
+        return;
+      }
+
+      const mapped = mapAgentEvent(event);
+      if (mapped.agent) {
+        completed = upsertProgress(completed, mapped.agent);
+        handlers.onAgent?.(mapped.agent);
+      }
+      if (mapped.stage) handlers.onStage?.(mapped.stage);
+    };
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          consumeFrame(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim()) consumeFrame(buffer);
+    } catch (error) {
+      // A watchdog abort is expected; everything consumed so far stays usable.
+      if (!timedOut && !signal?.aborted) throw error;
+    } finally {
+      reader.releaseLock();
+    }
   } finally {
-    reader.releaseLock();
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 
-  if (complete === undefined) throw new Error("Analiz tamamlanmadan bağlantı kapandı.");
-  return complete;
+  if (complete !== undefined) return complete;
+
+  const info: AgentPartialInfo = partialInfo ?? {
+    partial: true,
+    mode: input.mode,
+    completed,
+    elapsedMs: Date.now() - startedAt,
+    reason: timedOut ? "gateway_budget" : "stream_closed",
+  };
+
+  // The server named the agents that finished, so mirror them into local state.
+  for (const agent of info.completed) completed = upsertProgress(completed, agent);
+
+  if (info.completed.length > 0 || partialInfo) {
+    handlers.onPartial?.(info);
+    return null;
+  }
+
+  if (timedOut) throw new Error("Analiz zaman aşımına uğradı.");
+  throw new Error("Analiz tamamlanmadan bağlantı kapandı.");
 }
 
 /** Typed helper for the 14-agent council run. */
@@ -214,7 +315,7 @@ export function streamCouncilAnalysis(
   input: { query: string; country?: string; category?: string; lang?: string },
   handlers: AgentStreamHandlers = {},
   signal?: AbortSignal,
-): Promise<CouncilReport> {
+): Promise<CouncilReport | null> {
   return streamAgentRun<CouncilReport>(
     {
       mode: "council",
@@ -234,6 +335,8 @@ export type AgentStreamState = {
   stages: StageProgress[];
   error: string | null;
   result: unknown;
+  /** `true` when the last run ended on the gateway budget with partial data. */
+  partial: boolean;
 };
 
 const INITIAL_STATE: AgentStreamState = {
@@ -242,11 +345,12 @@ const INITIAL_STATE: AgentStreamState = {
   stages: [],
   error: null,
   result: null,
+  partial: false,
 };
 
 /** React binding for a streamed agent run (live agents + stages). */
 export function useAgentStream(): AgentStreamState & {
-  start: (input: AgentStreamRequest) => Promise<unknown>;
+  start: (input: AgentStreamRequest) => Promise<unknown | null>;
   cancel: () => void;
   reset: () => void;
 } {
@@ -261,7 +365,7 @@ export function useAgentStream(): AgentStreamState & {
     [],
   );
 
-  const start = useCallback(async (input: AgentStreamRequest): Promise<unknown> => {
+  const start = useCallback(async (input: AgentStreamRequest): Promise<unknown | null> => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -273,23 +377,23 @@ export function useAgentStream(): AgentStreamState & {
         input,
         {
           onAgent: (agent) => {
-            setState((prev) => {
-              const index = prev.agents.findIndex((a) => a.agent === agent.agent);
-              const agents =
-                index >= 0
-                  ? prev.agents.map((a, i) => (i === index ? { ...a, ...agent } : a))
-                  : [...prev.agents, agent];
-              return { ...prev, agents };
-            });
+            setState((prev) => ({ ...prev, agents: upsertProgress(prev.agents, agent) }));
           },
           onStage: (stage) => {
             setState((prev) => ({ ...prev, stages: [...prev.stages, stage] }));
+          },
+          onPartial: (info) => {
+            setState((prev) => ({
+              ...prev,
+              partial: true,
+              agents: info.completed.reduce(upsertProgress, prev.agents),
+            }));
           },
         },
         controller.signal,
       );
 
-      setState((prev) => ({ ...prev, result }));
+      setState((prev) => ({ ...prev, result: result ?? prev.result }));
       return result;
     } catch (error) {
       if (controller.signal.aborted) return null;

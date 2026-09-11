@@ -1,7 +1,8 @@
 import type { AgentBusEvent } from "./agent-bus.server";
+import { STREAM_BUDGET_MS, createDeadline, type Deadline } from "./deadline.server";
 
 export type SsePayload = {
-  status: "status" | "complete" | "error";
+  status: "status" | "complete" | "partial" | "error";
   data?: unknown;
   error?: string;
 };
@@ -36,11 +37,25 @@ export function sseHeaders(): Headers {
 
 export type SseEmit = (frame: string) => void;
 
+export type SseProducer = (emit: SseEmit, signal: AbortSignal, deadline: Deadline) => Promise<void>;
+
 export type SseStreamOptions = {
   /** Request signal — aborting it cancels the producer and closes the stream. */
   signal?: AbortSignal;
   /** Heartbeat cadence. Must stay well under the Cloudflare 100s idle limit. */
   heartbeatMs?: number;
+  /**
+   * Hard budget for the whole stream. When it is spent the producer signal is
+   * aborted and `onBudgetExhausted` runs, so the response always closes a few
+   * seconds before the gateway's 100s wall (the old HTTP 524).
+   */
+  budgetMs?: number;
+  /**
+   * Final chunk hook: called exactly once when the budget is spent, before the
+   * stream closes. Producers flush their partial results here so the client
+   * receives a successful response instead of an error.
+   */
+  onBudgetExhausted?: (emit: SseEmit, info: { budgetMs: number; elapsedMs: number }) => void;
   /** Invoked when the client disconnects before the producer finishes. */
   onCancel?: () => void;
 };
@@ -53,6 +68,8 @@ export type SseStreamOptions = {
  *    gateway response cap opens immediately and the 524 timer resets.
  *  • A comment heartbeat (`:ping`) on a fixed cadence so the connection never
  *    goes idle while an agent thinks.
+ *  • A hard budget (default 92s) that closes the stream and flushes partial
+ *    results well before Cloudflare's 100s limit.
  *  • Client aborts propagate to the producer through an `AbortController`, so
  *    scraper, LLM and DB work stops immediately (no orphaned connections).
  *  • Producer failures are contained: the stream always closes cleanly.
@@ -60,16 +77,15 @@ export type SseStreamOptions = {
  * Every emitted frame is a string the caller fully controls, so callers own
  * their payload schema (see `product-stream.shared.ts`).
  */
-export function createSseResponse(
-  run: (emit: SseEmit, signal: AbortSignal) => Promise<void>,
-  options: SseStreamOptions = {},
-): Response {
+export function createSseResponse(run: SseProducer, options: SseStreamOptions = {}): Response {
   const encoder = new TextEncoder();
   const heartbeatMs = options.heartbeatMs ?? 5_000;
+  const budgetMs = options.budgetMs ?? STREAM_BUDGET_MS;
   const abort = new AbortController();
   let closed = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let producer: Promise<void> | undefined;
+  let deadline: Deadline | undefined;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -83,17 +99,43 @@ export function createSseResponse(
         }
       };
 
+      const finish = (): void => {
+        if (heartbeat) clearInterval(heartbeat);
+        heartbeat = undefined;
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // Client already went away.
+        }
+      };
+
       // Instant flush — never wait for the pipeline before the first byte.
       emit(": initial-connect\n\n");
 
       if (options.signal?.aborted) abort.abort();
       else options.signal?.addEventListener("abort", () => abort.abort(), { once: true });
 
+      deadline = createDeadline(budgetMs, abort.signal);
+      deadline.onExpire(() => {
+        emit(": budget-exhausted\n\n");
+        try {
+          options.onBudgetExhausted?.(emit, {
+            budgetMs,
+            elapsedMs: Date.now() - deadline!.startedAt,
+          });
+        } catch (error) {
+          console.error("[sse] partial flush failed", error);
+        }
+        finish();
+      });
+
       heartbeat = setInterval(() => emit(encodeHeartbeat()), heartbeatMs);
 
-      producer = run(emit, abort.signal)
+      producer = run(emit, deadline.signal, deadline)
         .catch((error) => {
-          if (abort.signal.aborted) return;
+          if (deadline?.signal.aborted) return;
           console.error("[sse] producer failed", error);
           emit(
             encodeSseEvent("error", {
@@ -104,18 +146,13 @@ export function createSseResponse(
           );
         })
         .finally(() => {
-          if (heartbeat) clearInterval(heartbeat);
-          if (closed) return;
-          closed = true;
-          try {
-            controller.close();
-          } catch {
-            // Client already went away.
-          }
+          deadline?.dispose();
+          finish();
         });
     },
     cancel() {
       closed = true;
+      deadline?.dispose();
       abort.abort();
       if (heartbeat) clearInterval(heartbeat);
       options.onCancel?.();

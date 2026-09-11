@@ -1,9 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardPublic, readJsonBody, requireUser } from "@/lib/api-guard.server";
-import { buildMarketScan, hourKey, type MarketScanPayload } from "@/lib/hot-scan.server";
+import {
+  buildMarketScan,
+  hourKey,
+  nextHourIso,
+  type MarketScanPayload,
+} from "@/lib/hot-scan.server";
 import { persistStreamedProduct } from "@/lib/product-store.server";
 import { createSseResponse, encodeSseEvent } from "@/lib/sse.server";
-import type { ProductStreamEvent } from "@/lib/product-stream.shared";
+import { JSON_BUDGET_MS, withDeadline } from "@/lib/deadline.server";
+import type {
+  ProductStreamEvent,
+  ProductStreamResult,
+  StreamedProduct,
+} from "@/lib/product-stream.shared";
 
 /**
  * Live "most sellable right now" feed — Product Discovery.
@@ -82,6 +92,11 @@ async function streamDiscovery(request: Request, body: StreamBody): Promise<Resp
   const targetCountry = optionalString(body.target_country, 10).toUpperCase() || "GLOBAL";
   const traceId = `discover_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const started = Date.now();
+  // Shared with the budget hook below: the partial payload must carry the
+  // products (and counters) collected before the stream is cut.
+  let persisted = 0;
+  let failed = 0;
+  const collected: StreamedProduct[] = [];
 
   return createSseResponse(
     async (emit, signal) => {
@@ -91,11 +106,11 @@ async function streamDiscovery(request: Request, body: StreamBody): Promise<Resp
       send({ type: "agent", agent: "Market Scanner", status: "running", tier: 1 });
       send({ type: "stage", stage: "scan", label: "Canlı pazar taraması başladı" });
 
-      let persisted = 0;
-      let failed = 0;
-
       const scan = await buildMarketScan(niche, {
         signal,
+        // DB writes + frames for independent products run in small parallel
+        // batches instead of serializing behind each other.
+        concurrency: 3,
         onItem: async (product, index) => {
           const outcome = await persistStreamedProduct(product, { userId, targetCountry });
 
@@ -109,6 +124,7 @@ async function streamDiscovery(request: Request, body: StreamBody): Promise<Resp
               productName: product.name,
             });
           }
+          collected.push(product);
 
           send({
             type: "product",
@@ -139,10 +155,41 @@ async function streamDiscovery(request: Request, body: StreamBody): Promise<Resp
           failed,
           elapsedMs: Date.now() - started,
           nextRefreshAt: scan.next_refresh_at,
-        },
+        } satisfies ProductStreamResult,
       });
     },
-    { signal: request.signal, heartbeatMs: 5_000 },
+    {
+      signal: request.signal,
+      heartbeatMs: 5_000,
+      // Flush every product found so far as a successful partial payload a few
+      // seconds before Cloudflare's 100s wall (the old HTTP 524).
+      onBudgetExhausted: (emit) => {
+        const send = (event: ProductStreamEvent): void => emit(encodeSseEvent(event.type, event));
+        send({
+          type: "agent",
+          agent: "Market Scanner",
+          status: "complete",
+          tier: 1,
+          ms: Date.now() - started,
+          error: "Süre sınırı — kısmi sonuç",
+        });
+        send({ type: "stage", stage: "done", label: "Süre sınırı: kısmi sonuç gönderiliyor" });
+        send({
+          type: "complete",
+          data: {
+            traceId,
+            items: [...collected].sort((a, b) => b.score - a.score),
+            count: collected.length,
+            persisted,
+            failed,
+            elapsedMs: Date.now() - started,
+            nextRefreshAt: nextHourIso(),
+            partial: true,
+            partialReason: "gateway_budget",
+          } satisfies ProductStreamResult,
+        });
+      },
+    },
   );
 }
 
@@ -160,7 +207,22 @@ export const Route = createFileRoute("/api/public/hot-products")({
         if (limited) return limited;
         const niche = (url.searchParams.get("niche") ?? "").slice(0, 60).trim();
         try {
-          const payload = await getPayload(niche);
+          // JSON callers get the same guard: if the scan outlives the gateway
+          // budget we answer 200 with whatever exists instead of a 524.
+          const payload: MarketScanPayload = await withDeadline<MarketScanPayload>(
+            () => getPayload(niche),
+            (): MarketScanPayload => ({
+              hour: hourKey(),
+              refreshed_at: new Date().toISOString(),
+              next_refresh_at: nextHourIso(),
+              items: [],
+              ...(niche ? { niche } : {}),
+              partial: true,
+              partialReason: "gateway_budget",
+            }),
+            JSON_BUDGET_MS,
+            request.signal,
+          );
           return new Response(JSON.stringify(payload), {
             headers: {
               "Content-Type": "application/json",

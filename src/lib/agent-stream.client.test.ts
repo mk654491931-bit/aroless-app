@@ -118,7 +118,7 @@ describe("streamCouncilAnalysis", () => {
       },
     );
 
-    expect(report.velora_score).toBe(88);
+    expect(report).toMatchObject({ velora_score: 88 });
 
     const [path, init] = mockedFetch.mock.calls[0] ?? [];
     expect(path).toBe("/api/public/agent");
@@ -150,5 +150,58 @@ describe("streamCouncilAnalysis", () => {
     await expect(streamCouncilAnalysis({ query: "test" })).rejects.toThrow(
       "Analiz tamamlanmadan bağlantı kapandı.",
     );
+  });
+
+  it("resolves partial instead of throwing when the budget cuts the run", async () => {
+    mockedFetch.mockResolvedValueOnce(
+      sseResponse([
+        ": initial-connect\n\n",
+        statusFrame("agent:complete", { traceId: "t1", agent: "Trend Ekibi", ok: true, ms: 900 }),
+        `data: ${JSON.stringify({
+          status: "partial",
+          traceId: "t1",
+          data: {
+            partial: true,
+            partialReason: "gateway_budget",
+            mode: "council",
+            completed: [{ agent: "Trend Ekibi", status: "complete", ms: 900 }],
+            elapsedMs: 92_000,
+          },
+        })}\n\n`,
+      ]),
+    );
+
+    const partials: unknown[] = [];
+    const report = await streamCouncilAnalysis(
+      { query: "buz makinesi" },
+      { onPartial: (info) => partials.push(info) },
+    );
+
+    expect(report).toBeNull();
+    expect(partials).toHaveLength(1);
+    expect(partials[0]).toMatchObject({
+      partial: true,
+      reason: "gateway_budget",
+      completed: [{ agent: "Trend Ekibi", status: "complete", ms: 900 }],
+    });
+  });
+
+  it("keeps the agents it saw when the stream dies without any final frame", async () => {
+    mockedFetch.mockResolvedValueOnce(
+      sseResponse([
+        statusFrame("agent:start", { traceId: "t1", agent: "Finans Ekibi" }),
+        statusFrame("agent:complete", { traceId: "t1", agent: "Finans Ekibi", ok: true, ms: 500 }),
+      ]),
+    );
+
+    const partials: Array<{ completed: AgentProgress[] }> = [];
+    const report = await streamCouncilAnalysis(
+      { query: "buz makinesi" },
+      { onPartial: (info) => partials.push(info) },
+    );
+
+    expect(report).toBeNull();
+    expect(partials[0]?.completed).toHaveLength(1);
+    expect(partials[0]?.completed[0]).toMatchObject({ agent: "Finans Ekibi", status: "complete" });
   });
 });

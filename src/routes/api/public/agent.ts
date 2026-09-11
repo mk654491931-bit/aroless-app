@@ -35,11 +35,25 @@ export const Route = createFileRoute("/api/public/agent")({
 
         const mode = body["mode"] === "council" ? "council" : "pipeline";
         const token = bearerToken(request);
+        const started = Date.now();
+        const streamTraceId = `agent_${started.toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        /** Finished agents, kept so a budget cut can still return partial data. */
+        const completedAgents: Array<{ agent: string; ms?: number; ok: boolean }> = [];
 
         return createSseResponse(
           async (emit) => {
             const sendEvent = (event: AgentBusEvent): void => {
               const payload = event.payload as Record<string, unknown>;
+              if (event.type === "agent:complete") {
+                const agent = String(payload["agent"] ?? "");
+                if (agent) {
+                  completedAgents.push({
+                    agent,
+                    ...(typeof payload["ms"] === "number" ? { ms: payload["ms"] } : {}),
+                    ok: payload["ok"] !== false,
+                  });
+                }
+              }
               emit(
                 encodeSse({
                   status: "status",
@@ -107,7 +121,28 @@ export const Route = createFileRoute("/api/public/agent")({
               sendError("Analiz tamamlanamadı. Lütfen tekrar deneyin.");
             }
           },
-          { signal: request.signal, heartbeatMs: 5_000 },
+          {
+            signal: request.signal,
+            heartbeatMs: 5_000,
+            // The 14-agent chain can outlive Cloudflare's 100s wall. Instead of
+            // letting the gateway answer 524, flush the agents that finished as
+            // a successful `partial` payload and close the stream.
+            onBudgetExhausted: (emit) => {
+              emit(
+                encodeSse({
+                  status: "partial",
+                  traceId: streamTraceId,
+                  data: {
+                    partial: true,
+                    partialReason: "gateway_budget",
+                    mode,
+                    completed: completedAgents,
+                    elapsedMs: Date.now() - started,
+                  },
+                }),
+              );
+            },
+          },
         );
       },
     },

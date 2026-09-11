@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { JSON_BUDGET_MS, withDeadline } from "@/lib/deadline.server";
 import type { HybridScore } from "@/lib/consensus-types";
 
 /**
@@ -28,6 +29,11 @@ export type TrendAnalysis = {
   action_plan: string[];
   risks: string[];
   pricing: { suggested_retail_usd: number; margin_pct: number };
+  /**
+   * `true` when the four engines did not all finish inside the gateway budget,
+   * so this is everything that was ready — still a successful 200 response.
+   */
+  partial?: boolean;
 };
 
 const cache = new Map<string, { at: number; data: TrendAnalysis }>();
@@ -138,6 +144,34 @@ Return ONLY JSON (all text in Turkish):
   };
 }
 
+/**
+ * Answers with a structurally valid, explicitly-marked partial analysis when
+ * the engines run past the gateway budget, so a slow run never surfaces as the
+ * old HTTP 524 to the dashboard.
+ */
+function partialAnalysis(input: { name: string; country: string }, message: string): TrendAnalysis {
+  return {
+    name: input.name,
+    country: input.country,
+    hybrid: {
+      target_country: input.country,
+      ai_1_score: 0,
+      local_competition_level: "Orta",
+      ai_2_score: 0,
+      estimated_shipping_days: 0,
+      calculated_score: 0,
+    },
+    sourcing: { supplier_price_usd: 0, shipping_usd: 0, source: "partial", sample_title: "" },
+    trends: { yearly: [], monthly: [], momentum_pct: 0, source: "partial" },
+    verdict: message,
+    ai_comment: message,
+    action_plan: [],
+    risks: ["Analiz süresi doldu — sonuç kısmi döndü."],
+    pricing: { suggested_retail_usd: 0, margin_pct: 0 },
+    partial: true,
+  };
+}
+
 export const Route = createFileRoute("/api/public/trend-analysis")({
   server: {
     handlers: {
@@ -171,8 +205,19 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
           if (hit && Date.now() - hit.at < TTL) {
             return Response.json(hit.data);
           }
-          const data = await build(input);
-          cache.set(ck, { at: Date.now(), data });
+          const data = await withDeadline(
+            () => build(input),
+            () =>
+              hit?.data ??
+              partialAnalysis(
+                input,
+                "Analiz 99 saniyelik gateway sınırına takıldı; eldeki verilerle kısmi sonuç gösteriliyor.",
+              ),
+            JSON_BUDGET_MS,
+            request.signal,
+          );
+          // Never cache a partial result — the next call should retry the engines.
+          if (!data.partial) cache.set(ck, { at: Date.now(), data });
           return Response.json(data);
         } catch (e) {
           return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.", e);

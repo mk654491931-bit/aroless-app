@@ -11,6 +11,7 @@
 // waiting for the rest of the scan.
 // ============================================================================
 
+import { mapBatched } from "./concurrency.server";
 import type { ProductSignals, StreamedProduct } from "./product-stream.shared";
 
 export type MarketScanPayload = {
@@ -19,12 +20,28 @@ export type MarketScanPayload = {
   next_refresh_at: string;
   items: StreamedProduct[];
   niche?: string;
+  /** Budget exhausted: `items` holds everything the scan produced so far. */
+  partial?: boolean;
+  partialReason?: "gateway_budget";
 };
+
+/** ISO timestamp of the next UTC hour boundary (feed refresh cadence). */
+export function nextHourIso(from = new Date()): string {
+  const next = new Date(from);
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return next.toISOString();
+}
 
 export type MarketScanOptions = {
   signal?: AbortSignal;
   /** Awaited per product; a throw here must not abort the whole scan. */
   onItem?: (product: StreamedProduct, index: number) => void | Promise<void>;
+  /**
+   * How many `onItem` handlers (DB write + emit) may run in parallel. Batching
+   * them keeps the scan short without stampeding the database.
+   */
+  concurrency?: number;
 };
 
 export function hourKey(d = new Date()): string {
@@ -139,13 +156,6 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function nextHourIso(now: Date): string {
-  const next = new Date(now);
-  next.setUTCMinutes(0, 0, 0);
-  next.setUTCHours(next.getUTCHours() + 1);
-  return next.toISOString();
-}
-
 async function scanPrompt(niche: string): Promise<string> {
   const { callGemini } = await import("@/lib/ai.server");
   const now = new Date();
@@ -204,14 +214,21 @@ export async function buildMarketScan(
     const product = normalizeMarketProduct(raw[i], i);
     if (!product) continue;
     items.push(product);
-    if (options.onItem) {
+  }
+
+  // Persist + stream the products in small parallel batches: the per-product
+  // work (DB write, SSE frame) is independent, so awaiting it one by one only
+  // added latency. A failing handler still cannot kill the scan.
+  if (options.onItem) {
+    const handlers = options.onItem;
+    await mapBatched(items, options.concurrency ?? 3, async (product, index) => {
+      throwIfAborted(options.signal);
       try {
-        await options.onItem(product, items.length - 1);
+        await handlers(product, index);
       } catch (error) {
-        // A failing consumer (e.g. DB push) must never kill the scan.
         console.error("[hot-scan] onItem handler failed", error);
       }
-    }
+    });
   }
 
   items.sort((a, b) => b.score - a.score);
