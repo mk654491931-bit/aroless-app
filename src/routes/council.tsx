@@ -1,6 +1,8 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -20,6 +22,13 @@ import {
 } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
+import { getUsageSnapshot } from "@/lib/usage.functions";
+import {
+  USAGE_FEATURES,
+  isExhausted,
+  normalizeUsageSnapshot,
+  type UsageFeature,
+} from "@/lib/usage";
 import {
   streamAgentRun,
   streamCouncilAnalysis,
@@ -168,6 +177,19 @@ function CouncilPage() {
   const [agents, setAgents] = useState<AgentProgress[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Paket kotası: konsey ve derin analiz farklı aylık haklardan düşer.
+  const usageFn = useServerFn(getUsageSnapshot);
+  const usageQ = useQuery({
+    queryKey: ["usage-snapshot"],
+    queryFn: () => usageFn(),
+    staleTime: 60_000,
+  });
+  const activeFeature: UsageFeature = mode === "council" ? "council" : "product_finder";
+  const activeMeta = USAGE_FEATURES.find((f) => f.key === activeFeature);
+  // Sunucu kotası okunamadıysa kilitleme yapma — yalnızca kesin veriyle uyar.
+  const quota = usageQ.data ? normalizeUsageSnapshot(usageQ.data).features[activeFeature] : null;
+  const outOfQuota = quota ? isExhausted(quota) : false;
+
   // Closing the tab mid-run aborts the stream (and the server-side council run).
   useEffect(
     () => () => {
@@ -294,8 +316,9 @@ function CouncilPage() {
           </select>
           <button
             onClick={() => void run()}
-            disabled={running || query.trim().length < 2}
+            disabled={running || query.trim().length < 2 || outOfQuota}
             className="rounded-xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] disabled:opacity-50"
+            {...(outOfQuota ? { title: `${activeMeta?.label} limitin doldu` } : {})}
           >
             {running
               ? mode === "council"
@@ -306,6 +329,22 @@ function CouncilPage() {
                 : "Derin analizi başlat"}
           </button>
         </div>
+
+        {outOfQuota && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[oklch(0.68_0.20_25)]/45 bg-[oklch(0.68_0.20_25)]/10 p-3 text-sm">
+            <span className="flex items-center gap-2">
+              <ShieldAlert size={15} className="shrink-0 text-[oklch(0.75_0.18_25)]" />
+              {activeMeta?.label} limitin doldu ({quota?.used} / {quota?.limit}). Paketini
+              yükselterek devam edebilirsin.
+            </span>
+            <Link
+              to="/pricing"
+              className="inline-flex items-center rounded-xl bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-4 py-2 text-xs font-bold text-white"
+            >
+              Paket Yükselt
+            </Link>
+          </div>
+        )}
 
         {running && (
           <div className="glass rounded-2xl p-5 space-y-2">

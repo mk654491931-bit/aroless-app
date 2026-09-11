@@ -5,8 +5,10 @@ type Input = { query: string; country?: string; category?: string; lang?: string
 
 /**
  * 14'lü AI Konsey çalıştırıcısı.
- * - Aynı sorgu son 24 saatte yapıldıysa önbellekten döner ve KREDİ HARCAMAZ.
- * - Yeni sorguda 1 arama kredisi düşer, ardından konsey çalışır.
+ * - Aynı sorgu son 24 saatte yapıldıysa önbellekten döner ve KOTA HARCAMAZ.
+ * - Yeni sorguda 1 AI Konsey oturumu düşer (Starter 2 / Pro 6 / Business 20,
+ *   admin 250), ardından konsey çalışır. Kota fonksiyonu yoksa koşu bloke
+ *   edilmez — sunucu tarafı hatası kullanıcıyı kilitlememelidir.
  */
 export const runCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -30,13 +32,11 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const cachedReport = await peekCouncil(data.query, data.country, data.category, data.lang);
     if (cachedReport) return cachedReport;
 
-    const { error } = await context.supabase.rpc("deduct_product_finder_credit");
-    if (error) {
-      throw new Error(
-        error.message.includes("no_credits")
-          ? "Arama krediniz bitti. Paketinizi yükseltin."
-          : "Kredi düşülemedi, lütfen tekrar deneyin.",
-      );
+    const { enforceUsage } = await import("@/lib/usage.server");
+    const { quotaExceededMessage } = await import("@/lib/usage");
+    const quota = await enforceUsage(context.supabase, "council");
+    if (!quota.ok && quota.reason === "limit_reached") {
+      throw new Error(quotaExceededMessage("council", quota.limit));
     }
 
     return runCouncil(data.query, data.country, data.category, data.lang);

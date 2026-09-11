@@ -35,6 +35,10 @@ export const auditStore = createServerFn({ method: "POST" })
       throw new Error(deductErr.message);
     }
 
+    // Aylık AI araç kullanım sayacı.
+    const { recordUsage } = await import("@/lib/usage.server");
+    await recordUsage(context.supabase, "ai_tools");
+
     let page: { html: string; status: number; ms: number };
     try {
       page = await fetchStorePage(url);

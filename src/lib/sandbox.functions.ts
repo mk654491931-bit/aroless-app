@@ -25,37 +25,31 @@ const StartInput = z.object({
 export const startSimulation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => StartInput.parse(i))
-  .handler(
-    async ({
-      data,
-      context,
-    }): Promise<{ baseline: MarketBaseline; simCreditsRemaining: number }> => {
-      const { data: remaining, error } = await context.supabase.rpc("deduct_sim_credit");
-      if (error) throw new Error("NO_SIM_CREDITS");
-
-      const key = process.env.GEMINI_API_KEY;
-      // Statik/mock baseline yok: veriler yalnızca canlı AI pazar taramasından gelir.
-      const text = await callGemini(baselinePrompt(data), key, 0.4);
-      const parsed = extractJson<Partial<MarketBaseline>>(text, {});
-      if (parsed.cvr_pct == null || parsed.cpc_usd == null) {
-        throw new Error("Canlı pazar verisi alınamadı. Lütfen tekrar deneyin.");
-      }
-      const baseline: MarketBaseline = {
-        cvr_pct: num(parsed.cvr_pct, 0, 0.1, 20),
-        ctr_pct: num(parsed.ctr_pct, 0, 0.1, 20),
-        cpc_usd: num(parsed.cpc_usd, 0, 0.05, 12),
-        cac_usd: num(parsed.cac_usd, 0, 1, 400),
-        avg_market_price_usd: num(parsed.avg_market_price_usd, data.price, 1, 5000),
-        refund_rate_pct: num(parsed.refund_rate_pct, 0, 0, 45),
-        shipping_days: Math.round(num(parsed.shipping_days, 7, 1, 45)),
-        organic_daily_visitors: num(parsed.organic_daily_visitors, 0, 0, 5000),
-        seasonality: str(parsed.seasonality, ""),
-        risks: Array.isArray(parsed.risks) ? parsed.risks.slice(0, 4).map(String) : [],
-        benchmark_note: str(parsed.benchmark_note, ""),
-      };
-      return { baseline, simCreditsRemaining: Number(remaining ?? 0) };
-    },
-  );
+  .handler(async ({ data }): Promise<{ baseline: MarketBaseline; simCreditsRemaining: number }> => {
+    // Simülasyon modülü tüm paketlerde ücretsiz ve sınırsızdır — jeton düşülmez.
+    const key = process.env.GEMINI_API_KEY;
+    // Statik/mock baseline yok: veriler yalnızca canlı AI pazar taramasından gelir.
+    const text = await callGemini(baselinePrompt(data), key, 0.4);
+    const parsed = extractJson<Partial<MarketBaseline>>(text, {});
+    if (parsed.cvr_pct == null || parsed.cpc_usd == null) {
+      throw new Error("Canlı pazar verisi alınamadı. Lütfen tekrar deneyin.");
+    }
+    const baseline: MarketBaseline = {
+      cvr_pct: num(parsed.cvr_pct, 0, 0.1, 20),
+      ctr_pct: num(parsed.ctr_pct, 0, 0.1, 20),
+      cpc_usd: num(parsed.cpc_usd, 0, 0.05, 12),
+      cac_usd: num(parsed.cac_usd, 0, 1, 400),
+      avg_market_price_usd: num(parsed.avg_market_price_usd, data.price, 1, 5000),
+      refund_rate_pct: num(parsed.refund_rate_pct, 0, 0, 45),
+      shipping_days: Math.round(num(parsed.shipping_days, 7, 1, 45)),
+      organic_daily_visitors: num(parsed.organic_daily_visitors, 0, 0, 5000),
+      seasonality: str(parsed.seasonality, ""),
+      risks: Array.isArray(parsed.risks) ? parsed.risks.slice(0, 4).map(String) : [],
+      benchmark_note: str(parsed.benchmark_note, ""),
+    };
+    // -1 = sınırsız (modül ücretsiz).
+    return { baseline, simCreditsRemaining: -1 };
+  });
 
 const CrisisInput = z.object({
   platform: z.string(),

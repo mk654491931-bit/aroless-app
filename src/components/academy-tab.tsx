@@ -21,6 +21,7 @@ import {
   PenLine,
   ChevronLeft,
   ChevronRight,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 
 type Quiz = { q: string; options: string[]; answer: number; why: string };
@@ -972,8 +973,13 @@ export function AcademyTab() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[var(--brand)]/20 blur-3xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground">
-              <GraduationCap size={13} /> {DAYS.length} günlük interaktif program
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground">
+                <GraduationCap size={13} /> {DAYS.length} günlük interaktif program
+              </div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[11px] font-bold text-emerald-300">
+                <InfinityIcon size={11} /> Ücretsiz / Sınırsız
+              </div>
             </div>
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
               Aroless <span className="text-gradient">Academy</span>

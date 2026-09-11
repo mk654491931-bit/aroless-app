@@ -38,6 +38,10 @@ export const getRadar = createServerFn({ method: "POST" })
       const text = await callGemini(radarPrompt(data.country), undefined, 0.85);
       const parsed = extractJson<{ items?: unknown }>(text, { items: [] });
       seeds = sanitizeRadar(parsed.items, data.country);
+
+      // Aylık trend radar taraması sayacı.
+      const { recordUsage } = await import("@/lib/usage.server");
+      await recordUsage(context.supabase, "trend_radar");
     } catch {
       seeds = [];
     }

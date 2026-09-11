@@ -283,6 +283,10 @@ export const generateProducts = createServerFn({ method: "POST" })
       throw new Error(deductErr.message);
     }
 
+    // Aylık kullanım panosunu besle (limit zorlaması sunucu tarafında).
+    const { recordUsage } = await import("@/lib/usage.server");
+    await recordUsage(context.supabase, "product_finder");
+
     const apiKey = process.env.GEMINI_API_KEY;
 
     // Fetch GitHub public repo trends as an additional confidence signal.
@@ -634,17 +638,26 @@ JSON shape:
           };
           const hfEnginePromises = [
             (async () => {
-              const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "llama" }), "llama");
+              const text = await callHuggingFace(
+                buildHfPrompt({ ...hfBase, engine: "llama" }),
+                "llama",
+              );
               return mapHfProducts(text, data.platforms as string[], "llama");
             })(),
             (async () => {
-              const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "qwen" }), "qwen");
+              const text = await callHuggingFace(
+                buildHfPrompt({ ...hfBase, engine: "qwen" }),
+                "qwen",
+              );
               return mapHfProducts(text, data.platforms as string[], "qwen");
             })(),
           ];
           const hfResults = await Promise.allSettled(hfEnginePromises);
           const hfLists = hfResults
-            .filter((r): r is PromiseFulfilledResult<ReturnType<typeof mapHfProducts>> => r.status === "fulfilled")
+            .filter(
+              (r): r is PromiseFulfilledResult<ReturnType<typeof mapHfProducts>> =>
+                r.status === "fulfilled",
+            )
             .map((r) => r.value);
           if (hfLists.length > 0) {
             const merged = mergeHfProducts(hfLists) as unknown as WinningProduct[];
@@ -758,16 +771,18 @@ JSON shape:
     // +3 for products with profit margin > 40%
     // +2 for products with 3+ platform fit options
     const ranked = [...judged].sort((a, b) => {
-      const scoreA = (a.hybrid?.calculated_score ?? 0);
-      const scoreB = (b.hybrid?.calculated_score ?? 0);
+      const scoreA = a.hybrid?.calculated_score ?? 0;
+      const scoreB = b.hybrid?.calculated_score ?? 0;
       // Quality bonuses
-      const bonusA = ((a.viral_proof ?? []).length > 0 ? 5 : 0)
-        + ((a.cost_breakdown?.net_margin_pct ?? a.profit_margin_pct ?? 0) > 40 ? 3 : 0)
-        + ((a.platform_fit ?? []).length >= 3 ? 2 : 0);
-      const bonusB = ((b.viral_proof ?? []).length > 0 ? 5 : 0)
-        + ((b.cost_breakdown?.net_margin_pct ?? b.profit_margin_pct ?? 0) > 40 ? 3 : 0)
-        + ((b.platform_fit ?? []).length >= 3 ? 2 : 0);
-      return (scoreB + bonusB) - (scoreA + bonusA);
+      const bonusA =
+        ((a.viral_proof ?? []).length > 0 ? 5 : 0) +
+        ((a.cost_breakdown?.net_margin_pct ?? a.profit_margin_pct ?? 0) > 40 ? 3 : 0) +
+        ((a.platform_fit ?? []).length >= 3 ? 2 : 0);
+      const bonusB =
+        ((b.viral_proof ?? []).length > 0 ? 5 : 0) +
+        ((b.cost_breakdown?.net_margin_pct ?? b.profit_margin_pct ?? 0) > 40 ? 3 : 0) +
+        ((b.platform_fit ?? []).length >= 3 ? 2 : 0);
+      return scoreB + bonusB - (scoreA + bonusA);
     });
 
     let finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= minScore);

@@ -43,6 +43,7 @@ import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { UsageLimitsCard } from "@/components/usage-limits-card";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -145,10 +146,7 @@ function DashboardPage() {
     enabled: !!user,
   });
 
-  const favorites = useMemo(
-    () => (favQ.data as FavoriteRow[] | undefined) ?? [],
-    [favQ.data],
-  );
+  const favorites = useMemo(() => (favQ.data as FavoriteRow[] | undefined) ?? [], [favQ.data]);
   const analyses = useMemo(() => (anaQ.data as AnalysisRow[] | undefined) ?? [], [anaQ.data]);
   const notifications = useMemo(
     () => (notifQ.data as NotificationRow[] | undefined) ?? [],
@@ -235,7 +233,10 @@ function DashboardPage() {
         { metric: "Health", score: avg(health) },
         { metric: "Viral", score: avg(viral) },
         { metric: "Trend", score: avg(trend) },
-        { metric: "Confidence", score: favorites.length ? Math.min(100, favorites.length * 10) : 0 },
+        {
+          metric: "Confidence",
+          score: favorites.length ? Math.min(100, favorites.length * 10) : 0,
+        },
         {
           metric: "Diversity",
           score: collectionData.length ? Math.min(100, collectionData.length * 20) : 0,
@@ -245,10 +246,7 @@ function DashboardPage() {
     };
   }, [favorites, collectionData]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -360,6 +358,9 @@ function DashboardPage() {
         <Kpi icon={CreditCard} label="Kalan kredi" value={credits} sub={`${spent} harcandı`} />
       </section>
 
+      {/* ── Abonelik ve limit durumu (paket kotaları) ─────────────────── */}
+      <UsageLimitsCard />
+
       {/* ── Activity + credit balance ───────────────────────────────────── */}
       <section className="grid gap-4 lg:grid-cols-3">
         <ChartCard
@@ -428,7 +429,10 @@ function DashboardPage() {
               <span className="h-2 w-2 rounded-full" style={{ background: BRAND }} /> Kalan
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: "oklch(0.70 0.20 25)" }} />
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "oklch(0.70 0.20 25)" }}
+              />
               Harcanan
             </span>
           </div>
@@ -440,7 +444,10 @@ function DashboardPage() {
         <ChartCard icon={<Target size={15} />} title="Kayıtlı ürün kalite radarı">
           <div className="h-64">
             {favorites.length === 0 ? (
-              <EmptyState icon={<Target size={18} />} cta={{ to: "/", label: "Ürün bul ve kaydet" }}>
+              <EmptyState
+                icon={<Target size={18} />}
+                cta={{ to: "/", label: "Ürün bul ve kaydet" }}
+              >
                 Yapay zekâ kalite skorlarını görmek için ürün kaydet.
               </EmptyState>
             ) : (
@@ -448,7 +455,12 @@ function DashboardPage() {
                 <RadarChart data={engineRadar}>
                   <PolarGrid stroke="oklch(1 0 0 / 0.1)" />
                   <PolarAngleAxis dataKey="metric" stroke={AXIS_STROKE} fontSize={11} />
-                  <PolarRadiusAxis stroke={AXIS_STROKE} fontSize={10} angle={30} domain={[0, 100]} />
+                  <PolarRadiusAxis
+                    stroke={AXIS_STROKE}
+                    fontSize={10}
+                    angle={30}
+                    domain={[0, 100]}
+                  />
                   <RadarShape
                     name="Ortalama skor"
                     dataKey="score"
@@ -466,7 +478,10 @@ function DashboardPage() {
         <ChartCard icon={<Package size={15} />} title="Satılabilirlik kararları">
           <div className="h-64">
             {verdictPie.length === 0 ? (
-              <EmptyState icon={<Package size={18} />} cta={{ to: "/", label: "Ürün bul ve kaydet" }}>
+              <EmptyState
+                icon={<Package size={18} />}
+                cta={{ to: "/", label: "Ürün bul ve kaydet" }}
+              >
                 Karar dağılımını görmek için ürün kaydet.
               </EmptyState>
             ) : (
@@ -491,7 +506,10 @@ function DashboardPage() {
         <ChartCard icon={<Bookmark size={15} />} title="Koleksiyonlara göre kayıtlar">
           <div className="h-56">
             {collectionData.length === 0 ? (
-              <EmptyState icon={<Bookmark size={18} />} cta={{ to: "/", label: "İlk ürünü kaydet" }}>
+              <EmptyState
+                icon={<Bookmark size={18} />}
+                cta={{ to: "/", label: "İlk ürünü kaydet" }}
+              >
                 Koleksiyon dağılımını görmek için bir ürün kaydet.
               </EmptyState>
             ) : (
@@ -517,7 +535,10 @@ function DashboardPage() {
         >
           <div className="h-64">
             {topBar.length === 0 ? (
-              <EmptyState icon={<TrendingUp size={18} />} cta={{ to: "/", label: "Bir arama çalıştır" }}>
+              <EmptyState
+                icon={<TrendingUp size={18} />}
+                cta={{ to: "/", label: "Bir arama çalıştır" }}
+              >
                 Bu grafiği doldurmak için bir arama çalıştır.
               </EmptyState>
             ) : (
@@ -726,10 +747,7 @@ function ChartTooltip({
 }) {
   if (!active || !payload || payload.length === 0) return null;
   return (
-    <div
-      className="rounded-xl px-3 py-2 text-xs shadow-xl backdrop-blur"
-      style={TOOLTIP_STYLE}
-    >
+    <div className="rounded-xl px-3 py-2 text-xs shadow-xl backdrop-blur" style={TOOLTIP_STYLE}>
       {label !== undefined && label !== "" && (
         <div className="mb-1 font-semibold">{String(label)}</div>
       )}

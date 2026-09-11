@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
   Loader2,
   Users,
@@ -11,6 +12,7 @@ import {
   ArrowLeft,
   Shield,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -18,6 +20,7 @@ import {
   listAdminUsers,
   listAdminTransactions,
   checkIsAdmin,
+  adminResetUserUsage,
 } from "@/lib/admin.functions";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
@@ -44,6 +47,22 @@ function AdminPage() {
   const statsFn = useServerFn(getAdminStats);
   const usersFn = useServerFn(listAdminUsers);
   const txFn = useServerFn(listAdminTransactions);
+  const resetUsageFn = useServerFn(adminResetUserUsage);
+  const qc = useQueryClient();
+
+  // Admin varsayılanı özellik başına 250'dir; bu işlem bu ayın sayaçlarını sıfırlar.
+  const resetUsage = useMutation({
+    mutationFn: (userId: string) => resetUsageFn({ data: { userId } }),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error("Kullanım sayaçları sıfırlanamadı.");
+        return;
+      }
+      toast.success("Bu ayın kullanım sayaçları sıfırlandı.");
+      void qc.invalidateQueries({ queryKey: ["usage-snapshot"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   useEffect(() => {
     if (!loading && !user)
@@ -191,12 +210,13 @@ function AdminPage() {
                   <Th className="text-right">Spent</Th>
                   <Th>Tier</Th>
                   <Th>Joined</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {usersQ.isLoading && (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
                       <Loader2 className="inline animate-spin" />
                     </td>
                   </tr>
@@ -211,11 +231,22 @@ function AdminPage() {
                         <TierBadge tier={u.subscription_tier} />
                       </Td>
                       <Td className="text-muted-foreground">{fmtDate(u.created_at)}</Td>
+                      <Td className="text-right">
+                        <button
+                          type="button"
+                          disabled={resetUsage.isPending}
+                          onClick={() => resetUsage.mutate(u.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-50"
+                          title="Bu ayın kullanım sayaçlarını sıfırla"
+                        >
+                          <RotateCcw size={11} /> Sıfırla
+                        </button>
+                      </Td>
                     </tr>
                   ))}
                 {!usersQ.isLoading && (usersQ.data ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
                       No users yet
                     </td>
                   </tr>

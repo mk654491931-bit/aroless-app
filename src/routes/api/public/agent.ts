@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
 import { deductFinderCredit } from "@/lib/credits.server";
+import { consumeUsage, recordUsageWithToken } from "@/lib/usage.server";
+import { quotaExceededMessage } from "@/lib/usage";
 import { createSseResponse, encodeSse } from "@/lib/sse.server";
 import type { AgentBusEvent } from "@/lib/agent-bus.server";
 
@@ -32,6 +34,7 @@ export const Route = createFileRoute("/api/public/agent")({
         if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
 
         const mode = body["mode"] === "council" ? "council" : "pipeline";
+        const token = bearerToken(request);
 
         return createSseResponse(
           async (emit) => {
@@ -75,9 +78,12 @@ export const Route = createFileRoute("/api/public/agent")({
                   return;
                 }
 
-                const credit = await deductFinderCredit(bearerToken(request));
-                if (!credit.ok) {
-                  sendError(credit.message);
+                // Council sessions have their own monthly allowance, so they are
+                // counted there instead of draining the product-finder wallet.
+                // Degrades open when the quota RPC is unavailable.
+                const quota = await consumeUsage(token, "council");
+                if (!quota.ok && quota.error === "limit_reached") {
+                  sendError(quotaExceededMessage("council", quota.limit));
                   return;
                 }
 
@@ -85,13 +91,14 @@ export const Route = createFileRoute("/api/public/agent")({
                 return;
               }
 
-              // Same paid gate as the council run: the chain fans out to a
-              // retriever plus 14 sequential agents, so it must not be free.
-              const credit = await deductFinderCredit(bearerToken(request));
+              // The deep-analysis chain fans out to a retriever plus 14
+              // sequential agents, so it keeps the product-finder credit gate.
+              const credit = await deductFinderCredit(token);
               if (!credit.ok) {
                 sendError(credit.message);
                 return;
               }
+              await recordUsageWithToken(token, "product_finder");
 
               const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
               sendComplete(await runVeloraAgentPipeline(body, { onEvent: sendEvent }));
