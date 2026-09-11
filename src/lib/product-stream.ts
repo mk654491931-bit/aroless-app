@@ -1,5 +1,10 @@
 // ============================================================================
-// Product Discovery — streaming consumer (client)
+// Product Discovery — streaming consumer (browser-oriented)
+//
+// NOTE: the `.client.` suffix is intentionally omitted: route files are
+// isomorphic, and TanStack Start's import-protection denies server-environment
+// imports of `**/*.client.*` (that blocked the production build). These exports
+// are safe to evaluate on the server; the hook is simply never rendered there.
 //
 // `streamProductDiscovery` is the framework-agnostic reader: it uses
 // `response.body.getReader()` on the SSE endpoint, ignores `:ping` heartbeats,

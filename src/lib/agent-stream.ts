@@ -1,5 +1,11 @@
 // ============================================================================
-// Agent SSE stream consumer (client)
+// Agent SSE stream consumer (browser-oriented)
+//
+// NOTE: this file deliberately does NOT use the `.client.` suffix. Route files
+// are isomorphic (bundled for the server too), and TanStack Start's
+// import-protection denies any server-environment import of `**/*.client.*`,
+// which broke the production build. Every export here is safe to *evaluate* on
+// the server; the hooks simply never run there.
 //
 // Consumes `/api/public/agent` (Velora pipeline or `mode: "council"`) with
 // `response.body.getReader()`. Heartbeat comments (`:ping`) are ignored, live

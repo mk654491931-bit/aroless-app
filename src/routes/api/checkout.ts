@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { rateLimit } from "@/lib/api-guard.server";
 import type { Database } from "@/integrations/supabase/types";
 
 const BodySchema = z.object({
@@ -28,13 +29,23 @@ export const Route = createFileRoute("/api/checkout")({
           const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
           if (!token) return json({ error: "Unauthorized" }, 401);
 
-          const supabase = createClient<Database>(
-            process.env["SUPABASE_URL"]!,
-            process.env["SUPABASE_PUBLISHABLE_KEY"]!,
-            { auth: { persistSession: false, autoRefreshToken: false } },
-          );
+          const supabaseUrl = process.env["SUPABASE_URL"];
+          const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+          if (!supabaseUrl || !supabaseKey) {
+            console.error("[Checkout] Supabase environment is not configured");
+            return json({ error: "Ödeme servisi şu an kullanılamıyor." }, 503);
+          }
+
+          const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
           const { data: userData, error } = await supabase.auth.getUser(token);
           if (error || !userData.user) return json({ error: "Unauthorized" }, 401);
+
+          // Abuse guard: every call creates a real Paddle transaction upstream,
+          // so a stuck client must not be able to hammer it.
+          const limited = await rateLimit(`checkout:u:${userData.user.id}`, 10, 60);
+          if (limited) return limited;
 
           const parsed = BodySchema.safeParse(await request.json().catch(() => ({})));
           if (!parsed.success) {

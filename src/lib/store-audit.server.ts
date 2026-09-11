@@ -1,5 +1,7 @@
 /** AI Mağaza Denetçisi — sayfa çekme ve prompt üretimi (sunucu tarafı). */
 
+import { fetchExternalText } from "./url-safety.server";
+
 export type AuditIssue = {
   area: string; // Trust, Speed, Copy, Product page, Checkout, Mobile, SEO
   severity: "critical" | "high" | "medium" | "low";
@@ -22,23 +24,36 @@ export type AuditReport = {
 export async function fetchStorePage(
   url: string,
 ): Promise<{ html: string; status: number; ms: number }> {
-  const started = Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
-  try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { "user-agent": "Mozilla/5.0 (compatible; ArolessAudit/1.0)" },
-    });
-    const html = (await res.text()).slice(0, 220000);
-    return { html, status: res.status, ms: Date.now() - started };
-  } finally {
-    clearTimeout(timer);
-  }
+  // The URL comes straight from the user, so every hop (including redirects)
+  // is validated against loopback/private/metadata ranges before fetching.
+  const page = await fetchExternalText(url, { timeoutMs: 12_000, maxBytes: 220_000 });
+  return { html: page.html, status: page.status, ms: page.ms };
 }
 
-export function extractSignals(html: string) {
+/** Heuristic signals extracted from the raw store HTML. */
+export type StoreSignals = {
+  text: string;
+  title: string;
+  description: string;
+  images: number;
+  imagesWithoutAlt: number;
+  scripts: number;
+  weightKb: number;
+  hasReviews: boolean;
+  hasTrustBadges: boolean;
+  hasReturnPolicy: boolean;
+  hasContact: boolean;
+  hasFaq: boolean;
+  hasLiveChat: boolean;
+  hasPixel: boolean;
+  hasFreeShipping: boolean;
+  hasUrgency: boolean;
+  hasUpsell: boolean;
+  hasSchema: boolean;
+  viewport: boolean;
+};
+
+export function extractSignals(html: string): StoreSignals {
   const lower = html.toLowerCase();
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -74,11 +89,11 @@ export function extractSignals(html: string) {
 
 export function auditPrompt(
   url: string,
-  signals: ReturnType<typeof extractSignals>,
+  signals: StoreSignals,
   status: number,
   ms: number,
   lang: string,
-) {
+): string {
   return `You are a CRO (conversion rate optimization) auditor with 10+ years in DTC e-commerce.
 Audit this online store and write everything in language code "${lang}".
 
