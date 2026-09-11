@@ -4,6 +4,8 @@ import { encodeHeartbeat, encodeSse, sseHeaders } from "@/lib/sse.server";
 import type { AgentBusEvent } from "@/lib/agent-bus.server";
 
 /** Velora 14 ajanlı yönlendirici uç noktası (oturum zorunlu, SSE). */
+export const maxDuration = 1800;
+
 export const Route = createFileRoute("/api/public/agent")({
   server: {
     handlers: {
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/api/public/agent")({
               );
             };
 
+            enqueue(": initial-connect\n\n");
             enqueue(": connected\n\n");
             heartbeat = setInterval(() => enqueue(encodeHeartbeat()), 5_000);
 
