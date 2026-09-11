@@ -37,6 +37,9 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/product-discovery/start'
+import { Route as ApiProductDiscoveryStatusRouteImport } from './routes/api/product-discovery/status'
+import { Route as ApiProductDiscoveryWorkerRouteImport } from './routes/api/product-discovery/worker'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
@@ -188,6 +191,24 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProductDiscoveryStartRoute =
+  ApiProductDiscoveryStartRouteImport.update({
+    id: '/api/product-discovery/start',
+    path: '/api/product-discovery/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductDiscoveryStatusRoute =
+  ApiProductDiscoveryStatusRouteImport.update({
+    id: '/api/product-discovery/status',
+    path: '/api/product-discovery/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductDiscoveryWorkerRoute =
+  ApiProductDiscoveryWorkerRouteImport.update({
+    id: '/api/product-discovery/worker',
+    path: '/api/product-discovery/worker',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   id: '/api/public/agent',
   path: '/api/public/agent',
@@ -269,6 +290,9 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/status': typeof ApiProductDiscoveryStatusRoute
+  '/api/product-discovery/worker': typeof ApiProductDiscoveryWorkerRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -309,6 +333,9 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/status': typeof ApiProductDiscoveryStatusRoute
+  '/api/product-discovery/worker': typeof ApiProductDiscoveryWorkerRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -350,6 +377,9 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/status': typeof ApiProductDiscoveryStatusRoute
+  '/api/product-discovery/worker': typeof ApiProductDiscoveryWorkerRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -392,6 +422,9 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/status'
+    | '/api/product-discovery/worker'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -432,6 +465,9 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/status'
+    | '/api/product-discovery/worker'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -472,6 +508,9 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/status'
+    | '/api/product-discovery/worker'
     | '/api/public/agent'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -512,6 +551,9 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
+  ApiProductDiscoveryStatusRoute: typeof ApiProductDiscoveryStatusRoute
+  ApiProductDiscoveryWorkerRoute: typeof ApiProductDiscoveryWorkerRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
@@ -722,6 +764,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/product-discovery/start': {
+      id: '/api/product-discovery/start'
+      path: '/api/product-discovery/start'
+      fullPath: '/api/product-discovery/start'
+      preLoaderRoute: typeof ApiProductDiscoveryStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-discovery/status': {
+      id: '/api/product-discovery/status'
+      path: '/api/product-discovery/status'
+      fullPath: '/api/product-discovery/status'
+      preLoaderRoute: typeof ApiProductDiscoveryStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-discovery/worker': {
+      id: '/api/product-discovery/worker'
+      path: '/api/product-discovery/worker'
+      fullPath: '/api/product-discovery/worker'
+      preLoaderRoute: typeof ApiProductDiscoveryWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/agent': {
       id: '/api/public/agent'
       path: '/api/public/agent'
@@ -833,6 +896,9 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,
+  ApiProductDiscoveryStatusRoute: ApiProductDiscoveryStatusRoute,
+  ApiProductDiscoveryWorkerRoute: ApiProductDiscoveryWorkerRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
