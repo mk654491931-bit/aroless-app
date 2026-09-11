@@ -20,7 +20,12 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { fetchHotProducts, HOT_FEED_QUERY_KEY, type HotProduct } from "@/lib/hot-products";
+import {
+  fetchHotProducts,
+  HOT_FEED_QUERY_KEY,
+  type HotFeedProgress,
+  type HotProduct,
+} from "@/lib/hot-products";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -239,9 +244,11 @@ function marketMetrics(p: HotProduct): Array<{
 export function CommandCenter(): ReactElement {
   const [query, setQuery] = useState("");
   const [niche, setNiche] = useState<string | null>(null);
+  // Live stage/progress from the async discovery job (Redis-backed).
+  const [jobProgress, setJobProgress] = useState<HotFeedProgress | null>(null);
   const feed = useQuery({
     queryKey: [...HOT_FEED_QUERY_KEY, niche ?? "all"] as const,
-    queryFn: () => fetchHotProducts(niche),
+    queryFn: () => fetchHotProducts(niche, { onProgress: setJobProgress }),
     staleTime: 5 * 60_000,
   });
 
@@ -288,7 +295,9 @@ export function CommandCenter(): ReactElement {
   const logs = useLogStream(selected, current?.finger ?? 0, logOpen);
 
   const liveState = feed.isLoading
-    ? "Syncing live market stream…"
+    ? jobProgress
+      ? `${jobProgress.stageLabel} · %${jobProgress.progress}`
+      : "Syncing live market stream…"
     : feed.isError
       ? "Live feed unavailable — showing cached scan"
       : null;

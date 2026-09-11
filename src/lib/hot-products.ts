@@ -84,7 +84,35 @@ async function fetchHotProductsStreamed(niche: string): Promise<HotProduct[]> {
   return result.items;
 }
 
-export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
+/** Live progress a caller can render while an async discovery job runs. */
+export type HotFeedProgress = {
+  status: string;
+  stage: string;
+  stageLabel: string;
+  progress: number;
+  partial: boolean;
+};
+
+export type FetchHotProductsOptions = {
+  onProgress?: (progress: HotFeedProgress) => void;
+};
+
+/**
+ * Resolves the live feed, fastest path first:
+ *
+ *   1. the hourly JSON cache (milliseconds, works signed-out);
+ *   2. an **async Product Discovery job** — start → `jobId` → status polling —
+ *      when the cache is cold/empty and the caller is signed in. This is the
+ *      path that replaced the 90-100s synchronous request that triggered
+ *      Cloudflare 524s: nothing long-lived is ever held open on the browser's
+ *      connection.
+ *   3. the SSE stream as a last resort (queue not configured, signed-out, or
+ *      the job could not be authorized).
+ */
+export async function fetchHotProducts(
+  arg?: unknown,
+  options: FetchHotProductsOptions = {},
+): Promise<HotFeed> {
   const niche = typeof arg === "string" ? arg : "";
   const qs = niche.trim() ? `?niche=${encodeURIComponent(niche.trim())}` : "";
   const now = new Date().toISOString();
@@ -103,23 +131,51 @@ export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
     });
     if (res.ok) {
       const json = (await res.json()) as Partial<HotFeed>;
-      return {
-        hour: json.hour ?? "",
-        refreshed_at: json.refreshed_at ?? now,
-        next_refresh_at: json.next_refresh_at ?? now,
-        items: json.items ?? [],
-        ...(json.error ? { error: json.error } : {}),
-        ...(json.partial ? { partial: true } : {}),
-      };
+      const items = json.items ?? [];
+      if (items.length > 0) {
+        return {
+          hour: json.hour ?? "",
+          refreshed_at: json.refreshed_at ?? now,
+          next_refresh_at: json.next_refresh_at ?? now,
+          items,
+          ...(json.error ? { error: json.error } : {}),
+          ...(json.partial ? { partial: true } : {}),
+        };
+      }
     }
   } catch (error) {
-    console.warn("[hot-products] live feed unavailable; falling back to the stream", error);
+    console.warn("[hot-products] live feed cache unavailable; queueing a background scan", error);
   }
 
-  // The JSON route can exceed the gateway window — read the same scan as a
-  // stream so products arrive (and get persisted) incrementally. The stream
-  // always ends with a partial-but-successful payload before the 100s wall, so
-  // a slow scan fills the feed instead of leaving an empty state.
+  // Async job path. Signed-out callers get `unauthorized` and fall through to
+  // the public stream, so the landing-page ticker keeps working unchanged.
+  try {
+    const { runDiscoveryJob } = await import("./discovery-job");
+    const run = await runDiscoveryJob(
+      { niche: niche.trim(), targetCountry: "GLOBAL" },
+      options.onProgress ? { onProgress: options.onProgress } : {},
+    );
+    if (run.ok) {
+      const result = run.job.result;
+      if (result && result.products.length > 0) {
+        const feed = buildHotFeedFromItems(result.products);
+        return result.partial ? { ...feed, partial: true } : feed;
+      }
+      if (result) {
+        // A terminal job with zero products: report the empty feed honestly
+        // instead of re-running the whole scan on the stream.
+        return { ...buildHotFeedFromItems([]), error: "Bu niş için ürün bulunamadı." };
+      }
+    } else if (run.reason === "error") {
+      console.warn("[hot-products] async discovery job failed", run.message);
+    }
+  } catch (error) {
+    console.warn("[hot-products] async discovery path failed", error);
+  }
+
+  // Last resort: read the same scan as a stream so a slow scan still fills the
+  // feed. The stream always ends with a partial-but-successful payload before
+  // the 100s wall instead of leaving an empty state.
   try {
     const items = await fetchHotProductsStreamed(niche);
     if (items.length > 0) return buildHotFeedFromItems(items);
