@@ -38,7 +38,8 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => KitInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
+    const { data: remainingAfterDeduct, error: deductErr } =
+      await context.supabase.rpc("deduct_credit");
     if (deductErr) {
       if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
       throw new Error(deductErr.message);
@@ -47,7 +48,25 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
     // Aylık AI araç kullanım sayacı.
     const { recordUsage } = await import("@/lib/usage.server");
     await recordUsage(context.supabase, "ai_tools");
-    const text = await callPremiumAI(creativeKitPrompt(data), 0.75);
+
+    // Gateway bütçesi: çağrı 90s'yi aşarsa 524 yerine kredi iadesi + net hata.
+    const { raceBudget } = await import("@/lib/deadline.server");
+    const text = await raceBudget(() => callPremiumAI(creativeKitPrompt(data), 0.75));
+    if (text === null) {
+      if (typeof remainingAfterDeduct === "number") {
+        try {
+          await context.supabase
+            .from("profiles")
+            .update({ credits: remainingAfterDeduct + 1 })
+            .eq("id", context.userId);
+        } catch {
+          /* iade başarısız olsa da istek bozulmaz */
+        }
+      }
+      throw new Error(
+        "Kreatif kit üretimi 90 saniyelik sunucu sınırına takıldı. Krediniz iade edildi — lütfen tekrar deneyin.",
+      );
+    }
     const kit = extractJson<CreativeKit>(text, EMPTY);
 
     const { data: saved } = await context.supabase

@@ -25,6 +25,13 @@ export const STREAM_BUDGET_MS = 92_000;
 /** Budget for plain JSON responses — leaves room to serialize and send. */
 export const JSON_BUDGET_MS = 90_000;
 
+/**
+ * Sub-budget for the primary LLM fan-out inside a JSON request. Capping it
+ * well below the outer budget keeps the retry/enrichment stages alive instead
+ * of letting one stalled provider eat the whole request.
+ */
+export const FANOUT_BUDGET_MS = 45_000;
+
 export type Deadline = {
   readonly budgetMs: number;
   readonly startedAt: number;

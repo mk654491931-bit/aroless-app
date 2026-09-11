@@ -26,7 +26,8 @@ export const summarizeComparison = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SummarizeInput.parse(input))
   .handler(async ({ data }) => {
     const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}`;
-    const text = await callGemini(prompt, undefined, 0.3, false);
+    const { raceBudget } = await import("@/lib/deadline.server");
+    const text = (await raceBudget(() => callGemini(prompt, undefined, 0.3, false))) ?? "";
     try {
       const json = JSON.parse(text.replace(/```json|```/g, "").trim());
       return {

@@ -555,12 +555,21 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     // Each angle goes out on a DIFFERENT rotated key (apiKey omitted → the
     // round-robin scheduler in ai.server picks the next cool key), with a small
     // stagger so both calls never hit the same per-minute bucket at once.
-    const results = await Promise.allSettled(
-      anglePrompts.map(async (pr, i) => {
+    // Fan-out'un kendi alt bütçesi var: tek bir tıkanan sağlayıcı tüm isteği
+    // yutmasın, kalan süre yedek motorlara ve zenginleştirmeye kalsın.
+    const { FANOUT_BUDGET_MS } = await import("@/lib/deadline.server");
+    const { settleWithDeadline } = await import("@/lib/concurrency.server");
+    const fanout = createDeadline(FANOUT_BUDGET_MS, deadline.signal);
+    const angleRun = await settleWithDeadline(
+      anglePrompts.map((pr, i) => async () => {
         if (i > 0) await new Promise((r) => setTimeout(r, 700 * i));
         return callGemini(pr, undefined);
       }),
+      fanout,
     );
+    fanout.dispose();
+    if (angleRun.timedOut) partial = true;
+    const results = angleRun.results;
     const collected: WinningProduct[] = [];
     for (const r of results) {
       if (r.status === "fulfilled") {
@@ -586,15 +595,25 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     const cap = Math.max(10, angleCount * 2);
     if (products.length > cap) products = products.slice(0, cap);
 
+    // Yedek motor turları da bütçeye bağlı: süre bittiyse yeni çağrı açmak
+    // yerine elimizdekine bakıp karar veririz (kredi iadesi yolu).
+    const budgetedCall = async (fn: () => Promise<string>): Promise<string> => {
+      if (deadline.expired()) {
+        partial = true;
+        return "";
+      }
+      return (await deadline.race(fn())) ?? "";
+    };
+
     // If nothing came back, retry the first angle without grounding (strict JSON)
     if (products.length === 0) {
-      const retry = await callGemini(anglePrompts[0], apiKey, 0.7, false).catch(() => "");
+      const retry = await budgetedCall(() => callGemini(anglePrompts[0], apiKey, 0.7, false));
       const parsed = extractJson<{ products?: WinningProduct[] }>(retry, { products: [] });
       if (parsed.products?.length) products = parsed.products;
     }
     if (products.length === 0) {
       // Lovable AI gateway direct fallback
-      const retry2 = await callGemini(anglePrompts[0], undefined, 0.7, false).catch(() => "");
+      const retry2 = await budgetedCall(() => callGemini(anglePrompts[0], undefined, 0.7, false));
       const parsed = extractJson<{ products?: WinningProduct[] }>(retry2, { products: [] });
       if (parsed.products?.length) products = parsed.products;
     }
@@ -621,13 +640,13 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-      const slim = await callGemini(slimPrompt, undefined, 0.8, false).catch(() => "");
+      const slim = await budgetedCall(() => callGemini(slimPrompt, undefined, 0.8, false));
       const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
       if (parsed.products?.length) products = parsed.products;
     }
     // ---- Cross-engine fallback: Gemini tükendiyse HF motorlarıyla dene ----
     let fallbackEngine = "gemini";
-    if (products.length === 0) {
+    if (products.length === 0 && !deadline.expired()) {
       try {
         const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, hfTokenPool } =
           await import("@/lib/hf.server");
@@ -660,6 +679,7 @@ JSON shape:
             })(),
           ];
           const hfResults = await Promise.allSettled(hfEnginePromises);
+          if (deadline.expired()) partial = true;
           const hfLists = hfResults
             .filter(
               (r): r is PromiseFulfilledResult<ReturnType<typeof mapHfProducts>> =>
@@ -682,7 +702,7 @@ JSON shape:
     // HF→OpenRouter→PROVIDER_* zincirindeki ÇALIŞAN motorla minimal şemada bir
     // kez daha dene; böylece "ürün bulunamadı" yalnızca gerçekten her motor
     // tükendiğinde görünür. ----
-    if (products.length === 0) {
+    if (products.length === 0 && !deadline.expired()) {
       try {
         const meshPrompt = `You are an e-commerce product researcher. Return STRICT JSON only.
 Find 3 REAL, specific, currently trending products for:
@@ -704,7 +724,7 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-        const meshText = await callLovableAI(meshPrompt, 0.7);
+        const meshText = await budgetedCall(() => callLovableAI(meshPrompt, 0.7));
         const parsed = extractJson<{ products?: WinningProduct[] }>(meshText, { products: [] });
         if (parsed.products?.length) {
           products = parsed.products;
@@ -717,7 +737,9 @@ JSON shape:
     if (products.length === 0) {
       await refund();
       throw new Error(
-        "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
+        deadline.expired()
+          ? "Arama 90 saniyelik sunucu sınırına takıldı ve tamamlanamadı. Krediniz iade edildi — lütfen tekrar deneyin."
+          : "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
       );
     }
     const normalized = products.map((prod) =>
@@ -761,6 +783,10 @@ JSON shape:
     // agent calls, so an unbounded Promise.all is what trips rate limits.
     const { mapWithConcurrency } = await import("@/lib/ai.server");
     const judged = await mapWithConcurrency(gated, 2, async (p) => {
+      if (deadline.expired()) {
+        partial = true;
+        return { ...p, hybrid: undefined, consensus: undefined };
+      }
       const ctx = productDebateContext(p);
       const [hybrid, consensus] = await Promise.all([
         scoreProductForCountry(ctx, country).catch(() => undefined),
@@ -951,9 +977,9 @@ JSON shape:
 
     deadline.dispose();
 
-    // Süre dolduysa kullanıcıya neden daha az/az zenginleştirilmiş sonuç
-    // geldiğini söyle (mevcut fallback metnini ezmeden).
-    if (partial && !fallback) {
+    // Süre dolduysa bunu söyle: sonuçların neden eksik zenginleştirilmiş
+    // olduğu, "eşik altı kaldı" mesajından daha açıklayıcıdır.
+    if (partial) {
       fallback = {
         type: "partial",
         message:
