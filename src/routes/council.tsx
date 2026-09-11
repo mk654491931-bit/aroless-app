@@ -20,8 +20,15 @@ import {
 } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
-import { streamCouncilAnalysis, type AgentProgress } from "@/lib/agent-stream.client";
+import {
+  streamAgentRun,
+  streamCouncilAnalysis,
+  type AgentProgress,
+} from "@/lib/agent-stream.client";
 import { nextStageIndex, stageIndexForAgent, stageIndexForStage } from "@/lib/council-stage";
+import { PIPELINE_STAGES, stageIndexForPipelineStage } from "@/lib/pipeline-stage";
+import { DeepAnalysisResults } from "@/components/deep-analysis-results";
+import type { PipelineOutput } from "@/lib/velora-pipeline.server";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { CouncilReport } from "@/lib/council.server";
 
@@ -49,6 +56,50 @@ const TEAM_ICON = {
   compliance: ShieldAlert,
   creative: Palette,
 } as const;
+
+type AnalysisMode = "council" | "pipeline";
+
+/** The two analysis engines exposed on this page. */
+const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; hint: string }> = [
+  {
+    id: "council",
+    label: "14'lü Konsey",
+    hint: "Altı üretici + altı hakem ekip, müdür sentezi ve bağımsız denetçi tek sayfalık icra raporu üretir.",
+  },
+  {
+    id: "pipeline",
+    label: "Derin Ürün Analizi",
+    hint: "Product Retriever + 14 ajanlı konsey zinciri sıralı çalışır; ürünleri skorlayıp listeler.",
+  },
+];
+
+/** Progress rows for the Velora deep-analysis run (retriever → council → synthesis). */
+function PipelineStageList({ active }: { active: number }) {
+  return (
+    <div className="glass rounded-2xl p-5 space-y-3">
+      {PIPELINE_STAGES.map((label, i) => {
+        const done = i < active;
+        return (
+          <div
+            key={label}
+            className={`flex items-center gap-3 text-sm ${i > active ? "opacity-40" : ""}`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.62_0.17_255)]/15">
+              {done ? (
+                <Check size={14} className="text-emerald-400" />
+              ) : i === active ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <span className="text-[11px] text-muted-foreground">{i + 1}</span>
+              )}
+            </span>
+            <span>{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function StageList({ active }: { active: number }) {
   return (
@@ -109,8 +160,10 @@ function upsertAgent(list: AgentProgress[], update: AgentProgress): AgentProgres
 function CouncilPage() {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("GLOBAL");
+  const [mode, setMode] = useState<AnalysisMode>("council");
   const [stage, setStage] = useState(-1);
   const [report, setReport] = useState<CouncilReport | null>(null);
+  const [depth, setDepth] = useState<PipelineOutput | null>(null);
   const [running, setRunning] = useState(false);
   const [agents, setAgents] = useState<AgentProgress[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -131,32 +184,48 @@ function CouncilPage() {
     abortRef.current = controller;
 
     setReport(null);
+    setDepth(null);
     setAgents([]);
     setStage(0);
     setRunning(true);
 
-    try {
-      const data = await streamCouncilAnalysis(
-        { query, country, lang: getUiLang() },
-        {
-          onStage: (event) => {
-            const index = stageIndexForStage(event.stage);
-            if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
-          },
-          onAgent: (agent) => {
-            setAgents((prev) => upsertAgent(prev, agent));
-            const index = stageIndexForAgent(agent.agent);
-            if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
-          },
-        },
-        controller.signal,
-      );
+    // Both modes share the same live progress wiring; only the payloads differ.
+    const handlers = {
+      onStage: (event: { stage: string }) => {
+        const index =
+          mode === "council"
+            ? stageIndexForStage(event.stage)
+            : stageIndexForPipelineStage(event.stage);
+        if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
+      },
+      onAgent: (agent: AgentProgress) => {
+        setAgents((prev) => upsertAgent(prev, agent));
+        if (mode !== "council") return;
+        const index = stageIndexForAgent(agent.agent);
+        if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
+      },
+    };
 
-      setReport(data);
-      if (data.cache_hit) toast.success("24 saatlik önbellekten getirildi — kredi harcanmadı.");
+    try {
+      if (mode === "council") {
+        const data = await streamCouncilAnalysis(
+          { query, country, lang: getUiLang() },
+          handlers,
+          controller.signal,
+        );
+        setReport(data);
+        if (data.cache_hit) toast.success("24 saatlik önbellekten getirildi — kredi harcanmadı.");
+      } else {
+        const data = await streamAgentRun<PipelineOutput>(
+          { mode: "pipeline", userQuery: query, country, language: getUiLang() },
+          handlers,
+          controller.signal,
+        );
+        setDepth(data);
+      }
     } catch (error) {
       if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "Konsey çalıştırılamadı.");
+        toast.error(error instanceof Error ? error.message : "Analiz çalıştırılamadı.");
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -171,13 +240,34 @@ function CouncilPage() {
     <HubShell
       emoji="🧠"
       title="14'lü AI Konsey"
-      subtitle="Altı uzman ekip (üretici + hakem) + müdür sentezi + bağımsız denetçi. Çoklu sağlayıcı altyapısı, otomatik yedekleme ve 24 saatlik akıllı önbellek ile çalışır."
+      subtitle="İki motor: 14'lü konsey (ekip + hakem + müdür + denetçi icra raporu) ve derin ürün analizi (retriever + sıralı konsey zinciri ile skorlanmış ürünler). Çoklu sağlayıcı, otomatik yedekleme ve 24 saatlik önbellek."
     >
       <div className="mx-auto w-full max-w-4xl space-y-6 py-6">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Brain className="text-[oklch(0.75_0.16_255)]" />
-          <h1 className="text-xl font-extrabold">Konsey Analizi</h1>
-          <CreditCost amount={1} />
+          <h1 className="text-xl font-extrabold">
+            {mode === "council" ? "Konsey Analizi" : "Derin Ürün Analizi"}
+          </h1>
+          {mode === "council" && <CreditCost amount={1} />}
+        </div>
+
+        <div className="flex gap-2">
+          {ANALYSIS_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              disabled={running}
+              onClick={() => setMode(m.id)}
+              title={m.hint}
+              className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                mode === m.id
+                  ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/15 text-foreground"
+                  : "border-border/60 bg-transparent text-muted-foreground hover:bg-white/5"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
 
         <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
@@ -207,7 +297,13 @@ function CouncilPage() {
             disabled={running || query.trim().length < 2}
             className="rounded-xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] disabled:opacity-50"
           >
-            {running ? "Konsey çalışıyor…" : "Konseyi çalıştır"}
+            {running
+              ? mode === "council"
+                ? "Konsey çalışıyor…"
+                : "Derin analiz çalışıyor…"
+              : mode === "council"
+                ? "Konseyi çalıştır"
+                : "Derin analizi başlat"}
           </button>
         </div>
 
@@ -248,9 +344,16 @@ function CouncilPage() {
           </div>
         )}
 
-        {running && <StageList active={Math.max(0, stage)} />}
+        {running &&
+          (mode === "council" ? (
+            <StageList active={Math.max(0, stage)} />
+          ) : (
+            <PipelineStageList active={Math.max(0, stage)} />
+          ))}
 
-        {report && (
+        {depth && <DeepAnalysisResults result={depth} />}
+
+        {mode === "council" && report && (
           <div className="space-y-5">
             <div className="glass rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
               <ScoreRing score={report.velora_score} />
