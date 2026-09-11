@@ -56,7 +56,6 @@ import {
   getSimCoach,
   submitSimRun,
   getSimLeaderboard,
-  getSimCredits,
 } from "@/lib/sandbox.functions";
 import type { CoachAdvice } from "@/lib/sandbox.server";
 import { PostRunAnalytics } from "./post-run-analytics";
@@ -91,10 +90,7 @@ export function SandboxTab({
   const reviewsFn = useServerFn(getSimReviews);
   const coachFn = useServerFn(getSimCoach);
   const submitFn = useServerFn(submitSimRun);
-  const creditsFn = useServerFn(getSimCredits);
-
-  const creditsQ = useQuery({ queryKey: ["sim-credits"], queryFn: () => creditsFn() });
-  const simCredits = creditsQ.data?.simCredits ?? 0;
+  // Simülasyon modülü ücretsiz/sınırsız: jeton sorgusu yok.
 
   useEffect(() => {
     try {
@@ -191,12 +187,7 @@ export function SandboxTab({
       qc.invalidateQueries({ queryKey: ["sim-credits"] });
       toast.success("Simulation started — real market baseline loaded.");
     },
-    onError: (e: Error) => {
-      if (e.message.includes("NO_SIM_CREDITS")) {
-        onUpgrade();
-        toast.error("Out of simulation credits.");
-      } else toast.error(e.message);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const nextDay = async () => {
@@ -297,7 +288,6 @@ export function SandboxTab({
     return (
       <SetupView
         catalog={catalog}
-        simCredits={simCredits}
         loading={start.isPending}
         onUpgrade={onUpgrade}
         onStart={(cfg) => start.mutate(cfg)}
@@ -407,13 +397,11 @@ export function SandboxTab({
 
 function SetupView({
   catalog,
-  simCredits,
   loading,
   onStart,
   onUpgrade,
 }: {
   catalog: WinningProduct[];
-  simCredits: number;
   loading: boolean;
   onUpgrade: () => void;
   onStart: (cfg: {
@@ -568,21 +556,22 @@ function SetupView({
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/10">
           <button
             disabled={!ready || loading}
-            onClick={() => {
-              if (simCredits <= 0) {
-                onUpgrade();
-                return;
-              }
-              onStart({ platform, capital, storeName, product, name, cogs, price });
-            }}
+            onClick={() => onStart({ platform, capital, storeName, product, name, cogs, price })}
             className="flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white glow disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
-            {loading ? "Loading live market data…" : "Start simulation — 1 credit"}
+            {loading ? "Loading live market data…" : "Start simulation — ücretsiz"}
           </button>
-          <span className="text-xs text-muted-foreground">
-            {simCredits} simulation credit{simCredits === 1 ? "" : "s"} left
+          <span className="inline-flex items-center rounded-full border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+            Ücretsiz / Sınırsız
           </span>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="text-[11px] font-semibold text-muted-foreground underline hover:text-foreground"
+          >
+            Paketleri gör
+          </button>
         </div>
       </div>
     </div>

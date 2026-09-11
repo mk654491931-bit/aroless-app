@@ -122,6 +122,23 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
     }
   });
 
+/**
+ * Admin panel: bir kullanıcının bu aya ait kullanım sayaçlarını sıfırlar
+ * (admin varsayılanı özellik başına 250'dir; bu işlem o bakiyeyi taze açar).
+ */
+export const adminResetUserUsage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { userId?: unknown }) => {
+    const userId = String(input?.userId ?? "").trim();
+    if (!/^[0-9a-f-]{8,}$/i.test(userId)) throw new Error("Geçersiz kullanıcı.");
+    return { userId };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: boolean }> => {
+    await assertAdmin(context);
+    const { adminResetUsage } = await import("@/lib/usage.server");
+    return { ok: await adminResetUsage(data.userId) };
+  });
+
 export type FreeCreditAuditRow = {
   id: string;
   user_id: string | null;

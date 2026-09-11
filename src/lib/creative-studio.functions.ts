@@ -43,6 +43,10 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
       if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
       throw new Error(deductErr.message);
     }
+
+    // Aylık AI araç kullanım sayacı.
+    const { recordUsage } = await import("@/lib/usage.server");
+    await recordUsage(context.supabase, "ai_tools");
     const text = await callPremiumAI(creativeKitPrompt(data), 0.75);
     const kit = extractJson<CreativeKit>(text, EMPTY);
 

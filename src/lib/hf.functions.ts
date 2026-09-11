@@ -31,6 +31,10 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
       throw new Error(deductErr.message);
     }
 
+    // Aylık AI araç kullanım sayacı.
+    const { recordUsage } = await import("@/lib/usage.server");
+    await recordUsage(context.supabase, "ai_tools");
+
     const base = {
       niche: data.niche,
       category: data.category,
