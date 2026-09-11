@@ -85,6 +85,14 @@ export const Route = createFileRoute("/api/public/agent")({
                 return;
               }
 
+              // Same paid gate as the council run: the chain fans out to a
+              // retriever plus 14 sequential agents, so it must not be free.
+              const credit = await deductFinderCredit(bearerToken(request));
+              if (!credit.ok) {
+                sendError(credit.message);
+                return;
+              }
+
               const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
               sendComplete(await runVeloraAgentPipeline(body, { onEvent: sendEvent }));
             } catch (error) {

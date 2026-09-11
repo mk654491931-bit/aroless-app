@@ -248,7 +248,7 @@ function CouncilPage() {
           <h1 className="text-xl font-extrabold">
             {mode === "council" ? "Konsey Analizi" : "Derin Ürün Analizi"}
           </h1>
-          {mode === "council" && <CreditCost amount={1} />}
+          <CreditCost amount={1} />
         </div>
 
         <div className="flex gap-2">
