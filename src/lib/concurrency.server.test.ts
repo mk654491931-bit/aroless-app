@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clampBatchSize, fulfilled, mapBatched, settleBatched } from "./concurrency.server";
+import {
+  DeadlineExceededError,
+  clampBatchSize,
+  fulfilled,
+  mapBatched,
+  settleBatched,
+  settleWithDeadline,
+} from "./concurrency.server";
+import { createDeadline } from "./deadline.server";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +56,50 @@ describe("mapBatched", () => {
 
   it("handles an empty list", async () => {
     expect(await mapBatched([], 3, async () => 1)).toEqual([]);
+  });
+});
+
+describe("settleWithDeadline", () => {
+  it("waits for every task while the budget lasts", async () => {
+    const deadline = createDeadline(2_000);
+    const { results, timedOut } = await settleWithDeadline(
+      [async () => "a", async () => "b"],
+      deadline,
+    );
+    deadline.dispose();
+
+    expect(timedOut).toBe(false);
+    expect(fulfilled(results)).toEqual(["a", "b"]);
+  });
+
+  it("keeps the results that arrived and drops the stalled one", async () => {
+    const deadline = createDeadline(80);
+    const { results, timedOut } = await settleWithDeadline<string>(
+      [async () => "ready", () => new Promise<string>(() => undefined)],
+      deadline,
+    );
+    deadline.dispose();
+
+    expect(timedOut).toBe(true);
+    expect(fulfilled(results)).toEqual(["ready"]);
+    // The unfinished slot stays in place so indexes keep lining up.
+    expect(results).toHaveLength(2);
+    const dropped = results[1] as PromiseRejectedResult;
+    expect(dropped.reason).toBeInstanceOf(DeadlineExceededError);
+  });
+
+  it("still reports real per-task failures separately from a timeout", async () => {
+    const deadline = createDeadline(2_000);
+    const { results, timedOut } = await settleWithDeadline<string>(
+      [async () => "ok", async () => Promise.reject(new Error("provider 500"))],
+      deadline,
+    );
+    deadline.dispose();
+
+    expect(timedOut).toBe(false);
+    expect(results[0]?.status).toBe("fulfilled");
+    expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(Error);
+    expect(fulfilled(results)).toEqual(["ok"]);
   });
 });
 

@@ -6,7 +6,21 @@
 // that work concurrently in small batches instead of one-by-one, while keeping
 // result order and containing per-item failures so one rejection can never
 // kill the batch (or the request).
+//
+// `settleWithDeadline` is the gateway-safe variant: a fan-out of LLM calls can
+// stall on one slow provider for minutes, so it stops waiting once the budget
+// is spent and hands back the results that did arrive.
 // ============================================================================
+
+import type { Deadline } from "./deadline.server";
+
+/** Marks a task that never reported back before the deadline. */
+export class DeadlineExceededError extends Error {
+  constructor(message = "Task did not finish before the request budget") {
+    super(message);
+    this.name = "DeadlineExceededError";
+  }
+}
 
 export function clampBatchSize(size: number | undefined, fallback = 3): number {
   const n = Math.floor(Number(size));
@@ -41,6 +55,40 @@ export async function settleBatched<T>(
   batchSize: number,
 ): Promise<Array<PromiseSettledResult<T>>> {
   return mapBatched(tasks, batchSize, (task) => task());
+}
+
+/**
+ * Runs every task in parallel and stops waiting when `deadline` is spent.
+ *
+ * Unlike `Promise.allSettled` this never blocks on a stalled provider: the
+ * returned array always has one entry per task (unfinished ones become a
+ * `DeadlineExceededError` rejection) and `timedOut` tells the caller whether
+ * the result set is partial. Late settle-ups after the deadline are ignored.
+ */
+export async function settleWithDeadline<T>(
+  tasks: ReadonlyArray<() => Promise<T>>,
+  deadline: Deadline,
+): Promise<{ results: Array<PromiseSettledResult<T>>; timedOut: boolean }> {
+  const slots: Array<PromiseSettledResult<T> | undefined> = new Array(tasks.length).fill(undefined);
+  const running = Promise.all(
+    tasks.map(async (task, index) => {
+      try {
+        slots[index] = { status: "fulfilled", value: await task() };
+      } catch (reason) {
+        slots[index] = { status: "rejected", reason };
+      }
+    }),
+  );
+
+  const timedOut = (await deadline.race(running)) === null;
+
+  return {
+    timedOut,
+    results: slots.map(
+      (slot): PromiseSettledResult<T> =>
+        slot ?? { status: "rejected", reason: new DeadlineExceededError() },
+    ),
+  };
 }
 
 /** Resolves with the fulfilled values only (failed items are dropped). */
