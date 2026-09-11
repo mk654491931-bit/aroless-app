@@ -51,6 +51,8 @@ export type HotFeed = {
   next_refresh_at: string;
   items: HotProduct[];
   error?: string;
+  /** The scan hit the gateway budget; `items` holds everything found so far. */
+  partial?: boolean;
 };
 
 /** Builds the feed envelope from products streamed by the discovery endpoint. */
@@ -107,6 +109,7 @@ export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
         next_refresh_at: json.next_refresh_at ?? now,
         items: json.items ?? [],
         ...(json.error ? { error: json.error } : {}),
+        ...(json.partial ? { partial: true } : {}),
       };
     }
   } catch (error) {
@@ -114,7 +117,9 @@ export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
   }
 
   // The JSON route can exceed the gateway window — read the same scan as a
-  // stream so products arrive (and get persisted) incrementally.
+  // stream so products arrive (and get persisted) incrementally. The stream
+  // always ends with a partial-but-successful payload before the 100s wall, so
+  // a slow scan fills the feed instead of leaving an empty state.
   try {
     const items = await fetchHotProductsStreamed(niche);
     if (items.length > 0) return buildHotFeedFromItems(items);

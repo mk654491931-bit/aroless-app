@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Flame, Loader2, TrendingUp } from "lucide-react";
 import { fetchHotProducts, HOT_FEED_QUERY_KEY, type HotProduct } from "@/lib/hot-products";
+import { StreamErrorBoundary, StreamNotice } from "@/components/stream-error-boundary";
 
 const KEY = "omni_hot_ticker_open";
 
@@ -29,7 +30,7 @@ function TickerCard({ p }: { p: HotProduct }) {
 }
 
 /** Collapsible, viewport-contained live watermark of the most sellable products right now. */
-export function HotTicker() {
+export function HotTicker(): ReactElement {
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export function HotTicker() {
     });
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: HOT_FEED_QUERY_KEY,
     queryFn: fetchHotProducts,
     staleTime: 60 * 60 * 1000,
@@ -61,6 +62,9 @@ export function HotTicker() {
   });
 
   const items = data?.items ?? [];
+  // A budget-cut scan still returns everything it found — surface that instead
+  // of pretending the feed is complete.
+  const partial = data?.partial === true;
 
   if (!open) {
     return (
@@ -80,43 +84,58 @@ export function HotTicker() {
       className="pointer-events-none fixed bottom-3 left-3 right-3 top-auto z-20 w-auto md:bottom-auto md:left-auto md:right-3 md:top-24 md:w-56"
       style={{ maxHeight: "calc(100dvh - 8rem)" }}
     >
-      <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/70 backdrop-blur-md">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/60 px-3 py-2">
-          <span className="flex min-w-0 items-center gap-2">
-            <Flame className="h-4 w-4 shrink-0 text-orange-400" />
-            <span className="truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
-              Şu an satılmaya en müsait
+      <StreamErrorBoundary
+        label="Canlı fırsat akışı"
+        onRetry={() => void refetch()}
+        className="pointer-events-auto"
+      >
+        <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/70 backdrop-blur-md">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/60 px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2">
+              <Flame className="h-4 w-4 shrink-0 text-orange-400" />
+              <span className="truncate text-[11px] font-bold uppercase tracking-wide text-foreground">
+                Şu an satılmaya en müsait
+              </span>
             </span>
-          </span>
-          <button
-            onClick={toggle}
-            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            aria-label="Paneli kapat"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="relative min-h-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)]">
-          {isLoading && (
-            <div className="flex h-24 items-center justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </div>
+            <button
+              onClick={toggle}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label="Paneli kapat"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="relative min-h-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)]">
+            {isLoading && (
+              <div className="flex h-24 items-center justify-center text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            )}
+            {!isLoading && items.length === 0 && (
+              <p className="p-3 text-[11px] text-muted-foreground">Canlı veri şu an alınamadı.</p>
+            )}
+            {items.length > 0 && (
+              <div className="ticker-scroll space-y-2 p-2">
+                {[...items, ...items].map((p, i) => (
+                  <TickerCard key={`${p.id}-${i}`} p={p} />
+                ))}
+              </div>
+            )}
+          </div>
+          {partial && (
+            <StreamNotice
+              tone="warning"
+              className="m-2"
+              message="Tarama süre sınırına takıldı"
+              detail={`${items.length} ürün kısmi sonuç olarak gösteriliyor.`}
+              onRetry={() => void refetch()}
+            />
           )}
-          {!isLoading && items.length === 0 && (
-            <p className="p-3 text-[11px] text-muted-foreground">Canlı veri şu an alınamadı.</p>
-          )}
-          {items.length > 0 && (
-            <div className="ticker-scroll space-y-2 p-2">
-              {[...items, ...items].map((p, i) => (
-                <TickerCard key={`${p.id}-${i}`} p={p} />
-              ))}
-            </div>
-          )}
+          <div className="border-t border-border/60 px-3 py-1.5 text-[10px] text-muted-foreground">
+            Her saat başı yenilenir
+          </div>
         </div>
-        <div className="border-t border-border/60 px-3 py-1.5 text-[10px] text-muted-foreground">
-          Her saat başı yenilenir
-        </div>
-      </div>
+      </StreamErrorBoundary>
     </aside>
   );
 }

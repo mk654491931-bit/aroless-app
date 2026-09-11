@@ -56,6 +56,13 @@ export type ProductStreamResult = {
   failed: number;
   elapsedMs: number;
   nextRefreshAt?: string;
+  /**
+   * `true` when the run was cut by the gateway budget (Cloudflare 100s wall)
+   * and the payload carries everything collected up to that moment. A partial
+   * result is still a successful response — never an error state.
+   */
+  partial?: boolean;
+  partialReason?: "gateway_budget";
 };
 
 const EVENT_TYPES = new Set([

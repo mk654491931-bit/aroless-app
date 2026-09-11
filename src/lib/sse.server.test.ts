@@ -118,4 +118,50 @@ describe("createSseResponse", () => {
     expect(text).toContain("event: error");
     expect(text).toContain("Bağlantı beklenmedik şekilde kesildi.");
   });
+
+  it("closes the stream on the budget and flushes partial results", async () => {
+    let sawAbort = false;
+
+    const response = createSseResponse(
+      async (_emit, signal) => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        sawAbort = signal.aborted;
+      },
+      {
+        heartbeatMs: 1_000,
+        budgetMs: 60,
+        onBudgetExhausted: (emit) => {
+          emit(encodeSseEvent("complete", { type: "complete", data: { partial: true } }));
+        },
+      },
+    );
+
+    const text = await readAll(response);
+    expect(text).toContain(": budget-exhausted");
+    expect(text).toContain(`data: {"type":"complete","data":{"partial":true}}`);
+
+    // The producer wakes up after its own (longer) sleep and must see the abort.
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(sawAbort).toBe(true);
+  });
+
+  it("phones the partial hook exactly once", async () => {
+    let hookCalls = 0;
+
+    const response = createSseResponse(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      },
+      {
+        heartbeatMs: 1_000,
+        budgetMs: 60,
+        onBudgetExhausted: () => {
+          hookCalls += 1;
+        },
+      },
+    );
+
+    await readAll(response);
+    expect(hookCalls).toBe(1);
+  });
 });
