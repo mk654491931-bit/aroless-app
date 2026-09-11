@@ -1,9 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Brain,
@@ -22,7 +20,8 @@ import {
 } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
-import { runCouncilAnalysis } from "@/lib/council.functions";
+import { streamCouncilAnalysis, type AgentProgress } from "@/lib/agent-stream.client";
+import { nextStageIndex, stageIndexForAgent, stageIndexForStage } from "@/lib/council-stage";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { CouncilReport } from "@/lib/council.server";
 
@@ -100,37 +99,73 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
+/** Merges an incoming agent update into the live status list. */
+function upsertAgent(list: AgentProgress[], update: AgentProgress): AgentProgress[] {
+  const index = list.findIndex((a) => a.agent === update.agent);
+  if (index < 0) return [...list, update];
+  return list.map((a, i) => (i === index ? { ...a, ...update } : a));
+}
+
 function CouncilPage() {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("GLOBAL");
   const [stage, setStage] = useState(-1);
   const [report, setReport] = useState<CouncilReport | null>(null);
-  const runFn = useServerFn(runCouncilAnalysis);
+  const [running, setRunning] = useState(false);
+  const [agents, setAgents] = useState<AgentProgress[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      setReport(null);
-      setStage(0);
-      const timer = window.setInterval(
-        () => setStage((s) => Math.min(STAGES.length - 1, s + 1)),
-        4500,
-      );
-      try {
-        return (await runFn({ data: { query, country, lang: getUiLang() } })) as CouncilReport;
-      } finally {
-        window.clearInterval(timer);
-      }
+  // Closing the tab mid-run aborts the stream (and the server-side council run).
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
     },
-    onSuccess: (data) => {
-      setStage(-1);
+    [],
+  );
+
+  const run = async (): Promise<void> => {
+    if (running || query.trim().length < 2) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setReport(null);
+    setAgents([]);
+    setStage(0);
+    setRunning(true);
+
+    try {
+      const data = await streamCouncilAnalysis(
+        { query, country, lang: getUiLang() },
+        {
+          onStage: (event) => {
+            const index = stageIndexForStage(event.stage);
+            if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
+          },
+          onAgent: (agent) => {
+            setAgents((prev) => upsertAgent(prev, agent));
+            const index = stageIndexForAgent(agent.agent);
+            if (index >= 0) setStage((prev) => nextStageIndex(prev, index));
+          },
+        },
+        controller.signal,
+      );
+
       setReport(data);
       if (data.cache_hit) toast.success("24 saatlik önbellekten getirildi — kredi harcanmadı.");
-    },
-    onError: (e: Error) => {
-      setStage(-1);
-      toast.error(e.message);
-    },
-  });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        toast.error(error instanceof Error ? error.message : "Konsey çalıştırılamadı.");
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      if (!controller.signal.aborted) {
+        setRunning(false);
+        setStage(-1);
+      }
+    }
+  };
 
   return (
     <HubShell
@@ -151,7 +186,7 @@ function CouncilPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && query.trim() && mutation.mutate()}
+              onKeyDown={(e) => e.key === "Enter" && query.trim().length > 1 && void run()}
               placeholder="Ürün veya niş (örn. taşınabilir buz makinesi)"
               className="w-full bg-transparent py-3 text-sm outline-none"
             />
@@ -168,15 +203,52 @@ function CouncilPage() {
             ))}
           </select>
           <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || query.trim().length < 2}
+            onClick={() => void run()}
+            disabled={running || query.trim().length < 2}
             className="rounded-xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] disabled:opacity-50"
           >
-            {mutation.isPending ? "Konsey çalışıyor…" : "Konseyi çalıştır"}
+            {running ? "Konsey çalışıyor…" : "Konseyi çalıştır"}
           </button>
         </div>
 
-        {mutation.isPending && <StageList active={Math.max(0, stage)} />}
+        {running && (
+          <div className="glass rounded-2xl p-5 space-y-2">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Canlı ajan durumu · {agents.filter((a) => a.status === "complete").length} tamamlandı
+            </div>
+            {agents.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Ajanlar başlatılıyor…</div>
+            ) : (
+              <ul className="space-y-1.5">
+                {agents.map((a) => (
+                  <li key={a.agent} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {a.status === "complete" ? (
+                        <Check size={13} className="shrink-0 text-emerald-400" />
+                      ) : a.status === "error" ? (
+                        <ShieldAlert size={13} className="shrink-0 text-red-400" />
+                      ) : (
+                        <Loader2 size={13} className="shrink-0 animate-spin" />
+                      )}
+                      <span className="truncate">{a.agent}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {a.status === "complete"
+                        ? a.ms !== undefined
+                          ? `${(a.ms / 1000).toFixed(1)}s`
+                          : "tamamlandı"
+                        : a.status === "error"
+                          ? "hata (yedekle devam)"
+                          : "çalışıyor"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {running && <StageList active={Math.max(0, stage)} />}
 
         {report && (
           <div className="space-y-5">

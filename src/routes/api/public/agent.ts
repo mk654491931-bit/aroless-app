@@ -1,10 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
-import { encodeHeartbeat, encodeSse, sseHeaders } from "@/lib/sse.server";
+import { deductFinderCredit } from "@/lib/credits.server";
+import { createSseResponse, encodeSse } from "@/lib/sse.server";
 import type { AgentBusEvent } from "@/lib/agent-bus.server";
 
-/** Velora 14 ajanlı yönlendirici uç noktası (oturum zorunlu, SSE). */
+/**
+ * Velora 14 ajanlı yönlendirici uç noktası (oturum zorunlu, SSE).
+ *
+ * `mode: "council"` verildiğinde aynı taşıma katmanı 14'lü AI Konsey koşusunu
+ * (`council.server.ts`) canlı ajan olaylarıyla akıtır ve son paket olarak
+ * `CouncilReport` gönderir. Varsayılan mod Velora hattıdır (geriye dönük uyumlu).
+ *
+ * Ortak garantiler: ilk byte anında flush edilir, 5 saniyede bir `:ping`
+ * heartbeat gider, istemci ayrılırsa üretim iptal edilir.
+ */
 export const maxDuration = 1800;
+
+function bearerToken(request: Request): string {
+  const header = request.headers.get("authorization") ?? "";
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
 
 export const Route = createFileRoute("/api/public/agent")({
   server: {
@@ -16,25 +31,13 @@ export const Route = createFileRoute("/api/public/agent")({
         const body = await readJsonBody<Record<string, unknown>>(request);
         if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
 
-        const encoder = new TextEncoder();
-        let heartbeat: ReturnType<typeof setInterval> | undefined;
-        let cancelled = false;
-        let run: Promise<void> | undefined;
+        const mode = body["mode"] === "council" ? "council" : "pipeline";
 
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            const enqueue = (chunk: string): void => {
-              if (cancelled) return;
-              try {
-                controller.enqueue(encoder.encode(chunk));
-              } catch {
-                cancelled = true;
-              }
-            };
-
+        return createSseResponse(
+          async (emit) => {
             const sendEvent = (event: AgentBusEvent): void => {
               const payload = event.payload as Record<string, unknown>;
-              enqueue(
+              emit(
                 encodeSse({
                   status: "status",
                   event: event.type,
@@ -43,44 +46,54 @@ export const Route = createFileRoute("/api/public/agent")({
                 }),
               );
             };
+            const sendComplete = (data: unknown): void =>
+              emit(encodeSse({ status: "complete", data }));
+            const sendError = (message: string): void =>
+              emit(encodeSse({ status: "error", error: message }));
 
-            enqueue(": initial-connect\n\n");
-            enqueue(": connected\n\n");
-            heartbeat = setInterval(() => enqueue(encodeHeartbeat()), 5_000);
-
-            run = (async () => {
-              try {
-                const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
-                const result = await runVeloraAgentPipeline(body, { onEvent: sendEvent });
-                enqueue(encodeSse({ status: "complete", data: result }));
-              } catch (error) {
-                console.error("[api/public/agent] stream failed", error);
-                enqueue(
-                  encodeSse({
-                    status: "error",
-                    error: "Analiz tamamlanamadı. Lütfen tekrar deneyin.",
-                  }),
-                );
-              } finally {
-                if (heartbeat) clearInterval(heartbeat);
-                if (!cancelled) {
-                  try {
-                    controller.close();
-                  } catch {
-                    // Client disconnected before the final close.
-                  }
+            try {
+              if (mode === "council") {
+                const query = String(body["userQuery"] ?? body["query"] ?? "")
+                  .trim()
+                  .slice(0, 140);
+                if (query.length < 2) {
+                  sendError("Lütfen bir ürün veya niş girin.");
+                  return;
                 }
-              }
-            })();
-          },
-          cancel() {
-            cancelled = true;
-            if (heartbeat) clearInterval(heartbeat);
-            void run?.catch(() => undefined);
-          },
-        });
+                const country = String(body["country"] ?? "GLOBAL")
+                  .toUpperCase()
+                  .slice(0, 8);
+                const category = String(body["category"] ?? "General").slice(0, 60);
+                const lang = String(body["language"] ?? body["lang"] ?? "tr").slice(0, 5);
 
-        return new Response(stream, { headers: sseHeaders() });
+                const { peekCouncil, runCouncil } = await import("@/lib/council.server");
+
+                // Cache hit: no credits are spent, exactly like the server function.
+                const cachedReport = await peekCouncil(query, country, category, lang);
+                if (cachedReport) {
+                  sendComplete(cachedReport);
+                  return;
+                }
+
+                const credit = await deductFinderCredit(bearerToken(request));
+                if (!credit.ok) {
+                  sendError(credit.message);
+                  return;
+                }
+
+                sendComplete(await runCouncil(query, country, category, lang, sendEvent));
+                return;
+              }
+
+              const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
+              sendComplete(await runVeloraAgentPipeline(body, { onEvent: sendEvent }));
+            } catch (error) {
+              console.error("[api/public/agent] stream failed", error);
+              sendError("Analiz tamamlanamadı. Lütfen tekrar deneyin.");
+            }
+          },
+          { signal: request.signal, heartbeatMs: 5_000 },
+        );
       },
     },
   },

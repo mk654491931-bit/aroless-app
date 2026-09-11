@@ -22,7 +22,7 @@ import { callOpenRouter } from "./tools-ai.server";
 import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
-import { createAgentBus } from "./agent-bus.server";
+import { createAgentBus, type AgentBusObserver } from "./agent-bus.server";
 
 export const COUNCIL_TEAMS = [
   "market",
@@ -464,9 +464,55 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, nede
   };
 }
 
-async function build(query: string, country: string, category: string): Promise<CouncilReport> {
+/** Display names for the six producer teams, in council order. */
+const PRODUCER_AGENTS = [
+  "Trend Ekibi",
+  "Finans Ekibi",
+  "Pazarlama Ekibi",
+  "Operasyon Ekibi",
+  "Uyum Ekibi",
+  "Yaratıcı Ekip",
+] as const;
+
+/** Display names for the six reviewer teams (slots 6-11). */
+const REVIEWER_AGENTS = [
+  "Trend Hakemi",
+  "Finans Hakemi",
+  "Pazarlama Hakemi",
+  "Operasyon Hakemi",
+  "Uyum Hakemi",
+  "Yaratıcı Hakem",
+] as const;
+
+async function build(
+  query: string,
+  country: string,
+  category: string,
+  observer?: AgentBusObserver,
+): Promise<CouncilReport> {
   const traceId = `council_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  const bus = createAgentBus(traceId);
+  const bus = createAgentBus(traceId, observer);
+
+  /**
+   * Wraps one agent call with start/complete/error events. Purely additive: the
+   * resolved value and the rejection behaviour are unchanged.
+   */
+  const track = <T>(agent: string, tier: number, promise: Promise<T>): Promise<T> => {
+    bus.emit("agent:start", { traceId, agent, tier });
+    const startedAt = Date.now();
+    return promise.then(
+      (value) => {
+        bus.emit("agent:complete", { traceId, agent, ok: true, ms: Date.now() - startedAt });
+        return value;
+      },
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        bus.emit("agent:error", { traceId, agent, error: message });
+        bus.emit("agent:complete", { traceId, agent, ok: false, ms: Date.now() - startedAt });
+        throw error;
+      },
+    );
+  };
   bus.emit("pipeline:start", { traceId, query: query.slice(0, 80) });
   const tSignals = Date.now();
   const { data: signals } = await collectSignals(query, country, category);
@@ -482,12 +528,12 @@ async function build(query: string, country: string, category: string): Promise<
   bus.emit("tier:start", { traceId, tier: 1 });
   const tTier1 = Date.now();
   const [market, finance, marketing, operations, compliance, creative] = await Promise.all([
-    runMarketTeam(block),
-    runFinanceTeam(block),
-    runMarketingTeam(block),
-    runOperationsTeam(block),
-    runComplianceTeam(block),
-    runCreativeTeam(block),
+    track(PRODUCER_AGENTS[0], 1, runMarketTeam(block)),
+    track(PRODUCER_AGENTS[1], 1, runFinanceTeam(block)),
+    track(PRODUCER_AGENTS[2], 1, runMarketingTeam(block)),
+    track(PRODUCER_AGENTS[3], 1, runOperationsTeam(block)),
+    track(PRODUCER_AGENTS[4], 1, runComplianceTeam(block)),
+    track(PRODUCER_AGENTS[5], 1, runCreativeTeam(block)),
   ]);
 
   bus.emit("tier:complete", { traceId, tier: 1, ms: Date.now() - tTier1 });
@@ -497,12 +543,12 @@ async function build(query: string, country: string, category: string): Promise<
   const tTier2 = Date.now();
   // 6 hakem ekip, slot 6-11.
   const reviewed = await Promise.all([
-    reviewTeam(market, block, 6),
-    reviewTeam(finance, block, 7),
-    reviewTeam(marketing, block, 8),
-    reviewTeam(operations, block, 9),
-    reviewTeam(compliance, block, 10),
-    reviewTeam(creative, block, 11),
+    track(REVIEWER_AGENTS[0], 2, reviewTeam(market, block, 6)),
+    track(REVIEWER_AGENTS[1], 2, reviewTeam(finance, block, 7)),
+    track(REVIEWER_AGENTS[2], 2, reviewTeam(marketing, block, 8)),
+    track(REVIEWER_AGENTS[3], 2, reviewTeam(operations, block, 9)),
+    track(REVIEWER_AGENTS[4], 2, reviewTeam(compliance, block, 10)),
+    track(REVIEWER_AGENTS[5], 2, reviewTeam(creative, block, 11)),
   ]);
 
   const teams: TeamReport[] = rawTeams.map((t, i) => {
@@ -539,19 +585,20 @@ async function build(query: string, country: string, category: string): Promise<
 
   bus.emit("tier:start", { traceId, tier: 3 });
   const tTier3 = Date.now();
-  const director = await runDirector(query, country, teams, block, directorVelora, coverage);
+  const director = await track(
+    "Müdür Sentezi",
+    3,
+    runDirector(query, country, teams, block, directorVelora, coverage),
+  );
   bus.emit("tier:complete", { traceId, tier: 3, ms: Date.now() - tTier3 });
   bus.emit("tier:start", { traceId, tier: 4 });
   const tTier4 = Date.now();
 
   // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
-  const auditor = await runAuditor(
-    query,
-    country,
-    teams,
-    director.verdict,
-    directorVelora,
-    coverage,
+  const auditor = await track(
+    "Bağımsız Denetçi",
+    4,
+    runAuditor(query, country, teams, director.verdict, directorVelora, coverage),
   );
   bus.emit("tier:complete", { traceId, tier: 4, ms: Date.now() - tTier4 });
   const finalVelora = Math.round((directorVelora + auditor.score) / 2);
@@ -602,10 +649,11 @@ export async function runCouncil(
   country = "GLOBAL",
   category = "General",
   lang = "tr",
+  observer?: AgentBusObserver,
 ): Promise<CouncilReport> {
   activeCouncilLang = lang.slice(0, 2);
   const { data, cache_hit } = await cached("council", [query, country, category, lang], () =>
-    build(query, country, category),
+    build(query, country, category, observer),
   );
   return { ...data, cache_hit };
 }
