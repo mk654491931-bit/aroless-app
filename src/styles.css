@@ -1368,6 +1368,19 @@ html .cta-sweep::after {
   transition: opacity 700ms ease;
 }
 
+/*
+ * Long-running overlays (the finder pipeline) sit on a blurred scrim and hold
+ * the page for 30-100s. Every animated ambient layer underneath keeps the
+ * compositor busy and forces the scrim's backdrop-filter to re-blur the whole
+ * viewport each frame, so the ambience is frozen for the duration of the run.
+ * Nothing is visible of it through the scrim, and the pauses resume where they
+ * left off.
+ */
+html[data-ambient-paused] .amb-layer,
+html[data-ambient-paused] .amb-particles span {
+  animation-play-state: paused;
+}
+
 .amb-aurora {
   inset: -25%;
   background:

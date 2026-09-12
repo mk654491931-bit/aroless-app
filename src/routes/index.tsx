@@ -1,6 +1,6 @@
 import { ArolessCover } from "@/components/velora-cover";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -227,6 +227,60 @@ function toProductList(res: unknown): WinningProduct[] {
   return visit(res, 0);
 }
 
+/**
+ * Memoised finder card.
+ *
+ * ProductCard takes per-product arrow callbacks, so memoising it directly does
+ * nothing. This thin wrapper converts the grid's stable, product-argument
+ * callbacks into the arrows ProductCard expects, which makes `memo` effective:
+ * cards whose product, saved/selected flags and handlers are unchanged are
+ * skipped, so the (heavy) 200-node card tree is not rebuilt on unrelated
+ * dashboard renders.
+ */
+const FinderCard = memo(function FinderCard({
+  p,
+  saved,
+  selected,
+  onToggleSelect,
+  onSave,
+  onSeo,
+  onCreative,
+  onReport,
+  onOpen,
+  onUpgrade,
+}: {
+  p: WinningProduct;
+  saved: boolean;
+  selected: boolean;
+  onToggleSelect: (name: string) => void;
+  onSave: (p: WinningProduct) => void;
+  onSeo: (name: string) => void;
+  onCreative: (name: string) => void;
+  onReport: (p: WinningProduct) => void;
+  onOpen: (p: WinningProduct) => void;
+  onUpgrade: () => void;
+}) {
+  const toggle = useCallback(() => onToggleSelect(p.name), [onToggleSelect, p]);
+  const save = useCallback(() => onSave(p), [onSave, p]);
+  const report = useCallback(() => onReport(p), [onReport, p]);
+  const open = useCallback(() => onOpen(p), [onOpen, p]);
+  return (
+    <ProductCard
+      p={p}
+      saved={saved}
+      selected={selected}
+      onToggleSelect={toggle}
+      onSave={save}
+      onSeo={onSeo}
+      onCreative={onCreative}
+      onReport={report}
+      onOpen={open}
+      locked={false}
+      onUpgrade={onUpgrade}
+    />
+  );
+});
+
 function Dashboard() {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
@@ -299,15 +353,23 @@ function Dashboard() {
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
   const [compareNames, setCompareNames] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
-  const toggleCompare = (name: string) =>
-    setCompareNames((prev) =>
-      prev.includes(name)
-        ? prev.filter((n) => n !== name)
-        : prev.length >= 4
-          ? prev
-          : [...prev, name],
-    );
-  const compareProducts = results.filter((p) => compareNames.includes(p.name));
+  const toggleCompare = useCallback(
+    (name: string) =>
+      setCompareNames((prev) =>
+        prev.includes(name)
+          ? prev.filter((n) => n !== name)
+          : prev.length >= 4
+            ? prev
+            : [...prev, name],
+      ),
+    [],
+  );
+  // Memoised: this used to re-filter the whole result set on every render of
+  // the (very large) dashboard component, including job-poll ticks.
+  const compareProducts = useMemo(
+    () => results.filter((p) => compareNames.includes(p.name)),
+    [results, compareNames],
+  );
 
   const [showPricing, setShowPricing] = useState(false);
   const [reportProduct, setReportProduct] = useState<WinningProduct | null>(null);
@@ -507,6 +569,113 @@ function Dashboard() {
   );
 
   const searching = gen.isPending || hfGen.isPending || jobRunning;
+
+  /**
+   * Finder result pipeline.
+   *
+   * This used to be computed inside the results JSX, in a callback that only ran
+   * while results existed. That broke the Rules of Hooks (so the memo cache was
+   * discarded between renders) and re-ran the filter/sort/full unit-economics
+   * chain on every keystroke and hover — which is what made the screen feel
+   * sticky. hoisted here, it is computed once per real input change.
+   */
+  // The query drives a filter+sort over cards that are expensive to render, so
+  // the list follows the keystroke at a lower priority while the input itself
+  // stays instant (no visual difference: the results land one frame later).
+  const deferredQuery = useDeferredValue(resultQuery);
+  const q = useMemo(() => deferredQuery.trim().toLowerCase(), [deferredQuery]);
+  const favoriteNameSet = useMemo(
+    () => new Set((favsQ.data ?? []).map((f) => f.name)),
+    [favsQ.data],
+  );
+  const bandPass = useCallback(
+    (p: WinningProduct) => {
+      if (band === "winner") return (p.winner_score ?? 0) >= 70;
+      if (band === "high") return enrichProduct(p).ai_score >= 80;
+      if (band === "lowcomp") return p.competition_level === "Low";
+      if (band === "margin")
+        return (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40;
+      if (band === "saved") return favoriteNameSet.has(p.name);
+      if (band === "verified")
+        return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
+      if (band === "rising") return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
+      if (band === "shippable")
+        return (
+          (p.score_breakdown?.components.find((c) => c.key === "logistics")?.score ?? 0) >= 70
+        );
+      return true;
+    },
+    [band, favoriteNameSet],
+  );
+  const filtered = useMemo(
+    () =>
+      applyFilters(results, filters)
+        .filter(bandPass)
+        .filter(
+          (p) =>
+            !q ||
+            [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
+              .filter(Boolean)
+              .some((v) => String(v).toLowerCase().includes(q)),
+        ),
+    [results, filters, bandPass, q],
+  );
+  const shown = useMemo(
+    () => sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
+    [filtered, sortBy, onlyLaunch, sortDesc],
+  );
+  const bands = useMemo(
+    () =>
+      [
+        { id: "all", label: `Tümü (${results.length})` },
+        {
+          id: "winner",
+          label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})`,
+        },
+        { id: "high", label: "80+ AI skoru" },
+        { id: "lowcomp", label: "Düşük rekabet" },
+        { id: "margin", label: "Marj %40+" },
+        { id: "saved", label: "Kaydedilenler" },
+        {
+          id: "verified",
+          label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})`,
+        },
+        { id: "rising", label: "Canlı yükselişte" },
+        { id: "shippable", label: "Kargoya uygun" },
+      ] as const,
+    [results],
+  );
+
+  /**
+   * Stable card callbacks.
+   *
+   * The finder grid used to hand every ProductCard a fresh set of inline arrow
+   * callbacks, so any dashboard state change (a keystroke, a job-poll tick, a
+   * hover, toggling compare) re-rendered all cards at once. These references are
+   * stable, which lets the memoised FinderCard skip untouched cards entirely.
+   */
+  const saveMutateRef = useRef(saveMut.mutate);
+  useEffect(() => {
+    saveMutateRef.current = saveMut.mutate;
+  });
+  const cardHandlers = useMemo(
+    () => ({
+      onToggleSelect: toggleCompare,
+      onSave: (product: WinningProduct) => saveMutateRef.current(product),
+      onSeo: (name: string) => {
+        setTab("seo");
+        requestRun("seo", name);
+      },
+      onCreative: (name: string) => {
+        setTab("creative");
+        requestRun("creative", name);
+      },
+      onReport: (product: WinningProduct) => setReportProduct(product),
+      onOpen: (product: WinningProduct) => setDeepDiveProduct(product),
+      onUpgrade: () => setShowPricing(true),
+    }),
+    [toggleCompare],
+  );
 
   const runSearch = (nicheValue: string) => {
     if (!nicheValue.trim()) return toast.error(t("ui.enter_niche"));
@@ -708,7 +877,9 @@ function Dashboard() {
   const locked = !isAdmin && !isPaidTier;
 
   const favorites = favsQ.data ?? [];
-  const favoriteNames = new Set(favorites.map((f) => f.name));
+  // Reuses the memoised set built with the result pipeline above instead of
+  // rebuilding it on every render.
+  const favoriteNames = favoriteNameSet;
 
   const tabDefs: { id: Tab; label: string; icon: typeof TrendingUp }[] = [
     { id: "finder", label: t("ui.tab_finder"), icon: TrendingUp },
@@ -1424,73 +1595,8 @@ function Dashboard() {
                         </div>
                       </div>
                     )}
-                    {!searching &&
-                      results.length > 0 &&
-                      (() => {
-                        const q = resultQuery.trim().toLowerCase();
-                        const bandPass = (p: WinningProduct) => {
-                          if (band === "winner") return (p.winner_score ?? 0) >= 70;
-                          if (band === "high") return enrichProduct(p).ai_score >= 80;
-                          if (band === "lowcomp") return p.competition_level === "Low";
-                          if (band === "margin")
-                            return (
-                              (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40
-                            );
-                          if (band === "saved") return favoriteNames.has(p.name);
-                          if (band === "verified")
-                            return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
-                          if (band === "rising")
-                            return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
-                          if (band === "shippable")
-                            return (
-                              (p.score_breakdown?.components.find((c) => c.key === "logistics")
-                                ?.score ?? 0) >= 70
-                            );
-                          return true;
-                        };
-
-                        const filtered = useMemo(
-                          () =>
-                            applyFilters(results, filters)
-                              .filter(bandPass)
-                              .filter(
-                                (p) =>
-                                  !q ||
-                                  [
-                                    p.name,
-                                    p.description,
-                                    p.target_audience,
-                                    ...(p.platform_fit ?? []),
-                                  ]
-                                    .filter(Boolean)
-                                    .some((v) => String(v).toLowerCase().includes(q)),
-                              ),
-                          [results, filters, band, q, onlyLaunch],
-                        );
-                        const shown = useMemo(
-                          () => sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
-                          [filtered, sortBy, onlyLaunch, sortDesc],
-                        );
-                        const bands = [
-                          { id: "all", label: `Tümü (${results.length})` },
-                          {
-                            id: "winner",
-                            label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})`,
-                          },
-                          { id: "high", label: "80+ AI skoru" },
-                          { id: "lowcomp", label: "Düşük rekabet" },
-                          { id: "margin", label: "Marj %40+" },
-                          { id: "saved", label: "Kaydedilenler" },
-                          {
-                            id: "verified",
-                            label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})`,
-                          },
-                          { id: "rising", label: "Canlı yükselişte" },
-                          { id: "shippable", label: "Kargoya uygun" },
-                        ] as const;
-
-                        return (
-                          <>
+                    {!searching && results.length > 0 && (
+                      <>
                             <FinderInsights products={filtered} />
 
                             <AdvancedFilters
@@ -1561,26 +1667,12 @@ function Dashboard() {
                             )}
                             <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                               {shown.map((p, i) => (
-                                <ProductCard
+                                <FinderCard
                                   key={i}
                                   p={p}
                                   selected={compareNames.includes(p.name)}
-                                  onToggleSelect={() => toggleCompare(p.name)}
                                   saved={favoriteNames.has(p.name)}
-                                  onSave={() => saveMut.mutate(p)}
-                                  onSeo={(name) => {
-                                    setTab("seo");
-                                    requestRun("seo", name);
-                                  }}
-                                  onCreative={(name) => {
-                                    setTab("creative");
-                                    requestRun("creative", name);
-                                  }}
-                                  onReport={() => setReportProduct(p)}
-                                  onOpen={() => setDeepDiveProduct(p)}
-
-                                  locked={false}
-                                  onUpgrade={() => setShowPricing(true)}
+                                  {...cardHandlers}
                                 />
                               ))}
                             </div>
@@ -1603,9 +1695,8 @@ function Dashboard() {
                                 }
                               />
                             )}
-                          </>
-                        );
-                      })()}
+                      </>
+                    )}
                   </section>
                 </>
               )}

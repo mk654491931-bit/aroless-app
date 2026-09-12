@@ -98,10 +98,16 @@ export function AnalysisPipelineModal({
       setStepIdx(0);
       setElapsed(0);
       document.body.style.overflow = "";
+      delete document.documentElement.dataset.ambientPaused;
       return;
     }
     startedAt.current = Date.now();
     document.body.style.overflow = "hidden";
+    // The overlay blurs (backdrop-filter) everything behind it, so an ambient
+    // background that keeps animating underneath forces a full-screen re-blur
+    // on every frame for as long as the run lasts. Freezing it is invisible
+    // behind the 70% black + blur scrim and removes that whole cost.
+    document.documentElement.dataset.ambientPaused = "1";
     const target = Math.max(2000, etaMs);
     const id = window.setInterval(() => {
       const ms = Date.now() - startedAt.current;
@@ -116,6 +122,7 @@ export function AnalysisPipelineModal({
     return () => {
       window.clearInterval(id);
       document.body.style.overflow = "";
+      delete document.documentElement.dataset.ambientPaused;
     };
   }, [open, done, etaMs, steps.length]);
 

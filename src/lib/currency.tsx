@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { countryByCode } from "@/lib/countries";
@@ -57,6 +57,32 @@ export function CurrencyProvider({ country, children }: { country: string; child
 const ZERO_DECIMAL = new Set(["JPY", "KRW"]);
 
 /**
+ * `Intl.NumberFormat` construction is expensive (locale + currency data lookup)
+ * and the finder calls the money helper dozens of times per card, per render.
+ * The formatters are pure for a given locale/currency/digit triple, so they are
+ * built once and reused — the formatted output is byte-identical.
+ */
+const formatterCache = new Map<string, Intl.NumberFormat>();
+
+function currencyFormatter(locale: string, cur: string, digits: number): Intl.NumberFormat | null {
+  const key = `${locale}|${cur}|${digits}`;
+  const cached = formatterCache.get(key);
+  if (cached) return cached;
+  try {
+    const created = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: cur,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    formatterCache.set(key, created);
+    return created;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Country-aware money helper. Everything the AI returns is USD-based; this
  * converts it to the selected target country's currency using live FX and
  * keeps the USD reference visible for sourcing decisions.
@@ -71,30 +97,33 @@ export function useMoney() {
   const rate = rates[currency] ?? 1;
   const locale = i18n.language || "en";
 
-  const fmt = (amount: number, cur = currency, opts?: { compact?: boolean }) => {
-    const digits = ZERO_DECIMAL.has(cur) ? 0 : opts?.compact ? 0 : Math.abs(amount) >= 1000 ? 0 : 2;
-    try {
-      return new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: cur,
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      }).format(amount);
-    } catch {
-      return `${cur} ${amount.toFixed(digits)}`;
-    }
-  };
+  // `useCallback` keeps these two helpers referentially stable, so memoised
+  // cards are not invalidated just because the hook re-ran.
+  const fmt = useCallback(
+    (amount: number, cur = currency, opts?: { compact?: boolean }) => {
+      const digits = ZERO_DECIMAL.has(cur)
+        ? 0
+        : opts?.compact
+          ? 0
+          : Math.abs(amount) >= 1000
+            ? 0
+            : 2;
+      const formatter = currencyFormatter(locale, cur, digits);
+      return formatter ? formatter.format(amount) : `${cur} ${amount.toFixed(digits)}`;
+    },
+    [currency, locale],
+  );
 
   /** USD amount → local currency (with the USD original in parentheses). */
-  const money = (
-    usd: number | string | undefined,
-    opts?: { compact?: boolean; showUsd?: boolean },
-  ) => {
-    const value = parseUsd(usd);
-    if (currency === "USD" || rate === 1) return fmt(value, "USD", opts);
-    const local = fmt(value * rate, currency, opts);
-    return opts?.showUsd === false ? local : `${local} · ${fmt(value, "USD", opts)}`;
-  };
+  const money = useCallback(
+    (usd: number | string | undefined, opts?: { compact?: boolean; showUsd?: boolean }) => {
+      const value = parseUsd(usd);
+      if (currency === "USD" || rate === 1) return fmt(value, "USD", opts);
+      const local = fmt(value * rate, currency, opts);
+      return opts?.showUsd === false ? local : `${local} · ${fmt(value, "USD", opts)}`;
+    },
+    [currency, rate, fmt],
+  );
 
   return {
     currency,

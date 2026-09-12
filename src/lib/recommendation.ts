@@ -18,8 +18,30 @@ export type EnrichedScores = {
   est_monthly_net_profit_usd: number;
 };
 
+/**
+ * Per-product memoisation.
+ *
+ * `enrichProduct` runs the whole unit-economics model, and the finder calls it
+ * from sort comparators, filter bands, list headers and every card — so the
+ * same product object used to be modelled dozens of times per render and, on
+ * the finder screen, again on every keystroke and hover.
+ *
+ * It is a pure function of an immutable product (every producer builds a new
+ * object via spread), so an identity cache removes that repeated work without
+ * changing a single value.
+ */
+const enrichCache = new WeakMap<WinningProduct, EnrichedScores>();
+
 // Deterministic enrichment derived from Gemini output
 export function enrichProduct(p: WinningProduct): EnrichedScores {
+  const cached = enrichCache.get(p);
+  if (cached) return cached;
+  const value = computeEnrichedScores(p);
+  enrichCache.set(p, value);
+  return value;
+}
+
+function computeEnrichedScores(p: WinningProduct): EnrichedScores {
   const trend = clamp(p.trend_score ?? 70, 0, 100);
   const compPenalty =
     p.competition_level === "High" ? 25 : p.competition_level === "Medium" ? 10 : 0;
@@ -87,13 +109,25 @@ export function reliabilityStyle(v: SellabilityVerdict | undefined) {
   return { cls: "border-amber-500/40 bg-amber-500/15 text-amber-300", icon: "⚠️" };
 }
 
+/**
+ * `Intl.NumberFormat` construction is expensive and this runs inside list
+ * renders. The formatter is pure for a given currency, so it is built once and
+ * reused — the formatted output is identical.
+ */
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
 export function formatCurrency(n: number, currency = "USD") {
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(n);
+    let formatter = currencyFormatters.get(currency);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 0,
+      });
+      currencyFormatters.set(currency, formatter);
+    }
+    return formatter.format(n);
   } catch {
     return `$${n.toLocaleString()}`;
   }
