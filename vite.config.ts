@@ -10,7 +10,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 const isSandbox =
   process.env["LOVABLE_SANDBOX"] === "1" || !!process.env["DEV_SERVER__PROJECT_PATH"];
 
-export default defineConfig(async ({ command, mode }) => {
+export default defineConfig(async ({ command, mode }): Promise<import("vite").UserConfig> => {
   const plugins: PluginOption[] = [
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
@@ -64,10 +64,7 @@ export default defineConfig(async ({ command, mode }) => {
   // copied into the browser bundle; AI, Paddle and service-role secrets never are.
   const publicEnvSources = {
     VITE_SUPABASE_URL: ["VITE_SUPABASE_URL", "SUPABASE_URL"],
-    VITE_SUPABASE_PUBLISHABLE_KEY: [
-      "VITE_SUPABASE_PUBLISHABLE_KEY",
-      "SUPABASE_PUBLISHABLE_KEY",
-    ],
+    VITE_SUPABASE_PUBLISHABLE_KEY: ["VITE_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLISHABLE_KEY"],
     VITE_TURNSTILE_SITE_KEY: ["VITE_TURNSTILE_SITE_KEY", "TURNSTILE_SITE_KEY"],
     VITE_API_BASE_URL: ["VITE_API_BASE_URL", "API_BASE_URL"],
     VITE_APP_URL: ["VITE_APP_URL", "APP_URL"],
@@ -80,9 +77,12 @@ export default defineConfig(async ({ command, mode }) => {
   const loadedEnv = loadEnv(mode, process.cwd(), "VITE_");
   const buildEnv: Record<string, string> = {};
   for (const [publicName, sources] of Object.entries(publicEnvSources)) {
-    const value = sources.map((name) => process.env[name] ?? loadedEnv[name]).find(
-      (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
-    );
+    const value = sources
+      .map((name) => process.env[name] ?? loadedEnv[name])
+      .find(
+        (candidate): candidate is string =>
+          typeof candidate === "string" && candidate.trim().length > 0,
+      );
     if (value) buildEnv[publicName] = value;
   }
 
@@ -94,8 +94,7 @@ export default defineConfig(async ({ command, mode }) => {
       apiBaseUrl: buildEnv.VITE_API_BASE_URL ?? "",
       appUrl: buildEnv.VITE_APP_URL ?? "",
       paddleClientToken: buildEnv.VITE_PADDLE_CLIENT_TOKEN ?? "",
-      paddleEnvironment:
-        buildEnv.VITE_PADDLE_ENV === "production" ? "production" : "sandbox",
+      paddleEnvironment: buildEnv.VITE_PADDLE_ENV === "production" ? "production" : "sandbox",
       paddlePriceStarterMonthly: buildEnv.VITE_PADDLE_PRICE_STARTER_MONTHLY ?? "",
       paddlePriceProMonthly: buildEnv.VITE_PADDLE_PRICE_PRO_MONTHLY ?? "",
       paddlePriceBusinessMonthly: buildEnv.VITE_PADDLE_PRICE_BUSINESS_MONTHLY ?? "",
@@ -143,39 +142,10 @@ export default defineConfig(async ({ command, mode }) => {
     },
     build: {
       target: "ES2020",
-      minify: false,
-      sourcemap: mode !== "production",
+      minify: "esbuild",
+      sourcemap: false,
       rollupOptions: {
         output: {
-          // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
-          manualChunks: (id: string) => {
-            // Vendor chunks
-            if (id.includes("node_modules/react") && !id.includes("react-dom")) {
-              return "react-vendor";
-            }
-            if (id.includes("node_modules/react-dom")) {
-              return "react-vendor";
-            }
-            if (id.includes("node_modules/@radix-ui")) {
-              return "ui-vendor";
-            }
-            if (id.includes("node_modules/@tanstack")) {
-              return "tanstack-vendor";
-            }
-            if (id.includes("node_modules/@supabase")) {
-              return "supabase-vendor";
-            }
-            if (id.includes("node_modules/react-hook-form") || 
-                id.includes("node_modules/@hookform")) {
-              return "form-vendor";
-            }
-            if (id.includes("node_modules") && 
-                (id.includes("clsx") || id.includes("tailwind-merge"))) {
-              return "utils-vendor";
-            }
-            return undefined;
-          },
-          // Gzip compression için optimize edilmiş chunk boyutları
           entryFileNames: "js/[name].[hash:8].js",
           chunkFileNames: "js/[name].[hash:8].js",
           assetFileNames: (assetInfo: { name?: string }) => {
@@ -190,12 +160,14 @@ export default defineConfig(async ({ command, mode }) => {
           },
         },
       },
-      // Daha büyük chunk boyutu sınırı (çünkü daha iyi tree-shaking)
       chunkSizeWarningLimit: 600,
-      // Gzip compression
       reportCompressedSize: true,
       cssCodeSplit: true,
-      cssMinify: false, // Disable CSS minification to avoid lightningcss issues
+      // CSS minification used to be off because the CSS minifier cannot read the
+      // `ES2020` build target. Give it explicit browser targets instead, so the
+      // stylesheet is also minified in production.
+      cssMinify: true,
+      cssTarget: ["chrome111", "edge111", "firefox111", "safari16"],
     },
     plugins,
   };

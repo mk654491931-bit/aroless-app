@@ -23,7 +23,12 @@ import { AgentConsole } from "@/components/landing/agent-console";
 import { CapabilitySimulator } from "@/components/landing/capability-simulator";
 import { AgentTopology } from "@/components/landing/agent-topology";
 import { CountUp } from "@/components/landing/count-up";
-import { FaqSection, Testimonials, type FaqItem, type ReviewItem } from "@/components/landing/sections";
+import {
+  FaqSection,
+  Testimonials,
+  type FaqItem,
+  type ReviewItem,
+} from "@/components/landing/sections";
 
 const ECOSYSTEMS = [
   "Amazon",
@@ -66,10 +71,18 @@ const BENTO = [
 ];
 
 const METRICS = [
-  { value: <CountUp end={99.9} decimals={1} suffix="%" />, label: "Attribution accuracy", sim: true },
+  {
+    value: <CountUp end={99.9} decimals={1} suffix="%" />,
+    label: "Attribution accuracy",
+    sim: true,
+  },
   { value: <CountUp end={50} prefix="<" suffix="ms" />, label: "Median agent latency", sim: true },
   { value: <CountUp end={10} suffix="k+" />, label: "Simulated events processed", sim: true },
-  { value: <CountUp end={312} prefix="+" suffix="%" />, label: "Median ROI uplift in sim pilots", sim: true },
+  {
+    value: <CountUp end={312} prefix="+" suffix="%" />,
+    label: "Median ROI uplift in sim pilots",
+    sim: true,
+  },
 ];
 
 /* What we do — animated capability cards (hover-follow spotlight) */
@@ -137,35 +150,40 @@ const REVIEWS: ReviewItem[] = [
     role: "E-commerce operator · Istanbul",
     market: "TR",
     initials: "EK",
-    quote: "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
+    quote:
+      "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
   },
   {
     name: "Jonas Weber",
     role: "FBA seller · Berlin",
     market: "DE",
     initials: "JW",
-    quote: "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
+    quote:
+      "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
   },
   {
     name: "Marta Silva",
     role: "DTC brand lead · Lisbon",
     market: "EU",
     initials: "MS",
-    quote: "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
+    quote:
+      "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
   },
   {
     name: "Ahmet Demir",
     role: "Wholesale exporter · Gaziantep",
     market: "TR",
     initials: "AD",
-    quote: "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
+    quote:
+      "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
   },
   {
     name: "Sarah Mitchell",
     role: "Dropshipping operator · Manchester",
     market: "UK",
     initials: "SM",
-    quote: "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
+    quote:
+      "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
   },
 ];
 
@@ -178,7 +196,10 @@ export function MarketingLanding() {
   return (
     <div className="relative min-h-screen overflow-x-clip bg-[#050608] font-sans text-slate-200 antialiased">
       {/* Page atmosphere */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[52rem] overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[52rem] overflow-hidden"
+      >
         <div className="ent-orb ent-orb-a" />
         <div className="ent-orb ent-orb-b" />
         <div className="ent-grid-bg" />
@@ -186,17 +207,31 @@ export function MarketingLanding() {
       </div>
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050608]/75 backdrop-blur-xl">
+      {/* No `backdrop-blur` here: a blurred backdrop on a sticky element has to be
+          recomputed on every scroll frame, which was the worst source of scroll
+          jank on this page (it sits on top of the animated ambient layers). The
+          slightly stronger background keeps the exact same look. */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050608]/90">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" className="shrink-0">
             <BrandLogo />
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
-            <a href="#platform" className="transition hover:text-slate-100">Platform</a>
-            <a href="#architecture" className="transition hover:text-slate-100">Architecture</a>
-            <a href="#metrics" className="transition hover:text-slate-100">Metrics</a>
-            <a href="#faq" className="transition hover:text-slate-100">FAQ</a>
-            <Link to="/pricing" className="transition hover:text-slate-100">Pricing</Link>
+            <a href="#platform" className="transition hover:text-slate-100">
+              Platform
+            </a>
+            <a href="#architecture" className="transition hover:text-slate-100">
+              Architecture
+            </a>
+            <a href="#metrics" className="transition hover:text-slate-100">
+              Metrics
+            </a>
+            <a href="#faq" className="transition hover:text-slate-100">
+              FAQ
+            </a>
+            <Link to="/pricing" className="transition hover:text-slate-100">
+              Pricing
+            </Link>
           </nav>
           <div className="flex items-center gap-2">
             <Link
@@ -238,13 +273,15 @@ export function MarketingLanding() {
               </p>
 
               <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-300">
-                {["Deterministic, replayable runs", "SOC2-aligned data handling", "Simulation-first onboarding"].map(
-                  (item) => (
-                    <li key={item} className="inline-flex items-center gap-1.5">
-                      <BadgeCheck size={15} className="text-emerald-400" /> {item}
-                    </li>
-                  ),
-                )}
+                {[
+                  "Deterministic, replayable runs",
+                  "SOC2-aligned data handling",
+                  "Simulation-first onboarding",
+                ].map((item) => (
+                  <li key={item} className="inline-flex items-center gap-1.5">
+                    <BadgeCheck size={15} className="text-emerald-400" /> {item}
+                  </li>
+                ))}
               </ul>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -255,7 +292,10 @@ export function MarketingLanding() {
                 >
                   <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
                     Deploy Aroless Swarm
-                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight
+                      size={16}
+                      className="transition-transform group-hover:translate-x-0.5"
+                    />
                   </span>
                 </Link>
                 <a
@@ -268,7 +308,8 @@ export function MarketingLanding() {
 
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1.5">
-                  <Zap size={13} className="text-indigo-300" /> <CountUp end={99.99} decimals={2} suffix="%" /> uptime
+                  <Zap size={13} className="text-indigo-300" />{" "}
+                  <CountUp end={99.99} decimals={2} suffix="%" /> uptime
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Lock size={13} className="text-emerald-400" /> No credit card to start
@@ -446,7 +487,8 @@ export function MarketingLanding() {
               <div>
                 <p className="font-semibold text-white">Enterprise-readiness checklist</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Signed payloads · immutable event log · role-scoped agents · region-pinned data · deterministic replays
+                  Signed payloads · immutable event log · role-scoped agents · region-pinned data ·
+                  deterministic replays
                 </p>
               </div>
             </div>
@@ -476,12 +518,15 @@ export function MarketingLanding() {
                   <div className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                     {m.value}
                   </div>
-                  <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">{m.label}</div>
+                  <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">
+                    {m.label}
+                  </div>
                 </div>
               ))}
             </div>
             <div className="border-t border-white/10 px-6 py-3 text-center text-[10px] text-slate-600">
-              * Simulation benchmarks — production figures depend on your traffic profile and data sources.
+              * Simulation benchmarks — production figures depend on your traffic profile and data
+              sources.
             </div>
           </div>
         </section>
@@ -498,8 +543,14 @@ export function MarketingLanding() {
         {/* ── Final CTA ──────────────────────────────────────────── */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/80 px-6 py-14 text-center backdrop-blur-xl sm:px-12">
-            <div aria-hidden="true" className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+            />
             <div className="relative">
               <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                 Deploy your swarm in minutes, not quarters.
@@ -509,10 +560,17 @@ export function MarketingLanding() {
                 the pipeline provisions itself.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                <Link to="/auth" search={{ mode: "signup" }} className="sweep-frame group rounded-xl">
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup" }}
+                  className="sweep-frame group rounded-xl"
+                >
                   <span className="relative z-[1] flex h-12 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-7 text-sm font-semibold text-white transition group-hover:brightness-110">
                     Deploy Aroless Swarm
-                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight
+                      size={16}
+                      className="transition-transform group-hover:translate-x-0.5"
+                    />
                   </span>
                 </Link>
                 <a
@@ -552,10 +610,18 @@ export function MarketingLanding() {
             simulation payloads.
           </p>
           <div className="flex items-center gap-4 text-xs text-slate-500">
-            <Link to="/auth" className="hover:text-slate-200">Sign in</Link>
-            <Link to="/pricing" className="hover:text-slate-200">Pricing</Link>
-            <a href="#faq" className="hover:text-slate-200">FAQ</a>
-            <a href="#reviews" className="hover:text-slate-200">Reviews</a>
+            <Link to="/auth" className="hover:text-slate-200">
+              Sign in
+            </Link>
+            <Link to="/pricing" className="hover:text-slate-200">
+              Pricing
+            </Link>
+            <a href="#faq" className="hover:text-slate-200">
+              FAQ
+            </a>
+            <a href="#reviews" className="hover:text-slate-200">
+              Reviews
+            </a>
           </div>
         </div>
       </footer>

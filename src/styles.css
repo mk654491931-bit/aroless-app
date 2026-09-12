@@ -48,7 +48,7 @@
   --card-foreground: oklch(0.95 0.004 250);
   --popover: #0a1020;
   --popover-foreground: oklch(0.95 0.004 250);
-  --primary: oklch(0.62 0.17 255);  /* royal blue — primary actions */
+  --primary: oklch(0.62 0.17 255); /* royal blue — primary actions */
   --primary-foreground: oklch(0.98 0.004 250);
   --secondary: oklch(0.19 0.028 255);
   --secondary-foreground: oklch(0.93 0.004 250);
@@ -61,14 +61,14 @@
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 10%);
   --ring: oklch(0.62 0.17 255);
-  --brand: oklch(0.62 0.17 255);   /* corporate blue */
+  --brand: oklch(0.62 0.17 255); /* corporate blue */
   --brand-2: oklch(0.58 0.16 262); /* deeper navy-blue accent */
   /* Semantic accents — muted, corporate */
   --accent-active: oklch(0.75 0.13 205); /* soft cyan — active UI only */
 
-  --profit: oklch(0.7 0.14 155);  /* restrained green */
-  --warning: oklch(0.75 0.14 78);  /* restrained amber */
-  --ai: oklch(0.64 0.16 255);     /* blue-family, not purple */
+  --profit: oklch(0.7 0.14 155); /* restrained green */
+  --warning: oklch(0.75 0.14 78); /* restrained amber */
+  --ai: oklch(0.64 0.16 255); /* blue-family, not purple */
 }
 
 /* ---------- Light (gündüz) teması ---------- */
@@ -257,13 +257,28 @@ html.light [class*="text-white/"] {
   animation: error-shake 0.4s ease-in-out;
 }
 @keyframes error-shake {
-  0%, 100% { transform: translateX(0); }
-  15% { transform: translateX(-6px); }
-  30% { transform: translateX(5px); }
-  45% { transform: translateX(-4px); }
-  60% { transform: translateX(3px); }
-  75% { transform: translateX(-2px); }
-  90% { transform: translateX(1px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-6px);
+  }
+  30% {
+    transform: translateX(5px);
+  }
+  45% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  90% {
+    transform: translateX(1px);
+  }
 }
 
 /* Animated gradient headline */
@@ -672,15 +687,19 @@ html.light [class*="text-white/"] {
 /* ---------- A-Class Premium dashboard system ---------- */
 
 /* Mouse-tracked breathing ambient halo (fixed, behind content) */
+/* Large-area blur is one of the most expensive paints on the page, and this
+   layer also moves with the pointer. A smaller surface + softer radius keeps
+   the look while cutting the raster cost dramatically. */
 .ambient-drift {
   position: absolute;
   left: 50%;
   top: 46%;
-  width: 78vw;
-  height: 62vh;
+  width: 64vw;
+  height: 52vh;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  filter: blur(90px);
+  will-change: transform, opacity;
+  filter: blur(52px);
   background: radial-gradient(
     ellipse at center,
     color-mix(in oklab, var(--brand) 30%, transparent),
@@ -947,7 +966,7 @@ html.palette-aurora {
   --border: oklch(0.85 0.12 180 / 18%);
   --input: oklch(0.85 0.12 180 / 20%);
   --ring: oklch(0.78 0.17 168);
-  --brand: oklch(0.62 0.16 255);  /* corporate blue */
+  --brand: oklch(0.62 0.16 255); /* corporate blue */
   --brand-2: oklch(0.58 0.15 262); /* navy-blue */
   --accent-active: oklch(0.75 0.13 205);
   --profit: oklch(0.82 0.17 150);
@@ -1071,17 +1090,21 @@ body,
     color-mix(in oklab, var(--brand-2) 35%, transparent),
     transparent
   );
+  left: -35%;
   filter: blur(40px);
   transform: rotate(14deg);
+  will-change: transform, opacity;
   animation: beam-sweep 14s ease-in-out infinite alternate;
 }
+/* Animate the composited transform instead of `left`: animating `left` forced a
+   layout pass on every frame. */
 @keyframes beam-sweep {
   from {
-    left: -35%;
+    transform: translate3d(0, 0, 0) rotate(14deg);
     opacity: 0.25;
   }
   to {
-    left: 85%;
+    transform: translate3d(120vw, 0, 0) rotate(14deg);
     opacity: 0.55;
   }
 }
@@ -1959,11 +1982,14 @@ body {
   }
 }
 
-
 /* ── Premium Product Card Enhancements ── */
 @keyframes winner-shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
 }
 
 .premium-card:has(.border-amber-400\/50)::before {
@@ -1985,9 +2011,18 @@ body {
 }
 
 @keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.05); opacity: 0.3; }
-  100% { transform: scale(1); opacity: 0.6; }
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
 }
 
 .animate-pulse-ring {
@@ -2004,8 +2039,14 @@ input:focus-visible {
 
 /* ── Smooth page transitions ── */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-up {
@@ -2014,15 +2055,20 @@ input:focus-visible {
 
 /* ── Winner card shimmer border ── */
 @keyframes border-flow {
-  0% { border-color: oklch(0.82 0.18 85 / 0.3); }
-  50% { border-color: oklch(0.82 0.18 85 / 0.6); }
-  100% { border-color: oklch(0.82 0.18 85 / 0.3); }
+  0% {
+    border-color: oklch(0.82 0.18 85 / 0.3);
+  }
+  50% {
+    border-color: oklch(0.82 0.18 85 / 0.6);
+  }
+  100% {
+    border-color: oklch(0.82 0.18 85 / 0.3);
+  }
 }
 
 .animate-border-flow {
   animation: border-flow 2s ease-in-out infinite;
 }
-
 
 /* ── Premium: metin seçimi marka tonunda ── */
 ::selection {
@@ -2061,7 +2107,9 @@ html {
 
 /* ── Premium: yumuşak odak halkası (buton / bağlantı) ── */
 .premium-focus {
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
 }
 .premium-focus:hover {
   transform: translateY(-1px);
@@ -2072,23 +2120,42 @@ html {
   box-shadow: 0 0 0 3px oklch(0.62 0.17 255 / 0.4);
 }
 
-
 /* ---- Marketing landing v2: hero atmosphere, scroll reveals, marquee ---- */
 @keyframes hero-orb-a {
-  from { transform: translate3d(-4%, -3%, 0) scale(0.94); }
-  to   { transform: translate3d(5%, 5%, 0) scale(1.08); }
+  from {
+    transform: translate3d(-4%, -3%, 0) scale(0.94);
+  }
+  to {
+    transform: translate3d(5%, 5%, 0) scale(1.08);
+  }
 }
 @keyframes hero-orb-b {
-  from { transform: translate3d(3%, 2%, 0) scale(1.05); }
-  to   { transform: translate3d(-6%, 9%, 0) scale(0.92); }
+  from {
+    transform: translate3d(3%, 2%, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-6%, 9%, 0) scale(0.92);
+  }
 }
 @keyframes hero-orb-c {
-  from { transform: translate3d(0, 4%, 0) scale(1); }
-  to   { transform: translate3d(8%, -6%, 0) scale(1.12); }
+  from {
+    transform: translate3d(0, 4%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(8%, -6%, 0) scale(1.12);
+  }
 }
 @keyframes hero-grid-pan {
-  from { background-position: 0 0, 0 0; }
-  to   { background-position: 56px 56px, 56px 56px; }
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      56px 56px,
+      56px 56px;
+  }
 }
 .hero-orb {
   position: absolute;
@@ -2103,7 +2170,12 @@ html {
   width: 54rem;
   height: 32rem;
   margin-left: -27rem;
-  background: radial-gradient(closest-side, oklch(0.62 0.17 255 / 0.32), oklch(0.62 0.17 255 / 0.10) 55%, transparent 78%);
+  background: radial-gradient(
+    closest-side,
+    oklch(0.62 0.17 255 / 0.32),
+    oklch(0.62 0.17 255 / 0.1) 55%,
+    transparent 78%
+  );
   animation: hero-orb-a 17s ease-in-out infinite alternate;
 }
 .hero-orb-b {
@@ -2149,8 +2221,12 @@ html {
   transform: translate3d(0, 0, 0);
 }
 @keyframes marquee-x {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(-50%, 0, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
 }
 .marquee-mask {
   overflow: hidden;
@@ -2179,56 +2255,89 @@ html {
   }
 }
 
-
 /* ============================================================
    Enterprise landing (agent console / simulator / topology)
    ============================================================ */
 @keyframes console-log-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.console-log-in { animation: console-log-in 0.35s ease-out both; }
+.console-log-in {
+  animation: console-log-in 0.35s ease-out both;
+}
 
 @keyframes progress-stripe-move {
-  from { background-position: 0 0; }
-  to   { background-position: 12px 0; }
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 12px 0;
+  }
 }
 .progress-stripe {
   background-image: linear-gradient(
     135deg,
-    rgba(255,255,255,0.28) 25%, transparent 25%,
-    transparent 50%, rgba(255,255,255,0.28) 50%,
-    rgba(255,255,255,0.28) 75%, transparent 75%, transparent
+    rgba(255, 255, 255, 0.28) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.28) 75%,
+    transparent 75%,
+    transparent
   );
   background-size: 12px 12px;
   animation: progress-stripe-move 0.5s linear infinite;
 }
 
-.scroll-thin { scrollbar-width: thin; scrollbar-color: rgba(99,102,241,0.45) transparent; }
-.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
 .scroll-thin::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(99,102,241,0.45);
+  background: rgba(99, 102, 241, 0.45);
 }
-.scroll-thin::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.7); }
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
 
 @keyframes ent-dash-flow {
-  to { stroke-dashoffset: -22; }
+  to {
+    stroke-dashoffset: -22;
+  }
 }
 .ent-edge {
   stroke-dasharray: 7 4;
   animation: ent-dash-flow 1.1s linear infinite;
 }
 .ent-edge-lit {
-  filter: drop-shadow(0 0 5px rgba(99,102,241,0.85));
+  filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.85));
   animation-duration: 0.45s;
 }
 
 @keyframes border-sweep {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 .border-sweep {
   background-image: linear-gradient(100deg, #6366f1, #10b981, #6366f1);
@@ -2240,24 +2349,38 @@ html {
   box-shadow: 0 0 0 3px oklch(0.62 0.17 255 / 0.4);
 }
 @media (prefers-reduced-motion: reduce) {
-  .console-log-in, .progress-stripe, .ent-edge, .border-sweep {
+  .console-log-in,
+  .progress-stripe,
+  .ent-edge,
+  .border-sweep {
     animation: none !important;
   }
 }
-
 
 /* ============================================================
    Enterprise hero atmosphere + CTA sweep frame
    ============================================================ */
 @keyframes ent-orb-drift-a {
-  0%   { transform: translate3d(-6%, -4%, 0) scale(1); }
-  50%  { transform: translate3d(8%, 6%, 0) scale(1.12); }
-  100% { transform: translate3d(-6%, -4%, 0) scale(1); }
+  0% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8%, 6%, 0) scale(1.12);
+  }
+  100% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
 }
 @keyframes ent-orb-drift-b {
-  0%   { transform: translate3d(5%, 3%, 0) scale(1.05); }
-  50%  { transform: translate3d(-7%, -5%, 0) scale(0.95); }
-  100% { transform: translate3d(5%, 3%, 0) scale(1.05); }
+  0% {
+    transform: translate3d(5%, 3%, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-7%, -5%, 0) scale(0.95);
+  }
+  100% {
+    transform: translate3d(5%, 3%, 0) scale(1.05);
+  }
 }
 .ent-orb {
   position: absolute;
@@ -2267,20 +2390,28 @@ html {
   pointer-events: none;
 }
 .ent-orb-a {
-  top: -10rem; left: -8rem;
-  width: 34rem; height: 34rem;
-  background: radial-gradient(circle at 30% 30%, rgba(99,102,241,0.5), transparent 65%);
+  top: -10rem;
+  left: -8rem;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.5), transparent 65%);
   animation: ent-orb-drift-a 16s ease-in-out infinite;
 }
 .ent-orb-b {
-  top: -6rem; right: -10rem;
-  width: 30rem; height: 30rem;
-  background: radial-gradient(circle at 60% 40%, rgba(16,185,129,0.32), transparent 65%);
+  top: -6rem;
+  right: -10rem;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle at 60% 40%, rgba(16, 185, 129, 0.32), transparent 65%);
   animation: ent-orb-drift-b 20s ease-in-out infinite;
 }
 @keyframes ent-grid-pan {
-  from { background-position: 0 0; }
-  to   { background-position: 0 56px; }
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 56px;
+  }
 }
 .ent-grid-bg {
   position: absolute;
@@ -2288,8 +2419,8 @@ html {
   opacity: 0.5;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(148,163,184,0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,184,0.09) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.09) 1px, transparent 1px);
   background-size: 56px 56px;
   -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 0%, black 35%, transparent 78%);
   mask-image: radial-gradient(ellipse 70% 65% at 50% 0%, black 35%, transparent 78%);
@@ -2297,42 +2428,72 @@ html {
 }
 
 @keyframes sweep-rotate {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .sweep-frame {
   position: relative;
   isolation: isolate;
   padding: 1px;
-  background: linear-gradient(120deg, rgba(99,102,241,0.55), rgba(16,185,129,0.5), rgba(99,102,241,0.55));
+  background: linear-gradient(
+    120deg,
+    rgba(99, 102, 241, 0.55),
+    rgba(16, 185, 129, 0.5),
+    rgba(99, 102, 241, 0.55)
+  );
   background-size: 220% 220%;
-  animation: sweep-rotate 0s linear infinite, border-sweep 3.4s ease infinite;
-  box-shadow: 0 10px 40px -12px rgba(99,102,241,0.4);
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  animation:
+    sweep-rotate 0s linear infinite,
+    border-sweep 3.4s ease infinite;
+  box-shadow: 0 10px 40px -12px rgba(99, 102, 241, 0.4);
+  transition:
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
 }
 .sweep-frame:hover {
-  box-shadow: 0 16px 52px -12px rgba(99,102,241,0.55);
+  box-shadow: 0 16px 52px -12px rgba(99, 102, 241, 0.55);
   transform: translateY(-1px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .ent-orb, .ent-orb-a, .ent-orb-b, .ent-grid-bg, .sweep-frame {
+  .ent-orb,
+  .ent-orb-a,
+  .ent-orb-b,
+  .ent-grid-bg,
+  .sweep-frame {
     animation: none !important;
   }
 }
-
 
 /* ============================================================
    Auth page — matte, premium refinement (overrides at the end)
    ============================================================ */
 .auth-stage {
   background:
-    radial-gradient(1100px 500px at 15% -5%, color-mix(in oklab, var(--brand) 9%, transparent), transparent 60%),
-    radial-gradient(900px 480px at 90% 110%, color-mix(in oklab, var(--brand-2) 8%, transparent), transparent 62%),
+    radial-gradient(
+      1100px 500px at 15% -5%,
+      color-mix(in oklab, var(--brand) 9%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 480px at 90% 110%,
+      color-mix(in oklab, var(--brand-2) 8%, transparent),
+      transparent 62%
+    ),
     oklch(0.02 0.004 260 / 0.72);
 }
 html.light .auth-stage {
   background:
-    radial-gradient(1100px 500px at 15% -5%, color-mix(in oklab, var(--brand) 6%, transparent), transparent 60%),
-    radial-gradient(900px 480px at 90% 110%, color-mix(in oklab, var(--brand-2) 5%, transparent), transparent 62%),
+    radial-gradient(
+      1100px 500px at 15% -5%,
+      color-mix(in oklab, var(--brand) 6%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 480px at 90% 110%,
+      color-mix(in oklab, var(--brand-2) 5%, transparent),
+      transparent 62%
+    ),
     oklch(0.99 0.002 250 / 0.9);
 }
 .auth-stage .auth-aurora {
@@ -2371,7 +2532,6 @@ html.light .ls-chip {
   color: oklch(0.9 0.01 250);
 }
 
-
 /* ---------- App header: keep every action reachable on mobile ---------- */
 .header-actions {
   scrollbar-width: none;
@@ -2385,7 +2545,6 @@ html.light .ls-chip {
   flex: 0 0 auto;
 }
 
-
 /* ---------- Finder tab strip: swipeable on mobile ---------- */
 .tab-switch-track {
   scrollbar-width: none;
@@ -2398,7 +2557,6 @@ html.light .ls-chip {
 .tab-switch-track > button {
   flex: 0 0 auto;
 }
-
 
 /* ---------- Auth card: matte premium surface ---------- */
 .auth-card-wrap {
@@ -2439,9 +2597,6 @@ html.light .matte-card {
   }
 }
 
-
-
-
 /* ============================================================
    Shared landing sections (FAQ + reviews) — dark glass cards.
    Theme-safe: the sections may be embedded in light pages too.
@@ -2468,7 +2623,6 @@ html.light .ls-darkglass [class*="text-slate-200"],
 html.light .ls-darkglass [class*="text-slate-300"] {
   color: oklch(0.24 0.035 260) !important;
 }
-
 
 /* ============================================================================
  * Premium cohesion layer (additive — nothing below removes/overrides markup)
@@ -2519,7 +2673,9 @@ input[type="range"]::-webkit-slider-thumb {
     0 0 0 4px color-mix(in oklab, var(--brand) 20%, transparent),
     0 2px 12px -2px color-mix(in oklab, var(--brand) 85%, transparent);
   cursor: grab;
-  transition: transform 0.16s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.2s ease;
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px;
@@ -2542,10 +2698,20 @@ input[type="range"]::-moz-range-track {
     color-mix(in oklab, var(--border) 45%, transparent)
   );
 }
-input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.1); }
-input[type="range"]:hover::-moz-range-thumb { transform: scale(1.1); }
-input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(0.95); }
-input[type="range"]:active::-moz-range-thumb { cursor: grabbing; transform: scale(0.95); }
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.1);
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+input[type="range"]:active::-moz-range-thumb {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
 input[type="range"]:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent);
 }
@@ -2559,12 +2725,7 @@ input[type="range"]:focus-visible {
   left: -35%;
   width: 46%;
   pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent,
-    oklch(1 0 0 / 0.35) 48%,
-    transparent
-  );
+  background: linear-gradient(100deg, transparent, oklch(1 0 0 / 0.35) 48%, transparent);
   transform: skewX(-18deg);
   animation: cta-sheen 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
@@ -2572,16 +2733,32 @@ input[type="range"]:focus-visible {
   animation-duration: 1.1s;
 }
 @keyframes cta-sheen {
-  0% { left: -45%; opacity: 0; }
-  12% { opacity: 1; }
-  55% { left: 115%; opacity: 0; }
-  100% { left: 115%; opacity: 0; }
+  0% {
+    left: -45%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    left: 115%;
+    opacity: 0;
+  }
+  100% {
+    left: 115%;
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cta-sweep::after { animation: none; display: none; }
+  .cta-sweep::after {
+    animation: none;
+    display: none;
+  }
   input[type="range"]::-webkit-slider-thumb,
-  input[type="range"]::-moz-range-thumb { transition: none; }
+  input[type="range"]::-moz-range-thumb {
+    transition: none;
+  }
 }
 
 /* Slider fill (brand gradient up to value) + floating value tooltip */
@@ -2619,7 +2796,9 @@ input[type="range"].range-fill {
     0 0 0 1px oklch(1 0 0 / 0.2),
     0 6px 18px -6px color-mix(in oklab, var(--brand) 90%, transparent);
   opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 5;
 }
 .range-tooltip::after {
@@ -2638,14 +2817,17 @@ input[type="range"].range-fill {
   transform: translate(-50%, 0);
 }
 @media (prefers-reduced-motion: reduce) {
-  .range-tooltip { transition: none; }
+  .range-tooltip {
+    transition: none;
+  }
 }
-
 
 /* Mobile form fields keep >=16px text so iOS Safari never auto-zooms on
    focus (a common "jumpy page" complaint). Buttons/checkboxes/range excluded. */
 @media (max-width: 640px) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not(
+      [type="button"]
+    ):not([type="submit"]):not([type="reset"]):not([type="file"]),
   select,
   textarea {
     font-size: 16px !important;
