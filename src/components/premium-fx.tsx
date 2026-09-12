@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Fingerprint, ScanFace, Lock, Sparkles } from "lucide-react";
+import { createFrameGate, meshDpr, meshLinkStrength, meshNodeCount } from "@/lib/premium-mesh";
 
 /* ---------------- Quantum node mesh canvas (drifting data nodes) ---------------- */
-export function QuantumMesh({ className = "" }: { className?: string }) {
+export function QuantumMesh({ className = "" }: { className?: string }): ReactElement {
   const ref = useRef<HTMLCanvasElement>(null);
   const mouse = useRef({ x: 0.5, y: 0.5 });
 
@@ -14,10 +15,14 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
+    // Touch devices get a single static frame: a full-screen rAF mesh is pure
+    // CPU/battery cost there and does not add to the experience.
+    const animate = !reduce && !coarse;
     let raf = 0;
     let w = 0;
     let h = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // DPR 2 quadruples the pixels this canvas clears/fills every frame.
+    const dpr = meshDpr(window.devicePixelRatio || 1);
 
     const resize = () => {
       w = canvas.clientWidth;
@@ -29,12 +34,12 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     resize();
     window.addEventListener("resize", resize);
 
-    const count = Math.max(28, Math.min(70, Math.round((w * h) / 30000)));
+    const count = meshNodeCount(w, h);
     const nodes = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.18,
-      vy: (Math.random() - 0.5) * 0.18,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
       r: Math.random() * 1.5 + 0.6,
       p: Math.random() * Math.PI * 2,
     }));
@@ -43,17 +48,24 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
       mouse.current.x = e.clientX / window.innerWidth;
       mouse.current.y = e.clientY / window.innerHeight;
     };
-    if (!coarse) window.addEventListener("mousemove", onMove);
+    if (animate) window.addEventListener("mousemove", onMove);
 
+    // ~30fps: indistinguishable for slow drifting nodes, half the work.
+    const gate = createFrameGate();
     let t = 0;
-    const draw = () => {
-      t += 0.005;
+    const draw = (now: number) => {
+      raf = 0;
+      if (!gate(now)) {
+        if (animate && !document.hidden) raf = requestAnimationFrame(draw);
+        return;
+      }
+      t += 0.01;
       ctx.clearRect(0, 0, w, h);
       const swayX = (mouse.current.x - 0.5) * 24;
       const swayY = (mouse.current.y - 0.5) * 20;
 
       for (const n of nodes) {
-        if (!reduce) {
+        if (animate) {
           n.x += n.vx;
           n.y += n.vy;
         }
@@ -71,15 +83,16 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
           const b = nodes[j];
           const bx = b.x + swayX;
           const by = b.y + swayY;
-          const d = Math.hypot(ax - bx, ay - by);
-          if (d < 128) {
-            ctx.strokeStyle = `rgba(96,175,255,${(1 - d / 128) * 0.22})`;
-            ctx.lineWidth = 0.6;
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(bx, by);
-            ctx.stroke();
-          }
+          // Squared-distance compare + a single sqrt, instead of Math.hypot
+          // (this predicate runs ~1.1k times per frame).
+          const strength = meshLinkStrength(ax - bx, ay - by);
+          if (strength <= 0) continue;
+          ctx.strokeStyle = `rgba(96,175,255,${strength * 0.22})`;
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
         }
         const pulse = 0.55 + 0.45 * Math.sin(t * 2 + a.p);
         ctx.fillStyle = `rgba(140,225,255,${0.22 + pulse * 0.3})`;
@@ -87,15 +100,15 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
         ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.4), 0, Math.PI * 2);
         ctx.fill();
       }
-      if (!reduce && !coarse && !document.hidden) raf = requestAnimationFrame(draw);
+      if (animate && !document.hidden) raf = requestAnimationFrame(draw);
     };
-    draw();
+    raf = requestAnimationFrame(draw);
 
     const onVisibility = () => {
       if (document.hidden) {
         cancelAnimationFrame(raf);
         raf = 0;
-      } else if (!reduce && !coarse && !raf) {
+      } else if (animate && !raf) {
         raf = requestAnimationFrame(draw);
       }
     };
@@ -104,7 +117,7 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
-      if (!coarse) window.removeEventListener("mousemove", onMove);
+      if (animate) window.removeEventListener("mousemove", onMove);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
@@ -119,18 +132,34 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
 }
 
 /* ---------------- Mouse-tracked breathing ambient halo ---------------- */
-export function AmbientBackdrop() {
+export function AmbientBackdrop(): ReactElement {
   const halo = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const el = halo.current;
-      if (!el) return;
-      const x = e.clientX / window.innerWidth;
-      const y = e.clientY / window.innerHeight;
-      el.style.transform = `translate(-50%, -50%) translate3d(${(x - 0.5) * 120}px, ${(y - 0.5) * 90}px, 0) scale(${1 + (0.5 - Math.abs(y - 0.5)) * 0.14})`;
+    const el = halo.current;
+    if (!el) return;
+    // No pointer parallax on touch devices, and none when motion is reduced.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+
+    let raf = 0;
+    let x = 0;
+    let y = 0;
+    const apply = () => {
+      raf = 0;
+      el.style.transform = `translate(-50%, -50%) translate3d(${x * 120}px, ${y * 90}px, 0) scale(${1 + (0.5 - Math.abs(y)) * 0.14})`;
     };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
+    const onMove = (e: MouseEvent) => {
+      x = e.clientX / window.innerWidth - 0.5;
+      y = e.clientY / window.innerHeight - 0.5;
+      // Coalesce to one style write per frame: a high-poll-rate mouse used to
+      // force a transform write (and style recalc) on every single event.
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("mousemove", onMove);
+    };
   }, []);
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -143,7 +172,10 @@ export function AmbientBackdrop() {
 /* ---------------- Haptic energy ripples ---------------- */
 type Ripple = { id: number; x: number; y: number };
 
-export function useRipples() {
+export function useRipples(): {
+  spawn: (e: React.MouseEvent<HTMLElement>) => void;
+  layer: ReactElement;
+} {
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const spawn = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -165,7 +197,7 @@ export function useRipples() {
 }
 
 /** Global click ripple — applies the energy wave to every button press. */
-export function GlobalRippleLayer() {
+export function GlobalRippleLayer(): ReactElement {
   const [ripples, setRipples] = useState<Ripple[]>([]);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -192,7 +224,7 @@ export function GlobalRippleLayer() {
 }
 
 /* ---------------- Enterprise tier badge ---------------- */
-export function EnterpriseTierBadge({ className = "" }: { className?: string }) {
+export function EnterpriseTierBadge({ className = "" }: { className?: string }): ReactElement {
   return (
     <span
       title="Enterprise Tier — AI Elite"
@@ -206,7 +238,7 @@ export function EnterpriseTierBadge({ className = "" }: { className?: string }) 
 }
 
 /* ---------------- Tiny holographic PREMIUM badge with micro-pupil ---------------- */
-export function PremiumMicroBadge({ className = "" }: { className?: string }) {
+export function PremiumMicroBadge({ className = "" }: { className?: string }): ReactElement {
   return (
     <span
       title="Premium access"
@@ -221,7 +253,7 @@ export function PremiumMicroBadge({ className = "" }: { className?: string }) {
 }
 
 /* ---------------- Multi-biometric (fingerprint ⇄ face) button ---------------- */
-export function BiometricButton({ active = false }: { active?: boolean }) {
+export function BiometricButton({ active = false }: { active?: boolean }): ReactElement {
   const [mode, setMode] = useState<0 | 1>(0);
   const ripple = useRipples();
   useEffect(() => {
