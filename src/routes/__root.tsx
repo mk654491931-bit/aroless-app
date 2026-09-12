@@ -34,6 +34,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
+import { LazyRouteErrorBoundary } from "@/components/lazy-route-error-boundary";
 
 function NotFoundComponent() {
   return (
@@ -241,7 +242,9 @@ function RootComponent() {
             <ThemeToggle />
           </DraggableSettingsBar>
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-            <Outlet />
+            <LazyRouteErrorBoundary>
+              <Outlet />
+            </LazyRouteErrorBoundary>
           </div>
         </>
       ) : (
@@ -261,7 +264,9 @@ function RootComponent() {
                 </>
               )}
               <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
-                <Outlet />
+                <LazyRouteErrorBoundary>
+                  <Outlet />
+                </LazyRouteErrorBoundary>
               </div>
               <div className="mx-auto w-full max-w-6xl px-4 md:px-6">
                 <AiDisclaimer />

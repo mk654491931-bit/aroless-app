@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { importWithRetry } from "@/lib/lazy-with-retry";
 
 interface RouteOptimizationConfig {
   preloadDistance?: number; // Kaç ms sonra preload başlasın
@@ -138,7 +139,10 @@ export async function preloadRouteChunk(routePath: string): Promise<any> {
     return (window as any).__routePreloadQueue.get(routePath);
   }
 
-  const promise = import(/* @vite-ignore */ routePath).catch((error) => {
+  const promise = importWithRetry(
+    () => import(/* @vite-ignore */ routePath),
+    { label: `preloaded route ${routePath}` },
+  ).catch((error) => {
     console.warn(`Failed to preload route chunk: ${routePath}`, error);
     return null;
   });

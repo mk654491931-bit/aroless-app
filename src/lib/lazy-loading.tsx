@@ -4,7 +4,8 @@
  */
 
 import * as React from "react";
-import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
+import { Suspense, type ComponentType, type ReactNode } from "react";
+import { importWithRetry, lazyWithRetry } from "@/lib/lazy-with-retry";
 
 /**
  * Güvenli lazy loading - Error boundary ile
@@ -13,15 +14,7 @@ export function createLazyComponent<P extends object>(
   importFn: () => Promise<{ default: ComponentType<P> }>,
   fallback?: ReactNode,
 ): ComponentType<P> {
-  const Component = lazy(() =>
-    importFn().catch((error) => {
-      console.error("Component load failed:", error);
-      // Fallback component döndür
-      return {
-        default: () => fallback || <div>Component loading failed</div>,
-      };
-    }),
-  );
+  const Component = lazyWithRetry(importFn, { label: "component" });
 
   return function LazyComponent(props: P) {
     return (
@@ -39,11 +32,11 @@ export function createIntersectionLazyComponent<P extends object>(
   importFn: () => Promise<{ default: ComponentType<P> }>,
   options?: IntersectionObserverInit,
 ): ComponentType<P> {
-  const Component = lazy(
+  const Component = lazyWithRetry(
     () =>
-      new Promise<{ default: ComponentType<P> }>((resolve) => {
+      new Promise<{ default: ComponentType<P> }>((resolve, reject) => {
         if (typeof window === "undefined") {
-          importFn().then(resolve);
+          importWithRetry(importFn, { label: "intersection component" }).then(resolve, reject);
           return;
         }
 
@@ -51,7 +44,7 @@ export function createIntersectionLazyComponent<P extends object>(
           (entries) => {
             if (entries[0]?.isIntersecting) {
               observer.disconnect();
-              importFn().then(resolve);
+              importWithRetry(importFn, { label: "intersection component" }).then(resolve, reject);
             }
           },
           { rootMargin: "50px", threshold: 0.01, ...options },
@@ -61,6 +54,7 @@ export function createIntersectionLazyComponent<P extends object>(
         const dummy = document.createElement("div");
         observer.observe(dummy);
       }),
+    { label: "intersection component" },
   );
 
   return function LazyComponent(props: P) {
@@ -78,17 +72,19 @@ export const lazyRouteConfig = {
   createFileRoute: (path: string) => ({
     path,
     // Dosyayı lazy loading ile yükle
-    component: lazy(() => import(/* @vite-ignore */ `./routes${path}`)),
+    component: lazyWithRetry(
+      () => import(/* @vite-ignore */ `./routes${path}`),
+      { label: `route ${path}` },
+    ),
   }),
 
   /**
    * Component lazy loading helper
    */
   getComponentLoader: (componentName: string) => {
-    return lazy(() =>
-      import(/* @vite-ignore */ `./components/${componentName}`).catch(() => ({
-        default: () => <div>Component not found: {componentName}</div>,
-      })),
+    return lazyWithRetry(
+      () => import(/* @vite-ignore */ `./components/${componentName}`),
+      { label: `component ${componentName}` },
     );
   },
 };
