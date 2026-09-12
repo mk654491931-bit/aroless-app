@@ -175,6 +175,12 @@ export type CreateJobInput = {
   targetCountry: string;
   idempotencyKey: string;
   engine?: string;
+  /**
+   * Engine-specific request parameters, already validated by the caller. They
+   * are request data only (niche, platforms, budget, …) — never a token and
+   * never a credential, so a leaked row can never act as the user.
+   */
+  payload?: Record<string, unknown>;
 };
 
 export type CreateJobOutcome = {
@@ -208,7 +214,11 @@ export async function createJob(
         target_country: input.targetCountry,
         engine: input.engine ?? "discovery",
         idempotency_key: input.idempotencyKey,
-        payload: { niche: input.niche, targetCountry: input.targetCountry },
+        payload: {
+          niche: input.niche,
+          targetCountry: input.targetCountry,
+          ...(input.payload ?? {}),
+        },
         status: "queued",
         stage: "queued",
         progress: 0,

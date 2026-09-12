@@ -47,7 +47,14 @@ export type Budget = (typeof BUDGETS)[number];
 
 export const TARGET_COUNTRY_CODES = ["GLOBAL", "US", "DE", "UK", "FR", "CA", "AU"] as const;
 
-const InputSchema = z.object({
+/**
+ * Finder input contract.
+ *
+ * Exported so the async background engine ("finder") validates the exact same
+ * payload the synchronous server function accepts — the two paths can never
+ * drift apart.
+ */
+export const FinderInputSchema = z.object({
   niche: z.string().min(2).max(120),
   category: z.string().min(1).max(60).optional().default("Any"),
   audience: z.string().max(120).optional().default(""),
@@ -72,6 +79,8 @@ const InputSchema = z.object({
   competition_pref: z.enum(["any", "low"]).optional().default("any"),
   novelty: z.enum(["any", "fresh", "proven"]).optional().default("any"),
 });
+
+export type FinderInput = z.infer<typeof FinderInputSchema>;
 
 export type CostBreakdown = {
   supplier_cost: string;
@@ -271,30 +280,51 @@ export function productDebateContext(p: WinningProduct): string {
   ].join("\n");
 }
 
-export const generateProducts = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const { data: remaining, error: deductErr } = await context.supabase.rpc(
-      "deduct_product_finder_credit",
-    );
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+export type FinderRunOutput = {
+  products: WinningProduct[];
+  rejected: Array<{
+    name: string;
+    emoji?: string;
+    selling_price_usd?: string;
+    supplier_price_usd?: string;
+    competition_level?: string;
+    rejection_reason?: string;
+    market_verdict?: import("@/lib/market-verdict").MarketVerdict;
+  }>;
+  target_country: string;
+  min_score: number;
+  fallback: { type: "relaxed" | "partial"; message: string } | null;
+  fallback_engine: string;
+  partial: boolean;
+};
 
-    // Aylık kullanım panosunu besle (limit zorlaması sunucu tarafında).
-    const { recordUsage } = await import("@/lib/usage.server");
-    await recordUsage(context.supabase, "product_finder");
+/**
+ * The finder pipeline itself: live market evidence, the Gemini strategy
+ * fan-out, the Winner Gate, hybrid scoring, the 14-agent council and live
+ * market verification.
+ *
+ * It runs in two places with identical behaviour:
+ *   • in-request from `generateProducts` (queue fallback), under the 90s JSON
+ *     budget, returning partial results instead of an HTTP 524;
+ *   • off-request from the QStash worker (engine "finder"), under the much
+ *     larger WORKER_BUDGET_MS — which is what removes the 90-100s timeout.
+ *
+ * Billing deliberately lives OUTSIDE this function: the caller owns the charge
+ * and passes the matching `refund` callback, so a background run refunds
+ * through the job's own RPC instead of guessing a credit balance.
+ */
+export async function runFinderGeneration(
+  data: FinderInput,
+  options: { refund: () => Promise<void>; deadlineMs?: number },
+): Promise<FinderRunOutput> {
+  // Cloudflare her 100 saniyeyi aşan isteği `524 A Timeout Occurred` ile
+  // keser. Tüm hattı bir bütçeye bağla: süre dolarsa hata fırlatmak yerine
+  // "o ana kadar doğrulanmış" ürünleri döndür (partial sonuç).
+  const { createDeadline, JSON_BUDGET_MS } = await import("@/lib/deadline.server");
+  const deadline = createDeadline(options.deadlineMs ?? JSON_BUDGET_MS);
+  let partial = false;
 
-    // Cloudflare her 100 saniyeyi aşan isteği `524 A Timeout Occurred` ile
-    // keser. Tüm hattı bir bütçeye bağla: süre dolarsa hata fırlatmak yerine
-    // "o ana kadar doğrulanmış" ürünleri 200 ile döndür (partial sonuç).
-    const { createDeadline, JSON_BUDGET_MS } = await import("@/lib/deadline.server");
-    const deadline = createDeadline(JSON_BUDGET_MS);
-    let partial = false;
-
-    const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
     // Fetch GitHub public repo trends as an additional confidence signal.
     let githubBlock = "";
@@ -523,16 +553,7 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
   "viral_proof": [ { "platform": string (e.g. "TikTok", "Instagram Reels", "YouTube Shorts"), "url": string (REAL URL to the viral video / hashtag page / creator post you actually found), "views": string (real view or like count, e.g. "12.4M views"), "hashtag": string (optional related trending hashtag), "note": string (1 short line: what makes this clip go viral) } ] (1-3 entries — REQUIRED, at least 1 real URL. If you cannot find real viral proof, DO NOT return this product at all.)
 } ] }`;
 
-    const refund = async () => {
-      try {
-        await context.supabase
-          .from("profiles")
-          .update({ credits: (remaining as number) + 1 })
-          .eq("id", context.userId);
-      } catch {
-        /* kredi iadesi başarısız olsa da akış bozulmaz */
-      }
-    };
+    const refund = options.refund;
 
     // Run parallel Gemini calls with DIFFERENT angles to (a) multiply the
     // output token headroom (each call returns 2 products with full schema)
@@ -990,13 +1011,51 @@ JSON shape:
     return {
       products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),
       rejected: rejectedCandidates,
-      creditsRemaining: remaining as number,
       target_country: country,
       min_score: minScore,
       fallback,
       fallback_engine: fallbackEngine,
       partial,
     };
+}
+
+/**
+ * Synchronous entry point: charges exactly one credit, runs the pipeline inside
+ * the request and refunds the credit when nothing could be produced.
+ *
+ * The refund reuses the exact balance the deduct RPC returned, so it can never
+ * invent credits. The background path charges through the job row instead — see
+ * `/api/product-discovery/start` with engine "finder".
+ */
+export const generateProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => FinderInputSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: remaining, error: deductErr } = await context.supabase.rpc(
+      "deduct_product_finder_credit",
+    );
+    if (deductErr) {
+      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
+      throw new Error(deductErr.message);
+    }
+
+    // Aylık kullanım panosunu besle (limit zorlaması sunucu tarafında).
+    const { recordUsage } = await import("@/lib/usage.server");
+    await recordUsage(context.supabase, "product_finder");
+
+    const refund = async () => {
+      try {
+        await context.supabase
+          .from("profiles")
+          .update({ credits: (remaining as number) + 1 })
+          .eq("id", context.userId);
+      } catch {
+        /* kredi iadesi başarısız olsa da akış bozulmaz */
+      }
+    };
+
+    const result = await runFinderGeneration(data, { refund });
+    return { ...result, creditsRemaining: remaining as number };
   });
 
 // ---------- Product Validator: "Will it sell?" ----------

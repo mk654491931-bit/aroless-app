@@ -84,6 +84,8 @@ export async function startDiscoveryJob(
       body: JSON.stringify({
         niche: input.niche,
         ...(input.targetCountry ? { targetCountry: input.targetCountry } : {}),
+        ...(input.engine ? { engine: input.engine } : {}),
+        ...(input.payload ? { payload: input.payload } : {}),
       }),
     });
   } catch (error) {

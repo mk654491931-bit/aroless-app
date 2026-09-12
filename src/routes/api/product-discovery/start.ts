@@ -21,6 +21,8 @@ import {
   isSignatureVerificationConfigured,
   publishDiscoveryJob,
 } from "@/lib/qstash.server";
+import { FinderInputSchema } from "@/lib/gemini.functions";
+import type { DiscoveryEngine } from "@/lib/discovery-jobs.shared";
 
 /**
  * POST /api/product-discovery/start
@@ -42,6 +44,13 @@ export const maxDuration = 30;
 const StartBody = z.object({
   niche: z.string().trim().min(2).max(80),
   targetCountry: z.string().trim().min(2).max(8).optional(),
+  /**
+   * Which pipeline to run. Both engines share this endpoint, the job row and
+   * the polling contract; only the background worker differs.
+   */
+  engine: z.enum(["discovery", "finder"]).optional().default("discovery"),
+  /** Engine-specific parameters (finder: the full search form). Validated below. */
+  payload: z.record(z.string(), z.unknown()).optional(),
 });
 
 function bearerToken(request: Request): string {
@@ -79,6 +88,24 @@ export const Route = createFileRoute("/api/product-discovery/start")({
         }
         const niche = parsed.data.niche;
         const targetCountry = (parsed.data.targetCountry ?? "GLOBAL").toUpperCase();
+        const engine: DiscoveryEngine = parsed.data.engine;
+
+        // The finder engine re-runs the exact pipeline the synchronous server
+        // function uses, so its payload must satisfy the exact same contract.
+        // Validating here (before a row exists and before a credit is spent)
+        // means a malformed request can never charge the user for a job that
+        // was always going to fail.
+        let jobPayload: Record<string, unknown> = { niche, targetCountry };
+        if (engine === "finder") {
+          const validated = FinderInputSchema.safeParse({
+            ...(parsed.data.payload ?? {}),
+            niche,
+          });
+          if (!validated.success) {
+            return jsonError(400, "Arama parametreleri geçersiz.");
+          }
+          jobPayload = validated.data as unknown as Record<string, unknown>;
+        }
 
         // The queue is required: without it there is no way to run the pipeline
         // outside the client's HTTP connection, and pretending otherwise would
@@ -102,12 +129,15 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           niche,
           targetCountry,
           bucket: idempotencyBucket(),
+          engine,
         });
 
         const outcome = await createJob({
           userId: guard.userId,
           niche,
           targetCountry,
+          engine,
+          payload: jobPayload,
           idempotencyKey,
         });
         if (!outcome.job) {
@@ -140,6 +170,8 @@ export const Route = createFileRoute("/api/product-discovery/start")({
             userId: guard.userId,
             niche,
             targetCountry,
+            engine,
+            payload: jobPayload,
             idempotencyKey: `${idempotencyKey}:r${Date.now()}`,
           });
           if (!retried.job) {

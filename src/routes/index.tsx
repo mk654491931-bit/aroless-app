@@ -171,6 +171,24 @@ export const Route = createFileRoute("/")({
 type Tab = "finder" | "trends" | "seo" | "creative" | "library" | "training" | "academy";
 
 /**
+ * The finder request contract. The synchronous server function, the background
+ * job payload and the Deep Search panel all speak exactly this shape, so the
+ * publish/poll path and the in-request path can never drift apart.
+ */
+type FinderSearchVars = {
+  niche: string;
+  category: string;
+  audience: string;
+  platforms: Platform[];
+  budget: Budget;
+  target_country: string;
+  min_score: number;
+  marketplace: MarketplaceId;
+  lang: string;
+  use_github_trends: boolean;
+} & DeepSearchOptions;
+
+/**
  * Motor/agent yanıtlarından ürün listesini güvenle çıkarır.
  * Server-function adaptörleri sürüme göre sonucu doğrudan veya `result`,
  * `data` ya da `value` zarfı içinde döndürebilir; hepsini tek noktada açarız.
@@ -362,22 +380,12 @@ function Dashboard() {
 
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True while a background (QStash) job runs instead of an in-request call. */
+  const [jobRunning, setJobRunning] = useState(false);
+  const [jobStage, setJobStage] = useState<string | null>(null);
 
   const gen = useMutation({
-    mutationFn: (
-      vars: {
-        niche: string;
-        category: string;
-        audience: string;
-        platforms: Platform[];
-        budget: Budget;
-        target_country: string;
-        min_score: number;
-        marketplace: MarketplaceId;
-        lang: string;
-        use_github_trends: boolean;
-      } & DeepSearchOptions,
-    ) => generateFn({ data: vars }),
+    mutationFn: (vars: FinderSearchVars) => generateFn({ data: vars }),
     onSuccess: (res, vars) => {
       try {
         // Yanıt şekli her zaman doğrulanır (dizi / products / results / data).
@@ -498,7 +506,7 @@ function Dashboard() {
     [setPlatforms],
   );
 
-  const searching = gen.isPending || hfGen.isPending;
+  const searching = gen.isPending || hfGen.isPending || jobRunning;
 
   const runSearch = (nicheValue: string) => {
     if (!nicheValue.trim()) return toast.error(t("ui.enter_niche"));
@@ -546,7 +554,7 @@ function Dashboard() {
       hfGen.mutate({ engine, platforms: effectivePlatforms });
       return;
     }
-    gen.mutate({
+    const vars: FinderSearchVars = {
       niche: nicheValue,
       category,
       audience,
@@ -558,7 +566,99 @@ function Dashboard() {
       lang: i18n.language?.slice(0, 2) ?? "en",
       use_github_trends: useGithubTrends,
       ...deepSearch,
-    });
+    };
+    // Publish → poll first. The heavy Gemini strategy generation and scraping
+    // used to run inside this request, which is exactly what died with the
+    // 90-100s server timeout; now a background worker runs it and the browser
+    // only polls a job row. Nothing long-lived stays on this connection.
+    void runAsyncSearch(vars);
+  };
+
+  /**
+   * Background finder path.
+   *
+   * Starts an engine "finder" job, polls it and renders the result through the
+   * exact same code path as the synchronous function. When the queue is not
+   * configured (or the session cannot authorize a background job) it hands the
+   * request back to `gen`, i.e. the previous behaviour — so the feature can
+   * never become unavailable just because QStash is not set up.
+   */
+  const runAsyncSearch = async (vars: FinderSearchVars) => {
+    const { startDiscoveryJob, pollDiscoveryJob } = await import("@/lib/discovery-job");
+    setJobRunning(true);
+    setJobStage(null);
+    try {
+      const started = await startDiscoveryJob({
+        niche: vars.niche,
+        targetCountry: vars.target_country,
+        engine: "finder",
+        payload: vars,
+      });
+
+      if (!started.ok) {
+        // No background job could be started (queue not configured, storage not
+        // migrated yet, session rejected, …). Fall back to the in-request
+        // function so the finder behaves exactly as it did before — a missing
+        // queue can never make the feature worse than it already was.
+        console.warn("[finder] background job unavailable, using in-request search", started.reason);
+        gen.mutate(vars);
+        return;
+      }
+
+      // The poll enforces its own deadline; the 3-minute in-request safety
+      // timer must not fire a spurious timeout while the job is still running.
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+
+      const polled = await pollDiscoveryJob(started.jobId, {
+        onProgress: (p) => setJobStage(`${p.stageLabel} · %${p.progress}`),
+      });
+      if (!polled.ok) {
+        toast.error(
+          polled.reason === "error" ? polled.message : "Arama tamamlanamadı. Lütfen tekrar dene.",
+        );
+        return;
+      }
+
+      const finder = polled.job.result?.finder ?? null;
+      const products = finder?.products ?? [];
+      if (polled.job.status !== "completed" || products.length === 0) {
+        // A failed job refunds its credit server-side, so refresh the balance
+        // instead of leaving a stale (too low) number on screen.
+        qc.invalidateQueries({ queryKey: ["profile"] });
+        toast.error(polled.job.error ?? "Aradığınız kriterlere uygun ürün bulunamadı.");
+        return;
+      }
+
+      setResults(attachWinnerScores(products));
+      setRejected((finder?.rejected ?? []) as RejectedCandidate[]);
+      setFallbackNotice(finder?.fallback?.message ?? null);
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.success(`${products.length} winning products generated!`);
+
+      // Same fire-and-forget persistence the synchronous path performs.
+      saveAnalysisFn({
+        data: {
+          search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
+          results: products,
+        },
+      }).catch(() => {});
+      insertProductsFn({
+        data: { products, target_country: vars.target_country },
+      }).catch(() => {});
+    } catch (err) {
+      console.error("Arka plan araması işlenirken hata:", err);
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("NO_CREDITS")) {
+        toast.error("Out of credits — upgrade to keep going.");
+        setShowPricing(true);
+      } else {
+        toast.error("Arama tamamlanamadı. Lütfen tekrar dene.");
+      }
+    } finally {
+      setJobRunning(false);
+      setJobStage(null);
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    }
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -953,7 +1053,7 @@ function Dashboard() {
                           {engine === "hybrid" ? t("ui.hybrid_pill") : t("ui.hf_free")}
                         </span>
                       )}
-                      <EtaBadge running={searching} etaMs={etaMs} />
+                      <EtaBadge running={searching} etaMs={jobRunning ? 120_000 : etaMs} />
                     </div>
 
                     <div>
@@ -1278,7 +1378,9 @@ function Dashboard() {
                         <div className="flex items-center justify-center gap-3 py-2">
                           <Loader2 size={18} className="animate-spin text-[var(--brand)]" />
                           <span className="text-sm text-muted-foreground animate-pulse">
-                            AI motorları analiz ediyor — bu 15-30 saniye sürebilir…
+                            {jobStage
+                              ? `Arka planda çalışıyor — ${jobStage}`
+                              : "AI motorları analiz ediyor — bu 15-30 saniye sürebilir…"}
                           </span>
                         </div>
                         <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">

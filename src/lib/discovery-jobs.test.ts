@@ -133,6 +133,28 @@ describe("idempotency window", () => {
     expect(a).toContain("pd:");
     expect(a.length).toBeLessThanOrEqual(80);
   });
+
+  it("scopes the key to the engine so the two pipelines never collapse into one job", () => {
+    const finder = buildIdempotencyKey({
+      niche: "glass ware",
+      targetCountry: "US",
+      bucket: 7,
+      engine: "finder",
+    });
+    const discovery = buildIdempotencyKey({
+      niche: "glass ware",
+      targetCountry: "US",
+      bucket: 7,
+      engine: "discovery",
+    });
+    expect(finder).not.toBe(discovery);
+    expect(finder).toContain("finder");
+    // The default stays the discovery engine, so existing keys keep working.
+    expect(discovery).toBe(
+      buildIdempotencyKey({ niche: "glass ware", targetCountry: "US", bucket: 7 }),
+    );
+    expect(finder.length).toBeLessThanOrEqual(80);
+  });
 });
 
 describe("agent event table", () => {

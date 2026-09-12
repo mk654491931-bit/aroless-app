@@ -25,8 +25,10 @@ import {
   progressForStage,
   type DiscoveryAgentProgress,
   type DiscoveryJobResult,
+  type DiscoveryJobRow,
   type DiscoveryTransientState,
 } from "./discovery-jobs.shared";
+import { FinderInputSchema, runFinderGeneration } from "./gemini.functions";
 import {
   claimJob,
   finishJob,
@@ -58,15 +60,24 @@ const MAX_RESULT_PRODUCTS = 24;
  * QStash retries later; everything else is already final.
  */
 export async function runDiscoveryJob(jobId: string): Promise<DiscoveryRunOutcome> {
-  // 1. Single-execution gate. Postgres is authoritative here, Redis is only the
-  //    fast path.
+  // 1. Take the transient lock before changing the durable row. Redis is only
+  //    a fast path (Postgres remains authoritative), but this ordering prevents
+  //    a live Redis lease from leaving a successfully-claimed row stuck in
+  //    `running` when a duplicate delivery arrives.
+  const hasLock = await acquireJobLock(jobId);
+  if (!hasLock) return { kind: "refused", jobId, reason: "busy" };
+
+  // 2. Single-execution gate. Every early return after the lock releases it;
+  //    the long-running path releases it again from `finally` below.
   const claim = await claimJob(jobId);
   if (!claim.ok) {
+    await releaseJobLock(jobId);
     // Storage unavailable: do NOT run. Retrying is safe, running blind is not
     // (it could duplicate work and duplicate DB writes).
     return { kind: "refused", jobId, reason: "unavailable" };
   }
   if (!claim.claimed) {
+    await releaseJobLock(jobId);
     if (claim.status === "missing" || !claim.status) {
       return { kind: "refused", jobId, reason: "missing" };
     }
@@ -75,9 +86,6 @@ export async function runDiscoveryJob(jobId: string): Promise<DiscoveryRunOutcom
     }
     return { kind: "refused", jobId, reason: "terminal" };
   }
-
-  const hasLock = await acquireJobLock(jobId);
-  if (!hasLock) return { kind: "refused", jobId, reason: "busy" };
 
   const deadline = createDeadline(WORKER_BUDGET_MS);
   let agents: DiscoveryAgentProgress[] = initialAgentProgress();
@@ -109,6 +117,22 @@ export async function runDiscoveryJob(jobId: string): Promise<DiscoveryRunOutcom
         ...(options.stageChanged ? { stageChanged: true } : {}),
       });
     };
+
+    // ---- Engine dispatch ---------------------------------------------------
+    // "finder" runs the heavy Gemini strategy generation + scraping pipeline
+    // from here (off the client's HTTP connection, 200s instead of 90s), which
+    // is the whole reason this job infrastructure exists.
+    if (job.engine === "finder") {
+      return await runFinderJob({
+        job,
+        jobId,
+        publish,
+        niche,
+        targetCountry,
+        traceId,
+        startedAt,
+      });
+    }
 
     // ---- Phase 1: live retrieval + immediate DB push -----------------------
     await publish(
@@ -280,5 +304,102 @@ export async function runDiscoveryJob(jobId: string): Promise<DiscoveryRunOutcom
   } finally {
     deadline.dispose();
     await releaseJobLock(jobId);
+  }
+}
+
+/**
+ * Engine "finder": runs the full product-discovery pipeline (Gemini strategy
+ * generation, live scraping, Winner Gate, hybrid scoring, the 14-agent council
+ * and market verification) from the background worker instead of the client's
+ * request — the actual fix for the 90-100s server timeout.
+ *
+ * Products are handed back through the durable row: the exact objects the
+ * synchronous server function returns, so the client renders both paths
+ * identically. Progress is written through `publish` while the run is in
+ * flight, so the poller still sees the stage advance.
+ */
+async function runFinderJob(input: {
+  job: DiscoveryJobRow;
+  jobId: string;
+  publish: (
+    state: DiscoveryTransientState,
+    options?: { persist?: boolean; stageChanged?: boolean },
+  ) => Promise<void>;
+  niche: string;
+  targetCountry: string;
+  traceId: string;
+  startedAt: number;
+}): Promise<DiscoveryRunOutcome> {
+  const parsed = FinderInputSchema.safeParse({
+    ...(input.job.payload ?? {}),
+    niche: input.niche || String(input.job.payload?.["niche"] ?? ""),
+  });
+  if (!parsed.success) {
+    await finishJob(input.jobId, "failed", null, "invalid_payload");
+    await refundJob(input.jobId);
+    return { kind: "failed", jobId: input.jobId, message: "invalid_payload" };
+  }
+
+  // Refund at most once: the pipeline refunds when it produced nothing, the
+  // catch below refunds when it threw, and both must resolve to one credit.
+  let refunded = false;
+  const refund = async (): Promise<void> => {
+    if (refunded) return;
+    refunded = true;
+    await refundJob(input.jobId);
+  };
+
+  try {
+    await input.publish(
+      { stage: "retrieving", progress: progressForStage("retrieving", 0) },
+      { persist: true, stageChanged: true },
+    );
+
+    const result = await runFinderGeneration(parsed.data, {
+      refund,
+      deadlineMs: WORKER_BUDGET_MS,
+    });
+
+    await input.publish(
+      { stage: "ranking", progress: progressForStage("ranking", 0) },
+      { persist: true, stageChanged: true },
+    );
+
+    const durationMs = Date.now() - input.startedAt;
+    const generatedAt = new Date().toISOString();
+    const payload: DiscoveryJobResult = {
+      traceId: input.traceId,
+      niche: parsed.data.niche,
+      targetCountry: input.targetCountry,
+      engine: "finder",
+      // Same shape the synchronous server function returns.
+      finder: { ...result, traceId: input.traceId, generatedAt, durationMs },
+      // Finder products are the rich WinningProduct shape, so they travel in
+      // `finder.products` rather than the hot-feed `products` list.
+      products: [],
+      persisted: 0,
+      failedWrites: 0,
+      partial: result.partial,
+      agents: initialAgentProgress(),
+      council: null,
+      durationMs,
+      generatedAt,
+    };
+
+    const finished = await finishJob(input.jobId, "completed", payload, null);
+    if (!finished) return { kind: "failed", jobId: input.jobId, message: "finish_failed" };
+    return {
+      kind: "completed",
+      jobId: input.jobId,
+      persisted: result.products.length,
+      partial: result.partial,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[discovery-run] finder job failed", message);
+    await finishJob(input.jobId, "failed", null, message.slice(0, 300));
+    // A failed run handed back no products, so the credit goes back.
+    await refund();
+    return { kind: "failed", jobId: input.jobId, message };
   }
 }

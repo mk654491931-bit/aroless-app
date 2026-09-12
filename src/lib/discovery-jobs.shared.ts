@@ -10,7 +10,19 @@
 // ever allowed to know a job id and a poll URL.
 // ============================================================================
 
+import type { FinderRunOutput } from "./gemini.functions";
 import type { StreamedProduct } from "./product-stream.shared";
+
+/**
+ * Which pipeline one job runs. Both engines share the exact same durable row,
+ * claim/refund RPCs and polling contract, so adding one never changes the wire
+ * format the client already polls:
+ *   • `discovery` — the live market scan + 14-agent council (hot feed).
+ *   • `finder`    — the heavy Gemini strategy generation + scraping pipeline
+ *     behind "Kazananları Bul". Running it here is what removes the 90-100s
+ *     in-request timeout: nothing long-lived stays on the client connection.
+ */
+export type DiscoveryEngine = "discovery" | "finder";
 
 /** Terminal states never run again. */
 export const TERMINAL_JOB_STATUSES = ["completed", "failed", "canceled"] as const;
@@ -162,8 +174,12 @@ export function agentCompletionRatio(agents: readonly DiscoveryAgentProgress[]):
 export type DiscoveryJobRequest = {
   niche: string;
   targetCountry?: string;
-  /** Reserved for future engines so the wire format never has to change. */
-  engine?: "discovery";
+  engine?: DiscoveryEngine;
+  /**
+   * Engine-specific request parameters (validated server-side). Carried as
+   * request data only — never a token and never a credential.
+   */
+  payload?: Record<string, unknown>;
 };
 
 export type DiscoveryCouncilSummary = {
@@ -176,10 +192,23 @@ export type DiscoveryCouncilSummary = {
   agentsFailed: number;
 };
 
+/**
+ * Result of an engine "finder" job: literally the object the synchronous
+ * server function returns, so both paths render identically.
+ */
+export type FinderJobResult = FinderRunOutput & {
+  traceId: string;
+  generatedAt: string;
+  durationMs: number;
+};
+
 export type DiscoveryJobResult = {
   traceId: string;
   niche: string;
   targetCountry: string;
+  engine?: DiscoveryEngine;
+  /** Present only for engine "finder". */
+  finder?: FinderJobResult | null;
   products: StreamedProduct[];
   persisted: number;
   failedWrites: number;
@@ -211,9 +240,15 @@ export function buildIdempotencyKey(input: {
   niche: string;
   targetCountry: string;
   bucket: number;
+  engine?: string;
 }): string {
   const slug = input.niche.trim().toLowerCase().replace(/\s+/g, "-").slice(0, 48);
-  return `pd:${slug}:${input.targetCountry.toUpperCase()}:${input.bucket}`;
+  // The engine is part of the key on purpose: the same niche started from the
+  // finder and from the hot feed must never collapse into one job (they produce
+  // different payloads), while a double click inside one engine still reuses
+  // exactly one job and one charge.
+  const engine = (input.engine ?? "discovery").toLowerCase().replace(/[^a-z_]/g, "");
+  return `pd:${engine}:${slug}:${input.targetCountry.toUpperCase()}:${input.bucket}`;
 }
 
 /**
@@ -242,6 +277,10 @@ export type DiscoveryJobRow = {
   id: string;
   /** Owner. Used server-side for persistence + ownership; never sent to the wire view. */
   user_id: string;
+  /** Pipeline selector. Absent on rows written before the finder engine existed. */
+  engine?: string;
+  /** Engine-specific request parameters (shown to the owner only, never a secret). */
+  payload?: Record<string, unknown> | null;
   status: string;
   stage: string;
   progress: number;
