@@ -83,14 +83,18 @@ export function AdminAffiliates() {
                   <tr key={r.user_id} className="border-t border-white/5 hover:bg-white/[0.02]">
                     <td className="px-5 py-3 font-medium">{r.email ?? "—"}</td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}
+                      >
                         {badge.label}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right">%{r.commission_rate_pct}</td>
                     <td className="px-5 py-3 text-right">
                       <div className="font-semibold">{money(r.earned_cents)}</div>
-                      <div className="text-[10px] text-muted-foreground">{r.paid_transactions} ödeme</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {r.paid_transactions} ödeme
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {new Date(r.created_at).toLocaleDateString()}
@@ -106,7 +110,9 @@ export function AdminAffiliates() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => setStatus.mutate({ userId: r.user_id, status: "verified" })}
+                          onClick={() =>
+                            setStatus.mutate({ userId: r.user_id, status: "verified" })
+                          }
                           disabled={setStatus.isPending}
                           className="inline-flex items-center gap-1 rounded-lg border border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 px-2.5 py-1.5 text-xs font-medium hover:bg-[oklch(0.75_0.19_150)]/20 disabled:opacity-50"
                         >

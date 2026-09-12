@@ -102,10 +102,9 @@ export class MultiTierCache {
       ttl?: number;
       tier?: CacheTier;
       size?: number;
-    } = {}
+    } = {},
   ) {
-    const { ttl, tier = CacheTier.MEMORY, size = this.estimateSize(value) } =
-      options;
+    const { ttl, tier = CacheTier.MEMORY, size = this.estimateSize(value) } = options;
 
     if (tier === CacheTier.MEMORY || tier === CacheTier.INDEXED_DB) {
       this.setMemory(key, value, ttl, size);
@@ -336,7 +335,7 @@ export function useCacheAside<T>(
   options: {
     ttl?: number;
     tier?: CacheTier;
-  } = {}
+  } = {},
 ) {
   const cache = getCache();
   const [data, setData] = useState<T | null>(null);

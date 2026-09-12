@@ -22,9 +22,7 @@ describe("provider chain f/p ordering", () => {
   it("DEEP_CHAIN leads with quality engines and trails Hugging Face then paid Bedrock", () => {
     expect(DEEP_CHAIN[0]).toBe("gemini");
     expect(DEEP_CHAIN.indexOf("groq")).toBeLessThan(DEEP_CHAIN.indexOf("huggingface"));
-    expect(DEEP_CHAIN.indexOf("huggingface")).toBeLessThan(
-      DEEP_CHAIN.indexOf("bedrock"),
-    );
+    expect(DEEP_CHAIN.indexOf("huggingface")).toBeLessThan(DEEP_CHAIN.indexOf("bedrock"));
     expect(DEEP_CHAIN[DEEP_CHAIN.length - 1]).toBe("bedrock");
   });
 
@@ -36,7 +34,6 @@ describe("provider chain f/p ordering", () => {
   });
 
   it("no provider appears twice in a chain", () => {
-    for (const chain of [FAST_CHAIN, DEEP_CHAIN])
-      expect(new Set(chain).size).toBe(chain.length);
+    for (const chain of [FAST_CHAIN, DEEP_CHAIN]) expect(new Set(chain).size).toBe(chain.length);
   });
 });

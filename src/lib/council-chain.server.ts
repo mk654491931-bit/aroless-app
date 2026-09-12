@@ -124,20 +124,85 @@ export type CouncilAgentDefinition = {
 };
 
 export const COUNCIL_AGENTS: readonly CouncilAgentDefinition[] = [
-  { key: "cfo", name: "CFO Agent", task: "Unit economics, landed cost ve 3PL.", scoreKey: "cfo_score" },
-  { key: "cmo", name: "CMO Agent", task: "Audience fit, target ROAS/CPC simulation.", scoreKey: "cmo_score" },
+  {
+    key: "cfo",
+    name: "CFO Agent",
+    task: "Unit economics, landed cost ve 3PL.",
+    scoreKey: "cfo_score",
+  },
+  {
+    key: "cmo",
+    name: "CMO Agent",
+    task: "Audience fit, target ROAS/CPC simulation.",
+    scoreKey: "cmo_score",
+  },
   { key: "cro", name: "CRO Agent", task: "Brand ve IP risk scan.", scoreKey: "cro_score" },
-  { key: "trend_hunter", name: "Trend Hunter Agent", task: "Sosyal medya engagement ve view momentum.", scoreKey: "trend_score" },
-  { key: "competitor_intel", name: "Competitor Intel Agent", task: "Aktif Shopify/Amazon saturation audit.", scoreKey: "competitor_score" },
-  { key: "ux_specialist", name: "UX Specialist Agent", task: "Müşteri incelemeleri sentiment analizi.", scoreKey: "ux_score" },
-  { key: "supply_chain", name: "Supply Chain Agent", task: "Supplier stock stability ve delivery SLA.", scoreKey: "supply_score" },
-  { key: "pricing_strategist", name: "Pricing Strategist Agent", task: "Markup merdiveni ve fiyat esnekliği.", scoreKey: "pricing_score" },
-  { key: "logistics_cost", name: "Logistics Cost Agent", task: "Navlun/ciro oranı ve 3PL maliyeti.", scoreKey: "logistics_score" },
-  { key: "compliance_officer", name: "Compliance Officer Agent", task: "CE/FDA/SDS ve gümrük bariyerleri.", scoreKey: "compliance_score" },
-  { key: "retention_ltv", name: "Retention & LTV Analyst Agent", task: "Tekrar satın alma ve LTV/CAC.", scoreKey: "retention_score" },
-  { key: "creative_director", name: "Creative Director Agent", task: "Kanca gücü, UGC ve 3 saniye retention.", scoreKey: "creative_score" },
-  { key: "channel_fit", name: "Channel Fit Agent", task: "Pazar yeri komisyonu ve rekabet eşleşmesi.", scoreKey: "channel_score" },
-  { key: "independent_data_auditor", name: "Independent Data Auditor Agent", task: "Konsey girdilerinin kanıt kapsamı.", scoreKey: "auditor_score" },
+  {
+    key: "trend_hunter",
+    name: "Trend Hunter Agent",
+    task: "Sosyal medya engagement ve view momentum.",
+    scoreKey: "trend_score",
+  },
+  {
+    key: "competitor_intel",
+    name: "Competitor Intel Agent",
+    task: "Aktif Shopify/Amazon saturation audit.",
+    scoreKey: "competitor_score",
+  },
+  {
+    key: "ux_specialist",
+    name: "UX Specialist Agent",
+    task: "Müşteri incelemeleri sentiment analizi.",
+    scoreKey: "ux_score",
+  },
+  {
+    key: "supply_chain",
+    name: "Supply Chain Agent",
+    task: "Supplier stock stability ve delivery SLA.",
+    scoreKey: "supply_score",
+  },
+  {
+    key: "pricing_strategist",
+    name: "Pricing Strategist Agent",
+    task: "Markup merdiveni ve fiyat esnekliği.",
+    scoreKey: "pricing_score",
+  },
+  {
+    key: "logistics_cost",
+    name: "Logistics Cost Agent",
+    task: "Navlun/ciro oranı ve 3PL maliyeti.",
+    scoreKey: "logistics_score",
+  },
+  {
+    key: "compliance_officer",
+    name: "Compliance Officer Agent",
+    task: "CE/FDA/SDS ve gümrük bariyerleri.",
+    scoreKey: "compliance_score",
+  },
+  {
+    key: "retention_ltv",
+    name: "Retention & LTV Analyst Agent",
+    task: "Tekrar satın alma ve LTV/CAC.",
+    scoreKey: "retention_score",
+  },
+  {
+    key: "creative_director",
+    name: "Creative Director Agent",
+    task: "Kanca gücü, UGC ve 3 saniye retention.",
+    scoreKey: "creative_score",
+  },
+  {
+    key: "channel_fit",
+    name: "Channel Fit Agent",
+    task: "Pazar yeri komisyonu ve rekabet eşleşmesi.",
+    scoreKey: "channel_score",
+  },
+  {
+    key: "independent_data_auditor",
+    name: "Independent Data Auditor Agent",
+    task: "Konsey girdilerinin kanıt kapsamı.",
+    scoreKey: "auditor_score",
+  },
 ];
 
 const DEFAULT_TEXT = "Veri bulunamadı; güvenli nötr değerlendirme uygulandı.";
@@ -152,7 +217,11 @@ const neutralValues: Record<CouncilAgentKey, Record<string, unknown>> = {
   supply_chain: { supply_score: 50, stock_risk: false, delivery_days_avg: 0 },
   pricing_strategist: { pricing_score: 50, optimal_price: 0, markup_ratio: 0 },
   logistics_cost: { logistics_score: 50, shipping_cost_est: 0, freight_ratio: 0 },
-  compliance_officer: { compliance_score: 50, certificates_needed: [DEFAULT_TEXT], customs_passed: false },
+  compliance_officer: {
+    compliance_score: 50,
+    certificates_needed: [DEFAULT_TEXT],
+    customs_passed: false,
+  },
   retention_ltv: { retention_score: 50, estimated_ltv: 0, repeat_purchase_rate: 0 },
   creative_director: { creative_score: 50, hook_strength: 0, ugc_potential: DEFAULT_TEXT },
   channel_fit: { channel_score: 50, best_channel: DEFAULT_TEXT, margin_after_fees: 0 },
@@ -160,7 +229,11 @@ const neutralValues: Record<CouncilAgentKey, Record<string, unknown>> = {
 };
 
 function normalizeScore(value: unknown): { value: number; fallback: boolean } {
-  if (value === null || value === undefined || (typeof value !== "number" && typeof value !== "string")) {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value !== "number" && typeof value !== "string")
+  ) {
     return { value: 50, fallback: true };
   }
   const n = Number(value);
@@ -205,7 +278,11 @@ function normalizeCouncilValue(
     if (key === "cro" && field === "ip_risk_level" && !["LOW", "MEDIUM", "HIGH"].includes(value)) {
       return { value: fallbackValue, fallback: true };
     }
-    if (key === "competitor_intel" && field === "market_saturation" && !["LOW", "MEDIUM", "HIGH"].includes(value)) {
+    if (
+      key === "competitor_intel" &&
+      field === "market_saturation" &&
+      !["LOW", "MEDIUM", "HIGH"].includes(value)
+    ) {
       return { value: fallbackValue, fallback: true };
     }
     return { value, fallback: false };
@@ -220,9 +297,7 @@ export function normalizeCouncilOutput<K extends CouncilAgentKey>(
   raw: unknown,
 ): { output: CouncilOutput<K>; usedFallback: boolean } {
   const source =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
+    raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const defaults = neutralValues[key];
   const scoreKey = COUNCIL_AGENTS.find((agent) => agent.key === key)?.scoreKey ?? "";
   const scoreResult = normalizeScore(source[scoreKey]);
@@ -287,7 +362,9 @@ export async function runStrictCouncilChain(input: {
   const context = [
     `QUERY: ${input.query.slice(0, 240)}`,
     input.context?.slice(0, 8_000) ?? "",
-    candidates.length ? `CANDIDATES: ${JSON.stringify(candidates).slice(0, 8_000)}` : "CANDIDATES: []",
+    candidates.length
+      ? `CANDIDATES: ${JSON.stringify(candidates).slice(0, 8_000)}`
+      : "CANDIDATES: []",
   ]
     .filter(Boolean)
     .join("\n");
@@ -300,7 +377,11 @@ export async function runStrictCouncilChain(input: {
     try {
       result = await input.run(agent, prompt);
     } catch (error) {
-      result = { raw: {}, ok: false, error: error instanceof Error ? error.message : String(error) };
+      result = {
+        raw: {},
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
 
     const rawObject =
@@ -323,7 +404,9 @@ export async function runStrictCouncilChain(input: {
       makeDebugLog(
         agent.name,
         { query: input.query, prior_agents: Object.keys(outputs).length - 1 },
-        usedFallback ? { ...normalized.output, fallback: DEFAULT_TEXT + errorText } : normalized.output,
+        usedFallback
+          ? { ...normalized.output, fallback: DEFAULT_TEXT + errorText }
+          : normalized.output,
         candidates.length,
         status,
       ),
@@ -389,14 +472,21 @@ export function councilAverage(outputs: CouncilOutputMap): number {
 export function productFingerprint(items: Array<Record<string, unknown>>): number {
   if (!items.length) return 50;
   const uniqueNames = new Set(
-    items.map((item) => String(item.name ?? item.title ?? "").trim().toLocaleLowerCase("tr-TR")),
+    items.map((item) =>
+      String(item.name ?? item.title ?? "")
+        .trim()
+        .toLocaleLowerCase("tr-TR"),
+    ),
   );
   const withCommercialData = items.filter((item) =>
     [item.priceRange, item.estimatedMarginPct, item.category, item.whyNow].some(
       (value) => value !== undefined && String(value).trim() !== "",
     ),
   ).length;
-  return Math.max(50, Math.min(100, Math.round(50 + uniqueNames.size * 5 + withCommercialData * 5)));
+  return Math.max(
+    50,
+    Math.min(100, Math.round(50 + uniqueNames.size * 5 + withCommercialData * 5)),
+  );
 }
 
 export function finalCouncilScore(outputs: CouncilOutputMap, fingerprint: number): number {

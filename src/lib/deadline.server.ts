@@ -32,6 +32,14 @@ export const JSON_BUDGET_MS = 90_000;
  */
 export const FANOUT_BUDGET_MS = 45_000;
 
+/**
+ * Budget for one background job run. Jobs are off the client's HTTP connection
+ * (QStash calls the worker), so they may use a much larger slice than a
+ * request — but they still must finish inside the host function limit.
+ * Whatever finished before this point is committed as a partial success.
+ */
+export const WORKER_BUDGET_MS = 200_000;
+
 export type Deadline = {
   readonly budgetMs: number;
   readonly startedAt: number;

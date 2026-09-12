@@ -55,11 +55,7 @@ export function geminiEnvKeys(): string[] {
 export function groqEnvKeys(): string[] {
   return collectEnvKeys({
     base: ["GROQ_API_KEY"],
-    patterns: [
-      (i) => `GROQ_API_KEY_${i}`,
-      (i) => `GROQ_${i}_API_KEY`,
-      (i) => `GROQ_API_KEY${i}`,
-    ],
+    patterns: [(i) => `GROQ_API_KEY_${i}`, (i) => `GROQ_${i}_API_KEY`, (i) => `GROQ_API_KEY${i}`],
   });
 }
 
@@ -109,8 +105,7 @@ export function sambanovaEnvKeys(): string[] {
  * matter which suffix the user stored keys under.
  */
 export function anyAiKeyConfigured(): boolean {
-  const gateway =
-    process.env["AI_GATEWAY_API_KEY"] || process.env["LOVABLE_API_KEY"];
+  const gateway = process.env["AI_GATEWAY_API_KEY"] || process.env["LOVABLE_API_KEY"];
   if (gateway?.trim()) return true;
   return (
     geminiEnvKeys().length > 0 ||

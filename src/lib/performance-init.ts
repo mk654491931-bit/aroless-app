@@ -53,9 +53,7 @@ export function initializePerformanceOptimizations(
   if (enableWebVitals && typeof window !== "undefined") {
     const unsubscribe = initializeWebVitalsTracking((metric) => {
       if (debug) {
-        console.log(
-          `📊 ${metric.name}: ${metric.value.toFixed(2)}ms (${metric.rating})`,
-        );
+        console.log(`📊 ${metric.name}: ${metric.value.toFixed(2)}ms (${metric.rating})`);
       }
       onMetric?.(metric);
 
@@ -254,9 +252,7 @@ export async function getPerformanceHints(): Promise<string[]> {
     const slowResources = resources.filter((r) => r.duration > 1000);
 
     if (slowResources.length > 0) {
-      hints.push(
-        `⏱️ ${slowResources.length} slow resources detected - consider optimization`,
-      );
+      hints.push(`⏱️ ${slowResources.length} slow resources detected - consider optimization`);
     }
   }
 

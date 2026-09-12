@@ -18,8 +18,14 @@ const EDGE_GAP = 8;
 function clampPosition(pos: Pos): Pos {
   if (typeof window === "undefined") return pos;
   return {
-    x: Math.max(EDGE_GAP, Math.min(Math.max(EDGE_GAP, window.innerWidth - BAR_W - EDGE_GAP), pos.x)),
-    y: Math.max(EDGE_GAP, Math.min(Math.max(EDGE_GAP, window.innerHeight - BAR_H - EDGE_GAP), pos.y)),
+    x: Math.max(
+      EDGE_GAP,
+      Math.min(Math.max(EDGE_GAP, window.innerWidth - BAR_W - EDGE_GAP), pos.x),
+    ),
+    y: Math.max(
+      EDGE_GAP,
+      Math.min(Math.max(EDGE_GAP, window.innerHeight - BAR_H - EDGE_GAP), pos.y),
+    ),
   };
 }
 

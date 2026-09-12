@@ -146,7 +146,8 @@ export function getSupportedImageFormats(): ("webp" | "jpg" | "avif" | "png")[] 
   const img = new Image();
   img.onload = () => formats.push("avif");
   img.onerror = () => {};
-  img.src = "data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAG1hdmYAAACNbWV0YQAAAAAAAABkYXRhZQAQAAAAABA=";
+  img.src =
+    "data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAG1hdmYAAACNbWV0YQAAAAAAAABkYXRhZQAQAAAAABA=";
 
   return formats;
 }

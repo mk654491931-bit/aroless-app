@@ -166,11 +166,7 @@ export function useRoutePerformanceMonitoring() {
       // Performance API'ye kaydet
       if ("PerformanceObserver" in window && "mark" in performance) {
         performance.mark(`route-end-${route}`, { startTime });
-        performance.measure(
-          `route-navigation-${route}`,
-          `route-end-${route}`,
-          undefined
-        );
+        performance.measure(`route-navigation-${route}`, `route-end-${route}`, undefined);
 
         if (duration > 1000) {
           console.warn(`Slow route transition detected: ${route} (${duration}ms)`);
@@ -204,12 +200,9 @@ export function batchPreloadRoutes(routes: string[], options = { delay: 100 }) {
   (window as any).requestIdleCallback(
     () => {
       routes.forEach((route, index) => {
-        setTimeout(
-          () => preloadRouteChunk(route),
-          index * (options.delay / routes.length)
-        );
+        setTimeout(() => preloadRouteChunk(route), index * (options.delay / routes.length));
       });
     },
-    { timeout: 5000 }
+    { timeout: 5000 },
   );
 }

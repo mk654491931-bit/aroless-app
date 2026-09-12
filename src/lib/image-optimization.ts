@@ -30,7 +30,7 @@ const defaultOptions: ImageOptimizationOptions = {
 export function generateResponsiveSrcSet(
   imagePath: string,
   widths: number[] = [320, 640, 1024, 1920],
-  format: "webp" | "avif" | "jpg" = "webp"
+  format: "webp" | "avif" | "jpg" = "webp",
 ): string {
   return widths
     .map((width) => {
@@ -48,7 +48,7 @@ export function generateResponsiveSrcSet(
 export function createPictureElement(
   imagePath: string,
   alt: string,
-  options = defaultOptions
+  options = defaultOptions,
 ): string {
   const formats = options.formats || ["avif", "webp", "jpg"];
 
@@ -76,7 +76,7 @@ export function createPictureElement(
  */
 export function useImageLazyLoading(
   ref: React.RefObject<HTMLImageElement>,
-  options = defaultOptions
+  options = defaultOptions,
 ) {
   const [isLoaded, setIsLoaded] = useState(!options.lazy);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -120,9 +120,7 @@ export function generateBlurHash(color: string = "#e5e5e5"): string {
 /**
  * Network-aware quality adjustment
  */
-export function getNetworkAwareQuality(
-  baseQuality: number = 75
-): number {
+export function getNetworkAwareQuality(baseQuality: number = 75): number {
   if (typeof navigator === "undefined" || !(navigator as any).connection) {
     return baseQuality;
   }
@@ -152,8 +150,8 @@ export function preloadImages(urls: string[]): Promise<any[]> {
           img.onload = () => resolve(img);
           img.onerror = () => reject(new Error(`Failed to load ${url}`));
           img.src = url;
-        })
-    )
+        }),
+    ),
   );
 }
 
@@ -211,7 +209,7 @@ export class ImageObserver {
       {
         rootMargin: "100px",
         threshold: 0.01,
-      }
+      },
     );
   }
 

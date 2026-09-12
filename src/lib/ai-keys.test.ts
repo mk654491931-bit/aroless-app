@@ -44,9 +44,7 @@ const KEYS_TOUCHED = [
   "LOVABLE_API_KEY",
 ];
 
-const ORIGINAL = new Map<string, string | undefined>(
-  KEYS_TOUCHED.map((k) => [k, process.env[k]]),
-);
+const ORIGINAL = new Map<string, string | undefined>(KEYS_TOUCHED.map((k) => [k, process.env[k]]));
 
 function setEnv(name: string, value: string | undefined) {
   if (value === undefined) delete process.env[name];

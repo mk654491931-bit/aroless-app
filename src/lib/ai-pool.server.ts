@@ -195,20 +195,30 @@ export function poolGroupConfig(group: PoolGroup): {
     case "sambanova":
       return { baseUrl: "https://api.sambanova.ai/v1/chat/completions", model: "" };
     case "groq":
-      return { baseUrl: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" };
+      return {
+        baseUrl: "https://api.groq.com/openai/v1/chat/completions",
+        model: "llama-3.3-70b-versatile",
+      };
     case "gemini":
-      return { baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/", model: "gemini-flash-latest" };
+      return {
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+        model: "gemini-flash-latest",
+      };
     case "openrouter":
-      return { baseUrl: "https://openrouter.ai/api/v1/chat/completions", model: "meta-llama/llama-3.3-70b-instruct" };
+      return {
+        baseUrl: "https://openrouter.ai/api/v1/chat/completions",
+        model: "meta-llama/llama-3.3-70b-instruct",
+      };
     case "hf":
-      return { baseUrl: "https://router.huggingface.co/v1/chat/completions", model: "Qwen/Qwen2.5-7B-Instruct" };
+      return {
+        baseUrl: "https://router.huggingface.co/v1/chat/completions",
+        model: "Qwen/Qwen2.5-7B-Instruct",
+      };
   }
 }
 
 /** All configured, cooled-down nodes, in priority-aware order. */
-export function buildPoolNodes(
-  priority: PoolPriority | "all" = "all",
-): PoolNode[] {
+export function buildPoolNodes(priority: PoolPriority | "all" = "all"): PoolNode[] {
   const groups: PoolGroup[] =
     priority === "fast" ? FAST_ORDER : priority === "deep" ? DEEP_ORDER : ALL_ORDER;
   const nodes: PoolNode[] = [];
@@ -291,7 +301,11 @@ export function poolGroupAvailable(group: PoolGroup): boolean {
  * Report the outcome of a node attempt. Failures park the node; repeated
  * quota/server failures across a group park the whole group briefly.
  */
-export function markPoolGroupOutcome(group: PoolGroup, slot: number, outcome: PoolNodeOutcome): void {
+export function markPoolGroupOutcome(
+  group: PoolGroup,
+  slot: number,
+  outcome: PoolNodeOutcome,
+): void {
   if (outcome === "ok") {
     cooldownUntil.delete(nodeId(group, slot));
     groupCooldownUntil.delete(group);
@@ -316,7 +330,10 @@ export function poolBackoffMs(priority: PoolPriority | "all" = "all"): number {
   for (const group of groups) {
     const keys = poolGroupKeys(group);
     if (!keys.length) continue;
-    const until = Math.max(cooldownUntil.get(nodeId(group, 1)) ?? 0, groupCooldownUntil.get(group) ?? 0);
+    const until = Math.max(
+      cooldownUntil.get(nodeId(group, 1)) ?? 0,
+      groupCooldownUntil.get(group) ?? 0,
+    );
     if (until > now) min = min === 0 ? until - now : Math.min(min, until - now);
     else return 0;
   }
@@ -379,10 +396,7 @@ function classify(status: number, body: string): PoolNodeError {
  * Deterministic single-slot OpenAI-compatible call with timeout.
  * Throws PoolNodeError — caller should markPoolGroupOutcome + rotate.
  */
-export async function callPoolNode(
-  node: PoolNode,
-  opts: PoolCallOptions,
-): Promise<string> {
+export async function callPoolNode(node: PoolNode, opts: PoolCallOptions): Promise<string> {
   const { baseUrl, model } = poolGroupConfig(node.group);
   if (!baseUrl) throw new PoolNodeError("server", `no endpoint for ${node.group}`);
   const controller = new AbortController();

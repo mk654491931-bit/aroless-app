@@ -256,15 +256,9 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
   for (const group of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const) {
     const { keys, url, model } = customPoolConfig(group);
     if (!keys.length || !url) continue;
-    const text = await tryOpenAIPool(
-      group.toLowerCase(),
-      keys,
-      url,
-      [model],
-      prompt,
-      temperature,
-      { json: false },
-    );
+    const text = await tryOpenAIPool(group.toLowerCase(), keys, url, [model], prompt, temperature, {
+      json: false,
+    });
     if (text) return text;
   }
 
@@ -371,9 +365,9 @@ async function postOpenAICompat(opts: {
     });
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");
-      const err = new Error(
-        `${opts.model} ${resp.status}: ${body.slice(0, 160)}`,
-      ) as Error & { status?: number };
+      const err = new Error(`${opts.model} ${resp.status}: ${body.slice(0, 160)}`) as Error & {
+        status?: number;
+      };
       err.status = resp.status;
       throw err;
     }
@@ -409,9 +403,7 @@ function customPoolConfig(prefix: "PROVIDER_A" | "PROVIDER_B" | "PROVIDER_C" | "
   model: string;
 } {
   const keys = Array.from(
-    new Set(
-      Array.from({ length: 5 }, (_, i) => readEnv(`${prefix}_${i + 1}`)).filter(Boolean),
-    ),
+    new Set(Array.from({ length: 5 }, (_, i) => readEnv(`${prefix}_${i + 1}`)).filter(Boolean)),
   );
   const url =
     readEnv(`${prefix}_BASE_URL`) ||

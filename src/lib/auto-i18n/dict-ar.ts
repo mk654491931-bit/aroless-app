@@ -932,8 +932,7 @@ const dict: Record<string, string> = {
   "Lansmana özel · %50 indirim · 1 hafta geçerli": "عرض الإطلاق · خصم 50% · صالح لمدة أسبوع",
   "Ödeme sayfası açılıyor…": "جاري فتح صفحة الدفع…",
   "Satın al —": "شراء —",
-  "Secure checkout by Paddle. Cancel anytime.":
-    "دفع آمن عبر Paddle. إلغاء في أي وقت.",
+  "Secure checkout by Paddle. Cancel anytime.": "دفع آمن عبر Paddle. إلغاء في أي وقت.",
   "Pazar talebi (Groq)": "طلب السوق (Groq)",
   "Kâr & lojistik (Gemini)": "الأرباح والخدمات اللوجستية (Gemini)",
   "Hibrit skor": "النتيجة الهجينة",

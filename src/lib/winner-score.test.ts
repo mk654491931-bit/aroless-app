@@ -33,7 +33,14 @@ describe("computeWinnerScore", () => {
       profit_margin_pct: 55,
       differentiation: ["Unique design", "Better quality"],
       review_pain_points: [{ complaint: "Bad quality", fix: "Use better materials" }],
-      bundles: [{ name: "Bundle", contents: "Product + accessories", price_usd: "$59.99", why: "Higher AOV" }],
+      bundles: [
+        {
+          name: "Bundle",
+          contents: "Product + accessories",
+          price_usd: "$59.99",
+          why: "Higher AOV",
+        },
+      ],
     });
 
     expect(["Kazanan", "Güçlü aday", "Riskli", "Zayıf"]).toContain(result.verdict);
@@ -184,7 +191,10 @@ describe("attachWinnerScores", () => {
       { name: "Product B", selling_price_usd: "$20", supplier_price_usd: "$3" },
     ];
 
-    const scored = attachWinnerScores(products) as Array<{ winner_score?: number; score_breakdown?: unknown }>;
+    const scored = attachWinnerScores(products) as Array<{
+      winner_score?: number;
+      score_breakdown?: unknown;
+    }>;
 
     expect(scored).toHaveLength(2);
     expect(scored[0].winner_score).toBeDefined();
@@ -197,7 +207,14 @@ describe("attachWinnerScores", () => {
       {
         name: "Scored Product",
         winner_score: 85,
-        score_breakdown: { winner_score: 85, components: [], evidence_level: "verified" as const, penalties: [], flags: [], verdict: "Kazanan" as const },
+        score_breakdown: {
+          winner_score: 85,
+          components: [],
+          evidence_level: "verified" as const,
+          penalties: [],
+          flags: [],
+          verdict: "Kazanan" as const,
+        },
       },
     ];
 

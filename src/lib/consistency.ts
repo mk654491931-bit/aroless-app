@@ -354,17 +354,53 @@ export function normalizeProduct(
     const isTech = /tech|elektronik|gadget|accessory|aksesuar/.test(cat);
     out.personas = isBeauty
       ? [
-          { name: "Skincare Newbie", age_range: "22-32", pain: "Overwhelmed by 10-step routines", trigger: "Before/after transformation reel", where_to_find: "r/SkincareAddiction, TikTok #skintok" },
-          { name: "Gift Buyer", age_range: "30-45", pain: "Needs a premium-looking gift under $30", trigger: "Holiday gifting guide", where_to_find: "Instagram explore, Etsy" },
+          {
+            name: "Skincare Newbie",
+            age_range: "22-32",
+            pain: "Overwhelmed by 10-step routines",
+            trigger: "Before/after transformation reel",
+            where_to_find: "r/SkincareAddiction, TikTok #skintok",
+          },
+          {
+            name: "Gift Buyer",
+            age_range: "30-45",
+            pain: "Needs a premium-looking gift under $30",
+            trigger: "Holiday gifting guide",
+            where_to_find: "Instagram explore, Etsy",
+          },
         ]
       : isTech
         ? [
-            { name: "Early Adopter", age_range: "18-30", pain: "Wants the latest gadget before friends", trigger: "Unboxing video on YouTube", where_to_find: "r/gadgets, TikTok #techfinds" },
-            { name: "Practical Parent", age_range: "28-42", pain: "Needs reliable, affordable tech for kids", trigger: "Back-to-school deals", where_to_find: "Facebook Groups, Amazon" },
+            {
+              name: "Early Adopter",
+              age_range: "18-30",
+              pain: "Wants the latest gadget before friends",
+              trigger: "Unboxing video on YouTube",
+              where_to_find: "r/gadgets, TikTok #techfinds",
+            },
+            {
+              name: "Practical Parent",
+              age_range: "28-42",
+              pain: "Needs reliable, affordable tech for kids",
+              trigger: "Back-to-school deals",
+              where_to_find: "Facebook Groups, Amazon",
+            },
           ]
         : [
-            { name: "Impulse Scroller", age_range: "20-35", pain: "Wants quick wins for daily life", trigger: "15s life hack video", where_to_find: "TikTok FYP, Instagram Reels" },
-            { name: "Research Buyer", age_range: "25-40", pain: "Hates buying something that breaks in a week", trigger: "Detailed comparison blog", where_to_find: "Google Shopping, Reddit reviews" },
+            {
+              name: "Impulse Scroller",
+              age_range: "20-35",
+              pain: "Wants quick wins for daily life",
+              trigger: "15s life hack video",
+              where_to_find: "TikTok FYP, Instagram Reels",
+            },
+            {
+              name: "Research Buyer",
+              age_range: "25-40",
+              pain: "Hates buying something that breaks in a week",
+              trigger: "Detailed comparison blog",
+              where_to_find: "Google Shopping, Reddit reviews",
+            },
           ];
   }
 
@@ -372,19 +408,48 @@ export function normalizeProduct(
   if (!out.keyword_opportunities || out.keyword_opportunities.length === 0) {
     const baseName = (out.name ?? "product").split(" ").slice(0, 3).join(" ").toLowerCase();
     out.keyword_opportunities = [
-      { keyword: `${baseName} buy`, monthly_volume: "5K-15K", difficulty: "Low", intent: "Transactional — ready to purchase" },
-      { keyword: `${baseName} review`, monthly_volume: "3K-10K", difficulty: "Low", intent: "Commercial investigation — comparing options" },
-      { keyword: `best ${baseName} 2025`, monthly_volume: "2K-8K", difficulty: "Medium", intent: "Commercial — looking for the best option" },
-      { keyword: `${baseName} alternative`, monthly_volume: "1K-5K", difficulty: "Low", intent: "Consideration — comparing alternatives" },
+      {
+        keyword: `${baseName} buy`,
+        monthly_volume: "5K-15K",
+        difficulty: "Low",
+        intent: "Transactional — ready to purchase",
+      },
+      {
+        keyword: `${baseName} review`,
+        monthly_volume: "3K-10K",
+        difficulty: "Low",
+        intent: "Commercial investigation — comparing options",
+      },
+      {
+        keyword: `best ${baseName} 2025`,
+        monthly_volume: "2K-8K",
+        difficulty: "Medium",
+        intent: "Commercial — looking for the best option",
+      },
+      {
+        keyword: `${baseName} alternative`,
+        monthly_volume: "1K-5K",
+        difficulty: "Low",
+        intent: "Consideration — comparing alternatives",
+      },
     ];
   }
 
   // review_pain_points: derive from competition level
   if (!out.review_pain_points || out.review_pain_points.length === 0) {
     out.review_pain_points = [
-      { complaint: "Quality not matching listing photos", fix: "Add real-life UGC photos and video proof in listing" },
-      { complaint: "Slow shipping / wrong item delivered", fix: "Use reliable fulfillment with tracking + branded packaging" },
-      { complaint: "Hard to figure out how to use", fix: "Include quick-start card and QR-linked tutorial video" },
+      {
+        complaint: "Quality not matching listing photos",
+        fix: "Add real-life UGC photos and video proof in listing",
+      },
+      {
+        complaint: "Slow shipping / wrong item delivered",
+        fix: "Use reliable fulfillment with tracking + branded packaging",
+      },
+      {
+        complaint: "Hard to figure out how to use",
+        fix: "Include quick-start card and QR-linked tutorial video",
+      },
     ];
   }
 
@@ -496,10 +561,28 @@ export function normalizeProduct(
     const satScore = comp === "High" ? 72 : comp === "Medium" ? 48 : 25;
     out.market_saturation = {
       score: satScore,
-      active_sellers: comp === "High" ? "500+ listings" : comp === "Medium" ? "100-300 listings" : "Under 100 listings",
-      ad_activity: comp === "High" ? "Heavy — multiple brands running active ads" : comp === "Medium" ? "Moderate — a few brands with consistent spend" : "Low — mostly organic listings",
-      entry_window: satScore > 60 ? "Narrow — act fast or differentiate hard" : satScore > 35 ? "Open — solid entry window with differentiation" : "Wide — low saturation, easy entry",
-      verdict: satScore > 60 ? "Crowded market — requires strong differentiation" : "Manageable competition — good opportunity window",
+      active_sellers:
+        comp === "High"
+          ? "500+ listings"
+          : comp === "Medium"
+            ? "100-300 listings"
+            : "Under 100 listings",
+      ad_activity:
+        comp === "High"
+          ? "Heavy — multiple brands running active ads"
+          : comp === "Medium"
+            ? "Moderate — a few brands with consistent spend"
+            : "Low — mostly organic listings",
+      entry_window:
+        satScore > 60
+          ? "Narrow — act fast or differentiate hard"
+          : satScore > 35
+            ? "Open — solid entry window with differentiation"
+            : "Wide — low saturation, easy entry",
+      verdict:
+        satScore > 60
+          ? "Crowded market — requires strong differentiation"
+          : "Manageable competition — good opportunity window",
     };
   }
 
@@ -573,9 +656,30 @@ export function normalizeProduct(
   // supplier_shortlist: derive from cost structure
   if (!out.supplier_shortlist || out.supplier_shortlist.length === 0) {
     out.supplier_shortlist = [
-      { name: "CJ Dropshipping", region: "China (Guangzhou)", unit_price_usd: fmt(sup), moq: "1 unit (dropship)", lead_time: "7-15 days", notes: "Fast processing, US/EU warehouses available" },
-      { name: "1688 Direct", region: "China (Yiwu)", unit_price_usd: fmt(sup * 0.85), moq: "50 units", lead_time: "15-30 days", notes: "Best unit price for bulk — requires agent" },
-      { name: "Alibaba Verified", region: "China (Fujian)", unit_price_usd: fmt(sup * 0.92), moq: "100 units", lead_time: "20-40 days", notes: "Trade assurance + quality inspection" },
+      {
+        name: "CJ Dropshipping",
+        region: "China (Guangzhou)",
+        unit_price_usd: fmt(sup),
+        moq: "1 unit (dropship)",
+        lead_time: "7-15 days",
+        notes: "Fast processing, US/EU warehouses available",
+      },
+      {
+        name: "1688 Direct",
+        region: "China (Yiwu)",
+        unit_price_usd: fmt(sup * 0.85),
+        moq: "50 units",
+        lead_time: "15-30 days",
+        notes: "Best unit price for bulk — requires agent",
+      },
+      {
+        name: "Alibaba Verified",
+        region: "China (Fujian)",
+        unit_price_usd: fmt(sup * 0.92),
+        moq: "100 units",
+        lead_time: "20-40 days",
+        notes: "Trade assurance + quality inspection",
+      },
     ];
   }
 

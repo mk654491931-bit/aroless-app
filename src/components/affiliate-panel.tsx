@@ -2,7 +2,16 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { BadgeCheck, Copy, Check, Loader2, Megaphone, Coins, CalendarClock, ShieldCheck } from "lucide-react";
+import {
+  BadgeCheck,
+  Copy,
+  Check,
+  Loader2,
+  Megaphone,
+  Coins,
+  CalendarClock,
+  ShieldCheck,
+} from "lucide-react";
 import {
   getMyAffiliateStatus,
   applyForAffiliate,
@@ -37,7 +46,9 @@ export function AffiliatePanel() {
     mutationFn: () => applyFn(),
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success("Affiliate başvurun alındı — admin onayından sonra komisyon kazanmaya başlarsın.");
+        toast.success(
+          "Affiliate başvurun alındı — admin onayından sonra komisyon kazanmaya başlarsın.",
+        );
         qc.invalidateQueries({ queryKey: ["affiliate"] });
       } else toast.error("Başvuru kaydedilemedi, lütfen tekrar dene.");
     },
@@ -68,7 +79,9 @@ export function AffiliatePanel() {
           <h2 className="font-semibold">Affiliate Programı · Mikro-influencer</h2>
         </div>
         {status && meta && (
-          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.cls}`}>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.cls}`}
+          >
             {status === "verified" ? <BadgeCheck size={12} /> : <CalendarClock size={12} />}
             {meta.label}
           </span>
@@ -91,15 +104,19 @@ export function AffiliatePanel() {
           {!status && (
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <p className="text-sm">
-                Kitle oluşturmuş bir içerik üreticisi veya mikro-influencer mısın? Davet
-                linkinle abone olanların ödemelerinden komisyon kazanmaya başla.
+                Kitle oluşturmuş bir içerik üreticisi veya mikro-influencer mısın? Davet linkinle
+                abone olanların ödemelerinden komisyon kazanmaya başla.
               </p>
               <button
                 onClick={() => apply.mutate()}
                 disabled={apply.isPending}
                 className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {apply.isPending ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                {apply.isPending ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <ShieldCheck size={14} />
+                )}
                 Başvuru yap
               </button>
             </div>
@@ -138,7 +155,8 @@ export function AffiliatePanel() {
                     <Coins size={13} /> Birikmiş komisyon
                   </div>
                   <div className="text-2xl font-bold">
-                    ${((data?.earned_cents ?? 0) / 100).toLocaleString(undefined, {
+                    $
+                    {((data?.earned_cents ?? 0) / 100).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -159,7 +177,10 @@ export function AffiliatePanel() {
                   </div>
                   <ul className="divide-y divide-white/5 rounded-xl border border-white/10 bg-white/[0.02]">
                     {data!.recent.slice(0, 5).map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <li
+                        key={c.id}
+                        className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                      >
                         <span className="truncate">
                           {c.tier ?? "Abonelik"} · ${(c.gross_amount_cents / 100).toFixed(2)} ödeme
                         </span>

@@ -108,9 +108,7 @@ export function AnalysisPipelineModal({
       setElapsed(ms / 1000);
       // Saturating curve: ~95% by the engine ETA, then a slow creep toward 99%
       // so a long real 14-agent run never looks frozen at a flat percentage.
-      const pct = done
-        ? 100
-        : Math.min(99, Math.round(100 * (1 - Math.exp(-ms / (target / 3)))));
+      const pct = done ? 100 : Math.min(99, Math.round(100 * (1 - Math.exp(-ms / (target / 3)))));
       setProgress(pct);
       setStepIdx(Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length)));
       if (done && pct >= 100) window.clearInterval(id);
@@ -156,9 +154,7 @@ export function AnalysisPipelineModal({
                 ) : remaining > 0 ? (
                   <span>~{remaining.toFixed(0)}s</span>
                 ) : (
-                  <span className="animate-pulse text-[oklch(0.88_0.10_255)]">
-                    son adımlar…
-                  </span>
+                  <span className="animate-pulse text-[oklch(0.88_0.10_255)]">son adımlar…</span>
                 )}
               </div>
             </div>
@@ -212,7 +208,9 @@ export function AnalysisPipelineModal({
               <Users size={18} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold leading-tight">14-Agent AI Council Real-Time Status</div>
+              <div className="text-sm font-bold leading-tight">
+                14-Agent AI Council Real-Time Status
+              </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
                 Ağırlık %70 · {doneCount}/{COUNCIL_AGENTS.length} ajan tamamlandı
               </div>

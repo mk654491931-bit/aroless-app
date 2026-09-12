@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  PLANS,
-  PLAN_BY_ID,
-  tierLevel,
-  planForLevel,
-  quotaFor,
-  ALL_MODULES,
-} from "./plans";
+import { PLANS, PLAN_BY_ID, tierLevel, planForLevel, quotaFor, ALL_MODULES } from "./plans";
 
 describe("PLANS", () => {
   it("has 3 plans", () => {
