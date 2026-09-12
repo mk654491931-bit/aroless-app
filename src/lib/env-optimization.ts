@@ -117,10 +117,7 @@ export const runtimeOptimization = {
   /**
    * Scheduled microtask
    */
-  scheduleTask(
-    callback: () => void,
-    priority: "high" | "normal" | "low" = "normal",
-  ): () => void {
+  scheduleTask(callback: () => void, priority: "high" | "normal" | "low" = "normal"): () => void {
     if (priority === "high") {
       // High priority: hemen çalıştır
       Promise.resolve().then(callback);

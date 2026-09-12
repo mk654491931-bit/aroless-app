@@ -154,8 +154,6 @@ export function useOptimizedImage(
   }, [src, options?.width, options?.quality, options?.format]);
 }
 
-
-
 // Type definitions
 interface LayoutShiftEntry extends PerformanceEntry {
   value: number;

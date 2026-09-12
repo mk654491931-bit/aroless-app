@@ -32,11 +32,12 @@ const DEFAULTS = {
 } as const;
 
 /** UI seçenekleri — payload'ı göndermeden önce her alanı kısıtlı kümeye çeker. */
-export function sanitizeOnboardingResult(raw: Partial<OnboardingResult> | null | undefined): OnboardingResult {
+export function sanitizeOnboardingResult(
+  raw: Partial<OnboardingResult> | null | undefined,
+): OnboardingResult {
   const input = raw ?? {};
   const country =
-    typeof input.country === "string" &&
-    TARGET_COUNTRIES.some((c) => c.code === input.country)
+    typeof input.country === "string" && TARGET_COUNTRIES.some((c) => c.code === input.country)
       ? input.country
       : DEFAULTS.country;
   const platform =

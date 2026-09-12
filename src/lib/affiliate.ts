@@ -17,11 +17,7 @@ export const MIN_COMMISSION_GROSS_CENTS = 100; // $1.00
 
 export type AffiliateStatus = "pending" | "verified" | "revoked";
 
-export const AFFILIATE_STATUSES: readonly AffiliateStatus[] = [
-  "pending",
-  "verified",
-  "revoked",
-];
+export const AFFILIATE_STATUSES: readonly AffiliateStatus[] = ["pending", "verified", "revoked"];
 
 export function isAffiliateStatus(value: unknown): value is AffiliateStatus {
   return value === "pending" || value === "verified" || value === "revoked";

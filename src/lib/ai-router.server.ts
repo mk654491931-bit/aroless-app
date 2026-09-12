@@ -95,8 +95,7 @@ function pooledProvider(group: PoolGroup): ProviderCall {
   return async (prompt, temperature, signal) => {
     const keys = readPoolGroupKeys(group);
     const { baseUrl, model } = poolGroupConfig(group);
-    if (!keys.length || !baseUrl)
-      throw new Error(`no api key/endpoint configured for ${group}`);
+    if (!keys.length || !baseUrl) throw new Error(`no api key/endpoint configured for ${group}`);
     const modelName = model || "Meta-Llama-3.3-70B-Instruct";
     try {
       const text = await rotate(group, keys, [modelName], (key, m) =>
@@ -182,7 +181,10 @@ function routerErrorKind(e: unknown): "quota" | "server" | "network" {
   const status = (e as { status?: number }).status ?? 0;
   const msg = e instanceof Error ? e.message : "";
   if (
-    status === 429 || status === 401 || status === 402 || status === 403 ||
+    status === 429 ||
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
     msg.startsWith("QUOTA:")
   )
     return "quota";
@@ -218,7 +220,10 @@ async function rotate(
         last = e;
         const status = (e as { status?: number }).status;
         const isQuota =
-          status === 429 || status === 402 || status === 401 || status === 403 ||
+          status === 429 ||
+          status === 402 ||
+          status === 401 ||
+          status === 403 ||
           (e instanceof Error && e.message.startsWith("QUOTA:"));
         if (isQuota) {
           parkPoolKey(group, key); // anahtar tükendi → beklemeye al, sonraki anahtara geç
@@ -354,20 +359,16 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
 
   huggingface: async (prompt, temperature, signal) => {
     try {
-      const text = await rotate(
-        "huggingface",
-        hfEnvKeys(),
-        HF_MODELS,
-        (key, model) =>
-          openAICompatible({
-            url: "https://router.huggingface.co/v1/chat/completions",
-            key,
-            model,
-            prompt,
-            temperature,
-            signal,
-            json: false,
-          }),
+      const text = await rotate("huggingface", hfEnvKeys(), HF_MODELS, (key, model) =>
+        openAICompatible({
+          url: "https://router.huggingface.co/v1/chat/completions",
+          key,
+          model,
+          prompt,
+          temperature,
+          signal,
+          json: false,
+        }),
       );
       markPoolGroupOutcome("hf", 1, "ok");
       return text;

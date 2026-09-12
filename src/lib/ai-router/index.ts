@@ -22,7 +22,7 @@ import {
   loadProviderKeys,
   PROVIDER_CONFIGS,
   ROUTING_PRIORITY,
-} from './config';
+} from "./config";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -74,11 +74,8 @@ const rrIndex: Record<ProviderId, number> = {
 /** Vercel 30 s limiti altında güvenli fetch timeout */
 const TIMEOUT_MS = 28_000;
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-): Promise<Response> {
-  const ctrl  = new AbortController();
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
@@ -102,19 +99,19 @@ async function tryProvider(
   maxTokens: number,
   temperature: number,
 ): Promise<{ text: string; keyIndex: number } | null> {
-  const cfg  = PROVIDER_CONFIGS[id];
-  const n    = keys.length;
+  const cfg = PROVIDER_CONFIGS[id];
+  const n = keys.length;
   const base = rrIndex[id] ?? 0;
 
   for (let attempt = 0; attempt < n; attempt++) {
-    const idx    = (base + attempt) % n;
+    const idx = (base + attempt) % n;
     const apiKey = keys[idx]!;
 
     try {
       const res = await fetchWithTimeout(cfg.endpoint, {
-        method:  'POST',
+        method: "POST",
         headers: cfg.buildHeaders(apiKey),
-        body:    JSON.stringify(cfg.buildBody(prompt, maxTokens, temperature)),
+        body: JSON.stringify(cfg.buildBody(prompt, maxTokens, temperature)),
       });
 
       if (!res.ok) {
@@ -134,7 +131,6 @@ async function tryProvider(
       // Başarı — Round-Robin indeksini bir sonraki key'e taşı
       rrIndex[id] = (idx + 1) % n;
       return { text, keyIndex: idx + 1 };
-
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[ai-router] ${id} key[${idx + 1}] → ${msg}`);
@@ -161,19 +157,12 @@ async function tryProvider(
  * });
  * console.log(result.text, result.provider, result.latencyMs);
  */
-export async function callSmartRouter(
-  input: RouterInput,
-): Promise<RouterOutput> {
-  const {
-    prompt,
-    taskType    = 'default',
-    maxTokens   = 1024,
-    temperature = 0.7,
-  } = input;
+export async function callSmartRouter(input: RouterInput): Promise<RouterOutput> {
+  const { prompt, taskType = "default", maxTokens = 1024, temperature = 0.7 } = input;
 
-  const allKeys      = loadProviderKeys();
+  const allKeys = loadProviderKeys();
   const priorityList = ROUTING_PRIORITY[taskType];
-  const t0           = Date.now();
+  const t0 = Date.now();
 
   for (const id of priorityList) {
     const keys = allKeys[id];
@@ -187,21 +176,19 @@ export async function callSmartRouter(
 
     if (result) {
       return {
-        text:      result.text,
-        provider:  id,
-        model:     PROVIDER_CONFIGS[id].model,
-        keyIndex:  result.keyIndex,
+        text: result.text,
+        provider: id,
+        model: PROVIDER_CONFIGS[id].model,
+        keyIndex: result.keyIndex,
         latencyMs: Date.now() - t0,
       };
     }
 
-    console.warn(
-      `[ai-router] ${id}: tüm key'ler başarısız — sonraki provider'a geçiliyor.`,
-    );
+    console.warn(`[ai-router] ${id}: tüm key'ler başarısız — sonraki provider'a geçiliyor.`);
   }
 
   throw new Error(
     `[ai-router] Tüm provider'lar başarısız oldu (taskType=${taskType}). ` +
-    'Vercel ortam değişkenlerini (GROQ_KEY_1 … SAMBANOVA_KEY_1) kontrol edin.',
+      "Vercel ortam değişkenlerini (GROQ_KEY_1 … SAMBANOVA_KEY_1) kontrol edin.",
   );
 }

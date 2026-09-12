@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  isNoCreditsError,
-  isJwtError,
-  classifyServerError,
-} from "./error-helpers";
+import { isNoCreditsError, isJwtError, classifyServerError } from "./error-helpers";
 
 describe("isNoCreditsError", () => {
   it("returns true for no_credits error message", () => {

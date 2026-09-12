@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseMoney, computeUnitEconomics, marginBadge, MIN_NET_MARGIN_PCT } from "./unit-economics";
+import {
+  parseMoney,
+  computeUnitEconomics,
+  marginBadge,
+  MIN_NET_MARGIN_PCT,
+} from "./unit-economics";
 
 describe("parseMoney", () => {
   it("parses plain numbers", () => {

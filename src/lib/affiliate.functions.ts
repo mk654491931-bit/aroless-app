@@ -59,16 +59,10 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
         .select("user_id, status, commission_rate_pct, verified_by, verified_at, created_at")
         .eq("user_id", context.userId)
         .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", context.userId)
-        .maybeSingle(),
+      supabaseAdmin.from("profiles").select("referral_code").eq("id", context.userId).maybeSingle(),
       supabaseAdmin
         .from("affiliate_commissions")
-        .select(
-          "id, tier, gross_amount_cents, commission_cents, created_at",
-        )
+        .select("id, tier, gross_amount_cents, commission_cents, created_at")
         .eq("affiliate_id", context.userId)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -81,7 +75,8 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       applied: !!row,
       status: row && isAffiliateStatus(row.status) ? row.status : null,
       commission_rate_pct: row?.commission_rate_pct ?? DEFAULT_COMMISSION_RATE_PCT,
-      referral_code: ((profileRes.data as { referral_code?: string } | null)?.referral_code ?? "") as string,
+      referral_code: ((profileRes.data as { referral_code?: string } | null)?.referral_code ??
+        "") as string,
       earned_cents: commissions.reduce((s, c) => s + (c.commission_cents ?? 0), 0),
       paid_transactions: commissions.length,
       recent: commissions.slice(0, 10).map((c) => ({
@@ -144,14 +139,10 @@ export const adminListAffiliates = createServerFn({ method: "GET" })
     const [affiliatesRes, commissionsRes] = await Promise.all([
       supabaseAdmin
         .from("affiliates")
-        .select(
-          "user_id, status, commission_rate_pct, verified_at, created_at",
-        )
+        .select("user_id, status, commission_rate_pct, verified_at, created_at")
         .order("created_at", { ascending: false })
         .limit(200),
-      supabaseAdmin
-        .from("affiliate_commissions")
-        .select("affiliate_id, commission_cents"),
+      supabaseAdmin.from("affiliate_commissions").select("affiliate_id, commission_cents"),
     ]);
 
     const rows = (affiliatesRes.data ?? []) as Array<{
@@ -218,18 +209,16 @@ const SetStatusSchema = z.object({
 export const adminSetAffiliateStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => SetStatusSchema.parse(input))
-  .handler(
-    async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
-      await assertAdmin(context);
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-      const { data: result, error } = await supabaseAdmin.rpc("verify_affiliate", {
-        _admin_id: context.userId,
-        _user_id: data.userId,
-        _status: data.status,
-        _rate_pct: data.ratePct ?? null,
-      });
-      if (error || String(result) !== "ok") throw forbidden();
-      return { ok: true, status: data.status };
-    },
-  );
+    const { data: result, error } = await supabaseAdmin.rpc("verify_affiliate", {
+      _admin_id: context.userId,
+      _user_id: data.userId,
+      _status: data.status,
+      _rate_pct: data.ratePct ?? null,
+    });
+    if (error || String(result) !== "ok") throw forbidden();
+    return { ok: true, status: data.status };
+  });

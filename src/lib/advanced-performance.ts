@@ -90,9 +90,10 @@ export function initializeWebVitalsTracking(
     const fidObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         const interaction = entry as FirstInput | PerformanceEventTiming;
-        const duration = "processingDuration" in interaction
-          ? interaction.processingDuration
-          : (entry as PerformanceEntry).duration;
+        const duration =
+          "processingDuration" in interaction
+            ? interaction.processingDuration
+            : (entry as PerformanceEntry).duration;
         callback?.({
           name: "FID",
           value: duration,
@@ -154,7 +155,8 @@ export function getResourceMetrics(): ResourceMetrics[] {
     type: entry.entryType,
     duration: (entry as PerformanceResourceTiming).duration,
     size: (entry as PerformanceResourceTiming).transferSize || 0,
-    cached: (entry as PerformanceResourceTiming).transferSize === 0 &&
+    cached:
+      (entry as PerformanceResourceTiming).transferSize === 0 &&
       (entry as PerformanceResourceTiming).decodedBodySize > 0,
   }));
 }

@@ -200,7 +200,13 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       console.error("[email] welcome send failed", e);
     }
 
-    return { ok: true as const, email: data.email, emailSent, creditsBlocked: false, promoDiscount };
+    return {
+      ok: true as const,
+      email: data.email,
+      emailSent,
+      creditsBlocked: false,
+      promoDiscount,
+    };
   });
 
 export const verifyEmailSignup = createServerFn({ method: "POST" })

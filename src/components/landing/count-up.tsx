@@ -9,7 +9,13 @@ type CountUpProps = {
 };
 
 /** Animated counter — eases to `end` once when it enters the viewport. */
-export function CountUp({ end, decimals = 0, prefix = "", suffix = "", duration = 1500 }: CountUpProps) {
+export function CountUp({
+  end,
+  decimals = 0,
+  prefix = "",
+  suffix = "",
+  duration = 1500,
+}: CountUpProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const startedRef = useRef(false);
   const [value, setValue] = useState(0);
@@ -17,7 +23,10 @@ export function CountUp({ end, decimals = 0, prefix = "", suffix = "", duration 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (typeof IntersectionObserver === "undefined" || typeof requestAnimationFrame === "undefined") {
+    if (
+      typeof IntersectionObserver === "undefined" ||
+      typeof requestAnimationFrame === "undefined"
+    ) {
       setValue(end);
       return;
     }

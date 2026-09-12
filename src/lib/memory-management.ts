@@ -17,8 +17,7 @@ export class MemoryManager {
     event: string;
     handler: EventListener;
   }> = [];
-  private observers: Set<MutationObserver | ResizeObserver | IntersectionObserver> =
-    new Set();
+  private observers: Set<MutationObserver | ResizeObserver | IntersectionObserver> = new Set();
 
   /**
    * Register cleanup function
@@ -56,7 +55,7 @@ export class MemoryManager {
     target: EventTarget,
     event: string,
     handler: EventListener,
-    options?: EventListenerOptions
+    options?: EventListenerOptions,
   ) {
     target.addEventListener(event, handler, options);
     this.eventListeners.push({ target, event, handler });
@@ -147,7 +146,7 @@ export function useMemoryManager() {
  */
 export function useAutoCleanup(
   effect: (manager: MemoryManager) => void | (() => void),
-  deps?: React.DependencyList
+  deps?: React.DependencyList,
 ) {
   const manager = useMemoryManager();
 
@@ -176,9 +175,7 @@ export function setupMemoryLeakDetection() {
     const diff = currentMemory - previousMemory;
 
     if (diff > threshold) {
-      console.warn(
-        `⚠️ Potential memory leak detected: +${(diff / 1024 / 1024).toFixed(2)}MB`
-      );
+      console.warn(`⚠️ Potential memory leak detected: +${(diff / 1024 / 1024).toFixed(2)}MB`);
     }
 
     previousMemory = currentMemory;

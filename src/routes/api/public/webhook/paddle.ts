@@ -27,12 +27,8 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
     handlers: {
       POST: async ({ request }) => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const {
-          paddleSettings,
-          verifyPaddleWebhook,
-          mapPaddleEvent,
-          SUBSCRIPTION_CREDIT_GRANTS,
-        } = await import("@/lib/paddle.server");
+        const { paddleSettings, verifyPaddleWebhook, mapPaddleEvent, SUBSCRIPTION_CREDIT_GRANTS } =
+          await import("@/lib/paddle.server");
 
         try {
           // 1. Configuration guard — fail loudly (Paddle retries with backoff).
@@ -63,9 +59,10 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           let auditPayload: unknown = null;
           try {
             const parsed: unknown = JSON.parse(raw);
-            auditPayload = JSON.stringify(parsed).length > 50_000
-              ? { eventId: event.eventId, eventType: event.eventType, truncated: true }
-              : parsed;
+            auditPayload =
+              JSON.stringify(parsed).length > 50_000
+                ? { eventId: event.eventId, eventType: event.eventType, truncated: true }
+                : parsed;
           } catch {
             /* raw body was validated by unmarshal already */
           }
@@ -82,9 +79,8 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
 
           // 6. Attribute the event to a user: customData userId first, then the
           //    Paddle customer id recorded on the profile (renewal fallback).
-          let userId: string | null = command.userId && UUID_RE.test(command.userId)
-            ? command.userId
-            : null;
+          let userId: string | null =
+            command.userId && UUID_RE.test(command.userId) ? command.userId : null;
 
           if (!userId && command.customerId) {
             const { data: byCustomer } = await supabaseAdmin
@@ -115,7 +111,8 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
               .select("subscription_tier")
               .eq("id", userId as never)
               .maybeSingle();
-            const currentTier = (profile as { subscription_tier?: string } | null)?.subscription_tier;
+            const currentTier = (profile as { subscription_tier?: string } | null)
+              ?.subscription_tier;
             const planKey = (["Starter", "Pro", "Business"] as const).find(
               (p) => p.toLowerCase() === String(currentTier ?? "").toLowerCase(),
             );

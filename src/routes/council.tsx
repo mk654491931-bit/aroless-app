@@ -30,11 +30,7 @@ import {
   normalizeUsageSnapshot,
   type UsageFeature,
 } from "@/lib/usage";
-import {
-  streamAgentRun,
-  streamCouncilAnalysis,
-  type AgentProgress,
-} from "@/lib/agent-stream.client";
+import { streamAgentRun, streamCouncilAnalysis, type AgentProgress } from "@/lib/agent-stream";
 import { nextStageIndex, stageIndexForAgent, stageIndexForStage } from "@/lib/council-stage";
 import { PIPELINE_STAGES, stageIndexForPipelineStage } from "@/lib/pipeline-stage";
 import { DeepAnalysisResults } from "@/components/deep-analysis-results";

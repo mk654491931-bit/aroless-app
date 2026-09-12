@@ -49,12 +49,7 @@ function extractUrlFromMessage(message: string): string | undefined {
 /** True when an error looks like a chunk load that 404'd after a deploy. */
 export function isStaleChunkError(error: unknown): boolean {
   if (error == null) return false;
-  const message =
-    typeof error === "string"
-      ? error
-      : error instanceof Error
-        ? error.message
-        : "";
+  const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
   if (message && STALE_IMPORT_SIGNATURES.some((sig) => message.includes(sig))) {
     return true;
   }
