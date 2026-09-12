@@ -699,6 +699,8 @@ html.light [class*="text-white/"] {
   transform: translate(-50%, -50%);
   border-radius: 9999px;
   will-change: transform, opacity;
+  /* blur radius drives how much of the layer has to be rasterized every time
+     this layer is repainted; 52px keeps the soft look at a fraction of the cost. */
   filter: blur(52px);
   background: radial-gradient(
     ellipse at center,
@@ -1047,8 +1049,9 @@ body,
 
 .auth-grid {
   position: absolute;
-  inset: 0;
+  inset: -128px -64px;
   pointer-events: none;
+  will-change: transform;
   background-image:
     linear-gradient(
       to right,
@@ -1061,20 +1064,79 @@ body,
       transparent 1px
     );
   background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 10%, transparent 75%);
+  /* Percentages resolve against the overscanned box, so they are reduced to keep
+     the visible grid extent identical to the pre-overscan layer. */
+  mask-image: radial-gradient(ellipse 65% 48% at 50% 40%, #000 10%, transparent 75%);
   opacity: 0.35;
   animation: grid-pan 26s linear infinite;
 }
+/* Composited translate instead of `background-position`: this layer covers the
+   whole auth viewport, so the old animation repainted the full screen every
+   frame. One tile of overscan keeps the diagonally moving grid seamless. */
 @keyframes grid-pan {
   from {
-    background-position:
-      0 0,
-      0 0;
+    transform: translate3d(0, 0, 0);
   }
   to {
-    background-position:
-      64px 128px,
-      64px 128px;
+    transform: translate3d(64px, 128px, 0);
+  }
+}
+
+/* ------------------------------------------------------------
+   Composited replacements for the two remaining paint/layout loops.
+   `background-position` repaints the whole hero every frame and `left`
+   re-layouts the CTA every frame, so both are re-declared on transform-only
+   animations. New keyframe names are required because a same-name redefinition
+   would lose to the later original, and the `html` prefix outranks it in the
+   cascade. Reduced motion is re-asserted below for the same reason.
+   ------------------------------------------------------------ */
+@keyframes ent-grid-pan-composited {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 56px, 0);
+  }
+}
+/* Overscanned by exactly one tile so the rising pattern never exposes an empty
+   edge; the mask radius is scaled down for the taller box. */
+html .ent-grid-bg {
+  inset: -56px 0;
+  will-change: transform;
+  -webkit-mask-image: radial-gradient(ellipse 70% 57% at 50% 0%, black 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 57% at 50% 0%, black 35%, transparent 78%);
+  animation: ent-grid-pan-composited 6s linear infinite;
+}
+@keyframes cta-sheen-composited {
+  0% {
+    transform: skewX(-18deg) translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    transform: skewX(-18deg) translate3d(348%, 0, 0);
+    opacity: 0;
+  }
+  100% {
+    transform: skewX(-18deg) translate3d(348%, 0, 0);
+    opacity: 0;
+  }
+}
+/* 348% of the sheen's own 46% width equals the old 160% of the parent width. */
+html .cta-sweep::after {
+  left: -45%;
+  will-change: transform, opacity;
+  animation: cta-sheen-composited 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  html .ent-grid-bg {
+    animation: none;
+  }
+  html .cta-sweep::after {
+    animation: none;
+    display: none;
   }
 }
 

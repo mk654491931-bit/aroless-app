@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Fingerprint, ScanFace, Lock, Sparkles } from "lucide-react";
-import { createFrameGate, meshDpr, meshLinkStrength, meshNodeCount } from "@/lib/premium-mesh";
+import {
+  MESH_LINK_BUCKETS,
+  createFrameGate,
+  meshDpr,
+  meshLinkBucket,
+  meshLinkStrength,
+  meshNodeCount,
+} from "@/lib/premium-mesh";
 
 /* ---------------- Quantum node mesh canvas (drifting data nodes) ---------------- */
 export function QuantumMesh({ className = "" }: { className?: string }): ReactElement {
@@ -21,42 +28,36 @@ export function QuantumMesh({ className = "" }: { className?: string }): ReactEl
     let raf = 0;
     let w = 0;
     let h = 0;
+    let onScreen = true;
     // DPR 2 quadruples the pixels this canvas clears/fills every frame.
     const dpr = meshDpr(window.devicePixelRatio || 1);
 
-    const resize = () => {
-      w = canvas.clientWidth;
-      h = canvas.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const count = meshNodeCount(w, h);
-    const nodes = Array.from({ length: count }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3,
-      r: Math.random() * 1.5 + 0.6,
-      p: Math.random() * Math.PI * 2,
-    }));
-
-    const onMove = (e: MouseEvent) => {
-      mouse.current.x = e.clientX / window.innerWidth;
-      mouse.current.y = e.clientY / window.innerHeight;
-    };
-    if (animate) window.addEventListener("mousemove", onMove);
+    // Links are collected per opacity bucket so a frame strokes a handful of
+    // paths instead of ~1.1k individual `stroke()` calls that each built their
+    // own `rgba(...)` string — the real cost of the original loop was that
+    // allocation and the per-link draw call, not the distance maths.
+    const linkColors = Array.from(
+      { length: MESH_LINK_BUCKETS },
+      (_, bucket) => `rgba(96,175,255,${(((bucket + 1) / MESH_LINK_BUCKETS) * 0.22).toFixed(3)})`,
+    );
+    const segments: number[][] = Array.from({ length: MESH_LINK_BUCKETS }, () => []);
+    let nodes: { x: number; y: number; vx: number; vy: number; r: number; p: number }[] = [];
 
     // ~30fps: indistinguishable for slow drifting nodes, half the work.
     const gate = createFrameGate();
     let t = 0;
+
+    const wake = () => {
+      if (!raf) raf = requestAnimationFrame(draw);
+    };
+
+    // Only paint while the canvas is actually visible and the tab is in front.
+    const running = () => animate && onScreen && !document.hidden;
+
     const draw = (now: number) => {
       raf = 0;
-      if (!gate(now)) {
-        if (animate && !document.hidden) raf = requestAnimationFrame(draw);
+      if (animate && (!gate(now) || !running())) {
+        if (running()) raf = requestAnimationFrame(draw);
         return;
       }
       t += 0.01;
@@ -75,47 +76,109 @@ export function QuantumMesh({ className = "" }: { className?: string }): ReactEl
         if (n.y > h) n.y = 0;
       }
 
+      for (const segment of segments) segment.length = 0;
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
+        if (!a) continue;
         const ax = a.x + swayX;
         const ay = a.y + swayY;
         for (let j = i + 1; j < nodes.length; j++) {
           const b = nodes[j];
+          if (!b) continue;
           const bx = b.x + swayX;
           const by = b.y + swayY;
           // Squared-distance compare + a single sqrt, instead of Math.hypot
           // (this predicate runs ~1.1k times per frame).
           const strength = meshLinkStrength(ax - bx, ay - by);
           if (strength <= 0) continue;
-          ctx.strokeStyle = `rgba(96,175,255,${strength * 0.22})`;
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(bx, by);
-          ctx.stroke();
+          segments[meshLinkBucket(strength)].push(ax, ay, bx, by);
         }
+      }
+
+      ctx.lineWidth = 0.6;
+      for (let bucket = 0; bucket < segments.length; bucket++) {
+        const segment = segments[bucket];
+        if (!segment || segment.length === 0) continue;
+        ctx.strokeStyle = linkColors[bucket];
+        ctx.beginPath();
+        for (let k = 0; k < segment.length; k += 4) {
+          ctx.moveTo(segment[k], segment[k + 1]);
+          ctx.lineTo(segment[k + 2], segment[k + 3]);
+        }
+        ctx.stroke();
+      }
+
+      // Nodes paint on top of the link mesh.
+      for (const a of nodes) {
+        const ax = a.x + swayX;
+        const ay = a.y + swayY;
         const pulse = 0.55 + 0.45 * Math.sin(t * 2 + a.p);
-        ctx.fillStyle = `rgba(140,225,255,${0.22 + pulse * 0.3})`;
+        ctx.fillStyle = `rgba(140,225,255,${(0.22 + pulse * 0.3).toFixed(3)})`;
         ctx.beginPath();
         ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.4), 0, Math.PI * 2);
         ctx.fill();
       }
-      if (animate && !document.hidden) raf = requestAnimationFrame(draw);
+      if (running()) raf = requestAnimationFrame(draw);
     };
-    raf = requestAnimationFrame(draw);
+
+    const resize = () => {
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = Math.max(1, Math.round(w * dpr));
+      canvas.height = Math.max(1, Math.round(h * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Resizing clears the bitmap, and without an animation loop (touch or
+      // reduced motion) nothing would ever repaint it.
+      if (!animate) wake();
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    nodes = Array.from({ length: meshNodeCount(w, h) }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.5 + 0.6,
+      p: Math.random() * Math.PI * 2,
+    }));
+
+    const onMove = (e: MouseEvent) => {
+      mouse.current.x = e.clientX / window.innerWidth;
+      mouse.current.y = e.clientY / window.innerHeight;
+    };
+    if (animate) window.addEventListener("mousemove", onMove);
+
+    // The hero mesh is tall: without this it keeps burning frames while the user
+    // scrolls through the rest of the page.
+    let observer: IntersectionObserver | undefined;
+    if (animate && typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver((entries) => {
+        onScreen = entries[0]?.isIntersecting ?? true;
+        if (onScreen) wake();
+        else if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      });
+      observer.observe(canvas);
+    }
+
+    wake();
 
     const onVisibility = () => {
       if (document.hidden) {
-        cancelAnimationFrame(raf);
+        if (raf) cancelAnimationFrame(raf);
         raf = 0;
-      } else if (animate && !raf) {
-        raf = requestAnimationFrame(draw);
+      } else if (running()) {
+        wake();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
+      observer?.disconnect();
       window.removeEventListener("resize", resize);
       if (animate) window.removeEventListener("mousemove", onMove);
       document.removeEventListener("visibilitychange", onVisibility);

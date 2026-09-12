@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   CheckCircle2,
   ChevronRight,
@@ -95,7 +95,7 @@ type RunState = "idle" | "running" | "done";
  * Running it activates the agent pipeline visually for ~1.2s, then renders the
  * simulated output summary. No network, no accounts.
  */
-export function CapabilitySimulator() {
+export function CapabilitySimulator(): ReactElement {
   const [activeId, setActiveId] = useState<VerticalId>("consumer-tech");
   const [state, setState] = useState<RunState>("idle");
   const [progress, setProgress] = useState(0);
@@ -141,7 +141,9 @@ export function CapabilitySimulator() {
   };
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/70 shadow-[0_40px_120px_-50px_rgba(16,185,129,0.15)] backdrop-blur-xl">
+    // No backdrop blur: this panel floats over the animated ambient layers, so a
+    // blur would be recomputed every frame. A more opaque surface looks identical.
+    <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/90 shadow-[0_40px_120px_-50px_rgba(16,185,129,0.15)]">
       {/* Header / vertical pills */}
       <div className="border-b border-white/10 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -182,7 +184,9 @@ export function CapabilitySimulator() {
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-200">Agent pipeline · {vertical.label}</p>
+            <p className="text-sm font-semibold text-slate-200">
+              Agent pipeline · {vertical.label}
+            </p>
             <button
               type="button"
               onClick={runSimulation}
@@ -281,7 +285,9 @@ export function CapabilitySimulator() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Projected GMV</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                    Projected GMV
+                  </p>
                   <p className="mt-1 text-lg font-extrabold text-slate-100">{vertical.gmv}</p>
                 </div>
               </div>
@@ -314,7 +320,9 @@ export function CapabilitySimulator() {
                   ))}
                 </div>
                 <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500">
-                  <span className={`h-1 rounded-full bg-emerald-400/70 ${vertical.pairs[0]?.width ?? "w-1/2"}`} />
+                  <span
+                    className={`h-1 rounded-full bg-emerald-400/70 ${vertical.pairs[0]?.width ?? "w-1/2"}`}
+                  />
                   <span>match strength</span>
                 </div>
               </div>
@@ -322,8 +330,8 @@ export function CapabilitySimulator() {
               {/* Hook briefs */}
               <div className="mt-4">
                 <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200">
-                  <CircleDollarSign size={13} className="text-emerald-300" /> Generated campaign hook
-                  briefs
+                  <CircleDollarSign size={13} className="text-emerald-300" /> Generated campaign
+                  hook briefs
                 </p>
                 <ul className="mt-2 space-y-1.5">
                   {vertical.hooks.map((hook) => (
@@ -345,8 +353,8 @@ export function CapabilitySimulator() {
               </div>
               <p className="mt-3 text-sm font-medium text-slate-300">Output view</p>
               <p className="mt-1 max-w-60 text-[11px] leading-relaxed text-slate-500">
-                Run the pipeline to see ROI projections, match-graph pairs and generated hook
-                briefs for {vertical.label.toLowerCase()} — from a pre-loaded local payload.
+                Run the pipeline to see ROI projections, match-graph pairs and generated hook briefs
+                for {vertical.label.toLowerCase()} — from a pre-loaded local payload.
               </p>
             </div>
           )}

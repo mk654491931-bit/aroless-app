@@ -192,7 +192,9 @@ function toProductList(res: unknown): WinningProduct[] {
     for (const key of ["products", "results"]) {
       const candidate = object[key];
       if (Array.isArray(candidate)) {
-        return candidate.filter((item) => item !== null && typeof item === "object") as WinningProduct[];
+        return candidate.filter(
+          (item) => item !== null && typeof item === "object",
+        ) as WinningProduct[];
       }
     }
 
@@ -489,9 +491,12 @@ function Dashboard() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const togglePlatform = useCallback((p: Platform) => {
-    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  }, [setPlatforms]);
+  const togglePlatform = useCallback(
+    (p: Platform) => {
+      setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    },
+    [setPlatforms],
+  );
 
   const searching = gen.isPending || hfGen.isPending;
 
@@ -510,15 +515,15 @@ function Dashboard() {
     // When ALL selected platforms are unavailable in the target country,
     // automatically add cross-border alternatives to avoid empty results.
     const effectivePlatforms = (() => {
-      const allBlocked = platforms.every(
-        (p) => countryFit(p, effectiveCountry) === "unavailable",
-      );
+      const allBlocked = platforms.every((p) => countryFit(p, effectiveCountry) === "unavailable");
       if (!allBlocked) return platforms;
       const cb = platforms
         .filter((p) => countryFit(p, effectiveCountry) === "cross-border")
         .slice(0, 3);
       if (cb.length > 0) {
-        toast.info(`All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`);
+        toast.info(
+          `All selected platforms are unavailable in ${countryName(effectiveCountry)}. Using cross-border options.`,
+        );
         return cb;
       }
       // Last resort: add global platforms (Shopify, Amazon)
@@ -563,7 +568,9 @@ function Dashboard() {
 
   // Cleanup search safety timer on unmount
   useEffect(() => {
-    return () => { if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current); };
+    return () => {
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    };
   }, []);
 
   // "/" or Cmd/Ctrl+K focuses the niche field from anywhere in the finder.
@@ -620,7 +627,9 @@ function Dashboard() {
         <AmbientBackdrop />
         <GlobalRippleLayer />
         <HotTicker />
-        <header className="relative z-40 border-b border-white/10 glass top-light sticky top-0 backdrop-blur-xl">
+        {/* Sticky + backdrop-blur forces a full-width blur recalculation on every
+            scroll frame, so this header uses an opaque-enough surface instead. */}
+        <header className="relative z-40 border-b border-white/10 glass top-light sticky top-0 bg-background/85">
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px divider-glow opacity-70" />
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
             <div className="shrink-0">
@@ -1114,9 +1123,7 @@ function Dashboard() {
                             className="range-fill w-full"
                             style={
                               {
-                                "--range-pct": `${
-                                  ((minScore - 50) / (90 - 50)) * 100
-                                }%`,
+                                "--range-pct": `${((minScore - 50) / (90 - 50)) * 100}%`,
                               } as React.CSSProperties
                             }
                           />
@@ -1298,8 +1305,8 @@ function Dashboard() {
                             Kazanan ürününü keşfet
                           </h3>
                           <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
-                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
-                            gerçek zamanlı verilerle en kârlı ürünleri bulacak.
+                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız gerçek
+                            zamanlı verilerle en kârlı ürünleri bulacak.
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
@@ -1340,20 +1347,26 @@ function Dashboard() {
                           return true;
                         };
 
-                        const filtered = useMemo(() =>
-                          applyFilters(results, filters)
-                            .filter(bandPass)
-                            .filter(
-                              (p) =>
-                                !q ||
-                                [p.name, p.description, p.target_audience, ...(p.platform_fit ?? [])]
-                                  .filter(Boolean)
-                                  .some((v) => String(v).toLowerCase().includes(q)),
-                            ),
+                        const filtered = useMemo(
+                          () =>
+                            applyFilters(results, filters)
+                              .filter(bandPass)
+                              .filter(
+                                (p) =>
+                                  !q ||
+                                  [
+                                    p.name,
+                                    p.description,
+                                    p.target_audience,
+                                    ...(p.platform_fit ?? []),
+                                  ]
+                                    .filter(Boolean)
+                                    .some((v) => String(v).toLowerCase().includes(q)),
+                              ),
                           [results, filters, band, q, onlyLaunch],
                         );
-                        const shown = useMemo(() =>
-                          sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
+                        const shown = useMemo(
+                          () => sortProducts(filtered, sortBy, onlyLaunch, sortDesc),
                           [filtered, sortBy, onlyLaunch, sortDesc],
                         );
                         const bands = [
@@ -1668,7 +1681,12 @@ function TabSwitcher({
         if (!w2 || !el2) return;
         const wr = w2.getBoundingClientRect();
         const br = el2.getBoundingClientRect();
-        setPill({ left: br.left - wr.left, width: br.width, top: br.top - wr.top, height: br.height });
+        setPill({
+          left: br.left - wr.left,
+          width: br.width,
+          top: br.top - wr.top,
+          height: br.height,
+        });
       }, 80);
       setPill({ left: b.left - w.left, width: b.width, top: b.top - w.top, height: b.height });
     };
@@ -2806,10 +2824,19 @@ function ConsistencyBadge({ p }: { p: WinningProduct }) {
 }
 
 function ScorePill({ label, value }: { label: string; value: number }) {
-  const color = value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : value >= 40 ? "text-blue-400" : "text-muted-foreground";
+  const color =
+    value >= 80
+      ? "text-emerald-400"
+      : value >= 60
+        ? "text-amber-400"
+        : value >= 40
+          ? "text-blue-400"
+          : "text-muted-foreground";
   const glow = value >= 80 ? "shadow-[0_0_8px_-2px_oklch(0.75_0.18_155/0.4)]" : "";
   return (
-    <div className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}>
+    <div
+      className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}
+    >
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`text-xs font-bold ${color}`}>{value}</div>
     </div>
