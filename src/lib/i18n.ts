@@ -774,24 +774,50 @@ export type LangCode = (typeof LANGUAGES)[number]["code"];
 export const RTL_LANGS: LangCode[] = ["ar"];
 
 let initialized = false;
+
+/**
+ * i18next has to be ready before the first render, not in an effect.
+ *
+ * `useTranslation()` (src/lib/currency.tsx, app-sidebar, dashboard, …) reads the
+ * instance during that very first pass, and React renders children before the
+ * parent's effects run — so initialising from a `useEffect` in __root.tsx meant
+ * the first paint warned "You will need to pass in an i18next instance by using
+ * initReactI18next" and `t()` returned raw keys until a re-render. It also never
+ * ran on the server (`typeof window === "undefined"` early return), leaving SSR
+ * without an instance at all.
+ *
+ * The module now initialises itself on import for both environments; on the
+ * server the browser language detector is skipped and the fallback language is
+ * used. Calling initI18n() again is a no-op.
+ */
 export function initI18n() {
-  if (initialized || typeof window === "undefined") return;
+  if (initialized) return;
   initialized = true;
-  i18n
-    .use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
-      resources: { en, tr, es, de, fr, ar },
-      fallbackLng: "en",
-      supportedLngs: ["en", "tr", "es", "de", "fr", "ar"],
-      ns: ["common"],
-      defaultNS: "common",
-      interpolation: { escapeValue: false },
-      detection: { order: ["localStorage", "navigator"], caches: ["localStorage"] },
-    });
-  applyDir(i18n.language as LangCode);
-  i18n.on("languageChanged", (lng: string) => applyDir(lng as LangCode));
+
+  const isBrowser = typeof window !== "undefined";
+  i18n.use(initReactI18next);
+  if (isBrowser) i18n.use(LanguageDetector);
+
+  void i18n.init({
+    resources: { en, tr, es, de, fr, ar },
+    fallbackLng: "en",
+    supportedLngs: ["en", "tr", "es", "de", "fr", "ar"],
+    ns: ["common"],
+    defaultNS: "common",
+    interpolation: { escapeValue: false },
+    ...(isBrowser
+      ? { detection: { order: ["localStorage", "navigator"], caches: ["localStorage"] } }
+      : {}),
+  });
+
+  if (isBrowser) {
+    applyDir(i18n.language as LangCode);
+    i18n.on("languageChanged", (lng: string) => applyDir(lng as LangCode));
+  }
 }
+
+// Eager: guarantees a usable instance for the first render on client *and* server.
+initI18n();
 
 export function applyDir(lang: LangCode) {
   if (typeof document === "undefined") return;

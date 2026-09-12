@@ -89,6 +89,68 @@ export function reloadOnceForStaleChunk(error: unknown): boolean {
   return true;
 }
 
+/**
+ * Inline `<head>` bootstrap. Runs while the document is parsed, i.e. before a
+ * single hashed chunk is requested, so it also catches failures inside the
+ * entry script's own dynamic imports — the case that leaves a blank page today,
+ * because router.tsx (which calls installStaleChunkRecovery) never gets to
+ * execute when the entry's import of the route chunk 404s.
+ *
+ * Deliberately a dependency-free string: it is inlined into the document, so it
+ * cannot import anything from the bundle. Throttle key and window are shared
+ * with reloadOnceForStaleChunk so the two guards never fight each other.
+ */
+export const STALE_CHUNK_BOOTSTRAP_SCRIPT = `(function(){
+  var KEY="${RELOAD_STAMP_KEY}",COUNT_KEY="${RELOAD_STAMP_KEY}:count",THROTTLE=${RELOAD_THROTTLE_MS},MAX_RELOADS=2;
+  function isChunk(url){
+    if(typeof url!=="string"||url.length===0)return false;
+    var path=url;
+    try{path=new URL(url,location.href).pathname;}catch(e){}
+    if(path.indexOf("/js/")<0&&path.indexOf("/assets/")<0)return false;
+    return path.slice(-3)===".js";
+  }
+  function firstUrl(msg){
+    var start=msg.indexOf("http");
+    if(start<0)return "";
+    var tail=msg.slice(start),stop=tail.length;
+    for(var i=0;i<tail.length;i++){
+      var c=tail.charAt(i),code=c.charCodeAt(0);
+      if(c===" "||c==="'"||c===")"||c===","||code===10||code===34){stop=i;break;}
+    }
+    return tail.slice(0,stop);
+  }
+  function looksStale(msg){
+    if(typeof msg!=="string"||msg.length===0)return false;
+    if(msg.indexOf("dynamically imported module")>-1)return true;
+    if(msg.indexOf("Importing a module script failed")>-1)return true;
+    if(msg.indexOf("Loading chunk")>-1)return true;
+    return isChunk(firstUrl(msg));
+  }
+  function trigger(why){
+    try{
+      var count=Number(sessionStorage.getItem(COUNT_KEY)||0);
+      if(count>=MAX_RELOADS)return; // build genuinely broken: stop looping
+      var last=Number(sessionStorage.getItem(KEY)||0);
+      if(Date.now()-last<THROTTLE)return;
+      sessionStorage.setItem(KEY,String(Date.now()));
+      sessionStorage.setItem(COUNT_KEY,String(count+1));
+    }catch(e){}
+    try{console.warn("[deploy-race] "+why+" \u2192 reloading to pick up the current build");}catch(e){}
+    location.reload();
+  }
+  window.addEventListener("unhandledrejection",function(event){
+    var reason=event&&event.reason;
+    var msg=reason?(typeof reason==="string"?reason:reason.message||""):"";
+    if(looksStale(msg))trigger("module import failed (stale page session)");
+  });
+  window.addEventListener("error",function(event){
+    var target=event&&event.target;
+    var url=target&&(target.src||target.href);
+    if(url&&isChunk(url)){trigger("missing chunk "+url);return;}
+    if(looksStale((event&&event.message)||""))trigger("module load error");
+  },true);
+})();`;
+
 let listenersInstalled = false;
 
 /**

@@ -13,7 +13,7 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { reloadOnceForStaleChunk } from "@/lib/deploy-race-recovery";
+import { reloadOnceForStaleChunk, STALE_CHUNK_BOOTSTRAP_SCRIPT } from "@/lib/deploy-race-recovery";
 import { supabase } from "@/integrations/supabase/client";
 import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
@@ -101,6 +101,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "AI-powered winning product research for e-commerce. Discover trending products, ad angles, and target audiences with Gemini.",
       },
       { name: "theme-color", content: "#0b0f1a" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Aroless" },
@@ -140,6 +141,15 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" translate="no" suppressHydrationWarning>
       <head>
+        {/*
+          Inline, dependency-free and first in <head>: a tab that survived a
+          deploy still points at the previous build's hashed chunks. When one of
+          those 404s the entry's own dynamic import rejects and nothing else in
+          the bundle ever runs — so the only place able to catch it is the
+          document itself. It reloads once (throttled, capped) and the fresh
+          HTML brings the current chunk names. See lib/deploy-race-recovery.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: STALE_CHUNK_BOOTSTRAP_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
