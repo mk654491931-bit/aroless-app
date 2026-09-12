@@ -501,13 +501,14 @@ async function geminiOnce(
   temperature: number,
   grounded: boolean,
   models: string[],
+  attemptTimeoutMs = 25_000,
 ): Promise<string> {
   prompt = withEstimationRules(prompt);
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[Math.min(attempt, models.length - 1)];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
     try {
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -529,7 +530,7 @@ async function geminiOnce(
       );
       if (resp.status === 400 && grounded) {
         clearTimeout(timeout);
-        return geminiOnce(prompt, apiKey, temperature, false, models);
+        return geminiOnce(prompt, apiKey, temperature, false, models, attemptTimeoutMs);
       }
       if (!resp.ok) {
         const t = await resp.text();
@@ -609,22 +610,46 @@ export async function mapWithConcurrency<T, R>(
  * built-in Lovable AI gateway is the final fallback — the user never sees an
  * API error.
  */
+/**
+ * Wall-clock ceiling for the whole Gemini ladder.
+ *
+ * Each key/model attempt may burn its own 25s timeout, so a deployment whose
+ * Gemini keys are expired, quota-blocked or unreachable used to spend minutes
+ * inside this loop — far past any request budget — and every AI feature (the
+ * finder, the hourly market scan, trend analysis) looked frozen instead of
+ * degrading. Once this ceiling is spent, the fallback below runs instead of
+ * another doomed key.
+ */
+export const GEMINI_LADDER_BUDGET_MS = 25_000;
+
 export async function callGemini(
   prompt: string,
   apiKey?: string,
   temperature = 0.9,
   grounded = true,
   modelPreference?: string[],
+  budgetMs = GEMINI_LADDER_BUDGET_MS,
 ): Promise<string> {
   const models = modelPreference?.length ? modelPreference : GEMINI_MODELS_LATEST;
   const pool = geminiKeyPool();
   const cursor = geminiCursor++;
   const preferred = apiKey && isCool(apiKey) ? [apiKey] : [];
   const keys = Array.from(new Set([...preferred, ...scheduleKeys(pool, cursor)]));
+  const startedAt = Date.now();
+  const budget = Math.max(5_000, budgetMs);
   let lastErr: unknown = null;
   for (const key of keys) {
+    const remaining = budget - (Date.now() - startedAt);
+    if (remaining < 2_000) break;
     try {
-      return await geminiOnce(prompt, key, temperature, grounded, models);
+      return await geminiOnce(
+        prompt,
+        key,
+        temperature,
+        grounded,
+        models,
+        Math.min(25_000, remaining),
+      );
     } catch (e) {
       lastErr = e;
       if (e instanceof Error && e.message.startsWith("QUOTA:")) parkKey(key);

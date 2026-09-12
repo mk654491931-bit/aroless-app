@@ -73,15 +73,34 @@ export function buildHotFeedFromItems(items: HotProduct[], now = new Date()): Ho
  * Last-resort reader: consumes the streaming discovery endpoint so a slow scan
  * (the one that used to die with HTTP 524) still fills the feed instead of
  * leaving the UI on an empty state.
+ *
+ * The server closes the stream with a partial payload before its own 92s
+ * budget, so the client stops waiting just past that instead of holding the
+ * request — and the page — open for three minutes.
  */
 async function fetchHotProductsStreamed(niche: string): Promise<HotProduct[]> {
   const { streamProductDiscovery } = await import("./product-stream");
   const result = await streamProductDiscovery(
     { niche: niche.trim() || undefined },
     {},
-    AbortSignal.timeout(180_000),
+    AbortSignal.timeout(110_000),
   );
   return result.items;
+}
+
+/**
+ * Last feed this tab actually rendered.
+ *
+ * The hourly refresh can legitimately take a while, and every consumer of this
+ * module used to hold a spinner until the whole fallback chain finished. Keeping
+ * the last good answer lets React Query paint it immediately (placeholder data)
+ * and refresh underneath, so a page with the ticker never looks stuck.
+ */
+let lastGoodFeed: HotFeed | null = null;
+
+/** Last successfully loaded feed, if this tab has one. */
+export function getLastHotFeed(): HotFeed | undefined {
+  return lastGoodFeed ?? undefined;
 }
 
 /** Live progress a caller can render while an async discovery job runs. */
@@ -133,7 +152,7 @@ export async function fetchHotProducts(
       const json = (await res.json()) as Partial<HotFeed>;
       const items = json.items ?? [];
       if (items.length > 0) {
-        return {
+        const cached: HotFeed = {
           hour: json.hour ?? "",
           refreshed_at: json.refreshed_at ?? now,
           next_refresh_at: json.next_refresh_at ?? now,
@@ -141,6 +160,8 @@ export async function fetchHotProducts(
           ...(json.error ? { error: json.error } : {}),
           ...(json.partial ? { partial: true } : {}),
         };
+        lastGoodFeed = cached;
+        return cached;
       }
     }
   } catch (error) {
@@ -153,13 +174,22 @@ export async function fetchHotProducts(
     const { runDiscoveryJob } = await import("./discovery-job");
     const run = await runDiscoveryJob(
       { niche: niche.trim(), targetCountry: "GLOBAL" },
-      options.onProgress ? { onProgress: options.onProgress } : {},
+      {
+        ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+        // This feed is passive: bound the wait well below the 5-minute poll
+        // ceiling so a slow/stuck job hands over to the stream instead of
+        // pinning the ticker query (and the page) for minutes.
+        timeoutMs: 90_000,
+      },
     );
     if (run.ok) {
       const result = run.job.result;
       if (result && result.products.length > 0) {
-        const feed = buildHotFeedFromItems(result.products);
-        return result.partial ? { ...feed, partial: true } : feed;
+        const feed = result.partial
+          ? { ...buildHotFeedFromItems(result.products), partial: true }
+          : buildHotFeedFromItems(result.products);
+        lastGoodFeed = feed;
+        return feed;
       }
       if (result) {
         // A terminal job with zero products: report the empty feed honestly
@@ -178,12 +208,18 @@ export async function fetchHotProducts(
   // the 100s wall instead of leaving an empty state.
   try {
     const items = await fetchHotProductsStreamed(niche);
-    if (items.length > 0) return buildHotFeedFromItems(items);
+    if (items.length > 0) {
+      const streamed = buildHotFeedFromItems(items);
+      lastGoodFeed = streamed;
+      return streamed;
+    }
   } catch (error) {
-    console.warn("[hot-products] streaming fallback failed; rendering an empty state", error);
+    console.warn("[hot-products] streaming fallback failed", error);
   }
 
-  return fallback;
+  // Everything cold/failed: keep showing the last feed this tab saw rather than
+  // replacing a working ticker with an error state.
+  return lastGoodFeed ?? fallback;
 }
 
 export const HOT_FEED_QUERY_KEY = ["hot-products"] as const;

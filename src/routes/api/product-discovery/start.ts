@@ -27,7 +27,12 @@ import type { DiscoveryEngine } from "@/lib/discovery-jobs.shared";
 /**
  * POST /api/product-discovery/start
  *
- * The only place a Product Discovery credit is ever spent.
+ * The only place a user-initiated Product Discovery credit is ever spent.
+ *
+ * Only the `finder` engine (the "Kazananları Bul" search the user clicks) is
+ * billed. The `discovery` engine exists for the *passive* hourly hot-feed
+ * refresh: it runs on its own from the client, so charging for it silently
+ * drained credits for simply visiting a page and is never billed here.
  *
  * Flow (all of it synchronous and fast — no pipeline work happens here):
  *   auth → validate → idempotent job row → reserve charge (CAS) → charge once
@@ -132,6 +137,9 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           engine,
         });
 
+        // Billing rule: only a user-initiated finder search spends a credit.
+        const chargeable = engine === "finder";
+
         const outcome = await createJob({
           userId: guard.userId,
           niche,
@@ -177,10 +185,10 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           if (!retried.job) {
             return jsonError(503, "İş kaydı oluşturulamadı, lütfen tekrar deneyin.");
           }
-          return await chargeAndQueue(request, retried.job.id, guard.userId, token);
+          return await chargeAndQueue(request, retried.job.id, guard.userId, token, chargeable);
         }
 
-        return await chargeAndQueue(request, job.id, guard.userId, token);
+        return await chargeAndQueue(request, job.id, guard.userId, token, chargeable);
       },
     },
   },
@@ -198,7 +206,26 @@ async function chargeAndQueue(
   jobId: string,
   userId: string,
   token: string,
+  chargeable: boolean,
 ): Promise<Response> {
+  if (!chargeable) {
+    // Free engine: no credit, no usage row — just make sure the job runs. The
+    // passive feed refresh must never cost the user anything.
+    const queuedFree = await enqueue(request, jobId);
+    if (!queuedFree) {
+      const { finishJob } = await import("@/lib/discovery-jobs.server");
+      await finishJob(jobId, "failed", null, "enqueue_failed");
+      return jsonError(503, "İş kuyruğa alınamadı.");
+    }
+    const freeRow = await getJobOwned(jobId, userId);
+    return json(202, {
+      jobId,
+      reused: false,
+      statusUrl: `/api/product-discovery/status?jobId=${jobId}`,
+      ...(freeRow ? { job: toJobView(freeRow) as DiscoveryJobView } : {}),
+    });
+  }
+
   const reserved = await reserveJobCharge(jobId);
 
   if (!reserved) {

@@ -223,10 +223,16 @@ export const Route = createFileRoute("/api/public/hot-products")({
             JSON_BUDGET_MS,
             request.signal,
           );
+          // A refresh that produced nothing is a failed scan, not content.
+          // Caching that empty payload for an hour (as this used to) handed
+          // every visitor an empty feed and pushed all of them onto the
+          // expensive fallback paths — the async job and the SSE stream — until
+          // the next hour. Empty answers are therefore never cached.
+          const hasItems = payload.items.length > 0;
           return new Response(JSON.stringify(payload), {
             headers: {
               "Content-Type": "application/json",
-              "Cache-Control": "public, max-age=600, s-maxage=3600",
+              "Cache-Control": hasItems ? "public, max-age=600, s-maxage=3600" : "no-store",
             },
           });
         } catch (e) {
@@ -235,7 +241,7 @@ export const Route = createFileRoute("/api/public/hot-products")({
             JSON.stringify({ items: [], error: "Market scan temporarily unavailable" }),
             {
               status: 200,
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
             },
           );
         }

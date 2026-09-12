@@ -2,7 +2,12 @@ import { useEffect, useState, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Flame, Loader2, TrendingUp } from "lucide-react";
-import { fetchHotProducts, HOT_FEED_QUERY_KEY, type HotProduct } from "@/lib/hot-products";
+import {
+  fetchHotProducts,
+  getLastHotFeed,
+  HOT_FEED_QUERY_KEY,
+  type HotProduct,
+} from "@/lib/hot-products";
 import { StreamErrorBoundary, StreamNotice } from "@/components/stream-error-boundary";
 
 const KEY = "omni_hot_ticker_open";
@@ -59,6 +64,9 @@ export function HotTicker(): ReactElement {
     staleTime: 60 * 60 * 1000,
     refetchInterval: 60 * 60 * 1000,
     enabled: open,
+    // Paint the last feed this tab loaded while the hourly refresh runs, so the
+    // ticker never sits on a spinner (or blocks a page transition) again.
+    placeholderData: () => getLastHotFeed(),
   });
 
   const items = data?.items ?? [];

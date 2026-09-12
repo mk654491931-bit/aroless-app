@@ -15,7 +15,7 @@ import {
   Package,
   Clock,
 } from "lucide-react";
-import { fetchHotProducts, HOT_FEED_QUERY_KEY } from "@/lib/hot-products";
+import { fetchHotProducts, getLastHotFeed, HOT_FEED_QUERY_KEY } from "@/lib/hot-products";
 import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/hot/$id")({
@@ -65,6 +65,9 @@ function HotProductPage() {
     queryKey: HOT_FEED_QUERY_KEY,
     queryFn: fetchHotProducts,
     staleTime: 60 * 60 * 1000,
+    // The feed this tab already loaded renders the page immediately; the hourly
+    // refresh continues underneath instead of holding the page on a spinner.
+    placeholderData: () => getLastHotFeed(),
   });
   const p = data?.items.find((x) => x.id === id);
 

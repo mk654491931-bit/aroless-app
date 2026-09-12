@@ -156,7 +156,7 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-async function scanPrompt(niche: string): Promise<string> {
+async function scanPrompt(niche: string, budgetMs = 25_000): Promise<string> {
   const { callGemini } = await import("@/lib/ai.server");
   const now = new Date();
   const focus = niche
@@ -179,11 +179,17 @@ Return ONLY JSON:
 "signals":{"search_volume_monthly":number,"social_views_now":number,"social_views_7d_ago":number,"active_stores":number,"ads_running_14d":number,"amazon_sellers":number,"review_count":number,"quality_complaint_pct":number,"sizing_complaint_pct":number,"shipping_complaint_pct":number,"on_time_delivery_pct":number,"stock_stability_pct":number,"lead_time_days":number,"cpc_usd":number,"cvr_pct":number,"sources":string[]}}]}`;
 
   const key = process.env["GEMINI_API_KEY_3"] || process.env["GEMINI_API_KEY"];
-  const text = await callGemini(prompt, key, 0.6, true, [
-    "gemini-flash-latest",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-  ]);
+  // The hourly feed sits in front of a page, so the grounded ladder gets a hard
+  // budget: after it, the shared fallbacks answer instead of the request dying
+  // on a stalled provider.
+  const text = await callGemini(
+    prompt,
+    key,
+    0.6,
+    true,
+    ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"],
+    budgetMs,
+  );
   return text;
 }
 
@@ -202,11 +208,22 @@ export async function buildMarketScan(
   const now = new Date();
 
   throwIfAborted(options.signal);
-  const text = await scanPrompt(niche);
+  let text = await scanPrompt(niche);
   throwIfAborted(options.signal);
 
-  const parsed = extractJson<{ items?: unknown[] }>(text, { items: [] });
-  const raw = (parsed.items ?? []).slice(0, 12);
+  let parsed = extractJson<{ items?: unknown[] }>(text, { items: [] });
+  let raw = (parsed.items ?? []).slice(0, 12);
+
+  // An empty first answer is a failed refresh, not an empty market: the
+  // grounded model occasionally replies without JSON items (grounding
+  // unavailable, a refusal, a truncated response). One retry keeps the hourly
+  // feed from going dark for an entire hour on a single bad generation.
+  if (raw.length === 0) {
+    text = await scanPrompt(niche, 15_000);
+    throwIfAborted(options.signal);
+    parsed = extractJson<{ items?: unknown[] }>(text, { items: [] });
+    raw = (parsed.items ?? []).slice(0, 12);
+  }
 
   const items: StreamedProduct[] = [];
   for (let i = 0; i < raw.length; i++) {
