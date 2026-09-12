@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MESH_LINK_BUCKETS,
   MESH_LINK_DISTANCE,
   MESH_MAX_DPR,
   MESH_MAX_NODES,
@@ -7,6 +8,7 @@ import {
   MESH_TARGET_FPS,
   createFrameGate,
   meshDpr,
+  meshLinkBucket,
   meshLinkStrength,
   meshNodeCount,
 } from "./premium-mesh";
@@ -80,6 +82,38 @@ describe("meshLinkStrength", () => {
       expect(value).toBeGreaterThanOrEqual(0);
       expect(value).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("meshLinkBucket", () => {
+  it("maps the strength range onto the full bucket range", () => {
+    expect(meshLinkBucket(1)).toBe(MESH_LINK_BUCKETS - 1);
+    expect(meshLinkBucket(2)).toBe(MESH_LINK_BUCKETS - 1);
+    expect(meshLinkBucket(0.0001)).toBe(0);
+  });
+
+  it("is monotonic, so a stronger link never gets a dimmer bucket", () => {
+    let previous = -1;
+    for (let i = 0; i <= 20; i++) {
+      const bucket = meshLinkBucket(i / 20);
+      expect(bucket).toBeGreaterThanOrEqual(previous);
+      previous = bucket;
+    }
+  });
+
+  it("stays in range for garbage input", () => {
+    for (const strength of [Number.NaN, -1, 0, Number.POSITIVE_INFINITY]) {
+      const bucket = meshLinkBucket(strength);
+      expect(Number.isInteger(bucket)).toBe(true);
+      expect(bucket).toBeGreaterThanOrEqual(0);
+      expect(bucket).toBeLessThan(MESH_LINK_BUCKETS);
+    }
+  });
+
+  it("honours a custom bucket count", () => {
+    expect(meshLinkBucket(1, 2)).toBe(1);
+    expect(meshLinkBucket(0.2, 2)).toBe(0);
+    expect(meshLinkBucket(1, 0)).toBe(MESH_LINK_BUCKETS - 1);
   });
 });
 

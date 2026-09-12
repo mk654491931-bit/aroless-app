@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -192,7 +193,7 @@ const REVIEWS: ReviewItem[] = [
  * All interactive demos stream deterministic, pre-loaded local simulation
  * payloads: zero external API calls, zero network latency, no accounts needed.
  */
-export function MarketingLanding() {
+export function MarketingLanding(): ReactElement {
   return (
     <div className="relative min-h-screen overflow-x-clip bg-[#050608] font-sans text-slate-200 antialiased">
       {/* Page atmosphere */}
@@ -206,6 +207,10 @@ export function MarketingLanding() {
         <div className="absolute left-1/2 top-0 h-px w-[min(72rem,92%)] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       </div>
 
+      {/* `backdrop-blur` is deliberately avoided on the panels below: they sit on
+          the continuously animated ambient layers, so every blurred surface had to
+          be re-blurred each frame while scrolling. A slightly more opaque surface
+          keeps the identical glass look at no recurring paint cost. */}
       {/* ── Header ─────────────────────────────────────────────── */}
       {/* No `backdrop-blur` here: a blurred backdrop on a sticky element has to be
           recomputed on every scroll frame, which was the worst source of scroll
@@ -372,7 +377,7 @@ export function MarketingLanding() {
                   el.style.setProperty("--mx", `${e.clientX - r.left}px`);
                   el.style.setProperty("--my", `${e.clientY - r.top}px`);
                 }}
-                className={`wwd-card group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/70 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1.5 ${
+                className={`wwd-card group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/90 p-6 transition duration-300 hover:-translate-y-1.5 ${
                   card.accent === "emerald"
                     ? "hover:border-emerald-400/40"
                     : "hover:border-indigo-400/40"
@@ -461,7 +466,7 @@ export function MarketingLanding() {
             {BENTO.map((card) => (
               <div
                 key={card.title}
-                className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/70 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-white/20 ${
+                className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/90 p-6 transition duration-300 hover:-translate-y-1 hover:border-white/20 ${
                   card.span ?? ""
                 }`}
               >
@@ -479,7 +484,7 @@ export function MarketingLanding() {
           </div>
 
           {/* Compliance banner */}
-          <div className="mt-4 flex flex-col items-start gap-5 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0F1117] via-[#0F1117]/80 to-[#0F1117] p-6 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col items-start gap-5 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0F1117] via-[#0F1117]/92 to-[#0F1117] p-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10">
                 <FileText size={18} className="text-emerald-300" />
@@ -503,7 +508,7 @@ export function MarketingLanding() {
 
         {/* ── Metrics ────────────────────────────────────────────── */}
         <section id="metrics" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/70 backdrop-blur-xl">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/90">
             <div className="border-b border-white/10 px-6 py-5 text-center">
               <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Engineered for throughput, built for trust
@@ -542,7 +547,7 @@ export function MarketingLanding() {
 
         {/* ── Final CTA ──────────────────────────────────────────── */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/80 px-6 py-14 text-center backdrop-blur-xl sm:px-12">
+          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/92 px-6 py-14 text-center sm:px-12">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl"

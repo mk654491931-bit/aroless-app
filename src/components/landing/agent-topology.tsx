@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { GitBranch } from "lucide-react";
 
 type TopoNode = {
@@ -51,15 +51,15 @@ const accentStroke: Record<TopoNode["accent"], string> = {
  * Agent topology — a vector pipeline (ingestion → decision mesh → conversion)
  * with hover-aware flow highlighting. Deterministic SVG/CSS; no remote data.
  */
-export function AgentTopology() {
+export function AgentTopology(): ReactElement {
   const [hovered, setHovered] = useState<string | null>(null);
   const related = (id: string) =>
-    new Set(
-      EDGES.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to]),
-    );
+    new Set(EDGES.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to]));
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/70 p-4 backdrop-blur-xl sm:p-6">
+    // No backdrop blur: this panel floats over the animated ambient layers, so a
+    // blur would be recomputed every frame. A more opaque surface looks identical.
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/90 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
           <GitBranch size={15} className="text-indigo-300" /> Agent topology
@@ -92,12 +92,23 @@ export function AgentTopology() {
             y={22}
             textAnchor="middle"
             className="fill-slate-500"
-            style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+            }}
           >
             {c.label}
           </text>
         ))}
-        <text x={W / 2} y={H - 12} textAnchor="middle" className="fill-slate-600" style={{ fontSize: 10 }}>
+        <text
+          x={W / 2}
+          y={H - 12}
+          textAnchor="middle"
+          className="fill-slate-600"
+          style={{ fontSize: 10 }}
+        >
           deterministic simulation payload · rendered locally
         </text>
 
@@ -114,7 +125,11 @@ export function AgentTopology() {
           const dim = hovered !== null && !lit;
           const d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
           return (
-            <g key={`${edge.from}-${edge.to}`} opacity={dim ? 0.18 : 1} className="transition-opacity duration-300">
+            <g
+              key={`${edge.from}-${edge.to}`}
+              opacity={dim ? 0.18 : 1}
+              className="transition-opacity duration-300"
+            >
               <path
                 d={d}
                 fill="none"
@@ -153,9 +168,21 @@ export function AgentTopology() {
                 stroke={lit ? accentStroke[node.accent] : "rgba(255,255,255,0.1)"}
                 strokeWidth={lit ? 1.4 : 1}
                 className="transition-all duration-300"
-                style={lit ? { filter: `drop-shadow(0 0 10px ${accentStroke[node.accent]}66)` } : undefined}
+                style={
+                  lit
+                    ? { filter: `drop-shadow(0 0 10px ${accentStroke[node.accent]}66)` }
+                    : undefined
+                }
               />
-              <rect x={x} y={y} width={NODE_W} height={2} rx={1} fill={accentStroke[node.accent]} opacity={lit ? 1 : 0.5} />
+              <rect
+                x={x}
+                y={y}
+                width={NODE_W}
+                height={2}
+                rx={1}
+                fill={accentStroke[node.accent]}
+                opacity={lit ? 1 : 0.5}
+              />
               <text
                 x={node.x}
                 y={node.cy + 2}
@@ -165,8 +192,17 @@ export function AgentTopology() {
               >
                 {node.label}
               </text>
-              <text x={x + 10} y={y + NODE_H - 9} className="fill-slate-600" style={{ fontSize: 9, fontFamily: "monospace" }}>
-                {node.accent === "indigo" ? "● mesh" : node.accent === "emerald" ? "● output" : "○ ingest"}
+              <text
+                x={x + 10}
+                y={y + NODE_H - 9}
+                className="fill-slate-600"
+                style={{ fontSize: 9, fontFamily: "monospace" }}
+              >
+                {node.accent === "indigo"
+                  ? "● mesh"
+                  : node.accent === "emerald"
+                    ? "● output"
+                    : "○ ingest"}
               </text>
             </g>
           );

@@ -24,6 +24,13 @@ export const MESH_LINK_DISTANCE = 128;
 export const MESH_MAX_DPR = 1.5;
 /** Canvas redraw target. Slow drifting nodes do not need 60fps. */
 export const MESH_TARGET_FPS = 30;
+/**
+ * Link opacity levels. Each link used to get its own `rgba(...)` string *and* its
+ * own `stroke()` call (~1.1k of each per frame). Quantising the fade into a few
+ * buckets lets the renderer stroke every link of a bucket as one path, and keeps
+ * string allocation out of the frame loop.
+ */
+export const MESH_LINK_BUCKETS = 8;
 
 /** Clamped, finite device pixel ratio. */
 export function meshDpr(devicePixelRatio: number): number {
@@ -53,6 +60,20 @@ export function meshLinkStrength(
   const distanceSq = dx * dx + dy * dy;
   if (!Number.isFinite(distanceSq) || distanceSq >= max * max) return 0;
   return 1 - Math.sqrt(distanceSq) / max;
+}
+
+/**
+ * Bucket index for a link strength: `0` for a barely-visible link, `buckets - 1`
+ * for a fully lit one. Non-finite or non-positive input falls back to bucket `0`.
+ */
+export function meshLinkBucket(strength: number, buckets = MESH_LINK_BUCKETS): number {
+  const safeBuckets =
+    Number.isFinite(buckets) && buckets >= 1
+      ? Math.min(Math.floor(buckets), 64)
+      : MESH_LINK_BUCKETS;
+  if (!Number.isFinite(strength) || strength <= 0) return 0;
+  if (strength >= 1) return safeBuckets - 1;
+  return Math.min(safeBuckets - 1, Math.max(0, Math.ceil(strength * safeBuckets) - 1));
 }
 
 /**

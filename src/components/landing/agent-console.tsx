@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Activity, Radio, ShieldCheck, Terminal } from "lucide-react";
 
 type LogKind = "agent" | "success" | "warn" | "info";
@@ -10,16 +10,56 @@ type LogLine = {
 };
 
 const SIMULATION_LOGS: LogLine[] = [
-  { badge: "Trend-Scan-01", kind: "agent", text: "Identified viral TikTok item (+420% demand surge)." },
-  { badge: "Deal-Engine-04", kind: "agent", text: "Matched merchant deal with 18 tier-1 creators (3.4k projected GMV)." },
-  { badge: "Content-Orchestrator", kind: "success", text: "Dispatched 8 automated ad copy variations across channels." },
-  { badge: "Attribution-Mesh", kind: "info", text: "Attribution graph updated — 14 conversions re-mapped to top performer." },
-  { badge: "Deal-Engine-04", kind: "agent", text: "Negotiated fee override: 12% → 9.4% on recurring subscription tier." },
-  { badge: "Payout-Infra", kind: "success", text: "Scheduled 32 creator payouts · compliant, auditable ledger." },
-  { badge: "Trend-Scan-01", kind: "warn", text: "Flagged 3 items with anomalous return-rate signals for review." },
-  { badge: "Content-Orchestrator", kind: "agent", text: "A/B test launched — 6 hook variants, 2 market segments." },
-  { badge: "Attribution-Mesh", kind: "success", text: "ROAS attribution window consolidated across 9 networks." },
-  { badge: "Swarm-Orchestrator", kind: "info", text: "Pipeline idle → next scheduled sweep in 4m 12s." },
+  {
+    badge: "Trend-Scan-01",
+    kind: "agent",
+    text: "Identified viral TikTok item (+420% demand surge).",
+  },
+  {
+    badge: "Deal-Engine-04",
+    kind: "agent",
+    text: "Matched merchant deal with 18 tier-1 creators (3.4k projected GMV).",
+  },
+  {
+    badge: "Content-Orchestrator",
+    kind: "success",
+    text: "Dispatched 8 automated ad copy variations across channels.",
+  },
+  {
+    badge: "Attribution-Mesh",
+    kind: "info",
+    text: "Attribution graph updated — 14 conversions re-mapped to top performer.",
+  },
+  {
+    badge: "Deal-Engine-04",
+    kind: "agent",
+    text: "Negotiated fee override: 12% → 9.4% on recurring subscription tier.",
+  },
+  {
+    badge: "Payout-Infra",
+    kind: "success",
+    text: "Scheduled 32 creator payouts · compliant, auditable ledger.",
+  },
+  {
+    badge: "Trend-Scan-01",
+    kind: "warn",
+    text: "Flagged 3 items with anomalous return-rate signals for review.",
+  },
+  {
+    badge: "Content-Orchestrator",
+    kind: "agent",
+    text: "A/B test launched — 6 hook variants, 2 market segments.",
+  },
+  {
+    badge: "Attribution-Mesh",
+    kind: "success",
+    text: "ROAS attribution window consolidated across 9 networks.",
+  },
+  {
+    badge: "Swarm-Orchestrator",
+    kind: "info",
+    text: "Pipeline idle → next scheduled sweep in 4m 12s.",
+  },
 ];
 
 const kindStyles: Record<LogKind, string> = {
@@ -33,21 +73,25 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function useClock(): string {
+/**
+ * The ticking timestamp lives in its own component so its 1s tick re-renders a
+ * couple of text nodes instead of the whole console (status bar, meta strip and
+ * every log row used to be reconciled once a second).
+ */
+function ConsoleClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return <>{`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`}</>;
 }
 
 /**
  * Autonomous Operations Console — streams a deterministic, pre-loaded log set
  * locally (setInterval only; zero network). Purely illustrative.
  */
-export function AgentConsole() {
-  const clock = useClock();
+export function AgentConsole(): ReactElement {
   const tickRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [lines, setLines] = useState<LogLine[]>(() => SIMULATION_LOGS.slice(0, 4));
@@ -69,7 +113,9 @@ export function AgentConsole() {
   }, [lines]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/80 shadow-[0_30px_90px_-30px_rgba(99,102,241,0.35)] backdrop-blur-xl">
+    // The panel sits on the animated ambient layers, so a backdrop blur would be
+    // recomputed on every frame. A slightly more opaque surface looks the same.
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/92 shadow-[0_30px_90px_-30px_rgba(99,102,241,0.35)]">
       {/* Top status bar */}
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
@@ -101,13 +147,18 @@ export function AgentConsole() {
       </div>
 
       {/* Stream */}
-      <div ref={scrollRef} className="scroll-thin h-64 space-y-2 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed">
+      <div
+        ref={scrollRef}
+        className="scroll-thin h-64 space-y-2 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed"
+      >
         {lines.map((line, i) => (
           <div
             key={`${i}-${line.badge}-${line.text.slice(0, 12)}`}
             className="console-log-in flex flex-wrap items-baseline gap-x-2 text-slate-300"
           >
-            <span className="shrink-0 text-slate-500">[{clock}]</span>
+            <span className="shrink-0 text-slate-500">
+              [<ConsoleClock />]
+            </span>
             <span
               className={`inline-flex shrink-0 items-center rounded border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide ${kindStyles[line.kind]}`}
             >

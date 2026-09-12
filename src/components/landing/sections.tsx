@@ -1,17 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  ArrowRight,
-  ChevronDown,
-  MessageSquareQuote,
-  Sparkles,
-  Star,
-} from "lucide-react";
+import { ArrowRight, ChevronDown, MessageSquareQuote, Sparkles, Star } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Shared landing building blocks (landing + auth pages)               */
@@ -38,7 +32,7 @@ function Heading({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-export function StarRow({ className = "" }: { className?: string }) {
+export function StarRow({ className = "" }: { className?: string }): ReactElement {
   return (
     <div className={`flex items-center gap-0.5 ${className}`} aria-label="5 yıldız">
       {[0, 1, 2, 3, 4].map((i) => (
@@ -56,7 +50,7 @@ export function Testimonials({
   items: ReviewItem[];
   title?: string;
   subtitle?: string;
-}) {
+}): ReactElement {
   const [active, setActive] = useState(0);
   const t = items[active] ?? items[0]!;
 
@@ -69,11 +63,14 @@ export function Testimonials({
         <Heading title={title} subtitle={subtitle} />
       </div>
 
+      {/* These dark panels sit over the animated ambient layers: a backdrop blur
+          here is re-computed on every frame, so they use a more opaque surface
+          instead — same glass look, no recurring paint cost. */}
       <div className="mx-auto mt-10 grid max-w-5xl gap-6 lg:grid-cols-[1fr_1.15fr]">
         {/* Highlighted quote (keyed so it re-animates on switch) */}
         <div
           key={active}
-          className="console-log-in ls-darkglass relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/85 p-7 backdrop-blur-xl"
+          className="console-log-in ls-darkglass relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/93 p-7"
         >
           <div
             aria-hidden
@@ -127,7 +124,9 @@ export function Testimonials({
               <ArrowRight
                 size={15}
                 className={`shrink-0 text-slate-500 transition-transform ${
-                  active === i ? "translate-x-0 text-indigo-300" : "-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
+                  active === i
+                    ? "translate-x-0 text-indigo-300"
+                    : "-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
                 }`}
               />
             </button>
@@ -161,7 +160,7 @@ export function FaqSection({
   items: FaqItem[];
   title?: string;
   subtitle?: string;
-}) {
+}): ReactElement {
   return (
     <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6" aria-label="SSS">
       <div className="mx-auto max-w-2xl text-center">
@@ -177,7 +176,7 @@ export function FaqSection({
             <AccordionItem
               key={item.q}
               value={`item-${i}`}
-              className="ls-darkglass group overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/75 backdrop-blur-xl transition duration-300 hover:border-white/20 data-[state=open]:border-indigo-400/40"
+              className="ls-darkglass group overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/90 transition duration-300 hover:border-white/20 data-[state=open]:border-indigo-400/40"
             >
               <AccordionTrigger className="px-5 py-4 text-left text-sm font-semibold text-white hover:no-underline hover:text-white">
                 <span className="pr-2">{item.q}</span>
