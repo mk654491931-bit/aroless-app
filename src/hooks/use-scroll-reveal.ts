@@ -34,7 +34,7 @@ export function useScrollReveal<T extends HTMLElement>() {
           io.unobserve(el);
         });
       },
-      { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
+      { rootMargin: "350px 0px 350px 0px", threshold: 0 },
     );
 
     nodes.forEach((n) => io.observe(n));

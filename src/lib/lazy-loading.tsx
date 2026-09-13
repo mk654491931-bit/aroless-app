@@ -53,7 +53,7 @@ export function createIntersectionLazyComponent<P extends object>(
             importFn().then(resolve);
           }
         },
-        { rootMargin: "50px", threshold: 0.01, ...options },
+        { rootMargin: "350px", threshold: 0, ...options },
       );
 
       // Dummy element oluştur
@@ -119,7 +119,7 @@ export function useLazyImage(src: string) {
           observer.disconnect();
         }
       },
-      { rootMargin: "50px", threshold: 0.01 },
+      { rootMargin: "350px", threshold: 0 },
     );
 
     const div = document.createElement("div");
