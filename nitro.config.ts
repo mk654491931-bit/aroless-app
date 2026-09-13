@@ -1,6 +1,8 @@
 export default {
   compatibilityDate: "2025-07-13",
-  preset: "vercel",
+  // Keep Vercel as the default while allowing Render's Blueprint to select the
+  // persistent Node-compatible preset at build time.
+  preset: process.env["NITRO_PRESET"] ?? "vercel",
   vercel: {
     functions: {
       // Vercel HOBBY planı: bir fonksiyon en fazla 60 sn çalışabilir; daha

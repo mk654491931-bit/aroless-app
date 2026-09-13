@@ -52,10 +52,15 @@ function errorMessage(e: unknown): string {
 
 // ---------- Süre bütçesi (Hobby = 60 sn) ----------
 
-/** Vercel fonksiyon üst süre sınırı (saniye). Hobby varsayılanı: 60. */
+/** Maximum request budget used by the current hosting runtime (seconds). */
 export function functionMaxDurationSeconds(): number {
-  const raw = Number(env("VERCEL_FUNCTION_MAX_DURATION") ?? 60);
-  if (!Number.isFinite(raw) || raw < 10) return 60;
+  const isRender = env("NITRO_PRESET") === "render_com" || Boolean(env("RENDER_SERVICE_ID"));
+  const defaultDuration = isRender ? 900 : 60;
+  // Vercel's setting is intentionally ignored on Render so a stale project
+  // variable cannot reintroduce the old serverless timeout after migration.
+  const configuredDuration = isRender ? undefined : env("VERCEL_FUNCTION_MAX_DURATION");
+  const raw = Number(configuredDuration ?? defaultDuration);
+  if (!Number.isFinite(raw) || raw < 10) return defaultDuration;
   return Math.min(900, Math.round(raw));
 }
 

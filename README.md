@@ -76,10 +76,93 @@ hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üz
 | Hedef              | Adımlar                                                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
 | Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir)           |
-| Node sunucu / VPS  | `npm run build` → `npm run preview` veya çıktı `dist/server` girişini bir Node süreç yöneticisiyle çalıştır |
+| Render             | Render Blueprint (`render.yaml`) → **Web Service** → `npm install && npm run build` / `npm start`           |
+| Node sunucu / VPS  | `npm run build` → `npm run start` (`.output/server/index.mjs`)                                             |
+| Vercel             | `npm run build` → Vercel'in Nitro/Vercel preset'i; fonksiyon süresi plan limitlerine tabidir                |
 | Lovable            | Publish butonu; env değerleri proje secret'larından okunur                                                  |
 
-Notlar:
+### Render'a taşıma (önerilen backend deployment)
+
+Bu repo Render için **Static Site değil, Web Service** olarak yapılandırıldı. `render.yaml` şu ayarları kullanır:
+
+- Nitro `render_com` preset'i ile persistent Node server
+- Build: `npm install && npm run build`
+- Start: `npm start` → `.output/server/index.mjs`
+- Health check: `/health`
+Render'ın **ücretli `1c-2g` planı** ile başlamak, ağır AI işlerinde cold start ve bellek baskısını azaltır; bütçe kısıtlıysa Blueprint'te planı `free` veya `0.5c-512mb` olarak değiştirebilirsin, ancak ücretsiz servis uykuya geçebilir.
+
+Kurulum:
+
+1. GitHub'da repo erişimi olan Render hesabında **New → Blueprint** seç ve `render.yaml` dosyasını göster.
+2. Servis tipinin **Web Service** olduğunu kontrol et; Static Site seçme.
+3. İlk deploy'dan önce aşağıdaki secret'ları Render Dashboard → **Service → Environment** bölümüne ekle.
+4. Deploy tamamlanınca `https://<servis-adı>.onrender.com/health` adresinin `{"status":"ok"}` döndürdüğünü kontrol et.
+5. Custom domain olarak `aroless.tech` ekle ve DNS kayıtlarını Render'ın verdiği hedefe yönlendir.
+6. Supabase Dashboard → **Authentication → URL Configuration** içinde Site URL ve Redirect URLs'e canlı domaini ekle; Google OAuth redirect ayarlarını da güncelle.
+
+#### Render Environment değişkenleri
+
+**Zorunlu çekirdek değişkenler:**
+
+```text
+APP_URL=https://aroless.tech
+VITE_APP_URL=https://aroless.tech
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+**Ürün bulucu asenkron işleri için:**
+
+```text
+QSTASH_TOKEN
+JOB_WORKER_SECRET
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+```
+
+QStash'in callback adresi `https://aroless.tech/api/worker` olacağı için `APP_URL` kesinlikle Render servisinin geçici adresi değil, DNS geçişinden sonra gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
+
+**Özelliklere göre eklenebilenler:**
+
+```text
+# AI: .env.example içindeki tüm tanımlı provider anahtarları
+GEMINI_API_KEY_1..6
+GROQ_API_KEY_1..4
+TOGETHER_API_KEY
+CEREBRAS_API_KEY
+SAMBANOVA_API_KEY
+OPENROUTER_API_KEY_1..2
+HF_TOKEN_1..2
+AI_GATEWAY_URL
+AI_GATEWAY_API_KEY
+AI_GATEWAY_MODELS
+
+# Ödeme / e-posta / bot koruması
+PADDLE_API_KEY
+PADDLE_WEBHOOK_SECRET
+PADDLE_CLIENT_TOKEN
+PADDLE_PUBLIC_KEY
+PADDLE_VENDOR_ID
+PADDLE_STARTER_PRICE_ID
+PADDLE_PRO_PRICE_ID
+PADDLE_BUSINESS_PRICE_ID
+RESEND_API_KEY
+RESEND_FROM_EMAIL
+VITE_TURNSTILE_SITE_KEY
+TURNSTILE_SECRET_KEY
+
+# AWS/SES kullanılıyorsa
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_REGION
+AWS_SES_FROM_EMAIL
+```
+
+Render'a **değer değil, yalnızca anahtar adı** `render.yaml` içinde yazılır; gerçek değerleri Dashboard → Environment'e gir. Secret'ları Git'e, `render.yaml`'a veya `.env.example`'a yazma.
+
 
 - `nitro` kurulu değilse `npm run build` düz Vite SSR çıktısı üretir; geliştirme ve
   `npm run preview` için bu yeterlidir, Cloudflare dağıtımı için `nitro` gerekir.

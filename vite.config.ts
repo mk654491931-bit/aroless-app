@@ -30,7 +30,10 @@ export default defineConfig(async ({ command, mode }) => {
       const { nitro } = await import("nitro/vite");
       plugins.push(
         nitro({
-          preset: "vercel",
+          // Render runs a persistent Node web service. Vercel keeps its own
+          // preset through nitro.config.ts; this override is selected by the
+          // Render Blueprint's NITRO_PRESET environment variable.
+          preset: process.env["NITRO_PRESET"] ?? "vercel",
         }) as PluginOption,
       );
     } catch {

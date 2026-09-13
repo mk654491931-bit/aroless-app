@@ -1,0 +1,44 @@
+# Render Blueprint for Aroless (TanStack Start + Nitro persistent Node service).
+# Create this from Render Dashboard → New → Blueprint, then add secrets in the
+# service Environment tab. No secret values belong in this file.
+services:
+  - type: web
+    name: aroless
+    runtime: node
+    plan: 1c-2g
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: NITRO_PRESET
+        value: render_com
+      - key: NITRO_HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+      - key: VITE_APP_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: QSTASH_TOKEN
+        sync: false
+      - key: JOB_WORKER_SECRET
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

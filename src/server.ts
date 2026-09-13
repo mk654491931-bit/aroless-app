@@ -47,6 +47,14 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/health" || pathname === "/healthz") {
+      return Response.json(
+        { status: "ok" },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+
     checkServerEnvOnce();
     try {
       const handler = await getServerEntry();
