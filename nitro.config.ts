@@ -3,10 +3,12 @@ export default {
   preset: "vercel",
   vercel: {
     functions: {
-      // Ağır arka plan işi (/api/worker) 90 sn'lik varsayılan sınıra takılmamalı.
-      // Vercel Hobby planda üst sınır 60 sn'dir: o durumda
-      // VERCEL_FUNCTION_MAX_DURATION=60 ortam değişkenini ayarlayın.
-      maxDuration: Number(process.env["VERCEL_FUNCTION_MAX_DURATION"] ?? 300),
+      // Vercel HOBBY planı: bir fonksiyon en fazla 60 sn çalışabilir; daha
+      // yüksek bir değer deploy'u reddettirir. Bu yüzden varsayılan 60'tır.
+      // Pro/Enterprise plana geçildiğinde tek yapmanız gereken
+      // VERCEL_FUNCTION_MAX_DURATION=300 ortam değişkenini eklemektir;
+      // arka plan işçisi ve bekleme süreleri otomatik olarak genişler.
+      maxDuration: Number(process.env["VERCEL_FUNCTION_MAX_DURATION"] ?? 60),
     },
   },
 };

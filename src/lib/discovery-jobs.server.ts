@@ -10,6 +10,12 @@
  *     `completed` + `result` (veya `failed` + `error`) yazar ve sonucu Upstash
  *     Redis'te önbelleğe alır.
  *
+ * SÜRE BÜTÇESİ (ÖNEMLİ): Vercel Hobby planında bir fonksiyon en fazla 60 sn
+ * çalışabilir. Bu yüzden hem işçinin hat bütçesi hem de tetikleyicinin
+ * bekleme süresi `VERCEL_FUNCTION_MAX_DURATION` (varsayılan 60) değerinden
+ * türetilir; hiçbir istek platform sınırına dayanmaz, dolayısıyla 504 /
+ * "zaman aşımı" hatası oluşmaz.
+ *
  * QStash/Redis ortam değişkenleri yoksa hiçbir şey kırılmaz: çağrı yapan taraf
  * eski senkron davranışa geri düşer.
  *
@@ -42,6 +48,28 @@ function env(name: string): string | undefined {
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e ?? "unknown error");
+}
+
+// ---------- Süre bütçesi (Hobby = 60 sn) ----------
+
+/** Vercel fonksiyon üst süre sınırı (saniye). Hobby varsayılanı: 60. */
+export function functionMaxDurationSeconds(): number {
+  const raw = Number(env("VERCEL_FUNCTION_MAX_DURATION") ?? 60);
+  if (!Number.isFinite(raw) || raw < 10) return 60;
+  return Math.min(900, Math.round(raw));
+}
+
+/**
+ * İşçinin ağır hatta harcayabileceği süre. Üst sınırın altında bırakılan pay,
+ * sonucu Supabase + Redis'e yazmak ve yanıt dönmek içindir.
+ */
+export function workerBudgetMs(): number {
+  return Math.max(25_000, (functionMaxDurationSeconds() - 16) * 1000);
+}
+
+/** Tetikleyicinin sonucu beklerken kullanabileceği en uzun süre. */
+export function clientWaitMs(): number {
+  return Math.max(20_000, (functionMaxDurationSeconds() - 8) * 1000);
 }
 
 function isNewSupabaseApiKey(value: string): boolean {
@@ -150,6 +178,10 @@ async function publishToQStash(
   const secret = workerSecret();
   if (!token || !secret) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
 
+  // QStash'in işçiyi beklerken kullanacağı süre, platform sınırının hemen
+  // altında tutulur (Hobby: 58s). Böylece "timeout" yerine gerçek yanıt döner.
+  const qstashTimeout = `${Math.max(15, functionMaxDurationSeconds() - 2)}s`;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
@@ -160,7 +192,7 @@ async function publishToQStash(
         "Content-Type": "application/json",
         "Upstash-Method": "POST",
         "Upstash-Retries": "1",
-        "Upstash-Timeout": "290s",
+        "Upstash-Timeout": qstashTimeout,
         "Upstash-Forward-x-job-secret": secret,
       },
       body: JSON.stringify(payload),
@@ -304,13 +336,20 @@ export async function startDiscoveryJob(args: {
   return { ok: true, jobId };
 }
 
-/** Kayıt `completed`/`failed` olana kadar bekler (sunucu tarafı yoklama). */
+/**
+ * Kayıt `completed`/`failed` olana kadar bekler (sunucu tarafı yoklama).
+ *
+ * Bekleme süresi HER ZAMAN `clientWaitMs()` ile sınırlandırılır; böylece
+ * çağıran taraf yanlışlıkla daha uzun bir süre isterse dahi istek Vercel'in
+ * (Hobby'de 60 sn) sert sınırına çarpmaz.
+ */
 export async function waitForJob(
   jobId: string,
   opts?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<{ status: JobStatus; result?: unknown; error?: string | null }> {
-  const timeoutMs = opts?.timeoutMs ?? 240_000;
-  const intervalMs = opts?.intervalMs ?? 2_000;
+  const maxWait = clientWaitMs();
+  const timeoutMs = Math.min(opts?.timeoutMs ?? maxWait, maxWait);
+  const intervalMs = Math.max(1_000, opts?.intervalMs ?? 1_500);
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
@@ -333,6 +372,8 @@ export async function runJob(
       supabase: userClient(payload.accessToken),
       userId: payload.userId,
       deductCredit: true,
+      // Hat, kalan süreye göre kendini kısaltarak zamanında sonuç döner.
+      budgetMs: workerBudgetMs(),
     });
     await markJobCompleted(payload.jobId, result);
     await cacheJobResult(payload.jobId, result).catch(() => {});
