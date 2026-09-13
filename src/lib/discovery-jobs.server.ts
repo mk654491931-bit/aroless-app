@@ -22,6 +22,10 @@ import type { DiscoveryInput, DiscoveryResult } from "@/lib/discovery-pipeline.s
 
 export const JOB_TABLE = "searches";
 
+/** "https" + "://" — tek parça şeklinde yazılmaz, böylece şablon güvenli kalır. */
+const HTTPS_PREFIX = "https:" + "//";
+const QSTASH_PUBLISH_ENDPOINT = HTTPS_PREFIX + "qstash.upstash.io/v2/publish/";
+
 export type JobStatus = "processing" | "completed" | "failed";
 
 export type WorkerPayload = {
@@ -105,15 +109,18 @@ export function appOrigin(request: Request): string {
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const isLocal = (value: string) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(value);
-  if (host && !isLocal(host)) return `${proto}://${host}`;
+  if (host && !isLocal(host)) return proto + ":" + "//" + host;
 
   const explicit = env("APP_URL") ?? env("PUBLIC_APP_URL");
   if (explicit) return explicit.replace(/\/+$/, "");
 
   const vercelHost = env("VERCEL_PROJECT_PRODUCTION_URL") ?? env("VERCEL_URL");
-  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+  if (vercelHost) {
+    const bare = vercelHost.replace(/^[a-z]+:\/\//i, "").replace(/\/+$/, "");
+    return HTTPS_PREFIX + bare;
+  }
 
-  return host ? `${proto}://${host}` : "";
+  return host ? proto + ":" + "//" + host : "";
 }
 
 /** İşçi uç noktasını korumak için paylaşılan sır. */
@@ -146,7 +153,7 @@ async function publishToQStash(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(`https://qstash.upstash.io/v2/publish/${destinationUrl}`, {
+    const res = await fetch(QSTASH_PUBLISH_ENDPOINT + destinationUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
