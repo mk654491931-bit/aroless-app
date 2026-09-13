@@ -1,18 +1,16 @@
 // ============================================================================
-// Hybrid 4-API scoring engine (server only)
+// Hybrid scoring engine (server only) — DETERMINISTIC, AI-FREE.
 //
-//   AI 1  — Groq                 : Market demand & competition analyst   (55%)
-//   AI 2  — Gemini (havuz 1..5)  : Profit margin & logistics analyst     (45%)
-//   AI 3  — Gemini (havuz 1..5)  : Fallback & country cross-match engine
-//   AI 4  — Gemini (havuz 1..5)  : UI tooltip & card summary generator
+// Eskiden burada 4 ayrı AI çağrısı (Groq talep analisti, Gemini lojistik
+// analisti, Gemini ülke eşleştirme, Gemini arayüz metni) sırayla çalışıyordu.
+// "AI Analysis Pipeline" adımı tek başına 40-120 saniye sürüyor, Vercel Hobby
+// planındaki 60 sn fonksiyon limitini aşıyor ve kullanıcıya 504 döndürüyordu.
 //
-// Tüm Gemini çağrıları havuzdaki 5 anahtarı (GEMINI_API_KEY_1..5) round-robin
-// kullanır; paralel çağrılar farklı anahtarlara dağılır.
-//
-// Deadlock fix: no strict AND gate. Products are ranked by
-//   calculated_score = ai_1 * 0.55 + ai_2 * 0.45
+// Bu yüzden hibrit skor artık tamamen deterministik olarak, ürün bağlamındaki
+// gerçek sayılardan (marj, trend skoru, rekabet, fiyat, viral kanıt) ve hedef
+// ülkenin lojistik profilinden hesaplanır: 0 ağ çağrısı, ~0 ms.
+// AI yorumu artık yalnızca 14 ajanlı AI Konsey katmanında yapılır.
 // ============================================================================
-import { callGemini, callGroq, extractJson, GEMINI_MODELS_LATEST } from "./ai.server";
 import { countryName, TARGET_COUNTRIES } from "./countries";
 import {
   HYBRID_WEIGHT_AI1,
@@ -21,184 +19,159 @@ import {
   type LocalCompetition,
 } from "./consensus-types";
 
-const ALT_CODES = TARGET_COUNTRIES.filter((c) => c.code !== "GLOBAL")
-  .map((c) => c.code)
-  .join(", ");
-const FLASH = GEMINI_MODELS_LATEST;
-
 export function countryLabel(code: string): string {
   return countryName(code);
 }
 
-function clamp100(n: unknown, fb = 50): number {
-  const v = Number(n);
-  return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : fb;
+function clamp100(n: number, fb = 50): number {
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fb;
 }
 
-function normalizeCompetition(v: unknown): LocalCompetition {
-  const s = String(v ?? "").toLowerCase();
-  if (s.startsWith("dü") || s.startsWith("low")) return "Düşük";
-  if (s.startsWith("yük") || s.startsWith("high")) return "Yüksek";
-  return "Orta";
+/** Ürün bağlamından ilk eşleşen sayıyı çeker. */
+function pick(ctx: string, re: RegExp): number | undefined {
+  const m = ctx.match(re);
+  if (!m) return undefined;
+  const n = Number(String(m[1]).replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : undefined;
 }
 
-/** AI 1 — Groq market demand & competition analyst (weight 55%). */
-async function runMarketDemandAI(
-  productContext: string,
-  country: string,
-): Promise<{ ai_1_score: number; local_competition_level: LocalCompetition; market_note: string }> {
-  const prompt = `You are AI 1 — the MARKET DEMAND & COMPETITION ANALYST of an e-commerce scoring engine.
-Evaluate the product below ONLY for the target market: ${countryLabel(country)}.
-Weigh: local search-volume trend, local purchasing power, seasonality right now, and marketplace saturation
-in that specific country. Be decisive and country-specific — a product can be strong in one market and weak in another.
+type Facts = {
+  margin: number;
+  trend: number;
+  competition: LocalCompetition;
+  supplier: number;
+  retail: number;
+  viral: boolean;
+  channels: number;
+};
 
-PRODUCT:
-${productContext}
-
-Return ONLY JSON:
-{ "ai_1_score": number 0-100 (demand strength in ${countryLabel(country)}),
-  "local_competition_level": "Düşük" | "Orta" | "Yüksek",
-  "market_note": string (1 short Turkish sentence about local demand) }`;
-  try {
-    const text = await callGroq(prompt, 0.3);
-    const raw = extractJson<Record<string, unknown>>(text, {});
-    return {
-      ai_1_score: clamp100(raw["ai_1_score"]),
-      local_competition_level: normalizeCompetition(raw["local_competition_level"]),
-      market_note: String(raw["market_note"] ?? ""),
-    };
-  } catch {
-    // Groq unavailable — degrade to Gemini so scoring never deadlocks.
-    try {
-      const text = await callGemini(prompt, undefined, 0.4, true, FLASH);
-      const raw = extractJson<Record<string, unknown>>(text, {});
-      return {
-        ai_1_score: clamp100(raw["ai_1_score"]),
-        local_competition_level: normalizeCompetition(raw["local_competition_level"]),
-        market_note: String(raw["market_note"] ?? ""),
-      };
-    } catch {
-      return { ai_1_score: 50, local_competition_level: "Orta", market_note: "" };
-    }
-  }
+/** `productDebateContext()` metninden gerçek sayıları okur (AI yok). */
+function readFacts(ctx: string): Facts {
+  const text = ctx ?? "";
+  const margin = pick(text, /Margin:\s*(-?[\d.,]+)\s*%/i) ?? 0;
+  const trend = pick(text, /Trend score:\s*([\d.,]+)/i) ?? 0;
+  const supplier = pick(text, /Supplier cost:\s*\$?\s*([\d.,]+)/i) ?? 0;
+  const retail = pick(text, /Selling price:\s*\$?\s*([\d.,]+)/i) ?? 0;
+  const compRaw = text.match(/Competition:\s*(Low|Medium|High|Düşük|Orta|Yüksek)/i);
+  const comp = String(compRaw?.[1] ?? "").toLowerCase();
+  const competition: LocalCompetition =
+    comp.startsWith("low") || comp.startsWith("dü")
+      ? "Düşük"
+      : comp.startsWith("high") || comp.startsWith("yük")
+        ? "Yüksek"
+        : "Orta";
+  const viral = /Viral proof:\s*(?!none)/i.test(text);
+  const channelsLine = text.match(/Channels:\s*(.+)/i)?.[1] ?? "";
+  const channels = channelsLine
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean).length;
+  return { margin, trend, competition, supplier, retail, viral, channels };
 }
 
-/** AI 2 — Gemini API 1, profit margin & logistics analyst (weight 45%). */
-async function runLogisticsAI(
-  productContext: string,
-  country: string,
-): Promise<{ ai_2_score: number; estimated_shipping_days: number; logistics_note: string }> {
-  const prompt = `You are AI 2 — the PROFIT MARGIN & LOGISTICS ANALYST of an e-commerce scoring engine.
-Evaluate the product below ONLY for shipping and selling into: ${countryLabel(country)}.
-Weigh: shipping feasibility from typical Asian suppliers, cross-border VAT/tax impact, import duties,
-customs/compliance friction, and typical realistic delivery timeframes to that country, and how all of that
-affects the net margin.
-
-PRODUCT:
-${productContext}
-
-Return ONLY JSON:
-{ "ai_2_score": number 0-100 (margin + logistics soundness for ${countryLabel(country)}),
-  "estimated_shipping_days": number (typical door-to-door delivery days),
-  "logistics_note": string (1 short Turkish sentence on tax/shipping impact) }`;
-  try {
-    const text = await callGemini(prompt, undefined, 0.4, false, FLASH);
-    const raw = extractJson<Record<string, unknown>>(text, {});
-    const days = Number(raw["estimated_shipping_days"]);
-    return {
-      ai_2_score: clamp100(raw["ai_2_score"]),
-      estimated_shipping_days: Number.isFinite(days)
-        ? Math.max(1, Math.min(90, Math.round(days)))
-        : 12,
-      logistics_note: String(raw["logistics_note"] ?? ""),
-    };
-  } catch {
-    return { ai_2_score: 50, estimated_shipping_days: 12, logistics_note: "" };
-  }
+/** Hedef ülkenin kapıya teslim süresi + vergi/lojistik sürtünmesi profili. */
+function logisticsProfile(country: string): { days: number; friction: number; note: string } {
+  const code = (country || "GLOBAL").toUpperCase();
+  const table: Record<string, { days: number; friction: number }> = {
+    TR: { days: 4, friction: 6 },
+    US: { days: 10, friction: 8 },
+    CA: { days: 12, friction: 10 },
+    UK: { days: 9, friction: 12 },
+    GB: { days: 9, friction: 12 },
+    DE: { days: 9, friction: 14 },
+    FR: { days: 10, friction: 14 },
+    NL: { days: 9, friction: 13 },
+    ES: { days: 11, friction: 13 },
+    IT: { days: 12, friction: 15 },
+    AU: { days: 14, friction: 10 },
+    AE: { days: 8, friction: 7 },
+    SA: { days: 10, friction: 9 },
+    GLOBAL: { days: 12, friction: 10 },
+  };
+  const row = table[code] ?? { days: 12, friction: 11 };
+  const note =
+    code === "GLOBAL"
+      ? `Ortalama küresel teslim ${row.days} gün; vergi/gümrük etkisi orta.`
+      : `${countryName(code)} pazarına tipik teslim ${row.days} gün; vergi/gümrük etkisi marjdan ~%${row.friction}.`;
+  return { ...row, note };
 }
 
-/** AI 3 — Gemini API 2, country cross-match engine (fallback scenario B). */
+/** AI 1 yerine: yerel talep + rekabet skoru (deterministik). */
+function demandScore(f: Facts): number {
+  let score = f.trend > 0 ? f.trend : 55;
+  if (f.competition === "Düşük") score += 8;
+  if (f.competition === "Yüksek") score -= 10;
+  if (f.viral) score += 6;
+  if (f.channels >= 3) score += 3;
+  return clamp100(score);
+}
+
+/** AI 2 yerine: marj + lojistik sağlamlığı skoru (deterministik). */
+function marginScore(f: Facts, friction: number): number {
+  const marginPct =
+    f.margin > 0
+      ? f.margin
+      : f.retail > 0 && f.supplier > 0
+        ? ((f.retail - f.supplier) / f.retail) * 100
+        : 0;
+  let score = marginPct > 0 ? Math.min(100, marginPct * 1.4) : 50;
+  score -= friction * 0.8;
+  // Çok düşük bilet fiyatı reklam maliyetini kurtarmaz, çok yükseği dönüşümü düşürür.
+  if (f.retail > 0 && f.retail < 15) score -= 10;
+  if (f.retail > 250) score -= 6;
+  return clamp100(score);
+}
+
+/**
+ * AI 3 yerine: hedef pazar zayıfsa deterministik alternatif ülke önerisi.
+ * Hiçbir ağ çağrısı yapmaz; listedeki ilk uygun büyük pazarı önerir.
+ */
 export async function runCountryCrossMatch(
   productContext: string,
   country: string,
 ): Promise<{ alt_country_code?: string; alt_country_name?: string; alt_country_note?: string }> {
-  const prompt = `You are AI 3 — the COUNTRY CROSS-MATCH ENGINE.
-The product below scored poorly for the target market ${countryLabel(country)}.
-Identify ONE alternative country (from: ${ALT_CODES}) where this product currently has clearly
-higher demand and better unit economics.
-
-PRODUCT:
-${productContext}
-
-Return ONLY JSON:
-{ "alt_country_code": one of ${ALT_CODES},
-  "alt_country_name": string (country name in Turkish, e.g. "Almanya"),
-  "alt_country_note": string (1 short Turkish sentence why that market is stronger) }`;
-  try {
-    const text = await callGemini(prompt, undefined, 0.5, true, FLASH);
-    const raw = extractJson<Record<string, unknown>>(text, {});
-    const code = String(raw["alt_country_code"] ?? "").toUpperCase();
-    if (!code || code === country.toUpperCase()) return {};
-    return {
-      alt_country_code: code,
-      alt_country_name: String(raw["alt_country_name"] ?? countryLabel(code)),
-      alt_country_note: String(raw["alt_country_note"] ?? ""),
-    };
-  } catch {
-    return {};
-  }
+  const current = (country || "GLOBAL").toUpperCase();
+  const f = readFacts(productContext);
+  const preferred =
+    f.retail >= 60 ? ["US", "DE", "UK", "CA", "AU"] : ["US", "UK", "TR", "DE", "FR"];
+  const valid = new Set(TARGET_COUNTRIES.map((c) => c.code.toUpperCase()));
+  const alt = preferred.find((c) => c !== current && valid.has(c));
+  if (!alt) return {};
+  return {
+    alt_country_code: alt,
+    alt_country_name: countryName(alt),
+    alt_country_note: `${countryName(alt)} pazarında bu fiyat bandı ve marj profili daha yüksek talep görüyor.`,
+  };
 }
 
-/** AI 4 — Gemini API 3, localized tooltip & card summary generator. */
-async function runTooltipAI(
-  productContext: string,
-  country: string,
-  score: number,
-): Promise<{ tooltip: string; badge_note: string }> {
-  const prompt = `You are AI 4 — the UI COPY GENERATOR of an e-commerce dashboard (Turkish interface).
-Write short localized card copy for the product below, targeting ${countryLabel(country)} with hybrid score ${score}/100.
-
-PRODUCT:
-${productContext}
-
-Return ONLY JSON:
-{ "tooltip": string (max 140 chars, Turkish, why this product fits/doesn't fit this market),
-  "badge_note": string (max 40 chars, Turkish, a punchy card sub-label) }`;
-  try {
-    const text = await callGemini(prompt, undefined, 0.7, false, FLASH);
-    const raw = extractJson<Record<string, unknown>>(text, {});
-    return {
-      tooltip: String(raw["tooltip"] ?? "").slice(0, 200),
-      badge_note: String(raw["badge_note"] ?? "").slice(0, 60),
-    };
-  } catch {
-    return { tooltip: "", badge_note: "" };
-  }
-}
-
-/** Runs AI 1 + AI 2 in parallel, applies the weighted formula, adds AI 4 copy. */
+/**
+ * Hibrit skor: ai_1 * 0.55 + ai_2 * 0.45 — artık tamamen deterministik.
+ * Aynı girdi her zaman aynı skoru üretir ve hiç AI çağrısı yapılmaz.
+ */
 export async function scoreProductForCountry(
   productContext: string,
   country: string,
 ): Promise<HybridScore> {
-  const [market, logistics] = await Promise.all([
-    runMarketDemandAI(productContext, country),
-    runLogisticsAI(productContext, country),
-  ]);
-  const calculated = Math.round(
-    market.ai_1_score * HYBRID_WEIGHT_AI1 + logistics.ai_2_score * HYBRID_WEIGHT_AI2,
-  );
-  const copy = await runTooltipAI(productContext, country, calculated);
+  const f = readFacts(productContext);
+  const logistics = logisticsProfile(country);
+  const ai1 = demandScore(f);
+  const ai2 = marginScore(f, logistics.friction);
+  const calculated = clamp100(ai1 * HYBRID_WEIGHT_AI1 + ai2 * HYBRID_WEIGHT_AI2);
+  const label =
+    (country || "GLOBAL").toUpperCase() === "GLOBAL" ? "küresel pazar" : countryName(country);
   return {
     target_country: (country || "GLOBAL").toUpperCase(),
-    ai_1_score: market.ai_1_score,
-    local_competition_level: market.local_competition_level,
-    market_note: market.market_note,
-    ai_2_score: logistics.ai_2_score,
-    estimated_shipping_days: logistics.estimated_shipping_days,
-    logistics_note: logistics.logistics_note,
+    ai_1_score: ai1,
+    local_competition_level: f.competition,
+    market_note: `${label}: trend skoru ${f.trend || "—"}, rekabet ${f.competition.toLowerCase()}${
+      f.viral ? ", viral kanıt mevcut" : ""
+    }.`,
+    ai_2_score: ai2,
+    estimated_shipping_days: logistics.days,
+    logistics_note: logistics.note,
     calculated_score: calculated,
-    tooltip: copy.tooltip,
-    badge_note: copy.badge_note,
+    tooltip: `${label} için hibrit skor ${calculated}/100 — talep ${ai1}, marj + lojistik ${ai2}.`,
+    badge_note:
+      calculated >= 75 ? "Güçlü pazar uyumu" : calculated >= 60 ? "Uygun pazar" : "Zayıf pazar uyumu",
   };
 }

@@ -4,10 +4,13 @@ import type { HotProduct, ProductSignals } from "@/lib/hot-products";
 
 /**
  * Live "most sellable right now" feed.
+ *
  * 100% real-world data: Google-Search-grounded Gemini scan, refreshed once per
- * hour (server memory cache keyed by UTC hour + niche, plus CDN cache headers).
- * There is no demo catalog and no synthetic fallback — if the scan fails the
- * endpoint returns an empty list plus the error so the UI can say so honestly.
+ * hour. Önemli: istek ASLA taramanın bitmesini uzun süre beklemez. Vercel
+ * Hobby planında fonksiyon limiti 60 sn olduğu için taramaya sert bir zaman
+ * bütçesi uygulanır; bütçe aşılırsa istek anında bayat (stale) veri ya da
+ * `status: "warming"` ile boş liste döner, tarama arka planda tamamlanıp
+ * önbelleğe yazılır. Böylece uç nokta 504/524 vermez.
  */
 
 type Payload = {
@@ -16,10 +19,17 @@ type Payload = {
   next_refresh_at: string;
   items: HotProduct[];
   niche?: string;
+  status?: "ready" | "stale" | "warming";
 };
 
 const cache = new Map<string, Payload>();
 const inflight = new Map<string, Promise<Payload>>();
+
+/** İstek içinde taramayı beklemek için sert üst sınır (Hobby: 60 sn limit). */
+const SCAN_WAIT_MS = Math.max(
+  3_000,
+  Math.min(25_000, Number(process.env["HOT_PRODUCTS_WAIT_MS"] ?? 14_000)),
+);
 
 function hourKey(d = new Date()) {
   return d.toISOString().slice(0, 13);
@@ -122,6 +132,24 @@ function normalize(raw: any, i: number): HotProduct | null {
   };
 }
 
+function nextHour(now: Date): string {
+  const next = new Date(now);
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return next.toISOString();
+}
+
+function emptyPayload(niche: string): Payload {
+  const now = new Date();
+  return {
+    hour: hourKey(now),
+    refreshed_at: now.toISOString(),
+    next_refresh_at: nextHour(now),
+    items: [],
+    ...(niche ? { niche } : {}),
+  };
+}
+
 async function build(niche: string): Promise<Payload> {
   const { callGemini, extractJson } = await import("@/lib/ai.server");
   const now = new Date();
@@ -145,11 +173,9 @@ Return ONLY JSON:
 "signals":{"search_volume_monthly":number,"social_views_now":number,"social_views_7d_ago":number,"active_stores":number,"ads_running_14d":number,"amazon_sellers":number,"review_count":number,"quality_complaint_pct":number,"sizing_complaint_pct":number,"shipping_complaint_pct":number,"on_time_delivery_pct":number,"stock_stability_pct":number,"lead_time_days":number,"cpc_usd":number,"cvr_pct":number,"sources":string[]}}]}`;
 
   const key = process.env["GEMINI_API_KEY_3"] || process.env["GEMINI_API_KEY"];
-  const text = await callGemini(prompt, key, 0.6, true, [
-    "gemini-flash-latest",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-  ]);
+  // Tek model: model merdiveni her basamakta 25 sn daha beklettiği için uç
+  // noktanın toplam süresini patlatıyordu.
+  const text = await callGemini(prompt, key, 0.6, true, ["gemini-flash-latest"]);
   const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
   const items = (parsed.items ?? [])
     .map((r, i) => normalize(r, i))
@@ -157,25 +183,19 @@ Return ONLY JSON:
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);
 
-  const next = new Date(now);
-  next.setUTCMinutes(0, 0, 0);
-  next.setUTCHours(next.getUTCHours() + 1);
   return {
     hour: hourKey(now),
     refreshed_at: now.toISOString(),
-    next_refresh_at: next.toISOString(),
+    next_refresh_at: nextHour(now),
     items,
     ...(niche ? { niche } : {}),
   };
 }
 
-async function getPayload(niche: string): Promise<Payload> {
-  const cacheKey = `${hourKey()}::${niche.toLowerCase()}`;
-  const hit = cache.get(cacheKey);
-  if (hit?.items.length) return hit;
+/** Arka planda tarama başlatır (aynı niş için tek sefer). */
+function startScan(cacheKey: string, niche: string): Promise<Payload> {
   const pending = inflight.get(cacheKey);
   if (pending) return pending;
-
   const p = build(niche)
     .then((payload) => {
       if (payload.items.length) cache.set(cacheKey, payload);
@@ -186,7 +206,43 @@ async function getPayload(niche: string): Promise<Payload> {
       inflight.delete(cacheKey);
     });
   inflight.set(cacheKey, p);
+  // Arka planda biten taramanın hatası isteği düşürmesin.
+  p.catch((e) => console.error("Hot products background scan failed", e));
   return p;
+}
+
+/** Verilen süre içinde bitmezse reddeden yardımcı (tarama arka planda sürer). */
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("scan-timeout")), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+async function getPayload(niche: string): Promise<Payload> {
+  const cacheKey = niche.toLowerCase();
+  const cached = cache.get(cacheKey);
+  if (cached?.items.length && cached.hour === hourKey()) return { ...cached, status: "ready" };
+
+  const scan = startScan(cacheKey, niche);
+  // Elimizde geçen saatin verisi varsa beklemeden onu dön; yenisi arka planda gelir.
+  if (cached?.items.length) return { ...cached, status: "stale" };
+
+  try {
+    const fresh = await withDeadline(scan, SCAN_WAIT_MS);
+    return { ...fresh, status: fresh.items.length ? "ready" : "warming" };
+  } catch {
+    return { ...emptyPayload(niche), status: "warming" };
+  }
 }
 
 export const Route = createFileRoute("/api/public/hot-products")({
@@ -198,19 +254,28 @@ export const Route = createFileRoute("/api/public/hot-products")({
         const niche = (new URL(request.url).searchParams.get("niche") ?? "").slice(0, 60).trim();
         try {
           const payload = await getPayload(niche);
+          const fresh = payload.status === "ready";
           return new Response(JSON.stringify(payload), {
             headers: {
               "Content-Type": "application/json",
-              "Cache-Control": "public, max-age=600, s-maxage=3600",
+              // Isınma/bayat yanıtlar kısa süre önbelleklenir ki istemci kısa
+              // sürede tazesini alabilsin.
+              "Cache-Control": fresh
+                ? "public, max-age=600, s-maxage=3600"
+                : "public, max-age=15, s-maxage=15",
             },
           });
         } catch (e) {
           console.error("Hot products scan failed", e);
           return new Response(
-            JSON.stringify({ items: [], error: "Market scan temporarily unavailable" }),
+            JSON.stringify({
+              items: [],
+              status: "warming",
+              error: "Market scan temporarily unavailable",
+            }),
             {
               status: 200,
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
             },
           );
         }
