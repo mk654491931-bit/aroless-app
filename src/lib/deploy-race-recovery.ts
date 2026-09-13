@@ -10,7 +10,7 @@
  * which used to leave a blank/white page until a manual hard refresh.
  *
  * When such a stale-chunk failure is detected we perform one guarded full
- * reload (throttled, offline-aware). The reload fetches fresh SSR HTML, which
+ * reload per browser session (offline-aware). The reload fetches fresh SSR HTML, which
  * points at the current chunk names, so the app recovers on its own.
  *
  * Client-only module; safe to import from server-rendered files (all window
@@ -58,14 +58,16 @@ export function isStaleChunkError(error: unknown): boolean {
   return url ? isHashedChunkUrl(url) : false;
 }
 
-const RELOAD_STAMP_KEY = "aroless.deploy-race-reload";
-const RELOAD_THROTTLE_MS = 20_000;
+const RELOAD_FLAG_KEY = "aroless.deploy-race-reloaded";
 
 let reloadPending = false;
 
 /**
- * One guarded full-page reload per stale-chunk detection window.
- * Returns true when a reload was triggered.
+ * One guarded full-page reload per browser session.
+ *
+ * The flag is written before navigation. If the fresh document still points at
+ * a broken deployment, no second automatic reload is attempted; the route
+ * error boundary can then offer an explicit manual retry instead.
  */
 export function reloadOnceForStaleChunk(error: unknown): boolean {
   if (!isStaleChunkError(error)) return false;
@@ -74,11 +76,12 @@ export function reloadOnceForStaleChunk(error: unknown): boolean {
   if (reloadPending) return false;
 
   try {
-    const last = Number(window.sessionStorage.getItem(RELOAD_STAMP_KEY) ?? 0);
-    if (Date.now() - last < RELOAD_THROTTLE_MS) return false;
-    window.sessionStorage.setItem(RELOAD_STAMP_KEY, String(Date.now()));
+    if (window.sessionStorage.getItem(RELOAD_FLAG_KEY) === "1") return false;
+    window.sessionStorage.setItem(RELOAD_FLAG_KEY, "1");
   } catch {
-    /* storage unavailable → still allow a single reload */
+    // Fail closed when sessionStorage is unavailable; without a durable flag,
+    // an automatic reload could become an infinite loop.
+    return false;
   }
 
   reloadPending = true;
@@ -97,11 +100,11 @@ export function reloadOnceForStaleChunk(error: unknown): boolean {
  * execute when the entry's import of the route chunk 404s.
  *
  * Deliberately a dependency-free string: it is inlined into the document, so it
- * cannot import anything from the bundle. Throttle key and window are shared
- * with reloadOnceForStaleChunk so the two guards never fight each other.
+ * cannot import anything from the bundle. The session flag is shared with
+ * reloadOnceForStaleChunk so the two guards never fight each other.
  */
 export const STALE_CHUNK_BOOTSTRAP_SCRIPT = `(function(){
-  var KEY="${RELOAD_STAMP_KEY}",COUNT_KEY="${RELOAD_STAMP_KEY}:count",THROTTLE=${RELOAD_THROTTLE_MS},MAX_RELOADS=2;
+  var KEY="${RELOAD_FLAG_KEY}";
   function isChunk(url){
     if(typeof url!=="string"||url.length===0)return false;
     var path=url;
@@ -128,13 +131,9 @@ export const STALE_CHUNK_BOOTSTRAP_SCRIPT = `(function(){
   }
   function trigger(why){
     try{
-      var count=Number(sessionStorage.getItem(COUNT_KEY)||0);
-      if(count>=MAX_RELOADS)return; // build genuinely broken: stop looping
-      var last=Number(sessionStorage.getItem(KEY)||0);
-      if(Date.now()-last<THROTTLE)return;
-      sessionStorage.setItem(KEY,String(Date.now()));
-      sessionStorage.setItem(COUNT_KEY,String(count+1));
-    }catch(e){}
+      if(sessionStorage.getItem(KEY)==="1")return; // build genuinely broken: stop looping
+      sessionStorage.setItem(KEY,"1");
+    }catch(e){return;} // fail closed: never reload without a durable guard
     try{console.warn("[deploy-race] "+why+" \u2192 reloading to pick up the current build");}catch(e){}
     location.reload();
   }
