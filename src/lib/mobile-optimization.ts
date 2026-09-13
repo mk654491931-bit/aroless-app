@@ -137,21 +137,12 @@ export const mobileOptimization = {
    */
   optimizeTouchActions(): void {
     if (typeof document === "undefined") return;
+    if (document.getElementById("mobile-touch-optimization-style")) return;
 
     // CSS touch-action rules
     const style = document.createElement("style");
+    style.id = "mobile-touch-optimization-style";
     style.textContent = `
-      /* Dokunma performansını optimize et */
-      * {
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-      }
-      
-      input, textarea, [contenteditable="true"] {
-        -webkit-user-select: text;
-        user-select: text;
-      }
-      
       /* Pointer events optimize */
       button, a, [role="button"] {
         touch-action: manipulation;

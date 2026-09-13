@@ -1290,9 +1290,10 @@ body,
     radial-gradient(36% 28% at 82% 28%, var(--brand-2) 0%, transparent 64%),
     radial-gradient(44% 32% at 52% 88%, var(--accent-active) 0%, transparent 66%);
   opacity: 0.55;
-  filter: blur(78px);
+  filter: blur(36px);
   animation: aurora-swirl 26s ease-in-out infinite alternate;
   will-change: transform;
+  transform: translateZ(0);
   translate: calc(var(--px) * 34px) calc(var(--py) * 26px - var(--sy) * 60px);
 }
 html.light .amb-aurora {
@@ -1304,8 +1305,9 @@ html.palette-aurora .amb-aurora {
 
 .amb-blob {
   border-radius: 9999px;
-  filter: blur(68px);
-  opacity: 0.5;
+  filter: blur(32px);
+  opacity: 0.45;
+  transform: translateZ(0);
 }
 .amb-blob-1 {
   width: 46vw;
@@ -1633,9 +1635,11 @@ html.light .card-shimmer::before {
     color-mix(in oklab, var(--brand-2) 28%, transparent) 220deg,
     transparent 320deg
   );
-  filter: blur(90px);
-  opacity: 0.4;
+  filter: blur(40px);
+  opacity: 0.35;
   animation: amb-rotate 60s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
   translate: calc(var(--px) * 18px) calc(var(--py) * 14px);
 }
 html.light .amb-swirl {
@@ -2093,9 +2097,10 @@ html {
 .hero-orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(96px);
+  filter: blur(36px);
   pointer-events: none;
   will-change: transform;
+  transform: translateZ(0);
 }
 .hero-orb-a {
   left: 50%;
