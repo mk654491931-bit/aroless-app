@@ -108,6 +108,12 @@ export type DiscoveryContext = {
   deductCredit?: boolean;
   /** Kredi yukarıda düşüldüyse kalan bakiye. */
   creditsRemaining?: number;
+  /**
+   * Hattın tamamlanması için ayrılan süre (ms). Vercel Hobby planında
+   * fonksiyon limiti 60 sn olduğu için işçi ~44 sn'lik bir bütçe gönderir ve
+   * hat pahalı/opsiyonel adımları atlayarak limitin içinde kalır.
+   */
+  budgetMs?: number;
 };
 
 export type DiscoveryResult = {
@@ -161,12 +167,22 @@ export async function runProductDiscovery(
     remaining = (deducted as number) ?? 0;
   }
 
+  // ---- Süre bütçesi (Vercel Hobby: 60 sn fonksiyon limiti) ----
+  // İşçi `budgetMs` gönderir. Bütçe kısa ise ("hızlı profil") opsiyonel ama
+  // pahalı adımlar atlanır; sonuç şekli hiç değişmez, yalnızca derinlik azalır.
+  const startedAt = Date.now();
+  const budgetMs = Math.max(20_000, ctx.budgetMs ?? 240_000);
+  const deadline = startedAt + budgetMs;
+  const timeLeft = () => deadline - Date.now();
+  const hasTime = (needMs: number) => timeLeft() > needMs;
+  const fast = budgetMs <= 75_000;
+
   const apiKey = process.env.GEMINI_API_KEY;
 
   // Fetch GitHub public repo trends as an additional confidence signal.
   let githubBlock = "";
   let githubTrends: GitHubRepoTrend[] = [];
-  if (data.use_github_trends) {
+  if (data.use_github_trends && !fast) {
     try {
       const { fetchGitHubTrendsForNiche, summarizeGitHubTrends, formatGitHubTrendsBlock } =
         await import("@/lib/github-trends.server");
@@ -185,11 +201,15 @@ export async function runProductDiscovery(
 
   // Live, real-world market evidence (Google Trends + live marketplace
   // listings) injected as ground truth so the model's numbers stay realistic.
-  const { buildLiveEvidenceBlock } = await import("@/lib/market-verify.server");
-  const liveBlock = await buildLiveEvidenceBlock(
-    data.niche,
-    (data.target_country || "GLOBAL").toUpperCase(),
-  ).catch(() => "");
+  // Hızlı profilde atlanır: tek başına 20-40 sn alabiliyor.
+  let liveBlock = "";
+  if (!fast) {
+    const { buildLiveEvidenceBlock } = await import("@/lib/market-verify.server");
+    liveBlock = await buildLiveEvidenceBlock(
+      data.niche,
+      (data.target_country || "GLOBAL").toUpperCase(),
+    ).catch(() => "");
+  }
 
   // ---- Deep-search refinement constraints (only what the user actually set) ----
   const listify = (s: string) =>
@@ -410,7 +430,8 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     "CONSUMABLE / REPEAT PURCHASE — refill, subscription or run-out products with natural repurchase cycles and high LTV.",
     "DIFFERENTIATION PLAY — a product where existing listings have loud, repeated review complaints you can fix; state the complaint and the fix.",
   ];
-  const angleCount = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
+  // Hızlı profilde daha az açı → daha az paralel Gemini çağrısı → limit içinde kalır.
+  const angleCount = fast ? 3 : data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
   // İlk iki açı hedef ülkeye özel (yerel trend + yerel platform çok satanları).
   const activeAngles = [...localAngles, ...ANGLES].slice(0, angleCount);
   const anglePrompts = activeAngles.map((a) => buildPrompt(a, githubBlock + liveBlock));
@@ -602,7 +623,7 @@ JSON shape:
     market_verdict: r.verdict,
   }));
   // Pahalı derin analiz sadece kapıyı geçen en iyi adaylara uygulanır.
-  const deepLimit = data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
+  const deepLimit = fast ? 3 : data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
   const gated = gate.survivors.slice(0, deepLimit);
 
   // ---- Hybrid scoring: AI1 Groq (55%) + AI2 Gemini logistics (45%) ----
@@ -617,18 +638,21 @@ JSON shape:
   // Judge at most 2 products at a time: each product fans out into several
   // agent calls, so an unbounded Promise.all is what trips rate limits.
   const { mapWithConcurrency } = await import("@/lib/ai.server");
-  const judged = await mapWithConcurrency(gated, 2, async (p) => {
-    const context = productDebateContext(p);
-    const [hybrid, consensus] = await Promise.all([
-      scoreProductForCountry(context, country).catch(() => undefined),
-      runConsensus({
-        context,
-        profit_margin_pct: p.profit_margin_pct,
-        competition_level: p.competition_level,
-      }).catch(() => undefined),
-    ]);
-    return { ...p, hybrid, consensus };
-  });
+  let judged: WinningProduct[] = gated;
+  if (hasTime(12_000)) {
+    judged = await mapWithConcurrency(gated, fast ? 3 : 2, async (p) => {
+      const context = productDebateContext(p);
+      const [hybrid, consensus] = await Promise.all([
+        scoreProductForCountry(context, country).catch(() => undefined),
+        runConsensus({
+          context,
+          profit_margin_pct: p.profit_margin_pct,
+          competition_level: p.competition_level,
+        }).catch(() => undefined),
+      ]);
+      return { ...p, hybrid, consensus };
+    });
+  }
 
   // Rank by the weighted hybrid score with quality bonuses:
   // +5 for products with verified viral proof (URL + views)
@@ -649,7 +673,9 @@ JSON shape:
     return scoreB + bonusB - (scoreA + bonusA);
   });
 
-  let finalProducts = ranked.filter((p) => (p.hybrid?.calculated_score ?? 0) >= minScore);
+  let finalProducts: WinningProduct[] = ranked.filter(
+    (p) => (p.hybrid?.calculated_score ?? 0) >= minScore,
+  );
   let fallback: { type: "relaxed"; message: string } | null = null;
 
   if (finalProducts.length === 0) {
@@ -665,13 +691,15 @@ JSON shape:
   }
 
   // Fallback B — country cross-match for below-threshold survivors.
-  finalProducts = await Promise.all(
-    finalProducts.map(async (p) => {
-      if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
-      const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(() => ({}));
-      return { ...p, hybrid: { ...p.hybrid, ...alt } };
-    }),
-  );
+  if (hasTime(12_000)) {
+    finalProducts = await Promise.all(
+      finalProducts.map(async (p) => {
+        if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
+        const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(() => ({}));
+        return { ...p, hybrid: { ...p.hybrid, ...alt } };
+      }),
+    );
+  }
 
   if (finalProducts.length === 0) {
     await refund();
@@ -681,46 +709,49 @@ JSON shape:
   }
 
   // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
-  const { runCouncil } = await import("@/lib/council.server");
-  const COUNCIL_LIMIT = 8;
-  const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
-  const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
-    try {
-      const report = await runCouncil(p.name, country, data.category);
-      const council: CouncilSummary = {
-        velora_score: report.velora_score,
-        verdict: report.verdict,
-        director_engine: report.director_engine,
-        executive_report: report.executive_report,
-        teams: report.teams.map((t) => ({
-          team: t.team,
-          title: t.title,
-          score: t.score,
-          engine: t.engine,
-          summary: t.summary,
-          review_score: t.review_score,
-          reviewer_engine: t.reviewer_engine,
-          review_note: t.review_note,
-          confidence: t.confidence,
-          weight: t.weight,
-        })),
-        action_plan: report.action_plan,
-        risks: report.risks,
-        cache_hit: report.cache_hit,
-        auditor_engine: report.auditor_engine,
-        auditor_score: report.auditor_score,
-        auditor_note: report.auditor_note,
-        confidence: report.confidence,
-        disagreement: report.disagreement,
-        data_coverage: report.data_coverage,
-        kill_criteria: report.kill_criteria,
-      };
-      return { ...p, council };
-    } catch {
-      return p;
-    }
-  });
-  finalProducts = [...withCouncil, ...finalProducts.slice(COUNCIL_LIMIT)];
+  // En pahalı adım: yalnızca geniş bütçede (Pro/uzun fonksiyon limiti) çalışır.
+  if (!fast && hasTime(30_000)) {
+    const { runCouncil } = await import("@/lib/council.server");
+    const COUNCIL_LIMIT = 8;
+    const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
+    const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
+      try {
+        const report = await runCouncil(p.name, country, data.category);
+        const council: CouncilSummary = {
+          velora_score: report.velora_score,
+          verdict: report.verdict,
+          director_engine: report.director_engine,
+          executive_report: report.executive_report,
+          teams: report.teams.map((t) => ({
+            team: t.team,
+            title: t.title,
+            score: t.score,
+            engine: t.engine,
+            summary: t.summary,
+            review_score: t.review_score,
+            reviewer_engine: t.reviewer_engine,
+            review_note: t.review_note,
+            confidence: t.confidence,
+            weight: t.weight,
+          })),
+          action_plan: report.action_plan,
+          risks: report.risks,
+          cache_hit: report.cache_hit,
+          auditor_engine: report.auditor_engine,
+          auditor_score: report.auditor_score,
+          auditor_note: report.auditor_note,
+          confidence: report.confidence,
+          disagreement: report.disagreement,
+          data_coverage: report.data_coverage,
+          kill_criteria: report.kill_criteria,
+        };
+        return { ...p, council };
+      } catch {
+        return p;
+      }
+    });
+    finalProducts = [...withCouncil, ...finalProducts.slice(COUNCIL_LIMIT)];
+  }
 
   // Ortak karar: hibrit motor puanı ile AI Konsey puanının ortalaması.
   finalProducts = finalProducts.map((p) => {
@@ -743,9 +774,9 @@ JSON shape:
 
   // ---- Canlı piyasa doğrulaması: her ürün gerçek kaynaklarla çapraz kontrol
   // edilir; gerçeklik puanı ortak karara ağırlıklı olarak işlenir. ----
-  {
+  if (hasTime(15_000)) {
     const { verifyProduct } = await import("@/lib/market-verify.server");
-    const verified = await mapWithConcurrency(finalProducts, 2, async (p) => {
+    const verified = await mapWithConcurrency(finalProducts, fast ? 3 : 2, async (p) => {
       try {
         const { market_evidence, realism_score } = await verifyProduct(p, country);
         const base = p.unified_score ?? 0;
