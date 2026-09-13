@@ -3,22 +3,19 @@
 //
 // The browser never waits on the pipeline, never holds a job open, and never
 // touches a Redis credential. It:
-//   1. POSTs `/api/product-discovery/start` (authenticated) and gets a `jobId`
-//      back in milliseconds.
-//   2. Polls `/api/product-discovery/status?jobId=…` (authenticated, ownership
-//      checked server-side) until the job is terminal, forwarding progress so
-//      the UI can animate stages and the 14-agent table.
-//   3. Resolves with the durable result — including partial results, which are a
-//      success, not an error.
-//
-// All transport is injectable so the flow is unit-testable without a network.
-// The Supabase bearer token is attached by `apiFetch`, which is dynamically
-// imported so this module stays importable in a Node test environment.
+//   1. POSTs `/api/search` or `/api/product-discovery/start` (authenticated)
+//      and gets a `jobId` back in milliseconds (<500ms).
+//   2. Polls `/api/search?jobId=…` / `/api/product-discovery/status?jobId=…`
+//      and listens via Supabase Realtime (`postgres_changes`) until the job is
+//      terminal.
+//   3. Resolves with the durable result.
 // ============================================================================
 
 import type {
   DiscoveryAgentProgress,
+  DiscoveryEngine,
   DiscoveryJobRequest,
+  DiscoveryJobResult,
   DiscoveryJobView,
 } from "./discovery-jobs.shared";
 import { isTerminalStatus } from "./discovery-jobs.shared";
@@ -69,6 +66,43 @@ function errorMessage(payload: unknown, fallback: string): string {
     if (typeof record["message"] === "string" && record["message"].trim()) return record["message"];
   }
   return fallback;
+}
+
+/** Trigger async search job via /api/search (<500ms response). */
+export async function startSearchJob(
+  input: { niche: string; payload?: Record<string, unknown>; targetCountry?: string; engine?: DiscoveryEngine },
+  transport: DiscoveryTransport = defaultTransport,
+): Promise<StartJobOutcome> {
+  const discoveryRequest: DiscoveryJobRequest = {
+    niche: input.niche,
+    targetCountry: input.targetCountry,
+    engine: input.engine ?? "finder",
+    payload: input.payload,
+  };
+
+  try {
+    const response = await transport("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        niche: input.niche,
+        targetCountry: input.targetCountry,
+        engine: input.engine ?? "finder",
+        ...(input.payload ?? {}),
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+
+    if (response.ok && payload?.["success"] === true && typeof payload["jobId"] === "string") {
+      return { ok: true, jobId: payload["jobId"] as string, reused: false };
+    }
+
+    // Fall back to /api/product-discovery/start if /api/search fails or unavailable
+    return startDiscoveryJob(discoveryRequest, transport);
+  } catch {
+    return startDiscoveryJob(discoveryRequest, transport);
+  }
 }
 
 /** POST the request and hand back a job id. Never throws. */
@@ -139,12 +173,116 @@ export type PollOptions = DiscoveryJobCallbacks & {
   timeoutMs?: number;
 };
 
+/** Poll /api/search?jobId= status endpoint */
+export async function pollSearchJob(
+  jobId: string,
+  options: PollOptions = {},
+): Promise<RunJobOutcome> {
+  const transport = options.transport ?? defaultTransport;
+  const interval = options.intervalMs ?? STATUS_POLL_INTERVAL_MS;
+  const deadline = Date.now() + (options.timeoutMs ?? STATUS_POLL_MAX_MS);
+
+  for (;;) {
+    if (options.signal?.aborted) {
+      return { ok: false, reason: "error", message: "İş iptal edildi." };
+    }
+
+    try {
+      const response = await transport(`/api/search?jobId=${encodeURIComponent(jobId)}`, {
+        headers: { Accept: "application/json" },
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+
+      if (response.ok) {
+        const searchPayload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+        if (searchPayload?.["success"] === true && typeof searchPayload["status"] === "string") {
+          const status = searchPayload["status"] as string;
+          options.onProgress?.({
+            status,
+            stage: status,
+            stageLabel: status === "processing" ? "İşleniyor…" : status,
+            progress: status === "completed" ? 100 : 50,
+            agents: [],
+            partial: false,
+          });
+
+          if (status === "completed") {
+            const rawResult = searchPayload["result"] as Record<string, unknown> | undefined;
+            const completedResult: DiscoveryJobResult = {
+              traceId: jobId,
+              niche: "",
+              targetCountry: "TR",
+              engine: "finder",
+              finder: rawResult as unknown as NonNullable<DiscoveryJobResult["finder"]>,
+              products: [],
+              persisted: 0,
+              failedWrites: 0,
+              partial: false,
+              agents: [],
+              council: null,
+              durationMs: 0,
+              generatedAt: new Date().toISOString(),
+            };
+
+            return {
+              ok: true,
+              job: {
+                jobId,
+                status: "completed",
+                stage: "completed",
+                stageLabel: "Tamamlandı",
+                progress: 100,
+                partial: false,
+                agents: [],
+                result: completedResult,
+                error: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                finishedAt: new Date().toISOString(),
+              },
+            };
+          }
+
+          if (status === "failed") {
+            const errStr = typeof searchPayload["error"] === "string" ? searchPayload["error"] : "Arama başarısız oldu.";
+            return {
+              ok: true,
+              job: {
+                jobId,
+                status: "failed",
+                stage: "failed",
+                stageLabel: "Hata",
+                progress: 0,
+                partial: false,
+                agents: [],
+                result: null,
+                error: errStr,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                finishedAt: new Date().toISOString(),
+              },
+            };
+          }
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (Date.now() >= deadline) {
+      return { ok: false, reason: "error", message: "İş zaman aşımına uğradı." };
+    }
+
+    try {
+      await sleep(interval, options.signal);
+    } catch {
+      return { ok: false, reason: "error", message: "İş iptal edildi." };
+    }
+  }
+}
+
 /**
  * Polls until the job is terminal and returns its view.
- *
- * Transport/auth errors are surfaced (the caller may fall back); a job that
- * ends `failed`/`canceled` is still returned so the caller can render the error
- * and any partial products the row carries.
  */
 export async function pollDiscoveryJob(
   jobId: string,
@@ -217,8 +355,7 @@ export async function pollDiscoveryJob(
 }
 
 /**
- * Full flow: start, then poll to completion. `queue_unavailable` is returned as
- * its own reason so the caller can fall back to the streaming endpoint.
+ * Full flow: start via /api/product-discovery/start, then poll to completion.
  */
 export async function runDiscoveryJob(
   input: DiscoveryJobRequest,

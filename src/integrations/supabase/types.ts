@@ -742,6 +742,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      searches: {
+        Row: {
+          created_at: string;
+          error: string | null;
+          id: string;
+          niche: string | null;
+          payload: Json | null;
+          result: Json | null;
+          status: string;
+          updated_at: string;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          niche?: string | null;
+          payload?: Json | null;
+          result?: Json | null;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          niche?: string | null;
+          payload?: Json | null;
+          result?: Json | null;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       roi_entries: {
         Row: {
           ad_spend: number;

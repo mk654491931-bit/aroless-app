@@ -20,6 +20,7 @@ export default {
     // lower plan, lower this value and the job will report partial results.
     functionRules: {
       "/api/product-discovery/worker": { maxDuration: 300 },
+      "/api/worker": { maxDuration: 300 },
     },
   },
 };

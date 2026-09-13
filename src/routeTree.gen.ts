@@ -29,6 +29,8 @@ import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
 import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
+import { Route as ApiSearchRouteImport } from './routes/api/search'
+import { Route as ApiWorkerRouteImport } from './routes/api/worker'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
@@ -149,6 +151,16 @@ const ViralAdsRoute = ViralAdsRouteImport.update({
 const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
   id: '/api/checkout',
   path: '/api/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSearchRoute = ApiSearchRouteImport.update({
+  id: '/api/search',
+  path: '/api/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWorkerRoute = ApiWorkerRouteImport.update({
+  id: '/api/worker',
+  path: '/api/worker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -282,6 +294,8 @@ export interface FileRoutesByFullPath {
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/api/checkout': typeof ApiCheckoutRoute
+  '/api/search': typeof ApiSearchRoute
+  '/api/worker': typeof ApiWorkerRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/hot/$id': typeof HotIdRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -414,6 +428,8 @@ export interface FileRouteTypes {
     | '/trend-radar'
     | '/viral-ads'
     | '/api/checkout'
+    | '/api/search'
+    | '/api/worker'
     | '/auth/callback'
     | '/hot/$id'
     | '/legal/$slug'
@@ -544,6 +560,8 @@ export interface RootRouteChildren {
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
   ApiCheckoutRoute: typeof ApiCheckoutRoute
+  ApiSearchRoute: typeof ApiSearchRoute
+  ApiWorkerRoute: typeof ApiWorkerRoute
   HotIdRoute: typeof HotIdRoute
   LegalSlugRoute: typeof LegalSlugRoute
   ToolsFinanceRoute: typeof ToolsFinanceRoute
@@ -706,6 +724,20 @@ declare module '@tanstack/react-router' {
       path: '/api/checkout'
       fullPath: '/api/checkout'
       preLoaderRoute: typeof ApiCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/search': {
+      id: '/api/search'
+      path: '/api/search'
+      fullPath: '/api/search'
+      preLoaderRoute: typeof ApiSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/worker': {
+      id: '/api/worker'
+      path: '/api/worker'
+      fullPath: '/api/worker'
+      preLoaderRoute: typeof ApiWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -889,6 +921,8 @@ const rootRouteChildren: RootRouteChildren = {
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
   ApiCheckoutRoute: ApiCheckoutRoute,
+  ApiSearchRoute: ApiSearchRoute,
+  ApiWorkerRoute: ApiWorkerRoute,
   HotIdRoute: HotIdRoute,
   LegalSlugRoute: LegalSlugRoute,
   ToolsFinanceRoute: ToolsFinanceRoute,
