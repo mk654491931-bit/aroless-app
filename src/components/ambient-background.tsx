@@ -12,7 +12,7 @@ export function AmbientBackground() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     if (reduced || coarse) return setParticles(0);
-    const apply = () => setParticles(window.innerWidth < 768 ? 8 : 24);
+    const apply = () => setParticles(window.innerWidth < 768 ? 4 : 12);
     apply();
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
@@ -46,9 +46,9 @@ export function AmbientBackground() {
       el.style.setProperty("--sy", cur.s.toFixed(4));
       // Hareket durduysa döngüyü uyut; ilk etkileşimde yeniden başlar.
       const idle =
-        Math.abs(target.x - cur.x) < 0.0005 &&
-        Math.abs(target.y - cur.y) < 0.0005 &&
-        Math.abs(target.s - cur.s) < 0.0005;
+        Math.abs(target.x - cur.x) < 0.001 &&
+        Math.abs(target.y - cur.y) < 0.001 &&
+        Math.abs(target.s - cur.s) < 0.001;
       raf = idle ? 0 : requestAnimationFrame(tick);
     };
 
