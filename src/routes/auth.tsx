@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -29,6 +29,7 @@ import {
 import { claimReferral } from "@/lib/referral.functions";
 import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
+import { QuantumMesh } from "@/components/premium-fx";
 import { Testimonials, type ReviewItem } from "@/components/landing/sections";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
 
@@ -66,107 +67,10 @@ const PERKS = [
   { icon: ShieldCheck, label: "Profit simulation", note: "ROI forecasting" },
 ];
 
-/* ---------------- Quantum node mesh canvas ---------------- */
-function QuantumMesh() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const mouse = useRef({ x: 0.5, y: 0.5 });
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let raf = 0;
-    let w = 0;
-    let h = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const resize = () => {
-      w = canvas.clientWidth;
-      h = canvas.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const count = Math.max(34, Math.min(80, Math.round((w * h) / 22000)));
-    const nodes = Array.from({ length: count }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.22,
-      vy: (Math.random() - 0.5) * 0.22,
-      r: Math.random() * 1.6 + 0.7,
-      p: Math.random() * Math.PI * 2,
-    }));
-
-    const onMove = (e: MouseEvent) => {
-      mouse.current.x = e.clientX / window.innerWidth;
-      mouse.current.y = e.clientY / window.innerHeight;
-    };
-    window.addEventListener("mousemove", onMove);
-
-    let t = 0;
-    const draw = () => {
-      t += 0.006;
-      ctx.clearRect(0, 0, w, h);
-      const swayX = (mouse.current.x - 0.5) * 26;
-      const swayY = (mouse.current.y - 0.5) * 22;
-
-      for (const n of nodes) {
-        if (!reduce) {
-          n.x += n.vx;
-          n.y += n.vy;
-        }
-        if (n.x < 0) n.x = w;
-        if (n.x > w) n.x = 0;
-        if (n.y < 0) n.y = h;
-        if (n.y > h) n.y = 0;
-      }
-
-      for (let i = 0; i < nodes.length; i++) {
-        const a = nodes[i];
-        const ax = a.x + swayX;
-        const ay = a.y + swayY;
-        for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
-          const bx = b.x + swayX;
-          const by = b.y + swayY;
-          const d = Math.hypot(ax - bx, ay - by);
-          if (d < 132) {
-            const alpha = (1 - d / 132) * 0.32;
-            ctx.strokeStyle = `rgba(96,175,255,${alpha})`;
-            ctx.lineWidth = 0.6;
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(bx, by);
-            ctx.stroke();
-          }
-        }
-        const pulse = 0.55 + 0.45 * Math.sin(t * 2 + a.p);
-        ctx.fillStyle = `rgba(140,225,255,${0.35 + pulse * 0.4})`;
-        ctx.beginPath();
-        ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.4), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", onMove);
-    };
-  }, []);
-
-  return (
-    <canvas ref={ref} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
-  );
-}
+// The form owns all of this page's state, so without memo every keystroke
+// re-rendered the full marketing showcase and the review wall below it.
+const StaticShowcase = memo(AuthShowcase);
+const StaticTestimonials = memo(Testimonials);
 
 /* ---------------- Haptic ripple wrapper ---------------- */
 type Ripple = { id: number; x: number; y: number };
@@ -192,6 +96,58 @@ function useRipples() {
   return { spawn, layer };
 }
 
+/* ---------------- Isolated tickers ----------------
+ * These own their timers, so the periodic ticks never re-render the form, the
+ * card or the showcase below it. Both stay still under reduced motion. */
+function RotatingLine() {
+  const [i, setI] = useState(0);
+  const reduce =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    if (reduce) return;
+    const t = window.setInterval(() => setI((v) => (v + 1) % ROTATING.length), 3600);
+    return () => window.clearInterval(t);
+  }, [reduce]);
+  return (
+    <span key={i} className="rotating-line-text">
+      {ROTATING[i]}
+    </span>
+  );
+}
+
+function BiometricGlyph() {
+  const ripple = useRipples();
+  const [bio, setBio] = useState<0 | 1>(0);
+  const reduce =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    if (reduce) return;
+    const b = window.setInterval(() => setBio((v) => (v === 0 ? 1 : 0)), 2400);
+    return () => window.clearInterval(b);
+  }, [reduce]);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        ripple.spawn(e);
+        toast.info("Biometric sign-in is coming to Enterprise tier.");
+      }}
+      aria-label="Biometric sign in (fingerprint / face)"
+      className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
+    >
+      {ripple.layer}
+      <Fingerprint
+        className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+      />
+      <ScanFace
+        className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+      />
+    </button>
+  );
+}
+
 function AuthPage() {
   const nav = useNavigate();
   const { user } = useAuth();
@@ -208,8 +164,6 @@ function AuthPage() {
 
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState<null | "email" | "google">(null);
-  const [rotIndex, setRotIndex] = useState(0);
-  const [bio, setBio] = useState<0 | 1>(0);
   const [focusField, setFocusField] = useState<null | "email" | "password" | "confirm">(null);
   const [consent, setConsent] = useState<LegalConsent>({
     terms: false,
@@ -234,7 +188,6 @@ function AuthPage() {
 
   const emailRipple = useRipples();
   const googleRipple = useRipples();
-  const bioRipple = useRipples();
 
   const getRedirectPath = () => {
     const redirect = new URLSearchParams(window.location.search).get("redirect");
@@ -264,24 +217,26 @@ function AuthPage() {
   }, [user, nav, registerFingerprintFn]);
 
   useEffect(() => {
-    const t = setInterval(() => setRotIndex((i) => (i + 1) % ROTATING.length), 3200);
-    const b = setInterval(() => setBio((v) => (v === 0 ? 1 : 0)), 2400);
-    return () => {
-      clearInterval(t);
-      clearInterval(b);
-    };
-  }, []);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+    let raf = 0;
+    const point = { x: 0, y: 0 };
+    const apply = () => {
+      raf = 0;
       const halo = haloRef.current;
-      if (!halo) return;
-      const nx = e.clientX / window.innerWidth - 0.5;
-      const ny = e.clientY / window.innerHeight - 0.5;
-      halo.style.transform = `translate(-50%, 0) translate3d(${nx * 60}px, ${ny * 26}px, 0) scaleX(${1 + Math.abs(nx) * 0.25})`;
+      if (!halo || document.hidden) return;
+      halo.style.transform = `translate(-50%, 0) translate3d(${point.x * 60}px, ${point.y * 26}px, 0) scaleX(${1 + Math.abs(point.x) * 0.25})`;
     };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
+    const onMove = (e: PointerEvent) => {
+      point.x = e.clientX / window.innerWidth - 0.5;
+      point.y = e.clientY / window.innerHeight - 0.5;
+      if (!raf && !document.hidden) raf = requestAnimationFrame(apply);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+    };
   }, []);
 
   const strength = useMemo(() => {
@@ -293,12 +248,20 @@ function AuthPage() {
     return s;
   }, [password]);
 
-  const trackPointer = (e: React.MouseEvent<HTMLDivElement>) => {
+  // One style write per frame: this page has a big DOM, so writing the
+  // spotlight CSS vars on every pointer event forced a style recalc per move.
+  const pointerFrame = useRef(0);
+  const trackPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerFrame.current) return;
     const el = cardRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    el.style.setProperty("--my", `${e.clientY - r.top}px`);
+    const { clientX, clientY } = e;
+    pointerFrame.current = requestAnimationFrame(() => {
+      pointerFrame.current = 0;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${clientX - r.left}px`);
+      el.style.setProperty("--my", `${clientY - r.top}px`);
+    });
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -450,7 +413,7 @@ function AuthPage() {
         }}
       />
 
-      <AuthShowcase />
+      <StaticShowcase />
 
       <div
         id="signin"
@@ -494,8 +457,8 @@ function AuthPage() {
           </div>
 
           <div className="mt-4 h-7 overflow-hidden">
-            <p key={rotIndex} className="animate-rise-in text-lg text-muted-foreground">
-              {ROTATING[rotIndex]}
+            <p className="text-lg text-muted-foreground">
+              <RotatingLine />
             </p>
           </div>
 
@@ -541,7 +504,7 @@ function AuthPage() {
             <div ref={haloRef} aria-hidden className="ambient-halo" />
             <div
               ref={cardRef}
-              onMouseMove={trackPointer}
+              onPointerMove={trackPointer}
               key={shakeKey}
               className={`matte-card premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8 ${shakeKey > 0 ? "animate-error-shake" : ""}`}
             >
@@ -730,23 +693,7 @@ function AuthPage() {
                         </div>
 
                         {/* Multi-biometric field */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            bioRipple.spawn(e);
-                            toast.info("Biometric sign-in is coming to Enterprise tier.");
-                          }}
-                          aria-label="Biometric sign in (fingerprint / face)"
-                          className="biometric relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-card/50 text-foreground transition-all hover:-translate-y-0.5 hover:border-[oklch(0.80_0.14_200)]"
-                        >
-                          {bioRipple.layer}
-                          <Fingerprint
-                            className={`absolute h-5 w-5 transition-all duration-700 ${bio === 0 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                          />
-                          <ScanFace
-                            className={`absolute h-5 w-5 transition-all duration-700 ${bio === 1 ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-                          />
-                        </button>
+                        <BiometricGlyph />
                       </div>
                     )}
 
@@ -932,7 +879,7 @@ function AuthPage() {
       {/* ---------- Reviews under the auth card ---------- */}
       <div className="relative pb-20">
         <div aria-hidden className="mx-auto h-px w-full max-w-3xl bg-border/60" />
-        <Testimonials
+        <StaticTestimonials
           items={AUTH_REVIEWS}
           title="Onlarca satıcı veriyle büyüyor"
           subtitle="Giriş yapmadan önce — Aroless kullanıcılarının gerçek hikâyeleri."
