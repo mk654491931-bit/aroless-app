@@ -1615,6 +1615,53 @@ html.light .card-shimmer::before {
   pointer-events: none;
 }
 
+/* ---------- Mobile flow ---------- */
+/* Result cards carry a lot of long-form AI reasoning. On phones that is kept
+   folded behind a per-card toggle so one card fits roughly one screen;
+   desktop always renders the full breakdown. */
+.card-detail-fold {
+  display: none;
+}
+.card-detail-fold.is-open {
+  display: block;
+}
+.card-detail-toggle {
+  display: inline-flex;
+}
+@media (min-width: 1024px) {
+  .card-detail-fold {
+    display: block;
+  }
+  .card-detail-toggle {
+    display: none;
+  }
+}
+
+/* Chip rails (result bands, sorting): wrap normally on larger screens and swipe
+   as one line on phones, with finger-sized targets. */
+@media (max-width: 767px) {
+  .chip-rail {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .chip-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .chip-rail > * {
+    scroll-snap-align: start;
+  }
+}
+
+/* Floating compare bar clears the iOS home indicator / Android gesture bar. */
+.compare-tray {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Scroll performance guard: ambient-background.tsx flags the document while the
    user is actively scrolling. Pausing the decorative animation layers (and
    sweep shimmers) keeps the main thread free for layout and paint; everything

@@ -16,8 +16,8 @@ export function CompareTray({
 }) {
   if (products.length === 0) return null;
   return (
-    <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-      <div className="premium-card grain flex max-w-full flex-wrap items-center gap-2 rounded-2xl px-3 py-2 shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.6)]">
+    <div className="compare-tray fixed inset-x-0 z-40 flex justify-center px-3 sm:px-4">
+      <div className="premium-card grain flex max-h-[46vh] max-w-full flex-wrap items-center gap-2 overflow-y-auto rounded-2xl px-3 py-2 shadow-[0_20px_60px_-20px_oklch(0.68_0.20_265/0.6)]">
         <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
           <Columns3 size={12} /> Karşılaştırma
         </span>

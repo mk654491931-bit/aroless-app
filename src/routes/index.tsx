@@ -963,7 +963,7 @@ function Dashboard() {
                     {advancedOpen && (
                       <div
                         id="finder-advanced-filters"
-                        className="finder-advanced-panel animate-rise-in space-y-4 rounded-2xl border border-white/10 bg-black/10 p-3 sm:p-4 motion-reduce:animate-none"
+                        className="finder-advanced-panel scroll-mt-24 animate-rise-in space-y-4 rounded-2xl border border-white/10 bg-black/10 p-3 sm:p-4 motion-reduce:animate-none"
                       >
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
@@ -1458,13 +1458,13 @@ function Dashboard() {
                               }}
                             />
 
-                            <div className="mb-3 flex flex-wrap gap-1.5">
+                            <div className="chip-rail mb-3 flex flex-wrap gap-1.5">
                               {bands.map((b) => (
                                 <button
                                   key={b.id}
                                   type="button"
                                   onClick={() => setBand(b.id)}
-                                  className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                                  className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium transition sm:min-h-0 ${
                                     band === b.id
                                       ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.78_0.13_255)]"
                                       : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
@@ -1534,6 +1534,9 @@ function Dashboard() {
                             </div>
                             <RejectedPanel items={rejected} />
 
+                            {compareProducts.length > 0 && (
+                              <div aria-hidden className="h-24 sm:h-20" />
+                            )}
                             <CompareTray
                               products={compareProducts}
                               onRemove={(n) =>
@@ -1846,6 +1849,8 @@ function ProductCard({
   const modelImg = resolveProductImage(p);
   const isTopWinner = (p.winner_score ?? 0) >= 75;
   const isElite = (p.winner_score ?? 0) >= 85;
+  // Phones fold the long AI write-up; desktop always shows it (see CSS).
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <article
       className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:-translate-y-1 border flex flex-col animate-rise-in relative transition-all duration-300 ${
@@ -2236,6 +2241,20 @@ function ProductCard({
         </div>
       )}
 
+      <button
+        type="button"
+        aria-expanded={detailsOpen}
+        onClick={() => setDetailsOpen((v) => !v)}
+        className="card-detail-toggle mt-3 w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-3 text-xs font-semibold text-foreground transition hover:bg-white/10"
+      >
+        {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {detailsOpen
+          ? "Analiz detaylarını gizle"
+          : "Tam analizi göster — AI gerekçesi, konsey ve kanıt"}
+      </button>
+
+      {/* Folded on phones, always expanded from lg up (see .card-detail-fold) */}
+      <div className={`card-detail-fold ${detailsOpen ? "is-open" : ""}`}>
       <div className="mt-3 space-y-2 text-xs">
         <div className="flex gap-2">
           <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
@@ -2450,6 +2469,7 @@ function ProductCard({
       <ProductDeepDive p={p} />
 
       <BuyerSimulation p={p} />
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button
@@ -2691,7 +2711,8 @@ function ResultsToolbar({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="chip-rail flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mr-1">
           Sort
         </span>
@@ -2699,7 +2720,7 @@ function ResultsToolbar({
           <button
             key={s.id}
             onClick={() => onSortBy(s.id)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition ${
+            className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition sm:min-h-0 ${
               sortBy === s.id
                 ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground"
                 : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
@@ -2711,14 +2732,14 @@ function ResultsToolbar({
         <button
           onClick={onToggleDir}
           title={sortDesc ? "Yüksekten düşüğe" : "Düşükten yükseğe"}
-          className="text-xs px-2.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 sm:min-h-0"
         >
           {sortDesc ? <ArrowDownWideNarrow size={12} /> : <ArrowUpWideNarrow size={12} />}
           {sortDesc ? "Azalan" : "Artan"}
         </button>
         <button
           onClick={onToggleLaunch}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
+          className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition sm:min-h-0 ${
             onlyLaunch
               ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
               : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
@@ -2726,24 +2747,31 @@ function ResultsToolbar({
         >
           🟢 Launch only
         </button>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        </div>
+        <div className="flex items-center gap-2 sm:ml-auto">
           <button
             onClick={copySummary}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
+            aria-label="Özeti panoya kopyala"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 sm:min-h-0"
           >
-            <Copy size={12} /> Özet kopyala
+            <Copy size={12} />
+            <span className="hidden sm:inline">Özet kopyala</span>
           </button>
           <button
             onClick={downloadJson}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
+            aria-label="JSON olarak indir"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 sm:min-h-0"
           >
-            <FileJson size={12} /> JSON
+            <FileJson size={12} />
+            <span className="hidden sm:inline">JSON</span>
           </button>
           <button
             onClick={download}
-            className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center gap-1.5"
+            aria-label="CSV olarak indir"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 sm:min-h-0"
           >
-            <Download size={12} /> Export CSV
+            <Download size={12} />
+            <span className="hidden sm:inline">Export CSV</span>
           </button>
         </div>
       </div>
