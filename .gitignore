@@ -21,6 +21,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

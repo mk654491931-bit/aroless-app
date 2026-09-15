@@ -38,6 +38,8 @@ import {
   AlertTriangle,
   Gamepad2,
   Lock,
+  SlidersHorizontal,
+  ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
@@ -244,6 +246,7 @@ function Dashboard() {
     (p) => countryFit(p, effectiveCountry) === "unavailable",
   );
   const [recoOpen, setRecoOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [minScore, setMinScore] = usePersistentState<number>(
     "velora.finder.min_score",
     HYBRID_DEFAULT_MIN_SCORE,
@@ -258,6 +261,17 @@ function Dashboard() {
     "velora.finder.deep_search",
     DEFAULT_DEEP_SEARCH,
   );
+  const advancedSelectionCount = [
+    category !== "Any",
+    audience.trim().length > 0,
+    engine !== "default",
+    platforms.length !== 2 ||
+      !platforms.includes("Shopify") ||
+      !platforms.includes("TikTok Shop"),
+    minScore !== HYBRID_DEFAULT_MIN_SCORE,
+    !useGithubTrends,
+    JSON.stringify(deepSearch) !== JSON.stringify(DEFAULT_DEEP_SEARCH),
+  ].filter(Boolean).length;
   const {
     recent,
     push: pushRecent,
@@ -792,7 +806,7 @@ function Dashboard() {
               {tab === "finder" && (
                 <>
                   <div className="relative text-center mb-10">
-                    <div className="pointer-events-none absolute inset-x-0 -top-16 mx-auto h-56 w-[min(680px,90%)] rounded-full bg-[radial-gradient(closest-side,oklch(0.68_0.20_265/0.28),transparent)] blur-2xl animate-float-slow" />
+                    <div className="finder-hero-halo pointer-events-none absolute inset-x-0 -top-16 mx-auto h-56 w-[min(680px,90%)] rounded-full bg-[radial-gradient(closest-side,oklch(0.68_0.20_265/0.28),transparent)] blur-2xl md:animate-float-slow motion-reduce:animate-none" />
                     <div className="relative animate-rise-in">
                       <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
@@ -820,9 +834,9 @@ function Dashboard() {
 
                   <form
                     onSubmit={onSubmit}
-                    className="premium-card grain relative rounded-2xl p-5 md:p-7 max-w-5xl mx-auto space-y-4"
+                    className="finder-form premium-card grain relative mx-auto max-w-5xl space-y-4 rounded-2xl p-5 md:p-7"
                   >
-                    <div className="grid md:grid-cols-[1fr_180px_1fr] gap-3">
+                    <div className="grid gap-3">
                       <div className="flex items-center gap-2">
                         <div
                           className={`light-wave relative flex-1 ${nicheFocus ? "is-focused" : ""}`}
@@ -872,35 +886,125 @@ function Dashboard() {
                         <BiometricButton active={nicheFocus} />
                       </div>
 
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
-                      >
-                        {[
-                          "Any",
-                          "Beauty",
-                          "Fitness",
-                          "Home",
-                          "Tech",
-                          "Pets",
-                          "Fashion",
-                          "Kids",
-                          "Outdoor",
-                          "Kitchen",
-                        ].map((c) => (
-                          <option key={c} className="bg-[oklch(0.20_0.035_255)]">
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={audience}
-                        onChange={(e) => setAudience(e.target.value)}
-                        placeholder={t("audience_placeholder")}
-                        className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
-                      />
                     </div>
+
+                    <div className="finder-primary-grid grid gap-3 md:grid-cols-[1fr_1.35fr]">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                        <label className="mb-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Globe size={12} /> Target market
+                          </span>
+                          <CountryCurrencyBadge code={targetCountry} />
+                        </label>
+                        <select
+                          value={targetCountry}
+                          onChange={(e) => setTargetCountry(e.target.value)}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)]"
+                        >
+                          {TARGET_COUNTRIES.map((c) => (
+                            <option
+                              key={c.code}
+                              value={c.code}
+                              className="bg-[oklch(0.20_0.035_255)]"
+                            >
+                              {c.flag} {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                        <label className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <Wallet size={12} /> Starting capital
+                        </label>
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                          {BUDGETS.map((b) => {
+                            const on = budget === b;
+                            return (
+                              <button
+                                type="button"
+                                key={b}
+                                onClick={() => setBudget(b)}
+                                className={`rounded-lg border px-2.5 py-2 text-center text-xs transition ${
+                                  on
+                                    ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground shadow-[0_0_18px_-8px_color-mix(in_oklab,var(--brand)_80%,transparent)]"
+                                    : "border-white/10 bg-white/5 text-muted-foreground hover:border-white/25 hover:text-foreground"
+                                }`}
+                              >
+                                {b}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="finder-advanced-toggle flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5">
+                      <button
+                        type="button"
+                        aria-expanded={advancedOpen}
+                        aria-controls="finder-advanced-filters"
+                        onClick={() => setAdvancedOpen((open) => !open)}
+                        className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-foreground transition hover:bg-white/10"
+                      >
+                        <SlidersHorizontal size={15} className="text-[var(--accent-active)]" />
+                        Advanced filters
+                        {advancedSelectionCount > 0 && (
+                          <span className="rounded-full border border-[oklch(0.62_0.17_255)]/45 bg-[oklch(0.62_0.17_255)]/15 px-1.5 py-0.5 text-[10px] text-[oklch(0.86_0.10_255)]">
+                            {advancedSelectionCount} active
+                          </span>
+                        )}
+                        {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                      <span className="text-[11px] text-muted-foreground">
+                        AI, platforms, audience and research depth
+                      </span>
+                    </div>
+
+                    {advancedOpen && (
+                      <div
+                        id="finder-advanced-filters"
+                        className="finder-advanced-panel animate-rise-in space-y-4 rounded-2xl border border-white/10 bg-black/10 p-3 sm:p-4 motion-reduce:animate-none"
+                      >
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                              <Target size={12} /> Product category
+                            </label>
+                            <select
+                              value={category}
+                              onChange={(e) => setCategory(e.target.value)}
+                              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)]"
+                            >
+                              {[
+                                "Any",
+                                "Beauty",
+                                "Fitness",
+                                "Home",
+                                "Tech",
+                                "Pets",
+                                "Fashion",
+                                "Kids",
+                                "Outdoor",
+                                "Kitchen",
+                              ].map((c) => (
+                                <option key={c} className="bg-[oklch(0.20_0.035_255)]">
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                              <Users size={12} /> Audience
+                            </label>
+                            <input
+                              value={audience}
+                              onChange={(e) => setAudience(e.target.value)}
+                              placeholder={t("audience_placeholder")}
+                              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)]"
+                            />
+                          </div>
+                        </div>
 
                     <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 backdrop-blur">
                       <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -1049,51 +1153,7 @@ function Dashboard() {
                       )}
                     </div>
 
-                    <div>
-                      <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                        <Wallet size={12} /> Starting Capital
-                      </label>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {BUDGETS.map((b) => {
-                          const on = budget === b;
-                          return (
-                            <button
-                              type="button"
-                              key={b}
-                              onClick={() => setBudget(b)}
-                              className={`text-xs px-3 py-2 rounded-lg border text-center transition ${on ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground" : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"}`}
-                            >
-                              {b}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="flex items-center justify-between gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                          <span className="flex items-center gap-1.5">
-                            <Globe size={12} /> Hedef Ülke
-                          </span>
-                          <CountryCurrencyBadge code={targetCountry} />
-                        </label>
-                        <select
-                          value={targetCountry}
-                          onChange={(e) => setTargetCountry(e.target.value)}
-                          className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
-                        >
-                          {TARGET_COUNTRIES.map((c) => (
-                            <option
-                              key={c.code}
-                              value={c.code}
-                              className="bg-[oklch(0.20_0.035_255)]"
-                            >
-                              {c.flag} {c.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="grid gap-4">
                       <div>
                         <label className="flex items-center justify-between gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
                           <span className="flex items-center gap-1.5">
@@ -1154,8 +1214,10 @@ function Dashboard() {
                     />
 
                     <CountryInfoBox code={targetCountry} niche={niche} />
+                      </div>
+                    )}
 
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">
                         <CreditCost amount={1} />
                         Bu arama 1 kredi harcar · bakiyeniz{" "}
@@ -1164,7 +1226,8 @@ function Dashboard() {
                       <button
                         type="submit"
                         disabled={searching}
-                        className="cta-sweep relative overflow-hidden rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-5 py-2.5 text-sm font-semibold text-white glow disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
+                        aria-busy={searching}
+                        className="cta-sweep press relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_-14px_color-mix(in_oklab,var(--brand)_90%,transparent)] glow transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-14px_color-mix(in_oklab,var(--brand)_95%,transparent)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                       >
                         {searching ? (
                           <>
@@ -1278,7 +1341,7 @@ function Dashboard() {
                           {[0, 1, 2, 3, 4, 5].map((i) => (
                             <div
                               key={i}
-                              className="glass rounded-xl p-5 h-60 sm:h-72 animate-pulse"
+                              className="card-shimmer glass h-60 rounded-xl p-5 sm:h-72"
                               style={{ animationDelay: `${i * 120}ms` }}
                             />
                           ))}

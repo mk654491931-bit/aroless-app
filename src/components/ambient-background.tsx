@@ -26,6 +26,7 @@ export function AmbientBackground() {
     const coarse = window.matchMedia("(pointer: coarse)").matches;
 
     let raf = 0;
+    let scrollTimer: number | null = null;
     const target = { x: 0, y: 0, s: 0 };
     const cur = { x: 0, y: 0, s: 0 };
 
@@ -34,7 +35,21 @@ export function AmbientBackground() {
       target.y = (e.clientY / window.innerHeight - 0.5) * 2;
     };
     const onScroll = () => {
+      // Do not run a decorative animation loop while the user is actively
+      // scrolling. The scene is paused by CSS and catches up after scrolling
+      // stops, leaving the main thread available for layout/paint.
+      document.documentElement.classList.add("is-scrolling");
       target.s = Math.min(window.scrollY / 900, 1.6);
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrollTimer = null;
+        document.documentElement.classList.remove("is-scrolling");
+        wake();
+      }, 140);
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
     };
 
     const tick = () => {
@@ -53,14 +68,12 @@ export function AmbientBackground() {
     };
 
     const wake = () => {
-      if (!raf && !document.hidden) raf = requestAnimationFrame(tick);
+      if (!raf && !document.hidden && !document.documentElement.classList.contains("is-scrolling")) {
+        raf = requestAnimationFrame(tick);
+      }
     };
     const onPointerWake = (e: PointerEvent) => {
       onPointer(e);
-      wake();
-    };
-    const onScrollWake = () => {
-      onScroll();
       wake();
     };
     const onVisibility = () => {
@@ -72,13 +85,15 @@ export function AmbientBackground() {
 
     onScroll();
     if (!coarse) window.addEventListener("pointermove", onPointerWake, { passive: true });
-    window.addEventListener("scroll", onScrollWake, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("visibilitychange", onVisibility);
     wake();
     return () => {
       cancelAnimationFrame(raf);
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+      document.documentElement.classList.remove("is-scrolling");
       window.removeEventListener("pointermove", onPointerWake);
-      window.removeEventListener("scroll", onScrollWake);
+      window.removeEventListener("scroll", onScroll);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);

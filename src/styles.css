@@ -1615,6 +1615,84 @@ html.light .card-shimmer::before {
   pointer-events: none;
 }
 
+/* Scroll performance guard: ambient-background.tsx flags the document while the
+   user is actively scrolling. Pausing the decorative animation layers (and
+   sweep shimmers) keeps the main thread free for layout and paint; everything
+   resumes once scrolling stops. Names match the ambient scene above. */
+html.is-scrolling .amb-swirl,
+html.is-scrolling .amb-aurora,
+html.is-scrolling .amb-blob,
+html.is-scrolling .amb-rays,
+html.is-scrolling .amb-grid,
+html.is-scrolling .amb-beam,
+html.is-scrolling .amb-scan,
+html.is-scrolling .amb-particles span,
+html.is-scrolling .finder-hero-halo,
+html.is-scrolling .topbar-line,
+html.is-scrolling .page-hero::after,
+html.is-scrolling .card-shimmer::before,
+html.is-scrolling .edge-light::after {
+  animation-play-state: paused;
+}
+
+/* ---------- Finder command surface (premium search form) ---------- */
+/* Deep, focused shadow so the search form reads as the page's primary object. */
+.finder-form {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.08),
+    0 30px 90px -48px color-mix(in oklab, var(--brand) 60%, transparent),
+    0 24px 60px -32px oklch(0 0 0 / 0.9);
+}
+html.light .finder-form {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.9),
+    0 26px 70px -44px color-mix(in oklab, var(--brand) 30%, transparent),
+    0 18px 44px -30px oklch(0.4 0.06 265 / 0.25);
+}
+
+/* Soft pulse of light behind the finder heading. */
+.finder-hero-halo {
+  will-change: transform, opacity;
+}
+
+/* Target market + starting capital tiles */
+.finder-primary-grid > * {
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+.finder-primary-grid > *:focus-within {
+  border-color: color-mix(in oklab, var(--brand) 45%, transparent);
+  background: oklch(1 0 0 / 0.05);
+}
+html.light .finder-primary-grid > * {
+  background: oklch(1 0 0 / 0.6);
+}
+
+/* Advanced filters disclosure */
+.finder-advanced-toggle {
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+.finder-advanced-toggle:hover {
+  border-color: color-mix(in oklab, var(--brand) 26%, transparent);
+}
+.finder-advanced-toggle:has([aria-expanded="true"]) {
+  border-color: color-mix(in oklab, var(--brand) 38%, transparent);
+  background: color-mix(in oklab, var(--brand) 9%, oklch(1 0 0 / 0.02));
+}
+
+/* Expanded filter body */
+.finder-advanced-panel {
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
+}
+html.light .finder-advanced-panel {
+  background: oklch(1 0 0 / 0.65);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.85);
+}
+
 /* Animated numeric/measure fills */
 .fill-bar > i {
   display: block;

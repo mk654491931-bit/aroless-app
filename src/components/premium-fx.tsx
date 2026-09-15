@@ -15,42 +15,40 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     let raf = 0;
+    let frameTimeout: number | null = null;
+    let scrollTimer: number | null = null;
+    let scrolling = false;
+    let lastFrame = 0;
     let w = 0;
     let h = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
     const resize = () => {
       w = canvas.clientWidth;
       h = canvas.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+      canvas.width = Math.max(1, Math.round(w * dpr));
+      canvas.height = Math.max(1, Math.round(h * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
-    window.addEventListener("resize", resize);
 
-    const count = Math.max(28, Math.min(70, Math.round((w * h) / 30000)));
+    // Keep the mesh deliberately small: this is atmosphere, not a data viz.
+    const count = Math.max(22, Math.min(48, Math.round((w * h) / 42000)));
     const nodes = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.18,
-      vy: (Math.random() - 0.5) * 0.18,
-      r: Math.random() * 1.5 + 0.6,
+      vx: (Math.random() - 0.5) * 0.14,
+      vy: (Math.random() - 0.5) * 0.14,
+      r: Math.random() * 1.3 + 0.55,
       p: Math.random() * Math.PI * 2,
     }));
 
-    const onMove = (e: MouseEvent) => {
-      mouse.current.x = e.clientX / window.innerWidth;
-      mouse.current.y = e.clientY / window.innerHeight;
-    };
-    if (!coarse) window.addEventListener("mousemove", onMove);
-
     let t = 0;
-    const draw = () => {
-      t += 0.005;
+    const drawScene = (time: number) => {
+      t = reduce ? 0 : time * 0.002;
       ctx.clearRect(0, 0, w, h);
-      const swayX = (mouse.current.x - 0.5) * 24;
-      const swayY = (mouse.current.y - 0.5) * 20;
+      const swayX = (mouse.current.x - 0.5) * 18;
+      const swayY = (mouse.current.y - 0.5) * 15;
 
       for (const n of nodes) {
         if (!reduce) {
@@ -64,17 +62,17 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
       }
 
       for (let i = 0; i < nodes.length; i++) {
-        const a = nodes[i];
+        const a = nodes[i]!;
         const ax = a.x + swayX;
         const ay = a.y + swayY;
         for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
+          const b = nodes[j]!;
           const bx = b.x + swayX;
           const by = b.y + swayY;
           const d = Math.hypot(ax - bx, ay - by);
-          if (d < 128) {
-            ctx.strokeStyle = `rgba(96,175,255,${(1 - d / 128) * 0.22})`;
-            ctx.lineWidth = 0.6;
+          if (d < 112) {
+            ctx.strokeStyle = `rgba(96,175,255,${(1 - d / 112) * 0.18})`;
+            ctx.lineWidth = 0.55;
             ctx.beginPath();
             ctx.moveTo(ax, ay);
             ctx.lineTo(bx, by);
@@ -82,29 +80,88 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
           }
         }
         const pulse = 0.55 + 0.45 * Math.sin(t * 2 + a.p);
-        ctx.fillStyle = `rgba(140,225,255,${0.22 + pulse * 0.3})`;
+        ctx.fillStyle = `rgba(140,225,255,${0.2 + pulse * 0.25})`;
         ctx.beginPath();
-        ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.4), 0, Math.PI * 2);
+        ctx.arc(ax, ay, a.r * (0.9 + pulse * 0.35), 0, Math.PI * 2);
         ctx.fill();
       }
-      if (!reduce && !coarse && !document.hidden) raf = requestAnimationFrame(draw);
     };
-    draw();
 
-    const onVisibility = () => {
-      if (document.hidden) {
-        cancelAnimationFrame(raf);
-        raf = 0;
-      } else if (!reduce && !coarse && !raf) {
-        raf = requestAnimationFrame(draw);
+    const cancelAnimation = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (frameTimeout !== null) {
+        window.clearTimeout(frameTimeout);
+        frameTimeout = null;
       }
     };
+
+    const schedule = () => {
+      if (reduce || coarse || scrolling || document.hidden || raf || frameTimeout !== null) return;
+      raf = requestAnimationFrame(draw);
+    };
+
+    const draw = (time: number) => {
+      raf = 0;
+      if (scrolling || document.hidden) return;
+      const elapsed = time - lastFrame;
+      if (elapsed < 32) {
+        frameTimeout = window.setTimeout(() => {
+          frameTimeout = null;
+          schedule();
+        }, 32 - elapsed);
+        return;
+      }
+      lastFrame = time;
+      drawScene(time);
+      schedule();
+    };
+
+    const onMove = (e: PointerEvent) => {
+      mouse.current.x = e.clientX / window.innerWidth;
+      mouse.current.y = e.clientY / window.innerHeight;
+    };
+    const onScroll = () => {
+      if (reduce || coarse) return;
+      scrolling = true;
+      cancelAnimation();
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrollTimer = null;
+        scrolling = false;
+        schedule();
+      }, 160);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        cancelAnimation();
+      } else {
+        scrolling = false;
+        schedule();
+      }
+    };
+    const onResize = () => {
+      resize();
+      drawScene(lastFrame);
+    };
+
+    drawScene(0);
+    window.addEventListener("resize", onResize);
+    if (!coarse) {
+      window.addEventListener("pointermove", onMove, { passive: true });
+      window.addEventListener("scroll", onScroll, { passive: true });
+    }
     document.addEventListener("visibilitychange", onVisibility);
+    schedule();
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-      if (!coarse) window.removeEventListener("mousemove", onMove);
+      cancelAnimation();
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+      window.removeEventListener("resize", onResize);
+      if (!coarse) {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("scroll", onScroll);
+      }
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
@@ -122,15 +179,34 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
 export function AmbientBackdrop() {
   const halo = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const el = halo.current;
-      if (!el) return;
-      const x = e.clientX / window.innerWidth;
-      const y = e.clientY / window.innerHeight;
-      el.style.transform = `translate(-50%, -50%) translate3d(${(x - 0.5) * 120}px, ${(y - 0.5) * 90}px, 0) scale(${1 + (0.5 - Math.abs(y - 0.5)) * 0.14})`;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    if (reduce || coarse) return;
+
+    let raf = 0;
+    const point = { x: 0.5, y: 0.5 };
+    const onMove = (e: PointerEvent) => {
+      point.x = e.clientX / window.innerWidth;
+      point.y = e.clientY / window.innerHeight;
+      if (!raf && !document.hidden) raf = requestAnimationFrame(apply);
     };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
+    const apply = () => {
+      raf = 0;
+      const el = halo.current;
+      if (!el || document.hidden) return;
+      el.style.transform = `translate(-50%, -50%) translate3d(${(point.x - 0.5) * 120}px, ${(point.y - 0.5) * 90}px, 0) scale(${1 + (0.5 - Math.abs(point.y - 0.5)) * 0.14})`;
+    };
+    const onVisibility = () => {
+      if (document.hidden) cancelAnimationFrame(raf);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
