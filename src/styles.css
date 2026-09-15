@@ -1637,6 +1637,32 @@ html.light .card-shimmer::before {
   }
 }
 
+/* Phones-only fold (advanced filter panel): the body opens on demand below md
+   and stays fully expanded from md up, where the toggle disappears. */
+.fold-phone-toggle {
+  display: none;
+}
+@media (max-width: 767px) {
+  .fold-phone {
+    display: none;
+  }
+  .fold-phone.is-open {
+    display: block;
+  }
+  .fold-phone-toggle {
+    display: inline-flex;
+  }
+}
+
+/* Quick jump back to the search box once results fill the page. */
+.jump-search {
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+.jump-search.with-tray {
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Chip rails (result bands, sorting): wrap normally on larger screens and swipe
    as one line on phones, with finger-sized targets. */
 @media (max-width: 767px) {

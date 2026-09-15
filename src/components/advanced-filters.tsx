@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { SlidersHorizontal, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, SlidersHorizontal, X } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct } from "@/lib/recommendation";
 import { buyersPer1000, parseMoneyNum } from "@/lib/consistency";
@@ -71,6 +71,8 @@ export function AdvancedFilters({
 
   const matched = applyFilters(products, filters).length;
   const isDirty = JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS);
+  // Phones open the filter body on demand so results stay one tap away.
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="premium-card grain rounded-2xl p-4 mb-4">
@@ -82,16 +84,29 @@ export function AdvancedFilters({
             · {matched} / {products.length} match
           </span>
         </div>
-        {isDirty && (
+        <div className="flex items-center gap-2">
+          {isDirty && (
+            <button
+              onClick={onReset}
+              className="text-[11px] inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1"
+            >
+              <X size={11} /> Reset
+            </button>
+          )}
           <button
-            onClick={onReset}
-            className="text-[11px] inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1"
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="fold-phone-toggle items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-white/10"
           >
-            <X size={11} /> Reset
+            Filtreler
+            {isDirty && <span className="text-[oklch(0.86_0.10_255)]">· aktif</span>}
+            {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-        )}
+        </div>
       </div>
 
+      <div className={`fold-phone ${open ? "is-open" : ""}`}>
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
         <RangePair
           label="Price ($)"
@@ -149,6 +164,7 @@ export function AdvancedFilters({
           onChange={(v) => set("country", v)}
           options={countries}
         />
+      </div>
       </div>
     </div>
   );

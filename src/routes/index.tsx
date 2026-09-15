@@ -303,6 +303,39 @@ function Dashboard() {
     );
   const compareProducts = results.filter((p) => compareNames.includes(p.name));
 
+  // Mobile: keep the active chip of a swipeable rail (bands, sorting) in view.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const active = document.querySelector<HTMLElement>('.chip-rail [data-active="true"]');
+    const rail = active?.closest<HTMLElement>(".chip-rail");
+    if (!active || !rail || rail.scrollWidth <= rail.clientWidth) return;
+    const railRect = rail.getBoundingClientRect();
+    const itemRect = active.getBoundingClientRect();
+    const toRight = itemRect.right - railRect.right;
+    const toLeft = railRect.left - itemRect.left;
+    if (toRight > 4) rail.scrollTo({ left: rail.scrollLeft + toRight + 16, behavior: "smooth" });
+    else if (toLeft > 4) rail.scrollTo({ left: rail.scrollLeft - toLeft - 16, behavior: "smooth" });
+  }, [band, sortBy, onlyLaunch, compareNames.length]);
+
+  // Mobile: offer a shortcut back to the search box once results fill the page.
+  const [showJumpToSearch, setShowJumpToSearch] = useState(false);
+  useEffect(() => {
+    const onScroll = () => {
+      const field = nicheInputRef.current;
+      if (field) setShowJumpToSearch(field.getBoundingClientRect().bottom < 72);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const jumpToSearch = useCallback(() => {
+    const field = nicheInputRef.current;
+    if (!field) return;
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+    field.focus({ preventScroll: true });
+  }, []);
+
   const [showPricing, setShowPricing] = useState(false);
   const [reportProduct, setReportProduct] = useState<WinningProduct | null>(null);
   const [deepDiveProduct, setDeepDiveProduct] = useState<WinningProduct | null>(null);
@@ -1242,6 +1275,19 @@ function Dashboard() {
                     </div>
                   </form>
 
+                  {showJumpToSearch && (
+                    <button
+                      type="button"
+                      onClick={jumpToSearch}
+                      aria-label="Arama alanına dön"
+                      className={`jump-search press fixed z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white shadow-[0_18px_40px_-14px_color-mix(in_oklab,var(--brand)_95%,transparent)] lg:hidden ${
+                        compareProducts.length > 0 ? "with-tray" : ""
+                      }`}
+                    >
+                      <Search size={18} />
+                    </button>
+                  )}
+
                   <FinderMemoryBar
                     recent={recent}
                     onPick={(q) => {
@@ -1464,6 +1510,7 @@ function Dashboard() {
                                   key={b.id}
                                   type="button"
                                   onClick={() => setBand(b.id)}
+                                  data-active={band === b.id}
                                   className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium transition sm:min-h-0 ${
                                     band === b.id
                                       ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.78_0.13_255)]"
@@ -1888,7 +1935,7 @@ function ProductCard({
         onKeyDown={(e) => {
           if (e.key === "Enter") onOpen();
         }}
-        className="mb-3 -mx-3 -mt-3 sm:-mx-5 sm:-mt-5 aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer"
+        className="mb-3 -mx-3 -mt-3 sm:-mx-5 sm:-mt-5 aspect-[16/10] sm:aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer"
       >
         {realImg || modelImg ? (
           <img
@@ -2720,6 +2767,7 @@ function ResultsToolbar({
           <button
             key={s.id}
             onClick={() => onSortBy(s.id)}
+            data-active={sortBy === s.id}
             className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition sm:min-h-0 ${
               sortBy === s.id
                 ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 text-foreground"
