@@ -30,7 +30,64 @@ export const JOB_TABLE = "searches";
 
 /** "https" + "://" — tek parça şeklinde yazılmaz, böylece şablon güvenli kalır. */
 const HTTPS_PREFIX = "https:" + "//";
-const QSTASH_PUBLISH_ENDPOINT = HTTPS_PREFIX + "qstash.upstash.io/v2/publish/";
+
+const QSTASH_REGIONAL_ENDPOINTS: Record<string, string> = {
+  global: HTTPS_PREFIX + "qstash.upstash.io",
+  eu: HTTPS_PREFIX + "qstash-eu-central-1.upstash.io",
+  europe: HTTPS_PREFIX + "qstash-eu-central-1.upstash.io",
+  "eu-central-1": HTTPS_PREFIX + "qstash-eu-central-1.upstash.io",
+  us: HTTPS_PREFIX + "qstash-us-east-1.upstash.io",
+  usa: HTTPS_PREFIX + "qstash-us-east-1.upstash.io",
+  "us-east-1": HTTPS_PREFIX + "qstash-us-east-1.upstash.io",
+};
+
+function cleanQStashToken(value: string): string {
+  let cleaned = value.trim().replace(/^["']|["']$/g, "").trim();
+  cleaned = cleaned.replace(/^Bearer\s+/i, "").trim();
+  cleaned = cleaned.replace(/^QSTASH_TOKEN\s*=\s*/i, "").trim();
+  return cleaned.replace(/^["']|["']$/g, "").trim();
+}
+
+function qstashToken(): string | undefined {
+  const value = env("QSTASH_TOKEN");
+  if (!value) return undefined;
+  const cleaned = cleanQStashToken(value);
+  return cleaned || undefined;
+}
+
+/** QStash REST API tabanı; QSTASH_URL, QSTASH_REGION'dan önce gelir. */
+export function qstashBaseUrl(): string {
+  const configured = env("QSTASH_URL");
+  if (configured && /^https?:\/\//i.test(configured)) {
+    return configured
+      .replace(/\/v2\/publish\/?$/i, "")
+      .replace(/\/+$/, "");
+  }
+  // The project has been configured against the EU QStash account. Keep this
+  // explicit default so an omitted region cannot send an EU token to the
+  // global/legacy endpoint and produce a misleading 401.
+  const region = (env("QSTASH_REGION") ?? "eu").toLowerCase();
+  return QSTASH_REGIONAL_ENDPOINTS[region] ?? QSTASH_REGIONAL_ENDPOINTS.global;
+}
+
+/** QStash'in çağıracağı worker URL'si. Render URL'si base olarak da verilebilir. */
+function discoveryWorkerUrl(origin: string): string {
+  const configured = env("DISCOVERY_WORKER_URL");
+  if (!configured) return origin.replace(/\/+$/g, "") + "/api/worker";
+
+  try {
+    const url = new URL(configured);
+    if (url.protocol !== "https:") return "";
+    if (!url.pathname || url.pathname === "/") url.pathname = "/api/worker";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/g, "");
+  } catch {
+    return "";
+  }
+}
+
+const QSTASH_TIMEOUT_ENV = "QSTASH_TIMEOUT_SECONDS";
 
 export type JobStatus = "processing" | "completed" | "failed";
 
@@ -158,11 +215,13 @@ export function appOrigin(request: Request): string {
 
 /** İşçi uç noktasını korumak için paylaşılan sır. */
 export function workerSecret(): string | undefined {
-  return env("JOB_WORKER_SECRET") ?? env("QSTASH_TOKEN");
+  // QSTASH_TOKEN authenticates the publish request; it must never double as
+  // the secret forwarded to the worker.
+  return env("JOB_WORKER_SECRET");
 }
 
 export function qstashConfigured(): boolean {
-  return !!env("QSTASH_TOKEN") && !!workerSecret();
+  return !!qstashToken() && !!workerSecret();
 }
 
 export function verifyWorkerRequest(request: Request): boolean {
@@ -179,25 +238,35 @@ async function publishToQStash(
   destinationUrl: string,
   payload: WorkerPayload,
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
-  const token = env("QSTASH_TOKEN");
+  const token = qstashToken();
   const secret = workerSecret();
   if (!token || !secret) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
 
-  // QStash'in işçiyi beklerken kullanacağı süre, platform sınırının hemen
-  // altında tutulur (Hobby: 58s). Böylece "timeout" yerine gerçek yanıt döner.
-  const qstashTimeout = `${Math.max(15, functionMaxDurationSeconds() - 2)}s`;
+  // The sender may be Vercel while the worker lives on Render. In that case
+  // the timeout must follow the worker target, not the sender's 60s limit.
+  const configuredTimeout = Number(env(QSTASH_TIMEOUT_ENV) ?? "");
+  const targetIsLongLived = Boolean(env("DISCOVERY_WORKER_URL")) ||
+    env("NITRO_PRESET") === "render_com" ||
+    Boolean(env("RENDER_SERVICE_ID"));
+  const timeoutSeconds = Number.isFinite(configuredTimeout) && configuredTimeout >= 15
+    ? Math.min(900, Math.round(configuredTimeout))
+    : targetIsLongLived
+      ? 890
+      : Math.max(15, functionMaxDurationSeconds() - 2);
+  const qstashTimeout = `${timeoutSeconds}s`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(QSTASH_PUBLISH_ENDPOINT + destinationUrl, {
+    const res = await fetch(qstashBaseUrl() + "/v2/publish/" + destinationUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "Upstash-Method": "POST",
-        "Upstash-Retries": "1",
+        "Upstash-Retries": "3",
         "Upstash-Timeout": qstashTimeout,
+        "Upstash-Deduplication-Id": payload.jobId,
         "Upstash-Forward-x-job-secret": secret,
       },
       body: JSON.stringify(payload),
@@ -214,6 +283,44 @@ async function publishToQStash(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function markJobCompleted(
+  jobId: string,
+  result: DiscoveryResult,
+  attemptCount = 0,
+): Promise<void> {
+  const { error } = await jobStore().rpc("complete_search_job", {
+    _job_id: jobId,
+    _attempt_count: attemptCount,
+    _result: result,
+  });
+  if (!error) return;
+  if (!isMissingRpc(error)) throw new Error(error.message);
+  const { error: updateError } = await jobStore()
+    .from(JOB_TABLE)
+    .update({ status: "completed", result, error: null, locked_until: null } as never)
+    .eq("id", jobId);
+  if (updateError) throw new Error(updateError.message);
+}
+
+export async function markJobFailed(
+  jobId: string,
+  message: string,
+  attemptCount = 0,
+): Promise<void> {
+  const { error } = await jobStore().rpc("fail_search_job", {
+    _job_id: jobId,
+    _attempt_count: attemptCount,
+    _error: message,
+  });
+  if (!error) return;
+  if (!isMissingRpc(error)) throw new Error(error.message);
+  const { error: updateError } = await jobStore()
+    .from(JOB_TABLE)
+    .update({ status: "failed", error: message.slice(0, 2000), locked_until: null } as never)
+    .eq("id", jobId);
+  if (updateError) throw new Error(updateError.message);
 }
 
 // ---------- Upstash Redis (REST) önbellek ----------
@@ -279,19 +386,59 @@ export async function createJobRow(args: {
   if (error) throw new Error(error.message);
 }
 
-export async function markJobCompleted(jobId: string, result: unknown): Promise<void> {
-  const { error } = await jobStore()
-    .from(JOB_TABLE)
-    .update({ status: "completed", result, error: null })
-    .eq("id", jobId);
-  if (error) throw new Error(error.message);
-}
-
-export async function markJobFailed(jobId: string, message: string): Promise<void> {
+export async function setJobMessageId(jobId: string, messageId: string): Promise<void> {
+  if (!messageId) return;
   await jobStore()
     .from(JOB_TABLE)
-    .update({ status: "failed", error: message.slice(0, 2000) })
+    .update({ qstash_message_id: messageId } as never)
     .eq("id", jobId);
+}
+
+function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(
+    error &&
+      (error.code === "42883" ||
+        /could not find the function|function .* does not exist|undefined function/i.test(
+          error.message ?? "",
+        )),
+  );
+}
+
+export type SearchJobClaim = {
+  state: "claimed" | "completed" | "failed" | "processing" | "missing";
+  attemptCount?: number;
+  reliable: boolean;
+};
+
+/** Claim a delivery when the reliability migration is installed. */
+export async function claimSearchJob(jobId: string): Promise<SearchJobClaim> {
+  const { data, error } = await jobStore().rpc("claim_search_job", {
+    _job_id: jobId,
+    _lease_seconds: 900,
+  });
+  if (!error && data && typeof data === "object") {
+    const raw = data as { state?: SearchJobClaim["state"]; attempt_count?: number };
+    const state = raw.state;
+    if (
+      state === "claimed" ||
+      state === "completed" ||
+      state === "failed" ||
+      state === "processing" ||
+      state === "missing"
+    ) {
+      return {
+        state,
+        attemptCount:
+          typeof raw.attempt_count === "number" ? raw.attempt_count : undefined,
+        reliable: true,
+      };
+    }
+  }
+  // The base searches migration is enough to run safely in legacy mode. The
+  // reliability migration can be applied independently without blocking the
+  // first deployment.
+  if (isMissingRpc(error)) return { state: "claimed", reliable: false };
+  throw new Error(error?.message || "Could not claim search job");
 }
 
 export async function readJobRow(
@@ -328,7 +475,12 @@ export async function startDiscoveryJob(args: {
     return { ok: false, error: `JOB_STORE_UNAVAILABLE: ${errorMessage(e)}` };
   }
 
-  const published = await publishToQStash(`${args.origin}/api/worker`, {
+  const target = discoveryWorkerUrl(args.origin);
+  if (!target) {
+    await markJobFailed(jobId, "DISCOVERY_WORKER_URL_INVALID").catch(() => {});
+    return { ok: false, error: "DISCOVERY_WORKER_URL_INVALID" };
+  }
+  const published = await publishToQStash(target, {
     jobId,
     userId: args.userId,
     accessToken: args.accessToken,
@@ -338,6 +490,7 @@ export async function startDiscoveryJob(args: {
     await markJobFailed(jobId, published.error).catch(() => {});
     return { ok: false, error: published.error };
   }
+  await setJobMessageId(jobId, published.messageId);
   return { ok: true, jobId };
 }
 
@@ -371,7 +524,12 @@ export async function waitForJob(
 export async function runJob(
   payload: WorkerPayload,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  let attemptCount = 0;
   try {
+    const claim = await claimSearchJob(payload.jobId);
+    if (claim.state === "completed") return { ok: true };
+    if (claim.state !== "claimed") return { ok: false, error: `JOB_${claim.state.toUpperCase()}` };
+    attemptCount = claim.attemptCount ?? 0;
     const { runProductDiscovery } = await import("@/lib/discovery-pipeline.server");
     const result: DiscoveryResult = await runProductDiscovery(payload.input, {
       supabase: userClient(payload.accessToken),
@@ -380,13 +538,13 @@ export async function runJob(
       // Hat, kalan süreye göre kendini kısaltarak zamanında sonuç döner.
       budgetMs: workerBudgetMs(),
     });
-    await markJobCompleted(payload.jobId, result);
+    await markJobCompleted(payload.jobId, result, attemptCount);
     await cacheJobResult(payload.jobId, result).catch(() => {});
     return { ok: true };
   } catch (e) {
     const message = errorMessage(e);
     console.error(`[discovery-worker] job ${payload.jobId} failed: ${message}`);
-    await markJobFailed(payload.jobId, message).catch(() => {});
+    await markJobFailed(payload.jobId, message, attemptCount).catch(() => {});
     return { ok: false, error: message };
   }
 }
