@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-
-// TODO: replace with your project URL once a project name or custom domain is set.
-const BASE_URL = "";
+import { siteBaseUrl } from "@/lib/site-url";
+import { LEGAL_DOCS } from "@/lib/legal-content";
 
 interface SitemapEntry {
   path: string;
@@ -13,17 +12,26 @@ interface SitemapEntry {
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const base = siteBaseUrl(request);
+
         const entries: SitemapEntry[] = [
+          // Halka açık, SSR'lı sayfalar. Pro-gated / auth gerektiren
+          // route'lar sitemap'e girmez (crawler için değersiz).
           { path: "/", changefreq: "weekly", priority: "1.0" },
-          { path: "/auth", changefreq: "monthly", priority: "0.5" },
-          { path: "/viral-ads", changefreq: "daily", priority: "0.8" },
+          { path: "/pricing", changefreq: "monthly", priority: "0.9" },
+          { path: "/legal", changefreq: "yearly", priority: "0.3" },
+          ...LEGAL_DOCS.map((d) => ({
+            path: `/legal/${d.slug}`,
+            changefreq: "yearly" as const,
+            priority: "0.3",
+          })),
         ];
 
         const urls = entries.map((e) =>
           [
             `  <url>`,
-            `    <loc>${BASE_URL}${e.path}</loc>`,
+            `    <loc>${base}${e.path}</loc>`,
             e.changefreq ? `    <changefreq>${e.changefreq}</changefreq>` : null,
             e.priority ? `    <priority>${e.priority}</priority>` : null,
             `  </url>`,

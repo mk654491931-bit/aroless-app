@@ -42,6 +42,14 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  FinderIntroCard,
+  NoResultsCard,
+  SearchErrorCard,
+  SearchProgress,
+  describeSearchFailure,
+  type SearchErrorState,
+} from "@/components/search-states";
 import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -209,6 +217,14 @@ function toProductList(res: unknown): WinningProduct[] {
   return visit(res, 0);
 }
 
+/** One-click starting points for the cold-start finder state. */
+const FINDER_EXAMPLE_NICHES = [
+  "Kedi tırmalama tahtası",
+  "Kompakt seyahat organizeri",
+  "LED masa lambası",
+  "Bebek uyku tulumu",
+];
+
 function Dashboard() {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
@@ -252,6 +268,14 @@ function Dashboard() {
     HYBRID_DEFAULT_MIN_SCORE,
   );
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  // Persistent failure surface: a 401/504 used to disappear into a toast and leave
+  // the user staring at the cold-start empty state. These keep it on screen with a
+  // retry action and the credit-refund reassurance.
+  const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
+  /** Niche of the last attempted search ("nothing yet" vs "nothing found"). */
+  const [searchAttempt, setSearchAttempt] = useState<string | null>(null);
+  /** Safety timer fired: the request is still pending but stalled. */
+  const [stalled, setStalled] = useState(false);
   const [engine, setEngine] = usePersistentState<EngineId>("velora.finder.engine", "default");
   const [useGithubTrends, setUseGithubTrends] = usePersistentState<boolean>(
     "velora.finder.github_trends",
@@ -433,6 +457,8 @@ function Dashboard() {
           (res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ??
             null,
         );
+        setSearchError(null);
+        setStalled(false);
         qc.invalidateQueries({ queryKey: ["profile"] });
         if (products.length === 0) {
           toast.error("Aradığınız kriterlere uygun ürün bulunamadı.");
@@ -460,9 +486,16 @@ function Dashboard() {
       if (err.message.includes("NO_CREDITS")) {
         toast.error("Out of credits — upgrade to keep going.");
         setShowPricing(true);
-      } else toast.error(err.message);
+      } else {
+        setResults([]);
+        setRejected([]);
+        setFallbackNotice(null);
+        setStalled(false);
+        setSearchError({ ...describeSearchFailure(err.message), raw: err.message });
+      }
     },
     onSettled: () => {
+      setStalled(false);
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     },
   });
@@ -490,6 +523,8 @@ function Dashboard() {
         setResults(products.length > 0 ? attachWinnerScores(products) : []);
         setRejected([]);
         setFallbackNotice(null);
+        setSearchError(null);
+        setStalled(false);
 
         qc.invalidateQueries({ queryKey: ["profile"] });
         const model = (res as { model?: string } | undefined)?.model ?? "Hugging Face";
@@ -507,13 +542,23 @@ function Dashboard() {
         setShowPricing(true);
         return;
       }
-      toast.error(
+      setResults([]);
+      setStalled(false);
+      setSearchError(
         err.message.includes("HF_TOKEN_MISSING")
-          ? "Hugging Face token missing — add HF_TOKEN in Settings."
-          : err.message,
+          ? {
+              kind: "auth",
+              title: "Hugging Face token eksik",
+              body:
+                "Bu motor senin kendi Hugging Face token'ınla çalışır, bu yüzden istek yetkilendirilemedi.",
+              hint: "Ayarlar → API anahtarları bölümünden HF_TOKEN ekleyip tekrar dene.",
+              raw: err.message,
+            }
+          : { ...describeSearchFailure(err.message), raw: err.message },
       );
     },
     onSettled: () => {
+      setStalled(false);
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     },
   });
@@ -554,6 +599,9 @@ function Dashboard() {
     }
     pushRecent(nicheValue);
     setResultQuery("");
+    setSearchError(null);
+    setSearchAttempt(nicheValue);
+    setStalled(false);
     // When ALL selected platforms are unavailable in the target country,
     // automatically add cross-border alternatives to avoid empty results.
     const effectivePlatforms = (() => {
@@ -582,7 +630,8 @@ function Dashboard() {
     // reset the searching UI after 3 minutes.
     if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     searchSafetyTimerRef.current = setTimeout(() => {
-      toast.error("Search timed out — please try again.");
+      setStalled(true);
+      setSearchError({ ...describeSearchFailure("504 gateway timeout"), niche: nicheValue });
     }, 180_000);
     if (engine !== "default") {
       hfGen.mutate({ engine, platforms: effectivePlatforms });
@@ -1375,54 +1424,31 @@ function Dashboard() {
                         <span>{fallbackNotice}</span>
                       </div>
                     )}
-                    {searching && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-center gap-3 py-2">
-                          <Loader2 size={18} className="animate-spin text-[var(--brand)]" />
-                          <span className="text-sm text-muted-foreground animate-pulse">
-                            AI motorları analiz ediyor — bu 15-30 saniye sürebilir…
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                          {[0, 1, 2, 3, 4, 5].map((i) => (
-                            <div
-                              key={i}
-                              className="card-shimmer glass h-60 rounded-xl p-5 sm:h-72"
-                              style={{ animationDelay: `${i * 120}ms` }}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                    {searching && !stalled && (
+                      <SearchProgress label="AI motorları analiz ediyor — bu 15-30 saniye sürebilir…" />
                     )}
-                    {!searching && results.length === 0 && (
-                      <div className="text-center py-16 space-y-4">
-                        <div className="relative inline-flex">
-                          <div className="absolute inset-0 rounded-full bg-[var(--brand)]/20 blur-2xl animate-pulse-soft" />
-                          <div className="relative grid h-20 w-20 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--brand)]/10 to-[var(--brand-2)]/10">
-                            <Sparkles size={32} className="text-[oklch(0.68_0.15_255)]" />
-                          </div>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-foreground">
-                            Kazanan ürününü keşfet
-                          </h3>
-                          <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
-                            Nişini, platformunu ve bütçeni seç — yapay zeka motorlarımız
-                            gerçek zamanlı verilerle en kârlı ürünleri bulacak.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                            <Zap size={10} className="text-amber-400" /> 15-30 saniye
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                            <ShieldCheck size={10} className="text-emerald-400" /> 1 kredi
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                            <TrendingUp size={10} className="text-blue-400" /> AI Konsey onaylı
-                          </span>
-                        </div>
-                      </div>
+                    {!searching && searchError && results.length === 0 && (
+                      <SearchErrorCard
+                        error={searchError}
+                        onRetry={() => runSearch(searchError.niche ?? niche)}
+                        onEdit={jumpToSearch}
+                      />
+                    )}
+                    {!searching && !searchError && searchAttempt && results.length === 0 && (
+                      <NoResultsCard
+                        niche={searchAttempt}
+                        onRetry={() => runSearch(searchAttempt)}
+                        onEdit={jumpToSearch}
+                      />
+                    )}
+                    {!searching && !searchError && !searchAttempt && results.length === 0 && (
+                      <FinderIntroCard
+                        examples={FINDER_EXAMPLE_NICHES}
+                        onExample={(ex) => {
+                          setNiche(ex);
+                          runSearch(ex);
+                        }}
+                      />
                     )}
                     {!searching &&
                       results.length > 0 &&

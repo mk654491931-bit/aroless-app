@@ -22,6 +22,7 @@ import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as RadarRouteImport } from './routes/radar'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as RoiRouteImport } from './routes/roi'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -113,6 +114,11 @@ const PricingRoute = PricingRouteImport.update({
 const RadarRoute = RadarRouteImport.update({
   id: '/radar',
   path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoiRoute = RoiRouteImport.update({
@@ -266,6 +272,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -308,6 +315,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -351,6 +359,7 @@ export interface FileRoutesById {
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
   '/radar': typeof RadarRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/roi': typeof RoiRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -395,6 +404,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/robots.txt'
     | '/roi'
     | '/settings'
     | '/sitemap.xml'
@@ -437,6 +447,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/robots.txt'
     | '/roi'
     | '/settings'
     | '/sitemap.xml'
@@ -479,6 +490,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/pricing'
     | '/radar'
+    | '/robots.txt'
     | '/roi'
     | '/settings'
     | '/sitemap.xml'
@@ -522,6 +534,7 @@ export interface RootRouteChildren {
   NotificationsRoute: typeof NotificationsRoute
   PricingRoute: typeof PricingRoute
   RadarRoute: typeof RadarRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   RoiRoute: typeof RoiRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -641,6 +654,13 @@ declare module '@tanstack/react-router' {
       path: '/radar'
       fullPath: '/radar'
       preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/roi': {
@@ -859,6 +879,7 @@ const rootRouteChildren: RootRouteChildren = {
   NotificationsRoute: NotificationsRoute,
   PricingRoute: PricingRoute,
   RadarRoute: RadarRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   RoiRoute: RoiRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -889,13 +910,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
