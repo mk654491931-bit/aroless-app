@@ -1,4 +1,6 @@
-// Client-safe RestCountries + Frankfurter helpers (both free, no key, CORS-open).
+// Client-safe RestCountries + FX helpers — proxied via server to avoid browser CORS.
+// Upstream calls (restcountries.com / frankfurter) happen only in `src/routes/api/public/country.ts`
+// and `src/routes/api/public/fx.ts`. Frontend fetches only our own /api/... endpoints.
 import { useEffect, useState } from "react";
 import { countryByCode } from "./countries";
 
@@ -46,6 +48,18 @@ export function alpha2(code: string): string {
   return ISO_ALPHA2[c] ?? c;
 }
 
+type CountryProxyPayload = {
+  code: string;
+  flagSvg: string | null;
+  flagEmoji: string;
+  currency: string;
+  currencySymbol: string;
+  region: string;
+  subregion: string;
+  population: number | null;
+  rate: number;
+};
+
 export async function fetchCountryMeta(code: string): Promise<CountryMeta> {
   const c = (code || "GLOBAL").toUpperCase();
   const cached = metaCache.get(c);
@@ -64,30 +78,34 @@ export async function fetchCountryMeta(code: string): Promise<CountryMeta> {
   };
 
   try {
-    const res = await fetch(
-      `https://restcountries.com/v3.1/alpha/${alpha2(c)}?fields=flags,currencies,region,subregion,population`,
-    );
-    if (!res.ok) throw new Error("restcountries");
-    const raw = (await res.json()) as unknown;
-    const row = (Array.isArray(raw) ? raw[0] : raw) as {
-      flags?: { svg?: string };
-      currencies?: Record<string, { symbol?: string }>;
-      region?: string;
-      subregion?: string;
-      population?: number;
-    };
-    const curCode = Object.keys(row.currencies ?? {})[0] ?? local.currency;
+    const res = await fetch(`/api/public/country?code=${encodeURIComponent(c)}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`country proxy ${res.status}`);
+    const payload = (await res.json()) as Partial<CountryProxyPayload>;
+    // Accept only well-formed payloads; the proxy always returns the fields above.
+    if (!payload || typeof payload.code !== "string") throw new Error("bad payload");
     const meta: CountryMeta = {
-      code: c,
-      flagSvg: row.flags?.svg ?? null,
-      flagEmoji: local.flag,
-      currency: c === "GLOBAL" ? "USD" : curCode,
-      currencySymbol: row.currencies?.[curCode]?.symbol || currencySymbol(curCode),
-      region: row.region ?? "",
-      subregion: row.subregion ?? "",
-      population: typeof row.population === "number" ? row.population : null,
+      code: payload.code ?? c,
+      flagSvg: payload.flagSvg ?? null,
+      flagEmoji: payload.flagEmoji ?? local.flag,
+      currency: payload.currency ?? local.currency,
+      currencySymbol: payload.currencySymbol ?? currencySymbol(payload.currency ?? local.currency),
+      region: payload.region ?? "",
+      subregion: payload.subregion ?? "",
+      population: typeof payload.population === "number" ? payload.population : null,
     };
     metaCache.set(c, meta);
+    // Warm FX cache opportunistically so useUsdRate can resolve without a second request.
+    if (
+      typeof payload.rate === "number" &&
+      Number.isFinite(payload.rate) &&
+      payload.rate > 0 &&
+      payload.currency
+    ) {
+      const cur = String(payload.currency).toUpperCase();
+      if (!rateCache.has(cur)) rateCache.set(cur, payload.rate);
+    }
     return meta;
   } catch {
     metaCache.set(c, fallback);
@@ -95,21 +113,41 @@ export async function fetchCountryMeta(code: string): Promise<CountryMeta> {
   }
 }
 
-/** USD → target currency rate via Frankfurter (free, unlimited, no key). */
+/** USD → target currency rate via our own /api/public/fx (server calls Frankfurter). */
 export async function fetchUsdRate(currency: string): Promise<number> {
   const cur = (currency || "USD").toUpperCase();
   if (cur === "USD") return 1;
   const cached = rateCache.get(cur);
-  if (cached) return cached;
+  if (cached !== undefined) return cached;
   try {
-    const res = await fetch(`https://api.frankfurter.app/latest?from=USD&to=${cur}`);
-    if (!res.ok) throw new Error("frankfurter");
+    const res = await fetch("/api/public/fx", { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("fx proxy");
     const json = (await res.json()) as { rates?: Record<string, number> };
     const rate = Number(json.rates?.[cur]);
     if (!Number.isFinite(rate) || rate <= 0) throw new Error("no rate");
     rateCache.set(cur, rate);
     return rate;
   } catch {
+    // Also try country proxy as a fallback when FX is temporarily unavailable — most
+    // currencies map 1:1 to a country (e.g. GBP → UK / GB). Try a best-effort code lookup.
+    try {
+      const guessCode = cur === "GBP" ? "UK" : cur === "EUR" ? "DE" : cur;
+      // Don't recurse forever: only try if guess looks like a country code.
+      if (/^[A-Z]{2}$/.test(guessCode)) {
+        const r = await fetch(`/api/public/country?code=${encodeURIComponent(guessCode)}`, {
+          headers: { accept: "application/json" },
+        });
+        if (r.ok) {
+          const p = (await r.json()) as CountryProxyPayload;
+          if (p.currency?.toUpperCase() === cur && Number.isFinite(p.rate) && p.rate > 0) {
+            rateCache.set(cur, p.rate);
+            return p.rate;
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     return 0; // 0 = unavailable, callers fall back to USD
   }
 }

@@ -41,6 +41,7 @@ import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
+import { Route as ApiPublicCountryRouteImport } from './routes/api/public/country'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
 import { Route as ApiPublicPredictiveTrendsRouteImport } from './routes/api/public/predictive-trends'
@@ -211,6 +212,11 @@ const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   path: '/api/public/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCountryRoute = ApiPublicCountryRouteImport.update({
+  id: '/api/public/country',
+  path: '/api/public/country',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicFxRoute = ApiPublicFxRouteImport.update({
   id: '/api/public/fx',
   path: '/api/public/fx',
@@ -291,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
@@ -334,6 +341,7 @@ export interface FileRoutesByTo {
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
@@ -378,6 +386,7 @@ export interface FileRoutesById {
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
   '/api/public/predictive-trends': typeof ApiPublicPredictiveTrendsRoute
@@ -423,6 +432,7 @@ export interface FileRouteTypes {
     | '/tools/sourcing'
     | '/legal/'
     | '/api/public/agent'
+    | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/predictive-trends'
@@ -466,6 +476,7 @@ export interface FileRouteTypes {
     | '/tools/sourcing'
     | '/legal'
     | '/api/public/agent'
+    | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/predictive-trends'
@@ -509,6 +520,7 @@ export interface FileRouteTypes {
     | '/tools/sourcing'
     | '/legal/'
     | '/api/public/agent'
+    | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
     | '/api/public/predictive-trends'
@@ -552,6 +564,7 @@ export interface RootRouteChildren {
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
+  ApiPublicCountryRoute: typeof ApiPublicCountryRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
   ApiPublicPredictiveTrendsRoute: typeof ApiPublicPredictiveTrendsRoute
@@ -789,6 +802,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/country': {
+      id: '/api/public/country'
+      path: '/api/public/country'
+      fullPath: '/api/public/country'
+      preLoaderRoute: typeof ApiPublicCountryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/fx': {
       id: '/api/public/fx'
       path: '/api/public/fx'
@@ -897,6 +917,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
+  ApiPublicCountryRoute: ApiPublicCountryRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
   ApiPublicPredictiveTrendsRoute: ApiPublicPredictiveTrendsRoute,
@@ -910,3 +931,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
