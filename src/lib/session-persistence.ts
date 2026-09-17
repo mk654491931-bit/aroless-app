@@ -18,64 +18,111 @@ interface SessionData {
 const SESSION_KEY = "aroless_session";
 const SESSION_VERSION = 1;
 
+// --- Debounced idle flush: rapid WebVitals/scroll writes merge into single localStorage write ---
+let pendingPatch: Partial<SessionData> | null = null;
+let flushTimer: number | null = null;
+let flushIdle: number | null = null;
+function doFlushSession() {
+  flushTimer = null;
+  flushIdle = null;
+  if (!pendingPatch) return;
+  const patch = pendingPatch;
+  pendingPatch = null;
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    let existing: SessionData = {};
+    if (raw) {
+      try {
+        existing = JSON.parse(raw) as SessionData;
+        if (existing.timestamp && Date.now() - existing.timestamp > 24 * 60 * 60 * 1000) {
+          existing = {};
+        }
+      } catch {
+        existing = {};
+      }
+    }
+    const updated: SessionData = { ...existing, ...patch, timestamp: Date.now(), version: SESSION_VERSION };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+  } catch {
+    /* storage kapalı */
+  }
+}
+function scheduleSessionFlush() {
+  if (flushTimer !== null || flushIdle !== null) return;
+  flushTimer = window.setTimeout(() => {
+    flushTimer = null;
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+      .requestIdleCallback;
+    if (typeof ric === "function") {
+      flushIdle = ric(() => doFlushSession(), { timeout: 1500 }) as unknown as number;
+    } else {
+      doFlushSession();
+    }
+  }, 120) as unknown as number;
+}
+
 /**
  * Session Storage Management
  */
 export const sessionManager = {
   /**
-   * Oturumu localStorage'dan veya sessionStorage'dan al
+   * Oturumu localStorage'dan al — pendingPatch ile birleştirir (debounce sırasında tutarlılık)
    */
   getSession(): SessionData | null {
     try {
       const stored = localStorage.getItem(SESSION_KEY);
-      if (!stored) return null;
-
-      const data = JSON.parse(stored);
-      // Oturumun geçerliliğini kontrol et (24 saat)
-      if (data.timestamp && Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
-        sessionManager.clearSession();
-        return null;
+      let data: SessionData | null = null;
+      if (stored) {
+        data = JSON.parse(stored) as SessionData;
+        if (data.timestamp && Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
+          sessionManager.clearSession();
+          return pendingPatch ? ({ ...pendingPatch } as SessionData) : null;
+        }
       }
-
+      if (pendingPatch) {
+        return { ...(data ?? {}), ...pendingPatch } as SessionData;
+      }
       return data;
     } catch (error) {
       console.error("Session restore failed:", error);
-      return null;
+      return pendingPatch ? ({ ...pendingPatch } as SessionData) : null;
     }
   },
 
   /**
-   * Oturumu kaydet (debounced)
+   * Oturumu kaydet — idle'da tek yazıma birleştirilir (ana thread bloklanmaz)
    */
   saveSession(data: Partial<SessionData>) {
-    try {
-      const existing = sessionManager.getSession() || {};
-      const updated: SessionData = {
-        ...existing,
-        ...data,
-        timestamp: Date.now(),
-        version: SESSION_VERSION,
-      };
-
-      localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
-    } catch (error) {
-      console.error("Session save failed:", error);
-    }
+    if (typeof window === "undefined") return;
+    pendingPatch = { ...(pendingPatch ?? {}), ...data };
+    scheduleSessionFlush();
   },
 
   /**
-   * Belirli bir alanı güncelle
+   * Belirli bir alanı güncelle (debounced)
    */
   updateField<K extends keyof SessionData>(key: K, value: SessionData[K]) {
-    const session = sessionManager.getSession() || {};
-    sessionManager.saveSession({ ...session, [key]: value });
+    if (typeof window === "undefined") return;
+    pendingPatch = { ...(pendingPatch ?? {}), [key]: value } as Partial<SessionData>;
+    scheduleSessionFlush();
   },
 
   /**
-   * Oturumu temizle
+   * Oturumu temizle — bekleyen yazımı da iptal eder
    */
   clearSession() {
     try {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      if (flushIdle !== null) {
+        const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        if (typeof cic === "function") cic(flushIdle);
+        else clearTimeout(flushIdle);
+        flushIdle = null;
+      }
+      pendingPatch = null;
       localStorage.removeItem(SESSION_KEY);
     } catch (error) {
       console.error("Session clear failed:", error);
@@ -83,13 +130,14 @@ export const sessionManager = {
   },
 
   /**
-   * Scroll konumunu kaydet
+   * Scroll konumunu kaydet — 120ms debounce + idle flush
    */
   saveScrollPosition(route: string, position: number) {
-    const session = sessionManager.getSession() || {};
-    const scrollPositions = session.scrollPositions || {};
-    scrollPositions[route] = position;
-    sessionManager.updateField("scrollPositions", scrollPositions);
+    if (typeof window === "undefined") return;
+    const current = pendingPatch?.scrollPositions ?? sessionManager.getSession()?.scrollPositions ?? {};
+    const next = { ...current, [route]: position };
+    pendingPatch = { ...(pendingPatch ?? {}), scrollPositions: next };
+    scheduleSessionFlush();
   },
 
   /**

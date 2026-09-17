@@ -131,15 +131,36 @@ export function initFluidity(): () => void {
 
   let cancelled = false;
   let timer: number | null = null;
+  let idleId: number | null = null;
+  const runMeasure = () => {
+    if (cancelled || document.hidden || isLiteMode()) return;
+    void measureFrameHealth().then((healthy) => {
+      if (!cancelled && !healthy) enableLiteMode("measured-frames");
+    });
+  };
   const startMeasurement = () => {
     if (cancelled || isLiteMode()) return;
+    // İlk boyama + derleme gürültüsü geçtikten sonra, idle zamanında ölç — ana thread bloklanmaz
+    const doSchedule = () => {
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+        .requestIdleCallback;
+      if (typeof ric === "function") {
+        idleId = ric(() => {
+          idleId = null;
+          runMeasure();
+        }, { timeout: 2800 }) as unknown as number;
+      } else {
+        timer = window.setTimeout(() => {
+          timer = null;
+          runMeasure();
+        }, 1200) as unknown as number;
+      }
+    };
+    // load sonrası bir miktar bekle, sonra idle'da çalıştır
     timer = window.setTimeout(() => {
       timer = null;
-      if (cancelled || document.hidden) return;
-      void measureFrameHealth().then((healthy) => {
-        if (!cancelled && !healthy) enableLiteMode("measured-frames");
-      });
-    }, 1200);
+      doSchedule();
+    }, 900) as unknown as number;
   };
 
   // İlk boyama/JS derleme gürültüsü geçtikten sonra ölç.
@@ -156,6 +177,11 @@ export function initFluidity(): () => void {
   return () => {
     cancelled = true;
     if (timer !== null) window.clearTimeout(timer);
+    if (idleId !== null) {
+      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      if (typeof cic === "function") cic(idleId);
+      else clearTimeout(idleId);
+    }
     window.removeEventListener("load", startMeasurement);
     document.removeEventListener("visibilitychange", syncHidden);
     mq?.removeEventListener?.("change", onMotionChange);

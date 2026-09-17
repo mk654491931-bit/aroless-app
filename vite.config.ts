@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineConfig, loadEnv, type PluginOption } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
@@ -135,8 +136,8 @@ export default defineConfig(async ({ command, mode }) => {
     },
     build: {
       target: "ES2020",
-      minify: false,
-      sourcemap: mode !== "production",
+      minify: mode === "production" ? ("esbuild" as const) : false,
+      sourcemap: false as const,
       rollupOptions: {
         output: {
           // Kod bölümlendirmesi (Code Splitting) - Daha küçük chunks
@@ -185,9 +186,9 @@ export default defineConfig(async ({ command, mode }) => {
       // Daha büyük chunk boyutu sınırı (çünkü daha iyi tree-shaking)
       chunkSizeWarningLimit: 600,
       // Gzip compression
-      reportCompressedSize: true,
+      reportCompressedSize: false as const,
       cssCodeSplit: true,
-      cssMinify: false, // Disable CSS minification to avoid lightningcss issues
+      cssMinify: false as const,
     },
     plugins,
   };

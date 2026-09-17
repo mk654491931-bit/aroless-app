@@ -76,6 +76,27 @@ html.perf-lite * {
   will-change: auto !important;
 }
 
+/* ─── Genel akıcılık optimizasyonu — görünüm aynı kalır ───
+   contain/content-visibility yalnızca compositor işini azaltır,
+   pikseller aynıdır. Kart listeleri ekran dışındayken boyanmaz. */
+.premium-card,
+.live-card,
+.laptop-shell,
+.glass {
+  contain: layout style paint;
+}
+.stagger-in {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 700px;
+}
+/* will-change yalnızca gerçekten hareket eden katmanlarda kalsın;
+   kartların kendisinde gereksiz GPU katmanı oluşturma. */
+.premium-card,
+.live-card,
+.glass {
+  will-change: auto;
+}
+
 
 @custom-variant dark (&:is(.dark *));
 

@@ -49,24 +49,54 @@ export function initializePerformanceOptimizations(
     }
   }
 
-  // 2. Web Vitals Tracking
+  // 2. Web Vitals Tracking — idle'a ertelenir, ana thread bloklanmaz
   if (enableWebVitals && typeof window !== "undefined") {
-    const unsubscribe = initializeWebVitalsTracking((metric) => {
-      if (debug) {
-        console.log(
-          `📊 ${metric.name}: ${metric.value.toFixed(2)}ms (${metric.rating})`,
-        );
-      }
-      onMetric?.(metric);
-
-      // Session'a kaydet
-      if (enableSessionPersistence) {
-        sessionManager.updateField("lastWebVitals", {
-          [metric.name]: metric.value,
-        });
-      }
+    let unsubscribeVitals: (() => void) | null = null;
+    let vitalsIdle: number | null = null;
+    const pendingVitals: Record<string, number> = {};
+    let vitalsFlushTimer: number | null = null;
+    const flushVitals = () => {
+      vitalsFlushTimer = null;
+      if (Object.keys(pendingVitals).length === 0) return;
+      const snapshot = { ...pendingVitals };
+      for (const k of Object.keys(pendingVitals)) delete pendingVitals[k];
+      const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      const doWrite = () => {
+        try {
+          sessionManager.updateField("lastWebVitals", snapshot as unknown as Record<string, number>);
+        } catch { /* yoksay */ }
+      };
+      if (typeof idle === "function") idle(doWrite, { timeout: 2000 });
+      else setTimeout(doWrite, 300);
+    };
+    const scheduleIdle = (cb: () => void) => {
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof ric === "function") return ric(cb, { timeout: 2500 });
+      return window.setTimeout(cb, 900) as unknown as number;
+    };
+    const cancelIdle = (id: number) => {
+      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      if (typeof cic === "function") cic(id);
+      else clearTimeout(id);
+    };
+    vitalsIdle = scheduleIdle(() => {
+      vitalsIdle = null;
+      unsubscribeVitals = initializeWebVitalsTracking((metric) => {
+        if (debug) {
+          console.log(`📊 ${metric.name}: ${metric.value.toFixed(2)}ms (${metric.rating})`);
+        }
+        onMetric?.(metric);
+        if (enableSessionPersistence) {
+          pendingVitals[metric.name] = metric.value;
+          if (vitalsFlushTimer === null) vitalsFlushTimer = window.setTimeout(flushVitals, 1200) as unknown as number;
+        }
+      });
     });
-    cleanups.push(unsubscribe);
+    cleanups.push(() => {
+      if (vitalsIdle !== null) cancelIdle(vitalsIdle);
+      if (vitalsFlushTimer !== null) clearTimeout(vitalsFlushTimer);
+      unsubscribeVitals?.();
+    });
   }
 
   // 3. Mobile Optimizations
@@ -114,25 +144,32 @@ export function initializePerformanceOptimizations(
     }
   }
 
-  // 5. Performance monitoring - Chrome DevTools
-  if (typeof window !== "undefined" && "performance" in window) {
-    // PerformanceObserver setup
-    if ("PerformanceObserver" in window) {
+  // 5. Long-task observer — sadece debug'ta ve idle'da kurulur (prod'da kapalı)
+  if (debug && typeof window !== "undefined" && "performance" in window && "PerformanceObserver" in window) {
+    let ltIdle: number | null = null;
+    let ltObserver: PerformanceObserver | null = null;
+    const ric2 = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const setup = () => {
+      ltIdle = null;
       try {
-        // Long task tracking
-        const observer = new PerformanceObserver((list) => {
+        ltObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (debug) {
-              console.warn(`⚠️ Long task: ${entry.name} (${entry.duration.toFixed(0)}ms)`);
-            }
+            if (entry.duration > 200) console.warn(`⚠️ Long task: ${entry.name} (${entry.duration.toFixed(0)}ms)`);
           }
         });
-        observer.observe({ type: "longtask", buffered: true });
-        cleanups.push(() => observer.disconnect());
-      } catch (e) {
-        // Long task tracking not supported
+        ltObserver.observe({ type: "longtask", buffered: true });
+      } catch { /* desteklenmiyor */ }
+    };
+    if (typeof ric2 === "function") ltIdle = ric2(setup, { timeout: 4000 });
+    else ltIdle = window.setTimeout(setup, 1500) as unknown as number;
+    cleanups.push(() => {
+      if (ltIdle !== null) {
+        const cic2 = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        if (typeof cic2 === "function") cic2(ltIdle);
+        else clearTimeout(ltIdle);
       }
-    }
+      ltObserver?.disconnect();
+    });
   }
 
   // 6. Cleanup function

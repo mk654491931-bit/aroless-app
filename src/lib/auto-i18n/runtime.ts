@@ -89,11 +89,18 @@ function lookup(raw: string): string | null {
 }
 
 function shouldSkip(el: Element | null): boolean {
+  if (!el) return false;
+  // Native closest is far cheaper than manual parent walk (40 levels) for every text node.
+  // One call covers all SKIP_TAGS + data-no-translate in the ancestor chain.
+  const hit = (el as HTMLElement).closest?.(
+    "script,style,noscript,code,pre,textarea,svg,[data-no-translate]",
+  );
+  if (hit) return true;
+  // Fallback for edge cases where closest is unavailable (e.g. detached text parent)
   let node: Element | null = el;
   let depth = 0;
-  while (node && depth < 40) {
+  while (node && depth < 16) {
     if (SKIP_TAGS.has(node.tagName)) return true;
-    if (node.hasAttribute?.("data-no-translate")) return true;
     node = node.parentElement;
     depth++;
   }
@@ -155,10 +162,16 @@ function walk(root: Node) {
 
 function flush() {
   scheduled = false;
-  if (!currentLang) return;
+  if (!currentLang) {
+    dirty.clear();
+    return;
+  }
   observer?.disconnect();
   try {
     if (dirty.size === 0) {
+      walk(document.body);
+    } else if (dirty.size > 24) {
+      // Too many dirty roots — one coalesced walk is cheaper than 24+ subtree walks
       walk(document.body);
     } else {
       for (const node of dirty) {
@@ -178,8 +191,13 @@ function schedule(node?: Node) {
   if (scheduled) return;
   scheduled = true;
   const run = () => flush();
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
-  else setTimeout(run, 16);
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+    .requestIdleCallback;
+  if (typeof ric === "function") {
+    ric(run, { timeout: 120 });
+  } else {
+    window.setTimeout(run, 32);
+  }
 }
 
 function connect() {
@@ -196,10 +214,11 @@ function connect() {
 function ensureObserver() {
   if (observer || typeof MutationObserver === "undefined") return;
   observer = new MutationObserver((records) => {
+    // Coalesce: collect dirty roots first, schedule once
     for (const r of records) {
-      if (r.type === "characterData") schedule(r.target);
-      else if (r.type === "attributes") schedule(r.target);
-      else r.addedNodes.forEach((n) => schedule(n));
+      if (r.type === "characterData") dirty.add(r.target);
+      else if (r.type === "attributes") dirty.add(r.target);
+      else r.addedNodes.forEach((n) => dirty.add(n));
     }
     if (records.length) schedule();
   });

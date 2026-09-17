@@ -224,26 +224,38 @@ export function useWebVitalsMonitoring() {
   const [memoryMetrics, setMemoryMetrics] = useState<MemoryMetrics | null>(null);
 
   useEffect(() => {
-    // Web Vitals tracking
-    const unsubscribeVitals = initializeWebVitalsTracking((metric) => {
-      setMetrics((prev) => {
-        const filtered = prev.filter((m) => m.name !== metric.name);
-        return [...filtered, metric];
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    let idleId: number | null = null;
+    let unsubscribeVitals: (() => void) | null = null;
+    let memoryInterval: number | null = null;
+
+    const start = () => {
+      idleId = null;
+      unsubscribeVitals = initializeWebVitalsTracking((metric) => {
+        setMetrics((prev) => {
+          const filtered = prev.filter((m) => m.name !== metric.name);
+          return [...filtered, metric];
+        });
       });
-    });
-
-    // Resource metrics
-    const resources = getResourceMetrics();
-    setResourceMetrics(resources);
-
-    // Memory metrics (her 5 saniyede)
-    const memoryInterval = setInterval(() => {
+      setResourceMetrics(getResourceMetrics());
+      // Bellek 30 sn'de bir, sadece sekme görünürken
+      memoryInterval = window.setInterval(() => {
+        if (!document.hidden) setMemoryMetrics(getMemoryMetrics());
+      }, 30_000) as unknown as number;
       setMemoryMetrics(getMemoryMetrics());
-    }, 5000);
+    };
+
+    if (typeof ric === "function") idleId = ric(start, { timeout: 3000 });
+    else idleId = window.setTimeout(start, 900) as unknown as number;
 
     return () => {
-      unsubscribeVitals();
-      clearInterval(memoryInterval);
+      if (idleId !== null) {
+        if (typeof cic === "function") cic(idleId);
+        else clearTimeout(idleId);
+      }
+      unsubscribeVitals?.();
+      if (memoryInterval !== null) clearInterval(memoryInterval);
     };
   }, []);
 
