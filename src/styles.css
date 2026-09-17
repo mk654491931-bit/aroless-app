@@ -2923,3 +2923,72 @@ input[type="range"].range-fill {
     font-size: 16px !important;
   }
 }
+
+/* ── Özel imleç (gece/gündüz) — yalnızca html.cursor-enabled + fine pointer'da ── */
+.custom-cursor-dot,
+.custom-cursor-ring {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  will-change: transform, opacity, width, height;
+  transition: opacity 0.18s ease, width 0.18s ease, height 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+.custom-cursor-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--accent-active);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent-active) 70%, transparent), 0 0 18px color-mix(in oklab, var(--brand) 55%, transparent);
+}
+.custom-cursor-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--accent-active) 55%, transparent);
+  background: color-mix(in oklab, var(--accent-active) 10%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 18%, transparent) inset;
+}
+.custom-cursor-dot.is-hover {
+  width: 8px;
+  height: 8px;
+  background: oklch(1 0 0 / 0.92);
+}
+.custom-cursor-ring.is-hover {
+  width: 36px;
+  height: 36px;
+  border-color: color-mix(in oklab, var(--accent-active) 85%, transparent);
+  background: color-mix(in oklab, var(--accent-active) 16%, transparent);
+}
+html.light .custom-cursor-dot {
+  background: oklch(0.52 0.16 255);
+  box-shadow: 0 0 10px oklch(0.52 0.16 255 / 0.35);
+}
+html.light .custom-cursor-ring {
+  border-color: oklch(0.52 0.16 255 / 0.45);
+  background: oklch(0.52 0.16 255 / 0.08);
+}
+/* Sadece fine-pointer ve hareket azaltılmayan cihazlarda göster */
+@media (pointer: coarse) {
+  .custom-cursor-dot,
+  .custom-cursor-ring { display: none !important; }
+}
+@media (pointer: fine) {
+  html.cursor-enabled {
+    cursor: none;
+  }
+  html.cursor-enabled a,
+  html.cursor-enabled button,
+  html.cursor-enabled [role="button"],
+  html.cursor-enabled input,
+  html.cursor-enabled select,
+  html.cursor-enabled textarea {
+    cursor: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .custom-cursor-dot,
+  .custom-cursor-ring { transition: opacity 0.01ms; }
+}

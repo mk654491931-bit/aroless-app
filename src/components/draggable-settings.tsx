@@ -11,7 +11,7 @@ type Props = {
   anchor?: "top-right" | "bottom-right";
 };
 
-const BAR_W = 240;
+const BAR_W = 380;
 const BAR_H = 48;
 const EDGE_GAP = 8;
 

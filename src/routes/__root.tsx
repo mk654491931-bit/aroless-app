@@ -25,6 +25,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PaletteToggle } from "@/components/palette-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { CursorToggle } from "@/components/cursor-toggle";
+import { CustomCursor } from "@/components/custom-cursor";
 
 import { AmbientBackground } from "@/components/ambient-background";
 import { DeviceGuard } from "@/components/device-guard";
@@ -134,6 +136,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+const THEME_BOOT_SCRIPT =
+  "(function(){try{" +
+  "var t=localStorage.getItem('velora-theme');" +
+  "if(t!=='light'&&t!=='dark'){try{t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}catch(e){t='dark';}}" +
+  "document.documentElement.classList.toggle('light',t==='light');" +
+  "document.documentElement.classList.toggle('dark',t==='dark');" +
+  "var p=localStorage.getItem('velora-palette');document.documentElement.classList.toggle('palette-aurora',p==='aurora');" +
+  "var c=localStorage.getItem('velora-cursor');document.documentElement.classList.toggle('cursor-enabled',c==='1'||c==='on'||c==='true');" +
+  "var l=localStorage.getItem('i18nextLng');if(l){var lc=l.slice(0,2);document.documentElement.lang=lc;document.documentElement.dir=lc==='ar'?'rtl':'ltr';}" +
+  "}catch(e){}})();";
+
 function RootShell({ children }: { children: ReactNode }) {
   // translate="no": tarayıcı otomatik çevirisini kapatır. Google Translate DOM
   // metin düğümlerini <font> ile sarıp React ağacını bozabiliyor (onboarding
@@ -141,6 +154,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" translate="no" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -225,15 +239,17 @@ function RootComponent() {
   }, [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
+      <CustomCursor />
       <AmbientBackground />
       <DeviceGuard />
       {chromeless ? (
         <>
-          {/* Draggable language / palette / theme bar (auth, pricing, legal, landing) */}
+          {/* Sürüklenebilir dil / palet / tema / imleç çubuğu — tüm sayfalarda aynı, konum kalıcı */}
           <DraggableSettingsBar>
             <LanguageSwitcher />
             <PaletteToggle />
             <ThemeToggle />
+            <CursorToggle />
           </DraggableSettingsBar>
           <div key={`${pathname}|${lang}`} className="min-w-0 overflow-x-clip page-fade">
             <Outlet />
@@ -247,10 +263,12 @@ function RootComponent() {
               {pathname !== "/" && <AppTopbar />}
               {pathname === "/" && (
                 <>
-                  {/* Draggable palette / theme — position persists per user */}
+                  {/* "/" girişliyken de dil dahil — tüm ayarlar tek yerde, sürüklenebilir */}
                   <DraggableSettingsBar anchor="bottom-right">
+                    <LanguageSwitcher />
                     <PaletteToggle />
                     <ThemeToggle />
+                    <CursorToggle />
                   </DraggableSettingsBar>
                   <SidebarTrigger className="fixed bottom-4 left-4 z-50 h-9 w-9 rounded-lg border border-white/10 bg-(--surface)/90 backdrop-blur hover:bg-white/10" />
                 </>

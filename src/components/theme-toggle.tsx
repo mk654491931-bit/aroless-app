@@ -32,8 +32,19 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       setTheme(event.newValue);
       applyTheme(event.newValue);
     };
+    const onCustom = (e: Event) => {
+      const detail = (e as CustomEvent<{ theme?: Theme }>).detail;
+      if (detail?.theme === "light" || detail?.theme === "dark") {
+        setTheme(detail.theme);
+        applyTheme(detail.theme);
+      }
+    };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("velora:theme", onCustom as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("velora:theme", onCustom as EventListener);
+    };
   }, []);
 
   const toggle = () => {
@@ -41,6 +52,9 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     setTheme(next);
     localStorage.setItem(KEY, next);
     applyTheme(next);
+    try {
+      window.dispatchEvent(new CustomEvent("velora:theme", { detail: { theme: next } }));
+    } catch { /* ignore */ }
   };
 
   return (

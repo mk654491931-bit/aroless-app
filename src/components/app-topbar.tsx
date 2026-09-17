@@ -8,6 +8,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PaletteToggle } from "@/components/palette-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CursorToggle } from "@/components/cursor-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
@@ -102,6 +103,7 @@ export function AppTopbar() {
           <LanguageSwitcher />
           <PaletteToggle />
           <ThemeToggle />
+          <CursorToggle />
           <button
             type="button"
             onClick={async () => {

@@ -16,6 +16,25 @@ export function PaletteToggle({ className = "" }: { className?: string }) {
     const saved = (localStorage.getItem(KEY) as PaletteId | null) ?? "default";
     setPalette(saved);
     applyPalette(saved);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== KEY) return;
+      const v = (e.newValue as PaletteId | null) ?? "default";
+      setPalette(v === "aurora" ? "aurora" : "default");
+      applyPalette(v === "aurora" ? "aurora" : "default");
+    };
+    const onCustom = (e: Event) => {
+      const detail = (e as CustomEvent<{ palette?: PaletteId }>).detail;
+      if (detail?.palette === "aurora" || detail?.palette === "default") {
+        setPalette(detail.palette);
+        applyPalette(detail.palette);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("velora:palette", onCustom as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("velora:palette", onCustom as EventListener);
+    };
   }, []);
 
   const toggle = () => {
@@ -23,6 +42,9 @@ export function PaletteToggle({ className = "" }: { className?: string }) {
     setPalette(next);
     localStorage.setItem(KEY, next);
     applyPalette(next);
+    try {
+      window.dispatchEvent(new CustomEvent("velora:palette", { detail: { palette: next } }));
+    } catch { /* ignore */ }
   };
 
   return (
