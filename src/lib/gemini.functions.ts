@@ -279,8 +279,9 @@ export function productDebateContext(p: WinningProduct): string {
  * kadar hafif yoklama yapılır. Böylece 90 saniyelik sunucu zaman aşımı yerine
  * arka plan işçisinin uzun süre limiti (maxDuration) geçerli olur.
  *
- * QStash yapılandırılmamışsa veya iş kuyruğa alınamazsa hat aynı istek içinde
- * (eski davranış) çalıştırılır — hiçbir durumda arama tamamen bozulmaz.
+ * QStash yapılandırılmamışsa eski inline davranış korunur. QStash yapılandırılmış
+ * fakat iş kuyruğa alınamazsa inline fallback yapılmaz; gerçek hata kullanıcıya
+ * aktarılır ve ağır iş kısa HTTP isteğinde tekrar başlatılmaz.
  */
 export const generateProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -311,8 +312,11 @@ export const generateProducts = createServerFn({ method: "POST" })
       accessToken = "";
       origin = "";
     }
-    // İşçi, kredi düşümü ve RLS için kullanıcının JWT'sine ihtiyaç duyar.
-    if (!accessToken || !origin) return await inline();
+    // QStash yapılandırılmışken sessizce inline'a düşmek, ağır hattı tekrar
+    // aynı kısa HTTP isteğine taşır ve gerçek worker hatasını gizler.
+    if (!accessToken || !origin) {
+      throw new Error("DISCOVERY_BACKGROUND_UNAVAILABLE: public origin or auth token missing");
+    }
 
     const started = await jobs.startDiscoveryJob({
       input: data,
@@ -321,23 +325,30 @@ export const generateProducts = createServerFn({ method: "POST" })
       origin,
     });
     if (!started.ok) {
-      console.warn(`[discovery] background job unavailable (${started.error}) — running inline`);
-      return await inline();
+      throw new Error(`DISCOVERY_JOB_START_FAILED: ${started.error}`);
     }
 
-    const finished = await jobs.waitForJob(started.jobId, {
-      timeoutMs: 240_000,
-      intervalMs: 2_000,
-    });
-    if (finished.status === "completed" && finished.result) {
-      return finished.result as Awaited<ReturnType<typeof inline>>;
-    }
-    if (finished.status === "failed") {
-      throw new Error(finished.error || "Arama tamamlanamadı.");
-    }
-    throw new Error(
-      `Analiz hâlâ arka planda çalışıyor. Birkaç dakika içinde tekrar deneyin (jobId: ${started.jobId}).`,
-    );
+    // QStash işi asenkron çalışır. Burada sonucu beklemek serverless timeout'una
+    // çarpar; istemci getDiscoveryJob ile Supabase üzerinden hafifçe yoklar.
+    return { jobId: started.jobId, status: "processing" as const };
+  });
+
+export const getDiscoveryJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ jobId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("searches")
+      .select("status, result, error")
+      .eq("id", data.jobId)
+      .maybeSingle();
+    if (error) throw new Error(`DISCOVERY_JOB_READ_FAILED: ${error.message}`);
+    if (!row) throw new Error("DISCOVERY_JOB_NOT_FOUND");
+    return {
+      status: row.status as "processing" | "completed" | "failed",
+      result: row.result,
+      error: row.error,
+    };
   });
 
 // ---------- Product Validator: "Will it sell?" ----------

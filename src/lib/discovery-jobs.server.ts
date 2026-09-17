@@ -16,8 +16,9 @@
  * türetilir; hiçbir istek platform sınırına dayanmaz, dolayısıyla 504 /
  * "zaman aşımı" hatası oluşmaz.
  *
- * QStash/Redis ortam değişkenleri yoksa hiçbir şey kırılmaz: çağrı yapan taraf
- * eski senkron davranışa geri düşer.
+ * QStash değişkenleri yoksa çağrı yapan taraf kontrollü inline fallback kullanır.
+ * QStash yapılandırılmış fakat publish başarısızsa fallback yapılmaz; işin gerçek
+ * kuyruğa alma hatası korunur ve aynı kısa HTTP isteğinde ağır işlem tekrarlanmaz.
  *
  * Ek npm bağımlılığı yoktur — QStash ve Redis REST API'leri `fetch` ile
  * kullanılır (lock dosyası / kurulum riski sıfır).

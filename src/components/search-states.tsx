@@ -107,6 +107,30 @@ export function describeSearchFailure(raw: string | undefined | null): SearchFai
   const msg = (raw ?? "").trim();
   const m = msg.toLowerCase();
 
+  if (/discovery_background_unavailable|origin_not_public/.test(m)) {
+    return {
+      kind: "server",
+      title: "Arka plan işçisi başlatılamadı",
+      body: "Analiz için herkese açık HTTPS adresi veya geçerli oturum bilgisi bulunamadı.",
+      hint: "APP_URL değerini ve giriş oturumunu kontrol edip tekrar dene.",
+    };
+  }
+  if (/qstash_publish_failed/.test(m)) {
+    return {
+      kind: "server",
+      title: "Arka plan kuyruğuna bağlanılamadı",
+      body: "Analiz işi Upstash QStash kuyruğuna gönderilemedi. Bu bir AI kota hatası değildir.",
+      hint: "QSTASH_TOKEN, QSTASH_REGION ve worker adresini kontrol edip tekrar dene.",
+    };
+  }
+  if (/job_store_unavailable|discovery_job_read_failed|discovery_job_not_found/.test(m)) {
+    return {
+      kind: "server",
+      title: "Arama işi kaydedilemedi",
+      body: "Arama durumu Supabase üzerinde okunamadı veya kaydedilemedi.",
+      hint: "Supabase bağlantısını ve searches tablosu migration'larını kontrol edip tekrar dene.",
+    };
+  }
   if (/40[13]|unauthor|forbidden|invalid signature|missing secret|no auth/.test(m)) {
     return {
       kind: "auth",

@@ -55,6 +55,7 @@ import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit
 import { useAuth } from "@/hooks/use-auth";
 import {
   generateProducts,
+  getDiscoveryJob,
   getProfile,
   generateSeoKit,
   generateCreativeScripts,
@@ -234,6 +235,7 @@ function Dashboard() {
   const qc = useQueryClient();
   const getProfileFn = useServerFn(getProfile);
   const generateFn = useServerFn(generateProducts);
+  const getDiscoveryJobFn = useServerFn(getDiscoveryJob);
   const seoFn = useServerFn(generateSeoKit);
   const scriptsFn = useServerFn(generateCreativeScripts);
   const listFavFn = useServerFn(listFavorites);
@@ -435,7 +437,7 @@ function Dashboard() {
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const gen = useMutation({
-    mutationFn: (
+    mutationFn: async (
       vars: {
         niche: string;
         category: string;
@@ -448,7 +450,23 @@ function Dashboard() {
         lang: string;
         use_github_trends: boolean;
       } & DeepSearchOptions,
-    ) => generateFn({ data: vars }),
+    ) => {
+      const response = await generateFn({ data: vars });
+      const queued = response as { jobId?: unknown; status?: unknown } | null;
+      if (typeof queued?.jobId !== "string") return response;
+
+      // QStash işi uzun sürebilir; server function artık sonucu beklemez.
+      // Tarayıcı yalnızca küçük Supabase job kayıtlarını yoklar.
+      for (let attempt = 0; attempt < 180; attempt++) {
+        const job = await getDiscoveryJobFn({ data: { jobId: queued.jobId } });
+        if (job.status === "completed" && job.result) return job.result;
+        if (job.status === "failed") {
+          throw new Error(job.error || "Arama tamamlanamadı.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      throw new Error("DISCOVERY_JOB_TIMEOUT: Arka plan analizi 6 dakika içinde tamamlanmadı.");
+    },
     onSuccess: (res, vars) => {
       try {
         // Yanıt şekli her zaman doğrulanır (dizi / products / results / data).
@@ -628,13 +646,14 @@ function Dashboard() {
       }
       return platforms;
     })();
-    // Safety timer: if mutation hangs (server crash, network drop),
-    // reset the searching UI after 3 minutes.
+    // The QStash job is polled for up to 6 minutes below; keep this UI safety
+    // timer slightly longer so it cannot show a false 504 while polling still
+    // has a chance to receive a completed result.
     if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     searchSafetyTimerRef.current = setTimeout(() => {
       setStalled(true);
       setSearchError({ ...describeSearchFailure("504 gateway timeout"), niche: nicheValue });
-    }, 180_000);
+    }, 420_000);
     if (engine !== "default") {
       hfGen.mutate({ engine, platforms: effectivePlatforms });
       return;
