@@ -155,6 +155,9 @@ export default defineConfig(async ({ command, mode }) => {
             if (id.includes("node_modules/@tanstack")) {
               return "tanstack-vendor";
             }
+            if (id.includes("node_modules/jspdf")) {
+              return "pdf-vendor";
+            }
             if (id.includes("node_modules/@supabase")) {
               return "supabase-vendor";
             }

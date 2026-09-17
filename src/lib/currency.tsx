@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { countryByCode } from "@/lib/countries";
@@ -50,7 +50,13 @@ const CurrencyCtx = createContext<{ country: string } | null>(null);
 
 export function CurrencyProvider({ country, children }: { country: string; children: ReactNode }) {
   const value = useMemo(() => ({ country }), [country]);
-  if (typeof window !== "undefined") window.localStorage.setItem(COUNTRY_KEY, country);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COUNTRY_KEY, country);
+    } catch {
+      /* storage kapalı */
+    }
+  }, [country]);
   return <CurrencyCtx.Provider value={value}>{children}</CurrencyCtx.Provider>;
 }
 

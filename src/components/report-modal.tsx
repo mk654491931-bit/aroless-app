@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, recommendationStyle, formatCurrency } from "@/lib/recommendation";
-import jsPDF from "jspdf";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
@@ -76,7 +75,9 @@ export function ReportModal({
     }
   };
 
-  const onPdf = () => {
+  const onPdf = async () => {
+    // jsPDF ~340KB — ilk yükte değil, kullanıcı PDF istediğinde yüklenir.
+    const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 40;
     let y = margin;
