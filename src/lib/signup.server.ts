@@ -1,5 +1,7 @@
 /** Sunucu tarafı: OTP üretimi/doğrulaması ve Resend ile e-posta gönderimi. */
 
+import { maskEmail } from "@/lib/log-redact";
+
 export function generateOtp(): string {
   const bytes = new Uint32Array(1);
   crypto.getRandomValues(bytes);
@@ -25,7 +27,7 @@ export async function sendOtpEmail(to: string, code: string): Promise<boolean> {
   const { sendOtpCodeEmail } = await import("@/lib/email-service");
   const result = await sendOtpCodeEmail(to, code);
   if (!result.sent) {
-    console.warn(`[otp] email not delivered to ${to}: ${result.reason ?? "unknown"}`);
+    console.warn(`[otp] email not delivered to ${maskEmail(to)}: ${result.reason ?? "unknown"}`);
   }
   return result.sent;
 }

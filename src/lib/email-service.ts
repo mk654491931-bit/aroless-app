@@ -17,6 +17,7 @@ import {
   verificationEmail,
   welcomeEmail,
 } from "@/lib/email-templates";
+import { maskEmail, maskEmails } from "@/lib/log-redact";
 
 // ─── Types & Constants ────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ async function sendViaResend(args: SendEmailArgs): Promise<SendEmailResult> {
         const json = (await res.json().catch(() => ({}))) as { id?: string };
         providerStats.resend.successCount++;
         providerStats.resend.lastSuccess = Date.now();
-        console.log(`[resend] Email sent successfully to ${to.join(", ")}`);
+        console.log(`[resend] Email sent successfully to ${maskEmails(to)}`);
         return { sent: true, messageId: json.id };
       }
 
@@ -265,7 +266,7 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
     const json = (await res.json().catch(() => ({}))) as { MessageId?: string };
     providerStats.ses.successCount++;
     providerStats.ses.lastSuccess = Date.now();
-    console.log(`[ses] Email sent successfully to ${to.join(", ")}`);
+    console.log(`[ses] Email sent successfully to ${maskEmails(to)}`);
     return { sent: true, ...(json.MessageId ? { messageId: json.MessageId } : {}) };
   } catch (e) {
     const isTimeout = e instanceof Error && e.name === "AbortError";
@@ -285,7 +286,7 @@ async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
   
   console.log("[email-fallback] Development mode — e-posta gönderimi simüle ediliyor:");
   console.log(`  MessageID: ${messageId}`);
-  console.log(`  To: ${to.join(", ")}`);
+  console.log(`  To: ${maskEmails(to)}`);
   console.log(`  Subject: ${args.subject}`);
   console.log(`  Body preview: ${(args.html ?? args.text ?? "").slice(0, 150)}...`);
   
@@ -307,7 +308,9 @@ function isDuplicate(to: string | string[], subject: string): boolean {
   
   const isDup = Date.now() - lastSent < DEDUP_WINDOW;
   if (isDup) {
-    console.log(`[email] Duplicate prevention: email to ${Array.isArray(to) ? to[0] : to} already sent within ${DEDUP_WINDOW}ms`);
+    console.log(
+      `[email] Duplicate prevention: email to ${maskEmail(Array.isArray(to) ? to[0] : to)} already sent within ${DEDUP_WINDOW}ms`,
+    );
   }
   return isDup;
 }

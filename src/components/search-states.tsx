@@ -93,7 +93,7 @@ export type SearchFailure = {
   hint?: string;
 };
 
-const FAILURE_ICONS: Record<FailureKind, typeof AlertTriangle> = {
+export const FAILURE_ICONS: Record<FailureKind, typeof AlertTriangle> = {
   auth: KeyRound,
   timeout: Clock3,
   busy: Clock3,
@@ -158,6 +158,35 @@ export function describeSearchFailure(raw: string | undefined | null): SearchFai
   };
 }
 
+/**
+ * Aynı sınıflandırma, analiz yüzeyleri için: konsey, mağaza denetimi, kreatif
+ * stüdyo ve araç kartları. Yalnızca "arama" dili yerine "analiz" dili kullanır.
+ */
+export function describeAnalysisFailure(raw: string | null | undefined): SearchFailure {
+  const msg = (raw ?? "").trim();
+  const m = msg.toLowerCase();
+
+  if (/no_credits|kredin bitti|krediniz bitti/.test(m)) {
+    return {
+      kind: "auth",
+      title: "Kredin bitti",
+      body: "Bu analiz için yeterli kredin yok. Paketini yükselt ya da kredinin yenilenmesini bekle.",
+      hint: "Bu deneme için kredi harcanmadı.",
+    };
+  }
+  if (/fetch_failed|yerel site|erişilemedi/.test(m)) {
+    return {
+      kind: "offline",
+      title: "Mağaza sayfası okunamadı",
+      body: "Adres yanıt vermedi ya da bot koruması sayfayı engelledi. Kredi iade edildi.",
+      hint: "Adresi kontrol edip tekrar dene.",
+    };
+  }
+
+  const failure = describeSearchFailure(msg);
+  return failure.kind === "unknown" ? { ...failure, title: "Analiz tamamlanamadı" } : failure;
+}
+
 /* ------------------------------------------------------------------ *
  * Error card — persistent replacement for the transient toast
  * ------------------------------------------------------------------ */
@@ -168,10 +197,20 @@ export function SearchErrorCard({
   error,
   onRetry,
   onEdit,
+  label = "Arama",
+  retryLabel = "Tekrar dene",
+  editLabel = "Ayarları değiştir",
+  creditSafe = true,
 }: {
   error: SearchErrorState;
   onRetry: () => void;
   onEdit: () => void;
+  /** Kart içindeki bağlam etiketi ("Arama", "Analiz" gibi). */
+  label?: string;
+  retryLabel?: string;
+  editLabel?: string;
+  /** Başarısız işlemde kredinin iade edildiğini gösterir. */
+  creditSafe?: boolean;
 }) {
   const Icon = FAILURE_ICONS[error.kind] ?? AlertTriangle;
   return (
@@ -187,16 +226,18 @@ export function SearchErrorCard({
           <h3 className="text-base font-semibold text-foreground">{error.title}</h3>
           {error.niche && (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              Arama: <span className="text-foreground/80">{error.niche}</span>
+              {label}: <span className="text-foreground/80">{error.niche}</span>
             </p>
           )}
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{error.body}</p>
           {error.hint && <p className="mt-1 text-xs text-muted-foreground/90">{error.hint}</p>}
 
-          <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
-            <ShieldCheck size={13} className="shrink-0" />
-            Kredin harcanmadı — başarısız analizlerde kredi otomatik iade edilir.
-          </div>
+          {creditSafe && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
+              <ShieldCheck size={13} className="shrink-0" />
+              Kredin harcanmadı — başarısız analizlerde kredi otomatik iade edilir.
+            </div>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
@@ -204,14 +245,14 @@ export function SearchErrorCard({
               onClick={onRetry}
               className="press inline-flex min-h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-4 text-sm font-semibold text-white transition hover:-translate-y-0.5"
             >
-              <RefreshCw size={15} /> Tekrar dene
+              <RefreshCw size={15} /> {retryLabel}
             </button>
             <button
               type="button"
               onClick={onEdit}
               className="press inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/12 bg-white/5 px-4 text-sm font-medium text-foreground transition hover:bg-white/10"
             >
-              <Sliders size={15} /> Ayarları değiştir
+              <Sliders size={15} /> {editLabel}
             </button>
           </div>
         </div>

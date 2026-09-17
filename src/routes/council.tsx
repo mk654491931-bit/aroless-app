@@ -1,7 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
+import { AnalysisFailureCard } from "@/components/analysis-failure";
 import { runCouncilAnalysis } from "@/lib/council.functions";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { CouncilReport } from "@/lib/council.server";
@@ -105,6 +106,7 @@ function CouncilPage() {
   const [country, setCountry] = useState("GLOBAL");
   const [stage, setStage] = useState(-1);
   const [report, setReport] = useState<CouncilReport | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const runFn = useServerFn(runCouncilAnalysis);
 
   const mutation = useMutation({
@@ -149,6 +151,7 @@ function CouncilPage() {
           <div className="flex-1 flex items-center gap-2 rounded-xl border border-border/60 px-3">
             <Search size={16} className="text-muted-foreground" />
             <input
+              ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && query.trim() && mutation.mutate()}
@@ -177,6 +180,15 @@ function CouncilPage() {
         </div>
 
         {mutation.isPending && <StageList active={Math.max(0, stage)} />}
+
+        {mutation.isError && (
+          <AnalysisFailureCard
+            message={(mutation.error as Error | null)?.message}
+            subject={query.trim() || undefined}
+            onRetry={() => mutation.mutate()}
+            onEdit={() => inputRef.current?.focus()}
+          />
+        )}
 
         {report && (
           <div className="space-y-5">

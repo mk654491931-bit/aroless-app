@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { withCreditRefund } from "@/lib/credit-guard.server";
 
 const HfInput = z.object({
   niche: z.string().min(2).max(120),
@@ -51,18 +52,21 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
 
     const { rankProfitable } = await import("@/lib/profitability");
 
-    if (data.engine === "hybrid") {
-      const settled = await Promise.allSettled([runOne("llama"), runOne("qwen")]);
-      const lists = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
-      if (lists.length === 0)
-        throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
-      const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
-      const products = rankProfitable(merged);
-      return { products, model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`, engines: lists.length };
-    }
+    // Motor hata verirse düşülen kredi iade edilir.
+    return withCreditRefund(context.userId, async () => {
+      if (data.engine === "hybrid") {
+        const settled = await Promise.allSettled([runOne("llama"), runOne("qwen")]);
+        const lists = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
+        if (lists.length === 0)
+          throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
+        const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
+        const products = rankProfitable(merged);
+        return { products, model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`, engines: lists.length };
+      }
 
-    const products = rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]);
-    return { products, model: HF_MODELS[data.engine], engines: 1 };
+      const products = rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]);
+      return { products, model: HF_MODELS[data.engine], engines: 1 };
+    });
   });
 
 /** Connection probe for the settings panel. */

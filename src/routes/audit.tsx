@@ -1,5 +1,5 @@
 import { withProGate } from "@/components/pro-route-gate";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHero } from "@/components/page-hero";
+import { AnalysisFailureCard } from "@/components/analysis-failure";
 import { useAuth } from "@/hooks/use-auth";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import {
@@ -186,6 +187,7 @@ function AuditPage() {
   const { user, loading } = useAuth();
   const [url, setUrl] = useState("");
   const [active, setActive] = useState<StoreAuditRow | null>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
 
   const auditFn = useServerFn(auditStore);
   const listFn = useServerFn(listStoreAudits);
@@ -245,6 +247,7 @@ function AuditPage() {
       <Card className="premium-card border-white/10">
         <CardContent className="flex flex-wrap gap-3 p-4">
           <Input
+            ref={urlRef}
             placeholder="magazam.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -267,6 +270,17 @@ function AuditPage() {
       {run.isPending && (
         <div className="mt-6 flex flex-col items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="animate-spin" /> Sayfa okunuyor ve analiz ediliyor…
+        </div>
+      )}
+
+      {run.isError && (
+        <div className="mt-6">
+          <AnalysisFailureCard
+            message={(run.error as Error | null)?.message}
+            subject={url.trim() || undefined}
+            onRetry={() => run.mutate()}
+            onEdit={() => urlRef.current?.focus()}
+          />
         </div>
       )}
 

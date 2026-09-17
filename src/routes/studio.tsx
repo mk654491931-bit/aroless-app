@@ -1,5 +1,5 @@
 import { withProGate } from "@/components/pro-route-gate";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHero } from "@/components/page-hero";
+import { AnalysisFailureCard } from "@/components/analysis-failure";
 import { useAuth } from "@/hooks/use-auth";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import {
@@ -250,6 +251,7 @@ function StudioPage() {
   const [price, setPrice] = useState("");
   const [tone, setTone] = useState("energetic");
   const [active, setActive] = useState<CreativeAssetRow | null>(null);
+  const productRef = useRef<HTMLInputElement>(null);
 
   const genFn = useServerFn(generateCreativeKit);
   const listFn = useServerFn(listCreativeAssets);
@@ -300,6 +302,7 @@ function StudioPage() {
       <Card className="premium-card mb-5 border-white/10">
         <CardContent className="grid gap-3 p-4 md:grid-cols-5">
           <Input
+            ref={productRef}
             placeholder="Ürün adı"
             value={product}
             onChange={(e) => setProduct(e.target.value)}
@@ -354,6 +357,17 @@ function StudioPage() {
           />
         </CardContent>
       </Card>
+
+      {gen.isError && (
+        <div className="mb-5">
+          <AnalysisFailureCard
+            message={(gen.error as Error | null)?.message}
+            subject={product.trim() || undefined}
+            onRetry={() => gen.mutate()}
+            onEdit={() => productRef.current?.focus()}
+          />
+        </div>
+      )}
 
       {active && <KitView row={active} />}
 

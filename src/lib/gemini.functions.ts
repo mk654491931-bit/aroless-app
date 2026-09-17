@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { withCreditRefund } from "@/lib/credit-guard.server";
 import { callGemini, extractJson } from "@/lib/ai.server";
 import type { RealEconomics } from "@/lib/real-economics";
 import {
@@ -364,36 +365,39 @@ export const validateProduct = createServerFn({ method: "POST" })
         throw new Error(deductErr.message);
       }
 
-      const { runMarketAgent, runConsensus } = await import("@/lib/agents.server");
-      const scan = await runMarketAgent({ query: data.query, platforms: data.platforms });
-      const candidate = scan.candidates[0];
-      const productName = candidate?.name || data.query;
-      const ctx = [
-        `User input (link / name / niche): ${data.query}`,
-        `Resolved product: ${productName}`,
-        candidate ? `Why now: ${candidate.why_now}` : "",
-        candidate
-          ? `Retail price band: ${candidate.price_band_usd} | Supplier cost: ${candidate.supplier_cost_usd}`
-          : "",
-        candidate
-          ? `Demand signal: ${candidate.demand_signal} | Best channel: ${candidate.channel}`
-          : "",
-        scan.market_note ? `Market note: ${scan.market_note}` : "",
-        data.platforms.length ? `Seller channels: ${data.platforms.join(", ")}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      // Ajan hattı başarısız olursa düşülen kredi iade edilir.
+      return withCreditRefund(context.userId, async () => {
+        const { runMarketAgent, runConsensus } = await import("@/lib/agents.server");
+        const scan = await runMarketAgent({ query: data.query, platforms: data.platforms });
+        const candidate = scan.candidates[0];
+        const productName = candidate?.name || data.query;
+        const ctx = [
+          `User input (link / name / niche): ${data.query}`,
+          `Resolved product: ${productName}`,
+          candidate ? `Why now: ${candidate.why_now}` : "",
+          candidate
+            ? `Retail price band: ${candidate.price_band_usd} | Supplier cost: ${candidate.supplier_cost_usd}`
+            : "",
+          candidate
+            ? `Demand signal: ${candidate.demand_signal} | Best channel: ${candidate.channel}`
+            : "",
+          scan.market_note ? `Market note: ${scan.market_note}` : "",
+          data.platforms.length ? `Seller channels: ${data.platforms.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
 
-      const consensus = await runConsensus({ context: ctx });
-      return {
-        report: {
-          query: data.query,
-          product_name: productName,
-          market_note: scan.market_note,
-          consensus,
-        },
-        creditsRemaining: remaining as number,
-      };
+        const consensus = await runConsensus({ context: ctx });
+        return {
+          report: {
+            query: data.query,
+            product_name: productName,
+            market_note: scan.market_note,
+            consensus,
+          },
+          creditsRemaining: remaining as number,
+        };
+      });
     },
   );
 
@@ -463,10 +467,13 @@ Return STRICT JSON only:
     { "platform": "Instagram", "hook": string, "primary": string (caption w/ 1-2 emojis), "cta": string }
   ]
 }`;
-    const text = await callGemini(prompt, apiKey);
-    let parsed: SeoKit = { titles: [], meta_descriptions: [], keywords: [], ad_copy: [] };
-    parsed = extractJson<SeoKit>(text, parsed);
-    return parsed;
+    // Üretim başarısız olursa düşülen kredi iade edilir.
+    return withCreditRefund(context.userId, async () => {
+      const text = await callGemini(prompt, apiKey);
+      let parsed: SeoKit = { titles: [], meta_descriptions: [], keywords: [], ad_copy: [] };
+      parsed = extractJson<SeoKit>(text, parsed);
+      return parsed;
+    });
   });
 
 // ---------- Creative Studio (TikTok / Reels scripts) ----------
@@ -537,10 +544,13 @@ Return STRICT JSON only:
     }
   ]
 }`;
-    const text = await callGemini(prompt, apiKey);
-    let parsed: { scripts?: CreativeScript[] } = {};
-    parsed = extractJson<{ scripts?: CreativeScript[] }>(text, { scripts: [] });
-    return { scripts: parsed.scripts ?? [] };
+    // Üretim başarısız olursa düşülen kredi iade edilir.
+    return withCreditRefund(context.userId, async () => {
+      const text = await callGemini(prompt, apiKey);
+      let parsed: { scripts?: CreativeScript[] } = {};
+      parsed = extractJson<{ scripts?: CreativeScript[] }>(text, { scripts: [] });
+      return { scripts: parsed.scripts ?? [] };
+    });
   });
 
 // ---------- Favorites / Product Library ----------

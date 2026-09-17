@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  describeAnalysisFailure,
   describeSearchFailure,
   NoResultsCard,
   ProductCardSkeleton,
@@ -8,6 +9,7 @@ import {
   SearchErrorCard,
   SearchProgress,
 } from "./search-states";
+import { AnalysisFailureCard } from "./analysis-failure";
 
 const noop = () => {};
 
@@ -39,6 +41,48 @@ describe("describeSearchFailure", () => {
     // 40x branch just because the server echoed a status somewhere.
     expect(describeSearchFailure("Load failed").kind).toBe("offline");
     expect(describeSearchFailure("network error").kind).toBe("offline");
+  });
+});
+
+describe("describeAnalysisFailure", () => {
+  it("turns a spent-credit failure into an actionable upgrade message", () => {
+    const failure = describeAnalysisFailure("NO_CREDITS");
+    expect(failure.title).toContain("Kredin bitti");
+    expect(failure.body).toMatch(/paket/i);
+    expect(failure.body).not.toContain("NO_CREDITS");
+  });
+
+  it("explains an unreachable store page instead of dumping FETCH_FAILED", () => {
+    const failure = describeAnalysisFailure("FETCH_FAILED");
+    expect(failure.kind).toBe("offline");
+    expect(failure.body).not.toContain("FETCH_FAILED");
+  });
+
+  it("reuses the shared classification with analysis wording", () => {
+    expect(describeAnalysisFailure("504 Gateway Timeout").kind).toBe("timeout");
+    expect(describeAnalysisFailure("502 Bad Gateway").kind).toBe("server");
+    expect(describeAnalysisFailure("weird upstream thing").title).toBe("Analiz tamamlanamadı");
+  });
+});
+
+describe("AnalysisFailureCard", () => {
+  it("stays on screen with retry, input edit and the refund reassurance", () => {
+    const html = renderToStaticMarkup(
+      <AnalysisFailureCard message="504 Gateway Timeout" subject="buz makinesi" onRetry={noop} />,
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toMatch(/Analiz/);
+    expect(html).toContain("buz makinesi");
+    expect(html).toContain("Tekrar dene");
+    expect(html).toMatch(/iade/);
+  });
+
+  it("does not claim a refund on surfaces that never charge credits", () => {
+    const html = renderToStaticMarkup(
+      <AnalysisFailureCard message="502 Bad Gateway" onRetry={noop} creditSafe={false} />,
+    );
+    expect(html).not.toMatch(/iade/);
+    expect(html).toContain("Tekrar dene");
   });
 });
 

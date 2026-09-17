@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isDisposableEmail } from "@/lib/disposable-email";
+import { maskEmail } from "@/lib/log-redact";
 import { applyFingerprintPolicy, generateOtp, hashOtp, sendOtpEmail } from "@/lib/signup.server";
 import { clientIp, hashIp, verifyTurnstile } from "@/lib/turnstile.server";
 import { hashValue, rateLimit } from "@/lib/api-guard.server";
@@ -359,7 +360,7 @@ export const startLoginOtp = createServerFn({ method: "POST" })
     // E-posta gönder — başarısız olsa bile OTP doğrulama akışını devam ettir.
     const sent = await sendOtpEmail(data.email, code);
     if (!sent) {
-      console.warn(`[login-otp] email delivery failed for ${data.email}`);
+      console.warn(`[login-otp] email delivery failed for ${maskEmail(data.email)}`);
     }
 
     return { ok: true as const, emailSent: sent };
@@ -477,7 +478,7 @@ export const resendLoginOtp = createServerFn({ method: "POST" })
 
     const sent = await sendOtpEmail(data.email, code);
     if (!sent) {
-      console.warn(`[resend-login-otp] email delivery failed for ${data.email}`);
+      console.warn(`[resend-login-otp] email delivery failed for ${maskEmail(data.email)}`);
     }
 
     return { ok: true as const, emailSent: sent };

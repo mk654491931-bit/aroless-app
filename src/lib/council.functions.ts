@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { withCreditRefund } from "@/lib/credit-guard.server";
 
 type Input = { query: string; country?: string; category?: string; lang?: string };
 
@@ -39,5 +40,8 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       );
     }
 
-    return runCouncil(data.query, data.country, data.category, data.lang);
+    // Kredi düştükten sonraki her hata iade edilir (kredi güvenliği).
+    return withCreditRefund(context.userId, () =>
+      runCouncil(data.query, data.country, data.category, data.lang),
+    );
   });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callPremiumAI, extractJson } from "@/lib/ai.server";
 import { creativeKitPrompt, type CreativeKit } from "@/lib/creative-studio.server";
+import { withCreditRefund } from "@/lib/credit-guard.server";
 
 const KitInput = z.object({
   product: z.string().min(2).max(160),
@@ -43,29 +44,32 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
       if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
       throw new Error(deductErr.message);
     }
-    const text = await callPremiumAI(creativeKitPrompt(data), 0.75);
-    const kit = extractJson<CreativeKit>(text, EMPTY);
+    // Üretim başarısız olursa düşülen kredi iade edilir.
+    return withCreditRefund(context.userId, async () => {
+      const text = await callPremiumAI(creativeKitPrompt(data), 0.75);
+      const kit = extractJson<CreativeKit>(text, EMPTY);
 
-    const { data: saved } = await context.supabase
-      .from("creative_assets")
-      .insert({
-        user_id: context.userId,
+      const { data: saved } = await context.supabase
+        .from("creative_assets")
+        .insert({
+          user_id: context.userId,
+          product_name: data.product,
+          platform: data.platform,
+          language: data.lang,
+          payload: kit as unknown as never,
+        })
+        .select("id, product_name, platform, language, payload, created_at")
+        .single();
+
+      return (saved ?? {
+        id: "",
         product_name: data.product,
         platform: data.platform,
         language: data.lang,
-        payload: kit as unknown as never,
-      })
-      .select("id, product_name, platform, language, payload, created_at")
-      .single();
-
-    return (saved ?? {
-      id: "",
-      product_name: data.product,
-      platform: data.platform,
-      language: data.lang,
-      payload: kit,
-      created_at: new Date().toISOString(),
-    }) as unknown as CreativeAssetRow;
+        payload: kit,
+        created_at: new Date().toISOString(),
+      }) as unknown as CreativeAssetRow;
+    });
   });
 
 export const listCreativeAssets = createServerFn({ method: "POST" })

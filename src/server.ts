@@ -3,6 +3,7 @@ import { checkServerEnvOnce } from "./lib/env-check";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { applySecurityHeaders, isSecureRequest } from "./lib/security-headers";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -47,11 +48,15 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // Güvenlik başlıkları istisnasız her yanıta eklenir (plan §5): hata
+    // sayfaları, API yanıtları ve sağlık kontrolü dahil.
+    const secure = isSecureRequest(request);
+    const harden = (response: Response) => applySecurityHeaders(response, { secure });
+
     const pathname = new URL(request.url).pathname;
     if (pathname === "/health" || pathname === "/healthz") {
-      return Response.json(
-        { status: "ok" },
-        { headers: { "cache-control": "no-store" } },
+      return harden(
+        Response.json({ status: "ok" }, { headers: { "cache-control": "no-store" } }),
       );
     }
 
@@ -60,13 +65,15 @@ export default {
       const handler = await getServerEntry();
 
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return harden(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return harden(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };
