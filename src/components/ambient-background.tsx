@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isLiteMode, onLiteMode } from "@/lib/fluidity";
 
 /**
  * Site-wide animated ambience with pointer + scroll parallax.
@@ -11,17 +12,30 @@ export function AmbientBackground() {
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
-    if (reduced || coarse) return setParticles(0);
+    if (reduced || coarse || isLiteMode()) return setParticles(0);
     const apply = () => setParticles(window.innerWidth < 768 ? 4 : 12);
     apply();
     window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
+    // Ölçüm sonrası hafif mod açılırsa parçacıkları da kaldır (iş yapmayı bırak).
+    const off = onLiteMode(() => setParticles(0));
+    return () => {
+      window.removeEventListener("resize", apply);
+      off();
+    };
   }, []);
 
   // Parallax: smooth (lerped) pointer + scroll offsets exposed as CSS vars.
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
+    // Hafif modda parallax döngüsü hiç çalışmaz: sahne CSS olarak aynı kalır,
+    // yalnızca sürekli rAF işi kalkar.
+    if (isLiteMode()) {
+      el.style.setProperty("--px", "0");
+      el.style.setProperty("--py", "0");
+      el.style.setProperty("--sy", "0");
+      return;
+    }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
 

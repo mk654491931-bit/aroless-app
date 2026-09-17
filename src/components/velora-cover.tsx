@@ -26,7 +26,11 @@ export function ArolessCover({ className = "" }: { className?: string }) {
   const [rot, setRot] = useState(0);
 
   useEffect(() => {
-    const id = window.setInterval(() => setRot((i) => (i + 1) % ROTATING.length), 3200);
+    // Akıcılık: arka plan sekmesinde rozet döndürmek için render tetikleme.
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      setRot((i) => (i + 1) % ROTATING.length);
+    }, 3200);
     return () => window.clearInterval(id);
   }, []);
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Fingerprint, ScanFace, Lock, Sparkles } from "lucide-react";
+import { isLiteMode, onLiteMode } from "@/lib/fluidity";
 
 /* ---------------- Quantum node mesh canvas (drifting data nodes) ---------------- */
 export function QuantumMesh({ className = "" }: { className?: string }) {
@@ -14,6 +15,8 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
+    // Hafif modda canvas mesh hiç çizilmez (dekoratif; saydam kalır).
+    if (isLiteMode()) return;
     let raf = 0;
     let frameTimeout: number | null = null;
     let scrollTimer: number | null = null;
@@ -152,9 +155,15 @@ export function QuantumMesh({ className = "" }: { className?: string }) {
       window.addEventListener("scroll", onScroll, { passive: true });
     }
     document.addEventListener("visibilitychange", onVisibility);
+    // Ölçüm sonrası hafif mod açılırsa döngü tamamen durur ve canvas temizlenir.
+    const offLite = onLiteMode(() => {
+      cancelAnimation();
+      ctx.clearRect(0, 0, w, h);
+    });
     schedule();
 
     return () => {
+      offLite();
       cancelAnimation();
       if (scrollTimer !== null) window.clearTimeout(scrollTimer);
       window.removeEventListener("resize", onResize);
@@ -181,7 +190,7 @@ export function AmbientBackdrop() {
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
-    if (reduce || coarse) return;
+    if (reduce || coarse || isLiteMode()) return;
 
     let raf = 0;
     const point = { x: 0.5, y: 0.5 };
@@ -244,9 +253,15 @@ export function useRipples() {
 export function GlobalRippleLayer() {
   const [ripples, setRipples] = useState<Ripple[]>([]);
   useEffect(() => {
+    // Hafif modda her tıklamada büyük blur'lu dalga üretilmez.
+    if (isLiteMode()) return;
+    let last = 0;
     const onDown = (e: MouseEvent) => {
+      const now = performance.now();
+      if (now - last < 120) return;
       const target = e.target as HTMLElement | null;
       if (!target?.closest("button, a, [role='tab']")) return;
+      last = now;
       const id = Date.now() + Math.random();
       setRipples((rs) => [...rs.slice(-4), { id, x: e.clientX, y: e.clientY }]);
       window.setTimeout(() => setRipples((rs) => rs.filter((x) => x.id !== id)), 650);
@@ -301,7 +316,11 @@ export function BiometricButton({ active = false }: { active?: boolean }) {
   const [mode, setMode] = useState<0 | 1>(0);
   const ripple = useRipples();
   useEffect(() => {
-    const id = window.setInterval(() => setMode((m) => (m === 0 ? 1 : 0)), 2400);
+    // Sekme görünmüyorken ikon değişimi için boşuna render tetikleme.
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      setMode((m) => (m === 0 ? 1 : 0));
+    }, 2400);
     return () => window.clearInterval(id);
   }, []);
   return (

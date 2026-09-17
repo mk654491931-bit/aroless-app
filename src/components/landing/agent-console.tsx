@@ -36,7 +36,11 @@ function pad(value: number): string {
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
+    // Akıcılık: sekme görünmüyorken saat için boşuna render tetikleme.
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      setNow(new Date());
+    }, 1000);
     return () => window.clearInterval(id);
   }, []);
   return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -54,6 +58,8 @@ export function AgentConsole() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      // Akıcılık: arka plandaki sekmede log akışını durdur (görsel fark yok).
+      if (document.hidden) return;
       tickRef.current = (tickRef.current + 1) % SIMULATION_LOGS.length;
       setLines((prev) => {
         const next = [...prev, SIMULATION_LOGS[tickRef.current]!];

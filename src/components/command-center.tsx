@@ -223,7 +223,11 @@ export function CommandCenter() {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     setTick(0);
-    const id = setInterval(() => setTick((t) => (t >= agents.length + 1 ? t : t + 1)), 700);
+    // Akıcılık: arka plan sekmesinde sahne animasyonu için render tetikleme.
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      setTick((t) => (t >= agents.length + 1 ? t : t + 1));
+    }, 700);
     return () => clearInterval(id);
   }, [selected?.id, agents.length]);
 
@@ -751,6 +755,8 @@ function useLogStream(product: HotProduct | null, finger: number, active: boolea
       () => `score.merge { "finger": ${finger}, "formula": "council*0.70 + finger*0.30" }`,
     ];
     const id = setInterval(() => {
+      // Akıcılık: sekme görünmüyorken konsol akışını duraklat.
+      if (document.hidden) return;
       const f = templates[idx.current % templates.length]!;
       idx.current++;
       setLines((prev) => [

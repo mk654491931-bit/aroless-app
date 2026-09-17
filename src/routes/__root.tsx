@@ -19,6 +19,7 @@ import { initI18n } from "@/lib/i18n";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
 import i18n from "@/lib/i18n";
 import { usePerformanceInit } from "@/lib/performance-init";
+import { useFluidity } from "@/lib/fluidity";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -162,6 +163,10 @@ function RootComponent() {
     pathname.startsWith("/legal") ||
     (pathname === "/" && !user);
   const [lang, setLang] = useState<string>("en");
+
+  // Akıcılık: zayıf cihazda/oturumda dekoratif efektleri kısar, sekme arka
+  // plandayken animasyonları durdurur (bkz. src/lib/fluidity.ts).
+  useFluidity();
 
   // Performance optimizations başlat
   usePerformanceInit({

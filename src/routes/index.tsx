@@ -72,16 +72,24 @@ import {
   type ValidationReport,
 } from "@/lib/gemini.functions";
 import { validateProduct } from "@/lib/gemini.functions";
-import { ConsensusBadge, ConsensusReportModal } from "@/components/consensus-report";
+import { ConsensusBadge } from "@/components/consensus-report";
+// Akıcılık: ağır paneller/modallar ayrı chunk'tan, gerektiğinde iner (bkz. lazy-panels).
+import {
+  AcademyTab,
+  AnalysisPipelineModal,
+  BuyerSimulation,
+  ConsensusReportModal,
+  DraggableCopilot,
+  HotTicker,
+  PredictiveTrendsTab,
+  ProductDeepDive,
+  ProductDeepDiveModal,
+  ReportModal,
+  TrainingSection,
+} from "@/components/lazy-panels";
 import { checkIsAdmin } from "@/lib/admin.functions";
 import { PricingModal } from "@/components/pricing-modal";
-import { AnalysisPipelineModal } from "@/components/analysis-pipeline-modal";
-import { ReportModal } from "@/components/report-modal";
-import { ProductDeepDive } from "@/components/product-deep-dive";
-import { ProductDeepDiveModal } from "@/components/product-deep-dive-modal";
 import { CountryInfoBox } from "@/components/country-info-box";
-import { DraggableCopilot } from "@/components/draggable-copilot";
-import { BuyerSimulation } from "@/components/buyer-simulation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   enrichProduct,
@@ -97,11 +105,8 @@ import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { useTranslation } from "react-i18next";
 import { LayoutDashboard, Settings as SettingsIcon, FileText } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
-import { AcademyTab } from "@/components/academy-tab";
 import { LockedPanel, UnlockedBadge } from "@/components/upgrade-gate";
 import { CreditCost } from "@/components/credit-cost";
-
-import { TrainingSection } from "@/components/training-section";
 import {
   AdvancedFilters,
   DEFAULT_FILTERS,
@@ -116,9 +121,6 @@ import {
 } from "@/components/winner-score-panel";
 import { MarketFitPanel } from "@/components/market-fit-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
-
-import { HotTicker } from "@/components/hot-ticker";
-import { PredictiveTrendsTab } from "@/components/predictive-trends-tab";
 import { DataSourcesButton } from "@/components/header-extras";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/countries";
 import {

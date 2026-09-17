@@ -2,6 +2,81 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* ─── AKICILIK (FLUIDITY) KATMANI — bkz. src/lib/fluidity.ts ───
+   Görsel dil aynı kalır; yalnızca pahalı efektler kısılır. */
+
+/* Sekme arka plandayken dekoratif animasyonlar iş çıkarmaz; kullanıcı geri
+   döndüğünde birikmiş kare yükü oluşmadığı için donma yaşanmaz. */
+html.is-hidden *,
+html.is-hidden *::before,
+html.is-hidden *::after {
+  animation-play-state: paused !important;
+}
+
+/* Hafif mod: zayıf cihazlarda veya kare ölçümü kötü çıktığında açılır. */
+html.perf-lite .amb-layer,
+html.perf-lite .card-shimmer::before,
+html.perf-lite .page-hero::after,
+html.perf-lite .topbar-line,
+html.perf-lite .edge-light::after,
+html.perf-lite .ticker-scroll,
+html.perf-lite .heartbeat,
+html.perf-lite .holo-badge,
+html.perf-lite .pupil,
+html.perf-lite .elite-glow,
+html.perf-lite .ambient-drift,
+html.perf-lite .ambient-halo,
+html.perf-lite .morph-pill,
+html.perf-lite .animate-pulse-ring,
+html.perf-lite .animate-pulse-soft,
+html.perf-lite .auth-aurora,
+html.perf-lite .auth-grid,
+html.perf-lite .auth-beam,
+html.perf-lite .auth-orbits span,
+html.perf-lite .auth-shimmer,
+html.perf-lite .page-fade,
+html.perf-lite .premium-card:has(.border-amber-400\/50)::before {
+  animation: none !important;
+}
+
+/* Tam ekran ağır katmanlar hafif modda hiç çizilmez. */
+html.perf-lite .amb-grid,
+html.perf-lite .amb-rays,
+html.perf-lite .amb-scan,
+html.perf-lite .amb-beam,
+html.perf-lite .amb-particles,
+html.perf-lite .auth-grid,
+html.perf-lite .auth-beam,
+html.perf-lite .auth-shimmer {
+  display: none !important;
+}
+
+/* Blur yarıçapı düşer: yakın yumuşaklık, çok daha az GPU yükü. */
+html.perf-lite .amb-swirl,
+html.perf-lite .amb-aurora,
+html.perf-lite .amb-blob,
+html.perf-lite .ambient-halo,
+html.perf-lite .ambient-drift,
+html.perf-lite .auth-aurora {
+  filter: blur(22px) !important;
+  opacity: 0.34 !important;
+}
+
+/* Sayfada onlarca kez tekrarlanan backdrop-filter kaydırmadaki en pahalı iş;
+   hafif modda yarı saydam zemin kalır, blur kalkar. */
+html.perf-lite .glass,
+html.perf-lite .premium-card,
+html.perf-lite [data-sidebar="sidebar"],
+html.perf-lite [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+}
+
+/* Hafif modda GPU katman belleğini serbest bırak. */
+html.perf-lite * {
+  will-change: auto !important;
+}
+
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
