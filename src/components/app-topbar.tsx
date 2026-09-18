@@ -3,7 +3,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut, Radar, Users, Wrench } from "lucide-react";
+import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut, Radar, Users, Wrench, ChevronDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -87,13 +88,72 @@ export function AppTopbar() {
               ID {publicId}
             </span>
           ) : null}
-          {/* Kalan Finder kredisi — her zaman görünür */}
-          <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:inline-flex" title={`Kalan Finder kredisi: ${credits} / Aylık kota: ${quota.credits}`}>
-            <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
-            <span className="font-semibold">{credits}</span>
-            <span className="text-[10px] text-muted-foreground">/ {quota.credits}</span>
-          </span>
-          {/* 4’lü kota — optimize: tek satır, responsive, admin=250 her kalemde */}
+          {/* Kalan Finder kredisi — tıklanabilir: popover'da 4'lü kota detayı (mobil uyumlu) */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs transition hover:bg-white/10 sm:inline-flex"
+                title={`Kalan Finder kredisi: ${credits} / Aylık kota: ${quota.credits} — detay için tıkla`}
+              >
+                <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
+                <span className="font-semibold">{credits}</span>
+                <span className="text-[10px] text-muted-foreground">/ {quota.credits}</span>
+                <ChevronDown size={10} className="text-white/40" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={8} className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl">
+              <div className="space-y-3 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold tracking-wide text-white/90">Kullanım Hakkın</p>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">{tier}{isAdmin ? " · admin 250" : ""}</span>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Finder</span>
+                    <span className="font-mono text-xs font-semibold">{quota.credits}<span className="font-normal text-white/40"> /ay</span></span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Wrench size={12} className="text-sky-400" /> AI Araç</span>
+                    <span className="font-mono text-xs font-semibold">{quota.toolRuns}<span className="font-normal text-white/40"> /ay</span></span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Users size={12} className="text-violet-400" /> Konsey</span>
+                    <span className="font-mono text-xs font-semibold">{quota.councilRuns}<span className="font-normal text-white/40"> /ay</span></span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Radar size={12} className="text-emerald-400" /> Radar</span>
+                    <span className="font-mono text-xs font-semibold">{quota.radarScans}<span className="font-normal text-white/40"> /ay</span></span>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-white/55">
+                  {isAdmin ? "Admin: her kalemde 250 jeton (test/limit yok)." : "Kota ay başında yenilenir. Free planda Finder 2 jeton."}
+                </div>
+                <Link to="/pricing" className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90">Paketleri gör</Link>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {/* Mobil için de aynı tetik: sm altında ikon-only */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden" title={`Finder ${credits}/${quota.credits} — detay için tıkla`}>
+                <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {credits}/{quota.credits}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={8} className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl">
+              <div className="space-y-3 p-4">
+                <p className="text-xs font-semibold tracking-wide text-white/90">Kullanım Hakkın · {tier}</p>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between"><span className="text-white/60">Finder</span><span className="font-mono font-semibold">{quota.credits} /ay</span></div>
+                  <div className="flex justify-between"><span className="text-white/60">AI Araç</span><span className="font-mono font-semibold">{quota.toolRuns} /ay</span></div>
+                  <div className="flex justify-between"><span className="text-white/60">Konsey</span><span className="font-mono font-semibold">{quota.councilRuns} /ay</span></div>
+                  <div className="flex justify-between"><span className="text-white/60">Radar</span><span className="font-mono font-semibold">{quota.radarScans} /ay</span></div>
+                </div>
+                <Link to="/pricing" className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black">Paketleri gör</Link>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {/* 4’lü kota — xl'de tek satır özet (desktop) */}
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex" title={isAdmin ? "Admin: her kalemde 250 jeton" : `Free: Finder 2 jeton · Tool ${quota.toolRuns} · Konsey ${quota.councilRuns} · Radar ${quota.radarScans}`}>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Coins size={10} className="text-[oklch(0.85_0.18_90)]" />{quota.credits}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Wrench size={10} className="text-sky-400" />{quota.toolRuns}</span>
