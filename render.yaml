@@ -1,6 +1,12 @@
 # Render Blueprint for Aroless (TanStack Start + Nitro persistent Node service).
 # Create this from Render Dashboard → New → Blueprint, then add secrets in the
 # service Environment tab. No secret values belong in this file.
+#
+# 22-key mesh: kod `src/lib/ai-keys.server.ts` her provider için şu env'leri tarar
+#   GEMINI_API_KEY (+ _1.._8), GROQ_API_KEY (+ _1.._8), OPENROUTER_API_KEY (+ _1.._8),
+#   HF_TOKEN (+ _1.._8), CEREBRAS_API_KEY (+ _1.._8), SAMBANOVA_API_KEY (+ _1.._8)
+# Find Winner Vercel'de 44sn bütçede fast profile düşer, Render'da 884sn full depth koşar.
+# QStash publish timeout'u `discovery-jobs.server.ts` otomatik 890s yapar (Render algılanınca).
 services:
   - type: web
     name: aroless
@@ -20,25 +26,106 @@ services:
         value: 0.0.0.0
       - key: NODE_ENV
         value: production
+      # --- App origin (Vercel prod domain, https) ---
       - key: APP_URL
         sync: false
+      # --- Frontend (public) ---
       - key: VITE_APP_URL
         sync: false
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
+      # --- Supabase ---
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # --- Queue / Worker ---
       - key: QSTASH_TOKEN
+        sync: false
+      - key: QSTASH_REGION
+        value: eu
+      - key: QSTASH_URL
         sync: false
       - key: JOB_WORKER_SECRET
         sync: false
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # --- AI Gateway (opsiyonel, öncelikli) ---
+      - key: AI_GATEWAY_URL
+        sync: false
+      - key: AI_GATEWAY_API_KEY
+        sync: false
+      - key: AI_GATEWAY_MODELS
+        sync: false
+      - key: LOVABLE_API_KEY
+        sync: false
+      # --- 22-key pool: Gemini x5 (slot 1..5, base de taranır) ---
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_1
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GEMINI_API_KEY_3
+        sync: false
+      - key: GEMINI_API_KEY_4
+        sync: false
+      - key: GEMINI_API_KEY_5
+        sync: false
+      # --- Groq x5 ---
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_API_KEY_1
+        sync: false
+      - key: GROQ_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY_3
+        sync: false
+      - key: GROQ_API_KEY_4
+        sync: false
+      - key: GROQ_API_KEY_5
+        sync: false
+      # --- OpenRouter x5 ---
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY_1
+        sync: false
+      - key: OPENROUTER_API_KEY_2
+        sync: false
+      - key: OPENROUTER_API_KEY_3
+        sync: false
+      - key: OPENROUTER_API_KEY_4
+        sync: false
+      - key: OPENROUTER_API_KEY_5
+        sync: false
+      # --- HuggingFace x5 ---
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_TOKEN_1
+        sync: false
+      - key: HF_TOKEN_2
+        sync: false
+      - key: HF_TOKEN_3
+        sync: false
+      - key: HF_TOKEN_4
+        sync: false
+      - key: HF_TOKEN_5
+        sync: false
+      # --- Cerebras + SambaNova (tek anahtar, fallback) ---
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: SAMBANOVA_API_KEY
+        sync: false
+      # --- Opsiyonel: PROVIDER_A..D havuzları (OpenAI uyumlu) ---
+      - key: PROVIDER_A_1
+        sync: false
+      - key: PROVIDER_A_BASE_URL
+        sync: false
+      - key: PROVIDER_A_MODEL
         sync: false
