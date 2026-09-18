@@ -166,17 +166,26 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data }): Promise<{ strategy: string }> => {
+    const { hasAnyAiProvider } = await import("./ai.server");
+    if (!hasAnyAiProvider()) {
+      throw new Error("AI servisi yapılandırılmadı (anahtar yok). Yönetici panelinden AI anahtarlarını ekleyin.");
+    }
+    const withBudget = <T>(p: Promise<T>, ms = 18_000): Promise<T> =>
+      Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("STRATEGY_TIMEOUT")), ms))]);
     try {
-      const text = await callGemini(
-        countryStrategyPrompt(data.niche, data.country),
-        undefined,
-        0.6,
-        false,
+      const text = await withBudget(
+        callGemini(countryStrategyPrompt(data.niche, data.country), undefined, 0.6, false),
       );
       const p = extractJson<{ strategy?: string }>(text, {});
-      return { strategy: String(p.strategy ?? "") };
-    } catch {
-      return { strategy: "" };
+      const s = String(p.strategy ?? "").trim();
+      if (!s) throw new Error("AI boş strateji döndürdü — tekrar deneyin.");
+      return { strategy: s };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e ?? "");
+      if (msg === "STRATEGY_TIMEOUT") throw new Error("Strateji zaman aşımına uğradı (18sn) — tekrar deneyin.");
+      if (/AI anahtarı|not configured|AI servisi/i.test(msg)) throw e;
+      if (/quota|429|RESOURCE_EXHAUSTED/i.test(msg)) throw new Error("AI kotası dolu — 20-30 sn sonra tekrar deneyin.");
+      throw new Error(msg || "Strateji üretilemedi — tekrar deneyin.");
     }
   });
 

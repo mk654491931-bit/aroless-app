@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Lightbulb, Loader2, ShieldAlert, Sparkles, ThumbsUp } from "lucide-react";
+import { AlertTriangle, Lightbulb, Loader2, ShieldAlert, Sparkles, ThumbsUp } from "lucide-react";
+import { toast } from "sonner";
 import { countryByCode } from "@/lib/countries";
 import { getCountryStrategy } from "@/lib/competitor.functions";
 
@@ -9,11 +10,20 @@ import { getCountryStrategy } from "@/lib/competitor.functions";
 export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: string }) {
   const c = countryByCode(code);
   const [strategy, setStrategy] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string>("");
   const fn = useServerFn(getCountryStrategy);
   const mut = useMutation({
     mutationFn: () => fn({ data: { niche, country: c.code } }),
-    onSuccess: (r) => setStrategy(r?.strategy ?? ""),
-    onError: (err: Error) => console.error("Ülke stratejisi üretilemedi:", err),
+    onSuccess: (r) => {
+      setErrorMsg("");
+      setStrategy(r?.strategy ?? "");
+    },
+    onError: (err: Error) => {
+      const msg = err?.message || "Strateji üretilemedi.";
+      setErrorMsg(msg);
+      toast.error("Strateji üretilemedi", { description: msg });
+      console.error("Ülke stratejisi üretilemedi:", err);
+    },
   });
 
   return (
@@ -69,10 +79,17 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
             {strategy ? "Yenile" : "Strateji üret"}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {strategy ||
-            "Bu ülke + niş kombinasyonu için Gemini destekli özel strateji üretmek üzere butona bas."}
-        </p>
+        {errorMsg ? (
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-300">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            {errorMsg}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {strategy ||
+              "Bu ülke + niş kombinasyonu için Gemini destekli özel strateji üretmek üzere butona bas."}
+          </p>
+        )}
       </div>
     </div>
   );

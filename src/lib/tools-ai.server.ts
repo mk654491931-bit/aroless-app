@@ -65,20 +65,21 @@ function openRouterKeyPool(): string[] {
   return openRouterEnvKeys();
 }
 
-/** OpenAI-compatible OpenRouter call with key rotation and gateway fallback. */
+/** OpenAI-compatible OpenRouter call with key rotation and gateway fallback (12s per attempt). */
 export async function callOpenRouter(prompt: string, temperature = 0.4): Promise<string> {
   prompt = withEstimationRules(prompt);
   const keys = openRouterKeyPool();
   if (!keys.length) return callLovableAI(prompt, temperature);
-  // Keep only OpenRouter-native providers here; Google models are served through
-  // the direct Gemini key rotation instead (avoids "provider 'google' is not supported").
   const models = ["meta-llama/llama-3.3-70b-instruct", "mistralai/mistral-small-3.1-24b-instruct"];
   let lastErr: unknown = null;
   for (const key of keys) {
     for (let i = 0; i < models.length; i++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12_000);
       try {
         const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
           body: JSON.stringify({
             model: models[i],
@@ -96,7 +97,10 @@ export async function callOpenRouter(prompt: string, temperature = 0.4): Promise
         const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
         return json.choices?.[0]?.message?.content ?? "{}";
       } catch (e) {
-        lastErr = e;
+        if (e instanceof Error && e.name === "AbortError") lastErr = new Error("OpenRouter timeout");
+        else lastErr = e;
+      } finally {
+        clearTimeout(timer);
       }
     }
   }
@@ -143,25 +147,35 @@ function parseResult(text: string): Partial<ToolResult> | null {
 }
 
 /**
- * Hybrid execution, 2 stages:
- *  1) Draft — the 3 best-suited engines answer the same prompt in parallel.
- *  2) Synthesis — a different engine acts as a critic/editor: it reads all
- *     drafts, kills contradictions, keeps the strongest numbers and returns a
- *     single sharper answer. Falls back to a mechanical fusion when the critic
- *     is unavailable.
+ * Hybrid execution — Vercel Hobby 60sn limiti için bütçe korumalı:
+ *  1) Draft — en fazla 2 motor paralel (tercih edilen + bir yedek), 12sn/timeout.
+ *  2) Sentez — sadece iyi taslak >=2 ise ve süre kaldıysa tek deneme, aksi halde fuse dön.
+ *  1500ms+ sleep döngüsü kaldırıldı — 504'ün ana sebebi oydu.
  */
 export async function runTool(
   prompt: string,
   preferred: Provider = "gemini",
   temperature = 0.5,
 ): Promise<ToolResult> {
+  const started = Date.now();
+  const budgetLeft = () => 38_000 - (Date.now() - started); // route 42sn verir, burada 38sn içinde bitir
   const full = `${prompt}\n\n${SCHEMA_HINT}`;
   const runners = buildRunners(full, temperature);
   const order: Provider[] = [preferred, ...ALL_PROVIDERS.filter((p) => p !== preferred)];
-  const primary = order.slice(0, 3);
-  const backup = order.slice(3);
+  // ESKİDEN 3 motor paraleldi — 3× quota/429 = tüm havuzu aynı anda kitleyip 504 yapıyordu.
+  // Şimdi 2 ile sınırla, kalan havuz bir sonraki denemeye temiz kalsın.
+  const primary = order.slice(0, 2);
+  const backup = order.slice(2);
 
-  const settled = await Promise.allSettled(primary.map((p) => runners[p]()));
+  const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([
+      p,
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
+
+  const settled = await Promise.allSettled(
+    primary.map((p) => withTimeout(runners[p](), 12_000).catch((e) => { throw e; })),
+  );
   const good: { provider: Provider; data: Partial<ToolResult> }[] = [];
   let lastErr: unknown = null;
   settled.forEach((s, i) => {
@@ -171,51 +185,34 @@ export async function runTool(
     } else lastErr = s.reason;
   });
 
-  if (!good.length) {
-    for (const p of backup) {
-      try {
-        const data = parseResult(await runners[p]());
-        if (data) good.push({ provider: p, data });
-        if (good.length) break;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-  }
-  if (!good.length) {
-    // Absolute last resort — keep the UI working instead of surfacing an API error.
-    try {
-      const data = parseResult(await callLovableAI(full, temperature));
-      if (data) good.push({ provider: "lovable", data });
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  if (!good.length) {
-    // Kısa nefes molası + tam tur yeniden deneme: bir motorun limiti dolduysa
-    // cooldown sonrası diğerleri devralır.
-    await new Promise((r) => setTimeout(r, 1500));
-    for (const p of order) {
-      try {
-        const data = parseResult(await runners[p]());
-        if (data) {
-          good.push({ provider: p, data });
-          break;
-        }
-      } catch (e) {
-        lastErr = e;
-      }
-    }
+  // Hala boşsa yedekleri PARALEL dene — seri döngü 504 demek.
+  if (!good.length && budgetLeft() > 8_000) {
+    const backupSettled = await Promise.allSettled(
+      backup.map((p) => withTimeout(runners[p](), 12_000).catch((e) => { throw e; })),
+    );
+    backupSettled.forEach((s, i) => {
+      if (s.status === "fulfilled") {
+        const data = parseResult(s.value);
+        if (data) good.push({ provider: backup[i], data });
+      } else if (!lastErr) lastErr = s.reason;
+    });
   }
   if (!good.length) {
     void lastErr;
+    const msg = lastErr instanceof Error ? lastErr.message : "";
+    if (/AI anahtarı|not configured|no api key/i.test(msg)) throw lastErr;
+    if (/quota|429|RESOURCE_EXHAUSTED|timeout/i.test(msg)) {
+      throw new Error("AI motorları kotalı / yavaş yanıt verdi. 20-30 sn sonra tekrar deneyin.");
+    }
     throw new Error("Tüm motorlar şu anda yoğun. Birkaç saniye içinde tekrar deneyin.");
   }
 
   const fused = fuse(good);
   if (good.length < 2) return fused;
+  // Sentez bütçe kaldıysa tek deneme — yoksa fuse yeterli, 504'ten iyidir.
+  if (budgetLeft() < 9_000) return fused;
 
-  const critic = await synthesize(prompt, good, order);
+  const critic = await withTimeout(synthesize(prompt, good, order), 10_000).catch(() => null);
   if (!critic) return fused;
 
   return {
@@ -225,13 +222,13 @@ export async function runTool(
     bullets: critic.bullets.length ? critic.bullets : fused.bullets,
     table: critic.table ?? fused.table,
     document: critic.document ?? fused.document,
-    provider: `hibrit: ${good.map((g) => g.provider).join(" + ")} → sentez`,
+    provider: `hibrit: ${good.map((g) => g.provider).join(" + ")} \u2192 sentez`,
     providers: good.map((g) => g.provider),
     confidence: scoreConfidence(good, true),
   };
 }
 
-/** Critic/editor pass: one engine reviews every draft and writes the final answer. */
+/** Critic/editor pass — tek editör, 12sn timeout, en fazla 2 deneme (504 korumalı). */
 async function synthesize(
   prompt: string,
   drafts: { provider: Provider; data: Partial<ToolResult> }[],
@@ -239,38 +236,23 @@ async function synthesize(
 ): Promise<ToolResult | null> {
   const used = new Set(drafts.map((d) => d.provider));
   const editor = order.find((p) => !used.has(p)) ?? order[0];
-
   const body = drafts
-    .map(
-      (d, i) =>
-        `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 6000)}`,
-    )
+    .map((d, i) => `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 4000)}`)
     .join("\n\n");
-
-  const criticPrompt = `${prompt}
-
-Aşağıda aynı göreve verilmiş ${drafts.length} bağımsız AI taslağı var. Sen baş analistsin (editör/eleştirmen):
-${body}
-
-Görevin:
-1. Sayısal çelişkileri tespit et; en gerçekçi/muhafazakâr olanı seç ve gerekiyorsa kendin yeniden hesapla.
-2. Genel geçer, dolgu cümleleri at. Sadece bu vakaya özgü, ölçülebilir çıktılar bırak.
-3. Taslakların atladığı riskleri, gizli maliyetleri ve aksiyonları ekle.
-4. Doküman istenen görevlerde en iyi taslağı temel al ama yeniden yazarak güçlendir.
-Tek ve nihai cevabı üret.
-
-${SCHEMA_HINT}`;
-
+  const criticPrompt = `${prompt}\n\nA\u015fa\u011f\u0131da ayn\u0131 g\u00f6reve verilmi\u015f ${drafts.length} ba\u011f\u0131ms\u0131z AI tasla\u011f\u0131 var. Sen ba\u015f analistsin (edit\u00f6r/ele\u015ftirmen):\n${body}\n\nG\u00f6revin:\n1. Say\u0131sal \u00e7eli\u015fkileri tespit et; en ger\u00e7ek\u00e7i/muhafazak\u00e2r olan\u0131 se\u00e7 ve gerekiyorsa kendin yeniden hesapla.\n2. Genel ge\u00e7er, dolgu c\u00fcmleleri at. Sadece bu vakaya \u00f6zg\u00fc, \u00f6l\u00e7\u00fclebilir \u00e7\u0131kt\u0131lar b\u0131rak.\n3. Taslaklar\u0131n atlad\u0131\u011f\u0131 riskleri, gizli maliyetleri ve aksiyonlar\u0131 ekle.\n4. Dok\u00fcman istenen g\u00f6revlerde en iyi tasla\u011f\u0131 temel al ama yeniden yazarak g\u00fc\u00e7lendir.\nTek ve nihai cevab\u0131 \u00fcret.\n\n${SCHEMA_HINT}`;
   const runnerFor: Record<Provider, () => Promise<string>> = {
     gemini: () => callGemini(criticPrompt, geminiKey(1), 0.25, true),
     groq: () => callGroq(criticPrompt, 0.25),
     openrouter: () => callOpenRouter(criticPrompt, 0.25),
     lovable: () => callLovableAI(criticPrompt, 0.25),
   };
-
-  for (const p of [editor, ...order.filter((o) => o !== editor)]) {
+  const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  // En fazla 2 editör dene, her biri 8sn — fazlası 504 demek.
+  const editors = [editor, ...order.filter((o) => o !== editor)].slice(0, 2);
+  for (const p of editors) {
     try {
-      const data = parseResult(await runnerFor[p]());
+      const data = parseResult(await withTimeout(runnerFor[p](), 8_000));
       if (data) return normalize(data, p);
     } catch {
       /* try next editor */

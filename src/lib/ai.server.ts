@@ -84,7 +84,10 @@ export function hasAnyAiProvider(): boolean {
     hasGateway() ||
     geminiKeyPool().length > 0 ||
     groqKeyPool().length > 0 ||
-    openRouterKeyPool().length > 0
+    openRouterKeyPool().length > 0 ||
+    cerebrasEnvKeys().length > 0 ||
+    sambanovaEnvKeys().length > 0 ||
+    hfEnvKeys().length > 0
   );
 }
 
@@ -335,7 +338,7 @@ async function tryOpenAIPool(
             /* next */
           }
         }
-        await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
       }
     }
   }
@@ -352,7 +355,7 @@ async function postOpenAICompat(opts: {
   extraHeaders?: Record<string, string>;
 }): Promise<string> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  const timer = setTimeout(() => controller.abort(), 12_000);
   try {
     const resp = await fetch(opts.url, {
       method: "POST",
@@ -515,7 +518,7 @@ async function geminiOnce(
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[Math.min(attempt, models.length - 1)];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 12_000);
     try {
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -543,7 +546,7 @@ async function geminiOnce(
         const t = await resp.text();
         if (isQuotaError(resp.status, t)) throw new Error(`QUOTA: ${resp.status}`);
         lastErr = new Error(`Gemini error: ${resp.status} ${t.slice(0, 160)}`);
-        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
         continue;
       }
       const json = (await resp.json()) as {
@@ -558,7 +561,7 @@ async function geminiOnce(
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("QUOTA:")) throw e;
       lastErr = e;
-      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
     } finally {
       clearTimeout(timeout);
     }
@@ -666,9 +669,12 @@ export async function callGroq(prompt: string, temperature = 0.3): Promise<strin
   for (const key of keys) {
     for (let attempt = 0; attempt < models.length; attempt++) {
       const model = models[attempt];
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 12_000);
       try {
         const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
           body: JSON.stringify({
             model,
@@ -684,14 +690,16 @@ export async function callGroq(prompt: string, temperature = 0.3): Promise<strin
             parkKey(key);
             break;
           } // key spent — rotate
-          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
           continue;
         }
         const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        clearTimeout(t);
         return json.choices?.[0]?.message?.content ?? "{}";
       } catch (e) {
-        lastErr = e;
-        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        if (e instanceof Error && e.name === "AbortError") lastErr = new Error("Groq timeout");
+        else lastErr = e;
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
       }
     }
   }
