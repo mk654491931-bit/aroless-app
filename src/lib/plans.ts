@@ -127,11 +127,19 @@ export function planForLevel(level: number): Plan {
   return PLANS.find((p) => p.level === Math.min(3, Math.max(1, level))) ?? PLANS[0];
 }
 
-/** Aylık kullanım kotaları; ücretsiz hesap için küçük bir deneme kotası. */
+/** Admin hesabı için kota — her kalemde 250 jeton (tek kaynak). */
+export const ADMIN_QUOTA = {
+  credits: 250,
+  toolRuns: 250,
+  councilRuns: 250,
+  radarScans: 250,
+} as const satisfies Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
+
+/** Aylık kullanım kotaları; ücretsiz hesap Find Winner'da 2 jeton (klasik düzen). */
 export function quotaFor(
   level: 0 | 1 | 2 | 3,
 ): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans"> {
-  if (level === 0) return { credits: 1, toolRuns: 3, councilRuns: 0, radarScans: 1 };
+  if (level === 0) return { credits: 2, toolRuns: 3, councilRuns: 0, radarScans: 1 };
   const p = planForLevel(level);
   return {
     credits: p.credits,

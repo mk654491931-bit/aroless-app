@@ -8,15 +8,106 @@ import {
   ShieldCheck,
   Sigma,
   Trophy,
+  Target,
+  TrendingUp,
+  DollarSign,
 } from "lucide-react";
 import {
   evidenceLabel,
   evidenceStyle,
   type ScoreComponent,
   type WinnerBreakdown,
+  type EvidenceLevel,
 } from "@/lib/winner-score";
 import { MarketFitPanel } from "@/components/market-fit-panel";
 import type { MarketVerdict } from "@/lib/market-verdict";
+
+/* ------------------------------------------------------------------ *
+ * Decision strip V2 — girişimci kararının tek satır özeti
+ * "Test Et / Daha Fazla Doğrula / Uzak Dur" + Güven + Kanıt + Net marj + Test bütçesi
+ * ------------------------------------------------------------------ */
+function decisionMeta(score?: number, level?: EvidenceLevel) {
+  const s = typeof score === "number" ? score : 0;
+  const decision: "Test Et" | "Daha Fazla Doğrula" | "Uzak Dur" =
+    s >= 70 ? "Test Et" : s >= 50 ? "Daha Fazla Doğrula" : "Uzak Dur";
+  const confidence: "Yüksek" | "Orta" | "Düşük" =
+    level === "verified" && s >= 70
+      ? "Yüksek"
+      : level === "partial" || s >= 60
+        ? s >= 50
+          ? "Orta"
+          : "Düşük"
+        : s >= 55
+          ? "Orta"
+          : "Düşük";
+  const tone =
+    decision === "Test Et"
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+      : decision === "Daha Fazla Doğrula"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+        : "border-rose-500/40 bg-rose-500/10 text-rose-300";
+  const confTone =
+    confidence === "Yüksek"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : confidence === "Orta"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+        : "border-white/10 bg-white/5 text-muted-foreground";
+  return { decision, confidence, tone, confTone };
+}
+
+export function DecisionStrip({
+  winner_score,
+  evidence_level,
+  verdict,
+  net_margin_pct,
+  ad_budget_usd,
+}: {
+  winner_score?: number;
+  evidence_level?: EvidenceLevel;
+  verdict?: string;
+  net_margin_pct?: number;
+  ad_budget_usd?: number;
+}) {
+  const { decision, confidence, tone, confTone } = decisionMeta(winner_score, evidence_level);
+  const kanit =
+    evidence_level === "verified"
+      ? "Doğrulanmış"
+      : evidence_level === "partial"
+        ? "Kısmen"
+        : "AI";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2">
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${tone}`}
+        title={verdict ? `Winner verdict: ${verdict}` : undefined}
+      >
+        <Target size={11} />
+        {decision}
+      </span>
+      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${confTone}`}>
+        <ShieldCheck size={10} /> Güven: {confidence}
+      </span>
+      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${evidenceStyle(evidence_level ?? "ai_only")}`}>
+        Kanıt: {kanit}
+      </span>
+      {typeof net_margin_pct === "number" && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-foreground">
+          <TrendingUp size={10} className="text-emerald-400" /> Net marj %{Math.round(net_margin_pct)}
+        </span>
+      )}
+      {typeof ad_budget_usd === "number" && ad_budget_usd > 0 && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-foreground">
+          <DollarSign size={10} className="text-sky-400" /> Test bütçesi ${Math.round(ad_budget_usd)}
+        </span>
+      )}
+      {typeof winner_score === "number" && (
+        <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+          Winner {winner_score}/100
+        </span>
+      )}
+    </div>
+  );
+}
 
 const barColor = (v: number) =>
   v >= 75
@@ -213,9 +304,9 @@ export type RejectedCandidate = {
   market_verdict?: MarketVerdict;
 };
 
-/** Şeffaflık: kaliteyi geçemeyen adaylar ve gerekçeleri. */
+/** Şeffaflık: kaliteyi geçemeyen adaylar ve gerekçeleri — default açık. */
 export function RejectedPanel({ items }: { items: RejectedCandidate[] }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   if (!items?.length) return null;
   return (
     <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">

@@ -113,9 +113,9 @@ describe("planForLevel", () => {
 });
 
 describe("quotaFor", () => {
-  it("returns small trial quota for level 0 (Free)", () => {
+  it("returns small trial quota for level 0 (Free) — Find Winner 2 jeton (klasik düzen)", () => {
     const quota = quotaFor(0);
-    expect(quota.credits).toBe(1);
+    expect(quota.credits).toBe(2);
     expect(quota.toolRuns).toBe(3);
     expect(quota.councilRuns).toBe(0);
     expect(quota.radarScans).toBe(1);
@@ -154,5 +154,13 @@ describe("quotaFor", () => {
     expect(q0.credits).toBeLessThan(q1.credits);
     expect(q1.credits).toBeLessThan(q2.credits);
     expect(q2.credits).toBeLessThan(q3.credits);
+  });
+
+  it("ADMIN_QUOTA is 250 on every bucket", async () => {
+    const { ADMIN_QUOTA } = await import("./plans");
+    expect(ADMIN_QUOTA.credits).toBe(250);
+    expect(ADMIN_QUOTA.toolRuns).toBe(250);
+    expect(ADMIN_QUOTA.councilRuns).toBe(250);
+    expect(ADMIN_QUOTA.radarScans).toBe(250);
   });
 });

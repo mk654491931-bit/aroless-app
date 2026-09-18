@@ -2,6 +2,42 @@ import { BadgeCheck, ExternalLink, ShieldAlert, TrendingDown, TrendingUp } from 
 import { realismStyle, realismVerdict, type MarketEvidence } from "@/lib/market-evidence";
 import { Sparkline } from "@/components/sparkline";
 
+function fmtTrDate(iso?: string): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+export function ProofBadge({
+  kind,
+  date,
+}: {
+  kind: "Canlı veri" | "Kaynaklı veri" | "Hesaplanmış" | "AI tahmini" | "Doğrulanamadı";
+  date?: string;
+}) {
+  const cls =
+    kind === "Canlı veri"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-300"
+      : kind === "Kaynaklı veri"
+        ? "border-sky-500/35 bg-sky-500/10 text-sky-300"
+        : kind === "Hesaplanmış"
+          ? "border-[oklch(0.62_0.17_255)]/35 bg-[oklch(0.62_0.17_255)]/10 text-[oklch(0.85_0.15_255)]"
+          : kind === "AI tahmini"
+            ? "border-amber-500/35 bg-amber-500/10 text-amber-300"
+            : "border-rose-500/35 bg-rose-500/10 text-rose-300";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls}`}>
+      {kind}
+      {kind === "Canlı veri" && date ? ` — ${date}` : ""}
+    </span>
+  );
+}
+
 export function RealismBadge({ score }: { score?: number }) {
   if (typeof score !== "number") return null;
   const v = realismVerdict(score);
@@ -15,22 +51,22 @@ export function RealismBadge({ score }: { score?: number }) {
   );
 }
 
-/** Compact live-evidence strip shown on a product card. */
+/** Compact live-evidence strip shown on a product card — her metrik yanında kanıt rozeti. */
 export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
   if (!ev) return null;
   const up = ev.trend_momentum_pct >= 0;
+  const checkedDate = fmtTrDate(ev.checked_at);
   return (
     <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px]">
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">🔎 Canlı piyasa kanıtı</span>
-        <span className={up ? "text-emerald-300" : "text-rose-300"}>
-          {up ? (
-            <TrendingUp size={11} className="inline -mt-0.5" />
-          ) : (
-            <TrendingDown size={11} className="inline -mt-0.5" />
-          )}{" "}
-          {up ? "+" : ""}
-          {ev.trend_momentum_pct}% / 30g
+        <span className="flex items-center gap-1.5">
+          <ProofBadge kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
+          <span className={up ? "text-emerald-300" : "text-rose-300"}>
+            {up ? <TrendingUp size={11} className="inline -mt-0.5" /> : <TrendingDown size={11} className="inline -mt-0.5" />}{" "}
+            {up ? "+" : ""}
+            {ev.trend_momentum_pct}% / 30g
+          </span>
         </span>
       </div>
 
@@ -38,31 +74,26 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
         <Sparkline values={ev.trend_monthly} className="h-8 w-full" />
       )}
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
-        <span>
+      <div className="flex flex-wrap gap-2 text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
           Tedarik ~<b className="text-foreground">${ev.supplier_price_usd.toFixed(2)}</b>
-          <span className="opacity-60">
-            {" "}
-            ({ev.supplier_source === "aliexpress" ? "AliExpress" : "tahmini"})
-          </span>
+          <ProofBadge kind={ev.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
         </span>
         {ev.market_price_usd > 0 && (
-          <span>
+          <span className="inline-flex items-center gap-1.5">
             Piyasa medyanı <b className="text-foreground">${ev.market_price_usd.toFixed(2)}</b>
+            <ProofBadge kind={ev.sellers.length > 0 ? "Kaynaklı veri" : "Doğrulanamadı"} />
             {ev.price_delta_pct !== 0 && (
               <span className={Math.abs(ev.price_delta_pct) > 45 ? "text-amber-300" : "opacity-60"}>
-                {" "}
                 ({ev.price_delta_pct > 0 ? "+" : ""}
                 {ev.price_delta_pct}% fark)
               </span>
             )}
           </span>
         )}
-        <span>
-          Talep kaynağı{" "}
-          <b className="text-foreground">
-            {ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}
-          </b>
+        <span className="inline-flex items-center gap-1.5">
+          Talep kaynağı <b className="text-foreground">{ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}</b>
+          <ProofBadge kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
         </span>
       </div>
 

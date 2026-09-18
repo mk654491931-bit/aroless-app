@@ -1,9 +1,10 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { checkIsAdmin } from "@/lib/admin.functions";
-import { tierLevel, quotaFor } from "@/lib/plans";
+import { ADMIN_QUOTA, tierLevel, quotaFor } from "@/lib/plans";
 
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 /** Ücretsiz kullanıcıya açık modül grupları. */
@@ -37,11 +38,19 @@ export function useEntitlements(): Entitlements {
     queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
     enabled: !!user,
+    staleTime: 60_000,
+    gcTime: 300_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
   const adminQ = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: () => adminFn(),
     enabled: !!user,
+    staleTime: 300_000,
+    gcTime: 600_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const tier = String(
@@ -51,9 +60,11 @@ export function useEntitlements(): Entitlements {
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());
 
   const level: 0 | 1 | 2 | 3 = isAdmin ? 3 : tierLevel(tier);
-  // Ücretsiz kullanıcı: sadece Kazanan Ürün Radarı (ürün arama). Ücretli: tüm modüller.
-  const canUse = (groupId: string) => isAdmin || isPaid || FREE_GROUPS.includes(groupId);
-  const quota = quotaFor(level);
+  // Admin: her kalemde 250 jeton (ADMIN_QUOTA); free: Find Winner 2 jeton (quotaFor(0)).
+  const quota = useMemo(() => (isAdmin ? ADMIN_QUOTA : quotaFor(level)), [isAdmin, level]);
+  const canUse = useMemo(() => {
+    return (groupId: string) => isAdmin || isPaid || FREE_GROUPS.includes(groupId);
+  }, [isAdmin, isPaid]);
 
   return {
     level,

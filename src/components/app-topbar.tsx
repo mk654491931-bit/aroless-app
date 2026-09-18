@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut } from "lucide-react";
+import { useMemo } from "react";
+import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut, Radar, Users, Wrench } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -40,16 +41,19 @@ export function AppTopbar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { tier } = useEntitlements();
+  const { tier, quota, isAdmin } = useEntitlements();
   const { user } = useAuth();
   const profileFn = useServerFn(getFullProfile);
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
     enabled: !!user,
+    staleTime: 60_000,
+    gcTime: 300_000,
+    refetchOnWindowFocus: false,
   });
-  const credits = (profileQ.data as { credits?: number } | undefined)?.credits ?? 0;
-  const publicId = (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null;
+  const credits = useMemo(() => (profileQ.data as { credits?: number } | undefined)?.credits ?? 0, [profileQ.data]);
+  const publicId = useMemo(() => (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null, [profileQ.data]);
   const title =
     TITLES[pathname] ??
     (pathname.startsWith("/tools")
@@ -83,12 +87,21 @@ export function AppTopbar() {
               ID {publicId}
             </span>
           ) : null}
-          <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:inline-flex">
+          {/* Kalan Finder kredisi — her zaman görünür */}
+          <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:inline-flex" title={`Kalan Finder kredisi: ${credits} / Aylık kota: ${quota.credits}`}>
             <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
             <span className="font-semibold">{credits}</span>
+            <span className="text-[10px] text-muted-foreground">/ {quota.credits}</span>
+          </span>
+          {/* 4’lü kota — optimize: tek satır, responsive, admin=250 her kalemde */}
+          <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex" title={isAdmin ? "Admin: her kalemde 250 jeton" : `Free: Finder 2 jeton · Tool ${quota.toolRuns} · Konsey ${quota.councilRuns} · Radar ${quota.radarScans}`}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Coins size={10} className="text-[oklch(0.85_0.18_90)]" />{quota.credits}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Wrench size={10} className="text-sky-400" />{quota.toolRuns}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Users size={10} className="text-violet-400" />{quota.councilRuns}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Radar size={10} className="text-emerald-400" />{quota.radarScans}</span>
           </span>
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] md:inline-flex">
-            <Zap size={11} /> {tier}
+            <Zap size={11} /> {tier}{isAdmin ? " · 250" : ""}
           </span>
 
           <Link to="/notifications" className="topbar-btn" title="Notifications">
