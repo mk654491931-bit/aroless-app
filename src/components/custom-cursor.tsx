@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { CURSOR_KEY } from "./cursor-toggle";
+import { CURSOR_KEY, LEGACY_CURSOR_KEY } from "./cursor-toggle";
 
 /**
  * Tüm siteyi kapsayan, gece/gündüz temasına uyumlu özel imleç.
  * - Sadece `html.cursor-enabled` varken ve fine-pointer cihazlarda çalışır.
- * - Aç/kapa durumu `localStorage velora-cursor` + `html.cursor-enabled` üzerinden tüm sekmelerde senkron.
+ * - Aç/kapa durumu `localStorage aroless-cursor` (velora-cursor legacy) + `html.cursor-enabled` üzerinden tüm sekmelerde senkron.
  * - Performans: tek bir rAF ile dot+ring güncellenir, reduced-motion'da animasyon yok.
  */
 export function CustomCursor() {
@@ -90,7 +90,7 @@ export function CustomCursor() {
 
     // Sekmeler arası senkron: storage + custom event + mutation
     const onStorage = (ev: StorageEvent) => {
-      if (ev.key === CURSOR_KEY) syncEnabled();
+      if (ev.key === CURSOR_KEY || ev.key === LEGACY_CURSOR_KEY) syncEnabled();
     };
     const onCustom = () => syncEnabled();
 
@@ -102,6 +102,7 @@ export function CustomCursor() {
     document.addEventListener("mouseleave", onLeave);
     document.addEventListener("mouseenter", onEnter);
     window.addEventListener("storage", onStorage);
+    window.addEventListener("aroless:cursor", onCustom as EventListener);
     window.addEventListener("velora:cursor", onCustom as EventListener);
     syncEnabled();
 
@@ -113,6 +114,7 @@ export function CustomCursor() {
       document.removeEventListener("mouseleave", onLeave);
       document.removeEventListener("mouseenter", onEnter);
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("aroless:cursor", onCustom as EventListener);
       window.removeEventListener("velora:cursor", onCustom as EventListener);
     };
   }, []);

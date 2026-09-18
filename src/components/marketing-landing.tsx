@@ -24,6 +24,7 @@ import { CapabilitySimulator } from "@/components/landing/capability-simulator";
 import { AgentTopology } from "@/components/landing/agent-topology";
 import { CountUp } from "@/components/landing/count-up";
 import { FaqSection, Testimonials, type FaqItem, type ReviewItem } from "@/components/landing/sections";
+import { PLANS } from "@/lib/plans";
 
 const ECOSYSTEMS = [
   "Amazon",
@@ -66,10 +67,10 @@ const BENTO = [
 ];
 
 const METRICS = [
-  { value: <CountUp end={99.9} decimals={1} suffix="%" />, label: "Attribution accuracy", sim: true },
-  { value: <CountUp end={50} prefix="<" suffix="ms" />, label: "Median agent latency", sim: true },
-  { value: <CountUp end={10} suffix="k+" />, label: "Simulated events processed", sim: true },
-  { value: <CountUp end={312} prefix="+" suffix="%" />, label: "Median ROI uplift in sim pilots", sim: true },
+  { value: <CountUp end={99.9} decimals={1} suffix="%" />, label: "Attribution accuracy", sim: true, note: "Simülasyon referansı" },
+  { value: <CountUp end={50} prefix="<" suffix="ms" />, label: "Median agent latency", sim: true, note: "Lokal simülasyon" },
+  { value: <CountUp end={10} suffix="k+" />, label: "Simulated events processed", sim: true, note: "Demo payload" },
+  { value: <CountUp end={312} prefix="+" suffix="%" />, label: "Median ROI uplift in sim pilots", sim: true, note: "Pilot simülasyonu" },
 ];
 
 /* What we do — animated capability cards (hover-follow spotlight) */
@@ -469,21 +470,78 @@ export function MarketingLanding() {
               <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
                 Deterministic agent execution keeps every run measurable, auditable and repeatable.
               </p>
+              <p className="mx-auto mt-2 max-w-xl text-[11px] text-amber-300/80">
+                Aşağıdaki 4 değer <strong>simülasyon / demo referansıdır</strong> — gerçek üretim metrikleri değil. Fiyatlandırmayla karıştırılmamalı.
+              </p>
             </div>
             <div className="grid grid-cols-2 divide-x divide-y divide-white/5 lg:grid-cols-4 lg:divide-y-0">
               {METRICS.map((m) => (
-                <div key={m.label} className="px-6 py-8 text-center">
+                <div key={m.label} className="relative px-6 py-8 text-center">
+                  {m.sim && (
+                    <span className="absolute right-3 top-3 rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                      Sim*
+                    </span>
+                  )}
                   <div className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                     {m.value}
+                    {m.sim && <span className="align-super text-[10px] text-amber-300">*</span>}
                   </div>
                   <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">{m.label}</div>
+                  {m.note && <div className="mt-1 text-[10px] text-slate-600">{m.note}</div>}
                 </div>
               ))}
             </div>
-            <div className="border-t border-white/10 px-6 py-3 text-center text-[10px] text-slate-600">
-              * Simulation benchmarks — production figures depend on your traffic profile and data sources.
+            <div className="border-t border-white/10 px-6 py-3 text-center text-[10px] leading-relaxed text-slate-500">
+              * <strong>Simülasyon değeri</strong> — lokal deterministik demo payload’ları üzerinden ölçülmüştür. Canlı trafik, veri kaynağı ve kullanım profiline göre değişir. <Link to="/pricing" className="underline decoration-slate-600 underline-offset-4 hover:text-slate-300">Gerçek fiyatlar için /pricing →</Link>
             </div>
           </div>
+        </section>
+
+        {/* ── Pricing — Tek kaynak: PLANS (src/lib/plans.ts) ─────────── */}
+        <section id="pricing-preview" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
+              <CircleDollarSign size={12} /> Tek fiyat kaynağı — PLANS
+            </span>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+              Şeffaf fiyatlandırma. Tüm modüller açık.
+            </h2>
+            <p className="mt-3 text-sm text-slate-400 sm:text-base">
+              Fiyatlar yalnızca <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">src/lib/plans.ts → PLANS</code> üzerinden gelir. Landing, /pricing ve ödeme modalı aynı kaynağı okur — fiyat değişince tek yer güncellenir.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {PLANS.map((p) => (
+              <div
+                key={p.id}
+                className={`relative overflow-hidden rounded-2xl border p-6 backdrop-blur-xl ${p.highlight ? "border-indigo-400/40 bg-gradient-to-b from-indigo-500/10 via-[#0F1117]/70 to-[#0F1117]/70 shadow-[0_0_40px_-20px_rgba(99,102,241,0.6)]" : "border-white/10 bg-[#0F1117]/70"}`}
+              >
+                {p.highlight && (
+                  <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">En popüler</span>
+                )}
+                <h3 className="text-lg font-bold text-white">{p.label}</h3>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold tracking-tight text-white">${p.usd}</span>
+                  <span className="text-sm text-slate-500">/ay</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{p.credits} kredi / ay</span>
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">Tüm modüller açık</span>
+                </div>
+                <ul className="mt-4 space-y-1.5 text-sm text-slate-400">
+                  {p.features.slice(0, 4).map((f) => (
+                    <li key={f} className="flex items-start gap-2"><Check size={14} className="mt-0.5 shrink-0 text-emerald-400" /> {f}</li>
+                  ))}
+                </ul>
+                <Link to="/pricing" className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-white text-[#050608] hover:bg-slate-200" : "border border-white/15 text-slate-200 hover:bg-white/5"}`}>
+                  Detaylar <ArrowRight size={14} />
+                </Link>
+              </div>
+            ))}
+          </div>
+          <p className="mx-auto mt-4 max-w-2xl text-center text-[11px] leading-relaxed text-slate-500">
+            Görsel metriklerle fiyat ilişkisi yoktur — <strong className="text-slate-300">%99.9 doğruluk / +%312 ROI</strong> gibi sayılar simülasyon kartlarındaki yön gösterici değerlerdir, fatura değildir. Güncel ve bağlayıcı fiyatlar her zaman <Link to="/pricing" className="underline underline-offset-4 hover:text-slate-300">/pricing</Link> ve ödeme adımında gösterilir.
+          </p>
         </section>
 
         {/* ── FAQ ────────────────────────────────────────────────── */}

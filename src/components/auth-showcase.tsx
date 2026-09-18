@@ -127,7 +127,7 @@ export function AuthShowcase() {
               <span
                 key={`${ch}-${i}`}
                 aria-hidden
-                className="velora-letter velora-shine"
+                className="aroless-letter aroless-shine"
                 style={{ animationDelay: `${i * 0.09}s` }}
               >
                 {ch}

@@ -131,20 +131,20 @@ function Dashboard() {
   const [niche, setNiche] = useState("");
   const [nicheFocus, setNicheFocus] = useState(false);
   const [validatorFocus, setValidatorFocus] = useState(false);
-  const [category, setCategory] = usePersistentState<string>("velora.finder.category", "Any");
-  const [audience, setAudience] = usePersistentState<string>("velora.finder.audience", "");
-  const [platforms, setPlatforms] = usePersistentState<Platform[]>("velora.finder.platforms", ["Shopify", "TikTok Shop"]);
-  const [budget, setBudget] = usePersistentState<Budget>("velora.finder.budget", "$500 - $2,000");
+  const [category, setCategory] = usePersistentState<string>("aroless.finder.category", "Any");
+  const [audience, setAudience] = usePersistentState<string>("aroless.finder.audience", "");
+  const [platforms, setPlatforms] = usePersistentState<Platform[]>("aroless.finder.platforms", ["Shopify", "TikTok Shop"]);
+  const [budget, setBudget] = usePersistentState<Budget>("aroless.finder.budget", "$500 - $2,000");
   const marketplace: MarketplaceId = platforms.some((p) => p === "Trendyol" || p === "Hepsiburada") ? "turkey" : "global";
-  const [targetCountry, setTargetCountry] = usePersistentState<string>("velora.finder.country", DEFAULT_TARGET_COUNTRY);
+  const [targetCountry, setTargetCountry] = usePersistentState<string>("aroless.finder.country", DEFAULT_TARGET_COUNTRY);
   const effectiveCountry = marketplace === "turkey" ? "TR" : targetCountry;
   const blockedSelected = platforms.filter((p) => countryFit(p, effectiveCountry) === "unavailable");
   const [recoOpen, setRecoOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [minScore, setMinScore] = usePersistentState<number>("velora.finder.min_score", HYBRID_DEFAULT_MIN_SCORE);
-  const [engine, setEngine] = usePersistentState<EngineId>("velora.finder.engine", "default");
-  const [useGithubTrends, setUseGithubTrends] = usePersistentState<boolean>("velora.finder.github_trends", true);
-  const [deepSearch, setDeepSearch] = usePersistentState<DeepSearchOptions>("velora.finder.deep_search", DEFAULT_DEEP_SEARCH);
+  const [minScore, setMinScore] = usePersistentState<number>("aroless.finder.min_score", HYBRID_DEFAULT_MIN_SCORE);
+  const [engine, setEngine] = usePersistentState<EngineId>("aroless.finder.engine", "default");
+  const [useGithubTrends, setUseGithubTrends] = usePersistentState<boolean>("aroless.finder.github_trends", true);
+  const [deepSearch, setDeepSearch] = usePersistentState<DeepSearchOptions>("aroless.finder.deep_search", DEFAULT_DEEP_SEARCH);
   const advancedSelectionCount = [
     category !== "Any",
     audience.trim().length > 0,
@@ -160,13 +160,13 @@ function Dashboard() {
 
   const [results, setResults] = useState<WinningProduct[]>([]);
   const [rejected, setRejected] = useState<RejectedCandidate[]>([]);
-  const [sortBy, setSortBy] = usePersistentState<SortKey>("velora.finder.sort", "winner");
+  const [sortBy, setSortBy] = usePersistentState<SortKey>("aroless.finder.sort", "winner");
   const [sortDesc, setSortDesc] = useState(true);
   const [resultQuery, setResultQuery] = useState("");
   const [onlyLaunch, setOnlyLaunch] = useState(false);
   const [band, setBand] = usePersistentState<
     "all" | "high" | "lowcomp" | "margin" | "saved" | "verified" | "rising" | "winner" | "shippable"
-  >("velora.finder.band", "all");
+  >("aroless.finder.band", "all");
   const [filters, setFilters] = useState<FinderFilters>(DEFAULT_FILTERS);
   const [compareNames, setCompareNames] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -230,12 +230,18 @@ function Dashboard() {
     if (!user) return;
     let code: string | null = null;
     try {
-      code = window.localStorage.getItem("velora.ref");
+      code = window.localStorage.getItem("aroless.ref") ?? window.localStorage.getItem("velora.ref");
+      if (code) {
+        // dual-read migrasyon: yeniye taşı
+        try { window.localStorage.setItem("aroless.ref", code); } catch {}
+        try { window.localStorage.removeItem("velora.ref"); } catch {}
+      }
     } catch {
       code = null;
     }
     if (!code) return;
     try {
+      window.localStorage.removeItem("aroless.ref");
       window.localStorage.removeItem("velora.ref");
     } catch {
       /* yoksay */

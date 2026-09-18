@@ -138,12 +138,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 const THEME_BOOT_SCRIPT =
   "(function(){try{" +
-  "var t=localStorage.getItem('velora-theme');" +
+  "var t=localStorage.getItem('aroless-theme')||localStorage.getItem('velora-theme');" +
   "if(t!=='light'&&t!=='dark'){try{t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}catch(e){t='dark';}}" +
   "document.documentElement.classList.toggle('light',t==='light');" +
   "document.documentElement.classList.toggle('dark',t==='dark');" +
-  "var p=localStorage.getItem('velora-palette');document.documentElement.classList.toggle('palette-aurora',p==='aurora');" +
-  "var c=localStorage.getItem('velora-cursor');document.documentElement.classList.toggle('cursor-enabled',c==='1'||c==='on'||c==='true');" +
+  "var p=localStorage.getItem('aroless-palette')||localStorage.getItem('velora-palette');document.documentElement.classList.toggle('palette-aurora',p==='aurora');" +
+  "var c=localStorage.getItem('aroless-cursor')||localStorage.getItem('velora-cursor');document.documentElement.classList.toggle('cursor-enabled',c==='1'||c==='on'||c==='true');" +
   "var l=localStorage.getItem('i18nextLng');if(l){var lc=l.slice(0,2);document.documentElement.lang=lc;document.documentElement.dir=lc==='ar'?'rtl':'ltr';}" +
   "}catch(e){}})();";
 
@@ -218,12 +218,21 @@ function RootComponent() {
     };
   }, [queryClient]);
 
-  // Davet linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır.
+  // Davet linki (?ref=KOD) — kayıt sonrası kullanılmak üzere saklanır (dual-write, velora legacy temizlenir).
   useEffect(() => {
+    // İlk açılışta tüm legacy anahtarları sessizce yeniye taşı
+    try {
+      // dinamik import yerine doğrudan sync çağrı — daha güvenli, SSR'de no-op
+      const mod = { migrateAllLegacyKeys: undefined as unknown as (() => void) | undefined };
+      void import("@/lib/brand-storage").then((m) => m.migrateAllLegacyKeys()).catch(() => {});
+      void mod;
+    } catch {}
     try {
       const ref = new URLSearchParams(window.location.search).get("ref");
       if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
-        window.localStorage.setItem("velora.ref", ref.toUpperCase());
+        const v = ref.toUpperCase();
+        window.localStorage.setItem("aroless.ref", v);
+        try { window.localStorage.removeItem("velora.ref"); } catch {}
       }
     } catch {
       /* yoksay */

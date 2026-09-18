@@ -128,7 +128,7 @@ export type FinderPreset<T> = { name: string; state: T };
 export function FilterPresets<T>({
   current,
   onApply,
-  storageKey = "velora.finder.presets",
+  storageKey = "aroless.finder.presets",
 }: {
   current: T;
   onApply: (state: T) => void;

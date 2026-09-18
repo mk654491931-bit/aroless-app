@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import {
+  getBrandedItem,
+  setBrandedItem,
+  BRAND_EVENTS,
+  addBrandedEventListener,
+  dispatchBrandedEvent,
+} from "@/lib/brand-storage";
 
-const KEY = "velora-theme";
+const KEY = "aroless-theme";
 
 type Theme = "dark" | "light";
 
 function preferredTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  const saved = localStorage.getItem(KEY);
+  const saved = getBrandedItem(KEY);
   if (saved === "light" || saved === "dark") return saved;
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
@@ -28,9 +35,11 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     applyTheme(initial);
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== KEY || (event.newValue !== "light" && event.newValue !== "dark")) return;
-      setTheme(event.newValue);
-      applyTheme(event.newValue);
+      if (event.key !== KEY && event.key !== "velora-theme") return;
+      const v = event.newValue;
+      if (v !== "light" && v !== "dark") return;
+      setTheme(v);
+      applyTheme(v);
     };
     const onCustom = (e: Event) => {
       const detail = (e as CustomEvent<{ theme?: Theme }>).detail;
@@ -40,21 +49,23 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       }
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener("velora:theme", onCustom as EventListener);
+    const off = addBrandedEventListener(
+      BRAND_EVENTS.theme.new,
+      BRAND_EVENTS.theme.legacy,
+      onCustom as EventListener,
+    );
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("velora:theme", onCustom as EventListener);
+      off();
     };
   }, []);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    localStorage.setItem(KEY, next);
+    setBrandedItem(KEY, next);
     applyTheme(next);
-    try {
-      window.dispatchEvent(new CustomEvent("velora:theme", { detail: { theme: next } }));
-    } catch { /* ignore */ }
+    dispatchBrandedEvent(BRAND_EVENTS.theme.new, BRAND_EVENTS.theme.legacy, { theme: next });
   };
 
   return (

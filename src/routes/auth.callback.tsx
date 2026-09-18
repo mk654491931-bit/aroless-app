@@ -32,8 +32,9 @@ function AuthCallback() {
     const check = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        const saved = sessionStorage.getItem("velora:post-auth") ?? "/";
-        sessionStorage.removeItem("velora:post-auth");
+        const saved = sessionStorage.getItem("aroless:post-auth") ?? sessionStorage.getItem("velora:post-auth") ?? "/";
+        try { sessionStorage.removeItem("aroless:post-auth"); } catch {}
+        try { sessionStorage.removeItem("velora:post-auth"); } catch {}
         go(saved.startsWith("/") ? saved : "/");
       }
     };

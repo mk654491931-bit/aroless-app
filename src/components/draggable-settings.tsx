@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { GripVertical } from "lucide-react";
+import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
-const KEY = "velora-settings-pos";
+const KEY = "aroless-settings-pos";
 
 type Pos = { x: number; y: number };
 
@@ -46,7 +47,7 @@ export function DraggableSettingsBar({ children, anchor = "top-right" }: Props) 
   useEffect(() => {
     let initial = defaultPos(anchor);
     try {
-      const raw = localStorage.getItem(KEY);
+      const raw = getBrandedItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Pos;
         if (Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
@@ -92,7 +93,7 @@ export function DraggableSettingsBar({ children, anchor = "top-right" }: Props) 
     setPos((p) => {
       if (p) {
         try {
-          localStorage.setItem(KEY, JSON.stringify(p));
+          setBrandedItem(KEY, JSON.stringify(p));
         } catch {
           /* ignore */
         }

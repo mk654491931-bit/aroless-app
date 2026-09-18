@@ -10,9 +10,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  getBrandedItem,
+  setBrandedItem,
+  BRAND_EVENTS,
+  addBrandedEventListener,
+  dispatchBrandedEvent,
+} from "@/lib/brand-storage";
 
-export const COOKIE_KEY = "velora_cookie_consent";
-export const OPEN_COOKIE_PREFS = "velora:open-cookie-preferences";
+export const COOKIE_KEY = "aroless_cookie_consent";
+export const OPEN_COOKIE_PREFS = "aroless:open-cookie-preferences";
+
+// Legacy aliases — keep exported for any external importers still using velora names
+export const LEGACY_COOKIE_KEY = "velora_cookie_consent";
+export const LEGACY_OPEN_COOKIE_PREFS = "velora:open-cookie-preferences";
 
 export type CookieConsent = {
   essential: true;
@@ -22,12 +33,12 @@ export type CookieConsent = {
 };
 
 export function openCookiePreferences() {
-  window.dispatchEvent(new CustomEvent(OPEN_COOKIE_PREFS));
+  dispatchBrandedEvent(BRAND_EVENTS.cookiePrefs.new, BRAND_EVENTS.cookiePrefs.legacy, undefined);
 }
 
 function read(): CookieConsent | null {
   try {
-    const raw = localStorage.getItem(COOKIE_KEY);
+    const raw = getBrandedItem(COOKIE_KEY);
     return raw ? (JSON.parse(raw) as CookieConsent) : null;
   } catch {
     return null;
@@ -36,7 +47,7 @@ function read(): CookieConsent | null {
 
 function save(c: Omit<CookieConsent, "essential" | "decidedAt">) {
   const value: CookieConsent = { essential: true, decidedAt: new Date().toISOString(), ...c };
-  localStorage.setItem(COOKIE_KEY, JSON.stringify(value));
+  setBrandedItem(COOKIE_KEY, JSON.stringify(value));
   return value;
 }
 
@@ -54,8 +65,12 @@ export function CookieBanner() {
       setMarketing(existing.marketing);
     }
     const onOpen = () => setPrefsOpen(true);
-    window.addEventListener(OPEN_COOKIE_PREFS, onOpen);
-    return () => window.removeEventListener(OPEN_COOKIE_PREFS, onOpen);
+    const off = addBrandedEventListener(
+      BRAND_EVENTS.cookiePrefs.new,
+      BRAND_EVENTS.cookiePrefs.legacy,
+      onOpen as EventListener,
+    );
+    return off;
   }, []);
 
   const decide = (a: boolean, m: boolean) => {

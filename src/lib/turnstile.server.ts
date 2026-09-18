@@ -119,7 +119,7 @@ export function clientIp(request: Request): string {
 /** IP adresini geri döndürülemez şekilde hashler (KVKK/GDPR dostu). */
 export async function hashIp(ip: string): Promise<string> {
   if (!ip) return "";
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`velora::${ip}`));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`aroless::${ip}`));
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")

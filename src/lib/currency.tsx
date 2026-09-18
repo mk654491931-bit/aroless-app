@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, type ReactNode } from "r
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { countryByCode } from "@/lib/countries";
+import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
 export type FxPayload = {
   base: "USD";
@@ -38,12 +39,12 @@ export function parseUsd(v: string | number | undefined | null): number {
   return m ? Number(m[0]) : 0;
 }
 
-const COUNTRY_KEY = "velora:target-country";
+const COUNTRY_KEY = "aroless:target-country";
 
 /** Last country the user picked — lets FX-aware UI outside the provider (pricing modal, sidebar) stay in sync. */
 export function storedCountry(): string {
   if (typeof window === "undefined") return "GLOBAL";
-  return window.localStorage.getItem(COUNTRY_KEY) || "GLOBAL";
+  return getBrandedItem(COUNTRY_KEY) || "GLOBAL";
 }
 
 const CurrencyCtx = createContext<{ country: string } | null>(null);
@@ -52,7 +53,7 @@ export function CurrencyProvider({ country, children }: { country: string; child
   const value = useMemo(() => ({ country }), [country]);
   useEffect(() => {
     try {
-      window.localStorage.setItem(COUNTRY_KEY, country);
+      setBrandedItem(COUNTRY_KEY, country);
     } catch {
       /* storage kapalı */
     }

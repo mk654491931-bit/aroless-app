@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import { MousePointer2, MousePointerClick } from "lucide-react";
+import {
+  getBrandedItem,
+  setBrandedItem,
+  BRAND_EVENTS,
+  addBrandedEventListener,
+  dispatchBrandedEvent,
+} from "@/lib/brand-storage";
 
-export const CURSOR_KEY = "velora-cursor";
-const CURSOR_EVENT = "velora:cursor";
+export const CURSOR_KEY = "aroless-cursor";
+export const LEGACY_CURSOR_KEY = "velora-cursor";
+const CURSOR_EVENT_NEW = BRAND_EVENTS.cursor.new;
+const CURSOR_EVENT_LEGACY = BRAND_EVENTS.cursor.legacy;
 
 function readCursor(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const v = localStorage.getItem(CURSOR_KEY);
+    const v = getBrandedItem(CURSOR_KEY);
     if (v === "1" || v === "on" || v === "true") return true;
     if (v === "0" || v === "off" || v === "false") return false;
-  } catch { /* ignore */ }
-  // varsayılan: kapalı (kullanıcı açınca devreye girer) — dokunmatik cihazlarda zaten gösterilmez
+  } catch {
+    /* ignore */
+  }
+  // varsayılan: kapalı
   return false;
 }
 
@@ -26,7 +37,7 @@ export function useCursorEnabled() {
     setEnabled(readCursor());
     applyCursor(readCursor());
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== CURSOR_KEY) return;
+      if (e.key !== CURSOR_KEY && e.key !== LEGACY_CURSOR_KEY) return;
       const next = e.newValue === "1" || e.newValue === "on" || e.newValue === "true";
       setEnabled(next);
       applyCursor(next);
@@ -39,10 +50,10 @@ export function useCursorEnabled() {
       }
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener(CURSOR_EVENT, onCustom as EventListener);
+    const off = addBrandedEventListener(CURSOR_EVENT_NEW, CURSOR_EVENT_LEGACY, onCustom as EventListener);
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener(CURSOR_EVENT, onCustom as EventListener);
+      off();
     };
   }, []);
   return enabled;
@@ -57,7 +68,7 @@ export function CursorToggle({ className = "" }: { className?: string }) {
     setEnabled(init);
     applyCursor(init);
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== CURSOR_KEY) return;
+      if (e.key !== CURSOR_KEY && e.key !== LEGACY_CURSOR_KEY) return;
       const next = e.newValue === "1" || e.newValue === "on" || e.newValue === "true";
       setEnabled(next);
       applyCursor(next);
@@ -70,12 +81,12 @@ export function CursorToggle({ className = "" }: { className?: string }) {
     const next = !enabled;
     setEnabled(next);
     try {
-      localStorage.setItem(CURSOR_KEY, next ? "1" : "0");
-    } catch { /* ignore */ }
+      setBrandedItem(CURSOR_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
     applyCursor(next);
-    try {
-      window.dispatchEvent(new CustomEvent(CURSOR_EVENT, { detail: { enabled: next } }));
-    } catch { /* ignore */ }
+    dispatchBrandedEvent(CURSOR_EVENT_NEW, CURSOR_EVENT_LEGACY, { enabled: next });
   };
 
   return (

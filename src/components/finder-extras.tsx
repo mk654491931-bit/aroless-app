@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { History, Lightbulb, X } from "lucide-react";
+import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
 /** Persist any finder setting in localStorage so a search survives reloads. */
 export function usePersistentState<T>(
@@ -11,7 +12,7 @@ export function usePersistentState<T>(
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(key);
+      const raw = getBrandedItem(key);
       if (raw !== null) setValue(JSON.parse(raw) as T);
     } catch {
       /* ignore */
@@ -22,7 +23,7 @@ export function usePersistentState<T>(
   useEffect(() => {
     if (!hydrated) return;
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      setBrandedItem(key, JSON.stringify(value));
     } catch {
       /* ignore */
     }
@@ -31,7 +32,7 @@ export function usePersistentState<T>(
   return [value, setValue];
 }
 
-const RECENT_KEY = "velora.finder.recent";
+const RECENT_KEY = "aroless.finder.recent";
 const MAX_RECENT = 8;
 
 export function useRecentSearches() {

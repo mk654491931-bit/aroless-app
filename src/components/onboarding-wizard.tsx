@@ -3,8 +3,9 @@ import { createPortal } from "react-dom";
 import { Rocket, ArrowRight, ArrowLeft, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { TARGET_COUNTRIES, countryName } from "@/lib/countries";
+import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
-const KEY = "velora.onboarding.v1";
+const KEY = "aroless.onboarding.v1";
 
 export type OnboardingResult = {
   country: string;
@@ -58,7 +59,7 @@ export function useOnboarding() {
   const [done, setDone] = useState(true);
   useEffect(() => {
     try {
-      setDone(!!window.localStorage.getItem(KEY));
+      setDone(!!getBrandedItem(KEY));
     } catch {
       setDone(true);
     }
@@ -67,7 +68,7 @@ export function useOnboarding() {
     needsOnboarding: !done,
     complete: (r: OnboardingResult) => {
       try {
-        window.localStorage.setItem(KEY, JSON.stringify(sanitizeOnboardingResult(r)));
+        setBrandedItem(KEY, JSON.stringify(sanitizeOnboardingResult(r)));
       } catch {
         /* yoksay */
       }
@@ -75,7 +76,7 @@ export function useOnboarding() {
     },
     skip: () => {
       try {
-        window.localStorage.setItem(KEY, "skipped");
+        setBrandedItem(KEY, "skipped");
       } catch {
         /* yoksay */
       }
@@ -302,7 +303,7 @@ export function ActivationChecklist({
   const completed = items.filter((i) => i.done).length;
   useEffect(() => {
     try {
-      setHidden(window.localStorage.getItem("velora.checklist.hidden") === "1");
+      setHidden(getBrandedItem("aroless.checklist.hidden") === "1");
     } catch {
       /* yoksay */
     }
@@ -319,7 +320,7 @@ export function ActivationChecklist({
           type="button"
           onClick={() => {
             try {
-              window.localStorage.setItem("velora.checklist.hidden", "1");
+              setBrandedItem("aroless.checklist.hidden", "1");
             } catch {
               /* yoksay */
             }

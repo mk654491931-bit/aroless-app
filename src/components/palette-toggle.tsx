@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Palette } from "lucide-react";
+import {
+  getBrandedItem,
+  setBrandedItem,
+  BRAND_EVENTS,
+  addBrandedEventListener,
+  dispatchBrandedEvent,
+} from "@/lib/brand-storage";
 
-const KEY = "velora-palette";
+const KEY = "aroless-palette";
 type PaletteId = "default" | "aurora";
 
 function applyPalette(p: PaletteId) {
@@ -13,11 +20,11 @@ export function PaletteToggle({ className = "" }: { className?: string }) {
   const [palette, setPalette] = useState<PaletteId>("default");
 
   useEffect(() => {
-    const saved = (localStorage.getItem(KEY) as PaletteId | null) ?? "default";
+    const saved = (getBrandedItem(KEY) as PaletteId | null) ?? "default";
     setPalette(saved);
     applyPalette(saved);
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== KEY) return;
+      if (e.key !== KEY && e.key !== "velora-palette") return;
       const v = (e.newValue as PaletteId | null) ?? "default";
       setPalette(v === "aurora" ? "aurora" : "default");
       applyPalette(v === "aurora" ? "aurora" : "default");
@@ -30,21 +37,23 @@ export function PaletteToggle({ className = "" }: { className?: string }) {
       }
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener("velora:palette", onCustom as EventListener);
+    const off = addBrandedEventListener(
+      BRAND_EVENTS.palette.new,
+      BRAND_EVENTS.palette.legacy,
+      onCustom as EventListener,
+    );
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("velora:palette", onCustom as EventListener);
+      off();
     };
   }, []);
 
   const toggle = () => {
     const next: PaletteId = palette === "default" ? "aurora" : "default";
     setPalette(next);
-    localStorage.setItem(KEY, next);
+    setBrandedItem(KEY, next);
     applyPalette(next);
-    try {
-      window.dispatchEvent(new CustomEvent("velora:palette", { detail: { palette: next } }));
-    } catch { /* ignore */ }
+    dispatchBrandedEvent(BRAND_EVENTS.palette.new, BRAND_EVENTS.palette.legacy, { palette: next });
   };
 
   return (

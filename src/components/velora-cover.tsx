@@ -74,7 +74,7 @@ export function ArolessCover({ className = "" }: { className?: string }) {
               <ArolessMark size={56} className="hidden sm:block" />
             </span>
             <h1 className="relative min-w-0 flex-1 leading-none">
-              <span aria-hidden className="velora-halo" />
+              <span aria-hidden className="aroless-halo" />
               <span
                 className="relative block font-extralight uppercase"
                 style={{
@@ -87,14 +87,14 @@ export function ArolessCover({ className = "" }: { className?: string }) {
                   <span
                     key={`${ch}-${i}`}
                     aria-hidden
-                    className="velora-letter velora-shine"
+                    className="aroless-letter aroless-shine"
                     style={{ animationDelay: `${i * 0.09}s` }}
                   >
                     {ch}
                   </span>
                 ))}
               </span>
-              <span className="velora-underline mt-3 block w-full max-w-[14rem] sm:max-w-[16rem]" />
+              <span className="aroless-underline mt-3 block w-full max-w-[14rem] sm:max-w-[16rem]" />
               <span
                 className="mt-3 block font-medium uppercase text-[var(--brand)]"
                 style={{

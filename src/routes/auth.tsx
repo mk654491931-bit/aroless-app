@@ -433,7 +433,7 @@ function AuthPage() {
               className="h-16 w-16 object-contain drop-shadow-[0_6px_28px_color-mix(in_oklab,var(--brand)_50%,transparent)]"
             />
             <h1 className="relative leading-none">
-              <span aria-hidden className="velora-halo" />
+              <span aria-hidden className="aroless-halo" />
               <span
                 className="relative block text-[52px] font-extralight uppercase tracking-[0.34em]"
                 aria-label="Aroless"
@@ -442,14 +442,14 @@ function AuthPage() {
                   <span
                     key={`${ch}-${i}`}
                     aria-hidden
-                    className="velora-letter velora-shine"
+                    className="aroless-letter aroless-shine"
                     style={{ animationDelay: `${i * 0.09}s` }}
                   >
                     {ch}
                   </span>
                 ))}
               </span>
-              <span className="velora-underline mt-3 block w-56" />
+              <span className="aroless-underline mt-3 block w-56" />
               <span className="mt-3 block text-[10px] font-medium uppercase tracking-[0.42em] text-[var(--brand)]">
                 AI Commerce OS
               </span>

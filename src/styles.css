@@ -1248,7 +1248,8 @@ body,
   );
 }
 
-/* Harf harf beliren AROLESS yazısı */
+/* Harf harf beliren AROLESS yazısı — aroless-* birincil, velora-* geriye dönük alias */
+.aroless-letter,
 .velora-letter {
   display: inline-block;
   opacity: 0;
@@ -1258,6 +1259,7 @@ body,
     transform 0.35s cubic-bezier(0.34, 1.56, 0.5, 1),
     filter 0.35s ease;
 }
+.aroless-letter:hover,
 .velora-letter:hover {
   transform: translateY(-6px) scale(1.06);
   filter: drop-shadow(0 8px 22px color-mix(in oklab, var(--brand) 70%, transparent));
@@ -1268,6 +1270,7 @@ body,
     transform: none;
   }
 }
+.aroless-shine,
 .velora-shine {
   background: linear-gradient(
     100deg,
@@ -1284,11 +1287,13 @@ body,
   background-clip: text;
   color: transparent;
 }
+.aroless-letter.aroless-shine,
 .velora-letter.velora-shine {
   animation:
     letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards,
-    velora-shine 6s ease-in-out infinite;
+    aroless-shine 6s ease-in-out infinite;
 }
+@keyframes aroless-shine { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0% 0; } }
 @keyframes velora-shine {
   0%,
   100% {
@@ -1299,7 +1304,8 @@ body,
   }
 }
 
-/* Başlığın arkasındaki nefes alan hale */
+/* Başlığın arkasındaki nefes alan hale — aroless birincil */
+.aroless-halo,
 .velora-halo {
   position: absolute;
   left: 50%;
@@ -1318,7 +1324,8 @@ body,
   animation: pulse-soft 4.5s ease-in-out infinite;
 }
 
-/* Başlık altındaki ışıklı çizgi */
+/* Başlık altındaki ışıklı çizgi — aroless birincil */
+.aroless-underline,
 .velora-underline {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--brand), var(--brand-2), transparent);
@@ -1330,13 +1337,17 @@ body,
   .auth-aurora,
   .auth-grid,
   .auth-beam,
+  .aroless-shine,
   .velora-shine,
   .auth-orbits span,
   .auth-shimmer,
+  .aroless-halo,
   .velora-halo,
+  .aroless-underline,
   .velora-underline {
     animation: none;
   }
+  .aroless-letter,
   .velora-letter {
     animation-duration: 0.01s;
   }

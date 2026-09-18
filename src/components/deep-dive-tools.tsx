@@ -10,12 +10,13 @@ const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 /* ------------------------------------------------------------------ */
 
 export function useChecklist(scope: string) {
-  const storageKey = `velora.checklist.${scope}`;
+  const storageKey = `aroless.checklist.${scope}`;
   const [done, setDone] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(storageKey);
+      const { getBrandedItem } = require("@/lib/brand-storage");
+      const raw = getBrandedItem(storageKey) as string | null;
       if (raw) setDone(JSON.parse(raw) as Record<string, boolean>);
     } catch {
       /* yoksay */
@@ -26,7 +27,8 @@ export function useChecklist(scope: string) {
     setDone((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
+        const { setBrandedItem } = require("@/lib/brand-storage");
+        setBrandedItem(storageKey, JSON.stringify(next));
       } catch {
         /* yoksay */
       }
