@@ -40,6 +40,7 @@ import {
   Lock,
   SlidersHorizontal,
   ChevronUp,
+  CalendarDays,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -115,6 +116,7 @@ import {
   type FinderFilters,
 } from "@/components/advanced-filters";
 import {
+  DecisionStrip,
   RejectedPanel,
   WinnerBadge,
   WinnerScorePanel,
@@ -154,7 +156,7 @@ import {
   DEFAULT_DEEP_SEARCH,
   type DeepSearchOptions,
 } from "@/components/deep-search-panel";
-import { MarketEvidencePanel, RealismBadge } from "@/components/market-evidence-panel";
+import { MarketEvidencePanel, ProofBadge, RealismBadge } from "@/components/market-evidence-panel";
 
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
@@ -1900,6 +1902,95 @@ function requestRun(target: "seo" | "creative", name: string) {
   setTimeout(() => runRefs[target]?.(name), 0);
 }
 
+function DollarGap({ p }: { p: WinningProduct }) {
+  const { money } = useMoney();
+  const re = p.real_economics;
+  const cb = p.cost_breakdown;
+  const supplier = re ? re.supplier : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g,"")) || 0;
+  const shipping = re ? re.shipping : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g,"")) || 0;
+  const ad = re ? re.cac : Number(String(cb?.ad_spend ?? "0").replace(/[^0-9.]/g,"")) || 0;
+  const netPerUnit = re ? re.net_per_unit : Number(String(cb?.net_profit ?? "0").replace(/[^0-9.]/g,"")) || 0;
+  const breakeven =
+    p.unit_economics?.breakeven_units ??
+    (netPerUnit > 0 ? Math.ceil((supplier + shipping) / Math.max(0.1, netPerUnit)) : 0);
+  const invest = supplier + shipping + ad;
+  if (!cb && !re) return null;
+  return (
+    <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] to-sky-500/[0.06] px-3 py-2.5 text-[11px]">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-300 font-semibold mb-1.5">
+        <DollarSign size={11} /> Dollar gap \u2014 ne koyar, ne kazan\u0131rs\u0131n
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
+          <div className="text-[9px] uppercase text-muted-foreground">Koyars\u0131n</div>
+          <div className="text-xs font-bold text-foreground mt-0.5">{money(invest, { showUsd: false })}</div>
+          <div className="text-[9px] text-muted-foreground">tedarik+kargo+reklam</div>
+        </div>
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
+          <div className="text-[9px] uppercase text-emerald-300/80">Kazan\u0131rs\u0131n</div>
+          <div className="text-xs font-bold text-emerald-300 mt-0.5">{money(netPerUnit, { showUsd: false })} / adet</div>
+          <div className="text-[9px] text-muted-foreground">net marj %{re?.net_margin_pct ?? cb?.net_margin_pct ?? p.profit_margin_pct ?? 0}</div>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
+          <div className="text-[9px] uppercase text-muted-foreground">Ba\u015faba\u015f</div>
+          <div className="text-xs font-bold text-foreground mt-0.5">{breakeven ? breakeven + " adet" : "\u2014"}</div>
+          <div className="text-[9px] text-muted-foreground">{re ? re.monthly.units + " adet/ay \u00f6l\u00e7ek" : "ilk sipari\u015fler"}</div>
+        </div>
+      </div>
+      {re && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
+          Ger\u00e7ek\u00e7i ayl\u0131k net: <b className="text-emerald-300">{money(re.monthly.low_usd, { compact: true, showUsd: false })} \u2013 {money(re.monthly.high_usd, { compact: true, showUsd: false })}</b> \u00b7 {re.context.country_label} \u00b7 {re.context.category}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SevenDayPlan({ p }: { p: WinningProduct }) {
+  const roadmap = p.launch_roadmap ?? [];
+  const days: { day: string; title: string; actions: string[]; kpi: string; budget: string }[] = [];
+  if (roadmap.length) {
+    let d = 1;
+    for (const ph of roadmap) {
+      const acts = (ph.actions ?? []).slice(0, 3);
+      if (!acts.length) continue;
+      const label = ph.phase || "A\u015fama " + (days.length + 1);
+      days.push({ day: "G\u00fcn " + d + (acts.length > 1 ? "\u2013" + (d + acts.length - 1) : ""), title: label, actions: acts, kpi: ph.kpi ?? "\u2014", budget: ph.budget_usd ?? "\u2014" });
+      d += acts.length;
+      if (days.length >= 4 || d > 7) break;
+    }
+  }
+  if (!days.length) {
+    const avgBudget = p.real_economics?.monthly.ad_budget_usd ? "$" + Math.round(p.real_economics.monthly.ad_budget_usd / 4) : "$20";
+    days.push(
+      { day: "G\u00fcn 1\u20132", title: "Kreatif haz\u0131rl\u0131k", actions: ["3 UGC varyasyonu \u00e7ek (hook A/B/C)", "\u00dcr\u00fcn sayfas\u0131n\u0131 kur + Trust badge ekle"], kpi: "3 kreatif haz\u0131r", budget: avgBudget },
+      { day: "G\u00fcn 3\u20134", title: "Test yay\u0131n\u0131", actions: ["Meta Advantage+ \u2014 3 ad set x " + avgBudget, "\u00d6ld\u00fcrme kural\u0131: CTR <%1 ise kapat"], kpi: "CTR \u2265%1, CPC < $1.2", budget: avgBudget },
+      { day: "G\u00fcn 5\u20137", title: "\u00d6l\u00e7ek sinyali", actions: ["Kazanan kreatif %20 b\u00fct\u00e7e art\u0131\u015f\u0131", "Yeni a\u00e7\u0131: yorum \u015fikayetini \u00e7\u00f6zen bundle"], kpi: "ROAS \u22652.2", budget: avgBudget },
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.07] to-indigo-500/[0.06] p-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300 font-semibold mb-2">
+        <CalendarDays size={11} /> 7 g\u00fcnl\u00fck test plan\u0131 \u2014 ilk hafta ne yapars\u0131n
+      </div>
+      <div className="space-y-1.5">
+        {days.slice(0, 3).map((d, i) => (
+          <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[11px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-foreground">{d.day} \u00b7 {d.title}</span>
+              <span className="text-[10px] rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-muted-foreground">{d.budget}</span>
+            </div>
+            <ul className="mt-1 space-y-0.5 text-muted-foreground list-disc pl-4">
+              {d.actions.slice(0, 2).map((a, j) => (<li key={j}>{a}</li>))}
+            </ul>
+            <div className="mt-1 text-[10px] text-violet-300/90">Hedef: {d.kpi}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProductCard({
   p,
   saved,
@@ -2058,6 +2149,15 @@ function ProductCard({
         <WinnerBadge score={p.winner_score} level={p.evidence_level} />
       </div>
       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+      <div className="mt-2">
+        <DecisionStrip
+          winner_score={p.winner_score}
+          evidence_level={p.evidence_level}
+          verdict={p.score_breakdown?.verdict}
+          net_margin_pct={p.cost_breakdown?.net_margin_pct ?? p.real_economics?.net_margin_pct ?? p.profit_margin_pct}
+          ad_budget_usd={p.real_economics?.monthly.ad_budget_usd}
+        />
+      </div>
       <WinnerScorePanel breakdown={p.score_breakdown} />
       <MarketFitPanel verdict={p.market_verdict} />
 
@@ -2226,6 +2326,7 @@ function ProductCard({
         })()}
       </div>
 
+      <DollarGap p={p} />
       <div className="mt-3 flex items-center justify-center">
         {locked ? (
           <button
@@ -2246,21 +2347,21 @@ function ProductCard({
           </div>
           <div className="grid grid-cols-2 gap-y-1 text-[11px]">
             <span className="text-muted-foreground flex items-center gap-1">
-              <Package size={10} /> Supplier
+              <Package size={10} /> Supplier <ProofBadge kind={p.market_evidence?.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"} />
             </span>
-            <span className="text-right">{money(cb.supplier_cost, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">{money(cb.supplier_cost, { showUsd: false })}</span>
             <span className="text-muted-foreground flex items-center gap-1">
-              <Truck size={10} /> Shipping
+              <Truck size={10} /> Shipping <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right">{money(cb.shipping_cost, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">{money(cb.shipping_cost, { showUsd: false })}</span>
             <span className="text-muted-foreground flex items-center gap-1">
-              <Store size={10} /> Platform fee
+              <Store size={10} /> Platform fee <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right">{money(cb.platform_fee, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">{money(cb.platform_fee, { showUsd: false })}</span>
             <span className="text-muted-foreground flex items-center gap-1">
-              <Megaphone size={10} /> Ad spend
+              <Megaphone size={10} /> Ad spend <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right">{money(cb.ad_spend, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">{money(cb.ad_spend, { showUsd: false })}</span>
             <span className="font-semibold text-emerald-300 flex items-center gap-1 pt-1 border-t border-white/10 mt-1">
               <DollarSign size={10} /> Net / unit
             </span>
@@ -2335,6 +2436,7 @@ function ProductCard({
         </div>
       )}
 
+      <SevenDayPlan p={p} />
       <button
         type="button"
         aria-expanded={detailsOpen}
