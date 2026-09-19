@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Moon, Sun } from "lucide-react";
 import {
   getBrandedItem,
@@ -27,6 +28,7 @@ function applyTheme(theme: Theme) {
 
 /** Karanlık / gündüz teması anahtarı — sitenin ana rengini değiştirir. */
 export function ThemeToggle({ className = "" }: { className?: string }) {
+  const { t } = useTranslation();
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
@@ -72,8 +74,8 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === "dark" ? "Gündüz temasına geç" : "Karanlık temaya geç"}
-      title={theme === "dark" ? "Gündüz teması" : "Karanlık tema"}
+      aria-label={theme === "dark" ? t("theme_switch_day") : t("theme_switch_night")}
+      title={theme === "dark" ? t("theme_to_day") : t("theme_to_night")}
       className={`inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card/70 px-3 text-xs font-semibold text-foreground backdrop-blur transition-colors hover:bg-accent/40 ${className}`}
     >
       {theme === "dark" ? (
@@ -81,7 +83,9 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       ) : (
         <Moon size={14} className="text-[var(--brand)]" />
       )}
-      <span className="hidden sm:inline">{theme === "dark" ? "Gündüz" : "Karanlık"}</span>
+      <span className="hidden sm:inline">
+        {theme === "dark" ? t("theme_to_day") : t("theme_to_night")}
+      </span>
     </button>
   );
 }

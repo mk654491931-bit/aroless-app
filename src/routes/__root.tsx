@@ -15,8 +15,10 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { reloadOnceForStaleChunk } from "@/lib/deploy-race-recovery";
 import { supabase } from "@/integrations/supabase/client";
-import { initI18n } from "@/lib/i18n";
+import { changeAppLanguage, initI18n, normalizeLang } from "@/lib/i18n";
+import { LANGUAGE_STORAGE_KEY } from "@/lib/language-preference";
 import { setAutoLanguage } from "@/lib/auto-i18n/runtime";
+import { useLanguageSync } from "@/hooks/use-language-sync";
 import i18n from "@/lib/i18n";
 import { usePerformanceInit } from "@/lib/performance-init";
 import { useFluidity } from "@/lib/fluidity";
@@ -182,6 +184,9 @@ function RootComponent() {
   // plandayken animasyonları durdurur (bkz. src/lib/fluidity.ts).
   useFluidity();
 
+  // Hesapta kayıtlı dil tercihini bu cihaza da uygula (cihazda açık seçim varsa dokunmaz).
+  useLanguageSync();
+
   // Performance optimizations başlat
   usePerformanceInit({
     enableWebVitals: true,
@@ -192,23 +197,29 @@ function RootComponent() {
   });
 
   useEffect(() => {
+    // initI18n ayrıca <html lang/dir> niteliklerini yazar ve her dil
+    // değişiminde `applyDir` ile yeniden uygular; burada tekrar yazılmaz.
     initI18n();
-    setLang(i18n.language ?? "en");
+    // Tüm site bu normalize edilmiş koddan beslenir: "en-US" gibi locale'ler
+    // de tek bir dile ("en") indirgenir.
+    setLang(normalizeLang(i18n.language));
     setAutoLanguage(i18n.language);
-    document.documentElement.lang = (i18n.language ?? "en").slice(0, 2);
-    // Dil değişince: DOM sözlüğünü değiştir, React ağacını tazele ve
-    // AI/sunucu kaynaklı içerikleri yeni dilde yeniden çek.
+    // Dil değişince: DOM sözlüğü (+ başlık/meta), React ağacı ve AI/sunucu
+    // kaynaklı içerikler tek noktadan yeni dile geçer.
     const onLang = (lng: string) => {
       setAutoLanguage(lng);
-      setLang(lng);
-      document.documentElement.lang = lng.slice(0, 2);
+      setLang(normalizeLang(lng));
       queryClient.invalidateQueries();
     };
     i18n.on("languageChanged", onLang);
     // Diğer sekmelerde yapılan dil değişikliğini de anında uygula.
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "i18nextLng" && e.newValue && e.newValue !== i18n.language) {
-        i18n.changeLanguage(e.newValue);
+      if (
+        e.key === LANGUAGE_STORAGE_KEY &&
+        e.newValue &&
+        normalizeLang(e.newValue) !== normalizeLang(i18n.language)
+      ) {
+        changeAppLanguage(e.newValue);
       }
     };
     window.addEventListener("storage", onStorage);

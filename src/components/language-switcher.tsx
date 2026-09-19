@@ -1,44 +1,60 @@
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Globe } from "lucide-react";
-import { LANGUAGES, type LangCode } from "@/lib/i18n";
-import { useState, useEffect, useRef } from "react";
+import { LANGUAGES, changeAppLanguage, findLanguage, type LangCode } from "@/lib/i18n";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-export function LanguageSwitcher() {
-  const { i18n } = useTranslation();
+/**
+ * Global dil değiştirici.
+ *
+ * Menü Radix Popover ile **portal** içinde açılır: sürüklenen ayar barı ve
+ * topbar gibi kapsayıcılardaki `overflow` menüyü kesemez, ekranın altında yer
+ * yoksa Radix çakışma denetimiyle yukarı açılır. Dışına tıklama, Escape,
+ * odak yönetimi ve `aria-*` nitelikleri Radix'ten gelir.
+ *
+ * Dil değişimi tek noktadan yapılır (`changeAppLanguage`); `<html lang/dir>`,
+ * DOM sözlüğü, başlık/meta ve sayfa yeniden çizimi `__root`'taki
+ * `languageChanged` dinleyicisinde tüm siteye yayılır.
+ */
+export function LanguageSwitcher(): ReactElement {
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const current = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0];
-
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  // "en-US"/"tr_TR" gibi locale'ler de doğru kaydı ve bayrağı bulur.
+  const active = findLanguage(i18n.language);
 
   return (
-    <div ref={ref} className="relative shrink-0" data-no-translate>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 px-2.5 py-1.5 text-xs"
-        aria-label="Change language"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={t("language")}
+          title={t("language")}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10"
+        >
+          <Globe size={13} />
+          <span className="text-sm">{active.flag}</span>
+          <span className="hidden font-medium uppercase md:inline">{active.code}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        data-no-translate
+        className="w-[11rem] border-white/10 bg-[oklch(0.20_0.035_255)] p-1 text-white"
       >
-        <Globe size={13} />
-        <span className="text-sm">{current.flag}</span>
-        <span className="hidden md:inline uppercase font-medium">{current.code}</span>
-      </button>
-      {open && (
-        <div className="absolute end-0 mt-2 min-w-[10rem] rounded-lg border border-white/10 bg-[oklch(0.20_0.035_255)] shadow-xl z-50 py-1">
+        <div role="listbox" aria-label={t("language")} className="flex flex-col">
           {LANGUAGES.map((l) => (
             <button
               key={l.code}
+              type="button"
+              role="option"
+              aria-selected={l.code === active.code}
               onClick={() => {
-                i18n.changeLanguage(l.code as LangCode);
+                changeAppLanguage(l.code as LangCode);
                 setOpen(false);
               }}
-              className={`w-full text-start flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 ${
-                l.code === i18n.language ? "text-[oklch(0.85_0.15_255)]" : ""
+              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm hover:bg-white/5 ${
+                l.code === active.code ? "text-[oklch(0.85_0.15_255)]" : ""
               }`}
             >
               <span>{l.flag}</span>
@@ -46,7 +62,7 @@ export function LanguageSwitcher() {
             </button>
           ))}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

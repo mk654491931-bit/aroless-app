@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { PaletteToggle } from "@/components/palette-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CursorToggle } from "@/components/cursor-toggle";
+import { SettingsCluster } from "@/components/settings-cluster";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
@@ -63,8 +64,12 @@ export function AppTopbar() {
         ? "Product"
         : "Aroless");
 
+  // Not: `data-no-translate` buradan kaldırıldı — aksi hâlde topbar'daki
+  // Türkçe sabit metinler ("Kullanım Hakkın", "Paketleri gör", "Çıkış yap")
+  // dil değişimine hiç tepki vermiyordu. Dil/tema kümesi kendi içinde
+  // `data-no-translate` taşır ve etiketlerini t() ile alır.
   return (
-    <div className="topbar" data-no-translate>
+    <div className="topbar">
       <div className="topbar-inner">
         <div className="flex min-w-0 items-center gap-2">
           <SidebarTrigger className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10" />
@@ -173,10 +178,13 @@ export function AppTopbar() {
           <Link to="/settings" className="topbar-btn" title="Settings">
             <SettingsIcon size={14} />
           </Link>
-          <LanguageSwitcher />
-          <PaletteToggle />
-          <ThemeToggle />
-          <CursorToggle />
+          {/* Dil / tema / palet / imleç tek kümede: açılır-kapanır, tercih kalıcı. */}
+          <SettingsCluster defaultOpenMinWidth={1280}>
+            <LanguageSwitcher />
+            <PaletteToggle />
+            <ThemeToggle />
+            <CursorToggle />
+          </SettingsCluster>
           <button
             type="button"
             onClick={async () => {

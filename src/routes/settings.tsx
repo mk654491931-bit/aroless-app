@@ -6,7 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles, Loader2, BellRing, Coins } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { LANGUAGES } from "@/lib/i18n";
+import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const nav = useNavigate();
   const { user, loading } = useAuth();
   const qc = useQueryClient();
@@ -134,12 +134,15 @@ function SettingsPage() {
           <h2 className="font-semibold mb-3">{t("language")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {LANGUAGES.map((l) => {
-              const on = i18n.language === l.code;
+              // Normalize edilmiş aktif dil: "en-US" gibi locale'ler de doğru işaretlenir.
+              const on = activeLang() === l.code;
               return (
                 <button
                   key={l.code}
                   onClick={() => {
-                    i18n.changeLanguage(l.code);
+                    // Tek giriş noktası: <html lang/dir>, DOM sözlüğü, başlık/meta
+                    // ve sayfa yeniden çizimi __root'taki languageChanged ile yayılır.
+                    changeAppLanguage(l.code);
                     save.mutate({ language: l.code });
                   }}
                   className={`rounded-lg border px-3 py-2.5 text-sm text-start flex items-center gap-2 transition ${on ? "border-[oklch(0.62_0.17_255)] bg-gradient-to-r from-[oklch(0.62_0.17_255)]/20 to-[oklch(0.52_0.15_262)]/20" : "border-white/10 bg-white/5 hover:bg-white/10"}`}

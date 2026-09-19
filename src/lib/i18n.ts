@@ -50,6 +50,15 @@ const en = {
     currency: "Currency",
     notifications: "Notifications",
     subscription: "Subscription",
+    theme_to_day: "Day",
+    theme_to_night: "Night",
+    theme_switch_day: "Switch to day theme",
+    theme_switch_night: "Switch to night theme",
+    settings_panel: "Language & appearance",
+    settings_open: "Open language & appearance",
+    settings_close: "Close language & appearance",
+    drag_hint: "Drag to move",
+    drag_aria: "Move settings panel",
     pipeline: {
       title: "AI Analysis Pipeline",
       s1: "Connecting to global e-commerce nodes...",
@@ -190,6 +199,15 @@ const tr = {
     currency: "Para Birimi",
     notifications: "Bildirimler",
     subscription: "Abonelik",
+    theme_to_day: "Gündüz",
+    theme_to_night: "Karanlık",
+    theme_switch_day: "Gündüz temasına geç",
+    theme_switch_night: "Karanlık temaya geç",
+    settings_panel: "Dil ve görünüm",
+    settings_open: "Dil ve görünüm panelini aç",
+    settings_close: "Dil ve görünüm panelini kapat",
+    drag_hint: "Sürükleyerek yerini değiştir",
+    drag_aria: "Ayar panelini taşı",
     pipeline: {
       title: "AI Analiz Pipeline",
       s1: "Küresel e-ticaret düğümlerine bağlanılıyor...",
@@ -330,6 +348,15 @@ const es = {
     currency: "Moneda",
     notifications: "Notificaciones",
     subscription: "Suscripción",
+    theme_to_day: "Día",
+    theme_to_night: "Noche",
+    theme_switch_day: "Cambiar a tema diurno",
+    theme_switch_night: "Cambiar a tema nocturno",
+    settings_panel: "Idioma y apariencia",
+    settings_open: "Abrir idioma y apariencia",
+    settings_close: "Cerrar idioma y apariencia",
+    drag_hint: "Arrastra para mover",
+    drag_aria: "Mover panel de ajustes",
     pipeline: {
       title: "Pipeline de análisis IA",
       s1: "Conectando con nodos globales de e-commerce...",
@@ -398,6 +425,15 @@ const de = {
     currency: "Währung",
     notifications: "Benachrichtigungen",
     subscription: "Abonnement",
+    theme_to_day: "Tag",
+    theme_to_night: "Nacht",
+    theme_switch_day: "Zum Tag-Design wechseln",
+    theme_switch_night: "Zum Nacht-Design wechseln",
+    settings_panel: "Sprache & Darstellung",
+    settings_open: "Sprache & Darstellung öffnen",
+    settings_close: "Sprache & Darstellung schließen",
+    drag_hint: "Zum Verschieben ziehen",
+    drag_aria: "Einstellungen verschieben",
     pipeline: {
       title: "KI-Analyse-Pipeline",
       s1: "Verbinde mit globalen E-Commerce-Knoten...",
@@ -465,6 +501,15 @@ const fr = {
     currency: "Devise",
     notifications: "Notifications",
     subscription: "Abonnement",
+    theme_to_day: "Jour",
+    theme_to_night: "Nuit",
+    theme_switch_day: "Passer au thème clair",
+    theme_switch_night: "Passer au thème sombre",
+    settings_panel: "Langue et apparence",
+    settings_open: "Ouvrir langue et apparence",
+    settings_close: "Fermer langue et apparence",
+    drag_hint: "Glisser pour déplacer",
+    drag_aria: "Déplacer le panneau de réglages",
     pipeline: {
       title: "Pipeline d'analyse IA",
       s1: "Connexion aux nœuds e-commerce mondiaux...",
@@ -532,6 +577,15 @@ const ar = {
     currency: "العملة",
     notifications: "الإشعارات",
     subscription: "الاشتراك",
+    theme_to_day: "نهار",
+    theme_to_night: "ليل",
+    theme_switch_day: "التبديل إلى الوضع النهاري",
+    theme_switch_night: "التبديل إلى الوضع الليلي",
+    settings_panel: "اللغة والمظهر",
+    settings_open: "افتح اللغة والمظهر",
+    settings_close: "أغلق اللغة والمظهر",
+    drag_hint: "اسحب للنقل",
+    drag_aria: "نقل لوحة الإعدادات",
     pipeline: {
       title: "خط تحليل AI",
       s1: "الاتصال بعُقد التجارة الإلكترونية العالمية...",
@@ -561,7 +615,54 @@ export const LANGUAGES = [
   { code: "ar", label: "العربية", flag: "🇸🇦" },
 ] as const;
 export type LangCode = (typeof LANGUAGES)[number]["code"];
+export type LangEntry = (typeof LANGUAGES)[number];
 export const RTL_LANGS: LangCode[] = ["ar"];
+
+/**
+ * "en-US", "tr_TR", "EN" gibi tarayıcı locale'lerini desteklenen 2 harfli
+ * koda indirger; tanınmayan her değer İngilizceye düşer.
+ */
+export function normalizeLang(value: unknown): LangCode {
+  if (typeof value !== "string") return "en";
+  const code = value.trim().toLowerCase().slice(0, 2);
+  return (LANGUAGES.some((l) => l.code === code) ? code : "en") as LangCode;
+}
+
+/** Değer desteklenen bir dil mi? (normalizeLang'in "en"e düşmesinden bağımsız) */
+export function isSupportedLang(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    LANGUAGES.some((l) => l.code === value.trim().toLowerCase().slice(0, 2))
+  );
+}
+
+/** Aktif arayüz dili — sunucuda/pre-init her zaman "en". */
+export function activeLang(): LangCode {
+  if (typeof window === "undefined") return "en";
+  return normalizeLang(i18n.language);
+}
+
+/** Dile ait LANGUAGES kaydı; bulunamazsa İngilizce (bayrak/etiket için). */
+export function findLanguage(value?: string | null): LangEntry {
+  const code = normalizeLang(value);
+  return LANGUAGES.find((l) => l.code === code) ?? LANGUAGES[0];
+}
+
+/**
+ * Tek dil değiştirme noktası — tüm site bu fonksiyondan geçer.
+ *
+ * i18next'e yazar, `<html lang/dir>` niteliklerini hemen güncelleyip
+ * `languageChanged` akışını tetikler (__root oradan DOM sözlüğünü, sayfa
+ * anahtarlarını ve sorgu önbelleğini tazeler).
+ */
+export function changeAppLanguage(value: unknown): LangCode {
+  const code = normalizeLang(value);
+  applyDir(code);
+  if (typeof window !== "undefined" && normalizeLang(i18n.language) !== code) {
+    void i18n.changeLanguage(code);
+  }
+  return code;
+}
 
 let initialized = false;
 export function initI18n() {
@@ -585,9 +686,10 @@ export function initI18n() {
 
 export function applyDir(lang: LangCode) {
   if (typeof document === "undefined") return;
-  const rtl = RTL_LANGS.includes(lang);
+  const code = normalizeLang(lang);
+  const rtl = RTL_LANGS.includes(code);
   document.documentElement.setAttribute("dir", rtl ? "rtl" : "ltr");
-  document.documentElement.setAttribute("lang", lang);
+  document.documentElement.setAttribute("lang", code);
 }
 
 export default i18n;

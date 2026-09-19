@@ -30,6 +30,7 @@ const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "CODE", "PRE", "TEXTAR
 let dict: Record<string, string> = {};
 let currentLang: AutoLang | null = null;
 let observer: MutationObserver | null = null;
+let headObserver: MutationObserver | null = null;
 let scheduled = false;
 
 const originalText = new WeakMap<Text, string>();
@@ -211,6 +212,72 @@ function connect() {
   });
 }
 
+// ---------- Dokument başlığı ve meta (head bölgesi) ----------
+//
+// DOM yürüyüşü `document.body` üzerinden çalıştığı için `<title>` ve meta
+// etiketleri kapsam dışında kalıyordu: dil değişince tarayıcı sekmesi ve
+// paylaşım/SEO meta'ları eski dilde kalıyordu. Bu bölüm başlığı ve meta
+// içeriklerini de sözlükten çevirir ve route değişimlerinde yeniden uygular.
+
+const META_TARGETS: Array<{ selector: string; attr: string }> = [
+  { selector: 'meta[name="description"]', attr: "content" },
+  { selector: 'meta[property="og:title"]', attr: "content" },
+  { selector: 'meta[property="og:description"]', attr: "content" },
+  { selector: 'meta[name="twitter:title"]', attr: "content" },
+  { selector: 'meta[name="twitter:description"]', attr: "content" },
+];
+
+const TITLE_BASE_ATTR = "i18nTitleBase";
+const metaBase = new WeakMap<Element, string>();
+
+/**
+ * Aynı metnin kaynak (çevrilmemiş) hâlini izler: route yeni bir başlık/meta
+ * yazdığında kaynak güncellenir, aksi hâlde çevirinin üstüne yazılmaz.
+ */
+function syncSource(current: string, source: string | undefined, translate: (v: string) => string) {
+  if (!source) return current;
+  if (current === source) return source;
+  return translate(source) === current ? source : current;
+}
+
+export function translateDocumentMetadata(): void {
+  if (typeof document === "undefined") return;
+  try {
+    const root = document.documentElement;
+    const title = document.title ?? "";
+    const storedTitle = root.dataset[TITLE_BASE_ATTR];
+    const nextBase = syncSource(title, storedTitle, (v) => lookup(v) ?? v);
+    if (nextBase !== storedTitle) root.dataset[TITLE_BASE_ATTR] = nextBase;
+    const nextTitle = lookup(nextBase) ?? nextBase;
+    if (nextTitle !== title) document.title = nextTitle;
+
+    for (const target of META_TARGETS) {
+      const el = document.querySelector(target.selector);
+      if (!el) continue;
+      const current = el.getAttribute(target.attr) ?? "";
+      if (!current.trim()) continue;
+      const stored = metaBase.get(el);
+      const base = syncSource(current, stored, (v) => lookup(v) ?? v) || current;
+      if (base !== stored) metaBase.set(el, base);
+      const next = lookup(base);
+      if (next && next !== current) el.setAttribute(target.attr, next);
+    }
+  } catch {
+    /* metadata çevirisi asla uygulamayı kırmaz */
+  }
+}
+
+function connectHead() {
+  if (typeof document === "undefined") return;
+  headObserver?.observe(document.head, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["content"],
+  });
+}
+
 function ensureObserver() {
   if (observer || typeof MutationObserver === "undefined") return;
   observer = new MutationObserver((records) => {
@@ -223,10 +290,17 @@ function ensureObserver() {
     if (records.length) schedule();
   });
   connect();
+
+  if (!headObserver) {
+    // Yalnız yazıldığında (değer gerçekten değiştiğinde) tetiklenir — döngü yok.
+    headObserver = new MutationObserver(() => translateDocumentMetadata());
+  }
+  connectHead();
 }
 
 function restoreAll() {
   observer?.disconnect();
+  headObserver?.disconnect();
   const walker = document.createTreeWalker(
     document.body,
     NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -251,6 +325,7 @@ function restoreAll() {
     n = walker.nextNode();
   }
   connect();
+  connectHead();
 }
 
 let loadToken = 0;
@@ -272,6 +347,8 @@ export async function setAutoLanguage(lang: string | undefined | null) {
   currentLang = code;
   dict = { ...next, ...extrasFor(code) };
   ensureObserver();
+  // Başlık ve meta'lar body yürüyüşünün dışında: ayrıca çevrilir.
+  translateDocumentMetadata();
   restoreAll();
   dirty.clear();
   schedule();
