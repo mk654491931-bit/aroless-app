@@ -12,6 +12,7 @@ import {
   seedSwrCache,
   serveStaleWhileRevalidate,
   swrCacheStats,
+  swrWaitMs,
 } from "./swr-cache.server";
 
 type Payload = { items: number[] };
@@ -144,6 +145,16 @@ describe("serveStaleWhileRevalidate", () => {
     ]);
     expect(results.every((r) => r.status === "ready")).toBe(true);
     expect(build).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("swrWaitMs", () => {
+  it("ısınma beklemesini platform istek bütçesinin üzerine çıkarmaz", () => {
+    // Vercel Hobby: istek bütçesi 292 sn, ısınma 20 sn → 20 sn.
+    expect(swrWaitMs({ VERCEL: "1" })).toBe(20_000);
+    // Kalıcı süreçte dar bütçe ısınma beklemesini de daraltır.
+    expect(swrWaitMs({ RENDER_SERVICE_ID: "srv-1", REQUEST_BUDGET_MS: "8000" })).toBe(8_000);
+    expect(swrWaitMs({ RENDER_SERVICE_ID: "srv-1", WARM_WAIT_MS: "25000" })).toBe(25_000);
   });
 });
 

@@ -63,8 +63,14 @@ const RENDER_MARKERS = [
   "RENDER_EXTERNAL_HOSTNAME",
 ];
 
-/** Vercel Hobby varsayılanı: bir fonksiyon en fazla 60 sn çalışır. */
-export const VERCEL_DEFAULT_FUNCTION_SECONDS = 60;
+/**
+ * Vercel'in güncel varsayılan fonksiyon süresi.
+ *
+ * Fluid compute ile birlikte Hobby'de varsayılan ve üst sınır **300 sn**
+ * (Pro/Enterprise: varsayılan 300, üst sınır 800). Eski 60 sn kuralı geçersiz;
+ * 60 sn'de kalmak ağır analizleri fonksiyon ortasında kesip 504 üretir.
+ */
+export const VERCEL_DEFAULT_FUNCTION_SECONDS = 300;
 
 /** Kalıcı süreçte tek bir işin üst sınırı (15 dk). */
 export const MAX_LONG_LIVED_SECONDS = 900;

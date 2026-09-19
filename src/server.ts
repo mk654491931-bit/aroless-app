@@ -7,6 +7,7 @@ import { applySecurityHeaders, isSecureRequest } from "./lib/security-headers";
 import { hostRuntimeSummary } from "./lib/host-runtime.server";
 import { backgroundJobStats } from "./lib/job-runner.server";
 import { swrCacheStats } from "./lib/swr-cache.server";
+import { discoveryDispatchPlan, qstashConfigured } from "./lib/discovery-jobs.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -67,6 +68,13 @@ export default {
           {
             status: "ok",
             ...hostRuntimeSummary(),
+            // Ağır işlerin hangi yoldan gittiği: "qstash" | "in-process" | "inline".
+            // Sunucusuz ortamda "inline" görünüyorsa uzun analizler hâlâ istek
+            // içinde koşuyor demektir (QStash anahtarı girin ya da Render'a taşıyın).
+            workflow: {
+              dispatch: discoveryDispatchPlan(),
+              qstashConfigured: qstashConfigured(),
+            },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),
           },

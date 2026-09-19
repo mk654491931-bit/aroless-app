@@ -294,11 +294,16 @@ export const generateProducts = createServerFn({ method: "POST" })
     const { runProductDiscovery } = await import("@/lib/discovery-pipeline.server");
     const jobs = await import("@/lib/discovery-jobs.server");
 
+    // KRİTİK: istek içinde koşarken hatta MUTLAKA platform bütçesi verilmeli.
+    // Bütçe verilmezse hat 240 sn varsayar; 60/300 sn'lik bir fonksiyonun
+    // ortasında kesilir ve kullanıcı 504 görür. Bütçe ile hat `fast` profile
+    // inip zamanında sonuç döner (Vercel: kısa profil, Render: tam derinlik).
     const inline = () =>
       runProductDiscovery(data, {
         supabase: context.supabase,
         userId: context.userId,
         deductCredit: true,
+        budgetMs: jobs.workerBudgetMs(),
       });
 
     // Sunucusuz ortam + QStash yok: ağır hattı bu istekte kısaltarak koşmaktan

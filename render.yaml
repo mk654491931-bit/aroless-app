@@ -9,8 +9,9 @@
 # 22-key mesh: kod `src/lib/ai-keys.server.ts` her sağlayıcı için BASE adı ve
 # _1.._8 slotlarını tarar — hangi soneki kullanırsan otomatik bulunur.
 #
-# Find Winner Vercel'de 44sn bütçede fast profile düşer, Render'da 884sn full
-# depth koşar. QStash publish timeout'u `discovery-jobs.server.ts` içindeki
+# Find Winner Render'da 884sn full depth koşar; Vercel'de fonksiyon limitine göre
+# (Hobby 300sn → 284sn bütçe, 60sn'ye daraltılırsa fast profile) çalışır.
+# QStash publish timeout'u `discovery-jobs.server.ts` içindeki
 # `qstashTimeoutSeconds()` Render algılanınca otomatik 890s yapar; istemci
 # yoklama bütçesi de aynı fonksiyondan türetilir (yaklaşık 14,9 dk).
 #
@@ -110,7 +111,7 @@ services:
       - key: DISCOVERY_WORKER_URL
         sync: false
       # QStash `Upstash-Timeout` değerini elle sabitlemek için (15..900 sn).
-      # Boşsa platform otomatik seçilir: Render 890 sn, Vercel 58 sn.
+      # Boşsa platform otomatik seçilir: Render 890 sn, Vercel 298 sn.
       - key: QSTASH_TIMEOUT_SECONDS
         sync: false
       # --- AI Gateway (opsiyonel, öncelikli) ---

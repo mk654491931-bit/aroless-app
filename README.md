@@ -150,7 +150,11 @@ BACKGROUND_JOBS=                   # 0/1: arka plan işlerini zorla kapat/aç
 
 Bir 504/hata şikâyetinde ilk bakılacak adres: `https://<servis-adı>.onrender.com/health`.
 
-Süre bütçesi platformdan otomatik türetilir (`src/lib/discovery-jobs.server.ts`): Render'da worker ~884 sn, yoklama ~14,9 dk; Vercel'de 60 sn ve ~52 sn. İki değişken yalnızca gerektiğinde elle sabitlemek içindir:
+Süre bütçesi platformdan otomatik türetilir (`src/lib/host-runtime.server.ts` + `discovery-jobs.server.ts`): Render'da worker ~884 sn, yoklama ~14,9 dk; Vercel'de fonksiyon limiti 300 sn (Hobby güncel limiti) olduğu için worker ~284 sn, yoklama ~4,9 dk.
+
+> **Vercel notu:** Eski "Hobby = 60 sn" kuralı artık geçerli değil (fluid compute ile Hobby'de de varsayılan ve üst sınır 300 sn). Bu yüzden `nitro.config.ts` varsayılanı 300'dür. Projede eski bir `VERCEL_FUNCTION_MAX_DURATION=60` değişkeni kaldıysa silin ya da 300 yapın; build ve tüm runtime bütçeleri bu tek değişkenden türediği için 60'ta kalırsanız ağır analizler fonksiyon ortasında kesilip 504 üretir.
+
+İki değişken yalnızca gerektiğinde elle sabitlemek içindir:
 
 ```text
 # QStash `Upstash-Timeout` (15..900 sn). Boşsa platforma göre seçilir.

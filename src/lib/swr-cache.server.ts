@@ -16,7 +16,11 @@
  * "hazırlanıyor" yanıtı ve ardından gerçek veri gelir.
  */
 
-import { warmingWaitMs, withDeadlineOutcome } from "@/lib/host-runtime.server";
+import {
+  interactiveRequestBudgetMs,
+  warmingWaitMs,
+  withDeadlineOutcome,
+} from "@/lib/host-runtime.server";
 
 export type SwrStatus = "ready" | "stale" | "warming" | "failed";
 
@@ -84,6 +88,17 @@ export function swrCacheStats(): { entries: number; inflight: number } {
   return { entries: entries.size, inflight: inflight.size };
 }
 
+/**
+ * Soğuk önbellekte istek içinde gerçekten bekleyeceğimiz süre.
+ *
+ * `WARM_WAIT_MS` ile platformun istek bütçesinin **küçüğüdür**: hiçbir ayar
+ * tek bir isteği platform limitinin üzerine çıkaramaz. Böylece "istek 504'e
+ * dönmez" garantisi yapılandırmayla bozulamaz.
+ */
+export function swrWaitMs(env: EnvMap = process.env): number {
+  return Math.min(warmingWaitMs(env), interactiveRequestBudgetMs(env));
+}
+
 function startRefresh<T>(opts: SwrOptions<T>): Promise<T> {
   const running = inflight.get(opts.key) as Promise<T> | undefined;
   if (running) return running;
@@ -130,7 +145,7 @@ export async function serveStaleWhileRevalidate<T>(opts: SwrOptions<T>): Promise
   // arka planda hazırlanır.
   if (usable) return { data: usable.data, status: "stale" };
 
-  const waitMs = opts.waitMs ?? warmingWaitMs(env);
+  const waitMs = Math.min(opts.waitMs ?? swrWaitMs(env), swrWaitMs(env));
   const outcome = await withDeadlineOutcome(refresh, waitMs);
   if (outcome.kind === "value") {
     // Üretim bitti: veri kullanılabilirse hazır, değilse (ör. boş liste) istemci

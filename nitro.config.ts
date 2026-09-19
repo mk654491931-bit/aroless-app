@@ -5,12 +5,17 @@ export default {
   preset: process.env["NITRO_PRESET"] ?? "vercel",
   vercel: {
     functions: {
-      // Vercel HOBBY planı: bir fonksiyon en fazla 60 sn çalışabilir; daha
-      // yüksek bir değer deploy'u reddettirir. Bu yüzden varsayılan 60'tır.
-      // Pro/Enterprise plana geçildiğinde tek yapmanız gereken
-      // VERCEL_FUNCTION_MAX_DURATION=300 ortam değişkenini eklemektir;
-      // arka plan işçisi ve bekleme süreleri otomatik olarak genişler.
-      maxDuration: Number(process.env["VERCEL_FUNCTION_MAX_DURATION"] ?? 60),
+      // Vercel'in güncel süre limitleri (fluid compute varsayılan):
+      //   Hobby      → varsayılan 300 sn, üst sınır 300 sn
+      //   Pro/Ent.   → varsayılan 300 sn, üst sınır 800 sn
+      // Eski "Hobby 60 sn" kuralı geçersizdir; 60 sn bırakmak ağır analizleri
+      // fonksiyon ortasında keser ve kullanıcı 504 görür. Bu yüzden varsayılan
+      // 300'dür ve `VERCEL_FUNCTION_MAX_DURATION` ile (build zamanında) ezilir.
+      //
+      // ÖNEMLİ: aynı değişken `host-runtime.server.ts` tarafından okunup tüm
+      // istek/işçi/yoklama bütçelerini türettiği için build ve runtime bütçesi
+      // tek kaynaktan yönetilir: değeri düşürürseniz her şey tutarlı daralır.
+      maxDuration: Number(process.env["VERCEL_FUNCTION_MAX_DURATION"] ?? 300),
     },
   },
 };

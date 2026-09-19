@@ -26,9 +26,9 @@ describe("detectHostRuntime", () => {
     expect(runtime.serverless).toBe(false);
     expect(runtime.backgroundJobs).toBe(true);
     // Önemli: "local" kalıcı servis sayılmaz, aksi halde Vercel varsayılanı
-    // (60 sn) sessizce 900 sn'ye çıkardı.
+    // sessizce 900 sn'ye çıkardı.
     expect(runsOnPersistentHost({})).toBe(false);
-    expect(platformDurationSeconds({})).toBe(60);
+    expect(platformDurationSeconds({})).toBe(300);
   });
 
   it("Render'ı RENDER_SERVICE_ID ile tanır", () => {
@@ -84,7 +84,9 @@ describe("platformDurationSeconds", () => {
     expect(platformDurationSeconds({ VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe(300);
     expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe(300);
     expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5000" })).toBe(900);
-    expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5" })).toBe(60);
+    expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5" })).toBe(300);
+    // Eski varsayılanı isteyen kurulumlar env ile daraltabilir (fast profil).
+    expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" })).toBe(60);
   });
 });
 
@@ -103,9 +105,13 @@ describe("interactiveRequestBudgetMs (504 üst sınırı)", () => {
   });
 
   it("Vercel'de fonksiyon limitinin 8 sn altını alır", () => {
-    expect(interactiveRequestBudgetMs({ VERCEL: "1" })).toBe(52_000);
+    // Vercel Hobby güncel limiti 300 sn → istek bütçesi 292 sn.
+    expect(interactiveRequestBudgetMs({ VERCEL: "1" })).toBe(292_000);
     expect(interactiveRequestBudgetMs({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe(
       292_000,
+    );
+    expect(interactiveRequestBudgetMs({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" })).toBe(
+      52_000,
     );
   });
 });

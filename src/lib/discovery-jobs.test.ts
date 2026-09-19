@@ -39,9 +39,11 @@ afterEach(() => {
 });
 
 describe("functionMaxDurationSeconds", () => {
-  it("keeps the Vercel 60s function ceiling by default", () => {
+  it("keeps the current Vercel ceiling (300s) by default", () => {
+    // Vercel, fluid compute ile Hobby'de de 300 sn'ye izin veriyor; 60 sn'de
+    // kalmak ağır analizi fonksiyon ortasında kesip 504 üretiyordu.
     expect(runsOnLongLivedHost()).toBe(false);
-    expect(functionMaxDurationSeconds()).toBe(60);
+    expect(functionMaxDurationSeconds()).toBe(300);
   });
 
   it("uses the Render persistent-service budget via NITRO_PRESET", () => {
@@ -71,12 +73,18 @@ describe("functionMaxDurationSeconds", () => {
     vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "5000");
     expect(functionMaxDurationSeconds()).toBe(900);
     vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "5");
-    expect(functionMaxDurationSeconds()).toBe(60);
+    expect(functionMaxDurationSeconds()).toBe(300);
   });
 });
 
 describe("workerBudgetMs / clientWaitMs", () => {
-  it("keeps the Vercel fast profile", () => {
+  it("gives Vercel the full-depth budget now that Hobby allows 300s", () => {
+    expect(workerBudgetMs()).toBe(284_000);
+    expect(clientWaitMs()).toBe(292_000);
+  });
+
+  it("falls back to the fast profile when the function budget is narrowed", () => {
+    vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "60");
     expect(workerBudgetMs()).toBe(44_000);
     expect(clientWaitMs()).toBe(52_000);
   });
@@ -97,7 +105,7 @@ describe("workerBudgetMs / clientWaitMs", () => {
 describe("jobPollingPlan", () => {
   it("hands the browser the platform budget instead of a hardcoded wait", () => {
     expect(jobPollingPlan()).toEqual({
-      pollMaxMs: 52_000,
+      pollMaxMs: 292_000,
       pollIntervalMs: JOB_POLL_INTERVAL_MS,
     });
     expect(JOB_POLL_INTERVAL_MS).toBe(2_000);
@@ -115,7 +123,7 @@ describe("jobPollingPlan", () => {
 
 describe("qstashTimeoutSeconds", () => {
   it("stays inside the Vercel limit by default", () => {
-    expect(qstashTimeoutSeconds()).toBe(58);
+    expect(qstashTimeoutSeconds()).toBe(298);
   });
 
   it("uses 890s on Render", () => {
@@ -126,8 +134,8 @@ describe("qstashTimeoutSeconds", () => {
   it("follows the worker when only DISCOVERY_WORKER_URL is set (hybrid setup)", () => {
     vi.stubEnv("DISCOVERY_WORKER_URL", "https://aroless.tech/api/worker");
     expect(workerTargetIsLongLived()).toBe(true);
-    // Tetikleyici hâlâ Vercel'de: kendi istek bütçesi 60 sn kalır...
-    expect(functionMaxDurationSeconds()).toBe(60);
+    // Tetikleyici hâlâ Vercel'de: kendi istek bütçesi Vercel limitine göre kalır...
+    expect(functionMaxDurationSeconds()).toBe(300);
     // ...ama QStash işçiye göre beklemeli, yoksa 504 döner.
     expect(qstashTimeoutSeconds()).toBe(890);
   });
@@ -141,7 +149,7 @@ describe("qstashTimeoutSeconds", () => {
     vi.stubEnv("QSTASH_TIMEOUT_SECONDS", "5000");
     expect(qstashTimeoutSeconds()).toBe(900);
     vi.stubEnv("QSTASH_TIMEOUT_SECONDS", "5");
-    expect(qstashTimeoutSeconds()).toBe(58);
+    expect(qstashTimeoutSeconds()).toBe(298);
   });
 });
 
