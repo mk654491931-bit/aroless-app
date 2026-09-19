@@ -51,6 +51,13 @@ export type CouncilSummary = {
   disagreement?: number;
   data_coverage?: number;
   kill_criteria?: string[];
+  /**
+   * Karne hangi derinlikte üretildi (`enrich` = 6 uzman ekip + müdür; hakem
+   * turu ve denetçi yok). Eski kayıtlarda bulunmaz.
+   */
+  depth?: "full" | "fast" | "enrich";
+  /** Süre bütçesine sığmadığı için atlanan aşamalar (boşsa tam hat koştu). */
+  skipped_stages?: string[];
 };
 
 /** Local competition level, localized for the UI. */

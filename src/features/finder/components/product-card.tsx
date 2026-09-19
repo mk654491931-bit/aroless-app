@@ -498,9 +498,28 @@ export function ProductCard({
             ))}
           </div>
           <div className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-              12 uzman + Müdür ({p.council.director_engine})
-            </span>
+            {p.council.depth === "enrich" ? (
+              /* Kısa karne: 6 uzman üretici ekip + müdür. Hakem turu ve denetçi
+                 yok — sayıyı "12 uzman" diye yazmak yanıltıcı olurdu. */
+              <span
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+                title="Hızlı karne: 6 uzman üretici ekip + müdür. Hakem turu ve bağımsız denetçi bu koşuda atlandı."
+              >
+                6 uzman ekip + Müdür ({p.council.director_engine})
+              </span>
+            ) : (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                12 uzman + Müdür ({p.council.director_engine})
+              </span>
+            )}
+            {(p.council.skipped_stages?.length ?? 0) > 0 && (
+              <span
+                className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-200"
+                title={p.council.skipped_stages?.join(" · ")}
+              >
+                Atlanan aşama: {p.council.skipped_stages?.length}
+              </span>
+            )}
             {typeof p.council.auditor_score === "number" && (
               <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5" title={p.council.auditor_note ?? ""}>
                 Denetçi {p.council.auditor_engine ?? "AI"}: <b className="text-foreground">{p.council.auditor_score}</b>

@@ -134,12 +134,24 @@ export function useFinderSearch(opts: {
     onSuccess: (res, vars) => {
       try {
         const products = toProductList(res);
+        const fallbackMessage =
+          (res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ?? null;
+        // Hat 280 sn ile sınırlı: konsey karneye yer kalmadıysa bunu dürüstçe
+        // söyle ("neden bazı ürünlerde konsey kartı yok?" sorusunun cevabı).
+        const councilSkipped = Boolean(
+          (res as { skipped_council?: boolean } | undefined)?.skipped_council,
+        );
         opts.onResults(
           products.length > 0 ? attachWinnerScores(products) : [],
           (res as { rejected?: RejectedCandidate[] } | undefined)?.rejected ?? [],
-          (res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ?? null,
+          fallbackMessage,
         );
-        setFallbackNotice((res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ?? null);
+        setFallbackNotice(
+          fallbackMessage ??
+            (councilSkipped
+              ? "AI Konsey karneye bu koşuda yer kalmadı (280 sn hat sınırı). Ürünler hibrit motorla puanlandı; aynı nişi tekrar aradığında karne önbellekten daha hızlı gelir."
+              : null),
+        );
         setSearchError(null);
         setStalled(false);
         qc.invalidateQueries({ queryKey: ["profile"] });

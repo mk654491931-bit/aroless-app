@@ -12,6 +12,9 @@
 // Saf mantık: ağ yok, AI anahtarı gerekmez.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  COUNCIL_ENRICH_BUDGET_MS,
+  COUNCIL_ENRICH_MIN_MS,
+  COUNCIL_ENRICH_PROFILE,
   COUNCIL_FAST_PROFILE,
   COUNCIL_FULL_PROFILE,
   COUNCIL_RETURN_MARGIN_MS,
@@ -79,6 +82,64 @@ describe("profil rezervleri platform limitine sığar", () => {
       elapsed += budget.reserves[stage];
     }
     expect(elapsed + COUNCIL_RETURN_MARGIN_MS).toBeLessThanOrEqual(HOBBY_LIMIT_MS);
+  });
+});
+
+describe("kısa karne profili (ürün bulucu içinden)", () => {
+  it("6 uzman ekip + müdür koşar; hakem turu ve denetçi atlanır", () => {
+    const budget = planCouncilBudget({ budgetMs: HOBBY_LIMIT_MS, depth: "enrich", now: 0 });
+    expect(budget.depth).toBe("enrich");
+    expect(budget.skips).toEqual(["review", "auditor"]);
+    expect(sumReserves(COUNCIL_ENRICH_PROFILE)).toBe(52_000);
+  });
+
+  it("otomatik seçimde (depth verilmezse) asla enrich'e düşmez", () => {
+    // Kısa karne yalnızca çağıran AÇIKÇA istediğinde koşar; /council ekranı
+    // 300 sn'de hızlı profille tam rapor almaya devam eder.
+    expect(planCouncilBudget({ budgetMs: HOBBY_LIMIT_MS, now: 0 }).depth).toBe("fast");
+    expect(planCouncilBudget({ budgetMs: HOBBY_LIMIT_MS, now: 0 }).skips).toEqual([]);
+  });
+
+  it("atlanan aşamalar için hiç çağrı bütçesi harcanmaz", () => {
+    const budget = planCouncilBudget({
+      budgetMs: COUNCIL_ENRICH_BUDGET_MS,
+      depth: "enrich",
+      now: 0,
+    });
+    // Kapı `skips` listesidir (council.server bu aşamaları hiç başlatmaz);
+    // rezervleri de 0 olduğu için zincirden hiç süre almazlar.
+    expect(budget.skips).toContain("review");
+    expect(budget.skips).toContain("auditor");
+    expect(budget.reserves.review).toBe(0);
+    expect(budget.reserves.auditor).toBe(0);
+    // Atlanan aşamalar sonraki rezervlere yazılmaz: müdür yine yer bulur.
+    expect(laterReserveMs(budget, "teams")).toBe(18_000);
+  });
+
+  it("ürün başına maliyet sabittir ve 280 sn'lik hatta sığar", () => {
+    // Bulucu hat 280 sn ile sınırlı: tek bir ürün karnesi (rezervler + en kötü
+    // ek deneme) bu bütçenin küçük bir dilimini kullanmalı ki birkaç ürün
+    // birden karne alabilsin.
+    expect(COUNCIL_ENRICH_MIN_MS).toBe(62_000);
+    expect(COUNCIL_ENRICH_BUDGET_MS).toBe(90_000);
+    expect(COUNCIL_ENRICH_BUDGET_MS).toBeLessThan(280_000 / 2);
+    // Alt sınırın altında bir bütçe verilirse hat başlamamalı (bkz. bulucu:
+    // `councilCount` hesabı bu sabitle ürün sayısını belirler).
+    expect(COUNCIL_ENRICH_MIN_MS).toBeGreaterThan(COUNCIL_ENRICH_BUDGET_MS / 2);
+  });
+
+  it("kısa karnede de hiçbir aşama sonrakini imkânsız bırakmaz", () => {
+    const budget = planCouncilBudget({
+      budgetMs: COUNCIL_ENRICH_BUDGET_MS,
+      depth: "enrich",
+      now: 0,
+    });
+    let elapsed = 0;
+    for (const stage of ["signals", "teams", "director"] as const) {
+      expect(stageFits(budget, stage, elapsed)).toBe(true);
+      elapsed += budget.reserves[stage];
+    }
+    expect(elapsed + COUNCIL_RETURN_MARGIN_MS).toBeLessThanOrEqual(COUNCIL_ENRICH_BUDGET_MS);
   });
 });
 

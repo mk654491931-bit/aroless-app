@@ -5,7 +5,10 @@
 // limiti aşılır. Bu yüzden her platform varyantı ayrı ayrı sabitlenir.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DISCOVERY_MAX_BUDGET_MS,
+  DISCOVERY_RETURN_MARGIN_MS,
   JOB_POLL_INTERVAL_MS,
+  councilEnrichLimit,
   clientWaitMs,
   discoveryDispatchPlan,
   functionMaxDurationSeconds,
@@ -83,8 +86,13 @@ describe("functionMaxDurationSeconds", () => {
 });
 
 describe("workerBudgetMs / clientWaitMs", () => {
-  it("gives Vercel the full-depth budget now that Hobby allows 300s", () => {
-    expect(workerBudgetMs()).toBe(284_000);
+  it("ürün bulucu her platformda 280 sn tavanına oturur", () => {
+    // Ürün kararı: hat en fazla 280 sn sürsün. Vercel'in 300 sn limiti bunun
+    // üstünde bir tavan olsa bile hat kendini 280 sn'ye sığdırır.
+    expect(workerBudgetMs()).toBe(DISCOVERY_MAX_BUDGET_MS);
+    expect(DISCOVERY_MAX_BUDGET_MS).toBe(280_000);
+    // Sonucu yazmaya pay kalsın: 280 + pay, 300 sn'lik fonksiyon limitini aşmaz.
+    expect(DISCOVERY_MAX_BUDGET_MS + 16_000).toBeLessThanOrEqual(300_000);
     expect(clientWaitMs()).toBe(292_000);
   });
 
@@ -94,9 +102,10 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(clientWaitMs()).toBe(52_000);
   });
 
-  it("gives a Render worker the full-depth budget", () => {
+  it("Render'ın 900 sn limiti olsa bile hat 280 sn'de durur", () => {
     vi.stubEnv("NITRO_PRESET", "render_com");
-    expect(workerBudgetMs()).toBe(884_000);
+    expect(functionMaxDurationSeconds()).toBe(900);
+    expect(workerBudgetMs()).toBe(DISCOVERY_MAX_BUDGET_MS);
     expect(clientWaitMs()).toBe(892_000);
   });
 
@@ -121,27 +130,52 @@ describe("workerBudgetMs / clientWaitMs", () => {
   });
 });
 
+describe("councilEnrichLimit (kalan süreye göre karne sayısı)", () => {
+  it("280 sn'lik hat bütçesinde 4 ürüne karne çıkarır", () => {
+    // (280 sn - 5 sn yazma payı) / 62 sn karne = 4 → tek bir ürün kalan süreyi
+    // yiyip diğer ürünleri karnesiz bırakamaz.
+    expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBe(4);
+    expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBeLessThan(8);
+  });
+
+  it("süre azaldıkça karne sayısı da azalır (sığmayan iş başlatılmaz)", () => {
+    expect(councilEnrichLimit(200_000)).toBe(3);
+    expect(councilEnrichLimit(130_000)).toBe(2);
+    expect(councilEnrichLimit(65_000)).toBe(0);
+    expect(councilEnrichLimit(0)).toBe(0);
+    expect(councilEnrichLimit(-1_000)).toBe(0);
+    expect(councilEnrichLimit(Number.NaN)).toBe(0);
+  });
+
+  it("üst sınırı aşmaz", () => {
+    expect(councilEnrichLimit(10 * 60_000)).toBe(8);
+    expect(councilEnrichLimit(10 * 60_000, 3)).toBe(3);
+  });
+});
+
 describe("jobPollingPlan", () => {
-  it("hands the browser the platform budget instead of a hardcoded wait", () => {
+  it("yoklama penceresi 280 sn'lik iş + kuyruk payıdır", () => {
     expect(jobPollingPlan()).toEqual({
-      pollMaxMs: 292_000,
+      pollMaxMs: DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS,
       pollIntervalMs: JOB_POLL_INTERVAL_MS,
     });
+    expect(jobPollingPlan().pollMaxMs).toBe(300_000);
     expect(JOB_POLL_INTERVAL_MS).toBe(2_000);
   });
 
-  it("lets the browser keep polling past the old 6-minute client cap on Render", () => {
+  it("Render'da eski 892 sn bekleme kalktı: pencere yine 300 sn", () => {
     vi.stubEnv("NITRO_PRESET", "render_com");
     const plan = jobPollingPlan();
-    expect(plan.pollMaxMs).toBe(892_000);
-    expect(plan.pollMaxMs).toBeGreaterThan(6 * 60_000);
-    // Worker bütçesi yoklamadan kısa olmalı ki istemci sonucu görmeden pes etmesin.
+    expect(plan.pollMaxMs).toBe(300_000);
+    // İş 280 sn'de bittiği için kullanıcı 14 dakika boşuna beklemez...
+    expect(plan.pollMaxMs).toBeLessThan(400_000);
+    // ...ama yoklama iş bütçesinden uzun olmalı ki sonuç yazılmadan pes etmesin.
     expect(plan.pollMaxMs).toBeGreaterThan(workerBudgetMs());
   });
 
-  it("uzak worker'lı Vercel kurulumunda da 400 sn'lik konseyi bekler", () => {
+  it("uzak worker tanımlı olsa bile pencere 280 sn'lik işe göre kalır", () => {
     vi.stubEnv("WORKER_URL", "https://aroless.onrender.com");
-    expect(jobPollingPlan().pollMaxMs).toBe(892_000);
+    expect(jobPollingPlan().pollMaxMs).toBe(300_000);
   });
 });
 

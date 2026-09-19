@@ -41,7 +41,7 @@ import {
   runsOnPersistentHost,
 } from "@/lib/host-runtime.server";
 import { backgroundJobsEnabled, runInBackground } from "@/lib/job-runner.server";
-import { MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
+import { COUNCIL_ENRICH_MIN_MS, MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -185,11 +185,44 @@ export function qstashTimeoutSeconds(): number {
 }
 
 /**
- * İşçinin ağır hatta harcayabileceği süre. Üst sınırın altında bırakılan pay,
- * sonucu Supabase + Redis'e yazmak ve yanıt dönmek içindir.
+ * Ürün bulucu ("find winners") için SERT üst sınır (ms).
+ *
+ * Ürün kararı: ağır hat en fazla 280 sn sürsün. Bu tek sayı hem hattın
+ * bütçesini hem istemcinin yoklama penceresini belirler; platform 900 sn verse
+ * bile hat kendini 280 sn'ye sığdırır ve kalite adımları için içeride rezerv
+ * ayrılır (bkz. `discovery-pipeline.server.ts` → VERIFY_RESERVE_MS).
+ */
+export const DISCOVERY_MAX_BUDGET_MS = 280_000;
+
+/** Sonucu yazmak + yanıt dönmek + kuyruk gecikmesi için ayrılan pay (ms). */
+export const DISCOVERY_RETURN_MARGIN_MS = 20_000;
+
+/**
+ * İşçinin ağır hatta harcayabileceği süre. Platformun limiti ne olursa olsun
+ * `DISCOVERY_MAX_BUDGET_MS` ile sınırlanır; altındaki 16 sn'lik pay sonucu
+ * Supabase + Redis'e yazmak ve yanıt dönmek içindir.
  */
 export function workerBudgetMs(): number {
-  return Math.max(25_000, (functionMaxDurationSeconds() - 16) * 1000);
+  const platformMs = (functionMaxDurationSeconds() - 16) * 1000;
+  return Math.max(25_000, Math.min(DISCOVERY_MAX_BUDGET_MS, platformMs));
+}
+
+/** Ürün bulucunun konsey karnesinden sonra sonucu yazması için ayrılan pay. */
+export const COUNCIL_ENRICH_MARGIN_MS = 5_000;
+
+/**
+ * Ürün bulucunun kaç ürününe AI Konsey karnesi çıkarabileceği.
+ *
+ * Karne (6 uzman üretici ekip + müdür) ürün başına ~62 sn rezerv ister; bu
+ * yüzden kaç ürünün karne alacağını yalnızca **kalan süre** belirler. Çıktı: tek
+ * bir ürün hattın bütçesini yiyip sonrakileri karnesiz bırakamaz, ama kalan süre
+ * varsa da boş bırakılmaz. 0 ise bulucu konseyi hiç çağırmaz ve sonucu
+ * `skipped_council` ile dürüstçe işaretler.
+ */
+export function councilEnrichLimit(timeLeftMs: number, limit = 8): number {
+  if (!Number.isFinite(timeLeftMs)) return 0;
+  const usable = timeLeftMs - COUNCIL_ENRICH_MARGIN_MS;
+  return Math.max(0, Math.min(limit, Math.floor(usable / COUNCIL_ENRICH_MIN_MS)));
 }
 
 /**
@@ -211,16 +244,20 @@ export function clientWaitMs(): number {
 }
 
 /**
- * İstemcinin yoklama planı — tek kaynak burasıdır.
+ * ÜRÜN BULUCU için yoklama planı — tek kaynak burasıdır.
  *
- * Tarayıcı sabit bir süre varsaymaz; bütçe `jobWaitBudgetSeconds()`'ten gelir:
- * iş bu süreçte koşuyorsa platformun limiti (Render ~14,9 dk), iş uzak worker'a
- * gidiyorsa worker'ın limiti (hibritte de ~14,9 dk). Böylece uzun süren iş
- * istemcide erken "zaman aşımı" olarak görünmez; worker yoksa kısa süreli
- * Vercel fonksiyonu da gereksiz yere yoklanmaz.
+ * İş artık 280 sn ile sınırlı olduğu için pencere de ona göre kurulur: 280 sn
+ * iş + 20 sn kuyruk/gecikme payı. Eskiden Render'da 14,9 dk bekleniyordu; iş
+ * hiç o kadar sürmediği için kullanıcı saniyelerce boşuna bekliyordu.
+ *
+ * Konsey gibi DAHA UZUN işlerin kendi penceresi vardır (`clientWaitMs`), bu
+ * yüzden ikisi ayrı tutulur.
  */
 export function jobPollingPlan(): { pollMaxMs: number; pollIntervalMs: number } {
-  return { pollMaxMs: clientWaitMs(), pollIntervalMs: JOB_POLL_INTERVAL_MS };
+  return {
+    pollMaxMs: DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS,
+    pollIntervalMs: JOB_POLL_INTERVAL_MS,
+  };
 }
 
 function isNewSupabaseApiKey(value: string): boolean {

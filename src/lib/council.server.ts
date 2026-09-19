@@ -96,9 +96,11 @@ export type CouncilReport = {
   alt_market: string;
   /**
    * Rapor hangi derinlikte üretildi:
-   *  - `full` → kalıcı süreçte/uzak worker'da tam hat (6 üretici + 6 hakem + müdür + denetçi)
-   *  - `fast` → 300 sn'lik sunucusuz isteğe sığacak şekilde kısaltılmış hat
-   * Arayüz bunu dürüstçe gösterir; iki rapor aynı değildir.
+   *  - `full`   → kalıcı süreçte/uzak worker'da tam hat (6 üretici + 6 hakem + müdür + denetçi)
+   *  - `fast`   → 300 sn'lik sunucusuz isteğe sığacak şekilde kısaltılmış hat
+   *  - `enrich` → ürün bulucunun İÇİNDEN çağrılan kısa karne (6 üretici + müdür;
+   *               hakem turu ve denetçi yok — 280 sn'lik hat bütçesine sığar)
+   * Arayüz bunu dürüstçe gösterir; üç rapor aynı değildir.
    */
   depth: CouncilDepth;
   /** Süre bütçesine sığmadığı için atlanan aşamalar (boşsa tam hat koştu). */
@@ -628,11 +630,9 @@ async function build(
 
   // Canlı veri hatları 24 saat önbellekli; yine de bütçeye bağlanır: askıda
   // kalan bir kaynak tüm konseyi geciktirmemeli (boş sinyalle devam ederiz).
-  const signalsOutcome = await withStageDeadline(
-    collectSignals(query, country, category),
-    budget,
-    "signals",
-  );
+  const signalsOutcome = budget.skips.includes("signals")
+    ? ({ kind: "pending" } as const)
+    : await withStageDeadline(collectSignals(query, country, category), budget, "signals");
   const signals =
     signalsOutcome.kind === "value" ? signalsOutcome.value.data : emptySignals(query, country);
   if (signalsOutcome.kind !== "value") skipped.push("canlı veri hatları");
@@ -667,7 +667,7 @@ async function build(
   const tTier2 = Date.now();
   // 6 hakem ekip, slot 6-11. Süre yetmiyorsa hakem turu ATLANIR: her ekip kendi
   // puanını korur (aşağıdaki `rev?.score ?? t.raw_score`), rapor yine döner.
-  const reviewersFit = stageFits(budget, "review");
+  const reviewersFit = stageFits(budget, "review") && !budget.skips.includes("review");
   if (!reviewersFit) skipped.push("hakem turu (6 hakem)");
   const reviewCtx = ctxFor("review");
   const reviewed: Awaited<ReturnType<typeof reviewTeam>>[] = reviewersFit
@@ -717,7 +717,7 @@ async function build(
   const tTier3 = Date.now();
   // Müdür aşaması sığmıyorsa (veya hiçbir motor cevap vermediyse) icra raporu
   // ekip çıktılarından yerel olarak derlenir — kullanıcı 504 görmez.
-  const directorFits = stageFits(budget, "director");
+  const directorFits = stageFits(budget, "director") && !budget.skips.includes("director");
   if (!directorFits) skipped.push("müdür sentezi (model)");
   let director = directorFits
     ? await runDirector(query, country, teams, block, directorVelora, coverage, ctxFor("director"))
@@ -731,7 +731,7 @@ async function build(
   const tTier4 = Date.now();
 
   // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
-  const auditorFits = stageFits(budget, "auditor");
+  const auditorFits = stageFits(budget, "auditor") && !budget.skips.includes("auditor");
   if (!auditorFits) skipped.push("bağımsız denetçi (14. ajan)");
   const auditor = auditorFits
     ? await runAuditor(
@@ -804,16 +804,28 @@ async function build(
  * Önbellek anahtarı DERİNLİK İÇERMEZ: tetikleyici (Vercel) ile worker (Render)
  * aynı anahtarı üretmeli ki istemci worker'ın yazdığı sonucu görebilsin.
  */
+/** Kısa karnenin önbellek alanı — tam raporun (`council`) yerine geçmez. */
+export const COUNCIL_ENRICH_SCOPE = "council-enrich";
+
 export async function runCouncil(
   query: string,
   country = "GLOBAL",
   category = "General",
   lang = "tr",
   budgetMs: number = defaultCouncilBudgetMs(),
+  depth?: CouncilDepth,
 ): Promise<CouncilReport> {
   activeCouncilLang = lang.slice(0, 2);
-  const budget = planCouncilBudget({ budgetMs });
-  const { data, cache_hit } = await cached("council", [query, country, category, lang], () =>
+  // Zenginleştirme (ürün bulucu içinden): kullanıcı aynı ürün için TAM konseyi
+  // zaten çalıştırdıysa o raporu kullan — bedava kalite. Yoksa kısa karne AYRI
+  // önbellek alanına yazılır ki 24 saat boyunca tam raporun yerine geçmesin.
+  if (depth === "enrich") {
+    const full = await peekCouncil(query, country, category, lang);
+    if (full) return full;
+  }
+  const budget = planCouncilBudget({ budgetMs, depth });
+  const scope = depth === "enrich" ? COUNCIL_ENRICH_SCOPE : "council";
+  const { data, cache_hit } = await cached(scope, [query, country, category, lang], () =>
     build(query, country, category, budget),
   );
   return { ...data, cache_hit };

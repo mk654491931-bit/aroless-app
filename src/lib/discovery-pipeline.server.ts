@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { callGemini, callLovableAI, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
-import { MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
+import type { CouncilReport } from "@/lib/council.server";
 import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
@@ -133,6 +133,11 @@ export type DiscoveryResult = {
   min_score: number;
   fallback: { type: "relaxed"; message: string } | null;
   fallback_engine: string;
+  /**
+   * AI Konsey karneyi bu koşuda hiç çalıştırmadı (hat 280 sn'ye sıkıştı ve
+   * ürün başına ayrılan rezerv kadar süre kalmadı). UI bunu dürüstçe söyler.
+   */
+  skipped_council?: boolean;
 };
 
 /** Compact, model-friendly summary of a product used as debate context. */
@@ -678,6 +683,8 @@ JSON shape:
     (p) => (p.hybrid?.calculated_score ?? 0) >= minScore,
   );
   let fallback: { type: "relaxed"; message: string } | null = null;
+  /** Konsey karneye yer kalmadıysa `true` — sonuç bunu dürüstçe taşır. */
+  let skippedCouncil = false;
 
   if (finalProducts.length === 0) {
     // Fallback A — relax the threshold and show the best available.
@@ -710,22 +717,35 @@ JSON shape:
   }
 
   // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
-  // En pahalı adım: yalnızca geniş bütçede (Pro/uzun fonksiyon limiti) çalışır.
-  // Konsey KENDİ bütçesini alır: `deadline - now`. Böylece hattın kalan süresini
-  // yiyip işi yarıda bırakamaz (504 / "job failed" yerine ya rapor ya da atlama).
-  if (!fast && hasTime(MIN_INLINE_COUNCIL_MS)) {
+  // En pahalı adım. Hat 280 sn ile sınırlı olduğu için karne KISA PROFİLDE
+  // (`depth: "enrich"`) çağrılır: 6 uzman ekip + müdür paralel koşar, hakem turu
+  // ve bağımsız denetçi atlanır — ve bu durum ürün kartında dürüstçe yazılır.
+  // Ürün başına maliyet sabittir (~62 sn rezerv), bu yüzden kaç ürünün karne
+  // alacağını KALAN SÜRE belirler: tek bir ürün hattın bütçesini yiyemez.
+  if (!fast) {
+    const { COUNCIL_ENRICH_BUDGET_MS, COUNCIL_ENRICH_MIN_MS } =
+      await import("@/lib/council-budget.server");
+    const { councilEnrichLimit } = await import("@/lib/discovery-jobs.server");
     const { runCouncil } = await import("@/lib/council.server");
-    const COUNCIL_LIMIT = 8;
-    const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
+    const councilCount = councilEnrichLimit(timeLeft());
+    const councilTargets = finalProducts.slice(0, councilCount);
+    if (councilTargets.length === 0) skippedCouncil = true;
     const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
       try {
-        const report = await runCouncil(p.name, country, data.category, "tr", timeLeft());
+        const report = await runCouncil(
+          p.name,
+          country,
+          data.category,
+          "tr",
+          Math.max(COUNCIL_ENRICH_MIN_MS, Math.min(timeLeft() - 3_000, COUNCIL_ENRICH_BUDGET_MS)),
+          "enrich",
+        );
         const council: CouncilSummary = {
           velora_score: report.velora_score,
           verdict: report.verdict,
           director_engine: report.director_engine,
           executive_report: report.executive_report,
-          teams: report.teams.map((t) => ({
+          teams: report.teams.map((t: CouncilReport["teams"][number]) => ({
             team: t.team,
             title: t.title,
             score: t.score,
@@ -747,13 +767,19 @@ JSON shape:
           disagreement: report.disagreement,
           data_coverage: report.data_coverage,
           kill_criteria: report.kill_criteria,
+          depth: report.depth,
+          skipped_stages: report.skipped_stages,
         };
+        // Karne gövdesi boşsa (tüm motorlar susmuş) ürünü karne ile etiketlemeyiz.
+        if (!council.executive_report && council.velora_score <= 0) return p;
         return { ...p, council };
       } catch {
         return p;
       }
     });
-    finalProducts = [...withCouncil, ...finalProducts.slice(COUNCIL_LIMIT)];
+    finalProducts = [...withCouncil, ...finalProducts.slice(councilTargets.length)];
+  } else {
+    skippedCouncil = true;
   }
 
   // Ortak karar: hibrit motor puanı ile AI Konsey puanının ortalaması.
@@ -829,5 +855,6 @@ JSON shape:
     min_score: minScore,
     fallback,
     fallback_engine: fallbackEngine,
+    skipped_council: skippedCouncil,
   };
 }

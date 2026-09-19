@@ -31,7 +31,7 @@ import {
   type DeadlineOutcome,
 } from "@/lib/host-runtime.server";
 
-export type CouncilDepth = "full" | "fast";
+export type CouncilDepth = "full" | "fast" | "enrich";
 
 /** Aşama sırası. Rezervler bu sıraya göre "sonrası" toplanır. */
 export const COUNCIL_STAGE_ORDER = ["signals", "teams", "review", "director", "auditor"] as const;
@@ -45,6 +45,8 @@ type Profile = {
   maxAttempts: number;
   /** Aşama rezervleri — toplamı bütçeye sığmak zorundadır. */
   reserves: Record<CouncilStage, number>;
+  /** Bu profilde HİÇ koşmayan aşamalar (rapor bunu dürüstçe listeler). */
+  skips?: CouncilStage[];
 };
 
 /**
@@ -81,8 +83,48 @@ export const COUNCIL_FULL_PROFILE: Profile = {
   },
 };
 
+/**
+ * Zenginleştirme profili — ürün bulucu gibi SÜRE KISITLI bir hattın İÇİNDEN
+ * çağrılır.
+ *
+ * 6 uzman ekip (üretici) + müdür koşar; hakem turu ve bağımsız denetçi
+ * ATLANIR ve bu durum raporda `skipped_stages` + `depth: "enrich"` ile
+ * dürüstçe söylenir. Rezervler toplamı 52 sn + 10 sn dönüş payı = 62 sn:
+ * böylece tek bir ürün bütün bütçeyi yiyemez ve aynı iş içinde birkaç ürün
+ * birden çok motorlu karne alabilir.
+ */
+export const COUNCIL_ENRICH_PROFILE: Profile = {
+  perCallMs: 14_000,
+  maxAttempts: 2,
+  reserves: {
+    signals: 8_000,
+    teams: 26_000,
+    review: 0,
+    director: 18_000,
+    auditor: 0,
+  },
+  skips: ["review", "auditor"],
+};
+
 /** Sonucu yazıp yanıtı serialize etmek için ayrılan pay. */
 export const COUNCIL_RETURN_MARGIN_MS = 10_000;
+
+/**
+ * Zenginleştirmenin anlamlı olması için gereken en düşük bütçe (ms).
+ * Altında hiç başlatmayız: eksik bir karne üretmek yerine ürünü olduğu gibi
+ * bırakırız.
+ */
+export const COUNCIL_ENRICH_MIN_MS = sumReserves(COUNCIL_ENRICH_PROFILE) + COUNCIL_RETURN_MARGIN_MS;
+
+/**
+ * Kısa karneye verilebilecek ÜST bütçe (ms).
+ *
+ * Rezervler tek başına 52 sn tutar; en kötü durumda hakem/deneme tekrarları da
+ * eklenince ürün başına maliyet ~62-70 sn'yi geçmez. Üst sınırı bu yüzden
+ * koyuyoruz: bulucu hattı 8 ürünü karneye çıkarmak istese bile tek bir ürün
+ * hattın kalan süresini yiyip sonrakileri imkânsız bırakamaz.
+ */
+export const COUNCIL_ENRICH_BUDGET_MS = 90_000;
 
 /** Bu süreden kısa bir çağrı başlatmak anlamsız (boşa zaman aşımı olur). */
 export const MIN_CALL_MS = 8_000;
@@ -147,12 +189,19 @@ export type CouncilBudget = {
   perCallMs: number;
   maxAttempts: number;
   reserves: Record<CouncilStage, number>;
+  /** Bu profilde hiç koşmayacak aşamalar (rapora `skipped_stages` olarak yazılır). */
+  skips: CouncilStage[];
 };
 
 /**
  * Bütçe tam profili (750 sn rezerv + dönüş payı) kaldırıyor mu?
  * Kaldırmıyorsa hızlı profille koşar: 300 sn'lik Hobby isteği de tam bu yüzden
  * 504 yerine rapor üretir.
+ */
+/**
+ * Bütçeye göre profil. `enrich` yalnızca çağıran AÇIKÇA istediğinde seçilir
+ * (`planCouncilBudget({ depth: "enrich" })`): ürün bulucu içinden çağrılan
+ * kısa karnedir, tam bir konsey raporu değildir.
  */
 export function councilDepthFor(budgetMs: number): CouncilDepth {
   return sumReserves(COUNCIL_FULL_PROFILE) + COUNCIL_RETURN_MARGIN_MS <= budgetMs ? "full" : "fast";
@@ -169,7 +218,12 @@ export function planCouncilBudget(
   const now = opts.now ?? Date.now();
   const rawBudget = Math.max(0, Math.round(opts.budgetMs ?? DEFAULT_COUNCIL_BUDGET_MS));
   const depth = opts.depth ?? councilDepthFor(rawBudget);
-  const profile = depth === "full" ? COUNCIL_FULL_PROFILE : COUNCIL_FAST_PROFILE;
+  const profile =
+    depth === "full"
+      ? COUNCIL_FULL_PROFILE
+      : depth === "enrich"
+        ? COUNCIL_ENRICH_PROFILE
+        : COUNCIL_FAST_PROFILE;
   return {
     depth,
     startedAt: now,
@@ -178,6 +232,7 @@ export function planCouncilBudget(
     perCallMs: profile.perCallMs,
     maxAttempts: profile.maxAttempts,
     reserves: { ...profile.reserves },
+    skips: [...(profile.skips ?? [])],
   };
 }
 
