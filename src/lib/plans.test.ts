@@ -6,6 +6,12 @@ import {
   planForLevel,
   quotaFor,
   ALL_MODULES,
+  ADMIN_PERIOD_MONTHS,
+  normalizePlanId,
+  addMonths,
+  adminGrantFor,
+  daysLeft,
+  isPlanExpired,
 } from "./plans";
 
 describe("PLANS", () => {
@@ -162,5 +168,74 @@ describe("quotaFor", () => {
     expect(ADMIN_QUOTA.toolRuns).toBe(250);
     expect(ADMIN_QUOTA.councilRuns).toBe(250);
     expect(ADMIN_QUOTA.radarScans).toBe(250);
+  });
+});
+
+describe("admin paket tanımlama yardımcıları", () => {
+  it("ADMIN_PERIOD_MONTHS 1, 2, 3, 6 ve 12 ay seçeneklerini sunar", () => {
+    expect([...ADMIN_PERIOD_MONTHS]).toEqual([1, 2, 3, 6, 12]);
+    expect([...ADMIN_PERIOD_MONTHS].every((m) => m >= 1 && m <= 12)).toBe(true);
+  });
+
+  it("normalizePlanId büyük/küçük harf duyarsız paket döner", () => {
+    expect(normalizePlanId("starter")).toBe("Starter");
+    expect(normalizePlanId("PRO")).toBe("Pro");
+    expect(normalizePlanId(" Business ")).toBe("Business");
+    expect(normalizePlanId("enterprise")).toBe("Business");
+  });
+
+  it("normalizePlanId geçersiz değerlerde null döner", () => {
+    expect(normalizePlanId("free")).toBeNull();
+    expect(normalizePlanId("")).toBeNull();
+    expect(normalizePlanId(undefined)).toBeNull();
+    expect(normalizePlanId(null)).toBeNull();
+    expect(normalizePlanId(42)).toBeNull();
+  });
+
+  it("addMonths 1 ve 2 aylık süreyi doğru hesaplar", () => {
+    const start = "2026-01-15T10:00:00.000Z";
+    expect(addMonths(start, 1)).toBe("2026-02-15T10:00:00.000Z");
+    expect(addMonths(start, 2)).toBe("2026-03-15T10:00:00.000Z");
+    expect(addMonths(start, 12)).toBe("2027-01-15T10:00:00.000Z");
+  });
+
+  it("addMonths ay sonu taşmasını kırpar (31 Oca + 1 ay → Şubat sonu)", () => {
+    expect(addMonths("2026-01-31T00:00:00.000Z", 1)).toBe("2026-02-28T00:00:00.000Z");
+    // Artık yıl: 2028 Şubat 29 gün.
+    expect(addMonths("2028-01-31T00:00:00.000Z", 1)).toBe("2028-02-29T00:00:00.000Z");
+  });
+
+  it("addMonths süreyi 1..36 ay aralığına sınırlar", () => {
+    const start = "2026-06-01T00:00:00.000Z";
+    expect(addMonths(start, 0)).toBe(addMonths(start, 1));
+    expect(addMonths(start, 999)).toBe(addMonths(start, 36));
+    expect(addMonths(start, 1.4)).toBe(addMonths(start, 1));
+  });
+
+  it("addMonths geçersiz tarihte hata verir", () => {
+    expect(() => addMonths("bozuk-tarih", 1)).toThrow("INVALID_DATE");
+  });
+
+  it("adminGrantFor paket kredisini PLANS ile aynı tutar", () => {
+    expect(adminGrantFor("Starter")).toEqual({ credits: 8, simCredits: 5 });
+    expect(adminGrantFor("Pro")).toEqual({ credits: 15, simCredits: 10 });
+    expect(adminGrantFor("Business")).toEqual({ credits: 50, simCredits: 25 });
+  });
+
+  it("daysLeft kalan günü yukarı yuvarlar ve geçmişte 0 döner", () => {
+    const now = new Date("2026-05-01T00:00:00.000Z");
+    expect(daysLeft("2026-05-31T00:00:00.000Z", now)).toBe(30);
+    expect(daysLeft("2026-05-01T12:00:00.000Z", now)).toBe(1);
+    expect(daysLeft("2026-04-01T00:00:00.000Z", now)).toBe(0);
+    expect(daysLeft(null, now)).toBeNull();
+    expect(daysLeft("bozuk", now)).toBeNull();
+  });
+
+  it("isPlanExpired süresi dolmuş paketi tespit eder", () => {
+    const now = new Date("2026-05-01T00:00:00.000Z");
+    expect(isPlanExpired("2026-04-30T00:00:00.000Z", now)).toBe(true);
+    expect(isPlanExpired("2026-06-01T00:00:00.000Z", now)).toBe(false);
+    // Bitiş tarihi yoksa süresiz → dolmamış sayılır.
+    expect(isPlanExpired(null, now)).toBe(false);
   });
 });

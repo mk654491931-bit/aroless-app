@@ -148,3 +148,79 @@ export function quotaFor(
     radarScans: p.radarScans,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Admin paket tanımlama (yönetici, seçtiği kullanıcıya süreli paket)  */
+/* ------------------------------------------------------------------ */
+
+/** Adminin paket tanımlarken seçebileceği süreler (ay). */
+export const ADMIN_PERIOD_MONTHS = [1, 2, 3, 6, 12] as const;
+
+export type AdminPeriodMonths = (typeof ADMIN_PERIOD_MONTHS)[number];
+
+/** Süre üst sınırı (ay) — kazara 100 ay yazılmasını engeller. */
+export const ADMIN_MAX_PERIOD_MONTHS = 36;
+
+/** Metni geçerli bir paket kimliğine çevirir (büyük/küçük harf duyarsız). */
+export function normalizePlanId(value: unknown): PlanId | null {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text === "starter") return "Starter";
+  if (text === "pro") return "Pro";
+  if (text === "business" || text === "enterprise" || text === "ultra") return "Business";
+  return null;
+}
+
+/**
+ * Verilen tarihe ay ekler. Ay sonu taşması kırpılır (31 Oca + 1 ay → 28/29 Şub),
+ * böylece süre her zaman takvimde gerçekten var olan bir güne denk gelir.
+ */
+export function addMonths(iso: string, months: number): string {
+  const base = new Date(iso);
+  if (Number.isNaN(base.getTime())) throw new Error("INVALID_DATE");
+  const whole = Math.min(ADMIN_MAX_PERIOD_MONTHS, Math.max(1, Math.round(months)));
+  const day = base.getUTCDate();
+  const target = new Date(base.getTime());
+  target.setUTCDate(1);
+  target.setUTCMonth(target.getUTCMonth() + whole);
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return target.toISOString();
+}
+
+/** Admin tanımlamasında paketle birlikte verilen simülasyon kredisi. */
+export const ADMIN_SIM_GRANTS: Record<PlanId, number> = {
+  Starter: 5,
+  Pro: 10,
+  Business: 25,
+};
+
+/** Admin paket tanımlamasında verilecek kredi miktarları (tek kaynak: PLANS). */
+export function adminGrantFor(plan: PlanId): { credits: number; simCredits: number } {
+  return {
+    credits: PLAN_BY_ID[plan]?.credits ?? 0,
+    simCredits: ADMIN_SIM_GRANTS[plan] ?? 0,
+  };
+}
+
+/** Bitiş tarihine kalan gün sayısı (tarih geçmişse 0, tarih yoksa null). */
+export function daysLeft(
+  periodEnd: string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!periodEnd) return null;
+  const end = new Date(periodEnd);
+  if (Number.isNaN(end.getTime())) return null;
+  const diff = end.getTime() - now.getTime();
+  return diff <= 0 ? 0 : Math.ceil(diff / 86_400_000);
+}
+
+/** Paket süresi dolmuş mu? (Bitiş tarihi yoksa süresiz kabul edilir → false.) */
+export function isPlanExpired(
+  periodEnd: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const left = daysLeft(periodEnd, now);
+  return left !== null && left <= 0;
+}

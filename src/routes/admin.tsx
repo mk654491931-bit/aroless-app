@@ -13,12 +13,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { daysLeft } from "@/lib/plans";
 import {
   getAdminStats,
   listAdminUsers,
   listAdminTransactions,
   checkIsAdmin,
 } from "@/lib/admin.functions";
+import { AdminPlanAssign } from "@/components/admin-plan-assign";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
 import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
@@ -168,7 +170,9 @@ function AdminPage() {
           />
         </section>
 
-        {/* Users */}
+        {/* Paket tanımlama: seçilen e-postaya süreli Starter/Pro/Business */}
+        <AdminPlanAssign />
+
         <AdminPromoCodes />
         <AdminTickets />
         <AdminAbuseAlerts />
@@ -190,13 +194,14 @@ function AdminPage() {
                   <Th className="text-right">Credits</Th>
                   <Th className="text-right">Spent</Th>
                   <Th>Tier</Th>
+                  <Th>Bitiş</Th>
                   <Th>Joined</Th>
                 </tr>
               </thead>
               <tbody>
                 {usersQ.isLoading && (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
                       <Loader2 className="inline animate-spin" />
                     </td>
                   </tr>
@@ -210,12 +215,18 @@ function AdminPage() {
                       <Td>
                         <TierBadge tier={u.subscription_tier} />
                       </Td>
+                      <Td>
+                        <ExpiryCell
+                          end={u.current_period_end}
+                          status={u.subscription_status}
+                        />
+                      </Td>
                       <Td className="text-muted-foreground">{fmtDate(u.created_at)}</Td>
                     </tr>
                   ))}
                 {!usersQ.isLoading && (usersQ.data ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
                       No users yet
                     </td>
                   </tr>
@@ -310,6 +321,31 @@ function KpiCard({
         {loading ? <Loader2 className="animate-spin" size={20} /> : value}
       </div>
       {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
+
+/** Paket bitiş tarihi + kalan gün; süresi dolmuşsa kırmızı vurgular. */
+function ExpiryCell({ end, status }: { end: string | null; status: string }) {
+  if (!end) return <span className="text-xs text-muted-foreground">—</span>;
+  const left = daysLeft(end);
+  const isActive = status === "active" && left !== null && left > 0;
+  return (
+    <div className="text-xs">
+      <div className={isActive ? "text-foreground" : "text-rose-300"}>
+        {new Date(end).toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })}
+      </div>
+      <div className="text-[10px] text-muted-foreground">
+        {left === null
+          ? status
+          : left > 0
+            ? `${left} gün kaldı`
+            : "süresi doldu"}
+      </div>
     </div>
   );
 }
