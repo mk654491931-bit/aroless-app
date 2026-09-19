@@ -90,6 +90,15 @@ function discoveryWorkerUrl(origin: string): string {
 
 const QSTASH_TIMEOUT_ENV = "QSTASH_TIMEOUT_SECONDS";
 
+/** Hosting'in tek bir istek için izin verdiği en yüksek süre (Render). */
+const LONG_LIVED_MAX_SECONDS = 900;
+
+/** QStash'in Render işçisini beklerken kullandığı süre (900'ün altında pay bırakır). */
+const LONG_LIVED_QSTASH_TIMEOUT_SECONDS = 890;
+
+/** İstemcinin iş durumunu kaç ms aralıkla yoklayacağı. */
+export const JOB_POLL_INTERVAL_MS = 2_000;
+
 export type JobStatus = "processing" | "completed" | "failed";
 
 export type WorkerPayload = {
@@ -108,18 +117,53 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e ?? "unknown error");
 }
 
-// ---------- Süre bütçesi (Hobby = 60 sn) ----------
+// ---------- Süre bütçesi (platforma göre: Vercel 60 sn, Render 900 sn) ----------
 
-/** Maximum request budget used by the current hosting runtime (seconds). */
+/**
+ * True when this process runs on a host without a serverless request limit
+ * (Render's persistent Node web service). Detected from the Blueprint's
+ * NITRO_PRESET value or Render's own RENDER_SERVICE_ID marker.
+ */
+export function runsOnLongLivedHost(): boolean {
+  return env("NITRO_PRESET") === "render_com" || Boolean(env("RENDER_SERVICE_ID"));
+}
+
+/**
+ * True when the QStash worker lives on a long-lived host — either because this
+ * process itself is on Render, or because DISCOVERY_WORKER_URL points the job
+ * at a Render worker while the trigger keeps running on Vercel.
+ */
+export function workerTargetIsLongLived(): boolean {
+  return Boolean(env("DISCOVERY_WORKER_URL")) || runsOnLongLivedHost();
+}
+
+/** Bu sürecin barındırıldığı platformun istek başına süre bütçesi (saniye). */
 export function functionMaxDurationSeconds(): number {
-  const isRender = env("NITRO_PRESET") === "render_com" || Boolean(env("RENDER_SERVICE_ID"));
-  const defaultDuration = isRender ? 900 : 60;
+  const longLived = runsOnLongLivedHost();
+  const defaultDuration = longLived ? LONG_LIVED_MAX_SECONDS : 60;
   // Vercel's setting is intentionally ignored on Render so a stale project
   // variable cannot reintroduce the old serverless timeout after migration.
-  const configuredDuration = isRender ? undefined : env("VERCEL_FUNCTION_MAX_DURATION");
+  const configuredDuration = longLived ? undefined : env("VERCEL_FUNCTION_MAX_DURATION");
   const raw = Number(configuredDuration ?? defaultDuration);
   if (!Number.isFinite(raw) || raw < 10) return defaultDuration;
-  return Math.min(900, Math.round(raw));
+  return Math.min(LONG_LIVED_MAX_SECONDS, Math.round(raw));
+}
+
+/**
+ * QStash'e verilen `Upstash-Timeout` değeri (saniye).
+ *
+ * Öncelik: açık `QSTASH_TIMEOUT_SECONDS` → işçinin barındığı host'un bütçesi.
+ * Tetikleyici Vercel'de, işçi Render'da olsa bile süre işçiye göre belirlenir;
+ * aksi halde uzun iş 60 sn'de kesilip kullanıcıya 504 olarak dönerdi.
+ */
+export function qstashTimeoutSeconds(): number {
+  const configured = Number(env(QSTASH_TIMEOUT_ENV) ?? "");
+  if (Number.isFinite(configured) && configured >= 15) {
+    return Math.min(LONG_LIVED_MAX_SECONDS, Math.round(configured));
+  }
+  return workerTargetIsLongLived()
+    ? LONG_LIVED_QSTASH_TIMEOUT_SECONDS
+    : Math.max(15, functionMaxDurationSeconds() - 2);
 }
 
 /**
@@ -133,6 +177,17 @@ export function workerBudgetMs(): number {
 /** Tetikleyicinin sonucu beklerken kullanabileceği en uzun süre. */
 export function clientWaitMs(): number {
   return Math.max(20_000, (functionMaxDurationSeconds() - 8) * 1000);
+}
+
+/**
+ * İstemcinin yoklama planı — tek kaynak burasıdır.
+ *
+ * Tarayıcı sabit bir süre varsaymaz: Render'da ~14,9 dk, Vercel'de ~52 sn
+ * bekler. Böylece uzun süren Render işi istemcide erken "zaman aşımı" olarak
+ * görünmez ve kısa süreli Vercel fonksiyonu da gereksiz yere yoklanmaz.
+ */
+export function jobPollingPlan(): { pollMaxMs: number; pollIntervalMs: number } {
+  return { pollMaxMs: clientWaitMs(), pollIntervalMs: JOB_POLL_INTERVAL_MS };
 }
 
 function isNewSupabaseApiKey(value: string): boolean {
@@ -243,18 +298,7 @@ async function publishToQStash(
   const secret = workerSecret();
   if (!token || !secret) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
 
-  // The sender may be Vercel while the worker lives on Render. In that case
-  // the timeout must follow the worker target, not the sender's 60s limit.
-  const configuredTimeout = Number(env(QSTASH_TIMEOUT_ENV) ?? "");
-  const targetIsLongLived = Boolean(env("DISCOVERY_WORKER_URL")) ||
-    env("NITRO_PRESET") === "render_com" ||
-    Boolean(env("RENDER_SERVICE_ID"));
-  const timeoutSeconds = Number.isFinite(configuredTimeout) && configuredTimeout >= 15
-    ? Math.min(900, Math.round(configuredTimeout))
-    : targetIsLongLived
-      ? 890
-      : Math.max(15, functionMaxDurationSeconds() - 2);
-  const qstashTimeout = `${timeoutSeconds}s`;
+  const qstashTimeout = `${qstashTimeoutSeconds()}s`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
@@ -442,18 +486,10 @@ export async function claimSearchJob(jobId: string): Promise<SearchJobClaim> {
   throw new Error(error?.message || "Could not claim search job");
 }
 
-export async function readJobRow(
-  jobId: string,
-): Promise<{ status: JobStatus; result: unknown; error: string | null } | null> {
-  const { data, error } = await jobStore()
-    .from(JOB_TABLE)
-    .select("status, result, error")
-    .eq("id", jobId)
-    .maybeSingle();
-  if (error || !data) return null;
-  const row = data as { status: JobStatus; result: unknown; error: string | null };
-  return { status: row.status, result: row.result, error: row.error };
-}
+// Sunucu tarafı "iş bitene kadar bekle" yardımcı fonksiyonu bilinçli olarak yok:
+// kısa ömürlü bir fonksiyonda beklemek 504'ün ta kendisidir. Durum, tarayıcı
+// tarafından `getDiscoveryJob` (RLS kapsamlı, kullanıcı JWT'si) ile yoklanır ve
+// bekleme bütçesi tek kaynaktan — `jobPollingPlan()` — bildirilir.
 
 // ---------- Yüksek seviye API ----------
 
@@ -493,32 +529,6 @@ export async function startDiscoveryJob(args: {
   }
   await setJobMessageId(jobId, published.messageId);
   return { ok: true, jobId };
-}
-
-/**
- * Kayıt `completed`/`failed` olana kadar bekler (sunucu tarafı yoklama).
- *
- * Bekleme süresi HER ZAMAN `clientWaitMs()` ile sınırlandırılır; böylece
- * çağıran taraf yanlışlıkla daha uzun bir süre isterse dahi istek Vercel'in
- * (Hobby'de 60 sn) sert sınırına çarpmaz.
- */
-export async function waitForJob(
-  jobId: string,
-  opts?: { timeoutMs?: number; intervalMs?: number },
-): Promise<{ status: JobStatus; result?: unknown; error?: string | null }> {
-  const maxWait = clientWaitMs();
-  const timeoutMs = Math.min(opts?.timeoutMs ?? maxWait, maxWait);
-  const intervalMs = Math.max(1_000, opts?.intervalMs ?? 1_500);
-  const deadline = Date.now() + timeoutMs;
-
-  for (;;) {
-    const row = await readJobRow(jobId);
-    if (row && row.status !== "processing") {
-      return { status: row.status, result: row.result, error: row.error };
-    }
-    if (Date.now() + intervalMs >= deadline) return { status: "processing" };
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
 }
 
 /** QStash işçisinin gövdesi: ağır hattı çalıştırır ve sonucu kalıcılaştırır. */

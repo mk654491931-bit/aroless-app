@@ -16,6 +16,19 @@ import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
 
+/** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
+const DEFAULT_POLL_MAX_MS = 360_000;
+const DEFAULT_POLL_INTERVAL_MS = 2_000;
+/** İlk 30 sn sık, sonrası seyrek yoklanır: uzun Render işlerinde istek sayısı düşer. */
+const POLL_BACKOFF_AFTER_MS = 30_000;
+const POLL_SLOW_INTERVAL_MS = 5_000;
+/** Güvenlik zamanlayıcısı yoklama bütçesinin hemen üstünde kalsın ki mesajı yoklama üretsin. */
+const SAFETY_GRACE_MS = 15_000;
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 type GenVars = {
   niche: string;
   category: string;
@@ -63,19 +76,60 @@ export function useFinderSearch(opts: {
   const [searchAttempt, setSearchAttempt] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchNicheRef = useRef<string>("");
+
+  /**
+   * "Bu iş çok uzadı" kartını gösteren güvenlik zamanlayıcısı. Süre sunucunun
+   * yoklama bütçesinden türetilir; böylece Render'ın uzun işi 7. dakikada
+   * yanlışlıkla zaman aşımı hatası olarak gösterilmez.
+   */
+  const armSafetyTimer = useCallback((maxWaitMs: number) => {
+    if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    searchSafetyTimerRef.current = setTimeout(() => {
+      setStalled(true);
+      // Artık 504 çerçevesi değil: bütçe platforma göre hesaplanıyor, bu yüzden
+      // kullanıcıya "arka plan analizi zaman aşımına uğradı" anlatılır.
+      setSearchError({
+        ...describeSearchFailure("DISCOVERY_JOB_TIMEOUT"),
+        niche: searchNicheRef.current,
+      });
+    }, maxWaitMs);
+  }, []);
 
   const gen = useMutation({
     mutationFn: async (vars: GenVars) => {
       const response = await generateFn({ data: vars });
-      const queued = response as { jobId?: unknown; status?: unknown } | null;
+      const queued = response as {
+        jobId?: unknown;
+        status?: unknown;
+        pollMaxMs?: unknown;
+        pollIntervalMs?: unknown;
+      } | null;
       if (typeof queued?.jobId !== "string") return response;
-      for (let attempt = 0; attempt < 180; attempt++) {
-        const job = await getDiscoveryJobFn({ data: { jobId: queued.jobId } });
+
+      // Bekleme bütçesi sunucudan gelir: Render'da ~14,9 dk, Vercel'de ~52 sn.
+      const jobId = queued.jobId;
+      const maxWaitMs = positiveNumber(queued.pollMaxMs) ?? DEFAULT_POLL_MAX_MS;
+      const intervalMs = positiveNumber(queued.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS;
+      armSafetyTimer(maxWaitMs + SAFETY_GRACE_MS);
+
+      const deadline = Date.now() + maxWaitMs;
+      let elapsedMs = 0;
+      while (Date.now() < deadline) {
+        const job = await getDiscoveryJobFn({ data: { jobId } });
         if (job.status === "completed" && job.result) return job.result;
         if (job.status === "failed") throw new Error(job.error || "Arama tamamlanamadı.");
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const waitMs =
+          elapsedMs < POLL_BACKOFF_AFTER_MS
+            ? intervalMs
+            : Math.max(intervalMs, POLL_SLOW_INTERVAL_MS);
+        if (Date.now() + waitMs >= deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        elapsedMs += waitMs;
       }
-      throw new Error("DISCOVERY_JOB_TIMEOUT: Arka plan analizi 6 dakika içinde tamamlanmadı.");
+      throw new Error(
+        `DISCOVERY_JOB_TIMEOUT: Arka plan analizi ${Math.round(maxWaitMs / 60_000)} dakika içinde tamamlanmadı.`,
+      );
     },
     onSuccess: (res, vars) => {
       try {
@@ -193,6 +247,7 @@ export function useFinderSearch(opts: {
       setSearchError(null);
       setSearchAttempt(nicheValue);
       setStalled(false);
+      searchNicheRef.current = nicheValue;
 
       const effectivePlatforms = (() => {
         const allBlocked = opts.platforms.every((p) => countryFit(p, opts.effectiveCountry) === "unavailable");
@@ -212,11 +267,9 @@ export function useFinderSearch(opts: {
         return opts.platforms;
       })();
 
-      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
-      searchSafetyTimerRef.current = setTimeout(() => {
-        setStalled(true);
-        setSearchError({ ...describeSearchFailure("504 gateway timeout"), niche: nicheValue });
-      }, 420_000);
+      // İş kuyruğa alınana kadar geçerli varsayılan; sunucudan plan gelince
+      // mutationFn içinde gerçek bütçeyle yeniden kurulur.
+      armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
       if (opts.engine !== "default") {
         hfGen.mutate({ engine: opts.engine as "qwen" | "llama" | "hybrid", platforms: effectivePlatforms });
@@ -256,6 +309,7 @@ export function useFinderSearch(opts: {
       opts.pushRecent,
       opts.onNeedUpgrade,
       opts.niche,
+      armSafetyTimer,
       gen,
       hfGen,
     ],

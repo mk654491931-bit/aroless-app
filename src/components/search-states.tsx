@@ -134,9 +134,9 @@ export function describeSearchFailure(raw: string | undefined | null): SearchFai
   if (/discovery_job_timeout/.test(m)) {
     return {
       kind: "timeout",
-      title: "Arka plan analizi 6 dakikada bitmedi",
-      body: "Arama kuyruğa alındı ve motor çalışıyor, fakat 6 dakikalık bekleme süresi içinde tamamlanamadı. Worker hâlâ çalışıyor olabilir.",
-      hint: "Birkaç dakika sonra tekrar dene — tamamlanırsa sonuç polling ile gelecektir. Kalıcı çözüm için worker'ı Render'da (persistent Node) çalıştırın; Vercel 60 sn sınırı bu pipeline'ı keser.",
+      title: "Arka plan analizi zaman aşımına uğradı",
+      body: "Arama kuyruğa alındı ve motor çalışıyor, fakat bu cihazın bekleme bütçesi içinde tamamlanamadı. Worker hâlâ çalışıyor olabilir.",
+      hint: "Birkaç dakika sonra tekrar dene — tamamlanırsa sonuç polling ile gelecektir. Bekleme bütçesi platforma göre belirlenir (Render'da ~15 dk, Vercel'de ~52 sn).",
     };
   }
   if (/discovery_job_start_failed|discovery_job_not_found|discovery_job_read_failed/.test(m)) {
@@ -170,7 +170,7 @@ export function describeSearchFailure(raw: string | undefined | null): SearchFai
     return {
       kind: "timeout",
       title: "Motor zaman aşımına uğradı (504)",
-      body: "Analiz 60 saniyelik sınır içinde tamamlanamadı. Sunucular yoğun olduğunda bu hata oluşur.",
+      body: "İstek, barındırma platformunun süre sınırı içinde tamamlanamadı. Sunucular yoğun olduğunda bu hata oluşur.",
       hint: "Birkaç saniye bekleyip tekrar dene — genelde ikinci denemede tamamlanır.",
     };
   }

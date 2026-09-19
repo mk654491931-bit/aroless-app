@@ -330,7 +330,8 @@ export const generateProducts = createServerFn({ method: "POST" })
 
     // QStash işi asenkron çalışır. Burada sonucu beklemek serverless timeout'una
     // çarpar; istemci getDiscoveryJob ile Supabase üzerinden hafifçe yoklar.
-    return { jobId: started.jobId, status: "processing" as const };
+    // Yoklama bütçesi sunucudan gelir: Render'da ~14,9 dk, Vercel'de ~52 sn.
+    return { jobId: started.jobId, status: "processing" as const, ...jobs.jobPollingPlan() };
   });
 
 export const getDiscoveryJob = createServerFn({ method: "POST" })

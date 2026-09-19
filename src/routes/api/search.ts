@@ -60,7 +60,13 @@ export const Route = createFileRoute("/api/search")({
           return json({ success: false, error: started.error }, 503);
         }
 
-        return json({ success: true, jobId: started.jobId, status: "processing" });
+        return json({
+          success: true,
+          jobId: started.jobId,
+          status: "processing",
+          // İstemci sabit süre varsaymasın: bekleme bütçesi platformdan gelir.
+          ...jobs.jobPollingPlan(),
+        });
       },
     },
   },

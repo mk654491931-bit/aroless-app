@@ -2,11 +2,17 @@
 # Create this from Render Dashboard → New → Blueprint, then add secrets in the
 # service Environment tab. No secret values belong in this file.
 #
-# 22-key mesh: kod `src/lib/ai-keys.server.ts` her provider için şu env'leri tarar
-#   GEMINI_API_KEY (+ _1.._8), GROQ_API_KEY (+ _1.._8), OPENROUTER_API_KEY (+ _1.._8),
-#   HF_TOKEN (+ _1.._8), CEREBRAS_API_KEY (+ _1.._8), SAMBANOVA_API_KEY (+ _1.._8)
-# Find Winner Vercel'de 44sn bütçede fast profile düşer, Render'da 884sn full depth koşar.
-# QStash publish timeout'u `discovery-jobs.server.ts` otomatik 890s yapar (Render algılanınca).
+# Bu dosya yalnızca ANAHTAR ADLARINI listeler. Sadece kullandığın anahtarları
+# doldur; boş bırakılanlar devre dışı kalır (Render Blueprint oluştururken
+# değerleri atlayabilirsin, sonradan Dashboard → Environment'tan ekleyebilirsin).
+#
+# 22-key mesh: kod `src/lib/ai-keys.server.ts` her sağlayıcı için BASE adı ve
+# _1.._8 slotlarını tarar — hangi soneki kullanırsan otomatik bulunur.
+#
+# Find Winner Vercel'de 44sn bütçede fast profile düşer, Render'da 884sn full
+# depth koşar. QStash publish timeout'u `discovery-jobs.server.ts` içindeki
+# `qstashTimeoutSeconds()` Render algılanınca otomatik 890s yapar; istemci
+# yoklama bütçesi de aynı fonksiyondan türetilir (yaklaşık 14,9 dk).
 services:
   - type: web
     name: aroless
@@ -18,6 +24,7 @@ services:
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
+      # --- Runtime (sabit değerler) ---
       - key: NODE_VERSION
         value: 20.19.0
       - key: NITRO_PRESET
@@ -26,15 +33,25 @@ services:
         value: 0.0.0.0
       - key: NODE_ENV
         value: production
-      # --- App origin (Vercel prod domain, https) ---
+      - key: QSTASH_REGION
+        value: eu
+      # --- App origin ---
+      # Custom domain (aroless.tech) bağlanmadan Render'ın geçici adresini yazma:
+      # QStash worker adresi ve OAuth redirect'leri bu değerden üretilir.
       - key: APP_URL
         sync: false
-      # --- Frontend (public) ---
+      - key: PUBLIC_APP_URL
+        sync: false
       - key: VITE_APP_URL
         sync: false
+      # --- Frontend (build sırasında gömülür, public) ---
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_TURNSTILE_SITE_KEY
+        sync: false
+      - key: VITE_API_BASE_URL
         sync: false
       # --- Supabase ---
       - key: SUPABASE_URL
@@ -43,11 +60,9 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # --- Queue / Worker ---
+      # --- Kuyruk / işçi ---
       - key: QSTASH_TOKEN
         sync: false
-      - key: QSTASH_REGION
-        value: eu
       - key: QSTASH_URL
         sync: false
       - key: JOB_WORKER_SECRET
@@ -55,6 +70,15 @@ services:
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # Hibrit kurulum: tetikleyici Vercel'de kalırken worker Render'daysa buraya
+      # worker'ın public adresini yaz (ör. https://aroless.tech/api/worker).
+      # Boşsa worker adresi isteğin kendi origin'inden türetilir.
+      - key: DISCOVERY_WORKER_URL
+        sync: false
+      # QStash `Upstash-Timeout` değerini elle sabitlemek için (15..900 sn).
+      # Boşsa platform otomatik seçilir: Render 890 sn, Vercel 58 sn.
+      - key: QSTASH_TIMEOUT_SECONDS
         sync: false
       # --- AI Gateway (opsiyonel, öncelikli) ---
       - key: AI_GATEWAY_URL
@@ -65,7 +89,7 @@ services:
         sync: false
       - key: LOVABLE_API_KEY
         sync: false
-      # --- 22-key pool: Gemini x5 (slot 1..5, base de taranır) ---
+      # --- AI key pool: Gemini (BASE + _1.._8) ---
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_API_KEY_1
@@ -78,7 +102,13 @@ services:
         sync: false
       - key: GEMINI_API_KEY_5
         sync: false
-      # --- Groq x5 ---
+      - key: GEMINI_API_KEY_6
+        sync: false
+      - key: GEMINI_API_KEY_7
+        sync: false
+      - key: GEMINI_API_KEY_8
+        sync: false
+      # --- Groq (BASE + _1.._8) ---
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_API_KEY_1
@@ -91,7 +121,13 @@ services:
         sync: false
       - key: GROQ_API_KEY_5
         sync: false
-      # --- OpenRouter x5 ---
+      - key: GROQ_API_KEY_6
+        sync: false
+      - key: GROQ_API_KEY_7
+        sync: false
+      - key: GROQ_API_KEY_8
+        sync: false
+      # --- OpenRouter (BASE + _1.._8) ---
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY_1
@@ -104,7 +140,13 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY_5
         sync: false
-      # --- HuggingFace x5 ---
+      - key: OPENROUTER_API_KEY_6
+        sync: false
+      - key: OPENROUTER_API_KEY_7
+        sync: false
+      - key: OPENROUTER_API_KEY_8
+        sync: false
+      # --- Hugging Face (BASE + _1.._8) ---
       - key: HF_TOKEN
         sync: false
       - key: HF_TOKEN_1
@@ -117,15 +159,173 @@ services:
         sync: false
       - key: HF_TOKEN_5
         sync: false
-      # --- Cerebras + SambaNova (tek anahtar, fallback) ---
+      - key: HF_TOKEN_6
+        sync: false
+      - key: HF_TOKEN_7
+        sync: false
+      - key: HF_TOKEN_8
+        sync: false
+      # --- Cerebras (BASE + _1.._8) ---
       - key: CEREBRAS_API_KEY
         sync: false
+      - key: CEREBRAS_API_KEY_1
+        sync: false
+      - key: CEREBRAS_API_KEY_2
+        sync: false
+      - key: CEREBRAS_API_KEY_3
+        sync: false
+      - key: CEREBRAS_API_KEY_4
+        sync: false
+      - key: CEREBRAS_API_KEY_5
+        sync: false
+      - key: CEREBRAS_API_KEY_6
+        sync: false
+      - key: CEREBRAS_API_KEY_7
+        sync: false
+      - key: CEREBRAS_API_KEY_8
+        sync: false
+      # --- SambaNova (BASE + _1.._8) ---
       - key: SAMBANOVA_API_KEY
         sync: false
-      # --- Opsiyonel: PROVIDER_A..D havuzları (OpenAI uyumlu) ---
+      - key: SAMBANOVA_API_KEY_1
+        sync: false
+      - key: SAMBANOVA_API_KEY_2
+        sync: false
+      - key: SAMBANOVA_API_KEY_3
+        sync: false
+      - key: SAMBANOVA_API_KEY_4
+        sync: false
+      - key: SAMBANOVA_API_KEY_5
+        sync: false
+      - key: SAMBANOVA_API_KEY_6
+        sync: false
+      - key: SAMBANOVA_API_KEY_7
+        sync: false
+      - key: SAMBANOVA_API_KEY_8
+        sync: false
+      # --- Together (tek anahtar) ---
+      - key: TOGETHER_API_KEY
+        sync: false
+      # --- OpenAI uyumlu havuzlar PROVIDER_A..D (BASE + _1.._5 + opsiyonel model) ---
       - key: PROVIDER_A_1
+        sync: false
+      - key: PROVIDER_A_2
+        sync: false
+      - key: PROVIDER_A_3
+        sync: false
+      - key: PROVIDER_A_4
+        sync: false
+      - key: PROVIDER_A_5
         sync: false
       - key: PROVIDER_A_BASE_URL
         sync: false
       - key: PROVIDER_A_MODEL
+        sync: false
+      - key: PROVIDER_B_1
+        sync: false
+      - key: PROVIDER_B_2
+        sync: false
+      - key: PROVIDER_B_3
+        sync: false
+      - key: PROVIDER_B_4
+        sync: false
+      - key: PROVIDER_B_5
+        sync: false
+      - key: PROVIDER_B_BASE_URL
+        sync: false
+      - key: PROVIDER_B_MODEL
+        sync: false
+      - key: PROVIDER_C_1
+        sync: false
+      - key: PROVIDER_C_2
+        sync: false
+      - key: PROVIDER_C_3
+        sync: false
+      - key: PROVIDER_C_4
+        sync: false
+      - key: PROVIDER_C_5
+        sync: false
+      - key: PROVIDER_C_BASE_URL
+        sync: false
+      - key: PROVIDER_C_MODEL
+        sync: false
+      - key: PROVIDER_D_1
+        sync: false
+      - key: PROVIDER_D_2
+        sync: false
+      - key: PROVIDER_D_3
+        sync: false
+      - key: PROVIDER_D_4
+        sync: false
+      - key: PROVIDER_D_5
+        sync: false
+      - key: PROVIDER_D_BASE_URL
+        sync: false
+      - key: PROVIDER_D_MODEL
+        sync: false
+      # --- Veri kaynakları / botlar (opsiyonel) ---
+      # GitHub trendleri için personal access token (saatlik limiti 60 → 5.000'e çıkarır).
+      - key: GITHUB_PAT
+        sync: false
+      # Open PageRank — rakip domain otorite skoru.
+      - key: OPEN_PAGERANK_KEY
+        sync: false
+      # Trend radar webhook'unu koruyan paylaşılan sır.
+      - key: TREND_WEBHOOK_SECRET
+        sync: false
+      # Sıcak ürün uç noktasının bekleme bütçesi (ms, varsayılan 14.000, üst sınır 25.000).
+      - key: HOT_PRODUCTS_WAIT_MS
+        sync: false
+      # --- Paddle (ödeme) ---
+      - key: PADDLE_ENV
+        sync: false
+      # Tarayıcı tarafı Paddle aliases (public).
+      - key: VITE_PADDLE_ENV
+        sync: false
+      - key: VITE_PADDLE_CLIENT_TOKEN
+        sync: false
+      - key: VITE_PADDLE_PRICE_STARTER_MONTHLY
+        sync: false
+      - key: VITE_PADDLE_PRICE_PRO_MONTHLY
+        sync: false
+      - key: VITE_PADDLE_PRICE_BUSINESS_MONTHLY
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_CLIENT_TOKEN
+        sync: false
+      - key: PADDLE_PRODUCT_ID
+        sync: false
+      - key: PADDLE_STARTER_PRODUCT_ID
+        sync: false
+      - key: PADDLE_PRO_PRODUCT_ID
+        sync: false
+      - key: PADDLE_BUSINESS_PRODUCT_ID
+        sync: false
+      - key: PADDLE_STARTER_PRICE_ID
+        sync: false
+      - key: PADDLE_PRO_PRICE_ID
+        sync: false
+      - key: PADDLE_BUSINESS_PRICE_ID
+        sync: false
+      # --- E-posta (Resend) ---
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      # --- Bot koruması (Turnstile) ---
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      # --- AWS/SES kullanılıyorsa ---
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_SES_FROM_EMAIL
         sync: false

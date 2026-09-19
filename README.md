@@ -106,6 +106,7 @@ Kurulum:
 
 ```text
 APP_URL=https://aroless.tech
+PUBLIC_APP_URL=https://aroless.tech
 VITE_APP_URL=https://aroless.tech
 VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY
@@ -125,34 +126,54 @@ UPSTASH_REDIS_REST_TOKEN
 
 QStash'in callback adresi `https://aroless.tech/api/worker` olacağı için `APP_URL` kesinlikle Render servisinin geçici adresi değil, DNS geçişinden sonra gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
 
+Süre bütçesi platformdan otomatik türetilir (`src/lib/discovery-jobs.server.ts`): Render'da worker ~884 sn, yoklama ~14,9 dk; Vercel'de 60 sn ve ~52 sn. İki değişken yalnızca gerektiğinde elle sabitlemek içindir:
+
+```text
+# QStash `Upstash-Timeout` (15..900 sn). Boşsa platforma göre seçilir.
+QSTASH_TIMEOUT_SECONDS
+# Sadece HİBRİT kurulumda gerekir (aşağıya bak).
+DISCOVERY_WORKER_URL
+```
+
 **Özelliklere göre eklenebilenler:**
 
 ```text
-# AI: .env.example içindeki tüm tanımlı provider anahtarları
-GEMINI_API_KEY_1..6
-GROQ_API_KEY_1..4
+# AI: her sağlayıcı için BASE adı + _1.._8 slotları otomatik taranır
+#      (src/lib/ai-keys.server.ts) — hangi soneki kullanırsan bulunur.
+GEMINI_API_KEY(_1..8)
+GROQ_API_KEY(_1..8)
+OPENROUTER_API_KEY(_1..8)
+HF_TOKEN(_1..8)
+CEREBRAS_API_KEY(_1..8)
+SAMBANOVA_API_KEY(_1..8)
 TOGETHER_API_KEY
-CEREBRAS_API_KEY
-SAMBANOVA_API_KEY
-OPENROUTER_API_KEY_1..2
-HF_TOKEN_1..2
+PROVIDER_A..D_1..5 (+ PROVIDER_<X>_BASE_URL / _MODEL)
 AI_GATEWAY_URL
 AI_GATEWAY_API_KEY
 AI_GATEWAY_MODELS
 
 # Ödeme / e-posta / bot koruması
+PADDLE_ENV
 PADDLE_API_KEY
+PADDLE_WEBHOOK_SECRET_KEY
 PADDLE_WEBHOOK_SECRET
 PADDLE_CLIENT_TOKEN
-PADDLE_PUBLIC_KEY
-PADDLE_VENDOR_ID
-PADDLE_STARTER_PRICE_ID
-PADDLE_PRO_PRICE_ID
-PADDLE_BUSINESS_PRICE_ID
+PADDLE_PRODUCT_ID
+PADDLE_STARTER_PRODUCT_ID / PADDLE_PRO_PRODUCT_ID / PADDLE_BUSINESS_PRODUCT_ID
+PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID / PADDLE_BUSINESS_PRICE_ID
+VITE_PADDLE_ENV
+VITE_PADDLE_CLIENT_TOKEN
+VITE_PADDLE_PRICE_STARTER_MONTHLY / VITE_PADDLE_PRICE_PRO_MONTHLY / VITE_PADDLE_PRICE_BUSINESS_MONTHLY
 RESEND_API_KEY
 RESEND_FROM_EMAIL
 VITE_TURNSTILE_SITE_KEY
 TURNSTILE_SECRET_KEY
+
+# Veri kaynakları
+GITHUB_PAT
+OPEN_PAGERANK_KEY
+TREND_WEBHOOK_SECRET
+HOT_PRODUCTS_WAIT_MS
 
 # AWS/SES kullanılıyorsa
 AWS_ACCESS_KEY_ID
@@ -162,6 +183,29 @@ AWS_SES_FROM_EMAIL
 ```
 
 Render'a **değer değil, yalnızca anahtar adı** `render.yaml` içinde yazılır; gerçek değerleri Dashboard → Environment'e gir. Secret'ları Git'e, `render.yaml`'a veya `.env.example`'a yazma.
+
+#### Hibrit kurulum (frontend Vercel + worker Render)
+
+Vercel'deki 60 sn'lik fonksiyon limiti yalnızca tetikleyici isteği etkiler; ağır iş
+QStash üzerinden Render'a devredilebilir. Bunun için **Vercel** tarafına şunu ekle:
+
+```text
+DISCOVERY_WORKER_URL=https://aroless.tech/api/worker
+JOB_WORKER_SECRET=<Render'dakiyle aynı değer>
+QSTASH_TOKEN=<aynı QStash token'ı>
+```
+
+`DISCOVERY_WORKER_URL` tanımlı olduğu anda `qstashTimeoutSeconds()` hem Render'ı
+hem de bu değişkeni gördüğü için QStash bekleme süresi 60 sn yerine 890 sn'ye
+çıkar; istemci yoklama bütçesi de tetikleyicinin barındığı host'a göre hesaplanır.
+Bu değişken olmadan hibrit kurulumda uzun iş yine 60 sn'de 504 olarak kesilir.
+
+#### Paket yöneticisi / lockfile
+
+Render ve Vercel `npm install` kullanır, yani dağıtımda **`package-lock.json`**
+geçerlidir. `bun.lock` yerel geliştirme içindir; bağımlılık değiştirdikten sonra
+iki dosyanın da güncel kaldığından emin ol (aksi halde CI ile yerel ortam farklı
+ağaç kurar).
 
 
 - `nitro` kurulu değilse `npm run build` düz Vite SSR çıktısı üretir; geliştirme ve
