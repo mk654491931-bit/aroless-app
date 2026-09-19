@@ -12,6 +12,7 @@ import {
   jobPollingPlan,
   longJobPlan,
   qstashTimeoutSeconds,
+  inlineHeavyWorkFits,
   remoteWorkerConfigured,
   runsOnLongLivedHost,
   workerBudgetMs,
@@ -23,6 +24,7 @@ const MANAGED_KEYS = [
   "NITRO_PRESET",
   "RENDER_SERVICE_ID",
   "DISCOVERY_WORKER_URL",
+  "WORKER_URL",
   "QSTASH_TIMEOUT_SECONDS",
   "VERCEL_FUNCTION_MAX_DURATION",
 ];
@@ -103,6 +105,20 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(workerBudgetMs()).toBe(25_000);
     expect(clientWaitMs()).toBe(20_000);
   });
+
+  it("hibritte (Vercel tetikler, Render çalıştırır) yoklama penceresini worker'a göre açar", () => {
+    // 14'lü konsey 350-400 sn sürer: tetikleyicinin 300 sn'lik limiti geçerli
+    // olsaydı istemci 292. saniyede pes eder, kullanıcı sonucu hiç görmezdi.
+    vi.stubEnv("WORKER_URL", "https://aroless.onrender.com");
+    expect(workerTargetIsLongLived()).toBe(true);
+    expect(clientWaitMs()).toBe(892_000);
+    expect(clientWaitMs()).toBeGreaterThan(400_000);
+  });
+
+  it("DISCOVERY_WORKER_URL de tek başına yeter (ürün bulucu hibriti)", () => {
+    vi.stubEnv("DISCOVERY_WORKER_URL", "https://aroless.onrender.com/api/worker");
+    expect(clientWaitMs()).toBe(892_000);
+  });
 });
 
 describe("jobPollingPlan", () => {
@@ -121,6 +137,11 @@ describe("jobPollingPlan", () => {
     expect(plan.pollMaxMs).toBeGreaterThan(6 * 60_000);
     // Worker bütçesi yoklamadan kısa olmalı ki istemci sonucu görmeden pes etmesin.
     expect(plan.pollMaxMs).toBeGreaterThan(workerBudgetMs());
+  });
+
+  it("uzak worker'lı Vercel kurulumunda da 400 sn'lik konseyi bekler", () => {
+    vi.stubEnv("WORKER_URL", "https://aroless.onrender.com");
+    expect(jobPollingPlan().pollMaxMs).toBe(892_000);
   });
 });
 
@@ -221,14 +242,27 @@ describe("longJobPlan (504 garantisi)", () => {
     ).toBe("qstash-worker");
   });
 
-  it("Vercel'de worker yoksa 'unavailable' döner (istek içinde koşmaz)", () => {
-    // QStash var ama worker adresi yok → işi Render'a gönderemeyiz.
-    expect(longJobPlan({ VERCEL: "1", ...qstashEnv })).toBe("unavailable");
-    // Worker var ama QStash yok → tetikleyici işi yayınlayamaz.
-    expect(longJobPlan({ VERCEL: "1", WORKER_URL: "https://aroless.onrender.com" })).toBe(
-      "unavailable",
-    );
-    expect(longJobPlan({ VERCEL: "1" })).toBe("unavailable");
+  it("Vercel'de worker yoksa 300 sn'lik limite sığdırıp istek İÇİNDE koşar", () => {
+    // Hobby'de fonksiyon limiti 300 sn: konsey `fast` profille (245 sn rezerv +
+    // 10 sn dönüş payı) aynı istekte tamamlanır. Worker yok diye özelliği
+    // kapatmak yerine çalıştırıp zamanında bitirmek doğru davranıştır.
+    expect(longJobPlan({ VERCEL: "1" })).toBe("inline");
+    // QStash var ama worker adresi yok → işi Render'a gönderemeyiz: yine inline.
+    expect(longJobPlan({ VERCEL: "1", ...qstashEnv })).toBe("inline");
+    // Worker var ama QStash yok → tetikleyici işi yayınlayamaz: yine inline.
+    expect(longJobPlan({ VERCEL: "1", WORKER_URL: "https://aroless.onrender.com" })).toBe("inline");
+    // Açıkça 300 sn yazılmış kurulum.
+    expect(longJobPlan({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe("inline");
+  });
+
+  it("fonksiyon limiti 120 sn'nin altındaysa istek içinde koşmaz", () => {
+    // Ağır hat bu limite sığmaz: koşmak 504 üretirdi. Hızlı ve açık hata döner.
+    expect(longJobPlan({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" })).toBe("unavailable");
+    // Geçersiz (10'un altındaki) değer Vercel'in 300 sn varsayılanına düşer
+    // → yine inline koşabiliriz (bkz. `platformDurationSeconds`).
+    expect(longJobPlan({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5" })).toBe("inline");
+    expect(inlineHeavyWorkFits({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" })).toBe(false);
+    expect(inlineHeavyWorkFits({ VERCEL: "1" })).toBe(true);
   });
 
   it("yerel geliştirmede inline kalır (istek süresi sınırı yok)", () => {

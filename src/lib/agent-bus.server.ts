@@ -11,7 +11,7 @@
 // ============================================================================
 
 export type AgentBusEvent =
-  | { type: "pipeline:start"; payload: { traceId: string; query: string } }
+  | { type: "pipeline:start"; payload: { traceId: string; query: string; depth?: string } }
   | { type: "pipeline:complete"; payload: { traceId: string; ok: boolean; ms: number } }
   | { type: "signals:collected"; payload: { traceId: string; coverage: number; ms: number } }
   | { type: "tier:start"; payload: { traceId: string; tier: number } }

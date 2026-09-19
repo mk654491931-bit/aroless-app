@@ -41,6 +41,7 @@ import {
   runsOnPersistentHost,
 } from "@/lib/host-runtime.server";
 import { backgroundJobsEnabled, runInBackground } from "@/lib/job-runner.server";
+import { MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -150,11 +151,15 @@ export function runsOnLongLivedHost(envMap: EnvMap = process.env): boolean {
 
 /**
  * True when the QStash worker lives on a long-lived host — either because this
- * process itself is on Render, or because DISCOVERY_WORKER_URL points the job
- * at a Render worker while the trigger keeps running on Vercel.
+ * process itself is on Render, or because a remote worker URL points the job at
+ * a Render service while the trigger keeps running on Vercel.
+ *
+ * İki değişkeni de sayıyoruz: ürün bulucu `DISCOVERY_WORKER_URL` ile, ağır işler
+ * (AI Konsey) `WORKER_URL` ile hedefleniyor. Yalnızca birine bakmak, hibrit
+ * kurulumda tetikleyicinin 300 sn'lik bütçesini tüm zincire uygulardı.
  */
 export function workerTargetIsLongLived(envMap: EnvMap = process.env): boolean {
-  return Boolean(readEnvValue(envMap, "DISCOVERY_WORKER_URL")) || runsOnLongLivedHost(envMap);
+  return remoteWorkerConfigured(envMap) || runsOnLongLivedHost(envMap);
 }
 
 /** Bu sürecin barındırıldığı platformun istek başına süre bütçesi (saniye). */
@@ -187,17 +192,32 @@ export function workerBudgetMs(): number {
   return Math.max(25_000, (functionMaxDurationSeconds() - 16) * 1000);
 }
 
+/**
+ * Bir işin bitmesi için beklenebilecek süre (saniye).
+ *
+ * Uzak worker tanımlıysa iş tetikleyicinin değil **worker'ın** bütçesiyle koşar.
+ * Hibrit kurulumda (Vercel tetikler + Render çalıştırır) tetikleyicinin 300 sn'si
+ * baz alınırsa, 350-400 sn süren 14'lü konsey tamamlanmadan istemci "zaman
+ * aşımı" gösterirdi: sonuç önbelleğe yazılır ama kullanıcı hiç görmez.
+ */
+export function jobWaitBudgetSeconds(envMap: EnvMap = process.env): number {
+  if (workerTargetIsLongLived(envMap)) return LONG_LIVED_MAX_SECONDS;
+  return functionMaxDurationSeconds(envMap);
+}
+
 /** Tetikleyicinin sonucu beklerken kullanabileceği en uzun süre. */
 export function clientWaitMs(): number {
-  return Math.max(20_000, (functionMaxDurationSeconds() - 8) * 1000);
+  return Math.max(20_000, (jobWaitBudgetSeconds() - 8) * 1000);
 }
 
 /**
  * İstemcinin yoklama planı — tek kaynak burasıdır.
  *
- * Tarayıcı sabit bir süre varsaymaz: Render'da ~14,9 dk, Vercel'de ~52 sn
- * bekler. Böylece uzun süren Render işi istemcide erken "zaman aşımı" olarak
- * görünmez ve kısa süreli Vercel fonksiyonu da gereksiz yere yoklanmaz.
+ * Tarayıcı sabit bir süre varsaymaz; bütçe `jobWaitBudgetSeconds()`'ten gelir:
+ * iş bu süreçte koşuyorsa platformun limiti (Render ~14,9 dk), iş uzak worker'a
+ * gidiyorsa worker'ın limiti (hibritte de ~14,9 dk). Böylece uzun süren iş
+ * istemcide erken "zaman aşımı" olarak görünmez; worker yoksa kısa süreli
+ * Vercel fonksiyonu da gereksiz yere yoklanmaz.
  */
 export function jobPollingPlan(): { pollMaxMs: number; pollIntervalMs: number } {
   return { pollMaxMs: clientWaitMs(), pollIntervalMs: JOB_POLL_INTERVAL_MS };
@@ -361,11 +381,28 @@ export async function enqueueRemoteJob(args: {
  *  - `in-process`    → kalıcı servis (Render/VPS): süreç içi arka plan kuyruğu.
  *  - `qstash-worker` → sunucusuz tetikleyici + QStash + uzak Render worker'ı:
  *                      iş Render'da koşar, tetikleyici anında döner.
- *  - `inline`        → yerel geliştirme (istek süresi sınırı yok).
- *  - `unavailable`   → sunucusuz ve worker yok: istek içinde koşmak yerine
- *                      HIZLI ve AÇIK hata döner. Asla 504 üretilmez.
+ *  - `inline`        → yerel geliştirme ya da uzak worker'ı olmayan ama
+ *                      fonksiyon limiti ağır işe YETEN sunucusuz ortam (Vercel
+ *                      Hobby 300 sn): hat, istek içinde bütçesine sığdırılarak
+ *                      koşar ve sonucu aynı istekte döner.
+ *  - `unavailable`   → fonksiyon limiti ağır işe yetmiyor (ör. 60 sn'ye
+ *                      daraltılmış): istek içinde koşmak yerine HIZLI ve AÇIK
+ *                      hata döner. Asla 504 üretilmez.
  */
 export type LongJobPlan = "in-process" | "qstash-worker" | "inline" | "unavailable";
+
+/**
+ * Fonksiyon limiti ağır bir hattı İSTEK İÇİNDE koşmaya yetiyor mu?
+ *
+ * Vercel Hobby'de 300 sn (`nitro.config.ts` → `vercel.functions.maxDuration`),
+ * ve 14 ajanlı konseyin `fast` profili 245 sn rezerv + 10 sn dönüş payı ister:
+ * istek kendi kendine biter, 504 oluşmaz. Limit 120 sn'nin (MIN_INLINE_COUNCIL_MS)
+ * altına daraltılmışsa hiçbir ağır hat sığmaz; o durumda koşmak yerine hızlı ve
+ * açık hata döneriz (kredi harcanmadan).
+ */
+export function inlineHeavyWorkFits(envMap: EnvMap = process.env): boolean {
+  return platformDurationSeconds(envMap) * 1000 >= MIN_INLINE_COUNCIL_MS;
+}
 
 export function longJobPlan(envMap: EnvMap = process.env): LongJobPlan {
   const runtime = detectHostRuntime(envMap);
@@ -375,13 +412,15 @@ export function longJobPlan(envMap: EnvMap = process.env): LongJobPlan {
     return backgroundJobsEnabled(envMap) ? "in-process" : "inline";
   }
 
-  // Sunucusuz (Vercel): uzun iş ASLA istek içinde koşmaz.
+  // Sunucusuz (Vercel): tercih worker; worker yoksa istek içinde ama MUTLAKA
+  // platform limitine sığdırılarak koşar (bütçe `host-runtime`ten gelir).
   if (runtime.serverless) {
     const qstashReady = Boolean(
       cleanQStashToken(readEnvValue(envMap, "QSTASH_TOKEN") ?? "") &&
         readEnvValue(envMap, "JOB_WORKER_SECRET"),
     );
-    return qstashReady && remoteWorkerConfigured(envMap) ? "qstash-worker" : "unavailable";
+    if (qstashReady && remoteWorkerConfigured(envMap)) return "qstash-worker";
+    return inlineHeavyWorkFits(envMap) ? "inline" : "unavailable";
   }
 
   // Yerel geliştirme: istek sınırı yok, eski davranış korunur.

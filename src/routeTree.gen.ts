@@ -30,6 +30,7 @@ import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendRadarRouteImport } from './routes/trend-radar'
 import { Route as ViralAdsRouteImport } from './routes/viral-ads'
 import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
+import { Route as ApiJobsRouteImport } from './routes/api/jobs'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiWorkerRouteImport } from './routes/api/worker'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -155,6 +156,11 @@ const ViralAdsRoute = ViralAdsRouteImport.update({
 const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
   id: '/api/checkout',
   path: '/api/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiJobsRoute = ApiJobsRouteImport.update({
+  id: '/api/jobs',
+  path: '/api/jobs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
@@ -286,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/api/checkout': typeof ApiCheckoutRoute
+  '/api/jobs': typeof ApiJobsRoute
   '/api/search': typeof ApiSearchRoute
   '/api/worker': typeof ApiWorkerRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByTo {
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/api/checkout': typeof ApiCheckoutRoute
+  '/api/jobs': typeof ApiJobsRoute
   '/api/search': typeof ApiSearchRoute
   '/api/worker': typeof ApiWorkerRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -375,6 +383,7 @@ export interface FileRoutesById {
   '/trend-radar': typeof TrendRadarRoute
   '/viral-ads': typeof ViralAdsRoute
   '/api/checkout': typeof ApiCheckoutRoute
+  '/api/jobs': typeof ApiJobsRoute
   '/api/search': typeof ApiSearchRoute
   '/api/worker': typeof ApiWorkerRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -421,6 +430,7 @@ export interface FileRouteTypes {
     | '/trend-radar'
     | '/viral-ads'
     | '/api/checkout'
+    | '/api/jobs'
     | '/api/search'
     | '/api/worker'
     | '/auth/callback'
@@ -465,6 +475,7 @@ export interface FileRouteTypes {
     | '/trend-radar'
     | '/viral-ads'
     | '/api/checkout'
+    | '/api/jobs'
     | '/api/search'
     | '/api/worker'
     | '/auth/callback'
@@ -509,6 +520,7 @@ export interface FileRouteTypes {
     | '/trend-radar'
     | '/viral-ads'
     | '/api/checkout'
+    | '/api/jobs'
     | '/api/search'
     | '/api/worker'
     | '/auth/callback'
@@ -554,6 +566,7 @@ export interface RootRouteChildren {
   TrendRadarRoute: typeof TrendRadarRoute
   ViralAdsRoute: typeof ViralAdsRoute
   ApiCheckoutRoute: typeof ApiCheckoutRoute
+  ApiJobsRoute: typeof ApiJobsRoute
   ApiSearchRoute: typeof ApiSearchRoute
   ApiWorkerRoute: typeof ApiWorkerRoute
   HotIdRoute: typeof HotIdRoute
@@ -723,6 +736,13 @@ declare module '@tanstack/react-router' {
       path: '/api/checkout'
       fullPath: '/api/checkout'
       preLoaderRoute: typeof ApiCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/jobs': {
+      id: '/api/jobs'
+      path: '/api/jobs'
+      fullPath: '/api/jobs'
+      preLoaderRoute: typeof ApiJobsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/search': {
@@ -907,6 +927,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrendRadarRoute: TrendRadarRoute,
   ViralAdsRoute: ViralAdsRoute,
   ApiCheckoutRoute: ApiCheckoutRoute,
+  ApiJobsRoute: ApiJobsRoute,
   ApiSearchRoute: ApiSearchRoute,
   ApiWorkerRoute: ApiWorkerRoute,
   HotIdRoute: HotIdRoute,

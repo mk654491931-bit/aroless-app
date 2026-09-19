@@ -47,9 +47,13 @@ export type CouncilAnalysisStart =
   | { status: "ready"; report: CouncilReport }
   | { status: "processing"; pollIntervalMs: number; pollMaxMs: number }
   /**
-   * Ağır iş arka planda BAŞLATILAMADI (sunucusuz ortam + uzak worker yok).
-   * İstek içinde koşturmak 504 üretirdi; bunun yerine hızlı ve açık hata
-   * döneriz. Kredi bu durumda DÜŞÜLMEZ (ya da iade edilir).
+   * Ağır iş HİÇBİR yolla koşturulamadı: fonksiyon süresi limiti ağır analize
+   * yetmiyor (ör. 60 sn'ye daraltılmış) ve uzak worker da yok. İstek içinde
+   * koşturmak 504 üretirdi; bunun yerine hızlı ve açık hata döneriz. Kredi bu
+   * durumda DÜŞÜLMEZ (ya da iade edilir).
+   *
+   * Vercel Hobby'nin 300 sn'si bu sınıra girmez: orada plan `inline` olur ve
+   * konsey `fast` profille istek içinde, 300 sn'ye sığarak biter.
    */
   | { status: "unavailable"; error: string };
 
@@ -92,13 +96,13 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
 
     const plan = jobs.longJobPlan();
 
-    // Sunucusuz ortam + uzak worker yok: istek içinde koşturmak 504 olurdu.
-    // Kredi düşmeden hızlı ve açık bir hata döneriz.
+    // Fonksiyon limiti ağır hatta yetmiyor ve uzak worker da yok: istek içinde
+    // koşturmak 504 olurdu. Kredi düşmeden hızlı ve açık bir hata döneriz.
     if (plan === "unavailable") {
       return {
         status: "unavailable",
         error:
-          "Konsey şu an arka planda başlatılamıyor. WORKER_URL (Render servis adresi) tanımlanmalı ya da site Render'da çalışmalı.",
+          "Konsey bu ortamda başlatılamıyor: fonksiyon süresi limiti ağır analize yetmiyor (en az 300 sn gerekir). Süreyi 300 sn'ye çıkar ya da WORKER_URL (Render servis adresi) tanımla.",
       };
     }
 
@@ -107,7 +111,10 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
         runCouncil(data.query, data.country, data.category, data.lang),
       );
 
-    // Yerel geliştirme: istek süresi sınırı yok, eski davranış.
+    // Yerel geliştirme veya (worker'sız) süre limiti yeten sunucusuz ortam:
+    // konsey İSTEK İÇİNDE koşar. Bütçe platformdan gelir (`runCouncil` →
+    // `defaultCouncilBudgetMs`), yani Vercel Hobby'de 300 sn'ye sığan `fast`
+    // profille 14 ajan çalışır ve istek kendi kendine biter — 504 yok.
     if (plan === "inline") {
       const { error } = await context.supabase.rpc("deduct_product_finder_credit");
       if (error) throw creditError(error.message);

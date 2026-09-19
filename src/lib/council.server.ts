@@ -23,6 +23,17 @@ import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
 import { createAgentBus } from "./agent-bus.server";
+import {
+  canAffordCall,
+  CouncilBudgetError,
+  defaultCouncilBudgetMs,
+  planCouncilBudget,
+  stageFits,
+  withStageDeadline,
+  type CouncilBudget,
+  type CouncilDepth,
+  type CouncilStage,
+} from "./council-budget.server";
 
 export const COUNCIL_TEAMS = [
   "market",
@@ -83,6 +94,15 @@ export type CouncilReport = {
   opportunity_window: string;
   /** Daha güçlü alternatif pazar önerisi. */
   alt_market: string;
+  /**
+   * Rapor hangi derinlikte üretildi:
+   *  - `full` → kalıcı süreçte/uzak worker'da tam hat (6 üretici + 6 hakem + müdür + denetçi)
+   *  - `fast` → 300 sn'lik sunucusuz isteğe sığacak şekilde kısaltılmış hat
+   * Arayüz bunu dürüstçe gösterir; iki rapor aynı değildir.
+   */
+  depth: CouncilDepth;
+  /** Süre bütçesine sığmadığı için atlanan aşamalar (boşsa tam hat koştu). */
+  skipped_stages: string[];
 };
 
 /** Konsey ağırlıkları — toplam 100. */
@@ -109,22 +129,44 @@ const strArr = (v: unknown, n: number): string[] =>
 
 type Runner = { engine: string; run: () => Promise<string> };
 
-/** Tries each engine in order; the first non-empty JSON answer wins. */
-async function withFallback(runners: Runner[], prompt?: string) {
+/** Hangi aşamanın bütçesiyle koşuyoruz — her çağrı kendi aşamasına bağlanır. */
+type CallContext = { budget: CouncilBudget; stage: CouncilStage };
+
+/**
+ * Sırayla motorları dener; ilk anlamlı JSON cevabı kazanır.
+ *
+ * Her deneme AŞAMANIN süre bütçesine bağlıdır: yavaş bir sağlayıcı tüm bütçeyi
+ * yutamaz, sıradaki yedek motora geçilir. Süre bitmek üzereyse yeni deneme
+ * başlatılmaz (bu yüzden 504 yerine eksik ama geçerli bir rapor döner).
+ * Deneme sayısı profille sınırlıdır (`maxAttempts`): hızlı profilde 2, tamda 4.
+ */
+async function withFallback(runners: Runner[], prompt: string | undefined, ctx: CallContext) {
   const chain: Runner[] =
     prompt && !runners.some((r) => r.engine === "Lovable AI Gateway")
       ? [...runners, { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) }]
       : runners;
-  for (const r of chain) {
-    try {
-      const text = await r.run();
-      const parsed = extractJson<Record<string, unknown>>(text, {});
+  for (const r of chain.slice(0, ctx.budget.maxAttempts)) {
+    if (!canAffordCall(ctx.budget, ctx.stage)) break;
+    const outcome = await withStageDeadline(r.run(), ctx.budget, ctx.stage);
+    if (outcome.kind === "value") {
+      const parsed = extractJson<Record<string, unknown>>(outcome.value, {});
       if (parsed && Object.keys(parsed).length) return { engine: r.engine, raw: parsed };
-    } catch {
-      await sleep(200); // 429 / timeout → anında yedek modele geç
+    } else {
+      await sleep(120); // 429 / timeout / süre yetmedi → anında yedek modele geç
     }
   }
   return { engine: "unavailable", raw: {} as Record<string, unknown> };
+}
+
+/**
+ * Aşamaya bağlı model seçicisi.
+ *
+ * `withFallback`'i aşama bağlamına bağlar; 6 ekip + müdür + denetçi zinciri tek
+ * argümanlı çağrıyla kalır (`pickFor(ctx)(runnerChain)`), böylece 8 ayrı model
+ * listesi okunaklı durur.
+ */
+function pickFor(ctx: CallContext) {
+  return (runners: Runner[], prompt?: string) => withFallback(runners, prompt, ctx);
 }
 
 const SHAPE = `Return ONLY minified JSON:
@@ -178,14 +220,14 @@ function baseTeam(
   };
 }
 
-async function runMarketTeam(block: string): Promise<TeamReport> {
+async function runMarketTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 1 — TREND & PAZAR ANALİZİ ekibisin.",
     "Trend kaynaklarını, GitHub scraper verilerini ve sosyal sinyalleri analiz et. Pazar doygunluğunu ve trend ivmesini ölç. Puan = pazar fırsatı (1-100). Sinyalde ölçüm yoksa uydurma, 'veri yok' yaz.",
     block,
   );
   await stagger(0);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.3) },
     {
       engine: "Gemini Flash (grounded)",
@@ -193,18 +235,19 @@ async function runMarketTeam(block: string): Promise<TeamReport> {
         callGemini(prompt, undefined, 0.4, true, ["gemini-flash-latest", "gemini-2.0-flash"]),
     },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("market", "Trend & Pazar Analizi", engine, raw);
 }
 
-async function runFinanceTeam(block: string): Promise<TeamReport> {
+async function runFinanceTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 2 — FİNANS & TEDARİK ekibisin.",
     "Ürün maliyeti, kargo, gümrük/vergi, kar marjı ve Çin/küresel tedarik zincirini hesapla. Metriklerde COGS, satış fiyatı, brüt marj % ve başabaş adet yer alsın. Puan = finansal sürdürülebilirlik (1-100).",
     block,
   );
   await stagger(1);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     { engine: "OpenRouter DeepSeek (free)", run: () => callOpenRouter(prompt, 0.35) },
     { engine: "Groq DeepSeek-distill", run: () => callGroq(prompt, 0.35) },
     {
@@ -213,18 +256,19 @@ async function runFinanceTeam(block: string): Promise<TeamReport> {
         callGemini(prompt, undefined, 0.4, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
     },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("finance", "Finans & Tedarik", engine, raw);
 }
 
-async function runMarketingTeam(block: string): Promise<TeamReport> {
+async function runMarketingTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 3 — PAZARLAMA & REKLAM KANCASI ekibisin.",
     "Meta/TikTok reklam açılarını, metin yazarlığı detaylarını ve ikna kancalarını üret. Maddelerin en az ikisi doğrudan kullanılabilir reklam kancası olsun. Puan = pazarlanabilirlik (1-100).",
     block,
   );
   await stagger(2);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     {
       engine: "Hugging Face Mistral/Qwen",
       run: () => callHuggingFace(prompt, "qwen", { temperature: 0.6 }),
@@ -232,18 +276,19 @@ async function runMarketingTeam(block: string): Promise<TeamReport> {
     { engine: "OpenRouter free Llama/Qwen", run: () => callOpenRouter(prompt, 0.6) },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.6) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.6) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("marketing", "Pazarlama & Reklam Kancası", engine, raw);
 }
 
-async function runOperationsTeam(block: string): Promise<TeamReport> {
+async function runOperationsTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 4 — OPERASYON & LOJİSTİK ekibisin.",
     "Teslimat süresi, envanter yönetimi, 3PL/depolama, iade oranı, kırılganlık ve kargo maliyetini değerlendir. Puan = operasyonel ölçeklenebilirlik (1-100).",
     block,
   );
   await stagger(3);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
     {
       engine: "Gemini Flash",
@@ -252,18 +297,19 @@ async function runOperationsTeam(block: string): Promise<TeamReport> {
     },
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("operations", "Operasyon & Lojistik", engine, raw);
 }
 
-async function runComplianceTeam(block: string): Promise<TeamReport> {
+async function runComplianceTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 5 — UYUM & RİSK ekibisin.",
     "Fikri mülkiyet, sertifikalar (CE/FCC/RoHS), platform politikaları, ithalat yasakları, vergi/vergisi ve yasal riskleri incele. Puan = risk-adjusted uygunluk (1-100).",
     block,
   );
   await stagger(4);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.35) },
     {
       engine: "Gemini Flash",
@@ -272,18 +318,19 @@ async function runComplianceTeam(block: string): Promise<TeamReport> {
     },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.35) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("compliance", "Uyum & Risk", engine, raw);
 }
 
-async function runCreativeTeam(block: string): Promise<TeamReport> {
+async function runCreativeTeam(block: string, ctx: CallContext): Promise<TeamReport> {
   const prompt = teamPrompt(
     "Sen EKİP 6 — YARATICI & VİRAL İÇERİK ekibisin.",
     "Ürünün viral kancasını, TikTok/Reels/Shorts açılarını, hashtag potansiyelini, influencer uygunluğunu ve kreatif farklılaşmasını değerlendir. Puan = viral / kreatif potansiyel (1-100).",
     block,
   );
   await stagger(5);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     {
       engine: "Hugging Face Mistral/Qwen",
       run: () => callHuggingFace(prompt, "qwen", { temperature: 0.7 }),
@@ -291,7 +338,8 @@ async function runCreativeTeam(block: string): Promise<TeamReport> {
     { engine: "OpenRouter free Llama/Qwen", run: () => callOpenRouter(prompt, 0.65) },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.65) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.65) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   return baseTeam("creative", "Yaratıcı & Viral İçerik", engine, raw);
 }
 
@@ -299,6 +347,7 @@ async function reviewTeam(
   team: TeamReport,
   block: string,
   slot: number,
+  ctx: CallContext,
 ): Promise<{ score: number; note: string; engine: string }> {
   const prompt = `Sen bir HAKEM modelsin. Aşağıdaki ekip raporunu canlı verilerle karşılaştır, abartı/uydurma varsa puanı düşür.
 EKİP: ${team.title} | Ekip puanı: ${team.score}
@@ -346,7 +395,7 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 140 characters)}${
             callGemini(prompt, undefined, 0.2, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
         },
   ];
-  const { engine, raw } = await withFallback(runners, prompt);
+  const { engine, raw } = await withFallback(runners, prompt, ctx);
   const s = Number(raw["score"]);
   return {
     score: Number.isFinite(s) ? Math.max(1, Math.min(100, Math.round(s))) : team.score,
@@ -362,6 +411,7 @@ async function runDirector(
   block: string,
   veloraScore: number,
   coverage: number,
+  ctx: CallContext,
 ): Promise<{
   engine: string;
   verdict: string;
@@ -398,8 +448,11 @@ Return ONLY JSON:
  "opportunity_window": string (max 40 karakter, örn. "6-8 hafta"),
  "alt_market": string (max 80 karakter: daha güçlü alternatif ülke + tek cümle gerekçe)}`;
   await stagger(12);
-  const { engine, raw } = await withFallback([
-    { engine: "Aroless Premium (Gemini 3.1 Pro / GPT-5.5)", run: () => callPremiumAI(prompt, 0.5) },
+  const runnerChain: Runner[] = [
+    {
+      engine: "Aroless Premium (Gemini 3.1 Pro / GPT-5.5)",
+      run: () => callPremiumAI(prompt, 0.5),
+    },
     {
       engine: "Gemini Pro (free)",
       run: () =>
@@ -412,7 +465,8 @@ Return ONLY JSON:
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.5) },
     { engine: "OpenRouter free", run: () => callOpenRouter(prompt, 0.5) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.5) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
 
   return {
     engine,
@@ -435,6 +489,7 @@ async function runAuditor(
   directorVerdict: string,
   veloraScore: number,
   coverage: number,
+  ctx: CallContext,
 ): Promise<{ engine: string; score: number; note: string }> {
   const prompt = `Sen 14. YAPAY ZEKA — BAĞIMSIZ DENETÇİ'sin. Müdürün kararını ve altı ekibin puanlarını eleştirel gözle teyit et.
 Eğer ekipler arası fikir ayrılığı yüksekse, canlı veri kapsamı düşükse veya müdürün puanı hakem notlarıyla çelişiyorsa, puanı aşağı çek.
@@ -446,7 +501,7 @@ AROLESS SCORE (müdür): ${veloraScore}/100 | CANLI VERİ KAPSAMI: %${coverage}
 
 Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, neden düzelttiğin veya onayladığın)}${langDirective()}`;
   await stagger(13);
-  const { engine, raw } = await withFallback([
+  const runnerChain: Runner[] = [
     {
       engine: "Gemini Pro (auditor)",
       run: () =>
@@ -455,7 +510,8 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, nede
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.4) },
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.4) },
     { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) },
-  ]);
+  ];
+  const { engine, raw } = await pickFor(ctx)(runnerChain);
   const s = clamp100(raw["score"], veloraScore);
   return {
     engine,
@@ -464,12 +520,122 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, nede
   };
 }
 
-async function build(query: string, country: string, category: string): Promise<CouncilReport> {
+/** Canlı veri hattı süre bütçesine sığmadığında kullanılan boş sinyal seti. */
+function emptySignals(query: string, country: string): PipelineSignals {
+  return {
+    keyword: query,
+    country,
+    trends: { yearly: [], monthly: [], momentum_pct: 0, source: "yok" },
+    reddit: [],
+    tiktok: [],
+    amazon: [],
+    google_rising: [],
+    github: [],
+    sources: [],
+    collected_at: new Date().toISOString(),
+  };
+}
+
+type DirectorOutput = Awaited<ReturnType<typeof runDirector>>;
+
+/**
+ * Müdür modeli süre bütçesine sığmadığında (veya hiç cevap vermediğinde) icra
+ * raporunu ekip çıktılarından deterministik olarak derler.
+ *
+ * 300 sn'lik sunucusuz istekte kullanıcıya 504 yerine TAM bir rapor vermenin
+ * son savunma hattıdır. Uydurma sayı üretmez: yalnızca ekiplerin yazdıklarını
+ * birleştirir ve raporun başında bu durumu açıkça söyler.
+ */
+function synthesizeDirector(
+  teams: TeamReport[],
+  veloraScore: number,
+  coverage: number,
+): DirectorOutput {
+  const ranked = [...teams].sort((a, b) => b.score * b.weight - a.score * a.weight);
+  const weakest = [...teams].sort((a, b) => a.score - b.score).slice(0, 2);
+  const verdict =
+    veloraScore >= 70
+      ? `GİR — güçlü fırsat (${veloraScore}/100)`
+      : veloraScore >= 50
+        ? `BEKLE — sinyal orta (${veloraScore}/100)`
+        : `GEÇ — sinyal zayıf (${veloraScore}/100)`;
+
+  const report = [
+    "> Not: Müdür modeli süre bütçesine sığmadı. Bu icra raporu altı ekibin çıktısından otomatik derlendi, yeni sayı üretilmedi.",
+    "",
+    `## Aroless Score: ${veloraScore}/100 · Canlı veri kapsamı: %${coverage}`,
+    "",
+    "### Ekip özetleri",
+    ...teams.map(
+      (t) =>
+        `**${t.title}** — ${t.score}/100 (ağırlık %${t.weight}, güven %${t.confidence}, motor: ${t.engine})\n${t.summary}`,
+    ),
+    "",
+    "### Öne çıkan maddeler",
+    ...ranked.slice(0, 3).flatMap((t) => t.bullets.slice(0, 2).map((b) => `- [${t.title}] ${b}`)),
+  ].join("\n");
+
+  const actions = ranked
+    .flatMap((t) => t.bullets)
+    .slice(0, 5)
+    .map((b) => b.slice(0, 300));
+
+  const risks = [
+    ...weakest.map((t) => `${t.title} zayıf (${t.score}/100): ${t.summary}`.slice(0, 300)),
+    ...(coverage < 60
+      ? [
+          `Canlı veri kapsamı yalnızca %${coverage}: karar öncesi Google Trends/Reddit/TikTok verisini elle doğrula.`,
+        ]
+      : []),
+  ].slice(0, 4);
+
+  return {
+    engine: "yerel derleme (müdür modeli atlandı)",
+    verdict,
+    report,
+    actions,
+    risks,
+    kill: [
+      "İlk 14 günde doğrulanmış satış gelmezse durdur",
+      "Hedef CPA'nın 2 katını aşarsa durdur",
+      "Aroless Score 50'nin altına inerse durdur",
+    ],
+    window: "",
+    alt: "",
+  };
+}
+
+/**
+ * Konsey hattını verilen süre bütçesi içinde koşar.
+ *
+ * Bütçe kritik: her aşama ve her model çağrısı `council-budget.server.ts`
+ * kurallarına bağlanır, böylece istek platform onu kesmeden biter ve sığmayan
+ * aşamalar `skipped_stages` içinde dürüstçe raporlanır.
+ */
+async function build(
+  query: string,
+  country: string,
+  category: string,
+  budget: CouncilBudget,
+): Promise<CouncilReport> {
+  const skipped: string[] = [];
+  /** Her çağrı kendi aşamasının bütçesine bağlanır. */
+  const ctxFor = (stage: CouncilStage): CallContext => ({ budget, stage });
   const traceId = `council_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const bus = createAgentBus(traceId);
-  bus.emit("pipeline:start", { traceId, query: query.slice(0, 80) });
+  bus.emit("pipeline:start", { traceId, query: query.slice(0, 80), depth: budget.depth });
   const tSignals = Date.now();
-  const { data: signals } = await collectSignals(query, country, category);
+
+  // Canlı veri hatları 24 saat önbellekli; yine de bütçeye bağlanır: askıda
+  // kalan bir kaynak tüm konseyi geciktirmemeli (boş sinyalle devam ederiz).
+  const signalsOutcome = await withStageDeadline(
+    collectSignals(query, country, category),
+    budget,
+    "signals",
+  );
+  const signals =
+    signalsOutcome.kind === "value" ? signalsOutcome.value.data : emptySignals(query, country);
+  if (signalsOutcome.kind !== "value") skipped.push("canlı veri hatları");
   bus.emit("signals:collected", { traceId, coverage: 0, ms: Date.now() - tSignals });
   const block = signalsBlock(signals);
 
@@ -479,15 +645,19 @@ async function build(query: string, country: string, category: string): Promise<
   bus.emit("signals:collected", { traceId, coverage, ms: Date.now() - tSignals });
 
   // 6 üretici ekip paralel başlar — her biri bus üzerinden izlenir, blocking yok.
+  // Ekipler konseyin TEMELİDİR: bu aşamaya yer yoksa rapor üretilemez, o yüzden
+  // 504 yerine açık ve hızlı bir hata veririz (kredi iade edilir).
+  if (!stageFits(budget, "teams")) throw new CouncilBudgetError(budget.totalMs, "uzman ekipler");
   bus.emit("tier:start", { traceId, tier: 1 });
   const tTier1 = Date.now();
+  const teamCtx = ctxFor("teams");
   const [market, finance, marketing, operations, compliance, creative] = await Promise.all([
-    runMarketTeam(block),
-    runFinanceTeam(block),
-    runMarketingTeam(block),
-    runOperationsTeam(block),
-    runComplianceTeam(block),
-    runCreativeTeam(block),
+    runMarketTeam(block, teamCtx),
+    runFinanceTeam(block, teamCtx),
+    runMarketingTeam(block, teamCtx),
+    runOperationsTeam(block, teamCtx),
+    runComplianceTeam(block, teamCtx),
+    runCreativeTeam(block, teamCtx),
   ]);
 
   bus.emit("tier:complete", { traceId, tier: 1, ms: Date.now() - tTier1 });
@@ -495,15 +665,21 @@ async function build(query: string, country: string, category: string): Promise<
 
   bus.emit("tier:start", { traceId, tier: 2 });
   const tTier2 = Date.now();
-  // 6 hakem ekip, slot 6-11.
-  const reviewed = await Promise.all([
-    reviewTeam(market, block, 6),
-    reviewTeam(finance, block, 7),
-    reviewTeam(marketing, block, 8),
-    reviewTeam(operations, block, 9),
-    reviewTeam(compliance, block, 10),
-    reviewTeam(creative, block, 11),
-  ]);
+  // 6 hakem ekip, slot 6-11. Süre yetmiyorsa hakem turu ATLANIR: her ekip kendi
+  // puanını korur (aşağıdaki `rev?.score ?? t.raw_score`), rapor yine döner.
+  const reviewersFit = stageFits(budget, "review");
+  if (!reviewersFit) skipped.push("hakem turu (6 hakem)");
+  const reviewCtx = ctxFor("review");
+  const reviewed: Awaited<ReturnType<typeof reviewTeam>>[] = reviewersFit
+    ? await Promise.all([
+        reviewTeam(market, block, 6, reviewCtx),
+        reviewTeam(finance, block, 7, reviewCtx),
+        reviewTeam(marketing, block, 8, reviewCtx),
+        reviewTeam(operations, block, 9, reviewCtx),
+        reviewTeam(compliance, block, 10, reviewCtx),
+        reviewTeam(creative, block, 11, reviewCtx),
+      ])
+    : [];
 
   const teams: TeamReport[] = rawTeams.map((t, i) => {
     const rev = reviewed[i];
@@ -539,20 +715,39 @@ async function build(query: string, country: string, category: string): Promise<
 
   bus.emit("tier:start", { traceId, tier: 3 });
   const tTier3 = Date.now();
-  const director = await runDirector(query, country, teams, block, directorVelora, coverage);
+  // Müdür aşaması sığmıyorsa (veya hiçbir motor cevap vermediyse) icra raporu
+  // ekip çıktılarından yerel olarak derlenir — kullanıcı 504 görmez.
+  const directorFits = stageFits(budget, "director");
+  if (!directorFits) skipped.push("müdür sentezi (model)");
+  let director = directorFits
+    ? await runDirector(query, country, teams, block, directorVelora, coverage, ctxFor("director"))
+    : synthesizeDirector(teams, directorVelora, coverage);
+  if (directorFits && director.engine === "unavailable" && !director.report) {
+    director = synthesizeDirector(teams, directorVelora, coverage);
+    skipped.push("müdür sentezi (model cevapsız)");
+  }
   bus.emit("tier:complete", { traceId, tier: 3, ms: Date.now() - tTier3 });
   bus.emit("tier:start", { traceId, tier: 4 });
   const tTier4 = Date.now();
 
   // 14. üye: bağımsız denetçi müdür puanını teyit eder / düzeltir.
-  const auditor = await runAuditor(
-    query,
-    country,
-    teams,
-    director.verdict,
-    directorVelora,
-    coverage,
-  );
+  const auditorFits = stageFits(budget, "auditor");
+  if (!auditorFits) skipped.push("bağımsız denetçi (14. ajan)");
+  const auditor = auditorFits
+    ? await runAuditor(
+        query,
+        country,
+        teams,
+        director.verdict,
+        directorVelora,
+        coverage,
+        ctxFor("auditor"),
+      )
+    : {
+        engine: "atlandı (süre bütçesi)",
+        score: directorVelora,
+        note: "Denetçi aşaması süre bütçesine sığmadı; müdür puanı değiştirilmedi.",
+      };
   bus.emit("tier:complete", { traceId, tier: 4, ms: Date.now() - tTier4 });
   const finalVelora = Math.round((directorVelora + auditor.score) / 2);
 
@@ -593,19 +788,33 @@ async function build(query: string, country: string, category: string): Promise<
     kill_criteria: director.kill,
     opportunity_window: director.window,
     alt_market: director.alt,
+    depth: budget.depth,
+    skipped_stages: skipped,
   };
 }
 
-/** Cache-first council run (24h). */
+/**
+ * Cache-first council run (24h).
+ *
+ * `budgetMs` varsayılanı platformdan gelir (`defaultCouncilBudgetMs`): Render/
+ * yerelde tam hat (14 ajan), Vercel Hobby'de 300 sn'ye sığan hızlı hat. Çağıran
+ * taraf bu bütçeyi bilerek küçültmediği sürece hiçbir istek 504 olmaz — hat
+ * kendi kendine, platform kesmeden önce biter.
+ *
+ * Önbellek anahtarı DERİNLİK İÇERMEZ: tetikleyici (Vercel) ile worker (Render)
+ * aynı anahtarı üretmeli ki istemci worker'ın yazdığı sonucu görebilsin.
+ */
 export async function runCouncil(
   query: string,
   country = "GLOBAL",
   category = "General",
   lang = "tr",
+  budgetMs: number = defaultCouncilBudgetMs(),
 ): Promise<CouncilReport> {
   activeCouncilLang = lang.slice(0, 2);
+  const budget = planCouncilBudget({ budgetMs });
   const { data, cache_hit } = await cached("council", [query, country, category, lang], () =>
-    build(query, country, category),
+    build(query, country, category, budget),
   );
   return { ...data, cache_hit };
 }

@@ -225,6 +225,22 @@ function CouncilPage() {
                   <span className="rounded-full border border-border/60 px-2 py-0.5">
                     Görüş ayrılığı {report.disagreement} puan
                   </span>
+                  {report.depth === "fast" && (
+                    <span
+                      className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-amber-300"
+                      title="Sunucusuz fonksiyonun süre sınırına sığması için aşama bütçeleri kısaltıldı; 14 ajanın tamamı yine koşar."
+                    >
+                      Hızlı hat (süre bütçesi)
+                    </span>
+                  )}
+                  {(report.skipped_stages?.length ?? 0) > 0 && (
+                    <span
+                      className="rounded-full border border-amber-500/40 px-2 py-0.5 text-amber-300"
+                      title={`Süre bütçesine sığmadığı için atlanan aşamalar: ${report.skipped_stages.join(", ")}`}
+                    >
+                      Atlanan aşama: {report.skipped_stages.length}
+                    </span>
+                  )}
                   {report.opportunity_window && (
                     <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
                       Fırsat penceresi: {report.opportunity_window}

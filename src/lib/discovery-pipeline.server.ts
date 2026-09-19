@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { callGemini, callLovableAI, extractJson } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
+import { MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
 import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
@@ -710,13 +711,15 @@ JSON shape:
 
   // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
   // En pahalı adım: yalnızca geniş bütçede (Pro/uzun fonksiyon limiti) çalışır.
-  if (!fast && hasTime(30_000)) {
+  // Konsey KENDİ bütçesini alır: `deadline - now`. Böylece hattın kalan süresini
+  // yiyip işi yarıda bırakamaz (504 / "job failed" yerine ya rapor ya da atlama).
+  if (!fast && hasTime(MIN_INLINE_COUNCIL_MS)) {
     const { runCouncil } = await import("@/lib/council.server");
     const COUNCIL_LIMIT = 8;
     const councilTargets = finalProducts.slice(0, COUNCIL_LIMIT);
     const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
       try {
-        const report = await runCouncil(p.name, country, data.category);
+        const report = await runCouncil(p.name, country, data.category, "tr", timeLeft());
         const council: CouncilSummary = {
           velora_score: report.velora_score,
           verdict: report.verdict,
