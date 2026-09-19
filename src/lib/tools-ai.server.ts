@@ -51,16 +51,17 @@ const EMPTY: Omit<ToolResult, "provider"> = {
 };
 
 export const SCHEMA_HINT = `Think step by step internally (unit economics, benchmarks, worst case) but output ONLY minified JSON with this exact shape:
-{"headline": string (max 120 chars, contains at least one number),
- "verdict": string (max 60 chars, e.g. "GİRİLİR — marj %31" / "DİKKAT — kur riski"),
+{"headline": string (max 120 chars; MUST contain at least one number AND the decision, e.g. "Marj %31 ile girer, 420 adet MOQ'te kırılır"),
+ "verdict": string (max 60 chars, e.g. "GİRİLİR — marj %31" / "DİKKAT — kur riski" / "KAÇIN — kargo/desi kademesi"),
  "score": number 0-100 (opportunity/quality score for this specific case),
- "metrics": [{"label": string, "value": string, "tone": "profit"|"warning"|"action"|"neutral"}] (3-6 items; every value is a realistic ESTIMATION RANGE with units, e.g. "$1,200 - $1,800" / "%18 - %24"),
- "bullets": [string] (3-6 concrete insights; all forecasts written as ranges — no generic advice),
- "risks": [string] (2-4 specific failure modes with the number that triggers them),
- "actions": [string] (3-5 prioritised next steps, each starting with a verb and a deadline/quantity),
- "assumptions": [string] (1-3 assumptions the numbers depend on),
- "table": {"columns": [string], "rows": [[string]]} | null,
- "document": string | null (full ready-to-send text when the task asks for a letter/pitch/sheet, markdown allowed)}`;
+ "metrics": [{"label": string, "value": string, "tone": "profit"|"warning"|"action"|"neutral"}] (4-8 items covering: the headline money figure, the risk figure, the decision trigger, and the timing; every value is a realistic ESTIMATION RANGE with units, e.g. "$1,200 - $1,800" / "%18 - %24" / "42-58 gün"),
+ "bullets": [string] (5-10 concrete insights — each one states a finding AND its number; no generic advice, no repeated idea twice),
+ "risks": [string] (3-5 specific failure modes, each with the numeric trigger AND the mitigation),
+ "actions": [string] (4-6 prioritised next steps; each starts with a verb and includes a quantity, a cost or a deadline),
+ "assumptions": [string] (2-4 assumptions the numbers depend on, plus how to verify each one),
+ "table": {"columns": [string], "rows": [[string]]} | null — when the task compares options, costs or scenarios, ALWAYS provide a table with 4-8 rows and at least two numeric columns,
+ "document": string | null (full ready-to-send text when the task asks for a letter/pitch/spec/sheet; markdown with headings, ready to copy without edits)}
+Quality bar: a senior operator must be able to act on this answer without asking a follow-up question.`;
 
 /** All configured OpenRouter keys, de-duplicated, in rotation order. */
 function openRouterKeyPool(): string[] {
@@ -374,22 +375,22 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
     headline: base.headline || normalized.find((r) => r.headline)?.headline || "",
     verdict: base.verdict || normalized.find((r) => r.verdict)?.verdict || "",
     score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0,
-    metrics: metrics.slice(0, 8),
+    metrics: metrics.slice(0, 10),
     bullets: uniq(
       normalized.map((r) => r.bullets),
-      10,
+      12,
     ),
     risks: uniq(
       normalized.map((r) => r.risks),
-      6,
+      8,
     ),
     actions: uniq(
       normalized.map((r) => r.actions),
-      6,
+      8,
     ),
     assumptions: uniq(
       normalized.map((r) => r.assumptions),
-      4,
+      5,
     ),
     table,
     document,
@@ -467,7 +468,7 @@ function normalize(p: Partial<ToolResult>, provider: string): ToolResult {
     verdict: String(p.verdict ?? "").slice(0, 80),
     score: clampNum(p.score, 0, 100, 0),
     metrics: Array.isArray(p.metrics)
-      ? p.metrics.slice(0, 6).map((m) => ({
+      ? p.metrics.slice(0, 8).map((m) => ({
           label: String((m as { label?: string })?.label ?? "").slice(0, 40),
           value: String((m as { value?: string })?.value ?? "").slice(0, 40),
           tone: tones.has(String((m as { tone?: string })?.tone))
@@ -475,21 +476,21 @@ function normalize(p: Partial<ToolResult>, provider: string): ToolResult {
             : "neutral",
         }))
       : [],
-    bullets: strList(p.bullets, 8),
-    risks: strList(p.risks, 5),
-    actions: strList(p.actions, 6),
-    assumptions: strList(p.assumptions, 4),
+    bullets: strList(p.bullets, 12),
+    risks: strList(p.risks, 6),
+    actions: strList(p.actions, 8),
+    assumptions: strList(p.assumptions, 5),
 
     table:
       p.table && Array.isArray(p.table.columns) && Array.isArray(p.table.rows)
         ? {
-            columns: p.table.columns.slice(0, 8).map(String),
+            columns: p.table.columns.slice(0, 10).map(String),
             rows: p.table.rows
-              .slice(0, 20)
-              .map((r) => (Array.isArray(r) ? r.slice(0, 8).map(String) : [])),
+              .slice(0, 24)
+              .map((r) => (Array.isArray(r) ? r.slice(0, 10).map(String) : [])),
           }
         : null,
-    document: p.document ? String(p.document).slice(0, 8000) : null,
+    document: p.document ? String(p.document).slice(0, 12_000) : null,
     provider,
   };
 }

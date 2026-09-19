@@ -76,7 +76,7 @@ const VIEW_BRIEF: Record<TrendView, string> = {
 };
 
 async function build(view: TrendView, country: string): Promise<TrendPayload> {
-  const { callGroq, extractJson } = await import("@/lib/ai.server");
+  const { callAiMesh, extractJson } = await import("@/lib/ai.server");
   const { getGoogleTrends } = await import("@/lib/market-data.server");
   const now = new Date();
   const iso = now.toISOString().slice(0, 10);
@@ -95,7 +95,9 @@ Rules:
 Return ONLY JSON:
 {"items":[{"name":string,"keyword":string,"category":string,"why":string,"peak_month":string,"spike_window":string,"season":string,"competition":"Low"|"Medium"|"High","marketplace":string,"audience":string,"ad_angle":string,"score":number 1-100}]}`;
 
-  const text = await callGroq(prompt, 0.5);
+  // Yalnız Groq'a bağlı kalmak, Groq kotası dolduğunda paneli boş bırakıyordu:
+  // artık zeminli Gemini → tüm anahtar havuzu sırasıyla denenir.
+  const text = await callAiMesh(prompt, { temperature: 0.5, grounded: true });
   const parsed = extractJson<{ items?: Record<string, unknown>[] }>(text, { items: [] });
   const raws = (parsed.items ?? []).slice(0, 8);
 

@@ -65,7 +65,7 @@ async function build(input: {
   const { scoreProductForCountry, runCountryCrossMatch } =
     await import("@/lib/hybrid-scoring.server");
   const { getGoogleTrends, getSourcingEstimate } = await import("@/lib/market-data.server");
-  const { callGemini, extractJson } = await import("@/lib/ai.server");
+  const { callAiMesh, extractJson } = await import("@/lib/ai.server");
 
   const assumedRetail = 49;
   const [trends, sourcing] = await Promise.all([
@@ -113,17 +113,15 @@ Return ONLY JSON (all text in Turkish):
  "action_plan": string[4] (bu ürünü bu ülkede satmak için sıralı somut adımlar, tarih/sezon farkındalıklı),
  "risks": string[3] (gerçekçi riskler)}`;
 
-  const key3 =
-    process.env["GEMINI_API_KEY_3"] ||
-    process.env["GEMINI_3_API_KEY"] ||
-    process.env["GEMINI_API_KEY"];
   let synth: Record<string, unknown> = {};
   try {
-    const text = await callGemini(synthPrompt, key3, 0.6, false, [
-      "gemini-flash-latest",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-    ]);
+    // Çok motorlu yorum: zeminli Gemini başarısız olursa tüm anahtar havuzu
+    // (Groq / Cerebras / SambaNova / HF / OpenRouter) JSON modunda dener.
+    const text = await callAiMesh(synthPrompt, {
+      temperature: 0.6,
+      grounded: true,
+      models: ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"],
+    });
     synth = extractJson<Record<string, unknown>>(text, {});
   } catch {
     /* fall through to defaults */
@@ -189,7 +187,8 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
             isValid: (analysis) => Boolean(analysis?.name),
           });
 
-          if (data) return Response.json({ ...data, status: status === "ready" ? "ready" : "stale" });
+          if (data)
+            return Response.json({ ...data, status: status === "ready" ? "ready" : "stale" });
 
           // Tarama başarısız olduysa gerçek hata dön; hâlâ sürüyorsa "warming".
           if (status === "failed") {

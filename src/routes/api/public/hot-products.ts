@@ -151,7 +151,7 @@ function emptyPayload(niche: string): Payload {
 }
 
 async function build(niche: string): Promise<Payload> {
-  const { callGemini, extractJson } = await import("@/lib/ai.server");
+  const { callAiMesh, extractJson } = await import("@/lib/ai.server");
   const now = new Date();
   const focus = niche
     ? `NICHE FOCUS: every product must belong to the "${niche}" niche/category. If the niche is narrow, still return the 10 strongest real SKUs inside it.`
@@ -172,16 +172,28 @@ Return ONLY JSON:
 {"items":[{"name":string,"why_now":string,"country":string (2-letter ISO code),"marketplace":string,"budget_usd":string (e.g. "$800 - $2,000"),"supplier_cost_usd":string,"retail_price_usd":string,"margin_pct":number,"demand_signal":string (real search/social/marketplace evidence),"competition":"Low"|"Medium"|"High","audience":string,"ad_angle":string,"sourcing":string,"lead_time":string,"first_week_plan":string[4],"risks":string[3],"score":number 1-100,
 "signals":{"search_volume_monthly":number,"social_views_now":number,"social_views_7d_ago":number,"active_stores":number,"ads_running_14d":number,"amazon_sellers":number,"review_count":number,"quality_complaint_pct":number,"sizing_complaint_pct":number,"shipping_complaint_pct":number,"on_time_delivery_pct":number,"stock_stability_pct":number,"lead_time_days":number,"cpc_usd":number,"cvr_pct":number,"sources":string[]}}]}`;
 
-  const key = process.env["GEMINI_API_KEY_3"] || process.env["GEMINI_API_KEY"];
-  // Tek model: model merdiveni her basamakta 25 sn daha beklettiği için uç
-  // noktanın toplam süresini patlatıyordu.
-  const text = await callGemini(prompt, key, 0.6, true, ["gemini-flash-latest"]);
-  const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
-  const items = (parsed.items ?? [])
-    .map((r, i) => normalize(r, i))
-    .filter((x): x is HotProduct => !!x)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12);
+  // Çok motorlu yol: zeminli Gemini (canlı web verisi) → cevap vermezse JSON
+  // modunda TÜM anahtar havuzu. Eskiden yalnız Gemini çağrılıyordu; anahtar
+  // kotaya takılınca uç nokta sessizce BOŞ liste döndürüyordu.
+  const parseItems = (text: string) => {
+    const parsed = extractJson<{ items?: any[] }>(text, { items: [] });
+    return (parsed.items ?? [])
+      .map((r, i) => normalize(r, i))
+      .filter((x): x is HotProduct => !!x)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12);
+  };
+
+  let items = parseItems(
+    await callAiMesh(prompt, { temperature: 0.6, grounded: true, models: ["gemini-flash-latest"] }),
+  );
+  // Boş ya da tek ürünlük yanıt geldiyse daha kısa/kuralı gevşek bir tur daha
+  // denenir — "bir ürün bulup bırakmak" ekranı boş bırakmaktan kötüdür.
+  if (items.length < 3) {
+    const relaxed = `${prompt}\n\nIf web grounding is unavailable, answer from your own knowledge of currently selling products. Still return 10 items in the same JSON shape.`;
+    const retry = parseItems(await callAiMesh(relaxed, { temperature: 0.7, grounded: false }));
+    if (retry.length > items.length) items = retry;
+  }
 
   return {
     hour: hourKey(now),

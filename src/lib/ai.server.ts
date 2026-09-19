@@ -72,6 +72,44 @@ export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<
   }
 }
 
+/**
+ * Tek bir sağlayıcıya bağlı kalmayan "asla boş dönmez" yolu.
+ *
+ * Sıra:
+ *  1) Zeminli (canlı web araması yapan) Gemini — piyasa/trend/haber verisinde
+ *     en yüksek doğruluk; JSON modunda değil, arama kanıtıyla üretir.
+ *  2) Ağ geçidi + TÜM anahtar havuzunun JSON modundaki süpürmesi
+ *     (Gemini 5 → Groq 5 → Cerebras → SambaNova → HF 5 → OpenRouter 5).
+ *
+ * Neden gerekli: radar / hot products / trend uç noktaları yalnız tek bir
+ * sağlayıcıyı (`callGemini` ya da `callGroq`) çağırıyordu. O sağlayıcı kotaya
+ * takıldığında ya da zeminli yanıtı JSON'a çevrilemeyince uç nokta sessizce
+ * BOŞ dönüyordu ("kazanan ürün radarı sürekli boş"). İkinci tur, aynı isteği
+ * JSON modunda bütün havuzda tekrar dener; yani hangi sağlayıcı/anahtar o an
+ * müsaitse cevabı o verir.
+ */
+export async function callAiMesh(
+  prompt: string,
+  opts: { temperature?: number; grounded?: boolean; models?: string[] } = {},
+): Promise<string> {
+  const { temperature = 0.5, grounded = true, models } = opts;
+  let lastErr: unknown = null;
+  if (grounded) {
+    try {
+      return await callGemini(prompt, undefined, temperature, true, models);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  try {
+    // Ağ geçidi varsa önce o, yoksa doğrudan tam havuz süpürmesi (JSON modu).
+    return await callLovableAI(prompt, temperature);
+  } catch (e) {
+    lastErr = e;
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("AI motorları yanıt vermedi");
+}
+
 /** Ağ geçidi (LOVABLE_API_KEY veya AI_GATEWAY_*) tanımlı mı? */
 export function hasGateway(): boolean {
   const { key, url } = gatewayConfig();

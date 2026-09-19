@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PROVIDER_ORDER,
+  SCHEMA_HINT,
   orderToolProviders,
   toolProviderWaves,
   type Provider,
@@ -102,6 +103,38 @@ describe("orderToolProviders", () => {
         rest.indexOf(unavailable[0]),
       );
     }
+  });
+});
+
+describe("SCHEMA_HINT (tüm araçların ortak çıktı sözleşmesi)", () => {
+  it("her alanı ve daha yüksek detay barajını içerir", () => {
+    for (const key of [
+      "headline",
+      "verdict",
+      "score",
+      "metrics",
+      "bullets",
+      "risks",
+      "actions",
+      "assumptions",
+      "table",
+      "document",
+    ])
+      expect(SCHEMA_HINT).toContain(`"${key}"`);
+    // Detay barajı: 4-8 metrik, 5-10 madde, 3-5 risk, 4-6 aksiyon.
+    expect(SCHEMA_HINT).toContain("4-8 items");
+    expect(SCHEMA_HINT).toContain("5-10 concrete insights");
+    expect(SCHEMA_HINT).toContain("3-5 specific failure modes");
+    expect(SCHEMA_HINT).toContain("4-6 prioritised next steps");
+    // Başlık sayı VE karar taşımalı; tablo 4-8 satır olmalı.
+    expect(SCHEMA_HINT).toContain("MUST contain at least one number");
+    expect(SCHEMA_HINT).toContain("4-8 rows");
+    expect(SCHEMA_HINT).toContain("Quality bar");
+  });
+
+  it("JSON şeklini tarif eder, serbest metin istemez", () => {
+    expect(SCHEMA_HINT).toContain("output ONLY minified JSON");
+    expect(SCHEMA_HINT).not.toContain("```");
   });
 });
 

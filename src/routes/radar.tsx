@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Star,
   Search,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,7 @@ function scoreColor(v: number) {
 function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
   const nav = useNavigate();
   const color = scoreColor(item.winner_score);
+  const live = item.payload?.trend_source === "google-trends";
   return (
     <Card className="premium-card group relative overflow-hidden border-white/10">
       <CardContent className="p-4">
@@ -94,7 +96,6 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
             <div className="text-[9px] uppercase tracking-wider text-muted-foreground">score</div>
           </div>
         </div>
-
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
             <div
@@ -104,7 +105,9 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
               <TrendingUp size={12} /> {item.momentum >= 0 ? "+" : ""}
               {item.momentum}%
             </div>
-            <div className="text-[9px] uppercase text-muted-foreground">momentum</div>
+            <div className="text-[9px] uppercase text-muted-foreground">
+              momentum{live ? " · canlı" : ""}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
             <div className="text-sm font-bold">
@@ -117,11 +120,17 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
             <div className="text-[9px] uppercase text-muted-foreground">tah. marj</div>
           </div>
         </div>
-
         {item.reason && (
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{item.reason}</p>
+        )}{" "}
+        {live && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 font-semibold text-emerald-300">
+              <Activity size={10} /> canlı Google Trends
+            </span>
+            <span className="truncate">arama: "{item.payload?.keyword}"</span>
+          </div>
         )}
-
         <div className="mt-3 flex gap-2">
           <Button
             size="sm"
@@ -179,6 +188,7 @@ function RadarPage() {
     ? Math.round(items.reduce((s, i) => s + i.winner_score, 0) / items.length)
     : 0;
   const top = items.length ? Math.max(...items.map((i) => i.momentum)) : 0;
+  const liveCount = items.filter((i) => i.payload?.trend_source === "google-trends").length;
 
   if (loading || !user) {
     return (
@@ -193,7 +203,7 @@ function RadarPage() {
       <PageHero
         icon={<RadarIcon size={20} />}
         title="Kazanan Ürün Radarı"
-        description="Her gün otomatik taranan yükselen ürünler. Arama yapmadan, bugünün fırsatlarını gör."
+        description="Yapay zekâ konseyi her gün yükselen ürünleri tarar, her ürünün talebi canlı Google Trends verisiyle doğrulanır."
         actions={
           <div className="flex items-center gap-2">
             <Select value={country} onValueChange={setCountry}>
@@ -212,7 +222,12 @@ function RadarPage() {
               size="sm"
               variant="outline"
               className="h-9"
-              onClick={() => q.refetch()}
+              title="Bugünün radarını yeniden üret"
+              onClick={() =>
+                radarFn({ data: { country: country as "US", refresh: true } })
+                  .then(() => q.refetch())
+                  .catch(() => q.refetch())
+              }
               disabled={q.isFetching}
             >
               <RefreshCw size={13} className={q.isFetching ? "animate-spin" : ""} />
@@ -226,7 +241,7 @@ function RadarPage() {
           { label: "Bugünkü ürün", value: items.length },
           { label: "Ortalama skor", value: avg },
           { label: "En yüksek momentum", value: `+${top}%` },
-          { label: "Favori eşleşmesi", value: watch.data?.matches.length ?? 0 },
+          { label: "Canlı trend kanıtı", value: `${liveCount}/${items.length}` },
         ].map((s) => (
           <div key={s.label} className="premium-card p-3 text-center">
             <div className="text-xl font-black text-[var(--accent-active)]">{s.value}</div>
@@ -259,7 +274,8 @@ function RadarPage() {
         </div>
       ) : items.length === 0 ? (
         <div className="premium-card p-8 text-center text-sm text-muted-foreground">
-          Bugün için henüz veri yok. Birkaç dakika sonra tekrar dene.
+          Bugünün radarı oluşturulamadı. Üstteki yenile düğmesine bas — tarama yeniden çalıştırılır
+          ve AI motorları meşgulse Google Trends verisiyle doldurulur.
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
