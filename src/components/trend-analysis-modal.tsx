@@ -3,17 +3,24 @@ import { Bot, Loader2, ShieldAlert, Target, TrendingUp, Truck, X } from "lucide-
 import { Sparkline } from "@/components/sparkline";
 import { hybridBadge } from "@/lib/consensus-types";
 import type { TrendItem } from "@/routes/api/public/predictive-trends";
-import type { TrendAnalysis } from "@/routes/api/public/trend-analysis";
+import type { TrendAnalysis, TrendAnalysisWarming } from "@/routes/api/public/trend-analysis";
 import { apiFetch } from "@/lib/api-client";
 
-async function fetchAnalysis(p: TrendItem, country: string): Promise<TrendAnalysis> {
+/** Uç nokta ya hazır analizi ya da "hazırlanıyor" işaretini döner. */
+type TrendAnalysisResponse = TrendAnalysis | TrendAnalysisWarming;
+
+function isWarming(response: TrendAnalysisResponse | undefined): boolean {
+  return !!response && "status" in response && response.status === "warming";
+}
+
+async function fetchAnalysis(p: TrendItem, country: string): Promise<TrendAnalysisResponse> {
   const res = await apiFetch("/api/public/trend-analysis", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...p, country }),
   });
   if (!res.ok) throw new Error("Analiz alınamadı");
-  return (await res.json()) as TrendAnalysis;
+  return (await res.json()) as TrendAnalysisResponse;
 }
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -36,11 +43,18 @@ export function TrendAnalysisModal({
   country: string;
   onClose: () => void;
 }) {
-  const { data, isLoading, isError } = useQuery({
+  const response = useQuery({
     queryKey: ["trend-analysis", country, product.id],
     queryFn: () => fetchAnalysis(product, country),
     staleTime: 60 * 60 * 1000,
+    // Tarama arka planda sürerken kısa aralıklarla tekrar sor; sonuç gelince dur.
+    refetchInterval: (query) =>
+      isWarming(query.state.data as TrendAnalysisResponse | undefined) ? 4_000 : false,
   });
+  const { isLoading, isError } = response;
+  const warming = isWarming(response.data);
+  // `data` yalnızca hazır analizi tutar; aşağıdaki tüm bloklar aynı kalır.
+  const data = response.data && !warming ? (response.data as TrendAnalysis) : null;
 
   const badge = data ? hybridBadge(data.hybrid.calculated_score) : null;
 
@@ -73,6 +87,12 @@ export function TrendAnalysisModal({
         {isLoading && (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> 4 yapay zeka birlikte analiz ediyor…
+          </div>
+        )}
+        {warming && !isLoading && (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Analiz arka planda hazırlanıyor, birkaç
+            saniye içinde burada görünecek…
           </div>
         )}
         {isError && (

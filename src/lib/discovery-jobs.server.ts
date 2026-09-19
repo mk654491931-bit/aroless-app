@@ -16,7 +16,14 @@
  * türetilir; hiçbir istek platform sınırına dayanmaz, dolayısıyla 504 /
  * "zaman aşımı" hatası oluşmaz.
  *
- * QStash değişkenleri yoksa çağrı yapan taraf kontrollü inline fallback kullanır.
+ * DAĞITIM PLANI üç yoldan biridir (`discoveryDispatchPlan`):
+ *  - `qstash`     → QStash anahtarları var; iş QStash'e yayınlanır (mevcut yol).
+ *  - `in-process` → Kalıcı süreç (Render / VPS) ve QStash yok: iş AYNI süreçte
+ *                   arka planda koşar (`job-runner.server.ts`). İstek anında
+ *                   döner; bu yüzden QStash olmadan da tek bir 504 üretilmez.
+ *  - `inline`     → Sunucusuz ortam ve QStash yok: ağır hattı istek içinde
+ *                   çalıştırmaktan başka yol yoktur (çağıran kendi bütçesiyle
+ *                   kısaltır).
  * QStash yapılandırılmış fakat publish başarısızsa fallback yapılmaz; işin gerçek
  * kuyruğa alma hatası korunur ve aynı kısa HTTP isteğinde ağır işlem tekrarlanmaz.
  *
@@ -26,6 +33,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { DiscoveryInput, DiscoveryResult } from "@/lib/discovery-pipeline.server";
+import {
+  backgroundJobTimeoutMs,
+  platformDurationSeconds,
+  readEnvValue,
+  runsOnPersistentHost,
+} from "@/lib/host-runtime.server";
+import { backgroundJobsEnabled, runInBackground } from "@/lib/job-runner.server";
+
+type EnvMap = Record<string, string | undefined>;
 
 export const JOB_TABLE = "searches";
 
@@ -121,11 +137,14 @@ function errorMessage(e: unknown): string {
 
 /**
  * True when this process runs on a host without a serverless request limit
- * (Render's persistent Node web service). Detected from the Blueprint's
- * NITRO_PRESET value or Render's own RENDER_SERVICE_ID marker.
+ * (Render's persistent Node web service or a self-hosted Node server) so work
+ * can be finished outside the request instead of being cut off at 60s.
+ *
+ * Detection lives in `host-runtime.server.ts` so every budget in the codebase
+ * reads the platform the same way.
  */
-export function runsOnLongLivedHost(): boolean {
-  return env("NITRO_PRESET") === "render_com" || Boolean(env("RENDER_SERVICE_ID"));
+export function runsOnLongLivedHost(envMap: EnvMap = process.env): boolean {
+  return runsOnPersistentHost(envMap);
 }
 
 /**
@@ -133,20 +152,13 @@ export function runsOnLongLivedHost(): boolean {
  * process itself is on Render, or because DISCOVERY_WORKER_URL points the job
  * at a Render worker while the trigger keeps running on Vercel.
  */
-export function workerTargetIsLongLived(): boolean {
-  return Boolean(env("DISCOVERY_WORKER_URL")) || runsOnLongLivedHost();
+export function workerTargetIsLongLived(envMap: EnvMap = process.env): boolean {
+  return Boolean(readEnvValue(envMap, "DISCOVERY_WORKER_URL")) || runsOnLongLivedHost(envMap);
 }
 
 /** Bu sürecin barındırıldığı platformun istek başına süre bütçesi (saniye). */
-export function functionMaxDurationSeconds(): number {
-  const longLived = runsOnLongLivedHost();
-  const defaultDuration = longLived ? LONG_LIVED_MAX_SECONDS : 60;
-  // Vercel's setting is intentionally ignored on Render so a stale project
-  // variable cannot reintroduce the old serverless timeout after migration.
-  const configuredDuration = longLived ? undefined : env("VERCEL_FUNCTION_MAX_DURATION");
-  const raw = Number(configuredDuration ?? defaultDuration);
-  if (!Number.isFinite(raw) || raw < 10) return defaultDuration;
-  return Math.min(LONG_LIVED_MAX_SECONDS, Math.round(raw));
+export function functionMaxDurationSeconds(envMap: EnvMap = process.env): number {
+  return platformDurationSeconds(envMap);
 }
 
 /**
@@ -278,6 +290,24 @@ export function workerSecret(): string | undefined {
 
 export function qstashConfigured(): boolean {
   return !!qstashToken() && !!workerSecret();
+}
+
+/**
+ * İşi hangi yolla çalıştıracağımız: QStash, süreç içi arka plan veya istek
+ * içinde (inline). Tek karar noktasıdır; hem server function hem `/api/search`
+ * buradan okur, böylece iki yol farklı davranamaz.
+ */
+export type DiscoveryDispatchMode = "qstash" | "in-process" | "inline";
+
+export function discoveryDispatchPlan(envMap: EnvMap = process.env): DiscoveryDispatchMode {
+  const token = cleanQStashToken(readEnvValue(envMap, "QSTASH_TOKEN") ?? "");
+  const secret = readEnvValue(envMap, "JOB_WORKER_SECRET") ?? "";
+  if (token && secret) return "qstash";
+  // Render gibi kalıcı bir süreçte QStash opsiyoneldir: iş aynı süreçte arka
+  // planda koşar ve istek anında döner. Böylece anahtar girilmemiş bir kurulumda
+  // bile "sürekli 504" durumu oluşmaz.
+  if (runsOnLongLivedHost(envMap) && backgroundJobsEnabled(envMap)) return "in-process";
+  return "inline";
 }
 
 export function verifyWorkerRequest(request: Request): boolean {
@@ -499,11 +529,12 @@ export async function startDiscoveryJob(args: {
   userId: string;
   accessToken: string;
   origin: string;
-}): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  if (!qstashConfigured()) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
-  if (!args.origin || /localhost|127\.0\.0\.1/i.test(args.origin)) {
-    return { ok: false, error: "ORIGIN_NOT_PUBLIC" };
-  }
+}): Promise<
+  { ok: true; jobId: string; mode: DiscoveryDispatchMode } | { ok: false; error: string }
+> {
+  const mode = discoveryDispatchPlan();
+  // Sunucusuz ortam + QStash yok: arka plan yoktur, çağıran taraf inline koşar.
+  if (mode === "inline") return { ok: false, error: "BACKGROUND_DISPATCH_UNAVAILABLE" };
 
   const jobId = globalThis.crypto.randomUUID();
   try {
@@ -512,23 +543,47 @@ export async function startDiscoveryJob(args: {
     return { ok: false, error: `JOB_STORE_UNAVAILABLE: ${errorMessage(e)}` };
   }
 
+  const payload: WorkerPayload = {
+    jobId,
+    userId: args.userId,
+    accessToken: args.accessToken,
+    input: args.input,
+  };
+
+  if (mode === "in-process") {
+    // Kalıcı süreç: işi kendi kuyruğumuza atıp ANINDA dönüyoruz. İstemci
+    // `getDiscoveryJob` ile Supabase'den yoklar; istek hiçbir zaman platform
+    // zaman aşımına dayanmaz.
+    const started = runInBackground("discovery-job", () => runJob(payload), {
+      key: jobId,
+      timeoutMs: backgroundJobTimeoutMs(),
+    });
+    if (!started.started) {
+      const reason = `BACKGROUND_JOB_UNAVAILABLE:${started.reason ?? "unknown"}`;
+      await markJobFailed(jobId, reason).catch(() => {});
+      return { ok: false, error: reason };
+    }
+    return { ok: true, jobId, mode };
+  }
+
+  // QStash yolu: worker'ın public adresi şart.
+  if (!args.origin || /localhost|127\.0\.0\.1/i.test(args.origin)) {
+    await markJobFailed(jobId, "ORIGIN_NOT_PUBLIC").catch(() => {});
+    return { ok: false, error: "ORIGIN_NOT_PUBLIC" };
+  }
+
   const target = discoveryWorkerUrl(args.origin);
   if (!target) {
     await markJobFailed(jobId, "DISCOVERY_WORKER_URL_INVALID").catch(() => {});
     return { ok: false, error: "DISCOVERY_WORKER_URL_INVALID" };
   }
-  const published = await publishToQStash(target, {
-    jobId,
-    userId: args.userId,
-    accessToken: args.accessToken,
-    input: args.input,
-  });
+  const published = await publishToQStash(target, payload);
   if (!published.ok) {
     await markJobFailed(jobId, published.error).catch(() => {});
     return { ok: false, error: published.error };
   }
   await setJobMessageId(jobId, published.messageId);
-  return { ok: true, jobId };
+  return { ok: true, jobId, mode };
 }
 
 /** QStash işçisinin gövdesi: ağır hattı çalıştırır ve sonucu kalıcılaştırır. */

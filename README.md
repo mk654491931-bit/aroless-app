@@ -126,6 +126,30 @@ UPSTASH_REDIS_REST_TOKEN
 
 QStash'in callback adresi `https://aroless.tech/api/worker` olacağı için `APP_URL` kesinlikle Render servisinin geçici adresi değil, DNS geçişinden sonra gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
 
+#### 504 koruması (Render'ın en kritik ayarı)
+
+Render kalıcı bir Node servisi çalıştırır: istek yanıtlandıktan sonra süreç yaşamaya devam eder. Bu yüzden ağır işler **istek içinde beklenmez**:
+
+| Katman | Dosya | Davranış |
+| --- | --- | --- |
+| Arka plan kuyruğu | `src/lib/job-runner.server.ts` | Ürün bulucu ve AI Konsey işleri süreç içinde arka planda koşar, istek anında `jobId`/`processing` döner. **QStash anahtarı girilmemiş olsa bile çalışır.** |
+| Önbellek | `src/lib/swr-cache.server.ts` | `ready` / `stale` / `warming`: bayat veri anında döner, tazesi arka planda üretilir; istek asla platform kesme süresine dayanmaz. |
+| Bütçeler | `src/lib/host-runtime.server.ts` | Platform algılama (Render / Vercel / kalıcı Node) ve istek süresi üst sınırları tek kaynaktan. |
+| Teşhis | `GET /health` | Platform, istek bütçesi, arka plan kuyruğu ve önbellek sayaçları (sır içermez). |
+
+İsteğe bağlı ayarlar — boş bırakılırsa akıllı varsayılanlar kullanılır:
+
+```text
+REQUEST_BUDGET_MS=45000            # tek etkileşimli isteğin üst sınırı
+BACKGROUND_JOB_CONCURRENCY=2       # aynı anda arka planda koşan iş (1..8)
+BACKGROUND_JOB_TIMEOUT_MS=900000   # tek işin sert zaman aşımı (ms)
+WARM_WAIT_MS=20000                 # soğuk önbellekte istek içi bekleme (ms)
+HOT_PRODUCTS_WAIT_MS=14000         # sıcak ürün taraması bekleme (ms)
+BACKGROUND_JOBS=                   # 0/1: arka plan işlerini zorla kapat/aç
+```
+
+Bir 504/hata şikâyetinde ilk bakılacak adres: `https://<servis-adı>.onrender.com/health`.
+
 Süre bütçesi platformdan otomatik türetilir (`src/lib/discovery-jobs.server.ts`): Render'da worker ~884 sn, yoklama ~14,9 dk; Vercel'de 60 sn ve ~52 sn. İki değişken yalnızca gerektiğinde elle sabitlemek içindir:
 
 ```text

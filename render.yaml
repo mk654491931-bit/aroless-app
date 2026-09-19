@@ -13,16 +13,35 @@
 # depth koşar. QStash publish timeout'u `discovery-jobs.server.ts` içindeki
 # `qstashTimeoutSeconds()` Render algılanınca otomatik 890s yapar; istemci
 # yoklama bütçesi de aynı fonksiyondan türetilir (yaklaşık 14,9 dk).
+#
+# 504 KORUMASI (bu servisin en önemli ayarı): Render bir **kalıcı** Node servisi
+# çalıştırır, yani istek yanıtlandıktan sonra süreç yaşamaya devam eder. Ağır
+# işler (ürün bulucu hattı, AI konsey, saatlik taramalar) bu yüzden istek içinde
+# beklenmez:
+#   * `/health` → platform, istek bütçesi ve arka plan kuyruğu durumunu gösterir.
+#   * Kalıcı süreçte QStash OLMADAN da işler arka planda koşar
+#     (`src/lib/job-runner.server.ts`); istek anında `jobId` döner, istemci yoklar.
+#   * Herkese açık AI uçları `ready | stale | warming` desenini kullanır: bayat
+#     veriyi anında döner, tazesini arka planda üretir (bkz. `swr-cache.server.ts`).
+#   * Tek bir isteğin üst sınırı `REQUEST_BUDGET_MS` (varsayılan 45 sn) — proxy'nin
+#     isteği kesmesi beklenmeden hızlı bir "hazırlanıyor" yanıtına dönülür.
 services:
   - type: web
     name: aroless
     runtime: node
     plan: 1c-2g
     region: frankfurt
+    # Push'lar `aroless-repo` dalına gider; otomatik deploy'un onu izlediğinden
+    # emin olmak için açıkça sabitlendi.
+    branch: aroless-repo
     buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     autoDeployTrigger: commit
+    # Deploy sırasında Render önce SIGTERM yollar: arka planda koşan uzun işler
+    # (ürün bulucu taraması) yarıda kesilmesin diye kapanışa 90 sn tanınıyor.
+    maxShutdownDelaySeconds: 90
+    numInstances: 1
     envVars:
       # --- Runtime (sabit değerler) ---
       - key: NODE_VERSION
@@ -35,6 +54,20 @@ services:
         value: production
       - key: QSTASH_REGION
         value: eu
+      # --- 504 koruması: istek bütçeleri ve arka plan işleri ---
+      # Tek bir etkileşimli isteğin üst sınırı (ms). Aşılırsa istek hızlı bir
+      # "hazırlanıyor" yanıtına döner; proxy'nin 504 üretmesi beklenmez.
+      - key: REQUEST_BUDGET_MS
+        value: "45000"
+      # Aynı anda arka planda koşacak iş sayısı (tek CPU'da SSR'ı boğmamak için).
+      - key: BACKGROUND_JOB_CONCURRENCY
+        value: "2"
+      # Tek bir arka plan işinin sert üst sınırı (ms): 15 dk.
+      - key: BACKGROUND_JOB_TIMEOUT_MS
+        value: "900000"
+      # Önbellek soğukken istek içinde beklenecek en uzun süre (ms).
+      - key: WARM_WAIT_MS
+        value: "20000"
       # --- App origin ---
       # Custom domain (aroless.tech) bağlanmadan Render'ın geçici adresini yazma:
       # QStash worker adresi ve OAuth redirect'leri bu değerden üretilir.

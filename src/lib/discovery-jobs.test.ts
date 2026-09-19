@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   JOB_POLL_INTERVAL_MS,
   clientWaitMs,
+  discoveryDispatchPlan,
   functionMaxDurationSeconds,
   jobPollingPlan,
   qstashTimeoutSeconds,
@@ -141,5 +142,45 @@ describe("qstashTimeoutSeconds", () => {
     expect(qstashTimeoutSeconds()).toBe(900);
     vi.stubEnv("QSTASH_TIMEOUT_SECONDS", "5");
     expect(qstashTimeoutSeconds()).toBe(58);
+  });
+});
+
+// 504'ün kaldırıldığı yer: işin hangi yolla çalışacağı tek karar noktasından
+// (dispatch plan) belirlenir. Render'da QStash anahtarı girilmemiş olsa bile iş
+// arka plana gider; anahtar girilmemiş bir Vercel kurulumunda ise tek yol vardır.
+describe("discoveryDispatchPlan", () => {
+  const qstashEnv = { QSTASH_TOKEN: "qs-token", JOB_WORKER_SECRET: "shared-secret" };
+
+  it("QStash anahtarları varsa QStash kullanır", () => {
+    expect(discoveryDispatchPlan(qstashEnv)).toBe("qstash");
+    expect(discoveryDispatchPlan({ ...qstashEnv, RENDER_SERVICE_ID: "srv-1" })).toBe("qstash");
+  });
+
+  it("Render'da QStash yoksa süreç içi arka plan kullanır (504 yok)", () => {
+    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1" })).toBe("in-process");
+    expect(discoveryDispatchPlan({ NITRO_PRESET: "render_com" })).toBe("in-process");
+  });
+
+  it("yalnızca anahtarlardan biri varsa QStash seçilmez", () => {
+    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1", QSTASH_TOKEN: "qs" })).toBe(
+      "in-process",
+    );
+  });
+
+  it("Render'da arka plan işi elle kapatılırsa inline'a düşer", () => {
+    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1", BACKGROUND_JOBS: "false" })).toBe(
+      "inline",
+    );
+  });
+
+  it("sunucusuz ortamda QStash yoksa inline kalır", () => {
+    expect(discoveryDispatchPlan({ VERCEL: "1" })).toBe("inline");
+    expect(discoveryDispatchPlan({})).toBe("inline");
+  });
+
+  it("RENDER_SERVICE_ID'yi kalıcı servis olarak algılar", () => {
+    expect(runsOnLongLivedHost({ RENDER_SERVICE_ID: "srv-1" })).toBe(true);
+    expect(runsOnLongLivedHost({ VERCEL: "1" })).toBe(false);
+    expect(workerTargetIsLongLived({ DISCOVERY_WORKER_URL: "https://x/api/worker" })).toBe(true);
   });
 });

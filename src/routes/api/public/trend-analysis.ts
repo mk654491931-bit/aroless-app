@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { serveStaleWhileRevalidate } from "@/lib/swr-cache.server";
 import type { HybridScore } from "@/lib/consensus-types";
 
 /**
@@ -28,10 +29,25 @@ export type TrendAnalysis = {
   action_plan: string[];
   risks: string[];
   pricing: { suggested_retail_usd: number; margin_pct: number };
+  /** `ready` = taze, `stale` = bayat ama kullanılabilir (yenisi arka planda). */
+  status?: "ready" | "stale";
 };
 
-const cache = new Map<string, { at: number; data: TrendAnalysis }>();
-const TTL = 60 * 60 * 1000;
+/**
+ * İstemcinin beklediği iki şekil: hazır analiz ya da "hazırlanıyor" işareti.
+ * `warming` dönerken tarama arka planda sürer; istemci birkaç saniye sonra
+ * tekrar sorar ve bu kez gerçek analizi alır. İstek asla 504'e düşmez.
+ */
+export type TrendAnalysisWarming = {
+  status: "warming";
+  name: string;
+  country: string;
+};
+
+/** Analiz bu süreden eskiyse tazelenir (veri bayat olsa da dönmeye devam eder). */
+const FRESH_MS = 60 * 60 * 1000;
+
+const cacheKeyOf = (country: string, name: string) => `trend-analysis:${country}|${name}`;
 
 async function build(input: {
   name: string;
@@ -166,14 +182,28 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
             competition: String(body["competition"] ?? "Medium").slice(0, 12),
             score: Number(body["score"]) || 0,
           };
-          const ck = `${input.country}|${input.name}`;
-          const hit = cache.get(ck);
-          if (hit && Date.now() - hit.at < TTL) {
-            return Response.json(hit.data);
+          const { data, status } = await serveStaleWhileRevalidate<TrendAnalysis>({
+            key: cacheKeyOf(input.country, input.name),
+            freshMs: FRESH_MS,
+            build: () => build(input),
+            isValid: (analysis) => Boolean(analysis?.name),
+          });
+
+          if (data) return Response.json({ ...data, status: status === "ready" ? "ready" : "stale" });
+
+          // Tarama başarısız olduysa gerçek hata dön; hâlâ sürüyorsa "warming".
+          if (status === "failed") {
+            return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.");
           }
-          const data = await build(input);
-          cache.set(ck, { at: Date.now(), data });
-          return Response.json(data);
+          const warming: TrendAnalysisWarming = {
+            status: "warming",
+            name: input.name,
+            country: input.country,
+          };
+          return Response.json(warming, {
+            status: 200,
+            headers: { "Cache-Control": "no-store" },
+          });
         } catch (e) {
           return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.", e);
         }

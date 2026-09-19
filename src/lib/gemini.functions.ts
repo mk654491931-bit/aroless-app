@@ -279,9 +279,13 @@ export function productDebateContext(p: WinningProduct): string {
  * kadar hafif yoklama yapılır. Böylece 90 saniyelik sunucu zaman aşımı yerine
  * arka plan işçisinin uzun süre limiti (maxDuration) geçerli olur.
  *
- * QStash yapılandırılmamışsa eski inline davranış korunur. QStash yapılandırılmış
- * fakat iş kuyruğa alınamazsa inline fallback yapılmaz; gerçek hata kullanıcıya
- * aktarılır ve ağır iş kısa HTTP isteğinde tekrar başlatılmaz.
+ * QStash yapılandırılmamışsa davranış platforma göre değişir
+ * (`discoveryDispatchPlan`): **kalıcı süreçte** (Render) iş aynı süreçte arka
+ * planda koşar ve kullanıcı yine anında `jobId` alır — bu yüzden Render'da
+ * QStash olmadan da 504 oluşmaz. Yalnızca sunucusuz ortamda ve QStash yokken
+ * eski inline davranış korunur. QStash yapılandırılmış fakat iş kuyruğa
+ * alınamazsa inline fallback yapılmaz; gerçek hata kullanıcıya aktarılır ve ağır
+ * iş kısa HTTP isteğinde tekrar başlatılmaz.
  */
 export const generateProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -297,7 +301,10 @@ export const generateProducts = createServerFn({ method: "POST" })
         deductCredit: true,
       });
 
-    if (!jobs.qstashConfigured()) return await inline();
+    // Sunucusuz ortam + QStash yok: ağır hattı bu istekte kısaltarak koşmaktan
+    // başka yol yok.
+    const plan = jobs.discoveryDispatchPlan();
+    if (plan === "inline") return await inline();
 
     let accessToken = "";
     let origin = "";
@@ -312,10 +319,11 @@ export const generateProducts = createServerFn({ method: "POST" })
       accessToken = "";
       origin = "";
     }
-    // QStash yapılandırılmışken sessizce inline'a düşmek, ağır hattı tekrar
-    // aynı kısa HTTP isteğine taşır ve gerçek worker hatasını gizler.
-    if (!accessToken || !origin) {
-      throw new Error("DISCOVERY_BACKGROUND_UNAVAILABLE: public origin or auth token missing");
+    // QStash yolu worker'ın public adresine muhtaçtır; süreç içi arka plan
+    // yolunda adres gerekmez, yalnızca kullanıcı jetonu gerekir (işçi krediyi
+    // kullanıcı kimliğiyle düşer).
+    if (!accessToken || (plan === "qstash" && !origin)) {
+      throw new Error("DISCOVERY_BACKGROUND_UNAVAILABLE: auth token or public origin missing");
     }
 
     const started = await jobs.startDiscoveryJob({
@@ -328,9 +336,9 @@ export const generateProducts = createServerFn({ method: "POST" })
       throw new Error(`DISCOVERY_JOB_START_FAILED: ${started.error}`);
     }
 
-    // QStash işi asenkron çalışır. Burada sonucu beklemek serverless timeout'una
-    // çarpar; istemci getDiscoveryJob ile Supabase üzerinden hafifçe yoklar.
-    // Yoklama bütçesi sunucudan gelir: Render'da ~14,9 dk, Vercel'de ~52 sn.
+    // İş arka planda çalışır (QStash ya da süreç içi kuyruk). Burada sonucu
+    // beklemek 504'ün ta kendisidir; istemci getDiscoveryJob ile Supabase'den
+    // hafifçe yoklar. Yoklama bütçesi sunucudan gelir.
     return { jobId: started.jobId, status: "processing" as const, ...jobs.jobPollingPlan() };
   });
 

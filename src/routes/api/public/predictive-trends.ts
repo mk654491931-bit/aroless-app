@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed } from "@/lib/api-guard.server";
+import { serveStaleWhileRevalidate } from "@/lib/swr-cache.server";
 
 /**
  * Predictive Trends & Seasonality engine.
@@ -34,6 +35,12 @@ export type TrendPayload = {
   refreshed_at: string;
   next_refresh_at: string;
   items: TrendItem[];
+  /**
+   * `ready`  → önbellek taze, veri gerçek.
+   * `stale`  → geçen saatin verisi; yenisi arka planda hazırlanıyor.
+   * `warming`→ ilk tarama sürüyor; istemci kısa süre sonra tekrar sormalı.
+   */
+  status?: "ready" | "stale" | "warming";
 };
 
 const MONTHS = [
@@ -51,10 +58,9 @@ const MONTHS = [
   "December",
 ];
 
-const cache = new Map<string, TrendPayload>();
-const inflight = new Map<string, Promise<TrendPayload>>();
+/** Saatlik yenileme: bu süreden eski veri "bayat" sayılır ama yine de döner. */
+const FRESH_MS = 60 * 60 * 1000;
 
-const hourKey = (d = new Date()) => d.toISOString().slice(0, 13);
 const slug = (s: string) =>
   s
     .toLowerCase()
@@ -149,23 +155,39 @@ Return ONLY JSON:
   };
 }
 
+/** Tarama sürerken istemciye dönebileceğimiz boş iskelet. */
+function warmingPayload(view: TrendView, country: string): TrendPayload {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return {
+    view,
+    country,
+    refreshed_at: now.toISOString(),
+    next_refresh_at: next.toISOString(),
+    items: [],
+    status: "warming",
+  };
+}
+
+/**
+ * Saatlik Groq + Google Trends taraması.
+ *
+ * Anahtar saat içermez: saat başı yeni anahtar üretmek ilk ziyaretçiye boş
+ * ekran gösterirdi. Bunun yerine `FRESH_MS` sonrası veri **bayat** sayılır;
+ * geçen saatin listesi anında döner, yenisi arka planda üretilir. Böylece uç
+ * nokta hiçbir koşulda 504'e düşmez.
+ */
 async function getPayload(view: TrendView, country: string): Promise<TrendPayload> {
-  const key = `${hourKey()}|${view}|${country}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const running = inflight.get(key);
-  if (running) return running;
-  const p = build(view, country)
-    .then((res) => {
-      if (res.items.length) {
-        cache.clear();
-        cache.set(key, res);
-      }
-      return res;
-    })
-    .finally(() => inflight.delete(key));
-  inflight.set(key, p);
-  return p;
+  const { data, status } = await serveStaleWhileRevalidate<TrendPayload>({
+    key: `trends:${view}|${country}`,
+    freshMs: FRESH_MS,
+    build: () => build(view, country),
+    isValid: (payload) => payload.items.length > 0,
+  });
+  if (!data) return warmingPayload(view, country);
+  return { ...data, status: status === "ready" ? "ready" : "stale" };
 }
 
 export const Route = createFileRoute("/api/public/predictive-trends")({
@@ -183,7 +205,12 @@ export const Route = createFileRoute("/api/public/predictive-trends")({
           return new Response(JSON.stringify(payload), {
             headers: {
               "Content-Type": "application/json",
-              "Cache-Control": "private, max-age=600",
+              // Isınma/bayat yanıtlar kısa önbelleklenir ki istemci kısa sürede
+              // tazesini alabilsin.
+              "Cache-Control":
+                payload.status === "ready"
+                  ? "private, max-age=600, s-maxage=3600"
+                  : "private, max-age=15, s-maxage=15",
             },
           });
         } catch (e) {

@@ -4,6 +4,9 @@ import { checkServerEnvOnce } from "./lib/env-check";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { applySecurityHeaders, isSecureRequest } from "./lib/security-headers";
+import { hostRuntimeSummary } from "./lib/host-runtime.server";
+import { backgroundJobStats } from "./lib/job-runner.server";
+import { swrCacheStats } from "./lib/swr-cache.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -55,8 +58,20 @@ export default {
 
     const pathname = new URL(request.url).pathname;
     if (pathname === "/health" || pathname === "/healthz") {
+      // Health check HIZLI ve yan etkisiz kalmalı (Render bu uçtan 2xx bekler);
+      // yalnızca ucuz, sır içermeyen teşhis bilgisi ekliyoruz: hangi platformda
+      // koştuğumuz, istek bütçemiz, arka plan kuyruğunun durumu. Böylece
+      // "sürekli 504" gibi bir şikâyette tek adres burasıdır.
       return harden(
-        Response.json({ status: "ok" }, { headers: { "cache-control": "no-store" } }),
+        Response.json(
+          {
+            status: "ok",
+            ...hostRuntimeSummary(),
+            jobs: backgroundJobStats(),
+            caches: swrCacheStats(),
+          },
+          { headers: { "cache-control": "no-store" } },
+        ),
       );
     }
 

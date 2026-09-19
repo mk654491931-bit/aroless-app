@@ -23,7 +23,7 @@ import {
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
 import { AnalysisFailureCard } from "@/components/analysis-failure";
-import { runCouncilAnalysis } from "@/lib/council.functions";
+import { pollCouncilAnalysis, runCouncilAnalysis } from "@/lib/council.functions";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { CouncilReport } from "@/lib/council.server";
 
@@ -108,6 +108,7 @@ function CouncilPage() {
   const [report, setReport] = useState<CouncilReport | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const runFn = useServerFn(runCouncilAnalysis);
+  const pollFn = useServerFn(pollCouncilAnalysis);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -118,7 +119,22 @@ function CouncilPage() {
         4500,
       );
       try {
-        return (await runFn({ data: { query, country, lang: getUiLang() } })) as CouncilReport;
+        const start = await runFn({ data: { query, country, lang: getUiLang() } });
+        if (start.status === "ready") return start.report;
+
+        // Konsey sunucuda ARKA PLANDA çalışıyor (Render'da dakikalar sürer).
+        // İsteği açık tutmak 504 üretirdi; bunun yerine sonucu Supabase
+        // önbelleğinden kısa aralıklarla yokluyoruz. Yoklama bütçesi sunucudan
+        // gelir (Render'da ~14 dk), istemci sabit süre varsaymaz.
+        const deadline = Date.now() + start.pollMaxMs;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, start.pollIntervalMs));
+          const poll = await pollFn({ data: { query, country, lang: getUiLang() } });
+          if (poll.status === "ready") return poll.report;
+        }
+        throw new Error(
+          "Konsey hâlâ çalışıyor. Birkaç dakika sonra aynı sorguyu tekrar çalıştırın: sonuç önbellekten anında gelir ve kredi harcamaz.",
+        );
       } finally {
         window.clearInterval(timer);
       }
