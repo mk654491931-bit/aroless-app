@@ -7,7 +7,12 @@ import { applySecurityHeaders, isSecureRequest } from "./lib/security-headers";
 import { hostRuntimeSummary } from "./lib/host-runtime.server";
 import { backgroundJobStats } from "./lib/job-runner.server";
 import { swrCacheStats } from "./lib/swr-cache.server";
-import { discoveryDispatchPlan, qstashConfigured } from "./lib/discovery-jobs.server";
+import {
+  discoveryDispatchPlan,
+  longJobPlan,
+  qstashConfigured,
+  remoteWorkerConfigured,
+} from "./lib/discovery-jobs.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -72,8 +77,13 @@ export default {
             // Sunucusuz ortamda "inline" görünüyorsa uzun analizler hâlâ istek
             // içinde koşuyor demektir (QStash anahtarı girin ya da Render'a taşıyın).
             workflow: {
+              // Ürün bulucu işi hangi yoldan gidiyor?
               dispatch: discoveryDispatchPlan(),
+              // Konsey gibi ağır işler hangi yoldan gidiyor? Vercel'de
+              // "qstash-worker" görünmüyorsa uzun analizler istek içinde kalır.
+              longJob: longJobPlan(),
               qstashConfigured: qstashConfigured(),
+              remoteWorkerConfigured: remoteWorkerConfigured(),
             },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),

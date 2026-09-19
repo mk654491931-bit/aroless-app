@@ -10,9 +10,12 @@ import {
   discoveryDispatchPlan,
   functionMaxDurationSeconds,
   jobPollingPlan,
+  longJobPlan,
   qstashTimeoutSeconds,
+  remoteWorkerConfigured,
   runsOnLongLivedHost,
   workerBudgetMs,
+  workerJobsUrl,
   workerTargetIsLongLived,
 } from "./discovery-jobs.server";
 
@@ -190,5 +193,78 @@ describe("discoveryDispatchPlan", () => {
     expect(runsOnLongLivedHost({ RENDER_SERVICE_ID: "srv-1" })).toBe(true);
     expect(runsOnLongLivedHost({ VERCEL: "1" })).toBe(false);
     expect(workerTargetIsLongLived({ DISCOVERY_WORKER_URL: "https://x/api/worker" })).toBe(true);
+  });
+});
+
+// Ağır işler (AI Konsey vb.) için en iyi yol. Sözleşme: sunucusuz ortamda
+// "inline" DÖNMEZ — ya uzak worker'a gider ya da açık hata üretir. Böylece
+// 504 yapısal olarak imkânsız hale gelir.
+describe("longJobPlan (504 garantisi)", () => {
+  const qstashEnv = { QSTASH_TOKEN: "qs-token", JOB_WORKER_SECRET: "shared-secret" };
+
+  it("Render'da süreç içi arka plan kuyruğunu seçer", () => {
+    expect(longJobPlan({ RENDER_SERVICE_ID: "srv-1", ...qstashEnv })).toBe("in-process");
+    expect(longJobPlan({ NITRO_PRESET: "render_com" })).toBe("in-process");
+    expect(longJobPlan({ NITRO_PRESET: "node-server" })).toBe("in-process");
+  });
+
+  it("Vercel'de QStash + uzak worker varsa işi worker'a yollar", () => {
+    expect(
+      longJobPlan({ VERCEL: "1", ...qstashEnv, WORKER_URL: "https://aroless.onrender.com" }),
+    ).toBe("qstash-worker");
+    expect(
+      longJobPlan({
+        VERCEL: "1",
+        ...qstashEnv,
+        DISCOVERY_WORKER_URL: "https://aroless.onrender.com/api/worker",
+      }),
+    ).toBe("qstash-worker");
+  });
+
+  it("Vercel'de worker yoksa 'unavailable' döner (istek içinde koşmaz)", () => {
+    // QStash var ama worker adresi yok → işi Render'a gönderemeyiz.
+    expect(longJobPlan({ VERCEL: "1", ...qstashEnv })).toBe("unavailable");
+    // Worker var ama QStash yok → tetikleyici işi yayınlayamaz.
+    expect(longJobPlan({ VERCEL: "1", WORKER_URL: "https://aroless.onrender.com" })).toBe(
+      "unavailable",
+    );
+    expect(longJobPlan({ VERCEL: "1" })).toBe("unavailable");
+  });
+
+  it("yerel geliştirmede inline kalır (istek süresi sınırı yok)", () => {
+    expect(longJobPlan({})).toBe("inline");
+    expect(longJobPlan(qstashEnv)).toBe("inline");
+  });
+});
+
+describe("workerJobsUrl", () => {
+  it("yolu her zaman /api/jobs yapar", () => {
+    expect(workerJobsUrl({ WORKER_URL: "https://aroless.onrender.com/" })).toBe(
+      "https://aroless.onrender.com/api/jobs",
+    );
+    expect(
+      workerJobsUrl({ DISCOVERY_WORKER_URL: "https://aroless.onrender.com/api/worker" }),
+    ).toBe("https://aroless.onrender.com/api/jobs");
+    // WORKER_URL öncelikli.
+    expect(
+      workerJobsUrl({
+        WORKER_URL: "https://worker.onrender.com",
+        DISCOVERY_WORKER_URL: "https://other.dev/api/worker",
+      }),
+    ).toBe("https://worker.onrender.com/api/jobs");
+  });
+
+  it("tanımsız veya güvensiz adreste boş döner", () => {
+    expect(workerJobsUrl({})).toBe("");
+    expect(workerJobsUrl({ WORKER_URL: "http://insecure.local" })).toBe("");
+    expect(workerJobsUrl({ WORKER_URL: "bu bir url değil" })).toBe("");
+  });
+});
+
+describe("remoteWorkerConfigured", () => {
+  it("iki değişkenden birini de tanır", () => {
+    expect(remoteWorkerConfigured({ WORKER_URL: "https://x.dev" })).toBe(true);
+    expect(remoteWorkerConfigured({ DISCOVERY_WORKER_URL: "https://x.dev/api/worker" })).toBe(true);
+    expect(remoteWorkerConfigured({})).toBe(false);
   });
 });

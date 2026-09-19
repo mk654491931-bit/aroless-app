@@ -121,6 +121,8 @@ function CouncilPage() {
       try {
         const start = await runFn({ data: { query, country, lang: getUiLang() } });
         if (start.status === "ready") return start.report;
+        // Ağır iş arka plana alınamadıysa (worker yok) açık hata göster — 504 değil.
+        if (start.status === "unavailable") throw new Error(start.error);
 
         // Konsey sunucuda ARKA PLANDA çalışıyor (Render'da dakikalar sürer).
         // İsteği açık tutmak 504 üretirdi; bunun yerine sonucu Supabase

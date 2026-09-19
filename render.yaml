@@ -35,7 +35,10 @@ services:
     # Push'lar `aroless-repo` dalına gider; otomatik deploy'un onu izlediğinden
     # emin olmak için açıkça sabitlendi.
     branch: aroless-repo
-    buildCommand: npm install && npm run build
+    # Bellek tavanı: nitro SSR fazı 2 GB'lık planda sınıra yaklaşıyor. V8'e
+    # açık bir tavan vererek kernel OOM killer'ının build'i öldürmesini
+    # engelliyoruz (tavan aşılırsa yine anlaşılır bir heap hatası alırız).
+    buildCommand: npm install && NODE_OPTIONS=--max-old-space-size=1536 npm run build
     startCommand: npm start
     healthCheckPath: /health
     autoDeployTrigger: commit
@@ -109,6 +112,13 @@ services:
       # worker'ın public adresini yaz (ör. https://aroless.tech/api/worker).
       # Boşsa worker adresi isteğin kendi origin'inden türetilir.
       - key: DISCOVERY_WORKER_URL
+        sync: false
+      # Ağır işlerin (AI Konsey vb.) uzak worker adresi. Vercel tetikleyicisi
+      # işi bu servise QStash ile yollar; servis işi arka planda koşturur ve
+      # istek anında döner → 504 yok. Yolu `/api/jobs` olarak kullanılır
+      # (ör. https://aroless.onrender.com). Render'da çalışıyorsan bu değişken
+      # GEREKMEZ: işler süreç içi kuyrukta koşar.
+      - key: WORKER_URL
         sync: false
       # QStash `Upstash-Timeout` değerini elle sabitlemek için (15..900 sn).
       # Boşsa platform otomatik seçilir: Render 890 sn, Vercel 298 sn.

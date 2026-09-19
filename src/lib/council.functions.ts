@@ -45,7 +45,13 @@ export function councilJobKey(input: NormalizedInput): string {
  */
 export type CouncilAnalysisStart =
   | { status: "ready"; report: CouncilReport }
-  | { status: "processing"; pollIntervalMs: number; pollMaxMs: number };
+  | { status: "processing"; pollIntervalMs: number; pollMaxMs: number }
+  /**
+   * Ağır iş arka planda BAŞLATILAMADI (sunucusuz ortam + uzak worker yok).
+   * İstek içinde koşturmak 504 üretirdi; bunun yerine hızlı ve açık hata
+   * döneriz. Kredi bu durumda DÜŞÜLMEZ (ya da iade edilir).
+   */
+  | { status: "unavailable"; error: string };
 
 export type CouncilAnalysisPoll =
   | { status: "ready"; report: CouncilReport }
@@ -63,9 +69,13 @@ function creditError(message: string | null | undefined): Error {
  * 14'lü AI Konsey çalıştırıcısı.
  * - Aynı sorgu son 24 saatte yapıldıysa önbellekten döner ve KREDİ HARCAMAZ.
  * - Yeni sorguda 1 arama kredisi düşer, ardından konsey çalışır.
- * - Kalıcı süreçte (Render) konsey arka planda koşar; istek anında `processing`
- *   döner ve 504 oluşmaz. Kredi düşmeden önce aynı işin çalışıp çalışmadığı
- *   sorulur, böylece çift tıklama iki kez kredi harcamaz.
+ * - Kalıcı süreçte (Render) konsey süreç içi arka plan kuyruğunda koşar.
+ * - Sunucusuz ortamda (Vercel) iş, QStash ile **uzak Render worker'ına**
+ *   (`WORKER_URL` → `/api/jobs`) gönderilir; tetikleyici anında döner.
+ * - Uzak worker yoksa istek içinde koşturmak yerine açık hata döneriz: 504
+ *   yerine anlaşılır bir mesaj ve **kredi iadesi**.
+ * Kredi düşmeden önce aynı işin çalışıp çalışmadığı sorulur, böylece çift
+ * tıklama iki kez kredi harcamaz.
  */
 export const runCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -76,17 +86,29 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const cachedReport = await peekCouncil(data.query, data.country, data.category, data.lang);
     if (cachedReport) return { status: "ready", report: cachedReport };
 
+    const jobs = await import("@/lib/discovery-jobs.server");
     const runner = await import("@/lib/job-runner.server");
-    const { JOB_POLL_INTERVAL_MS, clientWaitMs } = await import("@/lib/discovery-jobs.server");
-    const poll = { pollIntervalMs: JOB_POLL_INTERVAL_MS, pollMaxMs: clientWaitMs() };
+    const poll = { pollIntervalMs: jobs.JOB_POLL_INTERVAL_MS, pollMaxMs: jobs.clientWaitMs() };
+
+    const plan = jobs.longJobPlan();
+
+    // Sunucusuz ortam + uzak worker yok: istek içinde koşturmak 504 olurdu.
+    // Kredi düşmeden hızlı ve açık bir hata döneriz.
+    if (plan === "unavailable") {
+      return {
+        status: "unavailable",
+        error:
+          "Konsey şu an arka planda başlatılamıyor. WORKER_URL (Render servis adresi) tanımlanmalı ya da site Render'da çalışmalı.",
+      };
+    }
 
     const work = () =>
       withCreditRefund(context.userId, () =>
         runCouncil(data.query, data.country, data.category, data.lang),
       );
 
-    // Sunucusuz ortam (veya arka plan kapalı): eski davranış — istek içinde koş.
-    if (!runner.backgroundJobsEnabled()) {
+    // Yerel geliştirme: istek süresi sınırı yok, eski davranış.
+    if (plan === "inline") {
       const { error } = await context.supabase.rpc("deduct_product_finder_credit");
       if (error) throw creditError(error.message);
       return { status: "ready", report: await work() };
@@ -95,10 +117,30 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const key = councilJobKey(data);
 
     // Aynı sorgu zaten arkada çalışıyor: KREDİ DÜŞMEDEN yalnızca beklemeyi söyle.
-    if (runner.isBackgroundJobRunning(key)) return { status: "processing", ...poll };
+    if (plan === "in-process" && runner.isBackgroundJobRunning(key)) {
+      return { status: "processing", ...poll };
+    }
 
     const { error } = await context.supabase.rpc("deduct_product_finder_credit");
     if (error) throw creditError(error.message);
+
+    // Hibrit kurulum: işi Render'daki kalıcı worker'a QStash ile yolla.
+    if (plan === "qstash-worker") {
+      const enqueued = await jobs.enqueueRemoteJob({
+        kind: "council",
+        payload: { userId: context.userId, ...data },
+        dedupeId: key,
+      });
+      if (!enqueued.ok) {
+        await refundCredit(context.userId, 1, "council_dispatch_failed");
+        return {
+          status: "unavailable",
+          error:
+            "Konsey başlatılamadı (worker'a ulaşılamadı). Krediniz iade edildi, lütfen tekrar deneyin.",
+        };
+      }
+      return { status: "processing", ...poll };
+    }
 
     const started = runner.runInBackground("council-analysis", work, { key });
     if (!started.started) {

@@ -35,6 +35,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { DiscoveryInput, DiscoveryResult } from "@/lib/discovery-pipeline.server";
 import {
   backgroundJobTimeoutMs,
+  detectHostRuntime,
   platformDurationSeconds,
   readEnvValue,
   runsOnPersistentHost,
@@ -310,6 +311,83 @@ export function discoveryDispatchPlan(envMap: EnvMap = process.env): DiscoveryDi
   return "inline";
 }
 
+// ---------- Uzak worker (hibrit: Vercel tetikler, Render çalıştırır) ----------
+
+/** Uzak worker adresi tanımlı mı? (`WORKER_URL` ya da `DISCOVERY_WORKER_URL`) */
+export function remoteWorkerConfigured(envMap: EnvMap = process.env): boolean {
+  return Boolean(
+    readEnvValue(envMap, "WORKER_URL") ?? readEnvValue(envMap, "DISCOVERY_WORKER_URL"),
+  );
+}
+
+/**
+ * Ağır işlerin worker uç noktası (`/api/jobs`).
+ *
+ * `WORKER_URL` (tercih) veya `DISCOVERY_WORKER_URL` taban alınır ve yol her
+ * zaman `/api/jobs` yapılır: aynı Render servisi hem `/api/worker` (ürün
+ * bulucu) hem `/api/jobs` (konsey ve diğer ağır işler) ucunu besler.
+ */
+export function workerJobsUrl(envMap: EnvMap = process.env): string {
+  const configured =
+    readEnvValue(envMap, "WORKER_URL") ?? readEnvValue(envMap, "DISCOVERY_WORKER_URL");
+  if (!configured) return "";
+  try {
+    const url = new URL(configured);
+    if (url.protocol !== "https:") return "";
+    url.pathname = "/api/jobs";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Ağır bir işi uzak worker'a QStash ile yollar. İstek ANINDA döner; worker işi
+ * kendi süreç içi kuyruğunda çalıştırır (Retries: 3, dedupe: `dedupeId`).
+ */
+export async function enqueueRemoteJob(args: {
+  kind: string;
+  payload: Record<string, unknown>;
+  dedupeId: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  return qstashPublish(workerJobsUrl(), { kind: args.kind, ...args.payload }, args.dedupeId);
+}
+
+/**
+ * Ağır bir iş için en iyi yol — **504 garantisi bu sözleşmedir**.
+ *
+ *  - `in-process`    → kalıcı servis (Render/VPS): süreç içi arka plan kuyruğu.
+ *  - `qstash-worker` → sunucusuz tetikleyici + QStash + uzak Render worker'ı:
+ *                      iş Render'da koşar, tetikleyici anında döner.
+ *  - `inline`        → yerel geliştirme (istek süresi sınırı yok).
+ *  - `unavailable`   → sunucusuz ve worker yok: istek içinde koşmak yerine
+ *                      HIZLI ve AÇIK hata döner. Asla 504 üretilmez.
+ */
+export type LongJobPlan = "in-process" | "qstash-worker" | "inline" | "unavailable";
+
+export function longJobPlan(envMap: EnvMap = process.env): LongJobPlan {
+  const runtime = detectHostRuntime(envMap);
+
+  // Kalıcı servis: arka plan kuyruğu.
+  if (!runtime.serverless && runtime.name !== "local") {
+    return backgroundJobsEnabled(envMap) ? "in-process" : "inline";
+  }
+
+  // Sunucusuz (Vercel): uzun iş ASLA istek içinde koşmaz.
+  if (runtime.serverless) {
+    const qstashReady = Boolean(
+      cleanQStashToken(readEnvValue(envMap, "QSTASH_TOKEN") ?? "") &&
+        readEnvValue(envMap, "JOB_WORKER_SECRET"),
+    );
+    return qstashReady && remoteWorkerConfigured(envMap) ? "qstash-worker" : "unavailable";
+  }
+
+  // Yerel geliştirme: istek sınırı yok, eski davranış korunur.
+  return "inline";
+}
+
 export function verifyWorkerRequest(request: Request): boolean {
   const secret = workerSecret();
   if (!secret) return false;
@@ -320,13 +398,21 @@ export function verifyWorkerRequest(request: Request): boolean {
   return provided.length > 0 && provided === secret;
 }
 
-async function publishToQStash(
+/**
+ * QStash'e tek bir HTTP işi yayınlar (ortak yol: ürün bulucu + konsey).
+ *
+ * `Upstash-Forward-x-job-secret` başlığı worker ucunun doğrulaması için taşınır;
+ * `Upstash-Deduplication-Id` aynı işin iki kez çalışmasını engeller.
+ */
+async function qstashPublish(
   destinationUrl: string,
-  payload: WorkerPayload,
+  body: unknown,
+  dedupeId: string,
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   const token = qstashToken();
   const secret = workerSecret();
   if (!token || !secret) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
+  if (!destinationUrl) return { ok: false, error: "WORKER_URL_NOT_CONFIGURED" };
 
   const qstashTimeout = `${qstashTimeoutSeconds()}s`;
 
@@ -341,10 +427,10 @@ async function publishToQStash(
         "Upstash-Method": "POST",
         "Upstash-Retries": "3",
         "Upstash-Timeout": qstashTimeout,
-        "Upstash-Deduplication-Id": payload.jobId,
+        "Upstash-Deduplication-Id": dedupeId,
         "Upstash-Forward-x-job-secret": secret,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -358,6 +444,13 @@ async function publishToQStash(
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function publishToQStash(
+  destinationUrl: string,
+  payload: WorkerPayload,
+): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  return qstashPublish(destinationUrl, payload, payload.jobId);
 }
 
 export async function markJobCompleted(
