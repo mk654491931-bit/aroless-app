@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { publicClientEnv } from "@/lib/client-env";
+import { TURNSTILE_SCRIPT_SRC, turnstileWidgetOptions } from "@/lib/turnstile-config";
 
 /**
  * Cloudflare Turnstile — interaction-only (görünmez) doğrulama.
  * - sitekey yoksa widget render etmez, token "" kalır (akış devam eder).
- * - Geçerli size değerleri: "normal" | "compact" | "flexible".
- *   Görünmez davranış için `appearance: "interaction-only"` kullanılır;
- *   `size: "invisible"` geçersizdir ve TurnstileError üretir.
+ * - Widget ayarları `lib/turnstile-config.ts` içinde tek kaynaktan gelir
+ *   (mobil için `size: "flexible"`, agresif retry aralığı yok).
  * - callback / error-callback / expired-callback her durumda token akışını korur.
  */
 declare global {
@@ -45,7 +45,7 @@ export function TurnstileWidget({
       return;
     }
     const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    s.src = TURNSTILE_SCRIPT_SRC;
     s.async = true;
     s.defer = true;
     s.onload = () => setReady(true);
@@ -58,32 +58,7 @@ export function TurnstileWidget({
 
   useEffect(() => {
     if (!SITE_KEY || !ready || !ref.current || !window.turnstile) return;
-    const id = window.turnstile.render(ref.current, {
-      sitekey: SITE_KEY,
-      // Geçerli size değerleri: "normal" | "compact" | "flexible"
-      // Görünmez doğrulama için Cloudflare'in önerdiği yöntem:
-      // appearance: "interaction-only" — widget yalnızca etkileşim gerekirse görünür,
-      // aksi halde görünmez kalır ve token callback üzerinden döner.
-      size: "normal",
-      appearance: "interaction-only",
-      theme: "auto",
-      retry: "auto",
-      "retry-interval": 1500,
-      "refresh-expired": "auto",
-      callback: (token: string) => onToken(token),
-      "error-callback": () => {
-        console.warn("[turnstile] verification failed — continuing without captcha");
-        onToken("");
-      },
-      "expired-callback": () => {
-        console.warn("[turnstile] token expired — continuing without captcha");
-        onToken("");
-      },
-      "timeout-callback": () => {
-        console.warn("[turnstile] timeout — continuing without captcha");
-        onToken("");
-      },
-    });
+    const id = window.turnstile.render(ref.current, turnstileWidgetOptions(SITE_KEY, onToken));
     return () => {
       try {
         window.turnstile?.remove(id);
@@ -94,5 +69,7 @@ export function TurnstileWidget({
   }, [ready, onToken]);
 
   if (!SITE_KEY) return null;
-  return <div ref={ref} className="mt-2 min-h-[1px]" aria-hidden />;
+  // Genişlik kapsayıcıya bırakılır: dar ekranda widget taşarsa kart ölçüsü
+  // değişir ve form açılıp kapanıyormuş gibi görünür.
+  return <div ref={ref} className="mt-2 w-full overflow-hidden" aria-hidden />;
 }

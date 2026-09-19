@@ -27,7 +27,8 @@ import {
   verifyEmailSignup,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
-import { SignupLegalConsent, type LegalConsent } from "@/components/legal/signup-legal-consent";
+import { SignupLegalConsent } from "@/components/legal/signup-legal-consent";
+import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { QuantumMesh } from "@/components/premium-fx";
 import { Testimonials, type ReviewItem } from "@/components/landing/sections";
@@ -172,7 +173,10 @@ function AuthPage() {
   });
   const [turnstileToken, setTurnstileToken] = useState("");
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
-  const [shakeKey, setShakeKey] = useState(0);
+  // Hata sarsıntısı bir *sınıfla* tetiklenir, React `key`'iyle değil.
+  // Kartı yeniden mount etmek giriş animasyonunu, captcha widget'ını ve mobil
+  // klavye odağını sıfırlıyordu; bu da bölümün açılıp kapanmasına yol açıyordu.
+  const [shaking, setShaking] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
@@ -182,7 +186,7 @@ function AuthPage() {
       : (new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase() ?? ""),
   );
 
-  const legalOk = consent.terms && consent.kvkk;
+  const legalOk = requiredConsentGiven(consent);
   const cardRef = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
 
@@ -337,7 +341,7 @@ function AuthPage() {
           } else {
             msg = error.message;
           }
-          setShakeKey((k) => k + 1);
+          setShaking(true);
           if (unconfirmed) {
             toast.error(msg, { duration: 6000 });
           } else {
@@ -505,8 +509,7 @@ function AuthPage() {
             <div
               ref={cardRef}
               onPointerMove={trackPointer}
-              key={shakeKey}
-              className={`matte-card premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8 ${shakeKey > 0 ? "animate-error-shake" : ""}`}
+              className="matte-card premium-card grain refract animate-rise-in relative overflow-hidden p-7 sm:p-8"
             >
               {/* pointer spotlight */}
               <div
@@ -524,7 +527,14 @@ function AuthPage() {
                 AI ELITE · ENTERPRISE
               </div>
 
-              <div className="relative">
+              {/* Sarsıntı iç katmanda oynatılır: kart hiç unmount olmadığı için
+                  giriş animasyonu, captcha iframe'i ve klavye odağı korunur. */}
+              <div
+                className={`relative ${shaking ? "animate-error-shake" : ""}`}
+                onAnimationEnd={(e) => {
+                  if (e.animationName === "error-shake") setShaking(false);
+                }}
+              >
                 <div className="flex items-center gap-2.5">
                   <img src="/logo-mark.png" alt="Aroless" className="h-9 w-9 object-contain" />
                   <span className="text-base font-light uppercase tracking-[0.3em] text-foreground/95">
@@ -839,7 +849,11 @@ function AuthPage() {
                       </div>
                     )}
 
-                    {!otpStep && <TurnstileWidget key={mode} onToken={setTurnstileToken} />}
+                    {/* Turnstile yalnızca kayıt akışında gerekli; giriş sekmesinde
+                        yüklenmesi mobilde boşuna challenge/iframe açıp kapatıyordu. */}
+                    {!otpStep && mode === "signup" && (
+                      <TurnstileWidget onToken={setTurnstileToken} />
+                    )}
 
                     <button
                       type="submit"
