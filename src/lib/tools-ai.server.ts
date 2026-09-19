@@ -5,11 +5,13 @@ import {
   callGemini,
   callGroq,
   callLovableAI,
+  callSweepProvider,
   extractJson,
   geminiKeyPool,
   isQuotaError,
 } from "./ai.server";
 import { openRouterEnvKeys } from "./ai-keys.server";
+import { poolGroupAvailable } from "./ai-pool.server";
 import { withEstimationRules } from "./ai-guidance";
 
 export type ToolResult = {
@@ -116,9 +118,50 @@ export async function callGroq2(prompt: string, temperature = 0.3): Promise<stri
   return callGroq(prompt, temperature);
 }
 
-export type Provider = "gemini" | "groq" | "openrouter" | "lovable";
+export type Provider =
+  | "gemini" | "groq" | "openrouter" | "hf" | "cerebras" | "sambanova" | "lovable";
 
-const ALL_PROVIDERS: Provider[] = ["gemini", "groq", "openrouter", "lovable"];
+/**
+ * Motor sırası — "hangisi müsaitse ondan alsın".
+ *
+ * Tercih edilen motor (araç kartının seçimi) başta kalır; kalanlar MÜSAİT olan
+ * önce gelecek şekilde sıralanır. Müsaitlik `ai-pool` registry'sinden gelir:
+ * anahtarı tanımlı olmayan ya da devre dışı (cooldown) bir sağlayıcıya ilk
+ * dalgada sıra harcamayız. `lovable` her zaman son çaredir: ağ geçidi + tüm
+ * anahtar havuzunu süpüren yoldur.
+ */
+export function orderToolProviders(
+  preferred: Provider,
+  isAvailable: (p: Provider) => boolean = (p) => p === "lovable" || poolGroupAvailable(p),
+): Provider[] {
+  const rest = PROVIDER_ORDER.filter((p) => p !== preferred);
+  const ranked = [...rest].sort((a, b) => Number(isAvailable(b)) - Number(isAvailable(a)));
+  return [preferred, ...ranked];
+}
+
+/**
+ * Motorları dalgalara böler: 3 + 3 + 1.
+ *
+ * Dalga = paralel çağrılan motor grubu. 3'lü gruplar hem yeterli çapraz
+ * doğrulama sağlar hem de sağlayıcı kotalarını aynı anda yakmaz; son dalga
+ * ağ geçidi/tam havuz süpürmesi içindir.
+ */
+export function toolProviderWaves(order: Provider[], size = 3): Provider[][] {
+  const waves: Provider[][] = [];
+  for (let i = 0; i < order.length; i += size) waves.push(order.slice(i, i + size));
+  return waves;
+}
+
+/** Eşit müsaitlikte korunan sabit güvenilirlik sırası. */
+export const PROVIDER_ORDER: Provider[] = [
+  "gemini",
+  "groq",
+  "openrouter",
+  "hf",
+  "cerebras",
+  "sambanova",
+  "lovable",
+];
 
 let geminiCursor = 0;
 /** Round-robin over every configured Gemini key so no single key is drained. */
@@ -129,11 +172,22 @@ function geminiKey(slot: 1 | 2 = 1) {
   return pool[idx];
 }
 
+/**
+ * Her motor için çağrıcı.
+ *
+ * Altı sağlayıcının HEPSİ kendi anahtar havuzunu sırayla döner — Gemini 5,
+ * Groq 5, OpenRouter 5, HuggingFace 5 token, Cerebras 1, SambaNova 1. Bir
+ * anahtar kotaya takılırsa sıradaki denenir; hiçbiri yanıt vermezse `lovable`
+ * yolu ağ geçidini ve tüm havuzu süpürer (araç asla boş dönmez).
+ */
 function buildRunners(full: string, temperature: number): Record<Provider, () => Promise<string>> {
   return {
     gemini: () => callGemini(full, geminiKey(1), temperature, true),
     groq: () => callGroq(full, temperature),
     openrouter: () => callOpenRouter(full, temperature),
+    hf: () => callSweepProvider("hf", full, temperature),
+    cerebras: () => callSweepProvider("cerebras", full, temperature),
+    sambanova: () => callSweepProvider("sambanova", full, temperature),
     lovable: () => callLovableAI(full, temperature),
   };
 }
@@ -147,25 +201,31 @@ function parseResult(text: string): Partial<ToolResult> | null {
 }
 
 /**
- * Hybrid execution — Vercel Hobby 60sn limiti için bütçe korumalı:
- *  1) Draft — en fazla 2 motor paralel (tercih edilen + bir yedek), 12sn/timeout.
- *  2) Sentez — sadece iyi taslak >=2 ise ve süre kaldıysa tek deneme, aksi halde fuse dön.
- *  1500ms+ sleep döngüsü kaldırıldı — 504'ün ana sebebi oydu.
+ * Hybrid execution — süre bütçesi korumalı, çok motorlu:
+ *  1) Dalga 1: öncelik sırasına göre 3 motor PARALEL (müsait sağlayıcılar önce).
+ *  2) Dalga 2/3: yeterli taslak çıkmadıysa sıradaki 3'lü gruplar; her dalga
+ *     `budgetMs`e sığmıyorsa hiç başlatılmaz (beklemek 504 demektir).
+ *  3) Sentez: en az 2 taslak varsa ve sentez için süre kaldıysa tek editör turu.
+ * En geniş halinde 5+ anahtar havuzlu 6 sağlayıcı + ağ geçidi denenir; yani
+ * hangi motor/anahtar o an müsaitse cevabı o verir.
  */
 export async function runTool(
   prompt: string,
   preferred: Provider = "gemini",
   temperature = 0.5,
+  budgetMs = 38_000,
 ): Promise<ToolResult> {
   const started = Date.now();
-  const budgetLeft = () => 38_000 - (Date.now() - started); // route 42sn verir, burada 38sn içinde bitir
+  const budgetLeft = () => budgetMs - (Date.now() - started);
+  /** Sentez turuna her zaman bu kadar yer bırakılır. */
+  const SYNTHESIS_RESERVE_MS = 10_000;
   const full = `${prompt}\n\n${SCHEMA_HINT}`;
   const runners = buildRunners(full, temperature);
-  const order: Provider[] = [preferred, ...ALL_PROVIDERS.filter((p) => p !== preferred)];
-  // ESKİDEN 3 motor paraleldi — 3× quota/429 = tüm havuzu aynı anda kitleyip 504 yapıyordu.
-  // Şimdi 2 ile sınırla, kalan havuz bir sonraki denemeye temiz kalsın.
-  const primary = order.slice(0, 2);
-  const backup = order.slice(2);
+  // Tercih edilen motor + MÜSAİT olanlar öne: tanımlı anahtarı olmayan veya
+  // devre dışı kalmış bir sağlayıcıya ilk dalgada sıra harcamayız.
+  const order = orderToolProviders(preferred);
+  const perCallMs = Math.min(14_000, Math.max(8_000, Math.round(budgetMs / 3)));
+  const waves = toolProviderWaves(order);
 
   const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
     Promise.race([
@@ -173,27 +233,20 @@ export async function runTool(
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
     ]);
 
-  const settled = await Promise.allSettled(
-    primary.map((p) => withTimeout(runners[p](), 12_000).catch((e) => { throw e; })),
-  );
   const good: { provider: Provider; data: Partial<ToolResult> }[] = [];
   let lastErr: unknown = null;
-  settled.forEach((s, i) => {
-    if (s.status === "fulfilled") {
-      const data = parseResult(s.value);
-      if (data) good.push({ provider: primary[i], data });
-    } else lastErr = s.reason;
-  });
-
-  // Hala boşsa yedekleri PARALEL dene — seri döngü 504 demek.
-  if (!good.length && budgetLeft() > 8_000) {
-    const backupSettled = await Promise.allSettled(
-      backup.map((p) => withTimeout(runners[p](), 12_000).catch((e) => { throw e; })),
-    );
-    backupSettled.forEach((s, i) => {
+  for (let w = 0; w < waves.length; w++) {
+    const wave = waves[w];
+    if (!wave.length) continue;
+    // 2 bağımsız taslak sentez için yeterli — daha fazla motor beklemeden devam.
+    if (good.length >= 2) break;
+    // İlk dalga her zaman denenir; sonrakiler yalnızca süre kalırsa.
+    if (w > 0 && budgetLeft() < perCallMs + SYNTHESIS_RESERVE_MS) break;
+    const settled = await Promise.allSettled(wave.map((p) => withTimeout(runners[p](), perCallMs)));
+    settled.forEach((s, i) => {
       if (s.status === "fulfilled") {
         const data = parseResult(s.value);
-        if (data) good.push({ provider: backup[i], data });
+        if (data) good.push({ provider: wave[i], data });
       } else if (!lastErr) lastErr = s.reason;
     });
   }
@@ -210,9 +263,11 @@ export async function runTool(
   const fused = fuse(good);
   if (good.length < 2) return fused;
   // Sentez bütçe kaldıysa tek deneme — yoksa fuse yeterli, 504'ten iyidir.
-  if (budgetLeft() < 9_000) return fused;
+  if (budgetLeft() < SYNTHESIS_RESERVE_MS) return fused;
 
-  const critic = await withTimeout(synthesize(prompt, good, order), 10_000).catch(() => null);
+  const critic = await withTimeout(synthesize(prompt, good, order), SYNTHESIS_RESERVE_MS).catch(
+    () => null,
+  );
   if (!critic) return fused;
 
   return {
@@ -240,12 +295,8 @@ async function synthesize(
     .map((d, i) => `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 4000)}`)
     .join("\n\n");
   const criticPrompt = `${prompt}\n\nA\u015fa\u011f\u0131da ayn\u0131 g\u00f6reve verilmi\u015f ${drafts.length} ba\u011f\u0131ms\u0131z AI tasla\u011f\u0131 var. Sen ba\u015f analistsin (edit\u00f6r/ele\u015ftirmen):\n${body}\n\nG\u00f6revin:\n1. Say\u0131sal \u00e7eli\u015fkileri tespit et; en ger\u00e7ek\u00e7i/muhafazak\u00e2r olan\u0131 se\u00e7 ve gerekiyorsa kendin yeniden hesapla.\n2. Genel ge\u00e7er, dolgu c\u00fcmleleri at. Sadece bu vakaya \u00f6zg\u00fc, \u00f6l\u00e7\u00fclebilir \u00e7\u0131kt\u0131lar b\u0131rak.\n3. Taslaklar\u0131n atlad\u0131\u011f\u0131 riskleri, gizli maliyetleri ve aksiyonlar\u0131 ekle.\n4. Dok\u00fcman istenen g\u00f6revlerde en iyi tasla\u011f\u0131 temel al ama yeniden yazarak g\u00fc\u00e7lendir.\nTek ve nihai cevab\u0131 \u00fcret.\n\n${SCHEMA_HINT}`;
-  const runnerFor: Record<Provider, () => Promise<string>> = {
-    gemini: () => callGemini(criticPrompt, geminiKey(1), 0.25, true),
-    groq: () => callGroq(criticPrompt, 0.25),
-    openrouter: () => callOpenRouter(criticPrompt, 0.25),
-    lovable: () => callLovableAI(criticPrompt, 0.25),
-  };
+  // Editör de aynı çok sağlayıcılı havuzdan çağrılır (düşük sıcaklık = daha kararlı).
+  const runnerFor = buildRunners(criticPrompt, 0.25);
   const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
     Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
   // En fazla 2 editör dene, her biri 8sn — fazlası 504 demek.

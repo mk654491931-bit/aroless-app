@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { interactiveRequestBudgetMs } from "@/lib/host-runtime.server";
 
 /** Single AI endpoint powering all Aroless tool cards. Requires a signed-in user. */
 export const Route = createFileRoute("/api/public/tool")({
@@ -36,8 +37,11 @@ export const Route = createFileRoute("/api/public/tool")({
           const { runTool, runConsensus } = await import("@/lib/tools-ai.server");
           const prompt = buildPrompt(tool, input);
 
-          // Vercel Hobby: 60sn hard limit — tüm işi 42sn içinde bitir, aşılırsa 504 değil anlamlı hata dön.
-          const withBudget = <T>(p: Promise<T>, ms = 42_000): Promise<T> =>
+          // Bütçe platformdan gelir (Vercel 300 sn → 90 sn'lik araç bütçesi),
+          // yani çok motorlu tur koşabilir; üst sınır yine de 90 sn'dir ki
+          // proxy'nin kesmesi beklenmeden anlamlı bir yanıt çıksın.
+          const budgetMs = Math.max(25_000, Math.min(90_000, interactiveRequestBudgetMs() - 4_000));
+          const withBudget = <T>(p: Promise<T>, ms = budgetMs): Promise<T> =>
             Promise.race([
               p,
               new Promise<never>((_, rej) =>
@@ -49,22 +53,39 @@ export const Route = createFileRoute("/api/public/tool")({
             return Response.json(await withBudget(runConsensus(prompt)));
           }
           if (tool === "news") {
-            const { callGemini, extractJson } = await import("@/lib/ai.server");
-            const text = await withBudget(callGemini(prompt, undefined, 0.5, true));
-            const parsed = extractJson<{ items?: unknown[] }>(text, {});
-            return Response.json({
-              items: Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [],
-            });
+            const { callGemini, callLovableAI, extractJson } = await import("@/lib/ai.server");
+            const readItems = (text: string) => {
+              const parsed = extractJson<{ items?: unknown[] }>(text, {});
+              return Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [];
+            };
+            // Önce zeminli (arama yapabilen) Gemini; cevap vermezse tüm anahtar
+            // havuzunu süpüren yol — araç yine boş dönmez.
+            try {
+              return Response.json({
+                items: readItems(
+                  await withBudget(
+                    callGemini(prompt, undefined, 0.5, true),
+                    Math.round(budgetMs * 0.6),
+                  ),
+                ),
+              });
+            } catch {
+              return Response.json({
+                items: readItems(await withBudget(callLovableAI(prompt, 0.5))),
+              });
+            }
           }
           return Response.json(
-            await withBudget(runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini")),
+            await withBudget(
+              runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini", 0.5, budgetMs - 2_000),
+            ),
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e ?? "");
           if (msg === "TOOL_TIMEOUT") {
             return jsonError(
               504,
-              "AI yanıtı zaman aşımına uğradı (42sn). Lütfen tekrar deneyin — bir sonraki deneme farklı bir anahtarla yapılır.",
+              "AI yanıtı zaman aşımına uğradı. Lütfen tekrar deneyin — bir sonraki deneme farklı bir anahtarla yapılır.",
               e,
             );
           }

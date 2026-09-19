@@ -161,6 +161,89 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
   throw lastErr instanceof Error ? lastErr : new Error("Gateway request failed");
 }
 
+/** OpenAI uyumlu sağlayıcı süpürmesinin tek kaynağı. */
+export type SweepProvider = "groq" | "cerebras" | "sambanova" | "hf" | "openrouter";
+
+type SweepConfig = {
+  keys: () => string[];
+  url: string;
+  models: string[];
+  opts: OpenAIPoolOptions;
+};
+
+function sweepConfig(name: SweepProvider): SweepConfig {
+  switch (name) {
+    case "groq":
+      return {
+        keys: groqEnvKeys,
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        models: GROQ_MODELS_LATEST,
+        opts: { json: true },
+      };
+    case "cerebras":
+      return {
+        keys: cerebrasEnvKeys,
+        url: "https://api.cerebras.ai/v1/chat/completions",
+        models: ["llama-3.3-70b", "llama3.1-8b"],
+        opts: { json: true, jsonOn400Retry: true },
+      };
+    case "sambanova":
+      return {
+        keys: sambanovaEnvKeys,
+        url: "https://api.sambanova.ai/v1/chat/completions",
+        models: ["Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct"],
+        opts: { json: false },
+      };
+    case "hf":
+      return {
+        keys: hfEnvKeys,
+        url: "https://router.huggingface.co/v1/chat/completions",
+        models: ["Qwen/Qwen2.5-7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"],
+        opts: { json: false },
+      };
+    case "openrouter":
+      return {
+        keys: openRouterEnvKeys,
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        models: OPENROUTER_MODELS_LATEST,
+        opts: { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
+      };
+  }
+}
+
+/** Bu sağlayıcı grubunda en az bir anahtar var mı? (ağ isteği yapmaz) */
+export function sweepProviderConfigured(name: SweepProvider): boolean {
+  return sweepConfig(name).keys().length > 0;
+}
+
+/**
+ * TEK sağlayıcı grubunun bütün anahtarlarını (5 Gemini/Groq/OpenRouter/HF,
+ * Cerebras, SambaNova) ve model yedeklerini sırayla dener; hepsi tükenirse
+ * açık hata verir.
+ *
+ * Araç kartları (sol menü AI tools) her motoru AYRI bir hakem olarak çağırabilsin
+ * diye dışa açıldı: hangi sağlayıcının anahtarı o an çalışıyorsa cevap ondan
+ * gelir, tek bir anahtarın kotası tüm aracı kilitlemez.
+ */
+export async function callSweepProvider(
+  name: SweepProvider,
+  prompt: string,
+  temperature = 0.3,
+): Promise<string> {
+  const cfg = sweepConfig(name);
+  const text = await tryOpenAIPool(
+    name,
+    cfg.keys(),
+    cfg.url,
+    cfg.models,
+    prompt,
+    temperature,
+    cfg.opts,
+  );
+  if (text) return text;
+  throw new Error(`${name} motoru yanıt vermedi (anahtar yok veya kota dolu)`);
+}
+
 /**
  * Last-resort path that sweeps the project's OWN provider keys — every one of
  * the 22-slot pool (Gemini, Groq, Cerebras, SambaNova, HuggingFace tokens,
@@ -194,66 +277,23 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
     }
   }
 
-  // 2) Groq — hızlı, yüksek f/p.
-  const groqText = await tryOpenAIPool(
-    "groq",
-    groqEnvKeys(),
-    "https://api.groq.com/openai/v1/chat/completions",
-    GROQ_MODELS_LATEST,
-    prompt,
-    temperature,
-    { json: true },
-  );
-  if (groqText) return groqText;
-
-  // 3) Cerebras — çok hızlı, cömert ücretsiz kota.
-  const cerebrasText = await tryOpenAIPool(
-    "cerebras",
-    cerebrasEnvKeys(),
-    "https://api.cerebras.ai/v1/chat/completions",
-    ["llama-3.3-70b", "llama3.1-8b"],
-    prompt,
-    temperature,
-    { json: true, jsonOn400Retry: true },
-  );
-  if (cerebrasText) return cerebrasText;
-
-  // 4) SambaNova — yüksek bağlam; strict JSON desteklemediği için yalnızca
-  //    komut istemine güvenir (çağıranlar extractJson ile toparlar).
-  const sambaText = await tryOpenAIPool(
-    "sambanova",
-    sambanovaEnvKeys(),
-    "https://api.sambanova.ai/v1/chat/completions",
-    ["Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct"],
-    prompt,
-    temperature,
-    { json: false },
-  );
-  if (sambaText) return sambaText;
-
-  // 5) HuggingFace router token'ları — en dar kotalı, son çarelerden biri.
-  const hfText = await tryOpenAIPool(
-    "hf",
-    hfEnvKeys(),
-    "https://router.huggingface.co/v1/chat/completions",
-    ["Qwen/Qwen2.5-7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"],
-    prompt,
-    temperature,
-    { json: false },
-  );
-  if (hfText) return hfText;
-
-  // 6) OpenRouter — geniş model yelpazesi.
-  const orText = await tryOpenAIPool(
-    "openrouter",
-    openRouterEnvKeys(),
-    "https://openrouter.ai/api/v1/chat/completions",
-    OPENROUTER_MODELS_LATEST,
-    prompt,
-    temperature,
-    { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
-  );
-  if (orText) return orText;
+  // 2) Groq → 3) Cerebras → 4) SambaNova → 5) HuggingFace → 6) OpenRouter.
+  // Sıra ve model listeleri tek kaynaktan (`sweepConfig`) gelir; her grup kendi
+  // bütün anahtarlarını dener, kota dolan anahtar park edilir ve sıradakine
+  // geçilir — yani o an hangi sağlayıcı/anahtar müsaitse cevabı o verir.
+  for (const name of ["groq", "cerebras", "sambanova", "hf", "openrouter"] as const) {
+    const cfg = sweepConfig(name);
+    const text = await tryOpenAIPool(
+      name,
+      cfg.keys(),
+      cfg.url,
+      cfg.models,
+      prompt,
+      temperature,
+      cfg.opts,
+    );
+    if (text) return text;
+  }
 
   // 7) PROVIDER_A..D — kullanıcı tanımlı OpenAI uyumlu havuzlar (BASE_URL + MODEL).
   for (const group of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const) {
