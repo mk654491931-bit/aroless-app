@@ -5,12 +5,15 @@
 // limiti aşılır. Bu yüzden her platform varyantı ayrı ayrı sabitlenir.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DISCOVERY_END_TO_END_MS,
   DISCOVERY_MAX_BUDGET_MS,
   DISCOVERY_RETURN_FLOOR_MS,
   DISCOVERY_RETURN_MARGIN_MS,
   JOB_POLL_INTERVAL_MS,
   batchReserveMs,
+  councilEnrichCallMs,
   councilEnrichLimit,
+  councilLoopDecision,
   discoveryStagePlan,
   clientWaitMs,
   discoveryDispatchPlan,
@@ -25,7 +28,7 @@ import {
   workerJobsUrl,
   workerTargetIsLongLived,
 } from "./discovery-jobs.server";
-import { COUNCIL_ENRICH_MIN_MS } from "./council-budget.server";
+import { COUNCIL_ENRICH_BUDGET_MS, COUNCIL_ENRICH_MIN_MS } from "./council-budget.server";
 
 const MANAGED_KEYS = [
   "NITRO_PRESET",
@@ -90,12 +93,16 @@ describe("functionMaxDurationSeconds", () => {
 });
 
 describe("workerBudgetMs / clientWaitMs", () => {
-  it("ürün bulucu her platformda 280 sn tavanına oturur", () => {
-    // Ürün kararı: hat en fazla 280 sn sürsün. Vercel'in 300 sn limiti bunun
-    // üstünde bir tavan olsa bile hat kendini 280 sn'ye sığdırır.
+  it("ürün bulucu her platformda uçtan uca 280 sn sözüne oturur", () => {
+    // Ürün kararı: kullanıcı tıkla → sonuç arası en fazla 280 sn bekler.
+    // İşçinin hattı koştuğu bütçe bu sözden dönüş payı (20 sn) düşülerek
+    // hesaplanır; yoksa hat tam bütçesini kullanınca kullanıcı 285-300 sn
+    // bekliyor ve "280 sn'den fazla sürüyor" görüyordu.
+    expect(DISCOVERY_END_TO_END_MS).toBe(280_000);
     expect(workerBudgetMs()).toBe(DISCOVERY_MAX_BUDGET_MS);
-    expect(DISCOVERY_MAX_BUDGET_MS).toBe(280_000);
-    // Sonucu yazmaya pay kalsın: 280 + pay, 300 sn'lik fonksiyon limitini aşmaz.
+    expect(DISCOVERY_MAX_BUDGET_MS).toBe(260_000);
+    expect(workerBudgetMs() + DISCOVERY_RETURN_MARGIN_MS).toBe(280_000);
+    // Sonucu yazmaya pay kalsın: 260 + 16, 300 sn'lik fonksiyon limitini aşmaz.
     expect(DISCOVERY_MAX_BUDGET_MS + 16_000).toBeLessThanOrEqual(300_000);
     expect(clientWaitMs()).toBe(292_000);
   });
@@ -106,10 +113,13 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(clientWaitMs()).toBe(52_000);
   });
 
-  it("Render'ın 900 sn limiti olsa bile hat 280 sn'de durur", () => {
+  it("Render'ın 900 sn limiti olsa bile hat sözünü aşmaz", () => {
     vi.stubEnv("NITRO_PRESET", "render_com");
     expect(functionMaxDurationSeconds()).toBe(900);
+    // Hat bütçesi = uçtan uca söz (280 sn) − dönüş payı (20 sn) = 260 sn.
     expect(workerBudgetMs()).toBe(DISCOVERY_MAX_BUDGET_MS);
+    expect(workerBudgetMs()).toBe(260_000);
+    expect(DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS).toBe(DISCOVERY_END_TO_END_MS);
     expect(clientWaitMs()).toBe(892_000);
   });
 
@@ -135,8 +145,8 @@ describe("workerBudgetMs / clientWaitMs", () => {
 });
 
 describe("councilEnrichLimit (kalan süreye göre karne sayısı)", () => {
-  it("280 sn'lik hat bütçesinde 4 ürüne karne çıkarır", () => {
-    // (280 sn - 5 sn yazma payı) / 62 sn karne = 4 → tek bir ürün kalan süreyi
+  it("260 sn'lik hat bütçesinde 4 ürüne karne çıkarır", () => {
+    // (260 sn - 5 sn yazma payı) / 62 sn karne = 4 → tek bir ürün kalan süreyi
     // yiyip diğer ürünleri karnesiz bırakamaz.
     expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBe(4);
     expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBeLessThan(8);
@@ -157,29 +167,61 @@ describe("councilEnrichLimit (kalan süreye göre karne sayısı)", () => {
   });
 });
 
-describe("jobPollingPlan", () => {
-  it("yoklama penceresi 280 sn'lik iş + kuyruk payıdır", () => {
-    expect(jobPollingPlan()).toEqual({
-      pollMaxMs: DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS,
-      pollIntervalMs: JOB_POLL_INTERVAL_MS,
-    });
-    expect(jobPollingPlan().pollMaxMs).toBe(300_000);
-    expect(JOB_POLL_INTERVAL_MS).toBe(2_000);
+describe("councilEnrichCallMs (sıradaki karne turunun bütçesi)", () => {
+  // REGRESYON: hat, kaç karne sığdığını bir kez hesaplayıp çağrı başına 90 sn
+  // izin veriyor, üstelik bütçeyi alt sınır olan 62 sn'ye YÜKSELTİYORDU. Kalan
+  // süre 20 sn iken bile 62 sn'lik tur başlıyor ve uçtan uca süre aşılıyordu.
+  it("kalan süre tam karneye yetmiyorsa 0 döner — tur hiç başlamaz", () => {
+    expect(councilEnrichCallMs(20_000, 10_000)).toBe(0);
+    expect(councilEnrichCallMs(70_000, 10_000)).toBe(0);
+    expect(councilEnrichCallMs(Number.NaN, 10_000)).toBe(0);
   });
 
-  it("Render'da eski 892 sn bekleme kalktı: pencere yine 300 sn", () => {
+  it("kalan süreye göre kırpılır ve dönüş payını asla yemez", () => {
+    // 100 sn kaldı: 100 − 10 (dönüş) − 3 (kuyruk) = 87 sn.
+    expect(councilEnrichCallMs(100_000, 10_000)).toBe(87_000);
+  });
+
+  it("her durumda üst sınıra saygı duyar ve sözü aşmaz", () => {
+    expect(councilEnrichCallMs(500_000, 10_000)).toBe(COUNCIL_ENRICH_BUDGET_MS);
+    for (const left of [20_000, 62_000, 100_000, 200_000, 500_000]) {
+      const call = councilEnrichCallMs(left, 10_000);
+      if (call > 0) {
+        expect(call).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
+        expect(call + 10_000).toBeLessThanOrEqual(left);
+      }
+    }
+  });
+});
+
+describe("jobPollingPlan", () => {
+  it("yoklama penceresi UÇTAN UCA sözdür: 280 sn (tıkla → sonuç)", () => {
+    expect(jobPollingPlan()).toEqual({
+      pollMaxMs: DISCOVERY_END_TO_END_MS,
+      pollIntervalMs: JOB_POLL_INTERVAL_MS,
+    });
+    expect(jobPollingPlan().pollMaxMs).toBe(280_000);
+    expect(JOB_POLL_INTERVAL_MS).toBe(2_000);
+    // Pencere işi her zaman kapsamalı: işçi bütçesi + dönüş payı > söz olamaz.
+    expect(jobPollingPlan().pollMaxMs).toBeGreaterThanOrEqual(
+      workerBudgetMs() + DISCOVERY_RETURN_MARGIN_MS,
+    );
+    expect(DISCOVERY_MAX_BUDGET_MS).toBe(DISCOVERY_END_TO_END_MS - DISCOVERY_RETURN_MARGIN_MS);
+  });
+
+  it("Render'da eski 892 sn bekleme kalktı: pencere uçtan uca 280 sn", () => {
     vi.stubEnv("NITRO_PRESET", "render_com");
     const plan = jobPollingPlan();
-    expect(plan.pollMaxMs).toBe(300_000);
-    // İş 280 sn'de bittiği için kullanıcı 14 dakika boşuna beklemez...
+    expect(plan.pollMaxMs).toBe(280_000);
+    // İş 260 sn'de bittiği için kullanıcı 14 dakika boşuna beklemez...
     expect(plan.pollMaxMs).toBeLessThan(400_000);
     // ...ama yoklama iş bütçesinden uzun olmalı ki sonuç yazılmadan pes etmesin.
     expect(plan.pollMaxMs).toBeGreaterThan(workerBudgetMs());
   });
 
-  it("uzak worker tanımlı olsa bile pencere 280 sn'lik işe göre kalır", () => {
+  it("uzak worker tanımlı olsa bile pencere uçtan uca söze göre kalır", () => {
     vi.stubEnv("WORKER_URL", "https://aroless.onrender.com");
-    expect(jobPollingPlan().pollMaxMs).toBe(300_000);
+    expect(jobPollingPlan().pollMaxMs).toBe(280_000);
   });
 });
 
@@ -377,30 +419,67 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     expect(discoveryStagePlan(DISCOVERY_MAX_BUDGET_MS).angleCount).toBe(8);
   });
 
-  it("280 sn'nin gerçek aşama sayıları", () => {
-    const plan = discoveryStagePlan(280_000);
+  it("hattın GERÇEK bütçesi (uçtan uca söz − dönüş payı) için aşama sayıları", () => {
+    // Üretimde hat `workerBudgetMs()` alır (260 sn); plan bu sayıya göre kurulur.
+    expect(workerBudgetMs()).toBe(260_000);
+    const plan = discoveryStagePlan(workerBudgetMs());
+    expect(plan.budgetMs).toBe(260_000);
     // Bu sayılar hat kalitesinin can alıcı yeridir: değişirse kalite adımları
     // sessizce kısalmış demektir, bu yüzden açıkça sabitlenir.
-    expect(plan.usableMs).toBe(270_000);
-    expect(plan.prepMs).toBe(40_000);
-    expect(plan.generationMs).toBe(64_800);
-    expect(plan.judgePerProductMs).toBe(13_500);
-    expect(plan.verifyReserveMs).toBe(16_200);
-    expect(plan.councilReserveMs).toBe(81_000);
+    expect(plan.usableMs).toBe(250_000);
+    expect(plan.prepMs).toBe(37_500);
+    expect(plan.generationMs).toBe(60_000);
+    expect(plan.judgePerProductMs).toBe(12_500);
+    expect(plan.verifyReserveMs).toBe(15_000);
+    expect(plan.councilReserveMs).toBe(75_000);
     // Erken aşamalar + konsey rezervi kullanılabilir sürenin içinde kalır.
-    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(185_800);
+    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(172_500);
   });
 
-  it("280 sn'lik gerçekçi zaman çizelgesinde konsey karnesine yer KALIR", () => {
-    const plan = discoveryStagePlan(280_000);
+  it("gerçekçi zaman çizelgesinde konsey karnesine yer KALIR (ve ölçülen bütçe yeter)", () => {
+    const plan = discoveryStagePlan(workerBudgetMs());
     // 6 adaylık tören: hazırlık + zeminli tur + hakem turu + canlı doğrulama
     // düşüldükten sonra konseye kalan süre en az bir karneye yetmeli.
     const judgeNeed = batchReserveMs(plan.judgePerProductMs, 6, plan.judgeConcurrency);
     const leftAtCouncil =
       plan.usableMs - plan.prepMs - plan.generationMs - judgeNeed - plan.verifyReserveMs;
-    expect(judgeNeed).toBe(40_500);
-    expect(leftAtCouncil).toBe(108_500);
-    expect(councilEnrichLimit(leftAtCouncil, 8)).toBeGreaterThanOrEqual(1);
+    expect(judgeNeed).toBe(37_500);
+    expect(leftAtCouncil).toBe(100_000);
+    const carnetMs = councilEnrichCallMs(leftAtCouncil, plan.returnFloorMs);
+    expect(carnetMs).toBe(87_000);
+    expect(carnetMs).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
+    // Karne başladığında kalan süreyi AŞMAZ: hat sözünü bozamaz.
+    expect(carnetMs + plan.returnFloorMs).toBeLessThanOrEqual(leftAtCouncil);
+  });
+
+  it("karne rezervden hızlı biterse süre boşa gitmez; sığmıyorsa hiç başlatılmaz", () => {
+    const plan = discoveryStagePlan(workerBudgetMs());
+    // İlk karne 20 sn'de bitti (önbellek isabeti) → 80 sn kaldı → ikinci sığar.
+    expect(councilEnrichCallMs(100_000 - 20_000, plan.returnFloorMs)).toBe(67_000);
+    // 30 sn sürdüyse kalan 70 sn tam karneye (62 sn) yetmez → başlatılmaz.
+    expect(councilEnrichCallMs(100_000 - 30_000, plan.returnFloorMs)).toBe(0);
+  });
+});
+
+describe("councilLoopDecision (karne döngüsünün durma koşulları)", () => {
+  it("süre ve bütçe varsa karneye devam eder", () => {
+    expect(councilLoopDecision({ carnetMs: 87_000, remaining: 4, failures: 0 })).toBe("carnet");
+    expect(councilLoopDecision({ carnetMs: 62_000, remaining: 1, failures: 1 })).toBe("carnet");
+  });
+
+  it("kalan süre tam karneye yetmiyorsa durur (yarım karne üretilmez)", () => {
+    expect(councilLoopDecision({ carnetMs: 0, remaining: 3, failures: 0 })).toBe("stop-time");
+  });
+
+  it("motorlar üst üste susarsa kalan süreyi yakmaz", () => {
+    expect(councilLoopDecision({ carnetMs: 87_000, remaining: 3, failures: 2 })).toBe(
+      "stop-failures",
+    );
+    expect(councilLoopDecision({ carnetMs: 87_000, remaining: 3, failures: 1 })).toBe("carnet");
+  });
+
+  it("karnesi olmayan ürün kalmadıysa döngü biter", () => {
+    expect(councilLoopDecision({ carnetMs: 87_000, remaining: 0, failures: 0 })).toBe("done");
   });
 });
 

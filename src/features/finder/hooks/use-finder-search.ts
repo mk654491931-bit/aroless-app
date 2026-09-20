@@ -17,7 +17,14 @@ import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
-const DEFAULT_POLL_MAX_MS = 360_000;
+/**
+ * Sunucudan plan gelmeden önceki varsayılan bekleme penceresi.
+ *
+ * Sunucu sözü uçtan ucadır (tıkla → sonuç): `jobPollingPlan()` 280 sn döndürür
+ * ve işçi hattı 260 sn'de bitirir. Bu sabit eskiden 360 sn'ydi; sunucu planı
+ * gelmediği bir durumda kullanıcı 6 dakika boşuna bekliyordu.
+ */
+const DEFAULT_POLL_MAX_MS = 280_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 /** İlk 30 sn sık, sonrası seyrek yoklanır: uzun Render işlerinde istek sayısı düşer. */
 const POLL_BACKOFF_AFTER_MS = 30_000;

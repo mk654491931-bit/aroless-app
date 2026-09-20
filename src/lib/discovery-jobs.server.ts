@@ -41,7 +41,11 @@ import {
   runsOnPersistentHost,
 } from "@/lib/host-runtime.server";
 import { backgroundJobsEnabled, runInBackground } from "@/lib/job-runner.server";
-import { COUNCIL_ENRICH_MIN_MS, MIN_INLINE_COUNCIL_MS } from "@/lib/council-budget.server";
+import {
+  COUNCIL_ENRICH_BUDGET_MS,
+  COUNCIL_ENRICH_MIN_MS,
+  MIN_INLINE_COUNCIL_MS,
+} from "@/lib/council-budget.server";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -192,15 +196,29 @@ export function qstashTimeoutSeconds(): number {
  * bile hat kendini 280 sn'ye sığdırır ve kalite adımları için içeride rezerv
  * ayrılır (bkz. `discoveryStagePlan` → aşama pencereleri + konsey rezervi).
  */
-export const DISCOVERY_MAX_BUDGET_MS = 280_000;
+export const DISCOVERY_END_TO_END_MS = 280_000;
 
 /** Sonucu yazmak + yanıt dönmek + kuyruk gecikmesi için ayrılan pay (ms). */
 export const DISCOVERY_RETURN_MARGIN_MS = 20_000;
 
 /**
+ * İşçinin ağır hatta harcayabileceği süre (ms).
+ *
+ * ÖNEMLİ AYRIM: kullanıcının gördüğü süre "tıkla → sonuç"tur ve bu, işçinin
+ * hattı koştuğu bütçeden **büyüktür**: araya iş kuyruğa alınma, sonucun
+ * Supabase/Redis'e yazılması ve istemcinin bir sonraki yoklama tick'i girer.
+ * Eskiden ikisi aynı sayıydı (280 sn), bu yüzden hat tam bütçesini kullandığında
+ * kullanıcı 285-300 sn bekliyor ve "280 saniyeden fazla sürüyor" görüyordu.
+ * Artık 280 sn **uçtan uca sözdür**; hattın payı bu sözden dönüş payı düşülerek
+ * hesaplanır.
+ */
+export const DISCOVERY_MAX_BUDGET_MS = DISCOVERY_END_TO_END_MS - DISCOVERY_RETURN_MARGIN_MS;
+
+/**
  * İşçinin ağır hatta harcayabileceği süre. Platformun limiti ne olursa olsun
- * `DISCOVERY_MAX_BUDGET_MS` ile sınırlanır; altındaki 16 sn'lik pay sonucu
- * Supabase + Redis'e yazmak ve yanıt dönmek içindir.
+ * `DISCOVERY_MAX_BUDGET_MS` (280 sn söz − 20 sn dönüş payı = 260 sn) ile
+ * sınırlanır; altındaki 16 sn'lik pay sonucu Supabase + Redis'e yazmak ve yanıt
+ * dönmek içindir.
  */
 export function workerBudgetMs(): number {
   const platformMs = (functionMaxDurationSeconds() - 16) * 1000;
@@ -223,6 +241,60 @@ export function councilEnrichLimit(timeLeftMs: number, limit = 8): number {
   if (!Number.isFinite(timeLeftMs)) return 0;
   const usable = timeLeftMs - COUNCIL_ENRICH_MARGIN_MS;
   return Math.max(0, Math.min(limit, Math.floor(usable / COUNCIL_ENRICH_MIN_MS)));
+}
+
+/** Karne turunun sonunda yanıt/skorlama için bırakılan pay (ms). */
+export const COUNCIL_ENRICH_TAIL_MS = 3_000;
+
+/**
+ * SIRADAKİ ürüne verilebilecek karne bütçesi (ms) — sıfırsa hiç başlatılmaz.
+ *
+ * Neden ayrı bir fonksiyon: hat "kaç karne sığar"ı bir kez hesaplayıp
+ * (`councilEnrichLimit`, ürün başına 62 sn) çağrıları sırayla yapıyordu, ama
+ * çağrı başına üst sınır 90 sn'ydi ve çağrı bütçesi
+ * `Math.max(COUNCIL_ENRICH_MIN_MS, …)` ile ALT SINIRA yükseltiliyordu. Kalan
+ * süre 20 sn iken bile 62 sn'lik bir çağrı başlatılabiliyordu → hat 280 sn'lik
+ * sözünü onlarca saniye aşıyordu (kullanıcının gördüğü "280 sn'den çok").
+ *
+ * Kural: her çağrı kalan süreden dönüş payını ve kuyruk payını düşer, üst
+ * sınırla kırpılır; tam bir karne (COUNCIL_ENRICH_MIN_MS) sığmıyorsa 0 döner.
+ */
+export function councilEnrichCallMs(
+  timeLeftMs: number,
+  returnFloorMs: number,
+  tailMs = COUNCIL_ENRICH_TAIL_MS,
+): number {
+  if (!Number.isFinite(timeLeftMs)) return 0;
+  const usable = Math.min(timeLeftMs - returnFloorMs - tailMs, COUNCIL_ENRICH_BUDGET_MS);
+  return usable >= COUNCIL_ENRICH_MIN_MS ? Math.round(usable) : 0;
+}
+
+/** Üst üste bu kadar karne turu boş dönerse motorlar susmuş demektir: döngü durur. */
+export const COUNCIL_MAX_FAILURES = 2;
+
+export type CouncilLoopAction = "carnet" | "stop-time" | "stop-failures" | "done";
+
+/**
+ * Konsey karne DÖNGÜSÜNÜN kararı — sıradaki ürüne karne çıkarılmalı mı?
+ *
+ * Neden ayrı ve saf bir fonksiyon: döngü iki farklı durumda durmalıdır.
+ *  1. `stop-time`: kalan süre tam bir karneye yetmiyor (62 sn) → yarım karne
+ *     üretmek yerine dururuz; bütçe aşılmaz.
+ *  2. `stop-failures`: motorlar üst üste boş dönüyor → kalan süreyi başarısız
+ *     çağrılarla yakmayız (kullanıcı sonucu daha erken görür).
+ * Ayrıca karne alan ürün sayısı `enriched` ile sayılır: bayrak "karne HİÇ
+ * çıkmadı" anlamına gelir, "hepsi çıkmadı" değil — aksi halde bir ürün karne
+ * almışken kullanıcıya "konsey atlandı" denirdi.
+ */
+export function councilLoopDecision(args: {
+  carnetMs: number;
+  remaining: number;
+  failures: number;
+  maxFailures?: number;
+}): CouncilLoopAction {
+  if (args.remaining <= 0) return "done";
+  if (args.failures >= (args.maxFailures ?? COUNCIL_MAX_FAILURES)) return "stop-failures";
+  return args.carnetMs > 0 ? "carnet" : "stop-time";
 }
 
 /**
@@ -364,7 +436,9 @@ export function clientWaitMs(): number {
  */
 export function jobPollingPlan(): { pollMaxMs: number; pollIntervalMs: number } {
   return {
-    pollMaxMs: DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS,
+    // İstemci penceresi = uçtan uca söz (280 sn). İşçi 260 sn'de bitirir, kalan
+    // 20 sn yazma + yoklama tick'i içindir; yani pencere her zaman işi kapsar.
+    pollMaxMs: DISCOVERY_END_TO_END_MS,
     pollIntervalMs: JOB_POLL_INTERVAL_MS,
   };
 }

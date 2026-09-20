@@ -182,7 +182,7 @@ export async function runProductDiscovery(
   // Aşama planı — tek kaynak. Her adımın penceresini ve sonraki adımların
   // rezervini buradan alıyoruz; böylece erken bir adım (ör. zeminli açı turu)
   // bütçenin tamamını yiyip canlı doğrulamayı/konsey karneyi dışarıda bırakamaz.
-  const { discoveryStagePlan, batchReserveMs, councilEnrichLimit } =
+  const { discoveryStagePlan, batchReserveMs, councilEnrichCallMs, councilLoopDecision } =
     await import("@/lib/discovery-jobs.server");
   const plan = discoveryStagePlan(budgetMs, { fast });
   const deadline = startedAt + budgetMs;
@@ -569,9 +569,15 @@ JSON shape:
     const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
+  // ---- Kurtarma zinciri penceresi ----
+  // HF + mesh yedekleri yalnızca HİÇ ürün gelmediğinde çalışır (yani hat zaten
+  // gecikmişken). Eskiden süre sınırı yoktu: 2 HF motoru + 22 anahtarlık mesh
+  // süpürmesi sınırsız sürebiliyor ve 280 sn'lik sözü bozuyordu. Artık ikisi de
+  // kalan süreye bağlı tek bir pencere içinde koşar.
+  const salvageMs = Math.max(8_000, Math.min(plan.generationMs, planTimeLeft() - 5_000));
   // ---- Cross-engine fallback: Gemini tükendiyse HF motorlarıyla dene ----
   let fallbackEngine = "gemini";
-  if (products.length === 0) {
+  if (products.length === 0 && planTimeLeft() > 5_000) {
     try {
       const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, hfTokenPool } =
         await import("@/lib/hf.server");
@@ -597,7 +603,11 @@ JSON shape:
             return mapHfProducts(text, data.platforms as string[], "qwen");
           })(),
         ];
-        const hfResults = await Promise.allSettled(hfEnginePromises);
+        const hfResults = await withDeadline(
+          Promise.allSettled(hfEnginePromises),
+          salvageMs,
+          "fallback:hf",
+        ).catch(() => [] as PromiseSettledResult<ReturnType<typeof mapHfProducts>>[]);
         const hfLists = hfResults
           .filter(
             (r): r is PromiseFulfilledResult<ReturnType<typeof mapHfProducts>> =>
@@ -620,7 +630,7 @@ JSON shape:
   // HF→OpenRouter→PROVIDER_* zincirindeki ÇALIŞAN motorla minimal şemada bir
   // kez daha dene; böylece "ürün bulunamadı" yalnızca gerçekten her motor
   // tükendiğinde görünür. ----
-  if (products.length === 0) {
+  if (products.length === 0 && planTimeLeft() > 5_000) {
     try {
       const meshPrompt = `You are an e-commerce product researcher. Return STRICT JSON only.
 Find 3 REAL, specific, currently trending products for:
@@ -642,7 +652,11 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-      const meshText = await callLovableAI(meshPrompt, 0.7);
+      const meshText = await withDeadline(
+        callLovableAI(meshPrompt, 0.7),
+        salvageMs,
+        "fallback:mesh",
+      ).catch(() => "");
       const parsed = extractJson<{ products?: WinningProduct[] }>(meshText, { products: [] });
       if (parsed.products?.length) {
         products = parsed.products;
@@ -788,30 +802,32 @@ JSON shape:
   }
 
   // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
-  // En pahalı adım. Hat 280 sn ile sınırlı olduğu için karne KISA PROFİLDE
+  // En pahalı adım. Hat bütçesi sınırlı olduğu için karne KISA PROFİLDE
   // (`depth: "enrich"`) çağrılır: 6 uzman ekip + müdür paralel koşar, hakem turu
   // ve bağımsız denetçi atlanır — ve bu durum ürün kartında dürüstçe yazılır.
-  // Ürün başına maliyet sabittir (~62 sn rezerv), bu yüzden kaç ürünün karne
-  // alacağını KALAN SÜRE belirler: tek bir ürün hattın bütçesini yiyemez.
+  //
+  // SÜRE KURALI (504/taşma koruması): her karne için bütçe SIRADAKİ ürün
+  // çağrılmadan ÖNCE kalan süreden yeniden hesaplanır (`councilEnrichCallMs`).
+  // Eskiden "kaç karne sığar" bir kez hesaplanıp çağrı başına 90 sn izin
+  // veriliyor, üstelik çağrı bütçesi alt sınır olan 62 sn'ye yükseltiliyordu:
+  // kalan süre 20 sn olsa bile 62 sn'lik bir tur başlayabiliyor ve hat 280 sn'lik
+  // sözünü onlarca saniye aşıyordu.
+  // SIRADAKİ ürünün bütçesi her turda yeniden ölçülür: bir karne rezervinden
+  // hızlı biterse süre boşa gitmez, sıradaki ürün de karne alır. Bu yüzden
+  // döngü tek seferlik "kaç karne sığar" hesabı yerine koşullu ilerler.
   if (!fast) {
-    const { COUNCIL_ENRICH_BUDGET_MS, COUNCIL_ENRICH_MIN_MS } =
-      await import("@/lib/council-budget.server");
     const { runCouncil } = await import("@/lib/council.server");
-    // Konsey kalan süreyle koşar; erken aşamalar `plan.councilReserveMs` ile onun
-    // payını korur, yani bu satır artık boş kalmıyor.
-    const councilCount = councilEnrichLimit(timeLeft());
-    const councilTargets = finalProducts.slice(0, councilCount);
-    if (councilTargets.length === 0) skippedCouncil = true;
-    const withCouncil = await mapWithConcurrency(councilTargets, 1, async (p) => {
+    const list = [...finalProducts];
+    let enrichedCount = 0;
+    let failures = 0;
+    for (let i = 0; i < list.length; i++) {
+      const carnetMs = councilEnrichCallMs(timeLeft(), plan.returnFloorMs);
+      const action = councilLoopDecision({ carnetMs, remaining: list.length - i, failures });
+      // Süre bitti ya da motorlar üst üste sustu: yarım karne üretmeden dururuz.
+      if (action !== "carnet") break;
+      const p = list[i];
       try {
-        const report = await runCouncil(
-          p.name,
-          country,
-          data.category,
-          "tr",
-          Math.max(COUNCIL_ENRICH_MIN_MS, Math.min(timeLeft() - 3_000, COUNCIL_ENRICH_BUDGET_MS)),
-          "enrich",
-        );
+        const report = await runCouncil(p.name, country, data.category, "tr", carnetMs, "enrich");
         const council: CouncilSummary = {
           velora_score: report.velora_score,
           verdict: report.verdict,
@@ -843,13 +859,21 @@ JSON shape:
           skipped_stages: report.skipped_stages,
         };
         // Karne gövdesi boşsa (tüm motorlar susmuş) ürünü karne ile etiketlemeyiz.
-        if (!council.executive_report && council.velora_score <= 0) return p;
-        return { ...p, council };
+        if (!council.executive_report && council.velora_score <= 0) {
+          failures += 1;
+        } else {
+          list[i] = { ...p, council };
+          enrichedCount += 1;
+          failures = 0;
+        }
       } catch {
-        return p;
+        failures += 1;
       }
-    });
-    finalProducts = [...withCouncil, ...finalProducts.slice(councilTargets.length)];
+    }
+    // Bayrak "karne HİÇ çıkmadı" demektir: bir ürün karne aldıysa kullanıcıya
+    // "konsey atlandı" demek yanlış olurdu (kartta karne zaten görünüyor).
+    skippedCouncil = enrichedCount === 0;
+    finalProducts = list;
   } else {
     skippedCouncil = true;
   }
