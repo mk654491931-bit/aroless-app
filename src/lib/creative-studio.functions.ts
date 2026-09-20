@@ -1,8 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callPremiumAI, extractJson } from "@/lib/ai.server";
-import { creativeKitPrompt, type CreativeKit } from "@/lib/creative-studio.server";
+import {
+  callAiMesh,
+  callPremiumAI,
+  callSweepProvider,
+  extractJson,
+  withDeadline,
+} from "@/lib/ai.server";
+import { poolGroupAvailable } from "@/lib/ai-pool.server";
+import { platformDurationSeconds } from "@/lib/host-runtime.server";
+import {
+  creativeKitCoverage,
+  creativeKitHasContent,
+  creativeKitPrompt,
+  creativeRepairPrompt,
+  emptyCreativeKit,
+  mergeCreativeKits,
+  normalizeCreativeKit,
+  studioBudgetMs,
+  type CreativeKit,
+} from "@/lib/creative-studio.server";
 import { withCreditRefund } from "@/lib/credit-guard.server";
 
 const KitInput = z.object({
@@ -14,6 +32,9 @@ const KitInput = z.object({
   lang: z.string().max(8).optional().default("tr"),
 });
 
+/** Bu süreden az kaldıysa yeni motor turu başlatılmaz (yarım cevap = boşa kota). */
+const MIN_TURN_MS = 12_000;
+
 export type CreativeAssetRow = {
   id: string;
   product_name: string;
@@ -23,17 +44,20 @@ export type CreativeAssetRow = {
   created_at: string;
 };
 
-const EMPTY: CreativeKit = {
-  positioning: "",
-  audience: "",
-  hooks: [],
-  ugc_script: { title: "", duration_seconds: 30, scenes: [], cta: "" },
-  ad_copies: [],
-  image_prompts: [],
-  hashtags: [],
-  ab_tests: [],
-  email_sms: { subject: "", body: "", sms: "" },
-};
+type Engine = "premium" | "groq" | "openrouter" | "mesh";
+
+function runnerFor(engine: Engine, prompt: string, temperature: number): Promise<string> {
+  switch (engine) {
+    case "premium":
+      return callPremiumAI(prompt, temperature);
+    case "groq":
+      return callSweepProvider("groq", prompt, temperature);
+    case "openrouter":
+      return callSweepProvider("openrouter", prompt, temperature);
+    case "mesh":
+      return callAiMesh(prompt, { temperature, grounded: false });
+  }
+}
 
 export const generateCreativeKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -46,8 +70,76 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
     }
     // Üretim başarısız olursa düşülen kredi iade edilir.
     return withCreditRefund(context.userId, async () => {
-      const text = await callPremiumAI(creativeKitPrompt(data), 0.75);
-      const kit = extractJson<CreativeKit>(text, EMPTY);
+      const plan = creativeKitPrompt(data);
+      const deadlineAt = Date.now() + studioBudgetMs(platformDurationSeconds());
+      const drafts: { engine: string; kit: CreativeKit }[] = [];
+      const timeLeft = () => deadlineAt - Date.now();
+
+      /** Bir motorun cevabını pakete çevirir; boş/parse edilemezse `null`. */
+      const collect = async (engine: Engine, prompt: string, temperature: number) => {
+        try {
+          const text = await withDeadline(
+            runnerFor(engine, prompt, temperature),
+            Math.max(1_000, timeLeft()),
+            `studio:${engine}`,
+          );
+          const kit = normalizeCreativeKit(extractJson<unknown>(text, {}));
+          if (creativeKitHasContent(kit)) drafts.push({ engine, kit });
+        } catch {
+          /* bu motor yanıt vermedi — sıradaki */
+        }
+      };
+
+      // ---- Dalga 1: iki BAĞIMSIZ motor paralel ----
+      // (ağ geçidi/premium yol + projenin kendi anahtar havuzundan ikinci motor)
+      const second: Engine = poolGroupAvailable("groq") ? "groq" : "openrouter";
+      await Promise.all([collect("premium", plan, 0.75), collect(second, plan, 0.7)]);
+
+      // ---- Dalga 2: hâlâ yeterli taslak yoksa tüm havuza yayılan güvenlik ağı ----
+      if (drafts.length < 2 && timeLeft() > MIN_TURN_MS) {
+        await collect("mesh", plan, 0.7);
+      }
+
+      let kit = drafts.reduce<CreativeKit>(
+        (acc, draft) => mergeCreativeKits(acc, draft.kit),
+        emptyCreativeKit(),
+      );
+      let coverage = creativeKitCoverage(kit);
+      let repaired = false;
+
+      // ---- Onarım turu: paket var ama bölümler eksikse FARKLI bir motor
+      // yalnızca eksikleri tamamlar. Böylece "yarım paket" kullanıcıya hiç
+      // gitmez; tek bir tur da süreyi aşmaz. ----
+      if (!coverage.complete && creativeKitHasContent(kit) && timeLeft() > MIN_TURN_MS + 5_000) {
+        const used = new Set(drafts.map((d) => d.engine));
+        const repairEngine: Engine =
+          (["openrouter", "groq", "premium"] as Engine[]).find((e) => !used.has(e)) ?? "mesh";
+        const before = drafts.length;
+        await collect(repairEngine, creativeRepairPrompt(data, kit, coverage.missing), 0.4);
+        if (drafts.length > before) {
+          repaired = true;
+          kit = drafts.reduce<CreativeKit>(
+            (acc, draft) => mergeCreativeKits(acc, draft.kit),
+            emptyCreativeKit(),
+          );
+          coverage = creativeKitCoverage(kit);
+        }
+      }
+
+      // Boş paket ASLA kaydedilmez/gösterilmez: kredi iade edilir ve kullanıcı
+      // "boş ekran" yerine gerçek nedeni görür.
+      if (!creativeKitHasContent(kit)) {
+        throw new Error(
+          "Kreatif paket üretilemedi: AI motorları yanıt vermedi (kota/anahtar). Lütfen birkaç saniye sonra tekrar deneyin — krediniz iade edildi.",
+        );
+      }
+
+      kit.meta = {
+        engines: drafts.map((d) => d.engine),
+        coverage: coverage.percent,
+        missing_sections: coverage.missing,
+        repaired,
+      };
 
       const { data: saved } = await context.supabase
         .from("creative_assets")

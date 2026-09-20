@@ -190,7 +190,7 @@ export function qstashTimeoutSeconds(): number {
  * Ürün kararı: ağır hat en fazla 280 sn sürsün. Bu tek sayı hem hattın
  * bütçesini hem istemcinin yoklama penceresini belirler; platform 900 sn verse
  * bile hat kendini 280 sn'ye sığdırır ve kalite adımları için içeride rezerv
- * ayrılır (bkz. `discovery-pipeline.server.ts` → VERIFY_RESERVE_MS).
+ * ayrılır (bkz. `discoveryStagePlan` → aşama pencereleri + konsey rezervi).
  */
 export const DISCOVERY_MAX_BUDGET_MS = 280_000;
 
@@ -223,6 +223,115 @@ export function councilEnrichLimit(timeLeftMs: number, limit = 8): number {
   if (!Number.isFinite(timeLeftMs)) return 0;
   const usable = timeLeftMs - COUNCIL_ENRICH_MARGIN_MS;
   return Math.max(0, Math.min(limit, Math.floor(usable / COUNCIL_ENRICH_MIN_MS)));
+}
+
+/**
+ * Hattın bütçesi bitmeden ÖNCE bitmesi için ayrılan taban pay (ms).
+ *
+ * Konseydeki dönüş payının ürün bulucu karşılığıdır: sonuç yazımı, winner
+ * skorlama, GPU'suz toparlama ve yanıt için. Bu pay sayesinde hat kendi
+ * kendine biter, platform onu kesmez (504 yok).
+ */
+export const DISCOVERY_RETURN_FLOOR_MS = 10_000;
+
+export type DiscoveryStagePlan = {
+  budgetMs: number;
+  /** Bütçeden düşülen dönüş payı. */
+  returnFloorMs: number;
+  /** Hat için gerçekten kullanılabilir süre (`budgetMs - returnFloorMs`). */
+  usableMs: number;
+  /** GitHub trendi + canlı piyasa kanıtı — artık PARALEL koşar. */
+  prepMs: number;
+  /** Zeminli (Google aramalı) açı turu; yavaş kalan motor düşer. */
+  generationMs: number;
+  /** Hakem turu: ürün başına hibrit puan + çok motorlu fikir birliği. */
+  judgePerProductMs: number;
+  judgeConcurrency: number;
+  /** Canlı piyasa doğrulaması: ürün başına. */
+  verifyPerProductMs: number;
+  verifyConcurrency: number;
+  /** En iyi 3 ürünün doğrulaması için ayrılan rezerv. */
+  verifyReserveMs: number;
+  /** AI Konsey karnesine ayrılan rezerv — hakem/doğrulama onu yiyemez. */
+  councilReserveMs: number;
+  /** Kaç zeminli açı paralel koşar (duvar saati maliyeti aynı, aday sayısı ↑). */
+  angleCount: number;
+};
+
+function clampMs(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+/**
+ * N adet işi `concurrency` paralellikle koşmanın duvar saati maliyeti.
+ *
+ * Aşama kapıları bunu kullanır: “kaç ürün kaldıysa o kadar süre” ilkesi, tek bir
+ * yavaş ürünün sonraki aşamaları (doğrulama + konsey) imkânsız hale
+ * getirmesini engeller.
+ */
+export function batchReserveMs(perItemMs: number, count: number, concurrency: number): number {
+  if (count <= 0 || perItemMs <= 0) return 0;
+  return Math.ceil(count / Math.max(1, concurrency)) * Math.round(perItemMs);
+}
+
+/**
+ * 280 sn'lik hattın aşama planı — tek kaynak.
+ *
+ * Neden gerekli: bütçe yalnızca `hasTime(12_000)` gibi sabit kapılarla
+ * korunuyordu. Bu, zeminli açı turunun (paralel 8 arama, her biri 12 sn
+ * timeout'lu) veya hakem turunun bütçenin tamamını yiyip son aşamaları
+ * (canlı doğrulama, AI Konsey karnesi) dışarıda bırakmasına izin veriyordu:
+ * hat zamanında biterdi ama iş "iyi" bitmezdi.
+ *
+ * Plan üç garantiyi verir:
+ *  1. Hiçbir aşama planlanan penceresini aşamaz (per-call deadline).
+ *  2. Hazırlık (GitHub + canlı kanıt) PARALEL koşar; seri ~40 sn boşa gidiyordu.
+ *  3. Son iki aşama (doğrulama + konsey) için rezerv ayrılır; erken aşamalar
+ *     onları yiyemez.
+ */
+export function discoveryStagePlan(
+  budgetMs: number,
+  opts: { fast?: boolean } = {},
+): DiscoveryStagePlan {
+  const total = Math.max(20_000, Math.round(budgetMs));
+  const fast = opts.fast ?? total <= 75_000;
+  const usableMs = Math.max(10_000, total - DISCOVERY_RETURN_FLOOR_MS);
+
+  const prepMs = fast ? 0 : clampMs(usableMs * 0.15, 8_000, 40_000);
+  const judgePerProductMs = clampMs(usableMs * 0.05, 8_000, 15_000);
+  const verifyPerProductMs = clampMs(usableMs * 0.03, 6_000, 12_000);
+  const judgeConcurrency = fast ? 3 : 2;
+  const verifyConcurrency = fast ? 3 : 2;
+  // Hakem turuna ayrılan pay: konsey rezervinin üstüne eklenir.
+  const judgeSlotMs = clampMs(usableMs * 0.1, 10_000, 40_000);
+  // Çok kısa bütçelerde (ör. 20 sn'lik test) pencereler kullanılabilir süreye
+  // sığacak şekilde küçülür — plan asla bütçesinden büyük olamaz.
+  const generationMs = Math.min(
+    clampMs(usableMs * 0.24, 20_000, 75_000),
+    Math.max(5_000, Math.round(usableMs * 0.5)),
+  );
+  const verifyReserveMs = Math.min(
+    batchReserveMs(verifyPerProductMs, 3, verifyConcurrency),
+    Math.max(0, usableMs - generationMs - judgeSlotMs),
+  );
+  const councilTarget = clampMs(usableMs * 0.3, COUNCIL_ENRICH_MIN_MS, COUNCIL_ENRICH_MIN_MS * 3);
+  const councilRoom = usableMs - prepMs - generationMs - verifyReserveMs - judgeSlotMs;
+  const councilReserveMs = fast ? 0 : Math.max(0, Math.min(councilTarget, councilRoom));
+
+  return {
+    budgetMs: total,
+    returnFloorMs: DISCOVERY_RETURN_FLOOR_MS,
+    usableMs,
+    prepMs,
+    generationMs,
+    judgePerProductMs,
+    judgeConcurrency,
+    verifyPerProductMs,
+    verifyConcurrency,
+    verifyReserveMs,
+    councilReserveMs,
+    angleCount: fast ? 3 : 8,
+  };
 }
 
 /**

@@ -71,8 +71,27 @@ function copy(text: string) {
   toast.success("Kopyalandı");
 }
 
-function KitView({ row }: { row: CreativeAssetRow }) {
+/**
+ * Bölüm boş kaldığında sessizce boş sekme göstermek yerine nedenini söyler.
+ * Motorlar kotalı/yavaş olabildiği için bu durum "stüdyo bozuk" değildir.
+ */
+function SectionNote({ label, onRetry }: { label: string; onRetry?: () => void }) {
+  return (
+    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+      <span className="font-semibold">{label}</span> bu üretimde tamamlanamadı (motor kotalı veya
+      yavaş yanıt verdi).
+      {onRetry && (
+        <button onClick={onRetry} className="ml-2 underline decoration-dotted hover:text-amber-100">
+          Tekrar üret
+        </button>
+      )}
+    </div>
+  );
+}
+
+function KitView({ row, onRegenerate }: { row: CreativeAssetRow; onRegenerate?: () => void }) {
   const kit = row.payload;
+  const meta = kit.meta;
   return (
     <Tabs defaultValue="hooks" className="mt-4">
       <TabsList className="flex w-full flex-wrap justify-start gap-1 bg-white/5">
@@ -97,15 +116,44 @@ function KitView({ row }: { row: CreativeAssetRow }) {
       </TabsList>
 
       <div className="premium-card mt-3 p-4 text-sm">
+        {meta && (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+            <Badge variant="outline" className="border-white/10">
+              Motorlar: {meta.engines.join(" + ") || "—"}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={
+                meta.coverage >= 100
+                  ? "border-[var(--profit)]/40 text-[var(--profit)]"
+                  : "border-amber-500/40 text-amber-300"
+              }
+            >
+              Kapsam %{meta.coverage}
+            </Badge>
+            {meta.repaired && (
+              <Badge variant="outline" className="border-white/10">
+                Eksikler onarım turuyla tamamlandı
+              </Badge>
+            )}
+            {meta.missing_sections.length > 0 && (
+              <Badge variant="outline" className="border-amber-500/40 text-amber-300">
+                Eksik: {meta.missing_sections.join(", ")}
+              </Badge>
+            )}
+          </div>
+        )}
+
         <div className="mb-3 rounded-lg border border-white/10 bg-white/5 p-3">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Konumlandırma
           </div>
-          <p className="mt-1 text-sm">{kit.positioning}</p>
-          <p className="mt-2 text-xs text-muted-foreground">{kit.audience}</p>
+          <p className="mt-1 text-sm">{kit.positioning || "—"}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{kit.audience || "—"}</p>
         </div>
 
         <TabsContent value="hooks" className="space-y-2">
+          {!kit.hooks?.length && <SectionNote label="Hook'lar" onRetry={onRegenerate} />}
           {kit.hooks?.map((h, i) => (
             <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="flex items-start justify-between gap-2">
@@ -136,6 +184,9 @@ function KitView({ row }: { row: CreativeAssetRow }) {
             </Badge>
           </div>
           <div className="space-y-2">
+            {!kit.ugc_script?.scenes?.length && (
+              <SectionNote label="UGC senaryo" onRetry={onRegenerate} />
+            )}
             {kit.ugc_script?.scenes?.map((s, i) => (
               <div
                 key={i}
@@ -165,6 +216,9 @@ function KitView({ row }: { row: CreativeAssetRow }) {
         </TabsContent>
 
         <TabsContent value="ads" className="space-y-2">
+          {!kit.ad_copies?.length && (
+            <SectionNote label="Reklam metinleri" onRetry={onRegenerate} />
+          )}
           {kit.ad_copies?.map((a, i) => (
             <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="flex items-center justify-between">
@@ -189,6 +243,9 @@ function KitView({ row }: { row: CreativeAssetRow }) {
         </TabsContent>
 
         <TabsContent value="visual" className="space-y-2">
+          {!kit.image_prompts?.length && (
+            <SectionNote label="Görsel promptları" onRetry={onRegenerate} />
+          )}
           {kit.image_prompts?.map((p, i) => (
             <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="flex items-center justify-between">
@@ -216,6 +273,7 @@ function KitView({ row }: { row: CreativeAssetRow }) {
         </TabsContent>
 
         <TabsContent value="tests" className="space-y-2">
+          {!kit.ab_tests?.length && <SectionNote label="A/B testleri" onRetry={onRegenerate} />}
           {kit.ab_tests?.map((t, i) => (
             <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
               <div className="font-semibold">{t.hypothesis}</div>
@@ -229,11 +287,17 @@ function KitView({ row }: { row: CreativeAssetRow }) {
         </TabsContent>
 
         <TabsContent value="crm">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
-            <div className="font-semibold">{kit.email_sms?.subject}</div>
-            <p className="mt-2 whitespace-pre-line">{kit.email_sms?.body}</p>
-            <div className="mt-3 rounded border border-white/10 p-2">SMS: {kit.email_sms?.sms}</div>
-          </div>
+          {kit.email_sms?.body ? (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
+              <div className="font-semibold">{kit.email_sms.subject}</div>
+              <p className="mt-2 whitespace-pre-line">{kit.email_sms.body}</p>
+              <div className="mt-3 rounded border border-white/10 p-2">
+                SMS: {kit.email_sms.sms}
+              </div>
+            </div>
+          ) : (
+            <SectionNote label="E-posta / SMS" onRetry={onRegenerate} />
+          )}
         </TabsContent>
       </div>
     </Tabs>
@@ -369,7 +433,7 @@ function StudioPage() {
         </div>
       )}
 
-      {active && <KitView row={active} />}
+      {active && <KitView row={active} onRegenerate={() => gen.mutate()} />}
 
       {(history.data?.length ?? 0) > 0 && (
         <div className="mt-6">

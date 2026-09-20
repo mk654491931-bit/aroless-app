@@ -6,9 +6,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DISCOVERY_MAX_BUDGET_MS,
+  DISCOVERY_RETURN_FLOOR_MS,
   DISCOVERY_RETURN_MARGIN_MS,
   JOB_POLL_INTERVAL_MS,
+  batchReserveMs,
   councilEnrichLimit,
+  discoveryStagePlan,
   clientWaitMs,
   discoveryDispatchPlan,
   functionMaxDurationSeconds,
@@ -22,6 +25,7 @@ import {
   workerJobsUrl,
   workerTargetIsLongLived,
 } from "./discovery-jobs.server";
+import { COUNCIL_ENRICH_MIN_MS } from "./council-budget.server";
 
 const MANAGED_KEYS = [
   "NITRO_PRESET",
@@ -334,5 +338,54 @@ describe("remoteWorkerConfigured", () => {
     expect(remoteWorkerConfigured({ WORKER_URL: "https://x.dev" })).toBe(true);
     expect(remoteWorkerConfigured({ DISCOVERY_WORKER_URL: "https://x.dev/api/worker" })).toBe(true);
     expect(remoteWorkerConfigured({})).toBe(false);
+  });
+});
+
+describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
+  it("dönüş payını her zaman dışarıda bırakır ve bütçesini aşmaz", () => {
+    for (const budget of [20_000, 60_000, 130_000, 240_000, 280_000, 900_000]) {
+      const plan = discoveryStagePlan(budget);
+      expect(plan.returnFloorMs).toBe(DISCOVERY_RETURN_FLOOR_MS);
+      expect(plan.usableMs).toBe(Math.max(10_000, budget - DISCOVERY_RETURN_FLOOR_MS));
+      // Hiçbir aşama planı bütçesinden büyük olamaz: erken aşamalar + konsey
+      // rezervi, kullanılabilir süreyi asla aşmaz.
+      expect(
+        plan.prepMs + plan.generationMs + plan.verifyReserveMs + plan.councilReserveMs,
+      ).toBeLessThanOrEqual(plan.usableMs);
+    }
+  });
+
+  it("280 sn'de konsey karneye yer AÇIKÇA ayrılır (son aşamalar aç kalmaz)", () => {
+    const plan = discoveryStagePlan(DISCOVERY_MAX_BUDGET_MS);
+    expect(plan.prepMs).toBeGreaterThan(0);
+    expect(plan.generationMs).toBeGreaterThanOrEqual(20_000);
+    expect(plan.generationMs).toBeLessThanOrEqual(75_000);
+    // Konsey rezervi en az bir karnelik (COUNCIL_ENRICH_MIN_MS) olmalı.
+    expect(plan.councilReserveMs).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
+    // Hazırlık + zeminli tur + konsey, dönüş payına dokunmadan sığar.
+    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBeLessThan(plan.usableMs);
+  });
+
+  it("hızlı profilde (≤75 sn) hazırlık ve konsey atlanır, açı 3'e düşer", () => {
+    const plan = discoveryStagePlan(60_000);
+    expect(plan.prepMs).toBe(0);
+    expect(plan.councilReserveMs).toBe(0);
+    expect(plan.angleCount).toBe(3);
+  });
+
+  it("280 sn'de daha çok zeminli açı koşar (paralel olduğu için ek duvar saati yok)", () => {
+    expect(discoveryStagePlan(DISCOVERY_MAX_BUDGET_MS).angleCount).toBe(8);
+  });
+});
+
+describe("batchReserveMs (ürün sayısına göre aşama süresi)", () => {
+  it("paralelliğe göre beklenen duvar saatini verir", () => {
+    expect(batchReserveMs(10_000, 5, 2)).toBe(30_000);
+    expect(batchReserveMs(10_000, 1, 2)).toBe(10_000);
+    expect(batchReserveMs(10_000, 6, 3)).toBe(20_000);
+  });
+
+  it("boş listede sıfır döner (aşama hiç başlamaz)", () => {
+    expect(batchReserveMs(10_000, 0, 2)).toBe(0);
   });
 });

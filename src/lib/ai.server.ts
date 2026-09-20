@@ -583,6 +583,27 @@ function isQuotaError(status: number, body: string): boolean {
   );
 }
 
+/** Tek denemenin tavan süresi (ms). */
+const GEMINI_ATTEMPT_MS = 12_000;
+/** Bu süreden kısa bir pencere kalmışsa yeni deneme hiç başlatılmaz. */
+const MIN_GEMINI_ATTEMPT_MS = 2_000;
+
+/**
+ * Çağıranın duvar saati sınırı varsa tek denemenin kullanabileceği süre.
+ *
+ * Neden gerekli: `callGemini` sırayla 5 anahtar × 4 model dener, her deneme
+ * 12 sn'de iptal olur — yani TEK bir açı çağrısı teorik olarak 240 sn sürebilir.
+ * Ürün bulucu hattı 280 sn'lik bir istekte koştuğu için bu zincir bütçenin
+ * tamamını yiyip isteği Vercel'in 300 sn duvarına dayayabiliyordu (504).
+ * Sınır verildiğinde ise her deneme kalan süreyle kırpılır ve süre bitince
+ * zincir tamamen durur.
+ */
+export function geminiAttemptMs(deadlineAt?: number, now = Date.now()): number {
+  if (deadlineAt === undefined) return GEMINI_ATTEMPT_MS;
+  const left = deadlineAt - now;
+  return Math.max(MIN_GEMINI_ATTEMPT_MS, Math.min(GEMINI_ATTEMPT_MS, left));
+}
+
 /** Single-key Gemini attempt. Throws with a QUOTA: prefix when the key is spent. */
 async function geminiOnce(
   prompt: string,
@@ -590,13 +611,16 @@ async function geminiOnce(
   temperature: number,
   grounded: boolean,
   models: string[],
+  deadlineAt?: number,
 ): Promise<string> {
   prompt = withEstimationRules(prompt);
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < models.length; attempt++) {
+    // Süre bitti: yeni deneme başlatmak yerine elimizdeki hatayla dön.
+    if (deadlineAt !== undefined && deadlineAt - Date.now() < MIN_GEMINI_ATTEMPT_MS) break;
     const model = models[Math.min(attempt, models.length - 1)];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12_000);
+    const timeout = setTimeout(() => controller.abort(), geminiAttemptMs(deadlineAt));
     try {
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -618,7 +642,7 @@ async function geminiOnce(
       );
       if (resp.status === 400 && grounded) {
         clearTimeout(timeout);
-        return geminiOnce(prompt, apiKey, temperature, false, models);
+        return geminiOnce(prompt, apiKey, temperature, false, models, deadlineAt);
       }
       if (!resp.ok) {
         const t = await resp.text();
@@ -674,6 +698,22 @@ function scheduleKeys(pool: string[], cursor: number): string[] {
   return [...ready, ...parked];
 }
 
+/**
+ * Bir sözü çağıranın duvar saati sınırına bağlar.
+ *
+ * Altındaki `fetch` çağrısı kendi iptalini yönetir; bu yardımcı ise ÇAĞIRANIN
+ * bütçesini korur: 280 sn'lik bir hat içinde yavaş bir motor/ağ çağrısı tek
+ * başına bütün süreyi yiyemez. Süre dolarsa söz reddedilir ("timeout: <etiket>")
+ * ve çağrı arka planda bırakılır — istek kendi kendine, zamanında biter.
+ */
+export function withDeadline<T>(promise: Promise<T>, ms: number, label = "timeout"): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const guard = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timeout: ${label}`)), Math.max(0, Math.round(ms)));
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
 /** Runs tasks with a hard concurrency cap so API rate limits are never burst. */
 export async function mapWithConcurrency<T, R>(
   items: T[],
@@ -704,6 +744,8 @@ export async function callGemini(
   temperature = 0.9,
   grounded = true,
   modelPreference?: string[],
+  /** Çağıranın duvar saati sınırı (epoch ms). Zincir bu an gelince durur. */
+  deadlineAt?: number,
 ): Promise<string> {
   const models = modelPreference?.length ? modelPreference : GEMINI_MODELS_LATEST;
   const pool = geminiKeyPool();
@@ -712,8 +754,10 @@ export async function callGemini(
   const keys = Array.from(new Set([...preferred, ...scheduleKeys(pool, cursor)]));
   let lastErr: unknown = null;
   for (const key of keys) {
+    // Süre dolduysa anahtar rotasyonuna devam etmek bütçeyi yakmaktan başka işe yaramaz.
+    if (deadlineAt !== undefined && deadlineAt - Date.now() < MIN_GEMINI_ATTEMPT_MS) break;
     try {
-      return await geminiOnce(prompt, key, temperature, grounded, models);
+      return await geminiOnce(prompt, key, temperature, grounded, models, deadlineAt);
     } catch (e) {
       lastErr = e;
       if (e instanceof Error && e.message.startsWith("QUOTA:")) parkKey(key);

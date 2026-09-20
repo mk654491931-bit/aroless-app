@@ -12,7 +12,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { callGemini, callLovableAI, extractJson } from "@/lib/ai.server";
+import { callGemini, callLovableAI, extractJson, withDeadline } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { CouncilReport } from "@/lib/council.server";
 import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
@@ -178,43 +178,64 @@ export async function runProductDiscovery(
   // pahalı adımlar atlanır; sonuç şekli hiç değişmez, yalnızca derinlik azalır.
   const startedAt = Date.now();
   const budgetMs = Math.max(20_000, ctx.budgetMs ?? 240_000);
-  const deadline = startedAt + budgetMs;
-  const timeLeft = () => deadline - Date.now();
-  const hasTime = (needMs: number) => timeLeft() > needMs;
   const fast = budgetMs <= 75_000;
+  // Aşama planı — tek kaynak. Her adımın penceresini ve sonraki adımların
+  // rezervini buradan alıyoruz; böylece erken bir adım (ör. zeminli açı turu)
+  // bütçenin tamamını yiyip canlı doğrulamayı/konsey karneyi dışarıda bırakamaz.
+  const { discoveryStagePlan, batchReserveMs, councilEnrichLimit } =
+    await import("@/lib/discovery-jobs.server");
+  const plan = discoveryStagePlan(budgetMs, { fast });
+  const deadline = startedAt + budgetMs;
+  /** Hat bu andan önce bitmeli: sonuç yazımı + yanıt için dönüş payı bırakılır. */
+  const planDeadline = deadline - plan.returnFloorMs;
+  const timeLeft = () => deadline - Date.now();
+  const planTimeLeft = () => planDeadline - Date.now();
+  /** Bu adıma başlamak sonraki adımların rezervini yiyor mu? */
+  const fits = (needMs: number, reservedMs: number) => planTimeLeft() > needMs + reservedMs;
 
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // Fetch GitHub public repo trends as an additional confidence signal.
+  // ---- Hazırlık kanıtları: GitHub trendi + canlı piyasa verisi ----
+  // İkisi de aynı prompt'a giren BAĞIMSIZ kanıtlardır; eskiden sırayla
+  // koşuyorlardı ve 280 sn'lik bütçeden ~40 sn'yi karşılıksız yiyorlardı.
+  // Artık aynı anda başlıyorlar ve her biri `plan.prepMs` penceresine bağlı:
+  // yavaş bir kaynak pencereyi aşamaz, kanıt gelmezse hat devam eder.
   let githubBlock = "";
   let githubTrends: GitHubRepoTrend[] = [];
-  if (data.use_github_trends && !fast) {
-    try {
-      const { fetchGitHubTrendsForNiche, summarizeGitHubTrends, formatGitHubTrendsBlock } =
-        await import("@/lib/github-trends.server");
-      githubTrends = await fetchGitHubTrendsForNiche(data.niche);
-      if (githubTrends.length) {
-        const { summary } = await summarizeGitHubTrends(data.niche, githubTrends, data.lang).catch(
-          () => ({ summary: "" }),
-        );
-        githubBlock = formatGitHubTrendsBlock(summary, githubTrends);
-      }
-    } catch {
-      githubBlock = "";
-      githubTrends = [];
-    }
-  }
-
-  // Live, real-world market evidence (Google Trends + live marketplace
-  // listings) injected as ground truth so the model's numbers stay realistic.
-  // Hızlı profilde atlanır: tek başına 20-40 sn alabiliyor.
   let liveBlock = "";
   if (!fast) {
-    const { buildLiveEvidenceBlock } = await import("@/lib/market-verify.server");
-    liveBlock = await buildLiveEvidenceBlock(
-      data.niche,
-      (data.target_country || "GLOBAL").toUpperCase(),
-    ).catch(() => "");
+    const prepCountry = (data.target_country || "GLOBAL").toUpperCase();
+    const prepGh: Promise<unknown> = data.use_github_trends
+      ? withDeadline(
+          (async () => {
+            const { fetchGitHubTrendsForNiche, summarizeGitHubTrends, formatGitHubTrendsBlock } =
+              await import("@/lib/github-trends.server");
+            const trends = await fetchGitHubTrendsForNiche(data.niche);
+            if (!trends.length) return { trends, block: "" };
+            const { summary } = await summarizeGitHubTrends(data.niche, trends, data.lang).catch(
+              () => ({ summary: "" }),
+            );
+            return { trends, block: formatGitHubTrendsBlock(summary, trends) };
+          })(),
+          plan.prepMs,
+          "prep:github",
+        )
+      : Promise.resolve(null);
+    const prepLive: Promise<unknown> = withDeadline(
+      (async () => {
+        const { buildLiveEvidenceBlock } = await import("@/lib/market-verify.server");
+        return buildLiveEvidenceBlock(data.niche, prepCountry);
+      })(),
+      plan.prepMs,
+      "prep:live",
+    );
+    const [gh, live] = await Promise.allSettled([prepGh, prepLive]);
+    if (gh.status === "fulfilled" && gh.value) {
+      const v = gh.value as { trends: GitHubRepoTrend[]; block: string };
+      githubTrends = v.trends;
+      githubBlock = v.block;
+    }
+    if (live.status === "fulfilled") liveBlock = (live.value as string | null) ?? "";
   }
 
   // ---- Deep-search refinement constraints (only what the user actually set) ----
@@ -436,18 +457,28 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     "CONSUMABLE / REPEAT PURCHASE — refill, subscription or run-out products with natural repurchase cycles and high LTV.",
     "DIFFERENTIATION PLAY — a product where existing listings have loud, repeated review complaints you can fix; state the complaint and the fix.",
   ];
-  // Hızlı profilde daha az açı → daha az paralel Gemini çağrısı → limit içinde kalır.
-  const angleCount = fast ? 3 : data.depth === "ultra" ? 8 : data.depth === "deep" ? 7 : 6;
+  // Açı sayısı plandan gelir: zeminli aramalar PARALEL koştuğu için duvar saati
+  // maliyeti neredeyse aynıdır, aday havuzu ise büyür (kalite ↑). Hızlı profilde
+  // kota yakmamak için 3'te kalır.
+  const angleCount = plan.angleCount;
   // İlk iki açı hedef ülkeye özel (yerel trend + yerel platform çok satanları).
   const activeAngles = [...localAngles, ...ANGLES].slice(0, angleCount);
   const anglePrompts = activeAngles.map((a) => buildPrompt(a, githubBlock + liveBlock));
   // Each angle goes out on a DIFFERENT rotated key (apiKey omitted → the
   // round-robin scheduler in ai.server picks the next cool key), with a small
   // stagger so both calls never hit the same per-minute bucket at once.
+  // Zeminli tur artık SÜRE SINIRLI: yavaş bir motor ya da kota rotasyonu tek
+  // başına hattın bütçesini yiyip sonraki aşamaları dışarıda bırakamaz. Süresi
+  // dolan açı düşer, elimizdeki sonuçlarla devam edilir (504 yerine sonuç).
+  const generationDeadlineAt = Date.now() + plan.generationMs;
   const results = await Promise.allSettled(
     anglePrompts.map(async (pr, i) => {
       if (i > 0) await new Promise((r) => setTimeout(r, 700 * i));
-      return callGemini(pr, undefined);
+      return withDeadline(
+        callGemini(pr, undefined, 0.9, true, undefined, generationDeadlineAt),
+        generationDeadlineAt - Date.now(),
+        `generation:angle${i}`,
+      );
     }),
   );
   const collected: WinningProduct[] = [];
@@ -475,15 +506,32 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
   const cap = Math.max(10, angleCount * 2);
   if (products.length > cap) products = products.slice(0, cap);
 
-  // If nothing came back, retry the first angle without grounding (strict JSON)
+  // If nothing came back, retry the first angle without grounding (strict JSON).
+  // Yedek denemeler de pencereye bağlıdır: hepsi başarısız olsa bile bu blok
+  // hattın kalan süresini yiyemez.
+  const retryDeadlineAt = Date.now() + plan.generationMs;
   if (products.length === 0) {
-    const retry = await callGemini(anglePrompts[0], apiKey, 0.7, false).catch(() => "");
+    const retry = await callGemini(
+      anglePrompts[0],
+      apiKey,
+      0.7,
+      false,
+      undefined,
+      retryDeadlineAt,
+    ).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(retry, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
   if (products.length === 0) {
     // Lovable AI gateway direct fallback
-    const retry2 = await callGemini(anglePrompts[0], undefined, 0.7, false).catch(() => "");
+    const retry2 = await callGemini(
+      anglePrompts[0],
+      undefined,
+      0.7,
+      false,
+      undefined,
+      retryDeadlineAt,
+    ).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(retry2, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
@@ -510,7 +558,14 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-    const slim = await callGemini(slimPrompt, undefined, 0.8, false).catch(() => "");
+    const slim = await callGemini(
+      slimPrompt,
+      undefined,
+      0.8,
+      false,
+      undefined,
+      retryDeadlineAt,
+    ).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
@@ -645,17 +700,27 @@ JSON shape:
   // agent calls, so an unbounded Promise.all is what trips rate limits.
   const { mapWithConcurrency } = await import("@/lib/ai.server");
   let judged: WinningProduct[] = gated;
-  if (hasTime(12_000)) {
-    judged = await mapWithConcurrency(gated, fast ? 3 : 2, async (p) => {
+  // Hakem turu: kaç ürün kaldıysa o kadar süre + sonraki aşamaların rezervi.
+  // (Sığmıyorsa hiç başlamaz — yarıda kesilen turdan iyi olan: tek tutarlı sonuç.)
+  const judgeNeedMs = batchReserveMs(plan.judgePerProductMs, gated.length, plan.judgeConcurrency);
+  if (fits(judgeNeedMs, plan.verifyReserveMs + plan.councilReserveMs)) {
+    judged = await mapWithConcurrency(gated, plan.judgeConcurrency, async (p) => {
       const context = productDebateContext(p);
-      const [hybrid, consensus] = await Promise.all([
-        scoreProductForCountry(context, country).catch(() => undefined),
-        runConsensus({
-          context,
-          profit_margin_pct: p.profit_margin_pct,
-          competition_level: p.competition_level,
-        }).catch(() => undefined),
-      ]);
+      // Ürün başına pencere: plan somut bir söz olsun diye her hakem turu
+      // `judgePerProductMs`e bağlanır. Süre dolarsa puanlar boş kalır ama
+      // sonraki aşamalar (doğrulama + konsey) planlandığı gibi çalışır.
+      const [hybrid, consensus] = await withDeadline(
+        Promise.all([
+          scoreProductForCountry(context, country).catch(() => undefined),
+          runConsensus({
+            context,
+            profit_margin_pct: p.profit_margin_pct,
+            competition_level: p.competition_level,
+          }).catch(() => undefined),
+        ]),
+        plan.judgePerProductMs,
+        "judge",
+      ).catch(() => [undefined, undefined] as [undefined, undefined]);
       return { ...p, hybrid, consensus };
     });
   }
@@ -699,14 +764,20 @@ JSON shape:
   }
 
   // Fallback B — country cross-match for below-threshold survivors.
-  if (hasTime(12_000)) {
-    finalProducts = await Promise.all(
-      finalProducts.map(async (p) => {
-        if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
-        const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(() => ({}));
-        return { ...p, hybrid: { ...p.hybrid, ...alt } };
-      }),
-    );
+  if (fits(12_000, plan.verifyReserveMs)) {
+    finalProducts = await withDeadline(
+      Promise.all(
+        finalProducts.map(async (p) => {
+          if (!p.hybrid || p.hybrid.calculated_score >= minScore) return p;
+          const alt = await runCountryCrossMatch(productDebateContext(p), country).catch(
+            () => ({}),
+          );
+          return { ...p, hybrid: { ...p.hybrid, ...alt } };
+        }),
+      ),
+      plan.verifyReserveMs,
+      "cross-match",
+    ).catch(() => finalProducts);
   }
 
   if (finalProducts.length === 0) {
@@ -725,8 +796,9 @@ JSON shape:
   if (!fast) {
     const { COUNCIL_ENRICH_BUDGET_MS, COUNCIL_ENRICH_MIN_MS } =
       await import("@/lib/council-budget.server");
-    const { councilEnrichLimit } = await import("@/lib/discovery-jobs.server");
     const { runCouncil } = await import("@/lib/council.server");
+    // Konsey kalan süreyle koşar; erken aşamalar `plan.councilReserveMs` ile onun
+    // payını korur, yani bu satır artık boş kalmıyor.
     const councilCount = councilEnrichLimit(timeLeft());
     const councilTargets = finalProducts.slice(0, councilCount);
     if (councilTargets.length === 0) skippedCouncil = true;
@@ -803,21 +875,29 @@ JSON shape:
 
   // ---- Canlı piyasa doğrulaması: her ürün gerçek kaynaklarla çapraz kontrol
   // edilir; gerçeklik puanı ortak karara ağırlıklı olarak işlenir. ----
-  if (hasTime(15_000)) {
+  // Canlı doğrulama: ürün sayısına göre ölçülen süre + konsey rezervi korunur.
+  const verifyNeedMs = batchReserveMs(
+    plan.verifyPerProductMs,
+    finalProducts.length,
+    plan.verifyConcurrency,
+  );
+  if (fits(verifyNeedMs, plan.councilReserveMs)) {
     const { verifyProduct } = await import("@/lib/market-verify.server");
-    const verified = await mapWithConcurrency(finalProducts, fast ? 3 : 2, async (p) => {
-      try {
-        const { market_evidence, realism_score } = await verifyProduct(p, country);
-        const base = p.unified_score ?? 0;
-        return {
-          ...p,
-          market_evidence,
-          realism_score,
-          unified_score: Math.round(base * 0.8 + realism_score * 0.2),
-        };
-      } catch {
-        return p;
-      }
+    const verified = await mapWithConcurrency(finalProducts, plan.verifyConcurrency, async (p) => {
+      const outcome = await withDeadline(
+        verifyProduct(p, country),
+        plan.verifyPerProductMs,
+        "verify",
+      ).catch(() => null);
+      if (!outcome) return p;
+      const { market_evidence, realism_score } = outcome;
+      const base = p.unified_score ?? 0;
+      return {
+        ...p,
+        market_evidence,
+        realism_score,
+        unified_score: Math.round(base * 0.8 + realism_score * 0.2),
+      };
     });
     // Gerçek piyasa verisiyle örtüşen ürünler önce gelir.
     finalProducts = verified.sort(
