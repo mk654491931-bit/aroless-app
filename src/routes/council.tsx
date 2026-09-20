@@ -2,7 +2,7 @@ import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -107,6 +107,7 @@ function CouncilPage() {
   const [stage, setStage] = useState(-1);
   const [report, setReport] = useState<CouncilReport | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
   const runFn = useServerFn(runCouncilAnalysis);
   const pollFn = useServerFn(pollCouncilAnalysis);
 
@@ -144,10 +145,15 @@ function CouncilPage() {
     onSuccess: (data) => {
       setStage(-1);
       setReport(data);
+      // Konsey bir jeton harcar (önbellek isabetinde harcamaz): rozet hemen
+      // günsellenmeli, yoksa kullanıcı "jeton eksilmiyor" görür.
+      if (!data.cache_hit) qc.invalidateQueries({ queryKey: ["profile"] });
       if (data.cache_hit) toast.success("24 saatlik önbellekten getirildi — kredi harcanmadı.");
     },
     onError: (e: Error) => {
       setStage(-1);
+      // Başarısız koşuda kredi iade edilir (sunucu tarafı `withCreditRefund`).
+      qc.invalidateQueries({ queryKey: ["profile"] });
       toast.error(e.message);
     },
   });

@@ -8,6 +8,7 @@ import { ArrowLeft, Sparkles, Loader2, BellRing, Coins } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
+import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
 import { ReferralPanel } from "@/components/referral-panel";
@@ -49,9 +50,13 @@ function SettingsPage() {
   }, [user, loading, nav]);
 
   const profQ = useQuery({
-    queryKey: ["profile-full", user?.id],
+    // Jetonlar için TEK anahtar: üst bardaki rozetle aynı önbelleği paylaşır,
+    // aksi halde ayarlar sayfası eski bir sayı gösterebiliyordu.
+    queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
     enabled: !!user,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
   const [notifications, setNotifications] = useState<boolean>(true);
   const [currency, setCurrency] = useState("USD");
@@ -67,7 +72,7 @@ function SettingsPage() {
     mutationFn: (v: { language?: string; currency?: string; notifications_enabled?: boolean }) =>
       updateFn({ data: v }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["profile-full"] });
+      qc.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -202,7 +207,10 @@ function SettingsPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <Info label="Email" value={profQ.data?.email ?? "—"} />
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
-            <Info label={t("credits")} value={String(profQ.data?.credits ?? 0)} />
+            <Info
+              label={t("credits")}
+              value={`${creditBalances(profQ.data).total} (${creditBreakdownLabel(creditBalances(profQ.data))})`}
+            />
           </div>
           <Link
             to="/pricing"

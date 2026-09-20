@@ -42,6 +42,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
+import { creditBalances } from "@/lib/credits";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 export const Route = createFileRoute("/dashboard")({
@@ -159,8 +160,11 @@ function DashboardPage() {
   // ---- derived datasets (all memoized — zero recompute on unrelated renders) ----
   const { credits, spent, tier, email, memberSince } = useMemo(
     () => ({
-      credits: profile?.credits ?? 0,
-      spent: profile?.credits_spent ?? 0,
+      // Harcanabilir jeton = ürün bulucu jetonu + genel jetonlar (tek kaynak).
+      // Eskiden yalnızca `credits` gösteriliyordu ve ürün bulucu ÖNCE
+      // finder_credits'i harcadığı için paneldeki sayı hiç değişmiyordu.
+      credits: creditBalances(profile).total,
+      spent: creditBalances(profile).spent,
       tier: profile?.subscription_tier ?? "Free",
       email: profile?.email ?? null,
       memberSince: profile?.created_at

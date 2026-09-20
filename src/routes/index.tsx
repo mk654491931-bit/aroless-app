@@ -69,6 +69,7 @@ import { LayoutDashboard, Settings as SettingsIcon } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { LockedPanel } from "@/components/upgrade-gate";
 import { CreditCost } from "@/components/credit-cost";
+import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
 import { AdvancedFilters, DEFAULT_FILTERS, applyFilters, type FinderFilters } from "@/components/advanced-filters";
 import { RejectedPanel, type RejectedCandidate } from "@/components/winner-score-panel";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/countries";
@@ -260,7 +261,10 @@ function Dashboard() {
     queryKey: ["profile", user?.id],
     queryFn: () => getProfileFn(),
     enabled: !!user,
-    staleTime: 2 * 60_000,
+    // Jeton rozeti: harcama işçide (arka planda) olabildiği için bayat sayı
+    // göstermemeliyiz — eskiden 2 dakika eski değer görünüyordu.
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
   });
   const favsQ = useQuery({
     queryKey: ["favorites", user?.id],
@@ -276,6 +280,13 @@ function Dashboard() {
     staleTime: 10 * 60_000,
   });
   const isAdmin = !!adminQ.data?.isAdmin;
+  /**
+   * Harcanabilir jeton = finder_credits + credits (tek kaynak: `creditBalances`).
+   * Eskiden yalnızca `credits` okunuyordu; ürün bulucu ise ÖNCE finder_credits'i
+   * harcadığı için ücretsiz kullanıcının rozeti hiç eksilmiyor gibi görünüyor,
+   * hatta arama "kredin bitti" diye engelleniyordu.
+   */
+  const balances = creditBalances(profileQ.data as CreditProfile | undefined);
 
   const togglePlatform = useCallback((p: Platform) => {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -286,7 +297,7 @@ function Dashboard() {
     effectiveCountry,
     engine,
     t,
-    profileCredits: profileQ.data?.credits,
+    profileCredits: balances.total,
     profileIsSuccess: profileQ.isSuccess,
     niche,
     category,
@@ -363,7 +374,8 @@ function Dashboard() {
   }
   if (!user) return <MarketingLanding />;
 
-  const credits = profileQ.data?.credits ?? 0;
+  const credits = balances.total;
+  const creditBreakdown = creditBreakdownLabel(balances);
   const tier = profileQ.data?.subscription_tier ?? "Free";
   const isPaidTier = ["starter", "pro", "business", "enterprise"].includes(String(tier).toLowerCase());
   const locked = !isAdmin && !isPaidTier;
@@ -409,7 +421,10 @@ function Dashboard() {
                 {engineLabel(engine).label}
               </span>
               <FxBadge />
-              <div className="morph-pill heartbeat hidden md:flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5">
+              <div
+                className="morph-pill heartbeat hidden md:flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5"
+                title={`Harcanabilir jeton: ${balances.total} — ${creditBreakdownLabel(balances)}`}
+              >
                 <Coins size={14} className="morph-icon text-[oklch(0.85_0.18_90)]" />
                 <span className="text-sm font-semibold">{credits}</span>
                 <span className="text-xs text-muted-foreground">{t("credits")}</span>
@@ -876,7 +891,10 @@ function Dashboard() {
                     <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">
                         <CreditCost amount={1} />
-                        Bu arama 1 kredi harcar · bakiyeniz <span className="font-semibold text-foreground">{credits}</span>
+                        Bu arama 1 kredi harcar · bakiyeniz <span className="font-semibold text-foreground">{credits}</span>{" "}
+                        <span className="text-[11px] text-muted-foreground/70">
+                          ({creditBreakdown})
+                        </span>
                       </p>
                       <button
                         type="submit"

@@ -16,6 +16,7 @@ import { callGemini, callLovableAI, extractJson, withDeadline } from "@/lib/ai.s
 import { normalizeProduct } from "@/lib/consistency";
 import type { CouncilReport } from "@/lib/council.server";
 import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
+import type { CreditPool as ChargePool } from "@/lib/credits";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
@@ -161,8 +162,25 @@ export async function runProductDiscovery(
   ctx: DiscoveryContext,
 ): Promise<DiscoveryResult> {
   let remaining: number = ctx.creditsRemaining ?? 0;
+  /**
+   * Düşmenin hangi havuzdan yapıldığı ve düşmeden önceki harcama sayacı.
+   * İade AYNI havuza ve aynı muhasebeye dönmelidir: eskiden iade her zaman
+   * `credits`'e yazılıyordu, bu yüzden ücretsiz kullanıcının hoş geldin jetonu
+   * harcanıp yerine genel jeton konuyordu (iki havuz birbirine karışıyordu).
+   */
+  let chargedPool: ChargePool = "credits";
+  let creditsSpentBefore = 0;
 
   if (ctx.deductCredit) {
+    const { creditBalances, chargePoolFor } = await import("@/lib/credits");
+    const { data: before } = await ctx.supabase
+      .from("profiles")
+      .select("finder_credits, credits, credits_spent")
+      .eq("id", ctx.userId)
+      .maybeSingle();
+    chargedPool = chargePoolFor(before);
+    creditsSpentBefore = creditBalances(before).spent;
+
     const { data: deducted, error: deductErr } = await ctx.supabase.rpc(
       "deduct_product_finder_credit",
     );
@@ -433,11 +451,17 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
 } ] }`;
 
   const refund = async () => {
+    // Kredi hiç düşülmediyse iade de yoktur: aksi halde bakiye haksız yere
+    // bir jeton artardı.
+    if (!ctx.deductCredit) return;
     try {
-      await ctx.supabase
-        .from("profiles")
-        .update({ credits: remaining + 1 })
-        .eq("id", ctx.userId);
+      // İade, DÜŞÜLEN havuzun düşme sonrası değerini bir geri alır ve harcama
+      // sayacını eski hâline döndürür (mantıksal olarak o harcama hiç olmadı).
+      const patch =
+        chargedPool === "finder_credits"
+          ? { finder_credits: remaining + 1, credits_spent: Math.max(0, creditsSpentBefore) }
+          : { credits: remaining + 1, credits_spent: Math.max(0, creditsSpentBefore) };
+      await ctx.supabase.from("profiles").update(patch).eq("id", ctx.userId);
     } catch {
       /* kredi iadesi başarısız olsa da akış bozulmaz */
     }

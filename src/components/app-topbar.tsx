@@ -15,6 +15,7 @@ import { SettingsCluster } from "@/components/settings-cluster";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
+import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
 import { supabase } from "@/integrations/supabase/client";
 
 const TITLES: Record<string, string> = {
@@ -50,11 +51,24 @@ export function AppTopbar() {
     queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
     enabled: !!user,
-    staleTime: 60_000,
+    // Jeton rozeti her zaman taze olmalı: harcama işçide/başka sekmede olabilir.
+    staleTime: 15_000,
     gcTime: 300_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
-  const credits = useMemo(() => (profileQ.data as { credits?: number } | undefined)?.credits ?? 0, [profileQ.data]);
+  /**
+   * Harcanabilir jeton = finder_credits + credits.
+   *
+   * Eskiden yalnızca `credits` okunuyordu; ürün bulucu ise ÖNCE
+   * `finder_credits`'i harcadığı için ücretsiz kullanıcının rozeti hiç
+   * eksilmiyordu (hatta 0 görünüp aramayı engelliyordu).
+   */
+  const balances = useMemo(
+    () => creditBalances(profileQ.data as CreditProfile | undefined),
+    [profileQ.data],
+  );
+  const credits = balances.total;
+  const breakdown = creditBreakdownLabel(balances);
   const publicId = useMemo(() => (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null, [profileQ.data]);
   const title =
     TITLES[pathname] ??
@@ -99,7 +113,7 @@ export function AppTopbar() {
               <button
                 type="button"
                 className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs transition hover:bg-white/10 sm:inline-flex"
-                title={`Kalan Finder kredisi: ${credits} / Aylık kota: ${quota.credits} — detay için tıkla`}
+                title={`Harcanabilir jeton: ${credits} (${breakdown}) / Aylık kota: ${quota.credits} — detay için tıkla`}
               >
                 <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
                 <span className="font-semibold">{credits}</span>
@@ -114,6 +128,20 @@ export function AppTopbar() {
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">{tier}{isAdmin ? " · admin 250" : ""}</span>
                 </div>
                 <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                      <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Harcanabilir jeton
+                    </span>
+                    <span className="font-mono text-xs font-semibold">{balances.total}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-5">
+                    <span className="text-[11px] text-white/50">Ürün bulucu jetonu</span>
+                    <span className="font-mono text-[11px] text-white/70">{balances.finder}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-5">
+                    <span className="text-[11px] text-white/50">Genel jetonlar</span>
+                    <span className="font-mono text-[11px] text-white/70">{balances.general}</span>
+                  </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Finder</span>
                     <span className="font-mono text-xs font-semibold">{quota.credits}<span className="font-normal text-white/40"> /ay</span></span>
@@ -141,7 +169,11 @@ export function AppTopbar() {
           {/* Mobil için de aynı tetik: sm altında ikon-only */}
           <Popover>
             <PopoverTrigger asChild>
-              <button type="button" className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden" title={`Finder ${credits}/${quota.credits} — detay için tıkla`}>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden"
+                title={`Jeton ${credits} (${breakdown}) — detay için tıkla`}
+              >
                 <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {credits}/{quota.credits}
               </button>
             </PopoverTrigger>
@@ -149,7 +181,23 @@ export function AppTopbar() {
               <div className="space-y-3 p-4">
                 <p className="text-xs font-semibold tracking-wide text-white/90">Kullanım Hakkın · {tier}</p>
                 <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between"><span className="text-white/60">Finder</span><span className="font-mono font-semibold">{quota.credits} /ay</span></div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Harcanabilir jeton</span>
+                    <span className="font-mono font-semibold">{balances.total}</span>
+                  </div>
+                  <div className="flex justify-between pl-3">
+                    <span className="text-white/45">Ürün bulucu</span>
+                    <span className="font-mono text-white/70">{balances.finder}</span>
+                  </div>
+                  <div className="flex justify-between pl-3">
+                    <span className="text-white/45">Genel</span>
+                    <span className="font-mono text-white/70">{balances.general}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Finder kotası</span>
+                    <span className="font-mono font-semibold">{quota.credits} /ay</span>
+                  </div>
+
                   <div className="flex justify-between"><span className="text-white/60">AI Araç</span><span className="font-mono font-semibold">{quota.toolRuns} /ay</span></div>
                   <div className="flex justify-between"><span className="text-white/60">Konsey</span><span className="font-mono font-semibold">{quota.councilRuns} /ay</span></div>
                   <div className="flex justify-between"><span className="text-white/60">Radar</span><span className="font-mono font-semibold">{quota.radarScans} /ay</span></div>
