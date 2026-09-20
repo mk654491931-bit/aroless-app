@@ -17,6 +17,7 @@ import {
   studioBudgetMs,
   type CreativeKit,
 } from "./creative-studio.server";
+import { extractJson } from "./ai.server";
 
 const input = {
   product: "Taşınabilir Boyun Fanı",
@@ -147,6 +148,23 @@ describe("normalizeCreativeKit", () => {
     expect(normalizeCreativeKit({}).hashtags).toEqual([]);
   });
 
+  it("düz METİN dizisi gelen bölümleri de doldurur (şema tutmayan cevap boşa gitmez)", () => {
+    // Modeller bazen `"hooks": ["Ter mi döküyorsun?"]` gibi düz liste döndürür;
+    // eskiden bunlar tamamen atılıyor ve bölüm boş görünüyordu.
+    const kit = normalizeCreativeKit({
+      hooks: ["Ter mi döküyorsun?", "3 saniyede takılıyor"],
+      ad_copies: ["Sıcak günlerde serin kal"],
+      image_prompts: ["studio shot of a neck fan"],
+      ab_tests: ["Acı noktası hook'u daha iyi çalışır"],
+      ugc_script: { scenes: ["0-3 terleyen kadın"] },
+    });
+    expect(kit.hooks.map((h) => h.hook)).toEqual(["Ter mi döküyorsun?", "3 saniyede takılıyor"]);
+    expect(kit.ad_copies[0].primary).toBe("Sıcak günlerde serin kal");
+    expect(kit.image_prompts[0].prompt).toContain("neck fan");
+    expect(kit.ab_tests[0].hypothesis).toContain("hook");
+    expect(kit.ugc_script.scenes[0].visual).toBe("0-3 terleyen kadın");
+  });
+
   it("sahne süresini makul aralığa kırar", () => {
     expect(
       normalizeCreativeKit({ ugc_script: { duration_seconds: 900 } }).ugc_script.duration_seconds,
@@ -217,6 +235,23 @@ describe("creativeKitCoverage", () => {
   it("boş paket hiçbir bölümü dolu saymaz", () => {
     expect(creativeKitCoverage(emptyCreativeKit()).filled).toBe(0);
   });
+
+  it("düz metin listesi gelen paket 'eksik' sayılmaz (kapsam boşa düşmez)", () => {
+    const kit = normalizeCreativeKit({
+      positioning: "Sessiz boyun fanı",
+      audience: "Sıcakta çalışan kadınlar",
+      hooks: ["h1", "h2", "h3"],
+      ad_copies: ["a1", "a2"],
+      image_prompts: ["p1", "p2"],
+      hashtags: ["a", "b", "c", "d", "e", "f"],
+      ab_tests: ["t1", "t2"],
+      ugc_script: { scenes: ["s1", "s2", "s3"] },
+      email_sms: { body: "Merhaba" },
+    });
+    const cov = creativeKitCoverage(kit);
+    expect(cov.missing).toEqual([]);
+    expect(cov.percent).toBe(100);
+  });
 });
 
 describe("creativeKitHasContent", () => {
@@ -255,6 +290,25 @@ describe("studioBudgetMs", () => {
   it("asla 25 sn'nin altına düşmez (kısa limitlerde bile tur başlatılabilir)", () => {
     expect(studioBudgetMs(10)).toBe(25_000);
     expect(studioBudgetMs(0)).toBe(25_000);
+  });
+});
+
+describe("gerçek üretim yolu (model cevabı → paket)", () => {
+  it("kesilmiş model cevabı BOŞ ekran üretmez: üretilen kısım gösterilir, eksikler adıyla bildirilir", () => {
+    // Üretimdeki tipik hata: model maxOutputTokens'ta kesiliyor.
+    const truncated =
+      '{"positioning":"Sessiz boyun fanı","audience":"Sıcakta çalışan kadınlar","hooks":[{"angle":"problem","hook":"Ter mi döküyorsun?","why":"acı noktası"},{';
+    const kit = normalizeCreativeKit(extractJson<unknown>(truncated, {}));
+
+    // Eskiden bu durumda arayüz tamamen boştu; şimdi içerik görünür.
+    expect(creativeKitHasContent(kit)).toBe(true);
+    expect(kit.hooks[0].hook).toBe("Ter mi döküyorsun?");
+    expect(kit.positioning).toBe("Sessiz boyun fanı");
+    // Kalan bölümler adıyla bildirilir ve onarım turu tam bunları ister.
+    const cov = creativeKitCoverage(kit);
+    expect(cov.complete).toBe(false);
+    expect(cov.missing).toContain("UGC senaryo");
+    expect(creativeRepairPrompt(input, kit, cov.missing)).toContain("UGC senaryo");
   });
 });
 

@@ -163,10 +163,26 @@ function asText(v: unknown, max: number): string {
   return "";
 }
 
-function asObjects(v: unknown): Record<string, unknown>[] {
-  return Array.isArray(v)
-    ? v.filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
-    : [];
+/**
+ * Dizi elemanlarını kayda çevirir; düz METİN gelen elemanlar da kabul edilir.
+ *
+ * Neden: modeller bazen şemayı tam tutmayıp `"hooks": ["Ter mi döküyorsun?"]`
+ * gibi düz metin listesi döndürüyor. Eskiden bunlar tamamen atılıyordu ve bölüm
+ * "boş" görünüyordu — oysa içerik üretilmişti. Artık metin elemanı, ilgili
+ * alanın (ör. hook) değeri sayılır.
+ */
+function asRecords(v: unknown, textKey: string): Record<string, unknown>[] {
+  if (!Array.isArray(v)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const item of v) {
+    if (typeof item === "string" || typeof item === "number") {
+      const text = asText(item, 900);
+      if (text) out.push({ [textKey]: text });
+      continue;
+    }
+    if (item && typeof item === "object") out.push(item as Record<string, unknown>);
+  }
+  return out;
 }
 
 function asStrings(v: unknown, limit: number, max = 60): string[] {
@@ -219,7 +235,7 @@ export function normalizeCreativeKit(raw: unknown): CreativeKit {
   ) as Record<string, unknown>;
 
   const hooks = dedupeBy(
-    asObjects(p["hooks"])
+    asRecords(p["hooks"], "hook")
       .map((h) => ({
         angle: asText(h["angle"], 60) || "Açı",
         hook: asText(h["hook"], 200),
@@ -230,7 +246,7 @@ export function normalizeCreativeKit(raw: unknown): CreativeKit {
   ).slice(0, 6);
 
   const scenes = dedupeBy(
-    asObjects(ugc["scenes"])
+    asRecords(ugc["scenes"], "visual")
       .map((s) => ({
         second: asText(s["second"], 20),
         visual: asText(s["visual"], 400),
@@ -242,7 +258,7 @@ export function normalizeCreativeKit(raw: unknown): CreativeKit {
   ).slice(0, 8);
 
   const adCopies = dedupeBy(
-    asObjects(p["ad_copies"])
+    asRecords(p["ad_copies"], "primary")
       .map((a) => ({
         platform: asText(a["platform"], 40) || "Meta",
         primary: asText(a["primary"], 900),
@@ -255,7 +271,7 @@ export function normalizeCreativeKit(raw: unknown): CreativeKit {
   ).slice(0, 4);
 
   const imagePrompts = dedupeBy(
-    asObjects(p["image_prompts"])
+    asRecords(p["image_prompts"], "prompt")
       .map((i) => ({ label: asText(i["label"], 60) || "Görsel", prompt: asText(i["prompt"], 900) }))
       .filter((i) => i.prompt.length > 0),
     (i) => `${i.label}${i.prompt}`,
@@ -269,7 +285,7 @@ export function normalizeCreativeKit(raw: unknown): CreativeKit {
   ).slice(0, 15);
 
   const abTests = dedupeBy(
-    asObjects(p["ab_tests"])
+    asRecords(p["ab_tests"], "hypothesis")
       .map((t) => ({
         hypothesis: asText(t["hypothesis"], 300),
         variant_a: asText(t["variant_a"], 300),

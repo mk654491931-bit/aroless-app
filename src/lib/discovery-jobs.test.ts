@@ -376,6 +376,32 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
   it("280 sn'de daha çok zeminli açı koşar (paralel olduğu için ek duvar saati yok)", () => {
     expect(discoveryStagePlan(DISCOVERY_MAX_BUDGET_MS).angleCount).toBe(8);
   });
+
+  it("280 sn'nin gerçek aşama sayıları", () => {
+    const plan = discoveryStagePlan(280_000);
+    // Bu sayılar hat kalitesinin can alıcı yeridir: değişirse kalite adımları
+    // sessizce kısalmış demektir, bu yüzden açıkça sabitlenir.
+    expect(plan.usableMs).toBe(270_000);
+    expect(plan.prepMs).toBe(40_000);
+    expect(plan.generationMs).toBe(64_800);
+    expect(plan.judgePerProductMs).toBe(13_500);
+    expect(plan.verifyReserveMs).toBe(16_200);
+    expect(plan.councilReserveMs).toBe(81_000);
+    // Erken aşamalar + konsey rezervi kullanılabilir sürenin içinde kalır.
+    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(185_800);
+  });
+
+  it("280 sn'lik gerçekçi zaman çizelgesinde konsey karnesine yer KALIR", () => {
+    const plan = discoveryStagePlan(280_000);
+    // 6 adaylık tören: hazırlık + zeminli tur + hakem turu + canlı doğrulama
+    // düşüldükten sonra konseye kalan süre en az bir karneye yetmeli.
+    const judgeNeed = batchReserveMs(plan.judgePerProductMs, 6, plan.judgeConcurrency);
+    const leftAtCouncil =
+      plan.usableMs - plan.prepMs - plan.generationMs - judgeNeed - plan.verifyReserveMs;
+    expect(judgeNeed).toBe(40_500);
+    expect(leftAtCouncil).toBe(108_500);
+    expect(councilEnrichLimit(leftAtCouncil, 8)).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("batchReserveMs (ürün sayısına göre aşama süresi)", () => {
