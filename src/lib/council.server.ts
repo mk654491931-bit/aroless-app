@@ -17,7 +17,14 @@
 // Rate-limit koruması: staggered execution (120-200 ms), otomatik fallback,
 // ve 24 saatlik smart cache.
 // ============================================================================
-import { callGemini, callGroq, callLovableAI, callPremiumAI, extractJson } from "./ai.server";
+import {
+  callAiMesh,
+  callGemini,
+  callGroq,
+  callLovableAI,
+  callPremiumAI,
+  extractJson,
+} from "./ai.server";
 import { callOpenRouter } from "./tools-ai.server";
 import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
@@ -25,8 +32,11 @@ import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipel
 import { createAgentBus } from "./agent-bus.server";
 import {
   canAffordCall,
+  callTimeoutMs,
+  COUNCIL_MESH_ENGINE,
   CouncilBudgetError,
   defaultCouncilBudgetMs,
+  needsMeshFallback,
   planCouncilBudget,
   stageFits,
   withStageDeadline,
@@ -147,8 +157,10 @@ async function withFallback(runners: Runner[], prompt: string | undefined, ctx: 
     prompt && !runners.some((r) => r.engine === "Lovable AI Gateway")
       ? [...runners, { engine: "Lovable AI Gateway", run: () => callLovableAI(prompt, 0.4) }]
       : runners;
+  let attempted = 0;
   for (const r of chain.slice(0, ctx.budget.maxAttempts)) {
     if (!canAffordCall(ctx.budget, ctx.stage)) break;
+    attempted += 1;
     const outcome = await withStageDeadline(r.run(), ctx.budget, ctx.stage);
     if (outcome.kind === "value") {
       const parsed = extractJson<Record<string, unknown>>(outcome.value, {});
@@ -157,6 +169,32 @@ async function withFallback(runners: Runner[], prompt: string | undefined, ctx: 
       await sleep(120); // 429 / timeout / süre yetmedi → anında yedek modele geç
     }
   }
+
+  // Zincirin deneme hakkı bitti ama süre var: tek sağlayıcıya bağlı kalmadan
+  // 22 slotluk anahtar havuzunu dene (Gemini → Groq → Cerebras → SambaNova →
+  // HF → OpenRouter). Böylece o an hangi anahtar müsaitse karne ondan gelir;
+  // iki sağlayıcı kotaya takıldı diye ekip "unavailable" olmaz.
+  if (
+    prompt &&
+    needsMeshFallback({
+      attempted,
+      maxAttempts: ctx.budget.maxAttempts,
+      timeLeftMs: callTimeoutMs(ctx.budget, ctx.stage),
+    })
+  ) {
+    const outcome = await withStageDeadline(
+      callAiMesh(prompt, { temperature: 0.4, grounded: false }),
+      ctx.budget,
+      ctx.stage,
+    );
+    if (outcome.kind === "value") {
+      const parsed = extractJson<Record<string, unknown>>(outcome.value, {});
+      if (parsed && Object.keys(parsed).length) {
+        return { engine: COUNCIL_MESH_ENGINE, raw: parsed };
+      }
+    }
+  }
+
   return { engine: "unavailable", raw: {} as Record<string, unknown> };
 }
 

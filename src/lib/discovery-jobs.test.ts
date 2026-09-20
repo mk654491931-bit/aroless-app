@@ -17,6 +17,7 @@ import {
   discoveryStagePlan,
   clientWaitMs,
   discoveryDispatchPlan,
+  discoveryFallbackDecision,
   functionMaxDurationSeconds,
   jobPollingPlan,
   longJobPlan,
@@ -556,5 +557,38 @@ describe("batchReserveMs (ürün sayısına göre aşama süresi)", () => {
 
   it("boş listede sıfır döner (aşama hiç başlamaz)", () => {
     expect(batchReserveMs(10_000, 0, 2)).toBe(0);
+  });
+});
+
+/**
+ * Arka plan yolu kurulamadığında Find Winners hata döndürmemeli: Vercel Hobby
+ * 300 sn verir, hat 260 sn'de biter ve dönüş payına 20 sn kalır — yani istek
+ * içinde koşmak platform duvarının altında kalır.
+ */
+describe("arka plan yolu düşerse ürün bulucu istek içinde koşar", () => {
+  it("yol kurulduysa arka plan tercih edilir", () => {
+    expect(discoveryFallbackDecision({ backgroundStarted: true, platformFits: false })).toBe(
+      "background",
+    );
+  });
+
+  it("yol düştü ama platform limiti yetiyorsa istek içinde koşar (hata değil)", () => {
+    expect(discoveryFallbackDecision({ backgroundStarted: false, platformFits: true })).toBe(
+      "inline",
+    );
+  });
+
+  it("limit ağır hatta yetmiyorsa açık hata döner (kredi harcanmadan)", () => {
+    expect(discoveryFallbackDecision({ backgroundStarted: false, platformFits: false })).toBe(
+      "error",
+    );
+  });
+
+  it("Vercel Hobby (300 sn) istek içi koşmaya yeter, 60 sn yetmez", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "300");
+    expect(discoveryFallbackDecision({ backgroundStarted: false })).toBe("inline");
+    vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "60");
+    expect(discoveryFallbackDecision({ backgroundStarted: false })).toBe("error");
   });
 });

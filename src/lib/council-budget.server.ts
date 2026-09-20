@@ -130,6 +130,35 @@ export const COUNCIL_ENRICH_BUDGET_MS = 90_000;
 export const MIN_CALL_MS = 8_000;
 
 /**
+ * Zincir tükendiğinde denenen son yedeğin rapor etiketi.
+ *
+ * Konseyin 6 ekibi kendi model zincirini sırayla dener (Groq → Gemini →
+ * OpenRouter → HF). Profil `maxAttempts` ile zinciri kırptığı için (hızlı ve
+ * zenginleştirme profilinde 2 deneme) bu zincirin SONUNDAKİ havuz motoru hiç
+ * koşmuyordu: iki sağlayıcı da o anda kotadaysa ekip `unavailable` dönüyor ve
+ * karne boş kalıyordu. Aşağıdaki karar, zincir tükendiğinde ama süre varken
+ * 22 slotluk anahtar havuzunun (Gemini/Groq/Cerebras/SambaNova/HF/OpenRouter)
+ * denenmesini sağlar — yani hangi sağlayıcı müsaitse cevabı o verir.
+ */
+export const COUNCIL_MESH_ENGINE = "Anahtar havuzu (22 slot)";
+
+/**
+ * Zincirin deneme hakkı bittiğinde bir havuz turu daha denenmeli mi?
+ *
+ * `attempted < maxAttempts` ise zincirin kendi sıradaki motoru koşacaktır
+ * (bu tur gereksiz olurdu). Süre `MIN_CALL_MS`in altındaysa tur başlatılmaz:
+ * beklemek 504 üretir, eksik karne üretmez.
+ */
+export function needsMeshFallback(args: {
+  attempted: number;
+  maxAttempts: number;
+  timeLeftMs: number;
+}): boolean {
+  if (args.attempted < args.maxAttempts) return false;
+  return Number.isFinite(args.timeLeftMs) && args.timeLeftMs >= MIN_CALL_MS;
+}
+
+/**
  * İstek içinde konsey koşturmak için gereken en düşük bütçe.
  * Altındaysa hızlı profil bile anlamlı rapor üretemez: açık hata döneriz
  * (504 değil) ve kredi harcanmaz.

@@ -12,7 +12,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { callGemini, callLovableAI, extractJson, withDeadline } from "@/lib/ai.server";
+import { callAiMesh, callLovableAI, extractJson, withDeadline } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { CouncilReport } from "@/lib/council.server";
 import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
@@ -111,9 +111,9 @@ export type DiscoveryContext = {
   /** Kredi yukarıda düşüldüyse kalan bakiye. */
   creditsRemaining?: number;
   /**
-   * Hattın tamamlanması için ayrılan süre (ms). Vercel Hobby planında
-   * fonksiyon limiti 60 sn olduğu için işçi ~44 sn'lik bir bütçe gönderir ve
-   * hat pahalı/opsiyonel adımları atlayarak limitin içinde kalır.
+   * Hattın tamamlanması için ayrılan süre (ms). Vercel Hobby'de fonksiyon
+   * limiti 300 sn'dir; işçi `workerBudgetMs()` (260 sn) gönderir ve hat aşama
+   * aşama kendini keser, böylece platform duvarına hiç dayanmaz.
    */
   budgetMs?: number;
 };
@@ -191,7 +191,7 @@ export async function runProductDiscovery(
     remaining = (deducted as number) ?? 0;
   }
 
-  // ---- Süre bütçesi (Vercel Hobby: 60 sn fonksiyon limiti) ----
+  // ---- Süre bütçesi (Vercel Hobby: 300 sn fonksiyon limiti) ----
   // İşçi `budgetMs` gönderir. Bütçe kısa ise ("hızlı profil") opsiyonel ama
   // pahalı adımlar atlanır; sonuç şekli hiç değişmez, yalnızca derinlik azalır.
   const startedAt = Date.now();
@@ -211,7 +211,9 @@ export async function runProductDiscovery(
   /** Bu adıma başlamak sonraki adımların rezervini yiyor mu? */
   const fits = (needMs: number, reservedMs: number) => planTimeLeft() > needMs + reservedMs;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  // NOT: Tek bir Gemini anahtarı (`GEMINI_API_KEY`) artık hiçbir aşamada
+  // sabitlenmez; zeminli turlar `callAiMesh` ile önce havuzdan soğuk olmayan
+  // bir Gemini anahtarı, yetmezse 22 slotluk anahtar havuzunu kullanır.
 
   // ---- Hazırlık kanıtları: GitHub trendi + canlı piyasa verisi ----
   // İkisi de aynı prompt'a giren BAĞIMSIZ kanıtlardır; eskiden sırayla
@@ -498,8 +500,12 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
   const results = await Promise.allSettled(
     anglePrompts.map(async (pr, i) => {
       if (i > 0) await new Promise((r) => setTimeout(r, 700 * i));
+      // ZEMİNLİ tur artık TEK sağlayıcıya bağlı değil: `callAiMesh` önce canlı
+      // Google aramalı Gemini'yi dener, o yoksa/kotadaysa 22 slotluk anahtar
+      // havuzunu (`deadlineAt` penceresi içinde) süpür. Böylece Gemini kotası
+      // dolduğunda açı düşmez — kalite Vercel'de de korunur.
       return withDeadline(
-        callGemini(pr, undefined, 0.9, true, undefined, generationDeadlineAt),
+        callAiMesh(pr, { temperature: 0.9, grounded: true, deadlineAt: generationDeadlineAt }),
         generationDeadlineAt - Date.now(),
         `generation:angle${i}`,
       );
@@ -535,26 +541,23 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
   // hattın kalan süresini yiyemez.
   const retryDeadlineAt = Date.now() + plan.generationMs;
   if (products.length === 0) {
-    const retry = await callGemini(
-      anglePrompts[0],
-      apiKey,
-      0.7,
-      false,
-      undefined,
-      retryDeadlineAt,
-    ).catch(() => "");
+    // 1) Havuz turu: hangi motor/anahtar müsaitse (Gemini → Groq → Cerebras →
+    //    SambaNova → HF → OpenRouter) JSON modunda bir kez daha sorar.
+    const retry = await callAiMesh(anglePrompts[0], {
+      temperature: 0.7,
+      grounded: false,
+      deadlineAt: retryDeadlineAt,
+    }).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(retry, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
   if (products.length === 0) {
-    // Lovable AI gateway direct fallback
-    const retry2 = await callGemini(
-      anglePrompts[0],
-      undefined,
-      0.7,
-      false,
-      undefined,
-      retryDeadlineAt,
+    // 2) Ağ geçidi (Lovable AI) doğrudan denemesi — havuz süpürmesinden farklı
+    //    bir yol olduğu için ikinci bir şans tanır.
+    const retry2 = await withDeadline(
+      callLovableAI(anglePrompts[0], 0.7),
+      retryDeadlineAt - Date.now(),
+      "fallback:gateway",
     ).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(retry2, { products: [] });
     if (parsed.products?.length) products = parsed.products;
@@ -582,14 +585,11 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
-    const slim = await callGemini(
-      slimPrompt,
-      undefined,
-      0.8,
-      false,
-      undefined,
-      retryDeadlineAt,
-    ).catch(() => "");
+    const slim = await callAiMesh(slimPrompt, {
+      temperature: 0.8,
+      grounded: false,
+      deadlineAt: retryDeadlineAt,
+    }).catch(() => "");
     const parsed = extractJson<{ products?: WinningProduct[] }>(slim, { products: [] });
     if (parsed.products?.length) products = parsed.products;
   }
@@ -676,8 +676,16 @@ JSON shape:
   "health_score": number, "viral_probability_90d": number,
   "sellability_verdict": "Highly Sellable"|"Moderate Risk"|"Do Not Sell"
 } ] }`;
+      // Havuz turu: önce JSON modunda tüm anahtar havuzu (Gemini → Groq →
+      // Cerebras → SambaNova → HF → OpenRouter), sonra ağ geçidi. `salvageMs`
+      // penceresi hem turu hem `deadlineAt`i sınırlar; kurtarma zinciri 280 sn
+      // sözünü bozamaz.
       const meshText = await withDeadline(
-        callLovableAI(meshPrompt, 0.7),
+        callAiMesh(meshPrompt, {
+          temperature: 0.7,
+          grounded: false,
+          deadlineAt: Date.now() + salvageMs,
+        }).catch(() => callLovableAI(meshPrompt, 0.7)),
         salvageMs,
         "fallback:mesh",
       ).catch(() => "");

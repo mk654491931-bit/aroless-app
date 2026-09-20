@@ -10,11 +10,15 @@
  *     `completed` + `result` (veya `failed` + `error`) yazar ve sonucu Upstash
  *     Redis'te önbelleğe alır.
  *
- * SÜRE BÜTÇESİ (ÖNEMLİ): Vercel Hobby planında bir fonksiyon en fazla 60 sn
- * çalışabilir. Bu yüzden hem işçinin hat bütçesi hem de tetikleyicinin
- * bekleme süresi `VERCEL_FUNCTION_MAX_DURATION` (varsayılan 60) değerinden
- * türetilir; hiçbir istek platform sınırına dayanmaz, dolayısıyla 504 /
- * "zaman aşımı" hatası oluşmaz.
+ * SÜRE BÜTÇESİ (ÖNEMLİ): Vercel Hobby planında bir fonksiyon EN FAZLA 300 sn
+ * çalışabilir (eski "60 sn" kuralı geçersizdir). Bu yüzden hem işçinin hat
+ * bütçesi hem de tetikleyicinin bekleme süresi `VERCEL_FUNCTION_MAX_DURATION`
+ * (varsayılan 300) değerinden türetilir; hiçbir istek platform sınırına
+ * dayanmaz, dolayısıyla 504 / "zaman aşımı" hatası oluşmaz.
+ *
+ * Vercel'e göre optimize edilmiş sözleşme (Hobby 300 sn):
+ *   uçtan uca söz 280 sn = hat 260 sn (`DISCOVERY_MAX_BUDGET_MS`) + 20 sn dönüş
+ *   payı. 300 sn'lik duvarın 20 sn altında kalırız; hat kendi kendine biter.
  *
  * DAĞITIM PLANI üç yoldan biridir (`discoveryDispatchPlan`):
  *  - `qstash`     → QStash anahtarları var; iş QStash'e yayınlanır (mevcut yol).
@@ -645,6 +649,27 @@ export function longJobPlan(envMap: EnvMap = process.env): LongJobPlan {
 
   // Yerel geliştirme: istek sınırı yok, eski davranış korunur.
   return "inline";
+}
+
+/**
+ * Arka plan yolu kurulamadığında (QStash publish hatası, kuyruk yok, süreç içi
+ * kuyruk kapalı) ne yapacağımızın kararı.
+ *
+ * Vercel Hobby'de fonksiyon limiti 300 sn'dir ve hat 260 sn'de kendi kendine
+ * biter: yani arka plan yolu düşse bile ağır iş bu isteğin İÇİNDE koşabilir.
+ * Eskiden bu durumda kullanıcıya hata dönüyordu ("ürün bulucu çalışmıyor");
+ * artık limit yetiyorsa istek yolu (inline) tercih edilir — 504 değil, sonuç.
+ * Limit 120 sn'nin altına daraltılmışsa inline koşmak hattı ortasında keser,
+ * bu yüzden orada açık hata döneriz (kredi harcanmaz).
+ */
+export type DiscoveryFallbackDecision = "background" | "inline" | "error";
+
+export function discoveryFallbackDecision(args: {
+  backgroundStarted: boolean;
+  platformFits?: boolean;
+}): DiscoveryFallbackDecision {
+  if (args.backgroundStarted) return "background";
+  return (args.platformFits ?? inlineHeavyWorkFits()) ? "inline" : "error";
 }
 
 export function verifyWorkerRequest(request: Request): boolean {

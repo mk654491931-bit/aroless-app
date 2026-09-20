@@ -90,20 +90,32 @@ export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<
  */
 export async function callAiMesh(
   prompt: string,
-  opts: { temperature?: number; grounded?: boolean; models?: string[] } = {},
+  opts: {
+    temperature?: number;
+    grounded?: boolean;
+    models?: string[];
+    /** Çağıranın duvar saati sınırı (epoch ms) — havuz turu da buna uyar. */
+    deadlineAt?: number;
+  } = {},
 ): Promise<string> {
-  const { temperature = 0.5, grounded = true, models } = opts;
+  const { temperature = 0.5, grounded = true, models, deadlineAt } = opts;
   let lastErr: unknown = null;
   if (grounded) {
     try {
-      return await callGemini(prompt, undefined, temperature, true, models);
+      return await callGemini(prompt, undefined, temperature, true, models, deadlineAt);
     } catch (e) {
       lastErr = e;
     }
   }
   try {
     // Ağ geçidi varsa önce o, yoksa doğrudan tam havuz süpürmesi (JSON modu).
-    return await callLovableAI(prompt, temperature);
+    // Sınır verildiyse havuz turu da çağıranın penceresine bağlanır: yavaş bir
+    // sağlayıcı, sınırlı bütçeli bir hattın (ör. 280 sn'lik ürün bulucu) tamamını
+    // yiyemez.
+    const pool = callLovableAI(prompt, temperature);
+    return deadlineAt === undefined
+      ? await pool
+      : await withDeadline(pool, deadlineAt - Date.now(), "ai-mesh");
   } catch (e) {
     lastErr = e;
   }

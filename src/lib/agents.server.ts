@@ -8,7 +8,14 @@
 // Consensus rule: a product survives ONLY IF both agents APPROVE and the
 // average of their scores is >= 75.
 // ============================================================================
-import { callGemini, callGroq, callLovableAI, extractJson } from "./ai.server";
+import {
+  GEMINI_MODELS_LATEST,
+  callAiMesh,
+  callGemini,
+  callGroq,
+  callLovableAI,
+  extractJson,
+} from "./ai.server";
 import { CONSENSUS_MIN_AVG, type AgentVerdict, type ConsensusResult } from "./consensus-types";
 export { CONSENSUS_MIN_AVG };
 export type { AgentVerdict, ConsensusResult };
@@ -25,8 +32,12 @@ export type MarketScan = {
   market_note: string;
 };
 
-const FLASH = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
-const PRO = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-flash-latest"];
+// Model kimlikleri TEK kaynaktan (`GEMINI_MODELS_LATEST`) gelir. Burada ayrı bir
+// liste tutmak emekliye ayrılmış 1.5 kimliklerinin her anahtar denemesinde 404
+// üretmesine yol açıyordu: `geminiOnce` model listesini sırayla denediği için
+// ölü kimlikler 300 sn'lik bütçeden gerçek round-trip harcıyordu.
+const FLASH = GEMINI_MODELS_LATEST;
+const PRO = ["gemini-2.5-pro", ...GEMINI_MODELS_LATEST.slice(0, 2)];
 
 /**
  * Resilient AI call: Gemini → Lovable AI Gateway → Groq. Never deadlocks.
@@ -50,7 +61,11 @@ async function agentCall(
       try {
         return await callGroq(prompt, temperature);
       } catch {
-        throw new Error("All AI providers are temporarily unavailable.");
+        // Son şans: TEK sağlayıcıya bağlı kalmadan 22 slotluk anahtar havuzu
+        // (Gemini → Groq → Cerebras → SambaNova → HF → OpenRouter). Ajanlar
+        // kararlarını hep bir AI API'sinden alır; "sağlayıcı yok" diye sessizce
+        // boş dönmek yerine o an müsait olan anahtar cevabı verir.
+        return await callAiMesh(prompt, { temperature, grounded: false });
       }
     }
   }
@@ -207,9 +222,10 @@ Return ONLY JSON:
     const raw = extractJson<Partial<AgentVerdict>>(text, {});
     if (raw && (raw.score || raw.summary)) return toVerdict(raw, "No verification returned.");
   } catch {
-    /* Groq unavailable — try Lovable AI gateway */
+    /* Groq kotası doldu — hangi sağlayıcı müsaitse ondan sor (bağımsız denetçi
+       de tek bir sağlayıcıya bağlı kalmaz, 22 slotluk havuzu süpürür). */
     try {
-      const text = await callLovableAI(prompt, 0.3);
+      const text = await callAiMesh(prompt, { temperature: 0.3, grounded: false });
       const raw = extractJson<Partial<AgentVerdict>>(text, {});
       if (raw && (raw.score || raw.summary)) return toVerdict(raw, "No verification returned.");
     } catch {

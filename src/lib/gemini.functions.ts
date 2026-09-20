@@ -338,6 +338,15 @@ export const generateProducts = createServerFn({ method: "POST" })
       origin,
     });
     if (!started.ok) {
+      // Arka plan yolu kurulamadı (QStash publish hatası, worker adresi yok,
+      // kuyruk reddi). Vercel Hobby'de fonksiyon limiti 300 sn ve hat 260 sn'de
+      // kendi kendine bittiği için ağır işi HATA döndürmek yerine bu isteğin
+      // içinde koşarız: kullanıcı 503/"çalışmıyor" yerine sonucu görür.
+      const decision = jobs.discoveryFallbackDecision({ backgroundStarted: false });
+      console.error(
+        `[generateProducts] background dispatch failed (${started.error}) → ${decision}`,
+      );
+      if (decision === "inline") return await inline();
       throw new Error(`DISCOVERY_JOB_START_FAILED: ${started.error}`);
     }
 

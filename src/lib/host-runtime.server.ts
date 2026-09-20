@@ -6,7 +6,7 @@
  *
  * | Platform            | İsteği kim keser?             | Kalıcı süreç |
  * | ------------------- | ----------------------------- | ------------ |
- * | Vercel (Hobby)      | fonksiyon limiti (60 sn)      | hayır        |
+ * | Vercel (Hobby)      | fonksiyon limiti (300 sn)     | hayır        |
  * | Render Web Service  | proxy'de sert sınır           | **evet**     |
  * | Kalıcı Node / VPS   | yok (biz `REQUEST_BUDGET_MS`  | **evet**     |
  * |                     | ile sınırlarız)               |              |
@@ -188,9 +188,10 @@ export function runsOnPersistentHost(env: Env = process.env): boolean {
  * Bu sürecin kendi koyduğu istek başına süre bütçesi (saniye).
  *
  * Kalıcı serviste platform limiti yoktur; üst sınırı biz koyarız. Sunucusuz
- * ortamda `VERCEL_FUNCTION_MAX_DURATION` (varsayılan 60) geçerlidir ve kalıcı
- * serviste bu değişken **bilinçli olarak yok sayılır** — göç sonrası kalan eski
- * bir değişken 60 sn'lik zaman aşımını geri getirmemelidir.
+ * ortamda `VERCEL_FUNCTION_MAX_DURATION` (varsayılan 300,
+ * `VERCEL_DEFAULT_FUNCTION_SECONDS`) geçerlidir ve kalıcı serviste bu
+ * değişken **bilinçli olarak yok sayılır** — göç sonrası kalan eski bir
+ * değişken 60 sn'lik zaman aşımını geri getirmemelidir.
  */
 export function platformDurationSeconds(env: Env = process.env): number {
   const longLived = runsOnPersistentHost(env);

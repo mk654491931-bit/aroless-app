@@ -20,12 +20,15 @@ import {
   COUNCIL_RETURN_MARGIN_MS,
   COUNCIL_STAGE_ORDER,
   CouncilBudgetError,
+  MIN_CALL_MS,
   MIN_INLINE_COUNCIL_MS,
+  COUNCIL_MESH_ENGINE,
   canAffordCall,
   callTimeoutMs,
   councilDepthFor,
   defaultCouncilBudgetMs,
   laterReserveMs,
+  needsMeshFallback,
   planCouncilBudget,
   remainingMs,
   stageFits,
@@ -239,5 +242,45 @@ describe("defaultCouncilBudgetMs (platforma göre profil)", () => {
     vi.stubEnv("VERCEL", "1");
     vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "10");
     expect(defaultCouncilBudgetMs()).toBe(MIN_INLINE_COUNCIL_MS);
+  });
+});
+
+/**
+ * Konseyin 6 ekibi tek sağlayıcıya bağlı kalmamalı: zincirin deneme hakkı
+ * bittiğinde süre varsa 22 slotluk anahtar havuzu denenir. Bu blok o kararı
+ * (ve sınırlarını) saf olarak sabitler.
+ */
+describe("konsey zinciri → havuz yedeği (needsMeshFallback)", () => {
+  it("deneme hakkı dolmadıysa havuz turu açılmaz (zincirin kendi motoru koşacak)", () => {
+    expect(needsMeshFallback({ attempted: 1, maxAttempts: 2, timeLeftMs: 60_000 })).toBe(false);
+  });
+
+  it("denemeler bitti ve süre varsa havuz yedeği açılır", () => {
+    expect(needsMeshFallback({ attempted: 2, maxAttempts: 2, timeLeftMs: 60_000 })).toBe(true);
+    // Zenginleştirme profili: 2 deneme × 14 sn pencere, havuz turuna yer kalır.
+    expect(
+      needsMeshFallback({
+        attempted: COUNCIL_ENRICH_PROFILE.maxAttempts,
+        maxAttempts: COUNCIL_ENRICH_PROFILE.maxAttempts,
+        timeLeftMs: COUNCIL_ENRICH_PROFILE.reserves.teams,
+      }),
+    ).toBe(true);
+  });
+
+  it("süre bir çağrıya yetmiyorsa havuz turu da başlatılmaz (504 üretmez)", () => {
+    expect(needsMeshFallback({ attempted: 2, maxAttempts: 2, timeLeftMs: 3_000 })).toBe(false);
+    expect(needsMeshFallback({ attempted: 2, maxAttempts: 2, timeLeftMs: MIN_CALL_MS - 1 })).toBe(
+      false,
+    );
+    expect(needsMeshFallback({ attempted: 2, maxAttempts: 2, timeLeftMs: MIN_CALL_MS })).toBe(true);
+  });
+
+  it("anlamsız süre değerlerinde çökmez", () => {
+    expect(needsMeshFallback({ attempted: 2, maxAttempts: 2, timeLeftMs: Number.NaN })).toBe(false);
+  });
+
+  it("havuz motorunun rapor etiketi diğer motorlardan ayırt edilebilir", () => {
+    expect(COUNCIL_MESH_ENGINE).toContain("havuzu");
+    expect(COUNCIL_MESH_ENGINE).not.toBe("unavailable");
   });
 });
