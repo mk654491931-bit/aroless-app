@@ -461,6 +461,70 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
   });
 });
 
+describe("280 sn sözü — uçtan uca zaman çizelgesi simülasyonu", () => {
+  /**
+   * Hattı AŞAMA AŞAMA simüle eder (AI çağrısı yok, saf aritmetik): her aşama en
+   * kötü durumda penceresini tam kullanır ve karne turu bütçesini tam harcar.
+   * Amaç: hangi senaryoda olursa olsun hat sözünü (280 sn) aşmasın, karne de
+   * sığmadığında hiç başlamasın.
+   */
+  function simulate(products: number, stageMsOverride?: number) {
+    const budget = workerBudgetMs();
+    const plan = discoveryStagePlan(budget);
+    let t = 0;
+    if (stageMsOverride === undefined) {
+      t += plan.prepMs; // hazırlık (paralel: en yavaş kaynak kadar)
+      t += plan.generationMs; // zeminli açı turu (pencere sınırlı)
+      t += batchReserveMs(plan.judgePerProductMs, products, plan.judgeConcurrency);
+      t += 12_000 + plan.verifyReserveMs; // çapraz eşleşme + canlı doğrulama
+    } else {
+      t += stageMsOverride;
+    }
+    const deadline = budget;
+    let carnets = 0;
+    const failures = 0;
+    for (let i = 0; i < products; i++) {
+      const carnetMs = councilEnrichCallMs(deadline - t, plan.returnFloorMs);
+      const action = councilLoopDecision({ carnetMs, remaining: products - i, failures });
+      if (action !== "carnet") break;
+      t += carnetMs; // en kötü durum: karne bütçesini tamamen kullanır
+      carnets += 1;
+    }
+    return { t, carnets, plan, budget };
+  }
+
+  it("planlı aşamalarla: hattın sonu dönüş tabanını, kullanıcının gördüğü süre 280 sn'yi aşmaz", () => {
+    const { t, carnets, plan, budget } = simulate(6);
+    expect(carnets).toBeGreaterThanOrEqual(1); // en az bir ürün karne alır
+    expect(t).toBeLessThanOrEqual(budget - plan.returnFloorMs);
+    // Uçtan uca söz: hat + dönüş payı.
+    expect(t + DISCOVERY_RETURN_MARGIN_MS).toBeLessThanOrEqual(DISCOVERY_END_TO_END_MS);
+    // İstemci penceresi işi her zaman kapsar (erken pes etmez).
+    expect(jobPollingPlan().pollMaxMs).toBeGreaterThanOrEqual(t + DISCOVERY_RETURN_MARGIN_MS);
+  });
+
+  it("aşamalar hızlı bittiğinde artan süre karneye dönüşür (2 ürün karne alır)", () => {
+    const { carnets, t, budget, plan } = simulate(6, 60_000);
+    expect(carnets).toBe(2);
+    expect(t).toBeLessThanOrEqual(budget - plan.returnFloorMs);
+  });
+
+  it("süre yetersizse karne HİÇ başlatılmaz (yarım karne üretilmez, söz aşılmaz)", () => {
+    // Aşamalar 200 sn sürdü → kalan 60 sn, tam karne (62 sn) sığmaz.
+    const { carnets, t } = simulate(6, 200_000);
+    expect(carnets).toBe(0);
+    expect(t).toBe(200_000);
+  });
+
+  it("ürün sayısı artse bile hat sözü bozulmaz", () => {
+    for (const products of [1, 3, 6, 8]) {
+      const { t, plan, budget } = simulate(products);
+      expect(t).toBeLessThanOrEqual(budget - plan.returnFloorMs);
+      expect(t + DISCOVERY_RETURN_MARGIN_MS).toBeLessThanOrEqual(DISCOVERY_END_TO_END_MS);
+    }
+  });
+});
+
 describe("councilLoopDecision (karne döngüsünün durma koşulları)", () => {
   it("süre ve bütçe varsa karneye devam eder", () => {
     expect(councilLoopDecision({ carnetMs: 87_000, remaining: 4, failures: 0 })).toBe("carnet");
