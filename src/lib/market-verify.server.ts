@@ -52,6 +52,99 @@ export async function buildLiveEvidenceBlock(niche: string, country: string): Pr
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(n)));
 
+/**
+ * VİRAL KANIT DOĞRULAMASI — "URL biçiminde" olmak kanıt değildir.
+ *
+ * Model, var olmayan bir TikTok/YouTube adresini sorunsuz üretebilir; eskiden
+ * skor katmanı yalnızca `https://` ile başlamasına bakıp viral bonusu veriyordu
+ * (uydurma kanıt → hak etmediği puan). Artık adres AĞ ÜZERİNDEN açılır.
+ *
+ * Maliyet güvenliği: ürün başına en fazla 2 adres, adresler PARALEL yoklanır,
+ * adres başına 2 sn sert sınır, sonuç 10 dk bellek önbelleğinde ve önbellek
+ * boyutu sınırlı. Kaynak yanıt vermezse ceza YOK; yalnızca bonus verilmez
+ * (kanıt seviyesi dürüst kalır).
+ *
+ * Neden paralel ve neden kısa: çağıran taraf bu fonksiyonu `withDeadline`
+ * penceresi içinde bekliyor (`verifyPerProductMs` ≈ 7,5 sn). Seri yoklama bu
+ * pencereyi tek başına yiyip canlı doğrulamayı iptal ettirebilirdi; o zaman
+ * ürün TÜM kanıtını kaybederdi. Artık yoklama diğer kaynaklarla aynı anda koşar.
+ */
+const VIRAL_PROOF_TTL_MS = 10 * 60_000;
+const VIRAL_PROOF_TIMEOUT_MS = 2_000;
+const VIRAL_PROOF_MAX_URLS = 2;
+const VIRAL_PROOF_CACHE_MAX = 200;
+const viralProofCache = new Map<string, { ok: boolean; at: number }>();
+
+function cachedViralProof(url: string): boolean | undefined {
+  const hit = viralProofCache.get(url);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > VIRAL_PROOF_TTL_MS) {
+    viralProofCache.delete(url);
+    return undefined;
+  }
+  return hit.ok;
+}
+
+function rememberViralProof(url: string, ok: boolean): void {
+  if (viralProofCache.size >= VIRAL_PROOF_CACHE_MAX) {
+    const oldest = viralProofCache.keys().next().value;
+    if (oldest !== undefined) viralProofCache.delete(oldest);
+  }
+  viralProofCache.set(url, { ok, at: Date.now() });
+}
+
+/** Tek bir kanıt adresi gerçekten yanıt veriyor mu? (HEAD → GET yedeği) */
+async function probeUrl(url: string): Promise<boolean> {
+  if (!/^https?:\/\//i.test(url)) return false;
+  const headers = {
+    "user-agent": "Mozilla/5.0 (compatible; ArolessEvidenceBot/1.0; +https://aroless.tech)",
+    accept: "text/html,application/xhtml+xml",
+  };
+  const attempt = async (method: "HEAD" | "GET") => {
+    const res = await fetch(url, {
+      method,
+      headers: method === "GET" ? { ...headers, range: "bytes=0-1024" } : headers,
+      redirect: "follow",
+      signal: AbortSignal.timeout(VIRAL_PROOF_TIMEOUT_MS),
+    });
+    // 404/410 = içerik yok. 403/429 gibi bot engelleri VAR OLDUĞUNU gösterir.
+    return res.status < 400 || res.status === 403 || res.status === 429;
+  };
+  try {
+    return await attempt("HEAD");
+  } catch {
+    try {
+      return await attempt("GET");
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Ürünün viral kanıt adreslerini PARALEL doğrular.
+ * Dönen değer: en az bir adres gerçekten açıldıysa `true`.
+ */
+export async function verifyViralProof(
+  proof: Array<{ url?: string }> | undefined,
+): Promise<boolean> {
+  const urls = (proof ?? [])
+    .map((v) => (v?.url ?? "").trim())
+    .filter((u) => /^https?:\/\//i.test(u))
+    .slice(0, VIRAL_PROOF_MAX_URLS);
+  if (!urls.length) return false;
+  const results = await Promise.all(
+    urls.map(async (url) => {
+      const cached = cachedViralProof(url);
+      if (cached !== undefined) return cached;
+      const ok = await probeUrl(url);
+      rememberViralProof(url, ok);
+      return ok;
+    }),
+  );
+  return results.some(Boolean);
+}
+
 /** Verify one product against live sources and score how realistic it is. */
 export async function verifyProduct(
   p: VerifiableProduct,
@@ -60,10 +153,16 @@ export async function verifyProduct(
   const name = (p.name ?? "").trim();
   const sellingPrice = parseMoney(p.selling_price_usd);
 
-  const [trends, sourcing, sellers] = await Promise.all([
+  // Viral kanıt adresi GERÇEKTEN açılmalı; yalnızca "https://" biçiminde olmak
+  // yeterli değildir (model var olmayan bir adres üretebilir). Yoklama diğer
+  // kaynaklarla PARALEL koşar ki `withDeadline` penceresini tek başına yemesin.
+  const claimedViral = (p.viral_proof ?? []).some((v) => /^https?:\/\//i.test(v?.url ?? ""));
+
+  const [trends, sourcing, sellers, viralVerified] = await Promise.all([
     getGoogleTrends(name, country).catch(() => null),
     getSourcingEstimate(name, sellingPrice || 49).catch(() => null),
     scrapeMarketplaceSellers(name, country).catch(() => []),
+    claimedViral ? verifyViralProof(p.viral_proof) : Promise.resolve(false),
   ]);
 
   const marketPrice = median(sellers.map((s) => s.price_usd));
@@ -84,9 +183,11 @@ export async function verifyProduct(
   if (sellers.length >= 2) verified.push(`${sellers.length} canlı pazaryeri ilanı`);
   else unverified.push("Rakip fiyatları (canlı ilan bulunamadı)");
 
-  const hasViral = (p.viral_proof ?? []).some((v) => /^https?:\/\//i.test(v?.url ?? ""));
-  if (hasViral) verified.push("Viral içerik kanıtı (URL)");
-  else unverified.push("Viral kanıt doğrulanamadı");
+  // Viral kanıt sonucu yukarıdaki paralel turdan gelir.
+  if (viralVerified) verified.push("Viral içerik kanıtı (canlı URL doğrulandı)");
+  else if (claimedViral) unverified.push("Viral kanıt adresi açılamadı (doğrulanmadı)");
+  else unverified.push("Viral kanıt bulunamadı");
+  const hasViral = viralVerified;
 
   // ---- realism scoring -------------------------------------------------
   let score = 40;
@@ -132,6 +233,7 @@ export async function verifyProduct(
     sellers,
     market_price_usd: Math.round(marketPrice * 100) / 100,
     price_delta_pct: priceDelta,
+    viral_verified: viralVerified,
     verified_signals: verified,
     unverified_signals: unverified,
     checked_at: new Date().toISOString(),

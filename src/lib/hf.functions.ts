@@ -52,6 +52,64 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
 
     const { rankProfitable } = await import("@/lib/profitability");
 
+    /**
+     * CANLI VERİ KATMANI (HF motorları için).
+     *
+     * Hugging Face modelleri Google aramalı zeminli çağrı yapamaz; bu yüzden
+     * eskiden bu yol "canlı veri" olmadan, yalnızca model hafızasıyla sonuç
+     * döndürüyordu ve kartlar diğer motorlarla aynı görünüyordu (kanıtsız veri
+     * doğrulanmış gibi okunuyordu). Artık aynı gerçek kaynaklar burada da
+     * çalışır:
+     *   Google Trends talep eğrisi + AliExpress tedarik fiyatı + canlı
+     *   pazaryeri ilanları → gerçeklik puanı ve kanıt seviyesi.
+     *
+     * Süre güvenliği: yalnızca ilk 6 ürün, 2 eşzamanlılık, ürün başına 15 sn
+     * sert sınır. Doğrulanamayan ürün elenmez; kanıt seviyesi dürüst kalır.
+     */
+    const enrichWithLiveData = async (list: WinningProduct[]) => {
+      if (list.length === 0) return list;
+      const [
+        { normalizeProduct },
+        { verifyProduct },
+        { computeWinnerScore },
+        { mapWithConcurrency, withDeadline },
+      ] = await Promise.all([
+        import("@/lib/consistency"),
+        import("@/lib/market-verify.server"),
+        import("@/lib/winner-score"),
+        import("@/lib/ai.server"),
+      ]);
+      const country = (data.target_country || "GLOBAL").toUpperCase();
+      const normalized = list.map((p) =>
+        normalizeProduct(p, {
+          country: data.target_country,
+          category: data.category && data.category !== "Any" ? data.category : data.niche,
+        }),
+      );
+      const LIVE_LIMIT = 6;
+      const head = normalized.slice(0, LIVE_LIMIT);
+      const tail = normalized.slice(LIVE_LIMIT);
+      const verified = await mapWithConcurrency(head, 2, async (p) => {
+        const outcome = await withDeadline(verifyProduct(p, country), 15_000, "hf-verify").catch(
+          () => null,
+        );
+        if (!outcome) return p;
+        const { market_evidence, realism_score } = outcome;
+        return { ...p, market_evidence, realism_score };
+      });
+      return [...verified, ...tail]
+        .map((p) => {
+          const breakdown = computeWinnerScore(p);
+          return {
+            ...p,
+            winner_score: breakdown.winner_score,
+            score_breakdown: breakdown,
+            evidence_level: breakdown.evidence_level,
+          };
+        })
+        .sort((a, b) => (b.winner_score ?? 0) - (a.winner_score ?? 0));
+    };
+
     // Motor hata verirse düşülen kredi iade edilir.
     return withCreditRefund(context.userId, async () => {
       if (data.engine === "hybrid") {
@@ -60,12 +118,19 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
         if (lists.length === 0)
           throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
         const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
-        const products = rankProfitable(merged);
-        return { products, model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`, engines: lists.length };
+        const products = await enrichWithLiveData(rankProfitable(merged));
+        return {
+          products,
+          model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`,
+          engines: lists.length,
+          live: true,
+        };
       }
 
-      const products = rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]);
-      return { products, model: HF_MODELS[data.engine], engines: 1 };
+      const products = await enrichWithLiveData(
+        rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]),
+      );
+      return { products, model: HF_MODELS[data.engine], engines: 1, live: true };
     });
   });
 

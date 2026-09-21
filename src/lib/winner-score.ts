@@ -90,7 +90,15 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
   const trend = clamp(p.trend_score ?? 55);
   const momentum = ev?.trend_momentum_pct ?? 0;
   const momentumBoost = clamp(50 + momentum * 1.2, 0, 100);
-  const viral = (p.viral_proof ?? []).some((v) => /^https?:\/\//i.test(v?.url ?? ""));
+  /**
+   * Viral kanıt YALNIZCA doğrulandıysa sayılır.
+   *
+   * `market_evidence` alanı varsa canlı doğrulama katmanı çalışmıştır ve tek
+   * geçerli kaynak `viral_verified`dır: modelin ürettiği `https://` adresi var
+   * olmayabilir, bu yüzden adres biçimine bakmak uydurma kanıta puan verirdi.
+   * Canlı doğrulama çalışmadıysa (ürün pencereye girmedi) bonus verilmez.
+   */
+  const viral = ev ? ev.viral_verified === true : false;
   let demand = Math.round(trend * 0.55 + momentumBoost * 0.35 + (viral ? 100 : 45) * 0.1);
   demand = clamp(demand);
   const demandReason = [
@@ -98,7 +106,7 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
     ev?.trend_source === "google-trends"
       ? `Google Trends momentumu ${momentum > 0 ? "+" : ""}${momentum}%`
       : "trend verisi tahmini",
-    viral ? "canlı viral kanıt var" : "viral kanıt yok",
+    viral ? "viral kanıt canlı URL ile doğrulandı" : "doğrulanmış viral kanıt yok",
   ].join(" · ");
 
   // ---- 2. Rekabet / doygunluk --------------------------------------------
@@ -220,11 +228,16 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
         },
         {
           metric: "Viral kanıt",
-          value: viral ? `${(p.viral_proof ?? []).length} gönderi` : "bulunamadı",
-          source: viral ? "Sosyal sinyal taraması" : "—",
+          value: viral
+            ? `${(p.viral_proof ?? []).length} gönderi (URL doğrulandı)`
+            : (p.viral_proof ?? []).length > 0
+              ? "adres açılamadı"
+              : "bulunamadı",
+          source: viral ? "Canlı URL doğrulaması" : "—",
           weight: 0.1,
           verified: viral,
-          ...(viralUrl ? { url: viralUrl } : {}),
+          // Doğrulanmamış adresi kanıt olarak göstermeyiz.
+          ...(viral && viralUrl ? { url: viralUrl } : {}),
         },
       ],
     },

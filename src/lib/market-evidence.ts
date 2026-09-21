@@ -27,6 +27,16 @@ export type MarketEvidence = {
   market_price_usd: number;
   /** How far the AI's selling price sits from the real market median, %. */
   price_delta_pct: number;
+  /**
+   * Viral kanıt URL'leri GERÇEKTEN açıldı mı?
+   *
+   * Neden ayrı bir alan: model "https://..." biçiminde bir adres üretmekte
+   * serbesttir; adresin var olması onu kanıt yapmaz. Bu alan yalnızca URL ağ
+   * üzerinden yanıt verdiğinde true olur ve skor katmanı (bkz. `winner-score`)
+   * viral bonusunu buna bağlar. `undefined` = doğrulama hiç çalışmadı (ürün
+   * canlı doğrulama penceresine girmedi), ki bu durum bonus vermez.
+   */
+  viral_verified?: boolean;
   /** Signals actually verified against a live source. */
   verified_signals: string[];
   /** Signals that could not be verified and stay AI-estimated. */

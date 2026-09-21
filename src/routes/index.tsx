@@ -161,6 +161,8 @@ function Dashboard() {
 
   const [results, setResults] = useState<WinningProduct[]>([]);
   const [rejected, setRejected] = useState<RejectedCandidate[]>([]);
+  /** Kullanıcı bekleme ekranını kapattıysa arama sürerken tekrar açmayız. */
+  const [pipelineDismissed, setPipelineDismissed] = useState(false);
   const [sortBy, setSortBy] = usePersistentState<SortKey>("aroless.finder.sort", "winner");
   const [sortDesc, setSortDesc] = useState(true);
   const [resultQuery, setResultQuery] = useState("");
@@ -292,7 +294,16 @@ function Dashboard() {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   }, [setPlatforms]);
 
-  const { searching, fallbackNotice, searchError, searchAttempt, stalled, runSearch } = useFinderSearch({
+  const {
+    searching,
+    enriching,
+    councilPending,
+    fallbackNotice,
+    searchError,
+    searchAttempt,
+    stalled,
+    runSearch,
+  } = useFinderSearch({
     platforms,
     effectiveCountry,
     engine,
@@ -348,6 +359,14 @@ function Dashboard() {
     e.preventDefault();
     runSearch(niche, setResultQuery);
   };
+
+  /**
+   * Yeni bir arama başladığında bekleme ekranı tekrar gösterilir: "arka planda
+   * devam et" yalnızca o arama için geçerlidir. Arama bitince de sıfırlanır.
+   */
+  useEffect(() => {
+    if (!searching) setPipelineDismissed(false);
+  }, [searching]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -987,13 +1006,27 @@ function Dashboard() {
                       </form>
                     </div>
 
-                    {!searching && fallbackNotice && results.length > 0 && (
+                    {councilPending && results.length > 0 && (
+                      <div className="mb-4 flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-200">
+                        <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
+                        <span>
+                          {t("finder.liveVerified", {
+                            count: results.length,
+                            defaultValue:
+                              "{{count}} ürün canlı piyasa verisiyle doğrulandı. AI Konsey karneleri en iyi 3 ürün için arka planda tamamlanıyor — sayfayı kapatabilirsiniz.",
+                          })}
+                        </span>
+                      </div>
+                    )}
+                    {(enriching || !searching) && fallbackNotice && results.length > 0 && (
                       <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                         <span>{fallbackNotice}</span>
                       </div>
                     )}
-                    {searching && !stalled && <SearchProgress label="AI motorları analiz ediyor — bu 15-30 saniye sürebilir…" />}
+                    {searching && !enriching && !stalled && (
+                      <SearchProgress label="AI motorları analiz ediyor — bu 15-30 saniye sürebilir…" />
+                    )}
                     {!searching && searchError && results.length === 0 && (
                       <SearchErrorCard error={searchError} onRetry={() => runSearch(searchError.niche ?? niche, setResultQuery)} onEdit={jumpToSearch} />
                     )}
@@ -1009,7 +1042,7 @@ function Dashboard() {
                         }}
                       />
                     )}
-                    {!searching &&
+                    {(enriching || !searching) &&
                       results.length > 0 &&
                       (() => {
                         const q = resultQuery.trim().toLowerCase();
@@ -1179,7 +1212,15 @@ function Dashboard() {
         </main>
 
         <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
-        <AnalysisPipelineModal open={searching} done={!searching} etaMs={etaMs} engine={engineLabel(engine).model} />
+        {/* Ön sonuç geldiğinde (enriching) bekleme ekranı KENDİLİĞİNDEN kapanır:
+            kullanıcı ürünleri görür, arama arka planda devam eder. */}
+        <AnalysisPipelineModal
+          open={searching && !enriching && !pipelineDismissed}
+          done={!searching}
+          etaMs={etaMs}
+          engine={engineLabel(engine).model}
+          onDismiss={() => setPipelineDismissed(true)}
+        />
         <ReportModal product={reportProduct} onClose={() => setReportProduct(null)} />
         <ProductDeepDiveModal product={deepDiveProduct} onClose={() => setDeepDiveProduct(null)} onSendToSimulator={() => setTab("training")} />
         <DraggableCopilot context={`Dashboard · sekme: ${tab} · niş: ${niche} · ülke: ${targetCountry}`} />

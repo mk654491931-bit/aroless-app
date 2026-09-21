@@ -5,6 +5,7 @@ import {
   evidenceStyle,
   attachWinnerScores,
 } from "./winner-score";
+import type { MarketEvidence } from "./market-evidence";
 
 describe("computeWinnerScore", () => {
   it("returns a score between 0 and 100", () => {
@@ -174,6 +175,83 @@ describe("evidenceStyle", () => {
 
   it("returns rose for ai_only", () => {
     expect(evidenceStyle("ai_only")).toContain("rose");
+  });
+});
+
+describe("viral kanıt yalnızca DOĞRULANDIYSA puanlanır (uydurma kanıt koruması)", () => {
+  /** Canlı doğrulama katmanının ürettiği kanıt bloğu (tüm alanlar zorunlu). */
+  function evidence(over: Partial<MarketEvidence> = {}): MarketEvidence {
+    return {
+      trend_monthly: [],
+      trend_yearly: [],
+      trend_momentum_pct: 12,
+      trend_source: "google-trends",
+      supplier_price_usd: 5,
+      supplier_shipping_usd: 2,
+      supplier_source: "aliexpress",
+      sellers: [],
+      market_price_usd: 30,
+      price_delta_pct: 5,
+      verified_signals: [],
+      unverified_signals: [],
+      checked_at: new Date(0).toISOString(),
+      ...over,
+    };
+  }
+  const base = {
+    name: "Test Product",
+    selling_price_usd: "$30",
+    supplier_price_usd: "$5",
+    competition_level: "Medium",
+    trend_score: 70,
+  };
+  const demandOf = (p: Parameters<typeof computeWinnerScore>[0]) =>
+    computeWinnerScore(p).components.find((c) => c.key === "demand")?.score ?? 0;
+  const fakeViral = { viral_proof: [{ url: "https://www.tiktok.com/@ghost/video/0000000000" }] };
+
+  it("adres açılamadıysa (viral_verified false) bonus VERİLMEZ", () => {
+    const unverified = demandOf({ ...base, ...fakeViral, market_evidence: evidence() });
+    const verified = demandOf({
+      ...base,
+      ...fakeViral,
+      market_evidence: evidence({ viral_verified: true }),
+    });
+    expect(verified).toBeGreaterThan(unverified);
+  });
+
+  it("canlı doğrulama hiç çalışmadıysa (market_evidence yok) bonus VERİLMEZ", () => {
+    const noEvidence = demandOf({ ...base, ...fakeViral });
+    const viralVerified = demandOf({
+      ...base,
+      ...fakeViral,
+      market_evidence: evidence({ viral_verified: true }),
+    });
+    expect(noEvidence).toBeLessThan(viralVerified);
+  });
+
+  it("viral kanıt doğrulanınca talep gerekçesi bunu açıkça söyler", () => {
+    const breakdown = computeWinnerScore({
+      ...base,
+      ...fakeViral,
+      market_evidence: evidence({ viral_verified: true }),
+    });
+    const demand = breakdown.components.find((c) => c.key === "demand");
+    expect(demand?.reason).toContain("doğrulandı");
+    const viralMetric = demand?.evidence?.find((e) => e.metric === "Viral kanıt");
+    expect(viralMetric?.verified).toBe(true);
+  });
+
+  it("doğrulanmamış adres kanıt olarak LİNKLENMEZ", () => {
+    const breakdown = computeWinnerScore({
+      ...base,
+      ...fakeViral,
+      market_evidence: evidence(),
+    });
+    const viralMetric = breakdown.components
+      .find((c) => c.key === "demand")
+      ?.evidence?.find((e) => e.metric === "Viral kanıt");
+    expect(viralMetric?.verified).toBe(false);
+    expect(viralMetric?.url).toBeUndefined();
   });
 });
 

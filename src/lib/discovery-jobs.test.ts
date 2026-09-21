@@ -413,6 +413,7 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     const plan = discoveryStagePlan(60_000);
     expect(plan.prepMs).toBe(0);
     expect(plan.councilReserveMs).toBe(0);
+    expect(plan.councilTargetCount).toBe(0);
     expect(plan.angleCount).toBe(3);
   });
 
@@ -428,13 +429,33 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     // Bu sayılar hat kalitesinin can alıcı yeridir: değişirse kalite adımları
     // sessizce kısalmış demektir, bu yüzden açıkça sabitlenir.
     expect(plan.usableMs).toBe(250_000);
-    expect(plan.prepMs).toBe(37_500);
+    // Hazırlık SERİ bir adımdır (zeminli tur ondan sonra başlar): eskiden 40 sn'ye
+    // kadar çıkıp ilk AI çağrısını geciktiriyordu. Üst sınır 14 sn; asıl canlı
+    // veri `verifyProduct` katmanından gelir, hazırlık onun yerini tutmaz.
+    expect(plan.prepMs).toBe(14_000);
     expect(plan.generationMs).toBe(60_000);
     expect(plan.judgePerProductMs).toBe(12_500);
     expect(plan.verifyReserveMs).toBe(15_000);
     expect(plan.councilReserveMs).toBe(75_000);
+    // Karne turu EN İYİ 3 ürünle sınırlı: döngü tüm ürünleri gezip bütçenin son
+    // saniyesine kadar yakmaz (eskiden "tıkla → sonuç" hep ~4,5 dk oluyordu).
+    expect(plan.councilTargetCount).toBe(3);
     // Erken aşamalar + konsey rezervi kullanılabilir sürenin içinde kalır.
-    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(172_500);
+    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(149_000);
+  });
+
+  it("konsey rezervi hedef karne sayısına göre ayrılır ve bütçeye sığar", () => {
+    const plan = discoveryStagePlan(workerBudgetMs());
+    const beforeCouncil =
+      plan.prepMs +
+      plan.generationMs +
+      batchReserveMs(plan.judgePerProductMs, 6, plan.judgeConcurrency) +
+      plan.verifyReserveMs;
+    // Konsey öncesi tüm aşamalar + karne rezervi kullanılabilir süreye sığar:
+    // hat kendi kendine biter, platform onu kesmez (504 yok).
+    expect(beforeCouncil + plan.councilReserveMs).toBeLessThanOrEqual(plan.usableMs);
+    // Hedef sayı yükselirse rezerv de yükselir; sayı 3 ile sabitlendi.
+    expect(plan.councilReserveMs).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
   });
 
   it("gerçekçi zaman çizelgesinde konsey karnesine yer KALIR (ve ölçülen bütçe yeter)", () => {
@@ -445,9 +466,11 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     const leftAtCouncil =
       plan.usableMs - plan.prepMs - plan.generationMs - judgeNeed - plan.verifyReserveMs;
     expect(judgeNeed).toBe(37_500);
-    expect(leftAtCouncil).toBe(100_000);
+    // Karne rezervi (75 sn) zaten ayrıldığı için konseye 123,5 sn kalır.
+    expect(leftAtCouncil).toBe(123_500);
     const carnetMs = councilEnrichCallMs(leftAtCouncil, plan.returnFloorMs);
-    expect(carnetMs).toBe(87_000);
+    // Çağrı başına üst sınır 90 sn; kalan süre bunun üstünde olduğu için kırpılır.
+    expect(carnetMs).toBe(90_000);
     expect(carnetMs).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
     // Karne başladığında kalan süreyi AŞMAZ: hat sözünü bozamaz.
     expect(carnetMs + plan.returnFloorMs).toBeLessThanOrEqual(leftAtCouncil);

@@ -116,6 +116,13 @@ export type DiscoveryContext = {
    * aşama kendini keser, böylece platform duvarına hiç dayanmaz.
    */
   budgetMs?: number;
+  /**
+   * Ön sonuç kancası. Hat, canlı doğrulanmış ürünler hazır olur olmaz bunu
+   * çağırır; işçi (`runJob`) gelen anlık görüntüyü `searches.result` alanına
+   * yazar ve `status` `processing` kalır. İstemci ilk yoklamada ürünleri
+   * gösterir, yoklamaya devam eder ve nihai sonuç geldiğinde üzerine yazar.
+   */
+  onProgress?: (snapshot: DiscoveryResult) => void | Promise<void>;
 };
 
 export type DiscoveryResult = {
@@ -139,6 +146,12 @@ export type DiscoveryResult = {
    * ürün başına ayrılan rezerv kadar süre kalmadı). UI bunu dürüstçe söyler.
    */
   skipped_council?: boolean;
+  /**
+   * `true` ise bu payload ÖN sonuçtur: canlı piyasa doğrulaması ve kazanan
+   * puanı hazırdır, AI Konsey karneleri hâlâ arkada üretiliyor. Nihai sonuç
+   * aynı iş kaydının üzerine yazılır (`council_pending: false`).
+   */
+  council_pending?: boolean;
 };
 
 /** Compact, model-friendly summary of a product used as debate context. */
@@ -833,6 +846,141 @@ JSON shape:
     );
   }
 
+  /**
+   * Katman 1 — CANLI PİYASA DOĞRULAMASI (artık konseyden ÖNCE koşar).
+   *
+   * Sıra bilinçli: gerçek veriye dayanan tek katman (Google Trends talep eğrisi
+   * + AliExpress tedarik fiyatı + canlı pazaryeri ilanları) AI Konsey karneye
+   * başlamadan önce çalışır. Eskiden konsey önce koşuyordu; bütçenin tamamını
+   * yediğinde canlı doğrulama hiç yapılmıyor ve ürünler "kanıtsız" kalıyordu.
+   * Artık kalite katmanı zamana yenilmiyor.
+   */
+  const runLiveVerification = async () => {
+    const verifyNeedMs = batchReserveMs(
+      plan.verifyPerProductMs,
+      finalProducts.length,
+      plan.verifyConcurrency,
+    );
+    if (!fits(verifyNeedMs, plan.councilReserveMs)) return;
+    const { verifyProduct } = await import("@/lib/market-verify.server");
+    const verified = await mapWithConcurrency(finalProducts, plan.verifyConcurrency, async (p) => {
+      const outcome = await withDeadline(
+        verifyProduct(p, country),
+        plan.verifyPerProductMs,
+        "verify",
+      ).catch(() => null);
+      if (!outcome) return p;
+      const { market_evidence, realism_score } = outcome;
+      const base = p.unified_score ?? 0;
+      return {
+        ...p,
+        market_evidence,
+        realism_score,
+        unified_score: Math.round(base * 0.8 + realism_score * 0.2),
+      };
+    });
+    // Gerçek piyasa verisiyle örtüşen ürünler önce gelir.
+    finalProducts = verified.sort(
+      (a, b) =>
+        (b.unified_score ?? 0) - (a.unified_score ?? 0) ||
+        (b.realism_score ?? 0) - (a.realism_score ?? 0),
+    );
+  };
+
+  /**
+   * Ortak karar: hibrit motor puanı, karne geldiyse AI Konsey Aroless skoruyla
+   * ortalanır. Konsey öncesi ve sonrası aynı fonksiyon kullanılır — tek fark
+   * karne gelmiş olmasıdır.
+   */
+  const applyUnifiedScore = () => {
+    finalProducts = finalProducts.map((p) => {
+      const hybridScore = p.hybrid?.calculated_score ?? p.consensus?.average_score ?? 0;
+      const velora = p.council?.velora_score;
+      const unified =
+        typeof velora === "number" && velora > 0
+          ? Math.round((hybridScore + velora) / 2)
+          : Math.round(hybridScore);
+      return { ...p, unified_score: unified };
+    });
+    // En iyi özellikteki ürünler ortak puana göre en üstte.
+    finalProducts.sort((a, b) => (b.unified_score ?? 0) - (a.unified_score ?? 0));
+  };
+
+  /** Winner Score: tüm sinyalleri tek, açıklanabilir puana indirger. */
+  const applyWinnerScores = async () => {
+    const { computeWinnerScore } = await import("@/lib/winner-score");
+    finalProducts = finalProducts
+      .map((p) => {
+        const breakdown = computeWinnerScore(p);
+        return {
+          ...p,
+          winner_score: breakdown.winner_score,
+          score_breakdown: breakdown,
+          evidence_level: breakdown.evidence_level,
+        };
+      })
+      .sort(
+        (a, b) =>
+          (b.winner_score ?? 0) - (a.winner_score ?? 0) ||
+          (b.unified_score ?? 0) - (a.unified_score ?? 0),
+      );
+  };
+
+  /**
+   * ÖN SONUÇ YAYINI — "tıkla → sonuç" süresini kısaltan asıl mekanizma.
+   *
+   * Kullanıcı artık hattın tamamını beklemez: canlı doğrulanmış ve kazanan
+   * puanı hesaplanmış ürünler hazır olur olmaz `searches.result` alanına
+   * yazılır (`status` hâlâ `processing`). İstemci ilk yoklamada bu ön sonucu
+   * gösterir ve yoklamaya devam eder; AI Konsey karneleri bitince nihai sonuç
+   * aynı kaydın üzerine yazılır.
+   *
+   * Kalite DÜŞMEZ: ön sonuç kendi başına eksiksizdir (canlı piyasa kanıtı +
+   * gerçeklik puanı + kazanan puanı + elenen adaylar). Yalnızca konsey karnesi
+   * henüz yoktur; bu `council_pending: true` ile dürüstçe işaretlenir.
+   */
+  const publishPartial = async (councilPending: boolean) => {
+    if (!ctx.onProgress || finalProducts.length === 0) return;
+    try {
+      await ctx.onProgress({
+        products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),
+        rejected: rejectedCandidates,
+        creditsRemaining: remaining,
+        target_country: country,
+        min_score: minScore,
+        fallback,
+        fallback_engine: fallbackEngine,
+        skipped_council: false,
+        council_pending: councilPending,
+      });
+    } catch {
+      /* ön sonuç yayını başarısız olsa da hat devam eder */
+    }
+  };
+
+  // ---- KONSEY ÖNCESİ kalite katmanları: puan → kârlılık → canlı veri → kazanan ----
+  applyUnifiedScore();
+  {
+    // Kârlılık kapısı: net marjı düşük ürünler elenir, en kârlı olan en üstte.
+    const { rankProfitable } = await import("@/lib/profitability");
+    const profitable = rankProfitable(finalProducts);
+    if (profitable.length) finalProducts = profitable;
+  }
+  await runLiveVerification();
+  await applyWinnerScores();
+
+  /**
+   * Konsey karneye yalnızca bu kadar ürün için yer var.
+   *
+   * Eskiden döngü TÜM ürünleri geziyor ve kalan süre bir karneye yetmediğinde
+   * duruyordu; yani hat her koşuda bütçesini son saniyesine kadar yakıyor ve
+   * "tıkla → sonuç" süresi hep ~4,5 dakika oluyordu. Üst sınırla hat, kalite
+   * işini bitirdiği anda durur.
+   */
+  const councilLimit = fast ? 0 : Math.min(finalProducts.length, plan.councilTargetCount);
+  // Kullanıcı BEKLEMEYİ BURADA BIRAKIR: ön sonuç hemen görünür.
+  await publishPartial(councilLimit > 0);
+
   // ---- 14'lü AI Konsey: ürün bulucu ile ORTAK KARAR (24h cached, no extra credit) ----
   // En pahalı adım. Hat bütçesi sınırlı olduğu için karne KISA PROFİLDE
   // (`depth: "enrich"`) çağrılır: 6 uzman ekip + müdür paralel koşar, hakem turu
@@ -847,14 +995,14 @@ JSON shape:
   // SIRADAKİ ürünün bütçesi her turda yeniden ölçülür: bir karne rezervinden
   // hızlı biterse süre boşa gitmez, sıradaki ürün de karne alır. Bu yüzden
   // döngü tek seferlik "kaç karne sığar" hesabı yerine koşullu ilerler.
-  if (!fast) {
+  if (councilLimit > 0) {
     const { runCouncil } = await import("@/lib/council.server");
     const list = [...finalProducts];
     let enrichedCount = 0;
     let failures = 0;
-    for (let i = 0; i < list.length; i++) {
+    for (let i = 0; i < councilLimit; i++) {
       const carnetMs = councilEnrichCallMs(timeLeft(), plan.returnFloorMs);
-      const action = councilLoopDecision({ carnetMs, remaining: list.length - i, failures });
+      const action = councilLoopDecision({ carnetMs, remaining: councilLimit - i, failures });
       // Süre bitti ya da motorlar üst üste sustu: yarım karne üretmeden dururuz.
       if (action !== "carnet") break;
       const p = list[i];
@@ -910,78 +1058,12 @@ JSON shape:
     skippedCouncil = true;
   }
 
-  // Ortak karar: hibrit motor puanı ile AI Konsey puanının ortalaması.
-  finalProducts = finalProducts.map((p) => {
-    const hybridScore = p.hybrid?.calculated_score ?? p.consensus?.average_score ?? 0;
-    const velora = p.council?.velora_score;
-    const unified =
-      typeof velora === "number" && velora > 0
-        ? Math.round((hybridScore + velora) / 2)
-        : Math.round(hybridScore);
-    return { ...p, unified_score: unified };
-  });
-  // En iyi özellikteki ürünler ortak puana göre en üstte.
-  finalProducts.sort((a, b) => (b.unified_score ?? 0) - (a.unified_score ?? 0));
-  // Kârlılık kapısı: net marjı düşük ürünler elenir, en kârlı olan en üstte.
-  {
-    const { rankProfitable } = await import("@/lib/profitability");
-    const profitable = rankProfitable(finalProducts);
-    if (profitable.length) finalProducts = profitable;
-  }
-
-  // ---- Canlı piyasa doğrulaması: her ürün gerçek kaynaklarla çapraz kontrol
-  // edilir; gerçeklik puanı ortak karara ağırlıklı olarak işlenir. ----
-  // Canlı doğrulama: ürün sayısına göre ölçülen süre + konsey rezervi korunur.
-  const verifyNeedMs = batchReserveMs(
-    plan.verifyPerProductMs,
-    finalProducts.length,
-    plan.verifyConcurrency,
-  );
-  if (fits(verifyNeedMs, plan.councilReserveMs)) {
-    const { verifyProduct } = await import("@/lib/market-verify.server");
-    const verified = await mapWithConcurrency(finalProducts, plan.verifyConcurrency, async (p) => {
-      const outcome = await withDeadline(
-        verifyProduct(p, country),
-        plan.verifyPerProductMs,
-        "verify",
-      ).catch(() => null);
-      if (!outcome) return p;
-      const { market_evidence, realism_score } = outcome;
-      const base = p.unified_score ?? 0;
-      return {
-        ...p,
-        market_evidence,
-        realism_score,
-        unified_score: Math.round(base * 0.8 + realism_score * 0.2),
-      };
-    });
-    // Gerçek piyasa verisiyle örtüşen ürünler önce gelir.
-    finalProducts = verified.sort(
-      (a, b) =>
-        (b.unified_score ?? 0) - (a.unified_score ?? 0) ||
-        (b.realism_score ?? 0) - (a.realism_score ?? 0),
-    );
-  }
-
-  // ---- Winner Score: tüm sinyalleri tek, açıklanabilir puana indirger ----
-  {
-    const { computeWinnerScore } = await import("@/lib/winner-score");
-    finalProducts = finalProducts
-      .map((p) => {
-        const breakdown = computeWinnerScore(p);
-        return {
-          ...p,
-          winner_score: breakdown.winner_score,
-          score_breakdown: breakdown,
-          evidence_level: breakdown.evidence_level,
-        };
-      })
-      .sort(
-        (a, b) =>
-          (b.winner_score ?? 0) - (a.winner_score ?? 0) ||
-          (b.unified_score ?? 0) - (a.unified_score ?? 0),
-      );
-  }
+  // ---- Konsey SONRASI nihai karar ----
+  // Konsey öncesi tüm katmanlar (puan, kârlılık, canlı doğrulama, kazanan puanı)
+  // yukarıda zaten koştu; burada yalnızca karne geldiği için puanlar yeniden
+  // hesaplanır ve sıralama güncellenir.
+  applyUnifiedScore();
+  await applyWinnerScores();
 
   return {
     products: finalProducts.map((p) => ({ ...p, github_trends: githubTrends })),
@@ -992,5 +1074,6 @@ JSON shape:
     fallback,
     fallback_engine: fallbackEngine,
     skipped_council: skippedCouncil,
+    council_pending: false,
   };
 }

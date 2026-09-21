@@ -241,6 +241,16 @@ export const COUNCIL_ENRICH_MARGIN_MS = 5_000;
  * varsa da boş bırakılmaz. 0 ise bulucu konseyi hiç çağırmaz ve sonucu
  * `skipped_council` ile dürüstçe işaretler.
  */
+/**
+ * Karne çıkarılacak en iyi ürün sayısı.
+ *
+ * Neden 3: bir karne (~62 sn) pahalıdır ve ilk üç ürün kullanıcı kararını
+ * belirler. 3'ün üzerine çıkmak hattın bütçesini doldurup sonucu dakikalarca
+ * geciktirir; karne almayan ürünler zaten canlı doğrulanmış ve kazanan puanı
+ * hesaplanmış olarak kullanıcıya ulaşır (bkz. `publishPartial`).
+ */
+export const DISCOVERY_COUNCIL_TARGET_PRODUCTS = 3;
+
 export function councilEnrichLimit(timeLeftMs: number, limit = 8): number {
   if (!Number.isFinite(timeLeftMs)) return 0;
   const usable = timeLeftMs - COUNCIL_ENRICH_MARGIN_MS;
@@ -330,6 +340,14 @@ export type DiscoveryStagePlan = {
   verifyReserveMs: number;
   /** AI Konsey karnesine ayrılan rezerv — hakem/doğrulama onu yiyemez. */
   councilReserveMs: number;
+  /**
+   * Karne çıkarılacak EN İYİ ürün sayısı (fast profilde 0).
+   *
+   * Sert üst sınır: eskiden karne döngüsü tüm ürünleri gezer ve yalnızca kalan
+   * süre bir karneye yetmediğinde dururdu; hat bütçesini son saniyesine kadar
+   * yaktığı için "tıkla → sonuç" süresi her koşuda ~4,5 dakika oluyordu.
+   */
+  councilTargetCount: number;
   /** Kaç zeminli açı paralel koşar (duvar saati maliyeti aynı, aday sayısı ↑). */
   angleCount: number;
 };
@@ -373,7 +391,13 @@ export function discoveryStagePlan(
   const fast = opts.fast ?? total <= 75_000;
   const usableMs = Math.max(10_000, total - DISCOVERY_RETURN_FLOOR_MS);
 
-  const prepMs = fast ? 0 : clampMs(usableMs * 0.15, 8_000, 40_000);
+  // Hazırlık (GitHub trendi + canlı piyasa kanıtı) SERİ bir adımdır: üretim
+  // turu bu blok prompt'a girdiği için ondan sonra başlar. Eskiden 40 sn'ye
+  // kadar bekleyebiliyordu, yani ilk AI çağrısı 40 sn sonra gidiyordu. Üst
+  // sınır 14 sn'ye indi: kanıt yetişirse prompt'a girer, yetişmezse hat hiç
+  // beklemez (asıl canlı veri zaten zeminli aramadan ve `verifyProduct`
+  // katmanından gelir).
+  const prepMs = fast ? 0 : clampMs(usableMs * 0.06, 6_000, 14_000);
   const judgePerProductMs = clampMs(usableMs * 0.05, 8_000, 15_000);
   const verifyPerProductMs = clampMs(usableMs * 0.03, 6_000, 12_000);
   const judgeConcurrency = fast ? 3 : 2;
@@ -390,7 +414,13 @@ export function discoveryStagePlan(
     batchReserveMs(verifyPerProductMs, 3, verifyConcurrency),
     Math.max(0, usableMs - generationMs - judgeSlotMs),
   );
-  const councilTarget = clampMs(usableMs * 0.3, COUNCIL_ENRICH_MIN_MS, COUNCIL_ENRICH_MIN_MS * 3);
+  /** Karne hedefi: en iyi 3 ürün. Rezerv da bu sayıya göre ayrılır. */
+  const councilTargetCount = fast ? 0 : DISCOVERY_COUNCIL_TARGET_PRODUCTS;
+  const councilTarget = clampMs(
+    usableMs * 0.3,
+    COUNCIL_ENRICH_MIN_MS,
+    COUNCIL_ENRICH_MIN_MS * councilTargetCount,
+  );
   const councilRoom = usableMs - prepMs - generationMs - verifyReserveMs - judgeSlotMs;
   const councilReserveMs = fast ? 0 : Math.max(0, Math.min(councilTarget, councilRoom));
 
@@ -406,6 +436,7 @@ export function discoveryStagePlan(
     verifyConcurrency,
     verifyReserveMs,
     councilReserveMs,
+    councilTargetCount,
     angleCount: fast ? 3 : 8,
   };
 }
@@ -756,6 +787,27 @@ export async function markJobCompleted(
   if (updateError) throw new Error(updateError.message);
 }
 
+/**
+ * ÖN SONUÇ YAZIMI — iş hâlâ `processing` iken `result` alanını güncelle.
+ *
+ * Neden ayrı bir fonksiyon: `complete_search_job` atomik ve claim'e bağlıdır;
+ * ön sonuç ise yalnızca kullanıcının beklemeyi bırakmasını sağlayan bir ara
+ * adımdır. Bu yüzden durumu DEĞİŞTİRMEZ (`status = 'processing'` kalır), yalnızca
+ * `result` yazar ve yarış koşullarına karşı `status = 'processing'` filtresiyle
+ * korunur: iş tamamlandıysa/başarısız olduysa nihai kaydı asla ezmez.
+ *
+ * İstemci bu kaydı ilk yoklamada görür, ürünleri gösterir ve yoklamaya devam
+ * eder; nihai sonuç geldiğinde yerini alır.
+ */
+export async function markJobPartial(jobId: string, result: DiscoveryResult): Promise<void> {
+  const { error } = await jobStore()
+    .from(JOB_TABLE)
+    .update({ result } as never)
+    .eq("id", jobId)
+    .eq("status", "processing");
+  if (error) throw new Error(error.message);
+}
+
 export async function markJobFailed(
   jobId: string,
   message: string,
@@ -980,6 +1032,9 @@ export async function runJob(
       deductCredit: true,
       // Hat, kalan süreye göre kendini kısaltarak zamanında sonuç döner.
       budgetMs: workerBudgetMs(),
+      // Ön sonuç: canlı doğrulanmış ürünler hazır olur olmaz yazılır; istemci
+      // konsey karnelerini beklemeden ürünleri görür (yoklama devam eder).
+      onProgress: (snapshot) => markJobPartial(payload.jobId, snapshot),
     });
     await markJobCompleted(payload.jobId, result, attemptCount);
     await cacheJobResult(payload.jobId, result).catch(() => {});

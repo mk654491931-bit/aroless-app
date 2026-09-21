@@ -1,82 +1,57 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Check, Loader2, Cpu, Flame, Users } from "lucide-react";
+import { Sparkles, Check, Loader2, Cpu, Users, X } from "lucide-react";
 
-const COUNCIL_AGENTS = [
-  {
-    name: "CFO Agent",
-    task: "Birim ekonomisi, landed cost & 3PL marjları kontrol ediliyor.",
-    base: 88,
-  },
-  { name: "CMO Agent", task: "Kitle uyumu & hedef ROAS/CPC simüle ediliyor.", base: 84 },
-  { name: "CRO Agent", task: "USPTO veritabanında marka & IP riski taranıyor.", base: 91 },
-  {
-    name: "Trend Hunter",
-    task: "Sosyal medya etkileşim & görüntüleme momentumu hesaplanıyor.",
-    base: 87,
-  },
-  {
-    name: "Competitor Intel",
-    task: "Aktif Shopify/Amazon mağaza doygunluğu denetleniyor.",
-    base: 79,
-  },
-  { name: "UX Specialist", task: "Müşteri yorum duygu skorları analiz ediliyor.", base: 86 },
-  {
-    name: "Supply Chain Agent",
-    task: "Tedarikçi stok istikrarı & teslim SLA doğrulanıyor.",
-    base: 83,
-  },
-  {
-    name: "Pricing Strategist",
-    task: "Markup merdiveni & fiyat esnekliği test ediliyor.",
-    base: 85,
-  },
-  {
-    name: "Logistics Cost Agent",
-    task: "Navlun/ciro oranı ve 3PL hat maliyetleri modelleniyor.",
-    base: 81,
-  },
-  {
-    name: "Compliance Officer",
-    task: "Sertifika bariyerleri (CE / FDA / SDS) ve gümrük kapıları taranıyor.",
-    base: 82,
-  },
-  {
-    name: "Retention & LTV Analyst",
-    task: "Tekrar satın alma oranı & LTV/CAC geri kazanımı hesaplanıyor.",
-    base: 80,
-  },
-  {
-    name: "Creative Director",
-    task: "Kanca gücü, UGC açıları ve 3 saniye tutma oranı puanlanıyor.",
-    base: 86,
-  },
-  {
-    name: "Channel Fit Agent",
-    task: "Pazar yeri komisyonu ile rekabet yoğunluğu eşleştiriliyor.",
-    base: 84,
-  },
-  {
-    name: "Independent Data Auditor",
-    task: "Tüm konsey girdilerinin kanıt kapsamı denetleniyor.",
-    base: 88,
-  },
+/**
+ * AI Konsey rolleri — YALNIZCA GÖREV AÇIKLAMASI.
+ *
+ * Burada bilinçli olarak hiçbir SKOR tutulmaz. Eskiden her ajanın yanında sabit
+ * bir puan (`base`) ve ağırlıklı, "hesaplanmış" görünen bir `Final Score` vardı;
+ * bunlar gerçek çıktı olmadığı için kullanıcıya uydurma sonuç gösteriyordu.
+ * Karneler yalnızca hat gerçekten koştuğunda ürün kartlarında (gerçek
+ * `council.velora_score` ile) görünür.
+ */
+const COUNCIL_ROLES = [
+  { name: "CFO Agent", task: "Birim ekonomisi, landed cost ve 3PL marjları." },
+  { name: "CMO Agent", task: "Kitle uyumu, hedef ROAS ve CPC bandı." },
+  { name: "CRO Agent", task: "Marka ve IP riski taraması." },
+  { name: "Trend Hunter", task: "Sosyal medya etkileşim ve görüntüleme momentumu." },
+  { name: "Competitor Intel", task: "Pazaryeri mağaza doygunluğu." },
+  { name: "UX Specialist", task: "Müşteri yorumu duygu skorları." },
+  { name: "Supply Chain Agent", task: "Tedarikçi stok istikrarı ve teslim SLA." },
+  { name: "Pricing Strategist", task: "Markup merdiveni ve fiyat esnekliği." },
+  { name: "Logistics Cost Agent", task: "Navlun/ciro oranı ve 3PL hat maliyeti." },
+  { name: "Compliance Officer", task: "CE / FDA / SDS sertifika ve gümrük kapıları." },
+  { name: "Retention & LTV Analyst", task: "Tekrar satın alma oranı, LTV/CAC." },
+  { name: "Creative Director", task: "Kanca gücü, UGC açıları, 3 sn tutma." },
+  { name: "Channel Fit Agent", task: "Pazaryeri komisyonu ve rekabet yoğunluğu." },
+  { name: "Independent Data Auditor", task: "Konsey girdilerinin kanıt kapsamı." },
 ];
 
 /**
- * Live AI analysis pipeline. Steps advance against the engine's ETA so the user
- * always sees what the pipeline is doing right now, plus elapsed time.
+ * Canlı analiz hattı göstergesi.
+ *
+ * Üç kural:
+ *  1. HİÇBİR SAYI UYDURULMAZ. İlerleme çubuğu motorun ETA'sına göre TAHMİNİ'dir
+ *     ve bu şekilde etiketlenir; ajan puanları / "Final Score" gösterilmez.
+ *  2. KAPATILABİLİR. Uzun bir tarama kullanıcıyı ekrana kilitlemez; kapatınca
+ *     arama arka planda sürer ve ürünler hazır olduğunda görünür.
+ *  3. ÖN SONUÇ GELİNCE KENDİLİĞİNDEN KAPANIR: canlı doğrulanmış ürünler
+ *     ekranda görünmeye başladığında bu modal artık engel değildir.
  */
 export function AnalysisPipelineModal({
   open,
   done,
   etaMs = 6500,
   engine,
+  onDismiss,
 }: {
   open: boolean;
   done: boolean;
   etaMs?: number;
   engine?: string;
+  /** "Arka planda devam et" — modalı kapatır, aramayı durdurmaz. */
+  onDismiss?: () => void;
 }) {
   const { t } = useTranslation();
   const steps = [
@@ -107,10 +82,8 @@ export function AnalysisPipelineModal({
       const ms = Date.now() - startedAt.current;
       setElapsed(ms / 1000);
       // Saturating curve: ~95% by the engine ETA, then a slow creep toward 99%
-      // so a long real 14-agent run never looks frozen at a flat percentage.
-      const pct = done
-        ? 100
-        : Math.min(99, Math.round(100 * (1 - Math.exp(-ms / (target / 3)))));
+      // so a long real run never looks frozen at a flat percentage.
+      const pct = done ? 100 : Math.min(99, Math.round(100 * (1 - Math.exp(-ms / (target / 3)))));
       setProgress(pct);
       setStepIdx(Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length)));
       if (done && pct >= 100) window.clearInterval(id);
@@ -121,23 +94,27 @@ export function AnalysisPipelineModal({
     };
   }, [open, done, etaMs, steps.length]);
 
+  // Escape ile kapatma: uzun taramada kullanıcı ekrana kilitli kalmasın.
+  useEffect(() => {
+    if (!open || !onDismiss) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onDismiss]);
+
   if (!open) return null;
 
   const remaining = Math.max(0, etaMs / 1000 - elapsed);
 
-  // Council agents advance concurrently with the main pipeline.
-  const agentDone = (i: number) => progress >= (i + 1) * (100 / (COUNCIL_AGENTS.length + 0.5));
-  const doneCount = COUNCIL_AGENTS.filter((_, i) => agentDone(i)).length;
-  const councilScore = Math.round(
-    COUNCIL_AGENTS.reduce((sum, a, i) => sum + (agentDone(i) ? a.base : 0), 0) /
-      Math.max(1, doneCount),
-  );
-  const fingerScore = Math.round(60 + (progress / 100) * 32);
-  const finalScore = doneCount ? Math.round(councilScore * 0.7 + fingerScore * 0.3) : 0;
-  const winner = finalScore > 85;
-
   return (
-    <div className="fixed inset-0 z-50 flex p-2 sm:p-4 lg:p-6 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex p-2 sm:p-4 lg:p-6 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto"
+      role="dialog"
+      aria-modal="false"
+      aria-label={t("pipeline.title")}
+    >
       <div className="m-auto w-full max-w-5xl grid gap-2.5 sm:gap-4 lg:grid-cols-2 lg:items-start">
         <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-4 sm:p-6">
           <div className="flex flex-shrink-0 items-center gap-3 mb-5">
@@ -147,18 +124,17 @@ export function AnalysisPipelineModal({
             <div className="min-w-0 flex-1">
               <div className="font-bold">{t("pipeline.title")}</div>
               <div className="text-xs text-muted-foreground flex items-center gap-2 truncate">
-                <span>{Math.floor(progress)}%</span>
+                {/* Yalnızca TAHMİNİ ilerleme; gerçek ölçüm değil. */}
+                <span>~{Math.floor(progress)}% tahmini</span>
                 <span className="opacity-40">·</span>
                 <span>{elapsed.toFixed(1)}s</span>
                 <span className="opacity-40">·</span>
                 {done ? (
                   <span className="text-emerald-300/90">tamamlandı</span>
                 ) : remaining > 0 ? (
-                  <span>~{remaining.toFixed(0)}s</span>
+                  <span>~{remaining.toFixed(0)}s kaldı</span>
                 ) : (
-                  <span className="animate-pulse text-[oklch(0.88_0.10_255)]">
-                    son adımlar…
-                  </span>
+                  <span className="animate-pulse text-[oklch(0.88_0.10_255)]">son adımlar…</span>
                 )}
               </div>
             </div>
@@ -166,6 +142,16 @@ export function AnalysisPipelineModal({
               <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.62_0.17_255)]/45 bg-[oklch(0.62_0.17_255)]/12 px-2.5 py-1 text-[10px] font-semibold text-[oklch(0.86_0.10_255)] max-w-[9rem] truncate">
                 <Cpu size={10} /> {engine}
               </span>
+            )}
+            {onDismiss && (
+              <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Kapat"
+                className="flex-shrink-0 rounded-lg border border-white/15 bg-white/5 p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
             )}
           </div>
           <div className="flex-shrink-0 h-2 w-full rounded-full bg-white/5 overflow-hidden mb-3">
@@ -203,89 +189,59 @@ export function AnalysisPipelineModal({
               );
             })}
           </ul>
+
+          <div className="mt-4 flex-shrink-0 rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] leading-snug text-emerald-200/90">
+            Canlı piyasa doğrulaması (Google Trends · tedarik fiyatı · pazaryeri ilanları) ürünler
+            hazır olur olmaz ekranda gösterilir. Bu ekran yalnızca bekleme göstergesidir; kapatmanız
+            aramayı durdurmaz.
+          </div>
+
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="mt-3 flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold transition hover:bg-white/10"
+            >
+              Arka planda devam et — sonuçlar hazır olunca göster
+            </button>
+          )}
         </div>
 
-        {/* RIGHT — 14-Agent AI Council live status (70% weight) */}
+        {/* RIGHT — AI Konsey rolleri. Puan YOK: karneler gerçek çıktıdır ve
+            yalnızca ürün kartlarında, hat gerçekten koştuktan sonra görünür. */}
         <div className="glass rounded-2xl flex flex-col overflow-hidden min-h-0 lg:max-h-[calc(100vh-2.5rem)] p-4 sm:p-6">
           <div className="flex flex-shrink-0 items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-lg glow bg-gradient-to-br from-emerald-500 to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold leading-tight">14-Agent AI Council Real-Time Status</div>
+              <div className="text-sm font-bold leading-tight">AI Konsey Rolleri</div>
               <div className="mt-0.5 text-xs text-muted-foreground">
-                Ağırlık %70 · {doneCount}/{COUNCIL_AGENTS.length} ajan tamamlandı
+                14 rol · karne en iyi 3 ürün için çalışır
               </div>
             </div>
           </div>
 
           <ul className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1.5">
-            {COUNCIL_AGENTS.map((a, i) => {
-              const complete = agentDone(i);
-              const active = !complete && i === doneCount;
-              return (
-                <li
-                  key={a.name}
-                  className={`rounded-xl border p-2 flex items-start gap-2 transition ${
-                    complete
-                      ? "border-emerald-400/40 bg-emerald-500/10"
-                      : active
-                        ? "border-[oklch(0.62_0.17_255)]/50 bg-[oklch(0.62_0.17_255)]/10 animate-pulse-soft"
-                        : "border-white/10 bg-white/5 opacity-60"
-                  }`}
-                >
-                  <span className="mt-0.5 flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center border border-white/10">
-                    {complete ? (
-                      <Check size={11} className="text-emerald-300" />
-                    ) : active ? (
-                      <Loader2 size={11} className="animate-spin text-[oklch(0.86_0.10_255)]" />
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">{i + 1}</span>
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold truncate">{a.name}</span>
-                      <span
-                        className={`text-[10px] font-bold ${complete ? "text-emerald-300" : "text-muted-foreground"}`}
-                      >
-                        {complete ? `${a.base}/100` : active ? "çalışıyor" : "sırada"}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground leading-snug">{a.task}</div>
-                  </div>
-                </li>
-              );
-            })}
+            {COUNCIL_ROLES.map((a) => (
+              <li
+                key={a.name}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 flex items-start gap-2"
+              >
+                <span className="mt-0.5 flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center border border-white/10">
+                  <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-semibold truncate">{a.name}</span>
+                  <div className="text-[11px] text-muted-foreground leading-snug">{a.task}</div>
+                </div>
+              </li>
+            ))}
           </ul>
 
-          <div
-            className={`mt-4 flex-shrink-0 rounded-xl border p-3 ${
-              winner
-                ? "border-emerald-400/60 bg-emerald-500/15 shadow-[0_0_28px_-6px_oklch(0.75_0.18_150)]"
-                : "border-white/10 bg-white/5"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-muted-foreground">
-                Final Score = (Council × 0.70) + (Product Finger × 0.30)
-              </span>
-              <span
-                className={`text-lg font-black ${winner ? "text-emerald-300" : "text-foreground"}`}
-              >
-                {finalScore}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px]">
-              <span className="text-muted-foreground">
-                Council {councilScore || 0} · Finger {fingerScore}
-              </span>
-              {winner && (
-                <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-2 py-0.5 font-bold text-emerald-300">
-                  <Flame size={11} /> Winner Product
-                </span>
-              )}
-            </div>
+          <div className="mt-4 flex-shrink-0 rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] leading-snug text-muted-foreground">
+            Skorlar yalnızca gerçek karne geldiğinde ürün kartlarında görünür. Bu ekranda gösterilen
+            hiçbir sayı üretilmiş/temsili değildir.
           </div>
         </div>
       </div>

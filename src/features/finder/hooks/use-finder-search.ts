@@ -68,7 +68,17 @@ export function useFinderSearch(opts: {
   deepSearch: DeepSearchOptions;
   pushRecent: (q: string) => void;
   onNeedUpgrade: () => void;
-  onResults: (products: WinningProduct[], rejected: RejectedCandidate[], fallback: string | null) => void;
+  onResults: (
+    products: WinningProduct[],
+    rejected: RejectedCandidate[],
+    fallback: string | null,
+    /**
+     * `true` ise bu ÖN sonuçtur: canlı doğrulanmış ürünler hazır, AI Konsey
+     * karneleri arka planda üretiliyor. İstemci ürünleri hemen gösterir ve
+     * yoklamaya devam eder; nihai sonuç geldiğinde `false` ile tekrar çağrılır.
+     */
+    enriching?: boolean,
+  ) => void;
   onClearResults: () => void;
 }) {
   const qc = useQueryClient();
@@ -82,6 +92,24 @@ export function useFinderSearch(opts: {
   const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
   const [searchAttempt, setSearchAttempt] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
+  /**
+   * Ön sonuç EKRANDA ve hat hâlâ sürüyor.
+   *
+   * Bu bayrak sonuç listesinin gösterilmesini açar: `searching` true olsa bile
+   * ürünler varsa kullanıcı onları görür (eskiden 280 sn boyunca hiçbir şey
+   * görünmüyordu).
+   */
+  const [enriching, setEnriching] = useState(false);
+  /**
+   * AI Konsey karneleri hâlâ bekleniyor (`council_pending`).
+   *
+   * `enriching`den ayrıdır: fast profilde ön sonuç gelebilir ama karne hiç
+   * çalışmıyor olabilir. UI yalnızca bu bayrak true iken "karneler tamamlanıyor"
+   * der — aksi halde olmayan bir işi varmış gibi göstermiş olurdu.
+   */
+  const [councilPending, setCouncilPending] = useState(false);
+  /** Ön sonuç teslim edildi mi? (hata anında sonuçları korumak için senkron ref) */
+  const partialDeliveredRef = useRef(false);
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchNicheRef = useRef<string>("");
 
@@ -122,10 +150,67 @@ export function useFinderSearch(opts: {
 
       const deadline = Date.now() + maxWaitMs;
       let elapsedMs = 0;
+      /**
+       * ÖN SONUÇ TESLİMİ.
+       *
+       * Hat, canlı doğrulanmış ürünleri AI Konsey karnelerinden ÖNCE
+       * `searches.result` alanına yazar (status hâlâ `processing`). Biz de
+       * burada o kaydı ilk gördüğümüzde kullanıcıya gösteriyoruz: kullanıcı
+       * 4-5 dakika yerine tipik olarak ~1,5-2 dakikada ürünleri görür.
+       * Yoklama durmaz; karne gelince nihai sonuç üzerine yazılır.
+       */
+      const deliverPartial = (payload: unknown): boolean => {
+        if (partialDeliveredRef.current) return false;
+        try {
+          const partialProducts = toProductList(payload);
+          if (partialProducts.length === 0) return false;
+          partialDeliveredRef.current = true;
+          const notice =
+            (payload as { fallback?: { message?: string } | null } | undefined)?.fallback
+              ?.message ?? null;
+          // Sunucu `council_pending: false` derse (fast profil) karne beklenmiyor
+          // demektir: kullanıcıya "karne tamamlanıyor" demeyiz.
+          const pending =
+            (payload as { council_pending?: boolean } | undefined)?.council_pending === true;
+          setEnriching(true);
+          setCouncilPending(pending);
+          opts.onResults(
+            attachWinnerScores(partialProducts),
+            (payload as { rejected?: RejectedCandidate[] } | undefined)?.rejected ?? [],
+            notice,
+            pending,
+          );
+          setFallbackNotice(notice);
+          setSearchError(null);
+          setStalled(false);
+          if (pending) {
+            toast.info(
+              `${partialProducts.length} canlı doğrulanmış ürün hazır — AI Konsey karneleri arka planda tamamlanıyor.`,
+            );
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
       while (Date.now() < deadline) {
         const job = await getDiscoveryJobFn({ data: { jobId } });
-        if (job.status === "completed" && job.result) return job.result;
-        if (job.status === "failed") throw new Error(job.error || "Arama tamamlanamadı.");
+        if (job.status === "failed") {
+          // Ön sonuç zaten gösterildiyse kullanıcıyı sonuçsuz bırakma: hata
+          // yalnızca karne turuna aittir, ürünler canlı doğrulanmıştır.
+          if (partialDeliveredRef.current) {
+            throw new Error(
+              `DISCOVERY_JOB_COUNCIL_TAIL_FAILED: ${job.error || "konsey karnesi tamamlanamadı"}`,
+            );
+          }
+          throw new Error(job.error || "Arama tamamlanamadı.");
+        }
+        if (job.result) {
+          if (job.status === "completed") return job.result;
+          // `status: processing` + `result` dolu = ön sonuç.
+          deliverPartial(job.result);
+        }
         const waitMs =
           elapsedMs < POLL_BACKOFF_AFTER_MS
             ? intervalMs
@@ -134,11 +219,19 @@ export function useFinderSearch(opts: {
         await new Promise((resolve) => setTimeout(resolve, waitMs));
         elapsedMs += waitMs;
       }
+      if (partialDeliveredRef.current) {
+        throw new Error(
+          `DISCOVERY_JOB_COUNCIL_TAIL_TIMEOUT: konsey karneleri ${Math.round(maxWaitMs / 60_000)} dakikalık pencere içinde yetişmedi.`,
+        );
+      }
       throw new Error(
         `DISCOVERY_JOB_TIMEOUT: Arka plan analizi ${Math.round(maxWaitMs / 60_000)} dakika içinde tamamlanmadı.`,
       );
     },
     onSuccess: (res, vars) => {
+      partialDeliveredRef.current = false;
+      setEnriching(false);
+      setCouncilPending(false);
       try {
         const products = toProductList(res);
         const fallbackMessage =
@@ -180,6 +273,16 @@ export function useFinderSearch(opts: {
       if (err.message.includes("NO_CREDITS")) {
         toast.error("Out of credits — upgrade to keep going.");
         opts.onNeedUpgrade();
+      } else if (partialDeliveredRef.current) {
+        // Ön sonuç ekranda: hata yalnızca konsey karne turuna ait. Ürünleri
+        // silmek kullanıcıyı haksız yere sonuçsuz bırakırdı.
+        partialDeliveredRef.current = false;
+        setEnriching(false);
+        setCouncilPending(false);
+        setStalled(false);
+        toast.warning(
+          "AI Konsey karneleri tamamlanamadı. Canlı doğrulanmış ürünler ve puanları korundu.",
+        );
       } else {
         opts.onClearResults();
         setFallbackNotice(null);
@@ -188,6 +291,8 @@ export function useFinderSearch(opts: {
       }
     },
     onSettled: () => {
+      setEnriching(false);
+      setCouncilPending(false);
       setStalled(false);
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     },
@@ -210,6 +315,9 @@ export function useFinderSearch(opts: {
         },
       }),
     onSuccess: (res) => {
+      partialDeliveredRef.current = false;
+      setEnriching(false);
+      setCouncilPending(false);
       try {
         const products = toProductList(res);
         opts.onResults(products.length > 0 ? attachWinnerScores(products) : [], [], null);
@@ -233,6 +341,8 @@ export function useFinderSearch(opts: {
       }
       opts.onClearResults();
       setStalled(false);
+      setEnriching(false);
+      setCouncilPending(false);
       setSearchError(
         err.message.includes("HF_TOKEN_MISSING")
           ? {
@@ -266,6 +376,9 @@ export function useFinderSearch(opts: {
       setSearchError(null);
       setSearchAttempt(nicheValue);
       setStalled(false);
+      setEnriching(false);
+      setCouncilPending(false);
+      partialDeliveredRef.current = false;
       searchNicheRef.current = nicheValue;
 
       const effectivePlatforms = (() => {
@@ -342,6 +455,10 @@ export function useFinderSearch(opts: {
 
   return {
     searching,
+    /** Ön sonuç ekranda, hat hâlâ sürüyor (sonuç listesini gösterir). */
+    enriching,
+    /** AI Konsey karne turu hâlâ bekleniyor (yalnızca dürüst durum rozetini açar). */
+    councilPending,
     fallbackNotice,
     searchError,
     searchAttempt,
