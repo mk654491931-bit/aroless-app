@@ -30,6 +30,8 @@ export type PipelineSignals = {
   tiktok: string[];
   amazon: string[];
   google_rising: string[];
+  /** Trend radarı kaynaklarından (Google/Amazon/TikTok/Yandex/RSS/GitHub) gelen ortak trend adları. */
+  radar: string[];
   github: { full_name: string; stars: number; description: string; topics: string[] }[];
   sources: { name: string; status: "active" | "error"; items: number }[];
   collected_at: string;
@@ -98,10 +100,13 @@ async function collect(
   const [trendsRes, redditRes, scrapeRes, ghRes] = await Promise.allSettled([
     getGoogleTrends(keyword, country),
     fetchRedditSignals(keyword),
+    // Trend radarı kazımaları ORTAK kullanılır: konsey yalnızca Google/Amazon/
+    // TikTok'a değil, Yandex/RSS/GitHub kazımalarına da bakar. Hepsi paralel ve
+    // süre sınırlı koşar; bir kaynak düşse diğerleri karneyi besler.
     runScrapeJob({
       region: country,
       category,
-      sources: ["Google", "Amazon", "TikTok"],
+      sources: ["Google", "Amazon", "TikTok", "Yandex", "RSS", "GitHub"],
       niche: keyword,
     }),
     fetchGitHubTrendsForNiche(keyword),
@@ -132,6 +137,7 @@ async function collect(
   let tiktok: string[] = [];
   let amazon: string[] = [];
   let google_rising: string[] = [];
+  let radar: string[] = [];
   if (scrapeRes.status === "fulfilled") {
     const byName = (s: string) =>
       scrapeRes.value.trends
@@ -141,6 +147,14 @@ async function collect(
     tiktok = byName("TikTok");
     amazon = byName("Amazon");
     google_rising = byName("Google");
+    // Tüm trend radarı kaynaklarından ortak trend listesi (tekrarsız).
+    radar = [
+      ...new Set(
+        scrapeRes.value.trends
+          .map((t) => `${t.source}: ${t.trend_name}`)
+          .filter((line) => line.length > 3),
+      ),
+    ].slice(0, 16);
     for (const st of scrapeRes.value.statuses) {
       sources.push({
         name: st.source === "Amazon" ? "Amazon Movers & Shakers" : `${st.source} Creative/Public`,
@@ -175,6 +189,7 @@ async function collect(
     tiktok,
     amazon,
     google_rising,
+    radar,
     github,
     sources,
     collected_at: new Date().toISOString(),
@@ -199,6 +214,8 @@ export function signalsBlock(s: PipelineSignals): string {
   if (s.google_rising.length) lines.push(`GOOGLE RISING QUERIES: ${s.google_rising.join(" | ")}`);
   if (s.amazon.length) lines.push(`AMAZON MOVERS & SHAKERS: ${s.amazon.join(" | ")}`);
   if (s.tiktok.length) lines.push(`TIKTOK CREATIVE CENTER: ${s.tiktok.join(" | ")}`);
+  if (s.radar?.length)
+    lines.push(`TREND RADAR (Google/Amazon/TikTok/Yandex/RSS/GitHub kazımaları): ${s.radar.join(" | ")}`);
   if (s.reddit.length)
     lines.push(
       `REDDIT CONSUMER SIGNALS:\n${s.reddit

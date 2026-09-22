@@ -202,16 +202,16 @@ describe("workerBudgetMs / clientWaitMs", () => {
 });
 
 describe("councilEnrichLimit (kalan süreye göre karne sayısı)", () => {
-  it("260 sn'lik hat bütçesinde 4 ürüne karne çıkarır", () => {
-    // (260 sn - 5 sn yazma payı) / 62 sn karne = 4 → tek bir ürün kalan süreyi
+  it("260 sn'lik hat bütçesinde tam 14 ajanlı 2 karneye yer var", () => {
+    // (260 sn - 5 sn yazma payı) / 98 sn karne = 2 → tek bir ürün kalan süreyi
     // yiyip diğer ürünleri karnesiz bırakamaz.
-    expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBe(4);
+    expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBe(2);
     expect(councilEnrichLimit(DISCOVERY_MAX_BUDGET_MS)).toBeLessThan(8);
   });
 
   it("süre azaldıkça karne sayısı da azalır (sığmayan iş başlatılmaz)", () => {
-    expect(councilEnrichLimit(200_000)).toBe(3);
-    expect(councilEnrichLimit(130_000)).toBe(2);
+    expect(councilEnrichLimit(200_000)).toBe(1);
+    expect(councilEnrichLimit(130_000)).toBe(1);
     expect(councilEnrichLimit(65_000)).toBe(0);
     expect(councilEnrichLimit(0)).toBe(0);
     expect(councilEnrichLimit(-1_000)).toBe(0);
@@ -219,7 +219,7 @@ describe("councilEnrichLimit (kalan süreye göre karne sayısı)", () => {
   });
 
   it("üst sınırı aşmaz", () => {
-    expect(councilEnrichLimit(10 * 60_000)).toBe(8);
+    expect(councilEnrichLimit(10 * 60_000)).toBe(6);
     expect(councilEnrichLimit(10 * 60_000, 3)).toBe(3);
   });
 });
@@ -235,8 +235,10 @@ describe("councilEnrichCallMs (sıradaki karne turunun bütçesi)", () => {
   });
 
   it("kalan süreye göre kırpılır ve dönüş payını asla yemez", () => {
-    // 100 sn kaldı: 100 − 10 (dönüş) − 3 (kuyruk) = 87 sn.
-    expect(councilEnrichCallMs(100_000, 10_000)).toBe(87_000);
+    // 120 sn kaldı: 120 − 10 (dönüş) − 3 (kuyruk) = 107 sn (üst sınır 120).
+    expect(councilEnrichCallMs(120_000, 10_000)).toBe(107_000);
+    // 110 sn kaldı: 97 sn tam 14 ajanlı karneye (98 sn) yetmez → hiç başlamaz.
+    expect(councilEnrichCallMs(110_000, 10_000)).toBe(0);
   });
 
   it("her durumda üst sınıra saygı duyar ve sözü aşmaz", () => {
@@ -492,12 +494,14 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     expect(plan.generationMs).toBe(60_000);
     expect(plan.judgePerProductMs).toBe(12_500);
     expect(plan.verifyReserveMs).toBe(15_000);
-    expect(plan.councilReserveMs).toBe(75_000);
+    // Karne rezervi tam 14 ajanlı TEK bir karneye (98 sn) ayrılır: ekipler ve
+    // hakemler paralel koştuğu için 12 üye tek pencereye sığar.
+    expect(plan.councilReserveMs).toBe(98_000);
     // Karne turu EN İYİ 3 ürünle sınırlı: döngü tüm ürünleri gezip bütçenin son
     // saniyesine kadar yakmaz (eskiden "tıkla → sonuç" hep ~4,5 dk oluyordu).
     expect(plan.councilTargetCount).toBe(3);
     // Erken aşamalar + konsey rezervi kullanılabilir sürenin içinde kalır.
-    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(149_000);
+    expect(plan.prepMs + plan.generationMs + plan.councilReserveMs).toBe(172_000);
   });
 
   it("konsey rezervi hedef karne sayısına göre ayrılır ve bütçeye sığar", () => {
@@ -525,8 +529,8 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
     // Karne rezervi (75 sn) zaten ayrıldığı için konseye 123,5 sn kalır.
     expect(leftAtCouncil).toBe(123_500);
     const carnetMs = councilEnrichCallMs(leftAtCouncil, plan.returnFloorMs);
-    // Çağrı başına üst sınır 90 sn; kalan süre bunun üstünde olduğu için kırpılır.
-    expect(carnetMs).toBe(90_000);
+    // Kalan süre, tam 14 ajanlı karneye fazlasıyla yeter (alt sınır 98 sn).
+    expect(carnetMs).toBe(110_500);
     expect(carnetMs).toBeGreaterThanOrEqual(COUNCIL_ENRICH_MIN_MS);
     // Karne başladığında kalan süreyi AŞMAZ: hat sözünü bozamaz.
     expect(carnetMs + plan.returnFloorMs).toBeLessThanOrEqual(leftAtCouncil);
@@ -534,10 +538,10 @@ describe("discoveryStagePlan (280 sn'lik hattın aşama planı)", () => {
 
   it("karne rezervden hızlı biterse süre boşa gitmez; sığmıyorsa hiç başlatılmaz", () => {
     const plan = discoveryStagePlan(workerBudgetMs());
-    // İlk karne 20 sn'de bitti (önbellek isabeti) → 80 sn kaldı → ikinci sığar.
-    expect(councilEnrichCallMs(100_000 - 20_000, plan.returnFloorMs)).toBe(67_000);
-    // 30 sn sürdüyse kalan 70 sn tam karneye (62 sn) yetmez → başlatılmaz.
-    expect(councilEnrichCallMs(100_000 - 30_000, plan.returnFloorMs)).toBe(0);
+    // Kalan süre 120 sn: 107 sn'lik ikinci karne başlar.
+    expect(councilEnrichCallMs(120_000, plan.returnFloorMs)).toBe(107_000);
+    // Kalan 110 sn tam 14 ajanlı karneye (98 sn) yetmez → hiç başlatılmaz.
+    expect(councilEnrichCallMs(110_000, plan.returnFloorMs)).toBe(0);
   });
 });
 
@@ -583,14 +587,16 @@ describe("280 sn sözü — uçtan uca zaman çizelgesi simülasyonu", () => {
     expect(jobPollingPlan().pollMaxMs).toBeGreaterThanOrEqual(t + DISCOVERY_RETURN_MARGIN_MS);
   });
 
-  it("aşamalar hızlı bittiğinde artan süre karneye dönüşür (2 ürün karne alır)", () => {
+  it("aşamalar hızlı bittiğinde artan süre karneye dönüşür (tam 14 ajanlı 1 karne)", () => {
+    // 60 sn'de biten aşamalardan sonra kalan ~200 sn, 120 sn'lik ÜST SINIRLA
+    // kırpılan TAM 14 ajanlı tek karneye dönüşür (ikinci karne sığmaz).
     const { carnets, t, budget, plan } = simulate(6, 60_000);
-    expect(carnets).toBe(2);
+    expect(carnets).toBe(1);
     expect(t).toBeLessThanOrEqual(budget - plan.returnFloorMs);
   });
 
   it("süre yetersizse karne HİÇ başlatılmaz (yarım karne üretilmez, söz aşılmaz)", () => {
-    // Aşamalar 200 sn sürdü → kalan 60 sn, tam karne (62 sn) sığmaz.
+    // Aşamalar 200 sn sürdü → kalan 60 sn, tam 14 ajanlı karne (98 sn) sığmaz.
     const { carnets, t } = simulate(6, 200_000);
     expect(carnets).toBe(0);
     expect(t).toBe(200_000);

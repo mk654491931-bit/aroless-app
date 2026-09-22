@@ -217,7 +217,7 @@ export function AnalysisPipelineModal({
             <div className="min-w-0 flex-1">
               <div className="text-sm font-bold leading-tight">AI Konsey Rolleri</div>
               <div className="mt-0.5 text-xs text-muted-foreground">
-                14 rol · karne en iyi 3 ürün için çalışır
+                14 rol · karne en iyi ürünler için çalışır (bütçeye göre 1-3)
               </div>
             </div>
           </div>

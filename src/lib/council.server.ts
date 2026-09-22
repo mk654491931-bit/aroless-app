@@ -570,6 +570,7 @@ function emptySignals(query: string, country: string): PipelineSignals {
     tiktok: [],
     amazon: [],
     google_rising: [],
+    radar: [],
     github: [],
     sources: [],
     collected_at: new Date().toISOString(),
@@ -657,6 +658,13 @@ async function build(
   country: string,
   category: string,
   budget: CouncilBudget,
+  /**
+   * Ürün bulucunun ZATEN topladığı canlı kanıt (GitHub trendi + doğrulanmış
+   * pazar kanıtı) ve trend radarı kazımaları. Konsey karne turu bunu anahtar
+   * kelime sinyallerinin ÜSTÜNE ekler; böylece 14 ajan aynı veriyi görür ve
+   * bulucu ile konsey ORTAK karar verir (ayrı iki gerçeklik olmaz).
+   */
+  extraEvidence = "",
 ): Promise<CouncilReport> {
   const skipped: string[] = [];
   /** Her çağrı kendi aşamasının bütçesine bağlanır. */
@@ -675,7 +683,9 @@ async function build(
     signalsOutcome.kind === "value" ? signalsOutcome.value.data : emptySignals(query, country);
   if (signalsOutcome.kind !== "value") skipped.push("canlı veri hatları");
   bus.emit("signals:collected", { traceId, coverage: 0, ms: Date.now() - tSignals });
-  const block = signalsBlock(signals);
+  // Konsey kanıt bloğu = trend radarı + Reddit + GitHub sinyalleri + bulucunun
+  // eklediği canlı kanıt. Tüm 14 üye aynı bloğu görür.
+  const block = [signalsBlock(signals), extraEvidence.trim()].filter(Boolean).join("\n\n");
 
   const total = signals.sources.length || 1;
   const active = signals.sources.filter((s) => s.status === "active" && s.items > 0).length;
@@ -852,6 +862,7 @@ export async function runCouncil(
   lang = "tr",
   budgetMs: number = defaultCouncilBudgetMs(),
   depth?: CouncilDepth,
+  extraEvidence = "",
 ): Promise<CouncilReport> {
   activeCouncilLang = lang.slice(0, 2);
   // Zenginleştirme (ürün bulucu içinden): kullanıcı aynı ürün için TAM konseyi
@@ -864,7 +875,7 @@ export async function runCouncil(
   const budget = planCouncilBudget({ budgetMs, depth });
   const scope = depth === "enrich" ? COUNCIL_ENRICH_SCOPE : "council";
   const { data, cache_hit } = await cached(scope, [query, country, category, lang], () =>
-    build(query, country, category, budget),
+    build(query, country, category, budget, extraEvidence),
   );
   return { ...data, cache_hit };
 }

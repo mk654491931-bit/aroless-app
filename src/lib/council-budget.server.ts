@@ -87,23 +87,27 @@ export const COUNCIL_FULL_PROFILE: Profile = {
  * Zenginleştirme profili — ürün bulucu gibi SÜRE KISITLI bir hattın İÇİNDEN
  * çağrılır.
  *
- * 6 uzman ekip (üretici) + müdür koşar; hakem turu ve bağımsız denetçi
- * ATLANIR ve bu durum raporda `skipped_stages` + `depth: "enrich"` ile
- * dürüstçe söylenir. Rezervler toplamı 52 sn + 10 sn dönüş payı = 62 sn:
- * böylece tek bir ürün bütün bütçeyi yiyemez ve aynı iş içinde birkaç ürün
- * birden çok motorlu karne alabilir.
+ * Ürün bulucudaki konsey artık 14 ajanın TAMAMINI koşar: 6 uzman ekip
+ * (üretici) + 6 hakem + müdür + bağımsız denetçi. Eskiden hakem turu ve
+ * denetçi atlanıyordu (`skips: ["review", "auditor"]`) ve kullanıcı ürün
+ * kartında yalnızca 7 üyenin çıktısını görüyordu; bulucu konseyi ile /council
+ * ekranındaki 14'lü konsey aynı karneyi vermiyordu.
+ *
+ * Rezervler toplamı 88 sn + 10 sn dönüş payı = 98 sn. Bulucu hattı 280 sn
+ * sözünü bozmaz: hat, karne için ayırdığı rezervi (`discoveryStagePlan` →
+ * `councilReserveMs`) buna göre böler ve sığmıyorsa karne hiç başlatılmaz.
+ * Ekipler ve hakemler PARALEL koştuğu için 12 üye tek bir pencereye sığar.
  */
 export const COUNCIL_ENRICH_PROFILE: Profile = {
-  perCallMs: 14_000,
+  perCallMs: 16_000,
   maxAttempts: 2,
   reserves: {
     signals: 8_000,
-    teams: 26_000,
-    review: 0,
+    teams: 28_000,
+    review: 20_000,
     director: 18_000,
-    auditor: 0,
+    auditor: 14_000,
   },
-  skips: ["review", "auditor"],
 };
 
 /** Sonucu yazıp yanıtı serialize etmek için ayrılan pay. */
@@ -119,12 +123,12 @@ export const COUNCIL_ENRICH_MIN_MS = sumReserves(COUNCIL_ENRICH_PROFILE) + COUNC
 /**
  * Kısa karneye verilebilecek ÜST bütçe (ms).
  *
- * Rezervler tek başına 52 sn tutar; en kötü durumda hakem/deneme tekrarları da
- * eklenince ürün başına maliyet ~62-70 sn'yi geçmez. Üst sınırı bu yüzden
- * koyuyoruz: bulucu hattı 8 ürünü karneye çıkarmak istese bile tek bir ürün
- * hattın kalan süresini yiyip sonrakileri imkânsız bırakamaz.
+ * Rezervler tek başına 88 sn tutar; en kötü durumda hakem/deneme tekrarları da
+ * eklenince ürün başına maliyet ~98 sn'yi geçmez. Üst sınırı bu yüzden
+ * koyuyoruz: bulucu hattı birden çok ürünü karneye çıkarmak istese bile tek bir
+ * ürün hattın kalan süresini yiyip sonrakileri imkânsız bırakamaz.
  */
-export const COUNCIL_ENRICH_BUDGET_MS = 90_000;
+export const COUNCIL_ENRICH_BUDGET_MS = 120_000;
 
 /** Bu süreden kısa bir çağrı başlatmak anlamsız (boşa zaman aşımı olur). */
 export const MIN_CALL_MS = 8_000;

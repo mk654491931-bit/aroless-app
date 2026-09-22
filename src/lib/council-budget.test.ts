@@ -89,11 +89,17 @@ describe("profil rezervleri platform limitine sığar", () => {
 });
 
 describe("kısa karne profili (ürün bulucu içinden)", () => {
-  it("6 uzman ekip + müdür koşar; hakem turu ve denetçi atlanır", () => {
+  it("14 ajanın TAMAMI koşar: 6 ekip + 6 hakem + müdür + denetçi", () => {
     const budget = planCouncilBudget({ budgetMs: HOBBY_LIMIT_MS, depth: "enrich", now: 0 });
     expect(budget.depth).toBe("enrich");
-    expect(budget.skips).toEqual(["review", "auditor"]);
-    expect(sumReserves(COUNCIL_ENRICH_PROFILE)).toBe(52_000);
+    // Ürün bulucu konseyi ile /council ekranı aynı 14'lü karneyi verir: hiçbir
+    // aşama atlanmaz, hakem turu ve bağımsız denetçi de koşar.
+    expect(budget.skips).toEqual([]);
+    expect(COUNCIL_ENRICH_PROFILE.skips ?? []).toEqual([]);
+    expect(sumReserves(COUNCIL_ENRICH_PROFILE)).toBe(88_000);
+    for (const stage of COUNCIL_STAGE_ORDER) {
+      expect(budget.reserves[stage]).toBeGreaterThan(0);
+    }
   });
 
   it("otomatik seçimde (depth verilmezse) asla enrich'e düşmez", () => {
@@ -103,45 +109,44 @@ describe("kısa karne profili (ürün bulucu içinden)", () => {
     expect(planCouncilBudget({ budgetMs: HOBBY_LIMIT_MS, now: 0 }).skips).toEqual([]);
   });
 
-  it("atlanan aşamalar için hiç çağrı bütçesi harcanmaz", () => {
+  it("hakem turu ve denetçi sonraki aşamaların rezervinde yer bulur", () => {
     const budget = planCouncilBudget({
       budgetMs: COUNCIL_ENRICH_BUDGET_MS,
       depth: "enrich",
       now: 0,
     });
-    // Kapı `skips` listesidir (council.server bu aşamaları hiç başlatmaz);
-    // rezervleri de 0 olduğu için zincirden hiç süre almazlar.
-    expect(budget.skips).toContain("review");
-    expect(budget.skips).toContain("auditor");
-    expect(budget.reserves.review).toBe(0);
-    expect(budget.reserves.auditor).toBe(0);
-    // Atlanan aşamalar sonraki rezervlere yazılmaz: müdür yine yer bulur.
-    expect(laterReserveMs(budget, "teams")).toBe(18_000);
+    // Hakem turu (6 hakem) ve bağımsız denetçi artık atlanmaz; ikisinin de
+    // rezervi sonraki aşamalara yazılır ve müdür/denetçi yine yer bulur.
+    expect(budget.reserves.review).toBe(20_000);
+    expect(budget.reserves.auditor).toBe(14_000);
+    expect(laterReserveMs(budget, "teams")).toBe(52_000);
+    expect(laterReserveMs(budget, "review")).toBe(32_000);
   });
 
   it("ürün başına maliyet sabittir ve 280 sn'lik hatta sığar", () => {
-    // Bulucu hat 280 sn ile sınırlı: tek bir ürün karnesi (rezervler + en kötü
-    // ek deneme) bu bütçenin küçük bir dilimini kullanmalı ki birkaç ürün
-    // birden karne alabilsin.
-    expect(COUNCIL_ENRICH_MIN_MS).toBe(62_000);
-    expect(COUNCIL_ENRICH_BUDGET_MS).toBe(90_000);
+    // Bulucu hat 280 sn ile sınırlı: tam 14 ajanlı tek karne (rezervler + en
+    // kötü ek deneme) bu bütçenin yarısını geçmemeli ki hat zamanında bitsin.
+    expect(COUNCIL_ENRICH_MIN_MS).toBe(98_000);
+    expect(COUNCIL_ENRICH_BUDGET_MS).toBe(120_000);
     expect(COUNCIL_ENRICH_BUDGET_MS).toBeLessThan(280_000 / 2);
     // Alt sınırın altında bir bütçe verilirse hat başlamamalı (bkz. bulucu:
     // `councilCount` hesabı bu sabitle ürün sayısını belirler).
     expect(COUNCIL_ENRICH_MIN_MS).toBeGreaterThan(COUNCIL_ENRICH_BUDGET_MS / 2);
   });
 
-  it("kısa karnede de hiçbir aşama sonrakini imkânsız bırakmaz", () => {
+  it("tam 14 ajanlı karnede de hiçbir aşama sonrakini imkânsız bırakmaz", () => {
     const budget = planCouncilBudget({
       budgetMs: COUNCIL_ENRICH_BUDGET_MS,
       depth: "enrich",
       now: 0,
     });
     let elapsed = 0;
-    for (const stage of ["signals", "teams", "director"] as const) {
+    for (const stage of COUNCIL_STAGE_ORDER) {
       expect(stageFits(budget, stage, elapsed)).toBe(true);
       elapsed += budget.reserves[stage];
     }
+    // Tüm aşamalar sırayla tam rezervini harcasa bile 120 sn'lik karne bütçesine
+    // dönüş payıyla sığar.
     expect(elapsed + COUNCIL_RETURN_MARGIN_MS).toBeLessThanOrEqual(COUNCIL_ENRICH_BUDGET_MS);
   });
 });

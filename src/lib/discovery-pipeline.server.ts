@@ -15,7 +15,11 @@ import type { Database } from "@/integrations/supabase/types";
 import { callAiMesh, callLovableAI, extractJson, withDeadline } from "@/lib/ai.server";
 import { normalizeProduct } from "@/lib/consistency";
 import type { CouncilReport } from "@/lib/council.server";
-import { HYBRID_RELAXED_MIN_SCORE, type CouncilSummary } from "@/lib/consensus-types";
+import {
+  HYBRID_RELAXED_MIN_SCORE,
+  combineJointScores,
+  type CouncilSummary,
+} from "@/lib/consensus-types";
 import type { CreditPool as ChargePool } from "@/lib/credits";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
@@ -888,19 +892,17 @@ JSON shape:
   };
 
   /**
-   * Ortak karar: hibrit motor puanı, karne geldiyse AI Konsey Aroless skoruyla
-   * ortalanır. Konsey öncesi ve sonrası aynı fonksiyon kullanılır — tek fark
-   * karne gelmiş olmasıdır.
+   * ORTAK KARAR: bulucunun analiz hattı puanı (hibrit pazar+lojistik ve/veya
+   * 4 ajanlı fikir birliği) ile 14'lü AI Konsey Aroless skoru tek puana
+   * indirgenir. Konsey öncesi ve sonrası aynı fonksiyon kullanılır — tek fark
+   * karne gelmiş olmasıdır (karne gelince konsey eşit ortak olur).
    */
   const applyUnifiedScore = () => {
     finalProducts = finalProducts.map((p) => {
-      const hybridScore = p.hybrid?.calculated_score ?? p.consensus?.average_score ?? 0;
-      const velora = p.council?.velora_score;
-      const unified =
-        typeof velora === "number" && velora > 0
-          ? Math.round((hybridScore + velora) / 2)
-          : Math.round(hybridScore);
-      return { ...p, unified_score: unified };
+      const analysisScore = p.hybrid?.calculated_score ?? p.consensus?.average_score ?? 0;
+      const councilScore = p.council?.velora_score ?? 0;
+      const joint = combineJointScores({ analysisScore, councilScore });
+      return { ...p, unified_score: joint.score };
     });
     // En iyi özellikteki ürünler ortak puana göre en üstte.
     finalProducts.sort((a, b) => (b.unified_score ?? 0) - (a.unified_score ?? 0));
@@ -919,11 +921,16 @@ JSON shape:
           evidence_level: breakdown.evidence_level,
         };
       })
-      .sort(
-        (a, b) =>
-          (b.winner_score ?? 0) - (a.winner_score ?? 0) ||
-          (b.unified_score ?? 0) - (a.unified_score ?? 0),
-      );
+      .sort((a, b) => {
+        // ORTAK KARAR sıralamaya da yansır: kazanan puanı tek başına karar
+        // vermez. 14'lü AI Konsey karnesi geldikçe ürün, kazanan puanının
+        // %70'i + ORTAK puanın (analiz hattı ⊕ konsey) %30'u ile sıralanır.
+        // Konsey öncesi ortak puan yalnızca analiz hattıdır; karne gelince
+        // konsey kararı sıralamayı gerçekten değiştirir (etiket olarak kalmaz).
+        const rankA = (a.winner_score ?? 0) * 0.7 + (a.unified_score ?? 0) * 0.3;
+        const rankB = (b.winner_score ?? 0) * 0.7 + (b.unified_score ?? 0) * 0.3;
+        return rankB - rankA || (b.winner_score ?? 0) - (a.winner_score ?? 0);
+      });
   };
 
   /**
@@ -1007,7 +1014,19 @@ JSON shape:
       if (action !== "carnet") break;
       const p = list[i];
       try {
-        const report = await runCouncil(p.name, country, data.category, "tr", carnetMs, "enrich");
+        // Karne turu, bulucunun ZATEN topladığı canlı kanıtı (GitHub trendi +
+        // doğrulanmış pazar kanıtı) da görür: 14 ajan ile analiz hattı aynı
+        // veriye bakıp ORTAK karar verir, iki ayrı gerçeklik oluşmaz.
+        const extraEvidence = [githubBlock, liveBlock].filter(Boolean).join("\n\n");
+        const report = await runCouncil(
+          p.name,
+          country,
+          data.category,
+          "tr",
+          carnetMs,
+          "enrich",
+          extraEvidence,
+        );
         const council: CouncilSummary = {
           velora_score: report.velora_score,
           verdict: report.verdict,

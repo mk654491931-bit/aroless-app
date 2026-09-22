@@ -93,6 +93,53 @@ export const HYBRID_WEIGHT_AI2 = 0.45;
 export const HYBRID_DEFAULT_MIN_SCORE = 65;
 export const HYBRID_RELAXED_MIN_SCORE = 50;
 
+/**
+ * ORTAK KARAR (joint decision) — ürün bulucunun ANALİZ HATTI puanı ile 14'lü AI
+ * Konsey karnesinin birleşimi. Saf fonksiyon: sunucu ve istemci aynı sonucu
+ * verir, ek AI çağrısı yoktur.
+ *
+ * Bulucu hattı iki bağımsız sinyal üretir:
+ *  - analiz puanı (`analysis`): hibrit pazarlama+lojistik puanı ve/veya 4 ajanlı
+ *    fikir birliği ortalaması — hattın KENDİ kararı,
+ *  - konsey puanı (`council`): 14 ajanın (6 ekip + 6 hakem + müdür + denetçi)
+ *    ağırlıklı Aroless skoru.
+ * İkisi de varsa karar EŞİT ortaklıktır (analiz %50 / konsey %50): konsey bir
+ * veto değildir, ortak karar verir. Yalnızca biri varsa o karar geçerlidir.
+ * Geçersiz (0 / NaN / negatif) puan "yok" sayılır.
+ */
+export function combineJointScores(input: {
+  analysisScore?: number | null;
+  councilScore?: number | null;
+}): {
+  score: number;
+  source: "joint" | "analysis" | "council" | "none";
+  analysisWeight: number;
+  councilWeight: number;
+} {
+  const norm = (value: number | null | undefined): number | null => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  };
+  const analysis = norm(input.analysisScore);
+  const council = norm(input.councilScore);
+  if (analysis === null && council === null) {
+    return { score: 0, source: "none", analysisWeight: 0, councilWeight: 0 };
+  }
+  if (analysis === null) {
+    return { score: council!, source: "council", analysisWeight: 0, councilWeight: 1 };
+  }
+  if (council === null) {
+    return { score: analysis, source: "analysis", analysisWeight: 1, councilWeight: 0 };
+  }
+  return {
+    score: Math.round(analysis * 0.5 + council * 0.5),
+    source: "joint",
+    analysisWeight: 0.5,
+    councilWeight: 0.5,
+  };
+}
+
 export function hybridBadge(score: number): { label: string; cls: string } {
   if (score >= 85)
     return {
