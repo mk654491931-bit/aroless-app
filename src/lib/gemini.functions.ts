@@ -295,9 +295,15 @@ export const generateProducts = createServerFn({ method: "POST" })
     const jobs = await import("@/lib/discovery-jobs.server");
 
     // KRİTİK: istek içinde koşarken hatta MUTLAKA platform bütçesi verilmeli.
-    // Bütçe verilmezse hat 240 sn varsayar; 60/300 sn'lik bir fonksiyonun
-    // ortasında kesilir ve kullanıcı 504 görür. Bütçe ile hat `fast` profile
-    // inip zamanında sonuç döner (Vercel: kısa profil, Render: tam derinlik).
+    // Bütçe verilmezse hat 240 sn varsayar; 60 sn'lik bir fonksiyonun ortasında
+    // kesilir ve kullanıcı 504 görür. Bütçe her zaman uçtan uca sözle (280 sn)
+    // kırpılır: `workerBudgetMs()` = min(260 sn, platform limiti − 16 sn).
+    //
+    // NOT: bu `inline` yol YALNIZCA QStash kurulmadığında seçilir (`workerHandoff`
+    // değilse). Vercel'de QSTASH_TOKEN + JOB_WORKER_SECRET varsa ağır hat
+    // `/api/worker`'a yayınlanır ve ön sonuç mekanizması da bu yolda çalışır —
+    // yani `inline` düştüyse kullanıcı ürünleri ilk yoklamada görmez.
+    // Doğrulama: `/health` → `workflow.dispatch` = `qstash`.
     const inline = () =>
       runProductDiscovery(data, {
         supabase: context.supabase,

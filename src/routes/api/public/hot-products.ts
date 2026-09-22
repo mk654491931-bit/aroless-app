@@ -25,11 +25,53 @@ type Payload = {
 const cache = new Map<string, Payload>();
 const inflight = new Map<string, Promise<Payload>>();
 
-/** İstek içinde taramayı beklemek için sert üst sınır (Hobby: 60 sn limit). */
+/**
+ * İstek içinde taramayı beklemek için sert üst sınır.
+ *
+ * Bu sayı KISA tutulur: tarama tipik olarak 20-40 sn sürer, kullanıcıyı bu
+ * kadar bekletmek yerine eldeki gerçek veriyi hemen verip taze taramayı arka
+ * planda başlatmak yeğlenir (bkz. `getPayload`). Değer yalnızca hiç önbellek
+ * yokken ilk boyama gecikmesini sınırlar; istemci `warming`/`stale` durumunda
+ * kısa aralıkla yoklar.
+ */
 const SCAN_WAIT_MS = Math.max(
-  3_000,
-  Math.min(25_000, Number(process.env["HOT_PRODUCTS_WAIT_MS"] ?? 14_000)),
+  2_000,
+  Math.min(25_000, Number(process.env["HOT_PRODUCTS_WAIT_MS"] ?? 7_000)),
 );
+
+/**
+ * Kalıcı (Supabase `ai_cache`) önbellek anahtarı.
+ *
+ * Kritik: sunucusuz çalıştırmada `cache` Map'i örnek (instance) başına ve
+ * geçicidir; soğuk örnekte boş olduğu için "Product Finger" her seferinde
+ * taramayı baştan bekliyordu. Kalıcı katman sayesinde BİR kez tamamlanan tarama
+ * tüm örneklerde ve tüm ziyaretçilerde anında servis edilir.
+ */
+function persistKey(niche: string): string {
+  return `hot-products:v2:${niche.trim().toLowerCase() || "all"}`;
+}
+
+/** Taramayı mümkün olduğunca kalıcı katmana da yazar (en iyi çaba). */
+async function persistPayload(niche: string, payload: Payload): Promise<void> {
+  if (!payload.items.length) return;
+  try {
+    const { cacheSet } = await import("@/lib/ai-cache.server");
+    await cacheSet(persistKey(niche), "hot-products", payload);
+  } catch (e) {
+    console.error("Hot products persist failed", e);
+  }
+}
+
+/** Kalıcı katmandan son gerçek taramayı okur (bayat olsa da kullanılır). */
+async function readPersisted(niche: string): Promise<Payload | null> {
+  try {
+    const { cacheGet } = await import("@/lib/ai-cache.server");
+    const hit = await cacheGet<Payload>(persistKey(niche));
+    return hit && Array.isArray(hit.items) && hit.items.length ? hit : null;
+  } catch {
+    return null;
+  }
+}
 
 function hourKey(d = new Date()) {
   return d.toISOString().slice(0, 13);
@@ -209,9 +251,14 @@ function startScan(cacheKey: string, niche: string): Promise<Payload> {
   const pending = inflight.get(cacheKey);
   if (pending) return pending;
   const p = build(niche)
-    .then((payload) => {
-      if (payload.items.length) cache.set(cacheKey, payload);
-      if (cache.size > 40) cache.delete(cache.keys().next().value as string);
+    .then(async (payload) => {
+      if (payload.items.length) {
+        cache.set(cacheKey, payload);
+        if (cache.size > 40) cache.delete(cache.keys().next().value as string);
+        // Kalıcı katman: sunucusuzda örnek değişse bile aynı tarama yeniden
+        // kullanılır, yani tarama başına bir kez AI çağrısı yapılır.
+        await persistPayload(cacheKey, payload);
+      }
       return payload;
     })
     .finally(() => {
@@ -248,6 +295,20 @@ async function getPayload(niche: string): Promise<Payload> {
   const scan = startScan(cacheKey, niche);
   // Elimizde geçen saatin verisi varsa beklemeden onu dön; yenisi arka planda gelir.
   if (cached?.items.length) return { ...cached, status: "stale" };
+
+  // Bu örnekte ısınma yok: kalıcı katmana bak. Bir kez tamamlanmış tarama
+  // varsa (başka örnek/ziyaretçi üretmiş olabilir) ANINDA onu döneriz ve
+  // taze tarama arka planda sürer. Böylece "Product Finger" dakikalarca
+  // boş ekran göstermez — gerçek (bayat işaretli) veri ilk saniyede gelir.
+  const persisted = await readPersisted(cacheKey);
+  if (persisted?.items.length) {
+    if (persisted.hour === hourKey()) {
+      cache.set(cacheKey, persisted);
+      return { ...persisted, status: "ready" };
+    }
+    cache.set(cacheKey, persisted);
+    return { ...persisted, status: "stale", refreshed_at: persisted.refreshed_at };
+  }
 
   try {
     const fresh = await withDeadline(scan, SCAN_WAIT_MS);

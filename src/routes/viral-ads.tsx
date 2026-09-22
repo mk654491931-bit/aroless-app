@@ -140,6 +140,10 @@ function ViralAdsPage() {
     enabled: !!user,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
+    // Sunucu taramayı arka planda yaparken boş liste döner ("warming"); bu
+    // durumda kısa aralıkla tekrar sor, böylece tarama biter bitmez reklamlar
+    // kendiliğinden görünür ve kullanıcı elle yenilemek zorunda kalmaz.
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? false : 8_000),
   });
 
   const filtered = useMemo(() => {

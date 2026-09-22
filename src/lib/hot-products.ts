@@ -45,11 +45,19 @@ export type HotProduct = {
   signals?: ProductSignals;
 };
 
+/**
+ * `status` sunucudan gelir: `ready` (bu saatte taranmış), `stale` (önceki
+ * tarama, taze tarama arka planda sürüyor) veya `warming` (henüz veri yok).
+ * İstemci `warming`/`stale` görürse kısa aralıkla tekrar sorar.
+ */
+export type HotFeedStatus = "ready" | "stale" | "warming";
+
 export type HotFeed = {
   hour: string;
   refreshed_at: string;
   next_refresh_at: string;
   items: HotProduct[];
+  status: HotFeedStatus;
   error?: string;
 };
 
@@ -61,11 +69,13 @@ export async function fetchHotProducts(arg?: unknown): Promise<HotFeed> {
   if (!res.ok) throw new Error("Failed to load live feed");
   const json = (await res.json()) as Partial<HotFeed>;
   if (json.error && !(json.items ?? []).length) throw new Error(json.error);
+  const items = json.items ?? [];
   return {
     hour: json.hour ?? "",
     refreshed_at: json.refreshed_at ?? new Date().toISOString(),
     next_refresh_at: json.next_refresh_at ?? new Date().toISOString(),
-    items: json.items ?? [],
+    items,
+    status: json.status ?? (items.length ? "ready" : "warming"),
   };
 }
 

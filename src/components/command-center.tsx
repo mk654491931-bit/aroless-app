@@ -20,7 +20,12 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { fetchHotProducts, HOT_FEED_QUERY_KEY, type HotProduct } from "@/lib/hot-products";
+import {
+  fetchHotProducts,
+  HOT_FEED_QUERY_KEY,
+  type HotFeedStatus,
+  type HotProduct,
+} from "@/lib/hot-products";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -192,7 +197,14 @@ export function CommandCenter() {
     queryKey: [...HOT_FEED_QUERY_KEY, niche ?? "all"] as const,
     queryFn: () => fetchHotProducts(niche),
     staleTime: 5 * 60_000,
+    // Sunucu "hazırlanıyor/bayat" derse kısa aralıkla yokla: tarama bitince ürünler
+    // kendiliğinden düşer, kullanıcı sayfayı yenilemek zorunda kalmaz.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "ready" ? false : 6_000;
+    },
   });
+  const feedStatus = feed.data?.status;
 
   const { products, disqualified } = useMemo(() => {
     const source = feed.data?.items ?? [];
@@ -238,13 +250,17 @@ export function CommandCenter() {
   const drillAgent = agents.find((a) => a.agent_id === drill) ?? null;
 
   const [logOpen, setLogOpen] = useState(false);
-  const logs = useLogStream(selected, current?.finger ?? 0, logOpen);
+  const logs = useLogStream(selected, current?.finger ?? 0, logOpen, agents.length, feedStatus);
 
   const liveState = feed.isLoading
     ? "Syncing live market stream…"
     : feed.isError
       ? "Live feed unavailable — showing cached scan"
-      : null;
+      : feedStatus === "stale"
+        ? "Showing the last completed scan — refresh in progress…"
+        : feedStatus === "warming"
+          ? "Market scan running — products stream in as soon as they are grounded…"
+          : null;
   const mb = econ ? marginBadge(econ) : null;
 
   return (
@@ -734,7 +750,13 @@ function StatusPill({ status }: { status: Status }) {
 
 type LogLine = { t: string; lvl: string; msg: string };
 
-function useLogStream(product: HotProduct | null, finger: number, active: boolean) {
+function useLogStream(
+  product: HotProduct | null,
+  finger: number,
+  active: boolean,
+  agentCount: number,
+  feedStatus: HotFeedStatus | undefined,
+) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const idx = useRef(0);
   useEffect(() => {
@@ -742,16 +764,22 @@ function useLogStream(product: HotProduct | null, finger: number, active: boolea
     idx.current = 0;
     setLines([]);
     const e = econOf(product);
+    // Her satır canlı yükteki GERÇEK bir değerden türetilir. Uydurma sorgu
+    // sonucu (ör. sahte marka/trademark taraması) yazılmaz; eksik kanıt
+    // "null" olarak görünür.
+    const n = (v?: number) => (typeof v === "number" && Number.isFinite(v) ? v : "null");
     const templates = [
-      () => `GET /api/public/hot-products 200 { "cache": "hour" }`,
+      () =>
+        `feed.load { "status": ${JSON.stringify(feedStatus ?? "unknown")}, "cache": "hourly" }`,
       () =>
         `econ.compute { "retail": ${e.retail.toFixed(2)}, "net": ${e.net_profit.toFixed(2)}, "net_margin_pct": ${e.net_margin_pct} }`,
       () =>
         `filter.strict { "min_net_margin_pct": ${MIN_NET_MARGIN_PCT}, "pass": ${!e.disqualified} }`,
-      () => `agent.dispatch { "agents": 14, "weight": 0.70 }`,
+      () => `council.dispatch { "agents": ${agentCount}, "weight": 0.70 }`,
       () =>
-        `signals.read { "search_volume": ${product.signals?.search_volume_monthly ?? "null"}, "active_stores": ${product.signals?.active_stores ?? "null"} }`,
-      () => `uspto.query { "mark": "${product.name.split(" ")[0]}", "hits": 0 }`,
+        `signals.read { "search_volume": ${n(product.signals?.search_volume_monthly)}, "active_stores": ${n(product.signals?.active_stores)} }`,
+      () =>
+        `signals.grounded { "sources": ${JSON.stringify(product.signals?.sources?.slice(0, 3) ?? [])} }`,
       () => `score.merge { "finger": ${finger}, "formula": "council*0.70 + finger*0.30" }`,
     ];
     const id = setInterval(() => {
@@ -769,6 +797,6 @@ function useLogStream(product: HotProduct | null, finger: number, active: boolea
       ]);
     }, 900);
     return () => clearInterval(id);
-  }, [active, product, finger]);
+  }, [active, product, finger, agentCount, feedStatus]);
   return lines;
 }

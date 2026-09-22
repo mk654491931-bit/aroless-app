@@ -142,7 +142,9 @@ export function useFinderSearch(opts: {
       } | null;
       if (typeof queued?.jobId !== "string") return response;
 
-      // Bekleme bütçesi sunucudan gelir: Render'da ~14,9 dk, Vercel'de ~52 sn.
+      // Bekleme bütçesi sunucudan gelir; ürün bulucu tek bir söz verir:
+      // uçtan uca 280 sn (`jobPollingPlan`). Ön sonuç mekanizması sayesinde bu
+      // pencere yalnızca ÜST SINIRdır: ürünler tipik olarak ~1,5-2 dk'da görünür.
       const jobId = queued.jobId;
       const maxWaitMs = positiveNumber(queued.pollMaxMs) ?? DEFAULT_POLL_MAX_MS;
       const intervalMs = positiveNumber(queued.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS;

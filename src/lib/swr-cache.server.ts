@@ -52,6 +52,55 @@ const inflight = new Map<string, Promise<unknown>>();
 const DEFAULT_MAX_ENTRIES = 50;
 const MAX_ENTRIES_HARD_LIMIT = 400;
 
+/** Kalıcı katmanın (Supabase `ai_cache`) anahtar ön eki. */
+const PERSIST_PREFIX = "swr:v1:";
+/** Kalıcı okuma kısa tutulur: önbellek yüzünden istek gecikmemeli. */
+const PERSIST_READ_MS = 2_500;
+
+/**
+ * Kalıcı katman testlerde kapatılır.
+ *
+ * Testler bu modülün BELLEK içi sözleşmesini doğrular (ready/stale/warming);
+ * gerçek Supabase'e yazıp okusaydı önceki koşulardan kalan kayıtlar sonucu
+ * değiştirir ve süite kararsız hâle gelirdi. Kalıcı katmanın kendisi
+ * `ai-cache.server.ts` üzerinden ayrıca kullanılır.
+ */
+function persistEnabled(env: EnvMap = process.env): boolean {
+  if (env["SWR_PERSIST"] === "off") return false;
+  return !(env["VITEST"] || env["NODE_ENV"] === "test");
+}
+
+/**
+ * Bellekte kayıt yokken kalıcı katmandan okur.
+ *
+ * Neden: sunucusuz çalıştırmada (Vercel) `entries` Map'i örnek başına ve
+ * geçicidir. Kalıcı katman olmadan her soğuk örnek pahalı üretimi sıfırdan
+ * yapar; kullanıcı ya dakikalarca bekler ya boş/`warming` yanıt alır. Kayıtlı
+ * yaş (`at`) korunur, böylece bayat veri "taze" sanılmaz.
+ */
+async function hydrate<T>(key: string, isValid: (value: T) => boolean): Promise<Entry<T> | null> {
+  if (!persistEnabled()) return null;
+  try {
+    const { cacheGet } = await import("@/lib/ai-cache.server");
+    const hit = await cacheGet<Entry<T>>(`${PERSIST_PREFIX}${key}`);
+    if (!hit || !isValid(hit.data)) return null;
+    return { data: hit.data, at: Number(hit.at) || Date.now() };
+  } catch {
+    return null;
+  }
+}
+
+/** Üretilen veriyi kalıcı katmana yazar (en iyi çaba). */
+async function persist<T>(key: string, entry: Entry<T>): Promise<void> {
+  if (!persistEnabled()) return;
+  try {
+    const { cacheSet } = await import("@/lib/ai-cache.server");
+    await cacheSet(`${PERSIST_PREFIX}${key}`, "swr", entry);
+  } catch (e) {
+    console.error(`[swr] ${key} kalıcı yazma hatası`, e);
+  }
+}
+
 function passThrough<T>(value: T): boolean {
   return value !== null && value !== undefined;
 }
@@ -106,12 +155,16 @@ function startRefresh<T>(opts: SwrOptions<T>): Promise<T> {
   const isValid = opts.isValid ?? passThrough;
   const p = opts
     .build()
-    .then((value) => {
+    .then(async (value) => {
       // Boş/geçersiz sonucu önbelleğe yazmayız; yoksa bir sonraki istek
       // "taze" sanıp boş liste gösterirdi.
       if (isValid(value)) {
-        entries.set(opts.key, { data: value, at: Date.now() });
+        const entry = { data: value, at: Date.now() };
+        entries.set(opts.key, entry);
         prune(opts.maxEntries ?? DEFAULT_MAX_ENTRIES);
+        // Yazma beklenir: istek yenilemeyi bekliyorsa veri kalıcı katmana da
+        // inmiş olur ve sunucusuz ortamda bir sonraki istek onu bulur.
+        await persist(opts.key, entry);
       }
       return value;
     })
@@ -133,7 +186,16 @@ export async function serveStaleWhileRevalidate<T>(opts: SwrOptions<T>): Promise
   const env = opts.env ?? process.env;
   const isValid = opts.isValid ?? passThrough;
 
-  const cached = entries.get(opts.key) as Entry<T> | undefined;
+  let cached = entries.get(opts.key) as Entry<T> | undefined;
+  if (!cached || !isValid(cached.data)) {
+    // Bellekte yok: kalıcı katmana bak (sınırlı süre, isteği geciktirmesin).
+    const outcome = await withDeadlineOutcome(hydrate<T>(opts.key, isValid), PERSIST_READ_MS);
+    if (outcome.kind === "value" && outcome.value) {
+      entries.set(opts.key, outcome.value);
+      prune(opts.maxEntries ?? DEFAULT_MAX_ENTRIES);
+      cached = outcome.value;
+    }
+  }
   const usable = cached && isValid(cached.data) ? cached : undefined;
   const age = usable ? Date.now() - usable.at : Number.POSITIVE_INFINITY;
 

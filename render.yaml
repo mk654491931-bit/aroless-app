@@ -9,11 +9,25 @@
 # 22-key mesh: kod `src/lib/ai-keys.server.ts` her sağlayıcı için BASE adı ve
 # _1.._8 slotlarını tarar — hangi soneki kullanırsan otomatik bulunur.
 #
-# Find Winner Render'da 884sn full depth koşar; Vercel'de fonksiyon limitine göre
-# (Hobby 300sn → 284sn bütçe, 60sn'ye daraltılırsa fast profile) çalışır.
-# QStash publish timeout'u `discovery-jobs.server.ts` içindeki
-# `qstashTimeoutSeconds()` Render algılanınca otomatik 890s yapar; istemci
-# yoklama bütçesi de aynı fonksiyondan türetilir (yaklaşık 14,9 dk).
+# Find Winner TEK BİR SÖZ verir: uçtan uca en fazla 280 sn
+# (`DISCOVERY_END_TO_END_MS`, `discovery-jobs.server.ts`). Hattın kendi bütçesi
+# 260 sn'dir (280 − 20 sn dönüş payı); platform ne verirse versin hat kendini bu
+# sayıya sığdırır ve aşama pencerelerini içeride böler (`discoveryStagePlan`).
+#
+# Üç önemli davranış:
+#   1. ÖN SONUÇ: canlı doğrulanmış ürünler AI Konsey karneye başlamadan önce
+#      `searches.result` alanına yazılır (`status` = `processing` kalır). İstemci
+#      ilk yoklamada ürünleri gösterir, yoklamaya devam eder ve nihai sonuç
+#      geldiğinde üzerine yazar → kullanıcı ~1,5-2 dk'da ürün görür.
+#   2. KARNE ÜST SINIRI: konsey karne turu en iyi 3 ürünle sınırlıdır; döngü tüm
+#      ürünleri gezip bütçenin son saniyesine kadar yakmaz.
+#   3. QStash publish timeout'u `qstashTimeoutSeconds()` ile seçilir: Render
+#      algılanınca 890 sn, Vercel'de fonksiyon sınırı − 2 sn (Hobby 300 sn → 298 sn).
+#
+# Vercel'de (QSTASH_TOKEN + JOB_WORKER_SECRET TANIMLIYSA) iş `/api/worker`'a
+# yayınlanır ve arka planda koşar; bu iki anahtardan biri eksikse `inline` moda
+# düşer ve ağır hat isteğin İÇİNDE koşar. Doğrulama: `/health` →
+# `workflow.dispatch` = `qstash` olmalı.
 #
 # 504 KORUMASI (bu servisin en önemli ayarı): Render bir **kalıcı** Node servisi
 # çalıştırır, yani istek yanıtlandıktan sonra süreç yaşamaya devam eder. Ağır

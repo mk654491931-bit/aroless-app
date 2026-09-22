@@ -161,7 +161,9 @@ Ağır işi yapısal olarak bitirmek için iki geçerli kurulum vardır:
 
 Sunucusuz ortamda uzak worker tanımlı değilse ağır iş **istek içinde koşturulmaz**: onun yerine hızlı ve açık bir hata döner ve kredi iade edilir (`longJob: "unavailable"`). Konsey işi Render'daki `/api/jobs` ucuna QStash ile gider; uç işi süreç içi kuyruğa atıp anında `202` döner.
 
-Süre bütçesi platformdan otomatik türetilir (`src/lib/host-runtime.server.ts` + `discovery-jobs.server.ts`): Render'da worker ~884 sn, yoklama ~14,9 dk; Vercel'de fonksiyon limiti 300 sn (Hobby güncel limiti) olduğu için worker ~284 sn, yoklama ~4,9 dk.
+Süre bütçesi platformdan otomatik türetilir (`src/lib/host-runtime.server.ts` + `discovery-jobs.server.ts`), ama ürün bulucu TEK bir söz verir: **uçtan uca en fazla 280 sn** (`DISCOVERY_END_TO_END_MS`). Hattın kendi payı 260 sn'dir (280 − 20 sn dönüş payı) ve platform daha uzun bir limit verse bile hat bu sayıya sığar; istemcinin yoklama penceresi de aynı sabitten gelir (`jobPollingPlan`).
+
+Ürünler 280 sn'yi beklemez: canlı doğrulanmış ürünler AI Konsey karneye başlamadan önce yazılır ve istemci ilk yoklamada gösterir (bkz. `publishPartial` / `markJobPartial`). Tipi bir arama ~1,5-2 dk'da ürün gösterir, karne birkaç on saniye sonra kartın üstüne gelir.
 
 > **Vercel notu:** Eski "Hobby = 60 sn" kuralı artık geçerli değil (fluid compute ile Hobby'de de varsayılan ve üst sınır 300 sn). Bu yüzden `nitro.config.ts` varsayılanı 300'dür. Projede eski bir `VERCEL_FUNCTION_MAX_DURATION=60` değişkeni kaldıysa silin ya da 300 yapın; build ve tüm runtime bütçeleri bu tek değişkenden türediği için 60'ta kalırsanız ağır analizler fonksiyon ortasında kesilip 504 üretir.
 
@@ -225,8 +227,9 @@ Render'a **değer değil, yalnızca anahtar adı** `render.yaml` içinde yazıl�
 
 #### Hibrit kurulum (frontend Vercel + worker Render)
 
-Vercel'deki 60 sn'lik fonksiyon limiti yalnızca tetikleyici isteği etkiler; ağır iş
-QStash üzerinden Render'a devredilebilir. Bunun için **Vercel** tarafına şunu ekle:
+Vercel'deki fonksiyon limiti (güncel Hobby'de 300 sn) yalnızca tetikleyici isteğini
+etkiler; ağır iş QStash üzerinden Render'a devredilebilir. Bunun için **Vercel**
+tarafına şunu ekle:
 
 ```text
 DISCOVERY_WORKER_URL=https://aroless.tech/api/worker

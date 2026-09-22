@@ -56,7 +56,10 @@ export function HotTicker() {
     queryKey: HOT_FEED_QUERY_KEY,
     queryFn: fetchHotProducts,
     staleTime: 60 * 60 * 1000,
-    refetchInterval: 60 * 60 * 1000,
+    // Tarama hazır değilken (warming/stale) kısa aralıkla yokla; hazır olduğunda
+    // saatlik ritme dön.
+    refetchInterval: (query) =>
+      query.state.data?.status === "ready" ? 60 * 60 * 1000 : 6_000,
     enabled: open,
   });
 

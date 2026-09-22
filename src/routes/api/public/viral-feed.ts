@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardPublic } from "@/lib/api-guard.server";
+import { serveStaleWhileRevalidate } from "@/lib/swr-cache.server";
 import { computeViralMetrics, type ViralMetrics } from "@/lib/viral-metrics";
 
 /**
@@ -242,57 +243,111 @@ Return ONLY JSON:
   }
 }
 
+type FeedPayload = {
+  items: FeedItem[];
+  generated_at: string;
+  copy_source: "ai" | "real";
+  /** Ölçülmüş metriklerden gelen en yüksek skor (UI rozeti için). */
+  top_virality: number;
+};
+
+/**
+ * Ağır canlı tarama: ~20 gerçek YouTube sorgusu + en iyi 36 videonun gerçek
+ * beğeni/açıklama zenginleştirmesi + tek AI hook/CTA turu.
+ *
+ * Bu iş 20-60 sn sürebildiği için İSTEK İÇİNDE her seferinde çalıştırılmaz:
+ * `serveStaleWhileRevalidate` altında koşar, sonuç hem belleğe hem kalıcı
+ * katmana (Supabase `ai_cache`) yazılır. Böylece sunucusuz ortamda örnek
+ * değişse bile pahalı tarama tekrar edilmez ve kullanıcı dakikalarca beklemez.
+ */
+async function buildFeed(): Promise<FeedPayload> {
+  const results = await Promise.allSettled(
+    QUERIES.map((q) => fetchQuery(q.q, q.niche, q.country, q.platform)),
+  );
+  const items: FeedItem[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") items.push(...r.value);
+  }
+
+  // Birincil tur zayıf kaldıysa (host değişimi/az sonuç) geniş tur.
+  if (items.length < 12) {
+    const extra = await Promise.allSettled(
+      BROADER_QUERIES.map((q) => fetchQuery(q.q, q.niche, q.country, q.platform, 10)),
+    );
+    for (const r of extra) if (r.status === "fulfilled") items.push(...r.value);
+  }
+
+  const seen = new Set<string>();
+  const unique = items.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
+
+  unique.sort((a, b) => b.metrics.virality_score - a.metrics.virality_score);
+  const top = unique.slice(0, MAX_ITEMS);
+
+  // Gerçek beğeni + gerçek açıklamayı çek, skorları tazele.
+  await enrichAll(top.slice(0, 36));
+  top.sort((a, b) => b.metrics.virality_score - a.metrics.virality_score);
+
+  // Gerçek sayılara dayalı hook/CTA turu (başarısız olursa feed yine dolu).
+  const aiCopy = await addAiCopy(top);
+
+  return {
+    items: top.slice(0, 60),
+    generated_at: new Date().toISOString(),
+    copy_source: aiCopy ? "ai" : "real",
+    top_virality: top.length ? top[0]!.metrics.virality_score : 0,
+  };
+}
+
+/** Tarama en az 5 dakika taze sayılır (eski `s-maxage=300` davranışı). */
+const FEED_FRESH_MS = 5 * 60_000;
+
 export const Route = createFileRoute("/api/public/viral-feed")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const limited = await guardPublic(request, "viral-feed", 20, 60);
+        const limited = await guardPublic(request, "viral-feed", 60, 60);
         if (limited) return limited;
         try {
-          const results = await Promise.allSettled(
-            QUERIES.map((q) => fetchQuery(q.q, q.niche, q.country, q.platform)),
-          );
-          const items: FeedItem[] = [];
-          for (const r of results) {
-            if (r.status === "fulfilled") items.push(...r.value);
-          }
+          const { data, status } = await serveStaleWhileRevalidate<FeedPayload>({
+            key: "viral-feed:v1",
+            freshMs: FEED_FRESH_MS,
+            isValid: (value) => value.items.length > 0,
+            build: buildFeed,
+          });
 
-          // Birincil tur zayıf kaldıysa (host değişimi/az sonuç) geniş tur.
-          if (items.length < 12) {
-            const extra = await Promise.allSettled(
-              BROADER_QUERIES.map((q) => fetchQuery(q.q, q.niche, q.country, q.platform, 10)),
+          if (data) {
+            return new Response(
+              JSON.stringify({
+                ...data,
+                // `live` = bu tazeleme turunun sonucu; `stale` = önceki tamamlanmış
+                // tarama gösteriliyor, yenisi arka planda hazırlanıyor.
+                status: status === "ready" ? "live" : "stale",
+              }),
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                  "Cache-Control":
+                    status === "ready"
+                      ? "public, max-age=300, s-maxage=300"
+                      : "public, max-age=15, s-maxage=15",
+                },
+              },
             );
-            for (const r of extra) if (r.status === "fulfilled") items.push(...r.value);
           }
 
-          const seen = new Set<string>();
-          const unique = items.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
-
-          unique.sort((a, b) => b.metrics.virality_score - a.metrics.virality_score);
-          const top = unique.slice(0, MAX_ITEMS);
-
-          // Gerçek beğeni + gerçek açıklamayı çek, skorları tazele.
-          await enrichAll(top.slice(0, 36));
-          top.sort((a, b) => b.metrics.virality_score - a.metrics.virality_score);
-
-          // Gerçek sayılara dayalı hook/CTA turu (başarısız olursa feed yine dolu).
-          const aiCopy = await addAiCopy(top);
-
-          const status = top.length ? "live" : "unavailable";
+          // Henüz hiç tamamlanmış tarama yok (soğuk ilk istek): tarama arka
+          // planda sürüyor, istemci kısa süre sonra tekrar sorar.
           return new Response(
             JSON.stringify({
-              items: top.slice(0, 60),
-              status,
+              items: [],
+              status: status === "failed" ? "unavailable" : "warming",
               generated_at: new Date().toISOString(),
-              copy_source: aiCopy ? "ai" : "real",
-              // Ölçülmüş metriklerden gelen en yüksek skor (UI rozeti için).
-              top_virality: top.length ? top[0]!.metrics.virality_score : 0,
+              copy_source: "real",
+              top_virality: 0,
             }),
             {
-              headers: {
-                "Content-Type": "application/json",
-                "Cache-Control": "public, max-age=300, s-maxage=300",
-              },
+              status: 200,
+              headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
             },
           );
         } catch (e) {
