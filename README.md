@@ -169,6 +169,41 @@ yoktur ve hiçbir şey ücretli plan gerektirmez.
 QStash anahtarları hiç yoksa hat istek içinde (`inline`) koşar: yine 280 sn sözü
 korunur (260 sn < 300 sn), ama ön sonuç/arka plan dayanıklılığı olmaz.
 
+#### 504'ü yapısal olarak imkânsız kılan kesme noktası (`src/server.ts`)
+
+Sunucusuz ortamda (Vercel Hobby) fonksiyon **300 sn**'de platform tarafından
+öldürülür ve yanıt `504 FUNCTION_INVOCATION_TIMEOUT` olur. Bütçesi olan uçlar
+(ürün bulucu, SWR önbellekli uçlar) zaten zamanında döner; ama bütçesi olmayan
+bir uç (ör. çok adımlı 14 ajanlık zincir) bu tavana dayanabilir. Bu yüzden sunucu
+girişi tek bir noktada korur:
+
+- `requestDeadlineMs()` platform limitinin 8 sn altını verir → Hobby'de **292 sn**.
+- İş bu süre içinde bitmezse `504` yerine **`503` + `Retry-After`** ve
+  `{ status: "warming", retryable: true, code: "REQUEST_BUDGET_EXCEEDED" }` döner
+  (`/api/*` JSON, sayfa istekleri kısa bir bilgi sayfası).
+- `/health` → `requestDeadlineMs` alanı bu değeri gösterir; `null` = kalıcı süreç,
+  global kesme yok.
+
+Kalıcı süreçte (Render / kendi Node sunucusu) koruma devre dışıdır: orada platform
+işi kesmez ve uç nokta bazlı bütçeler (`REQUEST_BUDGET_MS`) yeterlidir. Araç ucu da
+zaman aşımında artık `504` değil `503 + Retry-After` + `code: "TOOL_WARMING"` döner —
+böylece hiçbir araç "504" göstermez.
+
+#### Ücretsiz planların gerçek sınırları (bu kurulumun dayandığı sayılar)
+
+| Servis | Ücretsiz sınır | Bu projedeki rolü |
+| --- | --- | --- |
+| Vercel Hobby | fonksiyon başına 300 sn (varsayılan = üst sınır), 2 GB / 1 vCPU, 4.5 MB gövde | Uygulama + `/api/worker` |
+| Upstash QStash | günde 1.000 mesaj, mesaj başına 1 MB, yanıt süresi en fazla 15 dk (tekrar denemeler de mesaj sayılır) | Ağır işi `202` ile arka plana atar |
+| Upstash Redis | günlük komut kotası | AI/ürün önbelleği (kalıcı SWR katmanı) |
+| Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu |
+
+> **Modal.com / kiralık GPU gerekmez:** hat GPU'ya değil dış AI API'lerine bağlıdır
+> (I/O-bound). 300 sn'lik duvar hesaplamadan değil platformun fonksiyon süresinden
+> gelir; kiralanan bir GPU bu duvarı kaldırmaz, çünkü çağrı yine Vercel
+> fonksiyonunun içinde bekler. Kalıcı worker için ek servis açmak yerine mevcut
+> QStash + Vercel yolu kullanılır.
+
 > **Render ücretsiz planı bu iş için uygun değil:** 15 dk hareketsizlikte uyur ve
 > geri açılması ~1 dk sürer (bu süre hat bütçesinden düşülür, yani kaliteden
 yer), "harici API/veritabanı trafiği" nedeniyle askıya alınabilir ve aylık 750

@@ -8,12 +8,16 @@ import {
   DEFAULT_INTERACTIVE_BUDGET_MS,
   DEFAULT_WARM_WAIT_MS,
   MAX_LONG_LIVED_SECONDS,
+  REQUEST_BUDGET_EXCEEDED_CODE,
+  VERCEL_DEFAULT_FUNCTION_SECONDS,
   backgroundJobTimeoutMs,
+  budgetExceededPayload,
   detectHostRuntime,
   hostRuntimeSummary,
   interactiveRequestBudgetMs,
   platformDurationSeconds,
   readEnvValue,
+  requestDeadlineMs,
   runsOnPersistentHost,
   warmingWaitMs,
   withDeadlineOutcome,
@@ -163,6 +167,45 @@ describe("withDeadlineOutcome", () => {
     await expect(withDeadlineOutcome(Promise.reject(new Error("boom")), 50)).resolves.toEqual({
       kind: "rejected",
     });
+  });
+});
+
+// 504'ün yapısal olarak imkânsız olması bu fonksiyona bağlıdır: sunucusuz
+// platformda yanıt, platform işi öldürmeden ÖNCE üretilmek zorundadır.
+describe("requestDeadlineMs (504'ü imkânsız kılan kesme noktası)", () => {
+  it("Vercel'de fonksiyon limitinin altında bir kesme noktası verir", () => {
+    const env = { VERCEL: "1", VERCEL_URL: "aroless.vercel.app" };
+    const deadline = requestDeadlineMs(env);
+    expect(deadline).toBe((VERCEL_DEFAULT_FUNCTION_SECONDS - 8) * 1000);
+    expect(deadline).toBe(292_000);
+    // Sözün tamamı: kesme noktası platform limitinden KÜÇÜK olmalı, yoksa
+    // yanıt yarışı kaybeder ve kullanıcı yine 504 görür.
+    expect(deadline!).toBeLessThan(platformDurationSeconds(env) * 1000);
+  });
+
+  it("daraltılmış fonksiyon limitini izler", () => {
+    const env = { VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" };
+    expect(requestDeadlineMs(env)).toBe(52_000);
+    expect(requestDeadlineMs(env)!).toBeLessThan(60_000);
+  });
+
+  it("kalıcı süreçte global kesme YOK (uç nokta bütçeleri yeterli)", () => {
+    // Render ve kendi Node sunucusunda iş isteği platform kesmez; burada
+    // 45 sn'lik bir global tavan uzun analizleri haksız yere keserdi.
+    expect(requestDeadlineMs({ RENDER_SERVICE_ID: "srv-1" })).toBeUndefined();
+    expect(requestDeadlineMs({ NITRO_PRESET: "render_com" })).toBeUndefined();
+    expect(requestDeadlineMs({ NITRO_PRESET: "node-server" })).toBeUndefined();
+    // Dev sunucusu da kalıcıdır.
+    expect(requestDeadlineMs({})).toBeUndefined();
+  });
+
+  it("bütçe dolduğunda dönen gövde hata değil durum bildirir", () => {
+    const payload = budgetExceededPayload();
+    expect(payload.code).toBe(REQUEST_BUDGET_EXCEEDED_CODE);
+    expect(payload.status).toBe("warming");
+    // Yeniden denenebilir olması, 504 yerine 503 dönmenin tek sebebidir.
+    expect(payload.retryable).toBe(true);
+    expect(payload.error.length).toBeGreaterThan(10);
   });
 });
 

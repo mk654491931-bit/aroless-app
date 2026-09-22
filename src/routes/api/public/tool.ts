@@ -83,10 +83,27 @@ export const Route = createFileRoute("/api/public/tool")({
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e ?? "");
           if (msg === "TOOL_TIMEOUT") {
-            return jsonError(
-              504,
-              "AI yanıtı zaman aşımına uğradı. Lütfen tekrar deneyin — bir sonraki deneme farklı bir anahtarla yapılır.",
-              e,
+            // BİLİNÇLİ OLARAK 504 DEĞİL: bu bir altyapı zaman aşımı değil, "bu
+            // istekte bitmedi" durumudur ve iş yeniden denendiğinde (başka bir
+            // anahtar/motor ile) tipik olarak tamamlanır. 504 dönersek izleme
+            // araçları bunu gateway arızası sayar, bazı proxy'ler yanıtı
+            // yeniden yazar ve kullanıcı gördüğü sayıyı hata sanır. 503 +
+            // `Retry-After` doğru anlamı verir.
+            return new Response(
+              JSON.stringify({
+                error:
+                  "AI yanıtı bu istekte yetişmedi. Birkaç saniye sonra tekrar deneyin — sonraki deneme farklı bir anahtarla yapılır.",
+                retryable: true,
+                code: "TOOL_WARMING",
+              }),
+              {
+                status: 503,
+                headers: {
+                  "content-type": "application/json; charset=utf-8",
+                  "cache-control": "no-store",
+                  "retry-after": "4",
+                },
+              },
             );
           }
           if (/AI anahtar\u0131|AI gateway|not configured|no api key/i.test(msg)) {

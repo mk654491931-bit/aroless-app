@@ -10,6 +10,9 @@
 #     sürer (bu süre hat bütçesinden düşülür → kaliteden yer), "harici API/DB
 #     trafiği" nedeniyle askıya alınabilir ve aylık 750 instance saat sınırı vardır.
 #   * Bu blueprint'i yalnızca ÜCRETLİ bir instance ile kalıcı süreç istiyorsan kullan.
+#   * 504'ü sunucusuz ortamda yapısal olarak kapatan kesme noktası `src/server.ts`
+#     içindeki `requestDeadlineMs()`'tir (Hobby'de 292 sn → 503 + Retry-After).
+#     Render kalıcı bir süreç olduğu için orada bilinçli olarak devre dışıdır.
 #
 # Bu dosya yalnızca ANAHTAR ADLARINI listeler. Sadece kullandığın anahtarları
 # doldur; boş bırakılanlar devre dışı kalır (Render Blueprint oluştururken

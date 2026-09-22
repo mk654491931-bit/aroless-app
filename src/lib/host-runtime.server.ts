@@ -222,6 +222,53 @@ export function interactiveRequestBudgetMs(env: Env = process.env): number {
 }
 
 /**
+ * Sunucusuz platformun SERT kesmesinden önce yanıt üretmemiz için gereken süre
+ * (ms). Kalıcı süreçte `undefined` döner: orada platform işi kesmez, kendi
+ * bütçemiz zaten uç nokta bazında uygulanır.
+ *
+ * NEDEN: Vercel Hobby'de fonksiyon süresi **300 sn** (varsayılan ve üst sınır,
+ * fluid compute) ve aşılırsa Vercel işi öldürüp `504
+ * FUNCTION_INVOCATION_TIMEOUT` döner. O noktada elimizde ne kısmi sonuç ne de
+ * açıklama olur. Bütçesi olan uçlar (ürün bulucu, SWR önbellekli uçlar) zaten
+ * zamanında döner; ama bütçesiz bir uç (ör. çok adımlı ajan zinciri) bu tavana
+ * dayanırsa kullanıcı yine 504 görürdü. Bu fonksiyon, tek bir yerde — sunucu
+ * girişinde — platform öldürmeden ÖNCE yanıt üretip 504'ü yapısal olarak
+ * imkânsız kılar (bkz. `src/server.ts`, `budgetExceededPayload`).
+ *
+ * Sayı platformdan türetilir (sabiti elle yazmayız): `interactiveRequestBudgetMs`
+ * sunucusuz ortamda fonksiyon limitinin 8 sn altıdır → Hobby'de 292 sn.
+ */
+export function requestDeadlineMs(env: Env = process.env): number | undefined {
+  const runtime = detectHostRuntime(env);
+  if (!runtime.serverless) return undefined;
+  return interactiveRequestBudgetMs(env);
+}
+
+/**
+ * Bütçe aşıldığında istemciye dönen gövde.
+ *
+ * `retryable: true` bilinçli: iş gerçekten başarısız olmadı, yalnızca bu isteğin
+ * içinde bitmedi. İstemci kısa süre sonra tekrar sorduğunda önbellekten gerçek
+ * sonucu alabilir; bu yüzden gövde bir "hata" değil bir "durum" bildirimidir.
+ */
+export const REQUEST_BUDGET_EXCEEDED_CODE = "REQUEST_BUDGET_EXCEEDED";
+
+export function budgetExceededPayload(): {
+  status: "warming";
+  retryable: true;
+  code: typeof REQUEST_BUDGET_EXCEEDED_CODE;
+  error: string;
+} {
+  return {
+    status: "warming",
+    retryable: true,
+    code: REQUEST_BUDGET_EXCEEDED_CODE,
+    error:
+      "Analiz platform süre sınırına yaklaştı; bu istekte bitmedi. Birkaç saniye sonra tekrar deneyin.",
+  };
+}
+
+/**
  * Arka plan işi için sert zaman aşımı (ms). İş bu süreyi aşarsa kuyruk slotu
  * serbest bırakılır ve iş başarısız sayılır.
  */
