@@ -5,7 +5,7 @@
 // (ör. 10 dakikalık haberler) bellekte 24 saat kalamaz, yoksa bayat veri taze
 // sanılırdı.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cacheGet, cacheKey, cacheSet, cached } from "./ai-cache.server";
+import { cacheGet, cacheKey, cacheSet, cacheStats, cached } from "./ai-cache.server";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -79,5 +79,85 @@ describe("cached()", () => {
     const two = await cacheKey("scope", ["a", "B"]);
     expect(one).toBe(two);
     expect(one.startsWith("scope:")).toBe(true);
+  });
+});
+
+// Kota/token tasarrufu: aynı anda gelen özdeş istekler TEK AI çağrısında ve TEK
+// kalıcı yazmada birleşmeli. Aksi hâlde iki sekme açan bir kullanıcı iki kat
+// kota harcar ve ücretsiz plan kotası boşa gider.
+describe("cached() istek birleştirme (single-flight)", () => {
+  it("eşzamanlı özdeş istekler tek hesaplamada birleşir", async () => {
+    let calls = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const compute = async () => {
+      calls++;
+      await gate;
+      return { n: calls };
+    };
+    const parts = ["es-zamanli", Math.random()];
+
+    const pending = [
+      cached("flight-scope", parts, compute),
+      cached("flight-scope", parts, compute),
+      cached("flight-scope", parts, compute),
+    ];
+    // Tüm çağrılar uçuş kontrolüne ulaşsın: yalnızca BİR hesaplama başlamış olmalı.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(1);
+    expect(cacheStats().inflight).toBe(1);
+
+    release();
+    const results = await Promise.all(pending);
+
+    expect(calls).toBe(1);
+    // Bir çağrı hesapladı, ikisi uçuştaki söze birleşti (ikisi de kota yakmaz).
+    expect(results.filter((r) => !r.cache_hit)).toHaveLength(1);
+    expect(results.filter((r) => r.cache_hit)).toHaveLength(2);
+    expect(results.every((r) => r.data.n === 1)).toBe(true);
+    expect(cacheStats().inflight).toBe(0);
+  });
+
+  it("hesaplama hatası uçuş kaydını temizler ve sonraki çağrı yeniden dener", async () => {
+    const parts = ["hata", Math.random()];
+    await expect(
+      cached("flight-scope", parts, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(cacheStats().inflight).toBe(0);
+
+    const recovered = await cached("flight-scope", parts, async () => "kurtuldu");
+    expect(recovered.data).toBe("kurtuldu");
+    expect(recovered.cache_hit).toBe(false);
+  });
+
+  it("birleşen çağrılar sayaçta görünür (önbellek isabetinden ayrı)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const before = cacheStats().coalesced;
+    const parts = ["sayac", Math.random()];
+    const pending = [
+      cached("flight-scope", parts, async () => {
+        await gate;
+        return "v";
+      }),
+      cached("flight-scope", parts, async () => {
+        await gate;
+        return "v2";
+      }),
+    ];
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    const [a, b] = await Promise.all(pending);
+
+    expect(b.data).toBe("v");
+    expect(a.cache_hit).toBe(false);
+    expect(b.cache_hit).toBe(true);
+    expect(cacheStats().coalesced).toBe(before + 1);
   });
 });

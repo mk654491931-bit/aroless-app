@@ -42,6 +42,7 @@ import {
   collectVeloraEvidence,
   runVeloraAgentPipeline,
   scrapedCandidates,
+  veloraProductScore,
 } from "./velora-pipeline.server";
 
 const RADAR = ["TikTok: mini ice maker", "Yandex: kompakt buz makinesi"];
@@ -139,6 +140,51 @@ describe("scrapedCandidates (kazınmış trend → aday ürün)", () => {
   });
 });
 
+describe("veloraProductScore (nişteki en iyi ürün sıralaması)", () => {
+  it("modelin adlandırdığı gerçek ürün, kazınmış trend adını ve genel yedeği geçer", () => {
+    const base = {
+      name: "X",
+      demandScore: 80,
+      estimatedMarginPct: 45,
+      competitionScore: 30,
+      whyNow: "rising demand",
+      risks: [],
+      priceRange: "$29.99",
+    };
+    const ai = veloraProductScore({ ...base, source: "ai" }, 80).score;
+    const scraped = veloraProductScore({ ...base, source: "trend-radar" }, 80).score;
+    const fallback = veloraProductScore({ ...base, source: "fallback" }, 80).score;
+
+    expect(ai).toBeGreaterThan(scraped);
+    expect(scraped).toBeGreaterThan(fallback);
+  });
+
+  it("yüksek talep + marj + düşük rekabet daha yüksek puan verir", () => {
+    const strong = veloraProductScore(
+      { name: "a", demandScore: 95, estimatedMarginPct: 60, competitionScore: 10, whyNow: "x", risks: [], priceRange: "$40" },
+      90,
+    ).score;
+    const weak = veloraProductScore(
+      { name: "b", demandScore: 20, estimatedMarginPct: 5, competitionScore: 90, whyNow: "", risks: ["a", "b", "c"], priceRange: "" },
+      40,
+    ).score;
+
+    expect(strong).toBeGreaterThan(weak);
+  });
+
+  it("eksik/geçersiz alanlarda çökmez ve her zaman 0-100 içinde kalır", () => {
+    const missing = veloraProductScore({ name: "b" }, Number.NaN).score;
+    expect(Number.isFinite(missing)).toBe(true);
+    expect(missing).toBeGreaterThanOrEqual(0);
+
+    const inflated = veloraProductScore(
+      { name: "c", demandScore: 999, estimatedMarginPct: 999, competitionScore: -50 },
+      500,
+    ).score;
+    expect(inflated).toBeLessThanOrEqual(100);
+  });
+});
+
 describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
   it("14 ajanın tamamını koşar, ortak kanıtı herkese verir ve ortak kararı hesaplar", async () => {
     const result = await runVeloraAgentPipeline({
@@ -180,6 +226,18 @@ describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
     expect(result.metrics.listed).toBe(expected.score >= 60);
     expect(result.topProducts[0]!.councilScore).toBe(expected.score);
     expect(result.topProducts[0]!.councilDecision).toBe(result.metrics.listed ? "LISTED" : `REVIEW_90`);
+
+    // 5) En iyi ürün sıralaması: modelin adlandırdığı gerçek ürün başta, genel
+    //    yedek metin onun önüne geçemez ve sıralama 1'den başlar.
+    expect(result.topProducts[0]!.name).toBe("Mini Ice Maker XR-500");
+    expect(result.topProducts[0]!.source).toBe("ai");
+    expect(result.topProducts[0]!.rank).toBe(1);
+    expect(result.topProducts.map((p) => p.rank)).toEqual(
+      result.topProducts.map((_, i) => i + 1),
+    );
+    const scores = result.topProducts.map((p) => p.winnerScore);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(scores.every((s) => s >= 0 && s <= 100)).toBe(true);
   });
 
   it("AI retriever boş dönerse gerçek kazınmış trend adlarını aday yapar", async () => {
@@ -187,8 +245,14 @@ describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
 
     const result = await runVeloraAgentPipeline({ userQuery: "mini ice maker", country: "US" });
 
-    expect(result.topProducts.map((p) => p.name)).toEqual(["mini ice maker", "kompakt buz makinesi"]);
-    expect(result.topProducts[0]!.category).toBe("Trend radar (scraped)");
+    const names = result.topProducts.map((p) => p.name);
+    expect(names).toContain("mini ice maker");
+    expect(names).toContain("kompakt buz makinesi");
+    // Kazınmış trend adları havuzun başında gelir ama gerçek ad taşırlar.
+    const scraped = result.topProducts.filter((p) => p.source === "trend-radar");
+    expect(scraped).toHaveLength(RADAR.length);
+    expect(scraped[0]!.category).toBe("Trend radar (scraped)");
+    expect(result.topProducts[0]!.source).toBe("trend-radar");
     expect(result.metrics.evidence.scrapedTrends).toBe(RADAR.length);
     expect(result.metrics.agentCount).toBe(14);
     // Konsey kanıtsız kalmadı: kazınmış kanıt yine de 14 üyeye gitti.

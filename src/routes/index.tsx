@@ -84,6 +84,7 @@ import { ENGINES, engineLabel, type EngineId, type MarketplaceId } from "@/lib/e
 import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
 import { FinderInsights, FilterPresets } from "@/components/finder-insights";
+import { VeloraDeepAnalysis } from "@/components/velora-deep-analysis";
 import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/components/deep-search-panel";
 import { X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
@@ -1160,6 +1161,14 @@ function Dashboard() {
                                   onUpgrade={() => setShowPricing(true)}
                                 />
                               ))}
+                            </div>
+                            <div className="mt-4">
+                              <VeloraDeepAnalysis
+                                niche={niche}
+                                country={effectiveCountry}
+                                platforms={platforms}
+                                disabled={searching}
+                              />
                             </div>
                             <RejectedPanel items={rejected} />
                             {compareProducts.length > 0 && <div aria-hidden className="h-24 sm:h-20" />}

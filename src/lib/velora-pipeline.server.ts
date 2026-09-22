@@ -39,6 +39,12 @@ export const ProductSchema = z.object({
   risks: z.array(z.string()).default([]),
   councilScore: z.number().min(0).max(100).default(50),
   councilDecision: z.string().default("NEUTRAL"),
+  /** Açıklanabilir Velora kazanan puanı (talep + marj + rekabet + ortak karar + kanıt). */
+  winnerScore: z.number().min(0).max(100).default(0),
+  /** 1 = bu nişteki en iyi aday. */
+  rank: z.number().int().min(1).default(1),
+  /** Adayın kaynağı: modelin adlandırdığı gerçek ürün, kazınmış trend adı ya da genel yedek. */
+  source: z.enum(["ai", "trend-radar", "fallback"]).default("ai"),
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -101,6 +107,8 @@ export type PipelineOutput = z.infer<typeof PipelineOutputSchema>;
 
 type RetrieverCandidate = {
   name: string;
+  /** "ai" = modelin adlandırdığı ürün, "trend-radar" = kazınmış trend adı. */
+  source?: string;
   category?: string;
   priceRange?: string;
   estimatedMarginPct?: number;
@@ -196,11 +204,13 @@ export function scrapedCandidates(radar: string[]): RetrieverCandidate[] {
     if (seen.has(identity)) continue;
     seen.add(identity);
     out.push({
+      source: "trend-radar",
       name: name.slice(0, 180),
       category: "Trend radar (scraped)",
       priceRange: "",
       estimatedMarginPct: 0,
-      demandScore: 60,
+      // Kazıma adın GERÇEK olduğunu söyler, talebi ÖLÇMEZ: talep nötr kalır.
+      demandScore: 50,
       competitionScore: 50,
       sentiment: `Kazınmış trend sinyali (${source}); manuel doğrulama gerekir.`,
       whyNow: `Trend radarı kazımasında canlı sinyal: ${raw.slice(0, 200)}`,
@@ -226,6 +236,8 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
       return [
         {
           ...value,
+          // Modelin adlandırdığı gerçek ürün: kaynak "ai".
+          source: "ai",
           name: name.slice(0, 180),
           category: String(value.category ?? "").slice(0, 80),
           priceRange: String(value.priceRange ?? value.price_band_usd ?? "").slice(0, 80),
@@ -245,6 +257,59 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
       ];
     })
     .slice(0, 12);
+}
+
+/**
+ * Tek bir adayın açıklanabilir Velora kazanan puanı (0-100).
+ *
+ * "En iyi ürün" kararı uydurma değil, ÖLÇÜLEBİLİR bileşenlerden çıkar:
+ *  - talep (modelin `demandScore`'u),
+ *  - net marj (60%+ tam puan),
+ *  - rekabetin TERSİ (düşük rekabet yüksek puan),
+ *  - ORTAK KARAR puanı (analiz hattı ⊕ 14'lü konsey),
+ *  - kanıt kalitesi (`whyNow` + risk sayısı + fiyat bandı),
+ *  - kaynak (modelin adlandırdığı gerçek ürün > ham kazınmış trend adı).
+ */
+export function veloraProductScore(
+  candidate: RetrieverCandidate,
+  jointScore: number,
+): { score: number; components: Record<string, number> } {
+  const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+  const number = (value: unknown, fallback: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const demand = clamp(number(candidate.demandScore, 50));
+  const margin = clamp((number(candidate.estimatedMarginPct, 0) / 60) * 100);
+  const competition = clamp(100 - number(candidate.competitionScore, 50));
+  const council = clamp(number(jointScore, 0));
+  const risks = Array.isArray(candidate.risks) ? candidate.risks.length : 0;
+  const evidence = clamp(
+    (String(candidate.whyNow ?? "").trim() ? 40 : 0) +
+      (risks <= 2 ? 30 : 0) +
+      (String(candidate.priceRange ?? "").trim() ? 30 : 0),
+  );
+  // Kaynak ağırlığı: modelin adlandırdığı gerçek ürün > ham kazınmış trend adı >
+  // genel yedek. Böylece "en iyi ürün" sıralaması yedek metinle doldurulmaz.
+  const source =
+    candidate.source === "trend-radar" ? 40 : candidate.source === "fallback" ? 20 : 100;
+  const components = { demand, margin, competition, council, evidence, source };
+  const score = clamp(
+    demand * 0.28 +
+      margin * 0.22 +
+      competition * 0.15 +
+      council * 0.15 +
+      evidence * 0.1 +
+      source * 0.1,
+  );
+  return { score, components };
+}
+
+/** Adayın kaynağı — ham kazınmış trend adları ve genel yedekler modelin ürünlerinden sonra sıralanır. */
+function candidateSource(candidate: RetrieverCandidate): "ai" | "trend-radar" | "fallback" {
+  if (candidate.source === "trend-radar") return "trend-radar";
+  if (candidate.source === "fallback") return "fallback";
+  return "ai";
 }
 
 function retrieverPrompt(input: PipelineInput, query: string, evidenceBlock = ""): string {
@@ -316,6 +381,7 @@ async function retrieveCandidates(
   ];
   const fallbackAlternatives = fallbackNames.slice(1).map((name) => ({
     name,
+    source: "fallback",
     category: "Broad match",
     priceRange: "",
     estimatedMarginPct: 0,
@@ -326,91 +392,95 @@ async function retrieveCandidates(
     risks: ["Live evidence unavailable"],
   }));
 
-  if (collected.length) {
-    const merged = [...collected];
+  // ---- ORTAK ADAY HAVUZU ----
+  // Havuz üç kaynaktan beslenir ve TEK havuzda birleşir:
+  //  1) modelin adlandırdığı gerçek ürünler,
+  //  2) trend radarı kazımalarından gelen GERÇEK trend adları (ortak scraping),
+  //  3) hiçbiri yoksa sorgunun kendisi (dürüst son çare).
+  // Sıralama `veloraProductScore` ile yapılır: "en iyi ürün" ilk gelen 5 kayıt
+  // değil, ölçülebilir bileşenlerin toplamı en yüksek olan adaydır.
+  const merged: RetrieverCandidate[] = [...collected];
+  const pushUnique = (candidate: RetrieverCandidate) => {
+    const identity = candidate.name.toLocaleLowerCase("tr-TR");
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    merged.push(candidate);
+  };
+  const scraped = scrapedCandidates(evidence.radar);
+  for (const candidate of scraped) pushUnique(candidate);
+  if (merged.length < 3) {
     for (const candidate of fallbackAlternatives) {
       if (merged.length >= 3) break;
-      const identity = candidate.name.toLocaleLowerCase("tr-TR");
-      if (!seen.has(identity)) {
-        seen.add(identity);
-        merged.push(candidate);
-      }
+      pushUnique(candidate as RetrieverCandidate);
     }
-    const debug = makeDebugLog(
-      "Product Retriever",
-      { queries, attempts, collected: collected.length },
-      merged.slice(0, 3),
-      Math.min(3, merged.length),
-      merged.length > collected.length ? "FALLBACK_TRIGGERED" : "SUCCESS",
-    );
-    councilLogs.push(debug);
-    emitDebugLog(debug);
-    return { candidates: merged.slice(0, 12), attempts };
   }
-
-  // AI retriever boş döndü: uydurma isim yerine trend radarından GERÇEK kazınmış
-  // trend adlarını aday olarak kullan (ortak scraping).
-  const scraped = scrapedCandidates(evidence.radar);
-  if (scraped.length) {
-    const debug = makeDebugLog(
-      "Product Retriever",
-      { queries, attempts, source: "trend-radar-scrape", radar: evidence.radar.length },
-      scraped.slice(0, 5),
-      Math.min(3, scraped.length),
-      "FALLBACK_TRIGGERED",
-    );
-    councilLogs.push(debug);
-    emitDebugLog(debug);
-    return { candidates: scraped, attempts };
+  if (merged.length === 0) {
+    pushUnique({
+      name: queryLabel,
+      source: "fallback",
+      category: "Broad match",
+      priceRange: "",
+      estimatedMarginPct: 0,
+      demandScore: 50,
+      competitionScore: 50,
+      sentiment: "Neutral fallback; manual validation required.",
+      whyNow: "Exact live match unavailable; retained as the closest query candidate.",
+      risks: ["Live evidence unavailable"],
+    });
   }
-
-  const fallbackCandidates: RetrieverCandidate[] = fallbackNames.map((name, index) => ({
-    name,
-    category: "Broad match",
-    priceRange: "",
-    estimatedMarginPct: 0,
-    demandScore: 50,
-    competitionScore: 50,
-    sentiment: "Neutral fallback; manual validation required.",
-    whyNow:
-      index === 0
-        ? "Exact live match unavailable; retained as the closest query candidate."
-        : "Alternative retained for manual validation after broad query relaxation.",
-    risks: ["Live evidence unavailable"],
-  }));
   const debug = makeDebugLog(
     "Product Retriever",
-    { queries, attempts },
-    fallbackCandidates,
-    fallbackCandidates.length,
-    "FALLBACK_TRIGGERED",
+    {
+      queries,
+      attempts,
+      collected: collected.length,
+      scraped: scraped.length,
+      pool: merged.length,
+    },
+    merged.slice(0, 8),
+    merged.length,
+    collected.length ? "SUCCESS" : "FALLBACK_TRIGGERED",
   );
   councilLogs.push(debug);
   emitDebugLog(debug);
-  return { candidates: fallbackCandidates, attempts };
+  return { candidates: merged.slice(0, 24), attempts };
 }
 
+/**
+ * Aday havuzunu bu nişteki EN İYİ ürünler sırasına dizer ve ilk 5'i döner.
+ *
+ * Ortak karar puanı her ürüne işlenir ve sıralamaya girer; böylece konsey
+ * "etiket" değil kararın kendisidir. Sıralama tamamen deterministiktir (aynı
+ * aday → aynı sıra), sunucu ve istemci aynı sonucu görür.
+ */
 function toPipelineProducts(
   candidates: RetrieverCandidate[],
-  finalScore: number,
+  jointScore: number,
   councilAverage: number,
   listed: boolean,
 ): Product[] {
-  return candidates.slice(0, 5).map((candidate) =>
-    ProductSchema.parse({
-      name: candidate.name,
-      category: candidate.category ?? "",
-      priceRange: candidate.priceRange ?? "",
-      estimatedMarginPct: Number(candidate.estimatedMarginPct ?? 0),
-      demandScore: Math.max(0, Math.min(100, Number(candidate.demandScore ?? 50))),
-      competitionScore: Math.max(0, Math.min(100, Number(candidate.competitionScore ?? 50))),
-      sentiment: candidate.sentiment ?? "",
-      whyNow: candidate.whyNow ?? "",
-      risks: candidate.risks ?? [],
-      councilScore: finalScore,
-      councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
-    }),
-  );
+  return candidates
+    .map((candidate) => ({ candidate, score: veloraProductScore(candidate, jointScore).score }))
+    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name))
+    .slice(0, 5)
+    .map(({ candidate, score }, index) =>
+      ProductSchema.parse({
+        name: candidate.name,
+        category: candidate.category ?? "",
+        priceRange: candidate.priceRange ?? "",
+        estimatedMarginPct: Number(candidate.estimatedMarginPct ?? 0),
+        demandScore: Math.max(0, Math.min(100, Number(candidate.demandScore ?? 50))),
+        competitionScore: Math.max(0, Math.min(100, Number(candidate.competitionScore ?? 50))),
+        sentiment: candidate.sentiment ?? "",
+        whyNow: candidate.whyNow ?? "",
+        risks: candidate.risks ?? [],
+        councilScore: jointScore,
+        councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
+        winnerScore: score,
+        rank: index + 1,
+        source: candidateSource(candidate),
+      }),
+    );
 }
 
 /** 14 agents receive the prior JSON state sequentially; no member can erase it. */

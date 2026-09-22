@@ -16,6 +16,28 @@ type Entry = { at: number; expiresAt: number; value: unknown };
 const memory = new Map<string, Entry>();
 
 /**
+ * Uçuştaki (in-flight) hesaplamalar — istek birleştirme (single-flight).
+ *
+ * NEDEN GEREKLİ (kota/token tasarrufu): `cached()` "önce oku, yoksa hesapla,
+ * sonra yaz" yapıyordu. Aynı anda gelen N özdeş istek — iki sekme, iki kullanıcı
+ * ya da otomatik yeniden deneme — N kez modele gidiyor ve N kez kalıcı katmana
+ * yazıyordu. Ücretsiz plan mimarisinde en dar kaynak AI kotasıdır; bu yüzden
+ * aynı anahtar için uçuşta bir hesaplama varsa YENİSİ BAŞLATILMAZ: gelen çağrı
+ * aynı sözü paylaşır ve gerçekten AI harcaması yapılmadığı için `cache_hit:
+ * true` döner.
+ */
+type InflightEntry = { data: unknown; cache_hit: boolean };
+const inflight = new Map<string, Promise<InflightEntry>>();
+
+/** Kaç çağrı uçuştaki bir hesaplamaya birleşti (önbellek isabetinden AYRI sayaç). */
+let coalesced = 0;
+
+/** /health ve testler için küçük teşhis özeti (sır içermez). */
+export function cacheStats(): { entries: number; inflight: number; coalesced: number } {
+  return { entries: memory.size, inflight: inflight.size, coalesced };
+}
+
+/**
  * Kalıcı (Supabase) katman testlerde kapatılır.
  *
  * `swr-cache.server.ts` ile aynı kural: testler bu modülün BELLEK içi
@@ -104,7 +126,14 @@ export async function cacheSet(
   }
 }
 
-/** get-or-compute helper. */
+/**
+ * get-or-compute helper — istek birleştirmeli (single-flight).
+ *
+ * `cache_hit` üç durumu tek bayrakta toplar: önbellekten gelen taze kayıt,
+ * uçuştaki bir hesaplamaya birleşen çağrı ve gerçekten hesaplayan çağrı. İlk
+ * ikisinde AI harcaması YOKTUR; bu yüzden ikisi de `true` döner ve aynı kotayı
+ * iki kez yakmaz.
+ */
 export async function cached<T>(
   scope: string,
   parts: unknown[],
@@ -114,7 +143,27 @@ export async function cached<T>(
   const key = await cacheKey(scope, parts);
   const hit = await cacheGet<T>(key);
   if (hit) return { data: hit, cache_hit: true };
-  const data = await compute();
-  await cacheSet(key, scope, data, ttlMs);
-  return { data, cache_hit: false };
+
+  // Aynı anahtar için uçuşta bir hesaplama varsa onu paylaş: ikinci kez modele
+  // gidilmez, kalıcı katmana ikinci kez yazılmaz ve sonuç aynı anda hazır olur.
+  const running = inflight.get(key);
+  if (running) {
+    coalesced += 1;
+    const shared = await running;
+    return { data: shared.data as T, cache_hit: true };
+  }
+
+  const task: Promise<InflightEntry> = (async () => {
+    const data = await compute();
+    await cacheSet(key, scope, data, ttlMs);
+    return { data, cache_hit: false };
+  })();
+  inflight.set(key, task);
+  try {
+    const entry = await task;
+    return { data: entry.data as T, cache_hit: entry.cache_hit };
+  } finally {
+    // Hata durumunda da kaydı temizle: sonraki çağrı yeniden deneyebilsin.
+    inflight.delete(key);
+  }
 }
