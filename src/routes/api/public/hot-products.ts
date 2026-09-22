@@ -6,11 +6,14 @@ import type { HotProduct, ProductSignals } from "@/lib/hot-products";
  * Live "most sellable right now" feed.
  *
  * 100% real-world data: Google-Search-grounded Gemini scan, refreshed once per
- * hour. Önemli: istek ASLA taramanın bitmesini uzun süre beklemez. Vercel
- * Hobby planında fonksiyon limiti 60 sn olduğu için taramaya sert bir zaman
- * bütçesi uygulanır; bütçe aşılırsa istek anında bayat (stale) veri ya da
- * `status: "warming"` ile boş liste döner, tarama arka planda tamamlanıp
- * önbelleğe yazılır. Böylece uç nokta 504/524 vermez.
+ * hour. Önemli: istek ASLA taramanın bitmesini uzun süre beklemez. Taramaya sert
+ * bir zaman bütçesi uygulanır (`SCAN_WAIT_MS`, varsayılan 7 sn, üst sınır 25 sn);
+ * bütçe aşılırsa istek anında bayat (stale) veri ya da `status: "warming"` ile
+ * boş liste döner, tarama arka planda tamamlanıp önbelleğe yazılır.
+ *
+ * NOT: Vercel Hobby'de fonksiyon limiti artık **300 sn**'dir (fluid compute ile
+ * varsayılan ve üst sınır); eski "60 sn" kuralı geçersizdir. Yine de bu uç
+ * kasten kısa bekler: kullanıcı canlı ürünleri saniyeler içinde görmelidir.
  */
 
 type Payload = {
