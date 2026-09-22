@@ -5,7 +5,11 @@ import {
   parseAgentJson,
   type AgentRunLog,
 } from "./ai-router.server";
+import { withDeadline } from "./ai.server";
 import { createAgentBus } from "./agent-bus.server";
+import { combineJointScores } from "./consensus-types";
+import { collectSignals, signalsBlock } from "./data-pipeline.server";
+import { buildLiveEvidenceBlock } from "./market-verify.server";
 import {
   COUNCIL_AGENTS,
   emitDebugLog,
@@ -73,6 +77,24 @@ export const PipelineOutputSchema = z.object({
     listed: z.boolean(),
     councilOutputs: z.string(),
     retrieverAttempts: z.number().int().min(0),
+    /** Analiz hattı tarafı: retriever'ın kanıt/çeşitlilik parmak izi. */
+    analysisScore: z.number().min(0).max(100),
+    /** ORTAK KARAR: analiz hattı ⊕ 14'lü konsey (eşit ortaklık). */
+    jointScore: z.number().min(0).max(100),
+    jointSource: z.enum(["joint", "analysis", "council", "none"]),
+    /** Hattın gerçekten kullandığı ORTAK kanıt (trend radarı + canlı piyasa). */
+    evidence: z.object({
+      live: z.boolean(),
+      scrapedTrends: z.number().int().min(0),
+      radar: z.array(z.string()),
+      sources: z.array(
+        z.object({
+          name: z.string(),
+          status: z.enum(["active", "error"]),
+          items: z.number(),
+        }),
+      ),
+    }),
   }),
 });
 export type PipelineOutput = z.infer<typeof PipelineOutputSchema>;
@@ -89,6 +111,105 @@ type RetrieverCandidate = {
   risks?: string[];
   [key: string]: unknown;
 };
+
+/** Trend radarı kazımaları + canlı piyasa kanıtı için ayrılan süre (ms). */
+export const VELORA_EVIDENCE_BUDGET_MS = 20_000;
+
+export type VeloraEvidence = {
+  /** Retriever'a ve 14 üyenin TAMAMINA giren ortak kanıt bloğu. */
+  block: string;
+  /** Trend radarı kazımalarından gelen tekil trend adları. */
+  radar: string[];
+  /** Hangi kaynak kaç satır verdi — dürüst raporlama. */
+  sources: { name: string; status: "active" | "error"; items: number }[];
+  /** Canlı piyasa kanıtı (Google Trends + tedarik fiyatı + ilanlar) geldi mi? */
+  live: boolean;
+};
+
+export const EMPTY_VELORA_EVIDENCE: VeloraEvidence = {
+  block: "",
+  radar: [],
+  sources: [],
+  live: false,
+};
+
+/**
+ * Velora hattının ORTAK kanıtı.
+ *
+ * Ürün bulucu ve 14'lü AI Konsey, trend radarının kazımalarını
+ * (`data-pipeline.server.ts` → Google/Amazon/TikTok/Yandex/RSS/GitHub) ve canlı
+ * piyasa kanıtını ortak veri olarak kullanıyor. Velora hattı daha önce YALNIZCA
+ * AI'ya soruyordu; aynı soruya iki farklı gerçeklik üretiliyordu. Artık aynı
+ * kazımalar çekiliyor ve retriever ile 14 üyenin HEPSİ aynı bloğu görüyor →
+ * hat gerekirse scraping yapar ve konsey ile bulucu ORTAK karar verir.
+ *
+ * Her kaynak süre sınırlıdır: yavaş bir kaynak hattı bekletemez. Kanıt gelmezse
+ * hat kanıtsız (ama dürüst) devam eder; hiçbir koşulda fırlatmaz.
+ */
+export async function collectVeloraEvidence(
+  input: PipelineInput,
+  budgetMs: number = VELORA_EVIDENCE_BUDGET_MS,
+): Promise<VeloraEvidence> {
+  const country = (input.country ?? "GLOBAL").toUpperCase();
+  try {
+    const [signalsOutcome, liveOutcome] = await Promise.allSettled([
+      withDeadline(
+        collectSignals(input.userQuery, country, input.platform ?? "General"),
+        budgetMs,
+        "velora:signals",
+      ),
+      withDeadline(buildLiveEvidenceBlock(input.userQuery, country), budgetMs, "velora:live"),
+    ]);
+    const signals = signalsOutcome.status === "fulfilled" ? signalsOutcome.value.data : null;
+    const liveBlock = liveOutcome.status === "fulfilled" ? (liveOutcome.value ?? "") : "";
+    const scrapedBlock = signals ? signalsBlock(signals) : "";
+    return {
+      block: [scrapedBlock, liveBlock].filter(Boolean).join("\n\n"),
+      radar: signals?.radar ?? [],
+      sources: signals?.sources ?? [],
+      live: liveBlock.trim().length > 0,
+    };
+  } catch {
+    // Kazıma hattı tamamen düşse bile Velora hattı çalışmaya devam eder.
+    return EMPTY_VELORA_EVIDENCE;
+  }
+}
+
+/**
+ * Trend radarı kazımalarından gelen GERÇEK trend adlarını aday ürüne çevirir.
+ *
+ * AI retriever boş dönerse hat uydurma isim yerine kazınmış gerçek sinyali
+ * kullanır (`"TikTok: mini ice maker"` → `mini ice maker`). Kaynak etiketi
+ * adayın üzerinde kalır; kanıtın nereden geldiği kaybolmaz.
+ */
+export function scrapedCandidates(radar: string[]): RetrieverCandidate[] {
+  const seen = new Set<string>();
+  const out: RetrieverCandidate[] = [];
+  for (const line of radar) {
+    const raw = String(line ?? "").trim();
+    if (!raw) continue;
+    const [maybeSource, ...rest] = raw.split(":");
+    const source = (rest.length ? (maybeSource ?? "").trim() : "") || "Trend Radar";
+    const name = (rest.length ? rest.join(":") : raw).trim();
+    if (name.length < 3) continue;
+    const identity = name.toLocaleLowerCase("tr-TR");
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    out.push({
+      name: name.slice(0, 180),
+      category: "Trend radar (scraped)",
+      priceRange: "",
+      estimatedMarginPct: 0,
+      demandScore: 60,
+      competitionScore: 50,
+      sentiment: `Kazınmış trend sinyali (${source}); manuel doğrulama gerekir.`,
+      whyNow: `Trend radarı kazımasında canlı sinyal: ${raw.slice(0, 200)}`,
+      risks: ["Canlı kazıma sinyali; tedarik/fiyat doğrulanmadı"],
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
 
 function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
   const source =
@@ -126,13 +247,17 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
     .slice(0, 12);
 }
 
-function retrieverPrompt(input: PipelineInput, query: string): string {
+function retrieverPrompt(input: PipelineInput, query: string, evidenceBlock = ""): string {
   return `You are the Product Retriever for Aroless. Search broadly for real, specific, nameable products related to the query.
 
 QUERY: ${query}
 COUNTRY: ${input.country ?? "GLOBAL"}
 PLATFORM: ${input.platform ?? "any"}
-
+${
+  evidenceBlock
+    ? `\nSHARED LIVE EVIDENCE (trend radar scrapings + live market verification — the SAME data the finder's analysis pipeline and the 14-member council use). Treat it as ground truth and prefer products that appear here:\n${evidenceBlock.slice(0, 4_000)}\n`
+    : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
+}
 Do not require every filter to match. Prefer broad keyword/semantic matches and return the three strongest alternatives even when the exact query has no result. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":string[]}],"search_note":string}`;
 }
@@ -141,6 +266,7 @@ async function retrieveCandidates(
   input: PipelineInput,
   logs: AgentRunLog[],
   councilLogs: CouncilDebugLog[],
+  evidence: VeloraEvidence,
 ): Promise<{ candidates: RetrieverCandidate[]; attempts: number }> {
   const queries = relaxSearchQuery(input.userQuery);
   let attempts = 0;
@@ -151,7 +277,7 @@ async function retrieveCandidates(
     attempts++;
     const result = await executeAgentWithFallback(
       `Product Retriever (${attempts})`,
-      retrieverPrompt(input, query),
+      retrieverPrompt(input, query, evidence.block),
       DEEP_CHAIN,
       { temperature: 0.35, retries: 2 },
     );
@@ -222,6 +348,22 @@ async function retrieveCandidates(
     return { candidates: merged.slice(0, 12), attempts };
   }
 
+  // AI retriever boş döndü: uydurma isim yerine trend radarından GERÇEK kazınmış
+  // trend adlarını aday olarak kullan (ortak scraping).
+  const scraped = scrapedCandidates(evidence.radar);
+  if (scraped.length) {
+    const debug = makeDebugLog(
+      "Product Retriever",
+      { queries, attempts, source: "trend-radar-scrape", radar: evidence.radar.length },
+      scraped.slice(0, 5),
+      Math.min(3, scraped.length),
+      "FALLBACK_TRIGGERED",
+    );
+    councilLogs.push(debug);
+    emitDebugLog(debug);
+    return { candidates: scraped, attempts };
+  }
+
   const fallbackCandidates: RetrieverCandidate[] = fallbackNames.map((name, index) => ({
     name,
     category: "Broad match",
@@ -282,22 +424,40 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
   const tierLatencyMs: Record<string, number> = {};
 
   bus.emit("pipeline:start", { traceId, query: input.userQuery.slice(0, 120) });
+
+  // ORTAK KANIT: trend radarı kazımaları + canlı piyasa kanıtı. Bulucu ve 14'lü
+  // konsey aynı bloğu kullanır; Velora hattı da artık aynı veriye bakar.
+  const evidenceStart = Date.now();
+  const evidence = await collectVeloraEvidence(input);
+  bus.emit("evidence:collected", {
+    traceId,
+    ms: Date.now() - evidenceStart,
+    scraped: evidence.radar.length,
+    live: evidence.live,
+  });
+
   const retrievalStart = Date.now();
   bus.emit("tier:start", { traceId, tier: 1 });
-  const retrieval = await retrieveCandidates(input, logs, councilLogs);
+  const retrieval = await retrieveCandidates(input, logs, councilLogs, evidence);
   tierLatencyMs.tier1 = Date.now() - retrievalStart;
   bus.emit("tier:complete", { traceId, tier: 1, ms: tierLatencyMs.tier1 });
 
   const councilStart = Date.now();
   bus.emit("tier:start", { traceId, tier: 2 });
+  // 14 üyenin HEPSİ aynı kanıt bloğunu görür: konsey ile analiz hattı ayrı
+  // gerçeklik üretmez; aynı kazınmış veriye bakıp ORTAK karar verir.
+  const sharedContext = [
+    input.country ? `COUNTRY: ${input.country}` : "",
+    input.platform ? `PLATFORM: ${input.platform}` : "",
+    evidence.block
+      ? `SHARED LIVE EVIDENCE (trend radar scrapings + live market verification):\n${evidence.block}`
+      : "SHARED LIVE EVIDENCE: none available for this run; score neutrally where it matters.",
+  ]
+    .filter(Boolean)
+    .join("\n");
   const chain = await runStrictCouncilChain({
     query: input.userQuery,
-    context: [
-      input.country ? `COUNTRY: ${input.country}` : "",
-      input.platform ? `PLATFORM: ${input.platform}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    context: sharedContext,
     candidates: retrieval.candidates,
     run: async (agent, prompt) => {
       bus.emit("agent:start", { traceId, agent: agent.name, tier: 2 });
@@ -333,13 +493,24 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
   tierLatencyMs.tier2 = Date.now() - councilStart;
   bus.emit("tier:complete", { traceId, tier: 2, ms: tierLatencyMs.tier2 });
 
+  /**
+   * ORTAK KARAR — Velora hattı da bulucuyla AYNI formülü kullanır: analiz hattı
+   * (retriever'ın kanıt/çeşitlilik parmak izi) ⊕ 14'lü konsey ortalaması, eşit
+   * ortaklık. Böylece hat "konsey puanı" ile "analiz puanı" arasında seçim
+   * yapmaz; ikisini birlikte karara çevirir.
+   */
+  const joint = combineJointScores({
+    analysisScore: chain.productFingerprint,
+    councilScore: chain.councilAverage,
+  });
+  const listed = joint.score >= 60;
   const products = toPipelineProducts(
     retrieval.candidates,
-    chain.finalScore,
+    joint.score,
     chain.councilAverage,
-    chain.shouldList,
+    listed,
   );
-  const executiveSummary = `14-agent council tamamlandı. Council average: ${chain.councilAverage}/100, product fingerprint: ${chain.productFingerprint}/100, final score: ${chain.finalScore}/100. ${chain.shouldList ? "Ürünler listeleniyor." : "Nötr sonuçlar korunarak incelemeye bırakıldı."}`;
+  const executiveSummary = `14-agent council tamamlandı. Council average: ${chain.councilAverage}/100, product fingerprint: ${chain.productFingerprint}/100, ortak karar (analiz ⊕ konsey): ${joint.score}/100 (${joint.source}). ${listed ? "Ürünler listeleniyor." : "Nötr sonuçlar korunarak incelemeye bırakıldı."}`;
   const providerHits: Record<string, number> = {};
   for (const log of logs) {
     providerHits[log.provider] = (providerHits[log.provider] ?? 0) + 1;
@@ -361,10 +532,19 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
       councilLogs,
       councilAverage: chain.councilAverage,
       productFingerprint: chain.productFingerprint,
-      finalScore: chain.finalScore,
-      listed: chain.shouldList,
+      finalScore: joint.score,
+      listed,
       councilOutputs: JSON.stringify(chain.outputs),
       retrieverAttempts: retrieval.attempts,
+      analysisScore: chain.productFingerprint,
+      jointScore: joint.score,
+      jointSource: joint.source,
+      evidence: {
+        live: evidence.live,
+        scrapedTrends: evidence.radar.length,
+        radar: evidence.radar.slice(0, 16),
+        sources: evidence.sources,
+      },
     },
   });
 }

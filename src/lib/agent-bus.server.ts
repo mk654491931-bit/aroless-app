@@ -14,6 +14,11 @@ export type AgentBusEvent =
   | { type: "pipeline:start"; payload: { traceId: string; query: string; depth?: string } }
   | { type: "pipeline:complete"; payload: { traceId: string; ok: boolean; ms: number } }
   | { type: "signals:collected"; payload: { traceId: string; coverage: number; ms: number } }
+  /** Ortak kazıma kanıtı (trend radarı + canlı piyasa) toplandı. */
+  | {
+      type: "evidence:collected";
+      payload: { traceId: string; ms: number; scraped: number; live: boolean };
+    }
   | { type: "tier:start"; payload: { traceId: string; tier: number } }
   | { type: "tier:complete"; payload: { traceId: string; tier: number; ms: number } }
   | { type: "agent:start"; payload: { traceId: string; agent: string; tier: number } }
