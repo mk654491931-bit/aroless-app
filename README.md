@@ -148,20 +148,57 @@ HOT_PRODUCTS_WAIT_MS=14000         # sıcak ürün taraması bekleme (ms)
 BACKGROUND_JOBS=                   # 0/1: arka plan işlerini zorla kapat/aç
 ```
 
-Bir 504/hata şikâyetinde ilk bakılacak adres: `https://<servis-adı>.onrender.com/health`.
+Bir 504/hata şikâyetinde ilk bakılacak adres: `https://<domain>/health`.
 
-#### Hibrit kurulum: tetikleyici Vercel + worker Render
+#### ÜCRETSİZ kurulum (önerilen): yalnız Vercel Hobby + QStash
 
-Ağır işi yapısal olarak bitirmek için iki geçerli kurulum vardır:
+Ücretli/kalıcı sunucu **gerekmez**. Vercel Hobby fonksiyon tavanı 300 sn'dir (fluid
+compute ile varsayılan ve üst sınır) ve hat 260 sn'de kendi kendine biter; bu
+yüzden ağır iş uygulamanın **kendi** `/api/worker` ucunda güvenle koşar:
 
 | Kurulum | Ne yapılır | `/health` çıktısı |
 | --- | --- | --- |
-| **Domain Render'da** (önerilen) | `render.yaml` ile Web Service aç, `APP_URL=https://aroless.tech` | `workflow.dispatch: "in-process"`, `longJob: "in-process"` |
-| **Domain Vercel'de, worker Render'da** | Render servisini aç; Vercel env'e `WORKER_URL=https://<servis>.onrender.com` (+ `DISCOVERY_WORKER_URL=https://<servis>.onrender.com/api/worker`), `QSTASH_TOKEN`, `JOB_WORKER_SECRET` ekle | `longJob: "qstash-worker"` |
+| **Ücretsiz** (önerilen) | Yalnız Vercel Hobby. Vercel env'de `QSTASH_TOKEN` + `JOB_WORKER_SECRET` olsun; **`DISCOVERY_WORKER_URL`/`WORKER_URL` BOŞ kalsın** | `workflow.dispatch: "qstash"` |
 
-Sunucusuz ortamda uzak worker tanımlı değilse ağır iş **istek içinde koşturulmaz**: onun yerine hızlı ve açık bir hata döner ve kredi iade edilir (`longJob: "unavailable"`). Konsey işi Render'daki `/api/jobs` ucuna QStash ile gider; uç işi süreç içi kuyruğa atıp anında `202` döner.
+Boş kalması şu demektir: iş, uygulamanın kendi origin'ine
+(`https://<domain>/api/worker`) QStash ile yayınlanır. Bu **ayrı bir fonksiyon
+çağrısıdır** — kullanıcının isteği anında `jobId` ile döner, ağır hat arka
+gönde koşar, ön sonuçlar yoklamada görünür. Ayrı servis, uyku, soğuk başlangıç
+yoktur ve hiçbir şey ücretli plan gerektirmez.
+
+QStash anahtarları hiç yoksa hat istek içinde (`inline`) koşar: yine 280 sn sözü
+korunur (260 sn < 300 sn), ama ön sonuç/arka plan dayanıklılığı olmaz.
+
+> **Render ücretsiz planı bu iş için uygun değil:** 15 dk hareketsizlikte uyur ve
+> geri açılması ~1 dk sürer (bu süre hat bütçesinden düşülür, yani kaliteden
+yer), "harici API/veritabanı trafiği" nedeniyle askıya alınabilir ve aylık 750
+> instance saat sınırı vardır. Worker için ücretli instance açmıyorsanız Render'ı
+> hiç kullanmayın.
+
+#### Hibrit kurulum: tetikleyici Vercel + worker Render (ücretli instance)
+
+Ağır işi kalıcı bir sürece devretmek isterseniz (Render **ücretli** instance):
+
+| Kurulum | Ne yapılır | `/health` çıktısı |
+| --- | --- | --- |
+| **Domain Render'da** | `render.yaml` ile Web Service aç, `APP_URL=https://aroless.tech` | `workflow.dispatch: "in-process"`, `longJob: "in-process"` |
+| **Domain Vercel'de, worker Render'da** | `WORKER_URL=https://<servis>.onrender.com` (+ `DISCOVERY_WORKER_URL=.../api/worker`), `QSTASH_TOKEN`, `JOB_WORKER_SECRET` | `workflow.dispatch: "qstash"`, `longJob: "qstash-worker"` |
+
+Sunucusuz ortamda ne QStash ne de uzak worker tanımlıysa ağır iş istek içinde
+koşar; fonksiyon limiti daraltılmışsa (ör. eski `VERCEL_FUNCTION_MAX_DURATION=60`)
+hızlı ve açık bir hata döner, kredi iade edilir (`longJob: "unavailable"`).
 
 Süre bütçesi platformdan otomatik türetilir (`src/lib/host-runtime.server.ts` + `discovery-jobs.server.ts`), ama ürün bulucu TEK bir söz verir: **uçtan uca en fazla 280 sn** (`DISCOVERY_END_TO_END_MS`). Hattın kendi payı 260 sn'dir (280 − 20 sn dönüş payı) ve platform daha uzun bir limit verse bile hat bu sayıya sığar; istemcinin yoklama penceresi de aynı sabitten gelir (`jobPollingPlan`).
+
+**Söz, tıkla anından ölçülür** (`remainingWorkerBudgetMs`): iş QStash'te beklerken
+veya işçi soğuk başlarken geçen süre hattın bütçesinden düşülür. Böylece platform
+ne kadar uyutursa uyutsun "tıkla → sonuç" 280 sn'yi aşmaz. Kuyruk gecikmesi
+bütçeyi işe yaramaz hâle getirdiyse (kalan < 45 sn) hat **kredi harcamadan** ve
+açık sebeple (`QUEUE_DELAY_EXCEEDED_BUDGET`) durur.
+
+İş kilidi (`jobLeaseSeconds` = 310 sn) platform tavanına göre kısadır: iş ortasında
+öldürülürse QStash'in tekrar denemesi işi devralabilir; eskiden 900 sn'lik kilit
+yüzünden kayıt sonsuza kadar `processing` kalıyordu.
 
 Ürünler 280 sn'yi beklemez: canlı doğrulanmış ürünler AI Konsey karneye başlamadan önce yazılır ve istemci ilk yoklamada gösterir (bkz. `publishPartial` / `markJobPartial`). Tipi bir arama ~1,5-2 dk'da ürün gösterir, karne birkaç on saniye sonra kartın üstüne gelir.
 

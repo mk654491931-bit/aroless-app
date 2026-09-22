@@ -74,8 +74,11 @@ export default {
             status: "ok",
             ...hostRuntimeSummary(),
             // Ağır işlerin hangi yoldan gittiği: "qstash" | "in-process" | "inline".
-            // Sunucusuz ortamda "inline" görünüyorsa uzun analizler hâlâ istek
-            // içinde koşuyor demektir (QStash anahtarı girin ya da Render'a taşıyın).
+            // ÜCRETSİZ hedef: `dispatch: "qstash"` (Vercel Hobby + QStash, ayrı
+            // servis gerekmez). "inline" görünüyorsa `QSTASH_TOKEN` +
+            // `JOB_WORKER_SECRET` tanımlı değil demektir; ağır hat istek içinde
+            // koşar (280 sn sözü yine tutar ama ön sonuç/arka plan dayanıklılığı
+            // olmaz). `longJob: "inline"` Vercel'de normaldir.
             workflow: {
               // Ürün bulucu işi hangi yoldan gidiyor?
               dispatch: discoveryDispatchPlan(),

@@ -2,6 +2,15 @@
 # Create this from Render Dashboard → New → Blueprint, then add secrets in the
 # service Environment tab. No secret values belong in this file.
 #
+# ⚠️ ÜCRETSİZ PLAN UYGUN DEĞİL — ve Render zorunlu da değil.
+#   * Ağır iş için Render'a HİÇ ihtiyaç yok: Vercel Hobby fonksiyon tavanı 300 sn,
+#     hat 260 sn'de biter, iş uygulamanın kendi `/api/worker` ucuna QStash ile
+#     yayınlanır (`DISCOVERY_WORKER_URL` boş kalır). Ücretsiz ve soğuk başlangıç yok.
+#   * Render ücretsiz Web Service 15 dk hareketsizlikte uyur, geri açılması ~1 dk
+#     sürer (bu süre hat bütçesinden düşülür → kaliteden yer), "harici API/DB
+#     trafiği" nedeniyle askıya alınabilir ve aylık 750 instance saat sınırı vardır.
+#   * Bu blueprint'i yalnızca ÜCRETLİ bir instance ile kalıcı süreç istiyorsan kullan.
+#
 # Bu dosya yalnızca ANAHTAR ADLARINI listeler. Sadece kullandığın anahtarları
 # doldur; boş bırakılanlar devre dışı kalır (Render Blueprint oluştururken
 # değerleri atlayabilirsin, sonradan Dashboard → Environment'tan ekleyebilirsin).
@@ -25,9 +34,16 @@
 #      algılanınca 890 sn, Vercel'de fonksiyon sınırı − 2 sn (Hobby 300 sn → 298 sn).
 #
 # Vercel'de (QSTASH_TOKEN + JOB_WORKER_SECRET TANIMLIYSA) iş `/api/worker`'a
-# yayınlanır ve arka planda koşar; bu iki anahtardan biri eksikse `inline` moda
-# düşer ve ağır hat isteğin İÇİNDE koşar. Doğrulama: `/health` →
+# yayınlanır ve arka planda koşar; hedef, `DISCOVERY_WORKER_URL` boşsa uygulamanın
+# KENDİ origin'idir (yani ayrı servis gerekmez). Bu iki anahtardan biri eksikse
+# `inline` moda düşer ve ağır hat isteğin İÇİNDE koşar. Doğrulama: `/health` →
 # `workflow.dispatch` = `qstash` olmalı.
+#
+# Zaman sözü: bütçe kuyruğa alınma anından ölçülür (`remainingWorkerBudgetMs`),
+# yani QStash teslimi + soğuk başlangıç süresi hattan düşülür ve "tıkla → sonuç"
+# her koşulda ≤ 280 sn kalır. İş kilidi `jobLeaseSeconds()` = 310 sn'dir; öldürülen
+# bir iş böylece QStash tekrar denemesinde devralınabilir (eskiden 900 sn'lik kilit
+# yüzünden kayıt sonsuza kadar `processing` kalıyordu).
 #
 # 504 KORUMASI (bu servisin en önemli ayarı): Render bir **kalıcı** Node servisi
 # çalıştırır, yani istek yanıtlandıktan sonra süreç yaşamaya devam eder. Ağır

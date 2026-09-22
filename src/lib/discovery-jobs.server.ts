@@ -132,6 +132,12 @@ export type WorkerPayload = {
   userId: string;
   accessToken: string;
   input: DiscoveryInput;
+  /**
+   * İşin kuyruğa alındığı an (ms). Sözün ölçüldüğü başlangıç noktası budur:
+   * kullanıcı "tıkla → sonuç" süresini görür, işçinin ne zaman uyandığını
+   * değil. Eski (bu alanı taşımayan) payload'larda güvenli varsayılana düşer.
+   */
+  enqueuedAtMs?: number;
 };
 
 function env(name: string): string | undefined {
@@ -217,6 +223,54 @@ export const DISCOVERY_RETURN_MARGIN_MS = 20_000;
  * hesaplanır.
  */
 export const DISCOVERY_MAX_BUDGET_MS = DISCOVERY_END_TO_END_MS - DISCOVERY_RETURN_MARGIN_MS;
+
+/**
+ * İş kilidinin (lease) süresi.
+ *
+ * NEDEN: kilit eskiden 900 sn'ydi. Bir iş platform tarafından ortasında
+ * öldürüldüğünde (Vercel'de 300 sn tavanı) kayıt `processing` kalıyor, QStash'in
+ * tekrar denemesi ise kilidi geçerli görüp HİÇBİR ŞEY yapmıyordu — kullanıcı
+ * hem krediyi hem analizi kaybediyordu. Kilit artık uçtan uca sözün biraz
+ * üstünde: hat en fazla 260 sn koşar, 310 sn sonra hiçbir sağlıklı işçi kilidi
+ * tutamaz, yani tekrar deneme işi devralabilir. Bu, ek bir süpürücü servis
+ * gerektirmeden "iş sonsuza kadar processing" durumunu kapatır.
+ */
+export function jobLeaseSeconds(): number {
+  return Math.ceil(DISCOVERY_END_TO_END_MS / 1000) + 30;
+}
+
+/**
+ * Hattı koşmaya değer en küçük bütçe (ms).
+ *
+ * Bu eşiğin altında ürün doğrulaması yapılamaz: hat yalnızca para/kredi
+ * harcayıp işe yaramaz bir çıktı verir. Bu yüzden hızlı ve dürüst bir hata +
+ * kredi harcanmamış bir iş döneriz (kredi zaten hattın içinde düşülür).
+ */
+export const DISCOVERY_MIN_USEFUL_BUDGET_MS = 45_000;
+
+/**
+ * Kuyruk gecikmesini düşerek hattın GERÇEK bütçesini hesaplar.
+ *
+ * NEDEN GEREKLİ: `workerBudgetMs()` sabit bir tavan verir (260 sn), ama işin
+ * işçiye ulaşması zaman alır — QStash teslimi, sunucusuz soğuk başlangıç ve
+ * Render ücretsiz planında uykudan açılma (~1 dk). O gecikme düşülmezse
+ * kullanıcı 260 sn + gecikme bekler ve "280 sn'den fazla sürdü" görür.
+ * Artık bütçe SÖZÜN BAŞLANGICINDAN ölçülür: platform ne kadar uyutursa uyutsun
+ * uçtan uca süre 280 sn'yi aşmaz.
+ */
+export function remainingWorkerBudgetMs(args: {
+  enqueuedAtMs?: number;
+  now?: number;
+  platformBudgetMs?: number;
+} = {}): number {
+  const platform = args.platformBudgetMs ?? workerBudgetMs();
+  const enqueuedAtMs = args.enqueuedAtMs;
+  if (typeof enqueuedAtMs !== "number" || !Number.isFinite(enqueuedAtMs)) return platform;
+  const now = args.now ?? Date.now();
+  const elapsed = Math.max(0, now - enqueuedAtMs);
+  const remaining = DISCOVERY_END_TO_END_MS - elapsed - DISCOVERY_RETURN_MARGIN_MS;
+  return Math.max(0, Math.min(platform, remaining));
+}
 
 /**
  * İşçinin ağır hatta harcayabileceği süre. Platformun limiti ne olursa olsun
@@ -918,7 +972,7 @@ export type SearchJobClaim = {
 export async function claimSearchJob(jobId: string): Promise<SearchJobClaim> {
   const { data, error } = await jobStore().rpc("claim_search_job", {
     _job_id: jobId,
-    _lease_seconds: 900,
+    _lease_seconds: jobLeaseSeconds(),
   });
   if (!error && data && typeof data === "object") {
     const raw = data as { state?: SearchJobClaim["state"]; attempt_count?: number };
@@ -966,6 +1020,7 @@ export async function startDiscoveryJob(args: {
   if (mode === "inline") return { ok: false, error: "BACKGROUND_DISPATCH_UNAVAILABLE" };
 
   const jobId = globalThis.crypto.randomUUID();
+  const enqueuedAtMs = Date.now();
   try {
     await createJobRow({ jobId, userId: args.userId, input: args.input });
   } catch (e) {
@@ -977,6 +1032,7 @@ export async function startDiscoveryJob(args: {
     userId: args.userId,
     accessToken: args.accessToken,
     input: args.input,
+    enqueuedAtMs,
   };
 
   if (mode === "in-process") {
@@ -1025,13 +1081,30 @@ export async function runJob(
     if (claim.state === "completed") return { ok: true };
     if (claim.state !== "claimed") return { ok: false, error: `JOB_${claim.state.toUpperCase()}` };
     attemptCount = claim.attemptCount ?? 0;
+
+    // SÖZ ÖLÇÜTÜ: bütçe, işin kuyruğa alındığı andan itibaren kalan süredir.
+    // Kuyruk gecikmesi + işçinin uyanma süresi buradan düşülür, böylece
+    // "tıkla → sonuç" her koşulda 280 sn içinde kalır.
+    const budgetMs = remainingWorkerBudgetMs({ enqueuedAtMs: payload.enqueuedAtMs });
+    // Eşik platformun KENDİ bütçesiyle kıyaslanır: dar bir fonksiyon limiti
+    // (ör. 60 sn → 44 sn hızlı profil) zaten dar olduğu için reddedilmez, ama
+    // bol bütçeli bir platformda kuyruk neredeyse tamamını yediyse reddedilir.
+    if (budgetMs < Math.min(DISCOVERY_MIN_USEFUL_BUDGET_MS, workerBudgetMs())) {
+      // Kuyruk bu kadar geciktiyse doğrulanmış çıktı üretilemez; kredi
+      // harcamadan (düşme hattın içinde yapılır) açık sebeple bitiririz.
+      await markJobFailed(payload.jobId, "QUEUE_DELAY_EXCEEDED_BUDGET", attemptCount).catch(
+        () => {},
+      );
+      return { ok: false, error: "QUEUE_DELAY_EXCEEDED_BUDGET" };
+    }
+
     const { runProductDiscovery } = await import("@/lib/discovery-pipeline.server");
     const result: DiscoveryResult = await runProductDiscovery(payload.input, {
       supabase: userClient(payload.accessToken),
       userId: payload.userId,
       deductCredit: true,
       // Hat, kalan süreye göre kendini kısaltarak zamanında sonuç döner.
-      budgetMs: workerBudgetMs(),
+      budgetMs,
       // Ön sonuç: canlı doğrulanmış ürünler hazır olur olmaz yazılır; istemci
       // konsey karnelerini beklemeden ürünleri görür (yoklama devam eder).
       onProgress: (snapshot) => markJobPartial(payload.jobId, snapshot),

@@ -5,9 +5,11 @@
  * `searches` kaydına `completed` + `result` (hata durumunda `failed` + `error`)
  * yazar ve sonucu Upstash Redis'te önbelleğe alır.
  *
- * Fonksiyon süresi `nitro.config.ts` içindeki `vercel.functions.maxDuration`
- * ile ayarlanır (varsayılan 300 sn; Hobby planda
- * VERCEL_FUNCTION_MAX_DURATION=60 yapılmalıdır).
+ * ÜCRETSIZ KURULUM: `DISCOVERY_WORKER_URL` tanımlı değilse iş yine bu uca
+ * yayınlanır — yani uygulamanın KENDİ origin'i işçidir ve ayrı (ücretli) bir
+ * sunucu gerekmez. Fonksiyon süresi `nitro.config.ts` içindeki
+ * `vercel.functions.maxDuration` ile ayarlanır (Vercel Hobby'de varsayılan ve
+ * üst sınır 300 sn).
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/api/worker")({
           userId?: string;
           accessToken?: string;
           input?: unknown;
+          enqueuedAtMs?: number;
         } | null;
 
         if (!payload?.jobId || !payload.userId || !payload.accessToken || !payload.input) {
@@ -51,6 +54,10 @@ export const Route = createFileRoute("/api/worker")({
           userId: payload.userId,
           accessToken: payload.accessToken,
           input: parsed.data,
+          // Kuyruk gecikmesini (QStash teslimi + soğuk başlangıç) sözden
+          // düşebilmek için taşınır; olmazsa sabit tavana düşer.
+          enqueuedAtMs:
+            typeof payload.enqueuedAtMs === "number" ? payload.enqueuedAtMs : undefined,
         });
 
         // Hata durumunda bile 200 dönülür: kayıt "failed" olarak işlendi, QStash'in

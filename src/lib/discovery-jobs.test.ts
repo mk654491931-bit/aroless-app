@@ -7,8 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DISCOVERY_END_TO_END_MS,
   DISCOVERY_MAX_BUDGET_MS,
+  DISCOVERY_MIN_USEFUL_BUDGET_MS,
   DISCOVERY_RETURN_FLOOR_MS,
   DISCOVERY_RETURN_MARGIN_MS,
+  jobLeaseSeconds,
+  remainingWorkerBudgetMs,
   JOB_POLL_INTERVAL_MS,
   batchReserveMs,
   councilEnrichCallMs,
@@ -122,6 +125,59 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(workerBudgetMs()).toBe(260_000);
     expect(DISCOVERY_MAX_BUDGET_MS + DISCOVERY_RETURN_MARGIN_MS).toBe(DISCOVERY_END_TO_END_MS);
     expect(clientWaitMs()).toBe(892_000);
+  });
+
+  it("kuyruk gecikmesini sözden düşer (soğuk başlangıç/uykudan açılma)", () => {
+    // Kullanıcının gördüğü süre TIKLA → SONUÇ'tur. İşçi 60 sn sonra uyandıysa
+    // hat 260 sn koşamaz; kalan süre 200 sn'dir ve toplam yine 280 sn'de biter.
+    const now = 1_000_000_000_000;
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now, now })).toBe(DISCOVERY_MAX_BUDGET_MS);
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now - 60_000, now })).toBe(200_000);
+    // Söz her zaman tutar: geçen süre + hat bütçesi + dönüş payı = 280 sn.
+    expect(60_000 + remainingWorkerBudgetMs({ enqueuedAtMs: now - 60_000, now }) + 20_000).toBe(
+      DISCOVERY_END_TO_END_MS,
+    );
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now - 5_000, now })).toBe(255_000);
+  });
+
+  it("kilit, öldürülen işin tekrar denenebilmesi için platform tavanına göre kısalır", () => {
+    // 900 sn'lik kilit yüzünden: iş 300 sn'de öldürülüyor, QStash tekrar deniyor,
+    // kilit hâlâ geçerli görünüyor ve iş sonsuza kadar `processing` kalıyordu.
+    expect(jobLeaseSeconds()).toBe(310);
+    // Sağlıklı işçi kilidi en fazla 260 sn tutar → çift çalışma (çift kredi) olmaz.
+    expect(jobLeaseSeconds() * 1000).toBeGreaterThan(DISCOVERY_MAX_BUDGET_MS);
+    // Vercel Hobby fonksiyon tavanı 300 sn: kilit hemen ardından serbest kalır.
+    expect(jobLeaseSeconds()).toBeGreaterThan(300);
+    expect(jobLeaseSeconds()).toBeLessThan(900);
+  });
+
+  it("gecikme hattı işe yaramaz hâle getirdiyse bütçe 0'a iner", () => {
+    const now = 1_000_000_000_000;
+    // 275 sn kuyrukta geçti: kalan 20 sn − 20 sn dönüş payı yok.
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now - 275_000, now })).toBe(0);
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now - 300_000, now })).toBe(0);
+    // Eşik: bu değerin altında hat kredi harcamadan dürüstçe durur.
+    expect(DISCOVERY_MIN_USEFUL_BUDGET_MS).toBeGreaterThan(25_000);
+    expect(DISCOVERY_MIN_USEFUL_BUDGET_MS).toBeLessThan(DISCOVERY_MAX_BUDGET_MS);
+  });
+
+  it("eski payload'da ve saat kaymasında güvenli davranır", () => {
+    // Alanı taşımayan eski payload: sabit tavana düşer (geriye uyumlu).
+    expect(remainingWorkerBudgetMs({})).toBe(workerBudgetMs());
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: Number.NaN })).toBe(workerBudgetMs());
+    // Gelecekteki damga (saat kayması) negatif gecikme üretmez, tavanı aşamaz.
+    const now = 1_000_000_000_000;
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now + 5_000, now })).toBe(DISCOVERY_MAX_BUDGET_MS);
+  });
+
+  it("dar platform limiti kuyruk düşülünce tamamen reddedilmez", () => {
+    // 60 sn'lik limit → 44 sn hızlı profil. Bu zaten dar bir bütçedir; kuyruk
+    // gecikmesi olmasa bile 44 < 45 olduğu için reddedilmemelidir.
+    vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "60");
+    const platform = workerBudgetMs();
+    expect(platform).toBe(44_000);
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: Date.now(), now: Date.now() })).toBe(platform);
+    expect(platform).toBeLessThan(DISCOVERY_MIN_USEFUL_BUDGET_MS);
   });
 
   it("never drops below the safety floors", () => {
