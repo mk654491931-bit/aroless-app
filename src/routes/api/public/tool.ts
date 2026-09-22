@@ -35,6 +35,9 @@ export const Route = createFileRoute("/api/public/tool")({
 
           const { buildPrompt, TOOL_PROVIDER } = await import("@/lib/tools-prompts.server");
           const { runTool, runConsensus } = await import("@/lib/tools-ai.server");
+          const { cacheGet, cacheKey, cacheSet } = await import("@/lib/ai-cache.server");
+          const { isCacheableToolResult, toolCacheParts, toolCacheTtlMs } =
+            await import("@/lib/tools-cache.server");
           const prompt = buildPrompt(tool, input);
 
           // Bütçe platformdan gelir (Vercel 300 sn → 90 sn'lik araç bütçesi),
@@ -49,8 +52,32 @@ export const Route = createFileRoute("/api/public/tool")({
               ),
             ]);
 
+          /**
+           * ÖNBELLEK — ücretsiz planın en kritik tasarrufu.
+           *
+           * AI sağlayıcı kotaları bu mimarideki en dar kaynaktır ve önbellek
+           * olmadan aynı girdiyle yapılan her tekrar tıklama kotayı yeniden
+           * yakar, kullanıcıyı 30-90 sn bekletir. Aynı girdi aynı analizi hak
+           * eder; tazeliğin kritik olduğu araçta (`news`) TTL 10 dakikaya iner
+           * (bkz. `TOOL_CACHE_TTL_MS`).
+           *
+           * Boş/degrade sonuç ASLA yazılmaz: yoksa o girdi saatlerce boş
+           * sonuç döndürürdü — bu, uydurma sonuç kadar kötüdür.
+           */
+          const computeCached = async <T>(compute: () => Promise<T>): Promise<T> => {
+            const ttlMs = toolCacheTtlMs(tool);
+            if (ttlMs === null) return compute();
+            const scope = `tool:${tool}`;
+            const key = await cacheKey(scope, toolCacheParts(tool, input));
+            const hit = await cacheGet<T>(key);
+            if (hit !== null && isCacheableToolResult(hit)) return hit;
+            const fresh = await compute();
+            if (isCacheableToolResult(fresh)) await cacheSet(key, scope, fresh, ttlMs);
+            return fresh;
+          };
+
           if (tool === "consensus") {
-            return Response.json(await withBudget(runConsensus(prompt)));
+            return Response.json(await computeCached(() => withBudget(runConsensus(prompt))));
           }
           if (tool === "news") {
             const { callGemini, callLovableAI, extractJson } = await import("@/lib/ai.server");
@@ -60,24 +87,25 @@ export const Route = createFileRoute("/api/public/tool")({
             };
             // Önce zeminli (arama yapabilen) Gemini; cevap vermezse tüm anahtar
             // havuzunu süpüren yol — araç yine boş dönmez.
-            try {
-              return Response.json({
-                items: readItems(
-                  await withBudget(
-                    callGemini(prompt, undefined, 0.5, true),
-                    Math.round(budgetMs * 0.6),
+            const payload = await computeCached(async () => {
+              try {
+                return {
+                  items: readItems(
+                    await withBudget(
+                      callGemini(prompt, undefined, 0.5, true),
+                      Math.round(budgetMs * 0.6),
+                    ),
                   ),
-                ),
-              });
-            } catch {
-              return Response.json({
-                items: readItems(await withBudget(callLovableAI(prompt, 0.5))),
-              });
-            }
+                };
+              } catch {
+                return { items: readItems(await withBudget(callLovableAI(prompt, 0.5))) };
+              }
+            });
+            return Response.json(payload);
           }
           return Response.json(
-            await withBudget(
-              runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini", 0.5, budgetMs - 2_000),
+            await computeCached(() =>
+              withBudget(runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini", 0.5, budgetMs - 2_000)),
             ),
           );
         } catch (e) {

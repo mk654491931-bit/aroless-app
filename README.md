@@ -189,14 +189,41 @@ işi kesmez ve uç nokta bazlı bütçeler (`REQUEST_BUDGET_MS`) yeterlidir. Ara
 zaman aşımında artık `504` değil `503 + Retry-After` + `code: "TOOL_WARMING"` döner —
 böylece hiçbir araç "504" göstermez.
 
+#### Araç önbelleği — ücretsiz planın en kritik tasarrufu (`src/lib/tools-cache.server.ts`)
+
+Bu mimaride **ilk tükenecek kaynak AI sağlayıcı kotalarıdır** (QStash'ten bile önce),
+çünkü her araç çağrısı bir veya daha fazla model isteğidir. Bu yüzden araç ucu
+(`/api/public/tool`) artık sonucu önbelleğe alır: aynı araç + aynı girdi + aynı dil
+ikinci kez geldiğinde model **hiç çağrılmaz** (kalıcı katman: `ai_cache`).
+
+| Kademe | Süre | Araçlar | Neden |
+| --- | --- | --- | --- |
+| Canlı | 10 dk | `news` | Sonuç doğrudan güncel olaya bağlı; uzun önbellek geçmiş haberi "taze" gösterirdi |
+| Piyasa | 3 saat | `consensus`, `price-strategy`, `arbitrage-matrix`, `listing-seo`, `review-sentiment` | Fiyat/komisyon/sıralama gün içinde değişir |
+| Yapısal | 12 saat | Kalan 13 hesaplayıcı araç | Aynı girdi aynı sonucu verir; değişen kullanıcı verisidir ve o da anahtarda |
+
+Kurallar:
+
+- **Boş/degrade sonuç asla önbelleğe yazılmaz** (başlık + madde veya metrik şartı):
+yoksa o girdi saatlerce boş sonuç döndürürdü — bu, uydurma sonuç kadar kötüdür.
+- **Dil anahtarın parçasıdır** (istemci `uiLang` gönderir): Türkçe isteyen kullanıcı
+İngilizce sonucu almaz.
+- **Yeni araç eklenirse önbellek tanımı zorunludur**: `satisfies Record<ToolId, number>`
+sayesinde politika haritası güncellenmezse derleme hata verir.
+- Bilinmeyen araç önbelleğe alınmaz (politikası tanımlanmamış çıktı "canlı" gibi sunulmaz).
+
+Etki: tekrarlanan tıklamalar hem anında döner (gecikme ↓ → platform bütçesine daha
+az yük) hem de AI kotasını yakmaz ("tüm motorlar meşgul" hatası ↓).
+
 #### Ücretsiz planların gerçek sınırları (bu kurulumun dayandığı sayılar)
 
 | Servis | Ücretsiz sınır | Bu projedeki rolü |
 | --- | --- | --- |
 | Vercel Hobby | fonksiyon başına 300 sn (varsayılan = üst sınır), 2 GB / 1 vCPU, 4.5 MB gövde | Uygulama + `/api/worker` |
-| Upstash QStash | günde 1.000 mesaj, mesaj başına 1 MB, yanıt süresi en fazla 15 dk (tekrar denemeler de mesaj sayılır) | Ağır işi `202` ile arka plana atar |
+| Upstash QStash | günde 1.000 mesaj, mesaj başına 1 MB, yanıt süresi en fazla 15 dk (tekrar denemeler de mesaj sayılır) | Ağır işi `202` ile arka plana atar; kota dolarsa hat istek içinde koşar (`discoveryFallbackDecision`) |
 | Upstash Redis | günlük komut kotası | AI/ürün önbelleği (kalıcı SWR katmanı) |
-| Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu |
+| Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu, `ai_cache` (araç sonuçları dahil) |
+| AI sağlayıcı havuzu | Sağlayıcı başına ücretsiz kota (`*_API_KEY_1..8` ile dağıtılır) | **En dar kaynak** → araç önbelleği burayı korur |
 
 > **Modal.com / kiralık GPU gerekmez:** hat GPU'ya değil dış AI API'lerine bağlıdır
 > (I/O-bound). 300 sn'lik duvar hesaplamadan değil platformun fonksiyon süresinden
