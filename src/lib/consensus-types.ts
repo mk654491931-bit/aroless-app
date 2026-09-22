@@ -52,13 +52,62 @@ export type CouncilSummary = {
   data_coverage?: number;
   kill_criteria?: string[];
   /**
-   * Karne hangi derinlikte üretildi (`enrich` = 6 uzman ekip + müdür; hakem
-   * turu ve denetçi yok). Eski kayıtlarda bulunmaz.
+   * Karne hangi profilde üretildi. `enrich` ürün bulucunun İÇİNDEN çağrılan
+   * karnedir ve artık 14 ajanın tamamını koşar (6 ekip + 6 hakem + müdür +
+   * denetçi); yalnızca bütçe darsa bazı aşamalar atlanır ve bu durum
+   * `skipped_stages` ile dürüstçe bildirilir. Eski kayıtlarda bulunmaz.
    */
   depth?: "full" | "fast" | "enrich";
   /** Süre bütçesine sığmadığı için atlanan aşamalar (boşsa tam hat koştu). */
   skipped_stages?: string[];
 };
+
+/** Bir karne özetinde fiilen kaç ajan çağrısının koştuğunun dürüst dökümü. */
+export type CouncilAgentSummary = {
+  /** Kaç ajan çağrısı fiilen koştu (0-14). */
+  agentCalls: number;
+  /** Ekranda gösterilecek dürüst etiket. */
+  label: string;
+  /** 14 ajanın tamamı koştu mu? */
+  full: boolean;
+  /** Çıktısı olan hakem sayısı (0-6). */
+  reviewerCount: number;
+  /** Bağımsız denetçi (14. ajan) koştu mu? */
+  hasAuditor: boolean;
+};
+
+/**
+ * Karnenin KAÇ ajanla koştuğunu dürüstçe özetler.
+ *
+ * Konsey 14 üyeden oluşur: 6 uzman üretici ekip + 6 hakem + müdür + bağımsız
+ * denetçi. Süre bütçesi darsa hakem turu ve/veya denetçi atlanabilir. Bu
+ * fonksiyon `depth` etiketine GÜVENMEZ (o alan eski kayıtlarda yanıltıcı) ve
+ * fiili çıktıya bakar: hakem notu/motoru olan ekip sayısı + denetçi puanı.
+ * Böylece arayüz "6 uzman ekip" ile "14 ajan" arasındaki farkı yanlış
+ * gösteremez.
+ */
+export function councilAgentSummary(council: CouncilSummary): CouncilAgentSummary {
+  const teams = Array.isArray(council.teams) ? council.teams : [];
+  const reviewerCount = teams.filter(
+    (t) =>
+      typeof t.reviewer_engine === "string" &&
+      t.reviewer_engine.trim() !== "" &&
+      t.reviewer_engine !== "-",
+  ).length;
+  const hasDirector =
+    typeof council.director_engine === "string" &&
+    council.director_engine.trim() !== "" &&
+    council.director_engine !== "unavailable";
+  const hasAuditor = typeof council.auditor_score === "number" && council.auditor_score > 0;
+  const agentCalls = teams.length + reviewerCount + (hasDirector ? 1 : 0) + (hasAuditor ? 1 : 0);
+  const full = teams.length > 0 && reviewerCount === teams.length && hasDirector && hasAuditor;
+  const label = full
+    ? `14 ajan: ${teams.length} ekip + ${reviewerCount} hakem + Müdür + Denetçi`
+    : `${agentCalls} ajan koştu: ${teams.length} ekip + ${reviewerCount} hakem${
+        hasDirector ? " + Müdür" : ""
+      }${hasAuditor ? " + Denetçi" : ""}`;
+  return { agentCalls, label, full, reviewerCount, hasAuditor };
+}
 
 /** Local competition level, localized for the UI. */
 export type LocalCompetition = "Düşük" | "Orta" | "Yüksek";

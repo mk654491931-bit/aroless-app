@@ -36,7 +36,7 @@ import { DecisionStrip, WinnerBadge, WinnerScorePanel } from "@/components/winne
 import { countryName } from "@/lib/countries";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
-import { hybridBadge } from "@/lib/consensus-types";
+import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, recommendationStyle, reliabilityStyle } from "@/lib/recommendation";
 import { useMoney } from "@/lib/currency";
@@ -471,9 +471,25 @@ export function ProductCard({
       {typeof p.unified_score === "number" && p.unified_score > 0 && (
         <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-2 text-[11px]">
           <span className="font-semibold">🤝 Ortak Karar Puanı</span>
-          <span className="text-muted-foreground">
-            (Hibrit {p.hybrid?.calculated_score ?? "—"} + Konsey {p.council?.velora_score ?? "—"}) / 2 ={" "}
-            <b className="text-foreground">{p.unified_score}/100</b>
+          <span
+            className="text-muted-foreground"
+            title="Analiz hattı puanı ile 14 ajanlı AI Konsey puanı eşit ortaklıkla birleşir. Karne yoksa yalnızca analiz hattı kararı geçerlidir."
+          >
+            {(() => {
+              const analysis = p.hybrid?.calculated_score ?? p.consensus?.average_score;
+              const council = p.council?.velora_score;
+              return council ? (
+                <>
+                  (Analiz {analysis ?? "—"} ⊕ Konsey {council}) ={" "}
+                  <b className="text-foreground">{p.unified_score}/100</b>
+                </>
+              ) : (
+                <>
+                  (yalnızca analiz hattı) ={" "}
+                  <b className="text-foreground">{p.unified_score}/100</b>
+                </>
+              );
+            })()}
           </span>
         </div>
       )}
@@ -498,20 +514,16 @@ export function ProductCard({
             ))}
           </div>
           <div className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-            {p.council.depth === "enrich" ? (
-              /* Kısa karne: 6 uzman üretici ekip + müdür. Hakem turu ve denetçi
-                 yok — sayıyı "12 uzman" diye yazmak yanıltıcı olurdu. */
-              <span
-                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
-                title="Hızlı karne: 6 uzman üretici ekip + müdür. Hakem turu ve bağımsız denetçi bu koşuda atlandı."
-              >
-                6 uzman ekip + Müdür ({p.council.director_engine})
-              </span>
-            ) : (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-                12 uzman + Müdür ({p.council.director_engine})
-              </span>
-            )}
+            {/* Etiket depth alanına DEĞİL, fiili çıktıya bakar: hakem notu olan
+                ekip sayısı + denetçi puanı. Böylece 14 ajan koştuysa "14 ajan"
+                yazar, bütçe bir aşamayı atladıysa kaç ajanın koştuğunu dürüstçe
+                söyler (eskiden hep "6 uzman ekip" yazıyordu). */}
+            <span
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+              title={`Konsey 14 üyeden oluşur: 6 ekip + 6 hakem + Müdür + Denetçi. Müdür motoru: ${p.council.director_engine}`}
+            >
+              {councilAgentSummary(p.council).label}
+            </span>
             {(p.council.skipped_stages?.length ?? 0) > 0 && (
               <span
                 className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-200"
