@@ -35,6 +35,9 @@ import {
   ImagePlus,
   MessageSquareHeart,
   LineChart,
+  BadgeCheck,
+  Landmark,
+  Swords,
   Target,
   Radar,
   LayoutDashboard,
@@ -105,6 +108,12 @@ const GROUPS: {
         url: "/tools/sourcing",
         icon: ClipboardList,
       },
+      {
+        key: "compliance_check",
+        title: "Pazaryeri Uyum & Gating Denetçisi",
+        url: "/tools/sourcing",
+        icon: BadgeCheck,
+      },
     ],
   },
   {
@@ -129,6 +138,12 @@ const GROUPS: {
       },
       { key: "desi", title: "Packaging & Desi Optimizer", url: "/tools/finance", icon: Boxes },
       { key: "milestone", title: "Milestone Shield", url: "/tools/finance", icon: ShieldCheck },
+      {
+        key: "hs_classifier",
+        title: "HS Kodu & Gümrük Vergisi",
+        url: "/tools/finance",
+        icon: Landmark,
+      },
     ],
   },
   {
@@ -143,6 +158,12 @@ const GROUPS: {
       { key: "lead_time", title: "Lead-Time Countdown", url: "/tools/growth", icon: CalendarClock },
       { key: "arbitrage", title: "Arbitrage Matrix", url: "/tools/growth", icon: Globe2 },
       { key: "ad_hooks", title: "Ad Hook Extractor", url: "/tools/growth", icon: Megaphone },
+      {
+        key: "competitor_intel",
+        title: "Rakip İlan İstihbaratı",
+        url: "/tools/growth",
+        icon: Swords,
+      },
     ],
   },
   {

@@ -29,7 +29,7 @@ describe("araç önbellek TTL politikası", () => {
     const declared = Object.keys(TOOL_PROVIDER).sort();
     const cached = Object.keys(TOOL_CACHE_TTL_MS).sort();
     expect(cached).toEqual(declared);
-    expect(cached).toHaveLength(19);
+    expect(cached).toHaveLength(22);
   });
 
   it("tazelik kademeleri doğru sırada ve güvenli aralıkta", () => {
@@ -44,6 +44,11 @@ describe("araç önbellek TTL politikası", () => {
   it("haberler canlı kademede, hesaplayıcılar yapısal kademede", () => {
     // Haber 10 dakikadan uzun yaşarsa kullanıcı geçmiş haberi "şimdi" sanır.
     expect(toolCacheTtlMs("news")).toBe(TOOL_CACHE_TIERS.live);
+    // Tarife/uyum/rakip verisi gün içinde değişir: canlı kademeye kapatılmaz ama
+    // yapısal (12s) kademede de tutulmaz.
+    expect(toolCacheTtlMs("hs-classifier")).toBe(TOOL_CACHE_TIERS.market);
+    expect(toolCacheTtlMs("compliance-check")).toBe(TOOL_CACHE_TIERS.market);
+    expect(toolCacheTtlMs("competitor-intel")).toBe(TOOL_CACHE_TIERS.market);
     // Landed cost aynı girdi için aynı sonucu verir; uzun önbellek doğrudur.
     expect(toolCacheTtlMs("landed-cost")).toBe(TOOL_CACHE_TIERS.structural);
     expect(toolCacheTtlMs("price-strategy")).toBe(TOOL_CACHE_TIERS.market);

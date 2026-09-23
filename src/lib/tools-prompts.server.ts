@@ -1,4 +1,4 @@
-// Server-only prompt builders for the 19 Aroless tools.
+// Server-only prompt builders for the 22 Aroless tools.
 import type { Provider } from "./tools-ai.server";
 
 export type ToolId =
@@ -20,6 +20,9 @@ export type ToolId =
   | "listing-visual"
   | "review-sentiment"
   | "price-strategy"
+  | "hs-classifier"
+  | "compliance-check"
+  | "competitor-intel"
   | "news";
 
 type Ctx = Record<string, string>;
@@ -60,6 +63,9 @@ export const TOOL_PROVIDER: Record<ToolId, Provider> = {
   "listing-visual": "openrouter",
   "review-sentiment": "groq",
   "price-strategy": "gemini",
+  "hs-classifier": "gemini",
+  "compliance-check": "gemini",
+  "competitor-intel": "openrouter",
   news: "gemini",
 };
 
@@ -178,6 +184,21 @@ Yorumları temaya göre grupla; satın almayı engelleyen itirazları, memnuniye
       return `${BASE}
 Ürün: ${f(c, "product")} | Landed cost: $${f(c, "cost")} | Kanal: ${f(c, "channel", "Amazon US")} | Rakip fiyatları: ${f(c, "competitors")}
 Kâr koruyan bir fiyat bandı belirle: giriş fiyatı, hedef fiyat, taban fiyat (kupon/indirim sınırı). Kanal komisyonu, fulfillment, iade ve reklam payını hesaba kat. metrics: Önerilen fiyat (tone action), Net marj % (tone profit), Taban fiyat (tone warning), Başabaş dönüşüm oranı. table: ["Senaryo","Fiyat $","Net marj $","Net marj %","Not"]. bullets: lansman fiyatlama takvimi, kupon ve bundle hamleleri.`;
+
+    case "hs-classifier":
+      return `${BASE}
+Ürün: ${f(c, "product")} | Malzeme/kompozisyon: ${f(c, "material", "belirtilmedi")} | Hedef pazar: ${f(c, "destination", "US")} | Hedef satış fiyatı: $${f(c, "price")} | Landed maliyet: $${f(c, "cost", "bilinmiyor")}
+Bu ürünün 6 haneli HS kodu (ve ABD için 10 haneli HTS / AB için 8-10 haneli TARIC, GTİP) eşleşmesini yap. Menşe (Çin) ve hedef pazar için gümrük vergisi oranını, anti-damping/301 ek vergi riskini, ithalat KDV/VAT ve varsa satış vergisi muamelesini, ayrıca ürüne özgü ek gereklilikleri (FDA/CPSC/FCC/CE/UKCA, gıda temas, çocuk ürünü, pil/elektronik vb.) çıkar. Kod belirsizliklerinde alternatif kodları say ve hangi ek bilgiyle kesinleşeceğini söyle. metrics: Önerilen HS kodu, Gümrük vergisi %, Toplam vergi yükü birim $, Zorunlu sertifika sayısı. table: ["Pazar","HS/HTS kodu","Gümrük %","VAT/KDV %","Ek gereklilik"]. bullets: yanlış sınıflandırma cezası ve doğrulama adımları (bağlayıcı tarife bilgisi, broker onayı).`;
+
+    case "compliance-check":
+      return `${BASE}
+Ürün: ${f(c, "product")} | Pazar yeri: ${f(c, "channel", "Amazon US")} | Hedef ülke: ${f(c, "country", "US")} | Malzeme/özellik: ${f(c, "material", "belirtilmedi")} | Ürün linki/örnek: ${f(c, "url", "-")}
+Bu ürünün o pazaryerinde SATIŞA UYGUN olup olmadığını denetle: kısıtlı/yasaklı kategori veya içerik (gıda takviyesi, tıbbi iddia, lazer, kesici alet, pil, mıknatıs, CBD, çocuk oyuncağı, kozmetik), gating/kategori onayı zorunluluğu, sigorta/uygunluk beyanı (Certificate of Compliance), zorunlu sertifikalar (CPC, FCC, FDA 510(k)/registration, CE + DoC, UKCA, REACH/RoHS, GPSR + AB sorumlusu, WEEE, EPR/packaging) ve etiket/ambalaj kurallarını çıkar. Her kalem için eksikse askıya alınma (listing removal / account suspension) riskini ve giderme maliyetini yaz. metrics: Uyum riski skoru /100, Gating riski, Zorunlu sertifika sayısı, Eksik belge maliyeti $. table: ["Gereklilik","Zorunlu mu","Kapsam","Kanıt/Belge"]. bullets: yayına almadan önce tamamlanacak uyum kontrol listesi.`;
+
+    case "competitor-intel":
+      return `${BASE}
+Rakip ürün/ilan: ${f(c, "competitor")} | Kanıt (fiyat/BSR/yorum/kupon metni): ${f(c, "evidence")} | Kategori: ${f(c, "category", "-")} | Bizim landed maliyetimiz: $${f(c, "cost", "bilinmiyor")} | Hedef pazar yeri: ${f(c, "channel", "Amazon US")}
+Bu rakibi parçala: fiyat merdiveni ve kampanya/kupon deseni, yorum sayısı-kalitesi ve tekrarlayan 1-2 yıldızlı şikâyetler, görsel/başlık/bullet zayıflıkları, varyasyon ve bundle boşlukları, teslim süresi ve stok davranışı, kırılabilir savunma noktaları. Ardından onları fiyat, ürün iyileştirmesi, paket, görsel ve anahtar kelime eksenlerinde nasıl yeneceğimizi SOMUT hamlelerle yaz. Fiyat kırarak girmek yalnızca matematikle savunulabiliyorsa önerilsin. metrics: Fiyat boşluğu $, Zayıf nokta sayısı, Önerilen giriş fiyatı (tone action), Tahmini kazanma süresi. table: ["Fırsat","Rakip durumu","Bizim hamle","Beklenen etki"]. bullets: 90 günlük saldırı sırası ve kaçınılacak tuzaklar.`;
 
     case "consensus":
       return `${BASE}

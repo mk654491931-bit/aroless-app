@@ -1,7 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Handshake, FileSearch, ShieldQuestion, ClipboardList } from "lucide-react";
+import { Handshake, FileSearch, ShieldQuestion, ClipboardList, BadgeCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HubShell } from "@/components/tools/hub-shell";
@@ -34,6 +34,7 @@ function SourcingHub() {
   const [offer, setOffer] = useState("");
   const [legit, setLegit] = useState({ url: "", notes: "" });
   const [spec, setSpec] = useState({ product: "", reviews: "" });
+  const [comp, setComp] = useState({ product: "", channel: "Amazon US", country: "US", material: "", url: "" });
 
   return (
     <HubShell
@@ -144,6 +145,53 @@ function SourcingHub() {
             value={spec.reviews}
             onChange={(e) => setSpec({ ...spec, reviews: e.target.value })}
             placeholder="Motor 3 kullanımda yandı… Kapak sızdırıyor… Şarj kablosu gevşek…"
+          />
+        </Field>
+      </ToolCard>
+
+      <ToolCard
+        icon={BadgeCheck}
+        title="Pazaryeri Uyum & Gating Denetçisi"
+        description="Satışa almadan önce kısıtlı kategori, gating ve zorunlu sertifika riskini (CPC/FCC/FDA/CE/GPSR) çıkarır."
+        runLabel="Uyumu Denetle"
+        onRun={() => callTool("compliance-check", comp)}
+      >
+        <Field label="Ürün (malzeme ve kullanım amacıyla)">
+          <Input
+            value={comp.product}
+            onChange={(e) => setComp({ ...comp, product: e.target.value })}
+            placeholder="LED ışıklı 3-6 yaş çocuk oyuncak projeksiyon lambası"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Pazaryeri">
+            <Input
+              value={comp.channel}
+              onChange={(e) => setComp({ ...comp, channel: e.target.value })}
+              placeholder="Amazon US / TikTok Shop"
+            />
+          </Field>
+          <Field label="Hedef ülke">
+            <Input
+              value={comp.country}
+              onChange={(e) => setComp({ ...comp, country: e.target.value })}
+              placeholder="US / DE / UK"
+            />
+          </Field>
+        </div>
+        <Field label="Malzeme / teknik özellik">
+          <Input
+            value={comp.material}
+            onChange={(e) => setComp({ ...comp, material: e.target.value })}
+            placeholder="ABS gövde, Li-ion pil, USB şarj, 5V adaptör"
+          />
+        </Field>
+        <Field label="Ürün linki veya tedarikçi beyanı (opsiyonel)">
+          <Textarea
+            rows={3}
+            value={comp.url}
+            onChange={(e) => setComp({ ...comp, url: e.target.value })}
+            placeholder="Tedarikçi 'CE belgeli' diyor ama DoC ve test raporu yok…"
           />
         </Field>
       </ToolCard>

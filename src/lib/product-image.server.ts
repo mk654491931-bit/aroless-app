@@ -13,7 +13,14 @@ const UA =
 
 /** Anahtar modül yüklemesinde DEĞİL, çağrı anında okunur (istemci paketine sızmasın). */
 function scraperKey(): string {
-  return process.env.SCRAPERAPI_KEY?.trim() || process.env.SCRAP_API_KEY?.trim() || "";
+  // Anahtar adı kullanıcının panelde yazdığı biçime göre değişebilir: üçünü de
+  // kabul et ki "anahtarı ekledim ama fotoğraf gelmiyor" durumu oluşmasın.
+  return (
+    process.env.SCRAPERAPI_KEY?.trim() ||
+    process.env.SCRAPAPI_KEY?.trim() ||
+    process.env.SCRAP_API_KEY?.trim() ||
+    ""
+  );
 }
 
 export function scraperApiConfigured(): boolean {

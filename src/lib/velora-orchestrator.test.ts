@@ -255,6 +255,36 @@ describe("faz planı (14 ajan → 4 faz)", () => {
   });
 });
 
+describe("iki hat da AYNI Trend Radar kazımalarını kullanır (paralel, bağımsız)", () => {
+  it("kanıt kazımadan gelir ve HEM analiz hattına HEM 14 üyenin tamamına verilir", async () => {
+    const store = fakeStore();
+    await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+
+    // Kanıt Trend Radar kazıma hattından gelir (`collectSignals` → `runScrapeJob`),
+    // ve koşu başına BİR KEZ çekilir: iki hat aynı kazımayı paylaşır, çift
+    // kazıma (çift maliyet) yapılmaz.
+    expect(mocks.collectSignals).toHaveBeenCalledTimes(1);
+    expect(mocks.collectSignals).toHaveBeenCalledWith("mini ice maker", "US", "General");
+    // Canlı piyasa kanıtı da aynı anda (paralel) çekildi.
+    expect(mocks.buildLiveEvidenceBlock).toHaveBeenCalledTimes(1);
+
+    // 14 üyenin HEPSİ kazınan bloğu gördü.
+    const council = prompts.filter((p) => p.agentName !== "Product Retriever");
+    expect(council).toHaveLength(14);
+    expect(council.every((p) => p.prompt.includes(RADAR[0]!))).toBe(true);
+
+    // Analiz hattı (Product Retriever) da AYNI kazınmış kanıtı gördü — iki hat
+    // birbirinden bağımsız karar verir ama aynı gerçekliğe bakar.
+    const retriever = prompts.find((p) => p.agentName === "Product Retriever");
+    expect(retriever).toBeDefined();
+    expect(retriever!.prompt).toContain(RADAR[0]!);
+    expect(retriever!.prompt).toContain("SHARED LIVE EVIDENCE");
+  });
+});
+
 describe("runVeloraPhase (izole ve zaman dilimli adım)", () => {
   it("fazın üyelerini koşar ve ortak kanıtı hepsine verir", async () => {
     const state = baseState();
@@ -540,6 +570,25 @@ describe("ortak karar: iki bağımsız hattın AĞIRLIKLI birleşimi", () => {
     // Yalnızca analiz hattı sıralaması raporlanır — uydurma kesişim yok.
     expect(dossier.products[0]!.name).toBe("Mini Ice Maker XR-500");
     expect(dossier.products.every((p) => (p.analysisScore ?? 0) > 0)).toBe(true);
+  });
+
+  it("KALİTE KAPISI: yedek/dolgu metinleri listeye almaz, yalnız gerçek ürünleri gösterir", async () => {
+    const store = fakeStore();
+    // Ajan hiç ürün puanı vermez VE retriever boş döner → havuz dolgu metinleriyle
+    // dolar; kapı bunları eleyip uydurma sıra göstermemeli.
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner({ omitVotes: true, retrieverText: "{}" })) },
+    );
+    const dossier = result.dossier!;
+
+    // Yedek (fallback) adaylar listeye girmedi: dönen her ürün ya model ürünü ya
+    // da gerçek kazınmış trend adıdır.
+    expect(dossier.products.every((p) => p.source !== "fallback")).toBe(true);
+    // Eksik sıra DOLDURULMAZ: en fazla VELORA_TOP_N ve puanı barajın üstünde.
+    expect(dossier.products.length).toBeLessThanOrEqual(VELORA_TOP_N);
+    expect(dossier.products.every((p) => p.winnerScore >= 25)).toBe(true);
+    expect(dossier.requested_top).toBe(VELORA_TOP_N);
   });
 
   it("kararı analiz hattı ⊕ ürün başına konsey formülüne bağlar ve ürünleri puana göre dizer", async () => {

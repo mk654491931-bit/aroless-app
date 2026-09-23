@@ -327,10 +327,13 @@ export function veloraProductScore(
   const competition = clamp(100 - number(candidate.competitionScore, 50));
   const council = clamp(number(jointScore, 0));
   const risks = Array.isArray(candidate.risks) ? candidate.risks.length : 0;
+  // Kanıt kalitesi: gerekçe + risk sayısı + fiyat bandı + kategori. Belirsiz/
+  // dolgu adaylar ("için alternatif") burada düşük puan alır.
   const evidence = clamp(
     (String(candidate.whyNow ?? "").trim() ? 40 : 0) +
-      (risks <= 2 ? 30 : 0) +
-      (String(candidate.priceRange ?? "").trim() ? 30 : 0),
+      (risks <= 2 ? 20 : 0) +
+      (String(candidate.priceRange ?? "").trim() ? 25 : 0) +
+      (String(candidate.category ?? "").trim() ? 15 : 0),
   );
   // Kaynak ağırlığı: modelin adlandırdığı gerçek ürün > ham kazınmış trend adı >
   // genel yedek. Böylece "en iyi ürün" sıralaması yedek metinle doldurulmaz.
@@ -378,7 +381,7 @@ ${
     ? `\nSHARED LIVE EVIDENCE (trend radar scrapings + live market verification — the SAME data the finder's analysis pipeline and the 14-member council use). Treat it as ground truth and prefer products that appear here:\n${evidenceBlock.slice(0, 4_000)}\n`
     : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
 }
-Do not require every filter to match. Prefer broad keyword/semantic matches and return the three strongest alternatives even when the exact query has no result. Never return markdown. Return ONLY JSON:
+QUALITY BAR: return only REAL, specific, buyable products (e.g. "katlanabilir silikon su şişesi 750ml"), never vague categories ("ev gereçleri") or filler like "... için alternatif". No invented brand/model names and no unverifiable precision — give ranges. Each product needs a plausible price band, a concrete reason it is winning NOW tied to the shared evidence, and at least one real risk. Prefer products visible in the shared evidence; keep every candidate distinct. Returning fewer, stronger products beats inventing any. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":string[]}],"search_note":string}`;
 }
 
@@ -514,9 +517,13 @@ function toPipelineProducts(
   councilAverage: number,
   listed: boolean,
 ): Product[] {
-  return candidates
+  const ranked = candidates
     .map((candidate) => ({ candidate, score: veloraProductScore(candidate, jointScore).score }))
-    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name))
+    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name));
+  // KALİTE KAPISI: yedek/dolgu metinleri, GERÇEK aday varsa listeye alınmaz —
+  // uydurma ürün adı göstermek yerine daha az ama gerçek ürün gösterilir.
+  const real = ranked.filter((row) => candidateSource(row.candidate) !== "fallback");
+  return (real.length > 0 ? real : ranked)
     .slice(0, 5)
     .map(({ candidate, score }, index) =>
       ProductSchema.parse({

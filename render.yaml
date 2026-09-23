@@ -356,6 +356,7 @@ services:
       # ScrapAPI / ScraperAPI — ürün fotoğraflarını proxy + anti-bot ile kazımak için.
       # Tanımlıysa `/api/public/product-image` istekleri bu servis üzerinden gider;
       # yoksa hat doğrudan kazımaya düşer (özellik devre dışı kalmaz).
+      # Kod üç adı da kabul eder: SCRAPERAPI_KEY | SCRAPAPI_KEY | SCRAP_API_KEY.
       - key: SCRAPERAPI_KEY
         sync: false
       # --- Paddle (ödeme) ---

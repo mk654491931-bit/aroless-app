@@ -39,9 +39,19 @@ describe("resolveProductImage (ScrapAPI/ScraperAPI)", () => {
     expect(calls[0]).toContain(encodeURIComponent("bing.com/images/search"));
   });
 
+  it("panelde yazılan alternatif anahtar adı da kabul edilir", () => {
+    // Kullanıcı anahtarı farklı bir adla eklediyse (SCRAPAPI_KEY) entegrasyon
+    // sessizce devre dışı kalmamalı.
+    vi.stubEnv("SCRAPERAPI_KEY", "");
+    vi.stubEnv("SCRAP_API_KEY", "");
+    vi.stubEnv("SCRAPAPI_KEY", "alias-key");
+    expect(scraperApiConfigured()).toBe(true);
+  });
+
   it("anahtar yoksa doğrudan kazıma yapılır (DuckDuckGo sonra Bing)", async () => {
     vi.stubEnv("SCRAPERAPI_KEY", "");
     vi.stubEnv("SCRAP_API_KEY", "");
+    vi.stubEnv("SCRAPAPI_KEY", "");
     expect(scraperApiConfigured()).toBe(false);
 
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
@@ -65,6 +75,7 @@ describe("resolveProductImage (ScrapAPI/ScraperAPI)", () => {
   it("hiçbir kaynak görsel vermezse uydurma placeholder yerine null döner", async () => {
     vi.stubEnv("SCRAPERAPI_KEY", "");
     vi.stubEnv("SCRAP_API_KEY", "");
+    vi.stubEnv("SCRAPAPI_KEY", "");
     vi.stubGlobal("fetch", async () => new Response("", { status: 500 }));
 
     const result = await resolveProductImage("bulunamayan urun");

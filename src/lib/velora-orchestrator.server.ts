@@ -94,6 +94,16 @@ export const VELORA_PIPELINE_TOP_N = 5;
 export const VELORA_MIN_AGENT_COVERAGE = 0.5;
 
 /**
+ * ÜRÜN KALİTE KAPISI — nihai listeye yalnızca GERÇEK ürünler girebilsin.
+ *
+ * "En iyi 3" istenir; listeyi yedek metinle (ör. "mini ice maker için taşınabilir
+ * alternatif") doldurmak kullanıcıya değersiz sonuç gösterir. Bu yüzden kaynağı
+ * `fallback` olan adaylar ve ağırlıklı puanı bu barajın altında kalan zayıf
+ * adaylar listeye ALINMAZ; eksik sıra doldurulmaz ve durum dürüstçe not edilir.
+ */
+export const VELORA_MIN_PRODUCT_SCORE = 25;
+
+/**
  * Koşan bir fazın kilidi (ms). Aynı faz bu süre içinde tekrar teslim edilirse
  * ikinci kez BAŞLATILMAZ (QStash retry aynı işi iki kez harcayamaz).
  */
@@ -816,7 +826,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const selected = new Map<string, (typeof analysisRanked)[number]>();
   for (const row of [...analysisTop, ...councilTop]) selected.set(row.candidateId, row);
 
-  const products: Product[] = [...selected.values()]
+  const ranked = [...selected.values()]
     .map((row) => {
       const entry = consensus.get(row.candidateId);
       const productJoint = combineJointScores({
@@ -866,7 +876,17 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
         }),
       };
     })
-    .sort((a, b) => b.joint.score - a.joint.score || a.row.identity.localeCompare(b.row.identity))
+    .sort((a, b) => b.joint.score - a.joint.score || a.row.identity.localeCompare(b.row.identity));
+
+  // KALİTE KAPISI: yedek metinler (gerçek ürün DEĞİL) ve ağırlıklı puanı barajın
+  // altında kalan zayıf adaylar nihai listeye ALINMAZ; eksik sıra DOLDURULMAZ.
+  const qualified = ranked.filter(
+    (item) =>
+      item.product.source !== "fallback" && item.joint.score >= VELORA_MIN_PRODUCT_SCORE,
+  );
+  const gateDropped = ranked.length - qualified.length;
+  if (gateDropped > 0) notes.push(`QUALITY_GATE_DROPPED:${gateDropped}`);
+  const products: Product[] = qualified
     .slice(0, VELORA_TOP_N)
     .map((item, index) => ({ ...item.product, rank: index + 1 }));
 
@@ -1150,6 +1170,12 @@ ${
     ? `\nSHARED LIVE EVIDENCE (the SAME scrapings the 14 council members receive — treat as ground truth):\n${state.evidenceBlock.slice(0, 3_000)}\n`
     : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
 }
+QUALITY BAR (bu koşunun amacı GERÇEKTEN iyi ürünler göstermek — zayıf aday listeye girmemeli):
+- Yalnızca GERÇEK, SOMUT ve satın alınabilir ürünler döndür (ör. "katlanabilir silikon su şişesi 750ml"), asla geniş kategori ("ev gereçleri", "aksesuar") veya "için alternatif" gibi dolgu metni.
+- Uydurma marka/model adı ve doğrulanamayan sayı YASAK. Emin değilsen aralık ver.
+- Her ürün için: gerçekçi fiyat bandı, paylaşılan kanıta dayanan SOMUT bir "neden şimdi", ve en az bir gerçek risk.
+- Talebi paylaşılan kanıtta görünen ürünleri tercih et; her aday birbirinden FARKLI olmalı.
+- Kaliteli aday azsa daha az ürün döndürmek, uydurmaktan iyidir.
 Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number,"competitionScore":number,"sentiment":string,"whyNow":string,"risks":string[]}]}`;
 

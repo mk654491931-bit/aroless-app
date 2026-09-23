@@ -10,6 +10,7 @@ import {
   Megaphone,
   Loader2,
   Sparkles,
+  Swords,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -219,6 +220,13 @@ function GrowthHub() {
   });
   const [arb, setArb] = useState({ product: "", cost: "8.5", price: "39.99" });
   const [hook, setHook] = useState("");
+  const [ci, setCi] = useState({
+    competitor: "",
+    evidence: "",
+    category: "",
+    cost: "",
+    channel: "Amazon US",
+  });
 
   return (
     <HubShell
@@ -370,6 +378,54 @@ function GrowthHub() {
             value={hook}
             onChange={(e) => setHook(e.target.value)}
             placeholder="Only 200 left in stock — over 40,000 moms already switched…"
+          />
+        </Field>
+      </ToolCard>
+
+      <ToolCard
+        icon={Swords}
+        title="Rakip İlan İstihbaratı"
+        description="Rakibin fiyat/yorum/zayıf noktalarını parçalar ve fiyat–ürün–görsel ekseninde kazanma planı çıkarır."
+        runLabel="Rakibi Parçala"
+        onRun={() => callTool("competitor-intel", ci)}
+      >
+        <Field label="Rakip ürün / ilan (ad, ASIN veya URL)">
+          <Input
+            value={ci.competitor}
+            onChange={(e) => setCi({ ...ci, competitor: e.target.value })}
+            placeholder="B0XXXXXXX — 2L cam saklama kabı seti, 4.3★ / 2.180 yorum"
+          />
+        </Field>
+        <Field label="Kanıt: fiyat, BSR, yorum şikâyetleri, kupon metni">
+          <Textarea
+            rows={5}
+            value={ci.evidence}
+            onChange={(e) => setCi({ ...ci, evidence: e.target.value })}
+            placeholder="$24.99 (30 gün önce $29.99), BSR 4.200, en çok şikâyet: kapak contası sızdırıyor, 6'lı set eksik geliyor…"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Kategori">
+            <Input
+              value={ci.category}
+              onChange={(e) => setCi({ ...ci, category: e.target.value })}
+              placeholder="Kitchen storage"
+            />
+          </Field>
+          <Field label="Bizim landed maliyetimiz ($)">
+            <Input
+              type="number"
+              value={ci.cost}
+              onChange={(e) => setCi({ ...ci, cost: e.target.value })}
+              placeholder="6.10"
+            />
+          </Field>
+        </div>
+        <Field label="Hedef pazaryeri">
+          <Input
+            value={ci.channel}
+            onChange={(e) => setCi({ ...ci, channel: e.target.value })}
+            placeholder="Amazon US"
           />
         </Field>
       </ToolCard>

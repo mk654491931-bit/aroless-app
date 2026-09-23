@@ -140,6 +140,9 @@ export function noteLabel(note: string): string {
   if (note.startsWith("INTERSECTION_BELOW_TARGET:")) {
     return `Ortak kesişim hedefin altında (${note.split(":")[1] ?? "?"}): eksik sıra doldurulmadı.`;
   }
+  if (note.startsWith("QUALITY_GATE_DROPPED:")) {
+    return `Kalite kapısı ${note.split(":")[1] ?? "?"} zayıf/dolgu adayı eledi: listeye yalnızca gerçek ürünler girdi.`;
+  }
   return note;
 }
 

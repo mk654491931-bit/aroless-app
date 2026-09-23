@@ -1,7 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Calculator, Ship, Wallet, Boxes, ShieldCheck } from "lucide-react";
+import { Calculator, Ship, Wallet, Boxes, ShieldCheck, Landmark } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { HubShell } from "@/components/tools/hub-shell";
@@ -88,6 +88,13 @@ function FinanceHub() {
     currency: "USD/CNY",
     leadTime: "35",
     trust: "yeni tedarikçi",
+  });
+  const [hs, setHs] = useState({
+    product: "",
+    material: "",
+    destination: "US",
+    price: "29.99",
+    cost: "7.40",
   });
 
   const maxCost = n(rev.retail) * (1 - n(rev.margin) / 100) - n(rev.retail) * 0.15 - 3.9;
@@ -392,6 +399,54 @@ function FinanceHub() {
             ⚠ Kur riski: {ms.leadTime} günlük vade boyunca {ms.currency} oynaklığı bakiye ödemesini
             etkileyebilir.
           </div>
+        </div>
+      </ToolCard>
+
+      <ToolCard
+        icon={Landmark}
+        title="HS Kodu & Gümrük Vergisi Bulucu"
+        description="Ürünün HS/HTS kodunu, hedef pazar gümrük vergisini, VAT'ını ve zorunlu sertifikalarını çıkarır."
+        runLabel="Kodu ve Vergiyi Çıkar"
+        onRun={() => callTool("hs-classifier", hs)}
+      >
+        <Field label="Ürün (mümkünse malzeme ve kullanım amacıyla)">
+          <Input
+            value={hs.product}
+            onChange={(e) => setHs({ ...hs, product: e.target.value })}
+            placeholder="Paslanmaz çelik 750ml vakumlu terma termos"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Malzeme / kompozisyon">
+            <Input
+              value={hs.material}
+              onChange={(e) => setHs({ ...hs, material: e.target.value })}
+              placeholder="304 paslanmaz çelik + PP kapak"
+            />
+          </Field>
+          <Field label="Hedef pazar">
+            <Input
+              value={hs.destination}
+              onChange={(e) => setHs({ ...hs, destination: e.target.value })}
+              placeholder="US / EU / UK"
+            />
+          </Field>
+          <Field label="Hedef satış fiyatı ($)">
+            <Input
+              type="number"
+              value={hs.price}
+              onChange={(e) => setHs({ ...hs, price: e.target.value })}
+              placeholder="29.99"
+            />
+          </Field>
+          <Field label="Landed maliyet ($)">
+            <Input
+              type="number"
+              value={hs.cost}
+              onChange={(e) => setHs({ ...hs, cost: e.target.value })}
+              placeholder="7.40"
+            />
+          </Field>
         </div>
       </ToolCard>
     </HubShell>
