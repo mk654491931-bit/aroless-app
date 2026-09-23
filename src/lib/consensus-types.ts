@@ -152,10 +152,14 @@ export const HYBRID_RELAXED_MIN_SCORE = 50;
  *    fikir birliği ortalaması — hattın KENDİ kararı,
  *  - konsey puanı (`council`): 14 ajanın (6 ekip + 6 hakem + müdür + denetçi)
  *    ağırlıklı Aroless skoru.
- * İkisi de varsa karar EŞİT ortaklıktır (analiz %50 / konsey %50): konsey bir
- * veto değildir, ortak karar verir. Yalnızca biri varsa o karar geçerlidir.
- * Geçersiz (0 / NaN / negatif) puan "yok" sayılır.
+ * İkisi de varsa ağırlık AÇIKÇA 14 ajan lehinedir (konsey %70 / analiz %30):
+ * 14 üyeli konsey kararın ana eksenidir, AI analiz hattı onu destekleyen ikinci
+ * sinyaldir. Yalnızca biri varsa o karar geçerlidir. Geçersiz (0 / NaN / negatif)
+ * puan "yok" sayılır.
  */
+export const JOINT_WEIGHT_COUNCIL = 0.7;
+export const JOINT_WEIGHT_ANALYSIS = 0.3;
+
 export function combineJointScores(input: {
   analysisScore?: number | null;
   councilScore?: number | null;
@@ -182,10 +186,12 @@ export function combineJointScores(input: {
     return { score: analysis, source: "analysis", analysisWeight: 1, councilWeight: 0 };
   }
   return {
-    score: Math.round(analysis * 0.5 + council * 0.5),
+    score: Math.round(
+      analysis * JOINT_WEIGHT_ANALYSIS + council * JOINT_WEIGHT_COUNCIL,
+    ),
     source: "joint",
-    analysisWeight: 0.5,
-    councilWeight: 0.5,
+    analysisWeight: JOINT_WEIGHT_ANALYSIS,
+    councilWeight: JOINT_WEIGHT_COUNCIL,
   };
 }
 

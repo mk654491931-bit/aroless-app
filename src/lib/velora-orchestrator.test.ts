@@ -8,8 +8,8 @@
 //     sonraki fazı yayınlayıp anında döner,
 //  4. AYNI fazın tekrar teslimi idempotenttir: kayıtlı faz yeniden koşmaz,
 //     hâlâ koşan faz ikinci kez başlatılmaz → çift AI harcaması olmaz,
-//  5. nihai karar İKİ BAĞIMSIZ HATTIN kesişimidir (analiz ⊕ ürün başına ajan
-//     konseyi) ve kesişim 3'ten azsa eksik sıra DOLDURULMAZ,
+//  5. nihai karar İKİ BAĞIMSIZ HATTIN ağırlıklı birleşimidir (14 ajan %70 ⊕
+//     analiz %30) ve her hat kendi ilk 5'ini bağımsız bulur; eksik sıra DOLDURULMAZ,
 //  6. sonuç veritabanına push edilir, OTOMATİK SELF-TEST kaydı geri okuyup
 //     doğrular ve panel `runId` ile koşu durumunu yoklayabilir.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,9 +51,9 @@ vi.mock("./discovery-jobs.server", async (importOriginal) => ({
 import { COUNCIL_AGENTS } from "./council-chain.server";
 import { combineJointScores } from "./consensus-types";
 import {
-  VELORA_INTERSECTION_POOL,
   VELORA_PHASES,
   VELORA_PHASE_CEILING_MS,
+  VELORA_PIPELINE_TOP_N,
   VELORA_TOP_N,
   buildWinnerDossier,
   councilAverageOf,
@@ -248,10 +248,10 @@ describe("faz planı (14 ajan → 4 faz)", () => {
     expect(VELORA_PHASE_CEILING_MS).toBeLessThanOrEqual(8_000);
     // Toplam istek-içi koşu yolu (4 faz) dar limitlerde bile 504 üretmez.
     expect(VELORA_PHASE_CEILING_MS * VELORA_PHASES.length).toBeLessThanOrEqual(32_000);
-    // Ortak en iyi 3 istenir; kesişim havuzu ondan geniş olmalı ki gerçek ortak
-    // ürünler elenmesin.
+    // Ağırlıklı birleşimden en iyi 3 istenir; her bağımsız hat daha geniş bir
+    // ilk 5 çıkarır ki gerçek ortak ürünler elenmesin.
     expect(VELORA_TOP_N).toBe(3);
-    expect(VELORA_INTERSECTION_POOL).toBeGreaterThanOrEqual(VELORA_TOP_N);
+    expect(VELORA_PIPELINE_TOP_N).toBeGreaterThan(VELORA_TOP_N);
   });
 });
 
@@ -492,27 +492,35 @@ describe("ürün başına ajan konsensüsü (run geneli ortalama kopyalanmaz)", 
   });
 });
 
-describe("ortak karar: iki bağımsız hattın GERÇEK kesişimi", () => {
-  it("ajan oyu olmayan ürün listeye girmez, eksik sıra DOLDURULMAZ", async () => {
+describe("ortak karar: iki bağımsız hattın AĞIRLIKLI birleşimi", () => {
+  it("her hat kendi ilk 5'ini bulur; %70 ajan ⊕ %30 analiz ağırlıklı ilk 3 çıkar", async () => {
     const store = fakeStore();
-    // Ajanlar yalnızca C2 ve C3'ü puanlar → ajan sıralaması C2,C3.
+    // Ajanlar yalnızca C2 ve C3'ü puanlar → konsey hattının kendi ilk 5'i C2,C3.
     const result = await startVeloraRun(
       { userQuery: "mini ice maker", country: "US" },
       { store, runAgent: runAgentStub(stubRunner({ votes: { C2: 88, C3: 70 } })) },
     );
     const dossier = result.dossier!;
 
-    expect(dossier.rank_source).toBe("intersection");
-    expect(dossier.products).toHaveLength(2);
+    expect(dossier.rank_source).toBe("weighted");
+    expect(dossier.products).toHaveLength(3);
+    // C2 ve C3 iki hattın ilk 5'inde ortak; C1 yalnız analiz hattından gelir.
     expect(dossier.intersection_count).toBe(2);
     expect(dossier.requested_top).toBe(3);
     expect(dossier.finalists).toBe(3);
     expect(dossier.evaluated).toBe(2);
-    expect(dossier.notes).toContain("INTERSECTION_BELOW_TARGET:2/3");
-    // Analiz hattının 1. ürünü ajan oyu almadığı için kesişimde YOK.
-    expect(dossier.products.map((p) => p.name)).not.toContain("Mini Ice Maker XR-500");
-    expect(dossier.products.map((p) => p.councilScore).sort((a, b) => b - a)).toEqual([88, 70]);
-    expect(dossier.products.map((p) => p.rank)).toEqual([1, 2]);
+    // Ajan oyu olmayan ürün bile birleşimde korunur (sıra DOLDURULMAZ).
+    expect(dossier.products.map((p) => p.name)).toContain("Mini Ice Maker XR-500");
+    expect(dossier.products.map((p) => p.rank)).toEqual([1, 2, 3]);
+    // Ağırlıklı puan gerçekten 14 ajan %70 ⊕ analiz %30 formülünden gelir.
+    for (const product of dossier.products) {
+      expect(product.winnerScore).toBe(
+        combineJointScores({
+          analysisScore: product.analysisScore,
+          councilScore: product.councilScore,
+        }).score,
+      );
+    }
   });
 
   it("ajan hiç ürün puanı vermezse kesişim İDDİA EDİLMEZ ve sonuç dürüstçe etiketlenir", async () => {
@@ -639,7 +647,7 @@ describe("veloraRunStatus (panel yoklaması)", () => {
     expect(done.nextPhase).toBeNull();
     expect(done.recovered).toBe(false);
     expect(done.dossier!.products.length).toBeGreaterThan(0);
-    expect(done.dossier!.rank_source).toBe("intersection");
+    expect(done.dossier!.rank_source).toBe("weighted");
     expect(done.push!.ok).toBe(true);
     expect(done.selfTest!.verdict).toBe("PASS");
     expect(done.phases.map((p) => p.id)).toEqual([1, 2, 3, 4]);
@@ -663,7 +671,7 @@ describe("veloraRunStatus (panel yoklaması)", () => {
     expect(status.notes).toContain("STATE_EXPIRED_USING_WINNER_LEDGER");
     expect(status.dossier!.notes).toContain("RECOVERED_FROM_WINNER_LEDGER");
     expect(status.dossier!.products.map((p) => p.name)).toEqual(expected);
-    expect(status.dossier!.rank_source).toBe("intersection");
+    expect(status.dossier!.rank_source).toBe("weighted");
     // Geri kurulan kayıt da ürün başına kanıt taşır (uydurma alan yok).
     expect(status.dossier!.products[0]!.candidateId).toBeTruthy();
     expect(status.dossier!.products[0]!.verification).toBe("verified");
@@ -738,7 +746,7 @@ describe("kazanan karne (dossier) ve DTO", () => {
       listed: true,
       requested_top: 3,
       intersection_count: 1,
-      rank_source: "intersection",
+      rank_source: "weighted",
       finalists: 3,
       evaluated: 2,
       notes: [],
@@ -779,7 +787,7 @@ describe("kazanan karne (dossier) ve DTO", () => {
     expect(rows[0]!.niche).toBe("mini ice maker");
     const payload = rows[0]!.payload as Record<string, unknown>;
     expect(payload["joint_score"]).toBe(85);
-    expect(payload["rank_source"]).toBe("intersection");
+    expect(payload["rank_source"]).toBe("weighted");
     expect(payload["product_council_score"]).toBe(74);
     expect(payload["product_council_votes"]).toBe(12);
     expect(payload["product_analysis_score"]).toBe(91);

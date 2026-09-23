@@ -43,7 +43,7 @@ export type Dossier = {
   products: DossierProduct[];
   requested_top: number;
   intersection_count: number;
-  rank_source: "intersection" | "analysis-only";
+  rank_source: "weighted" | "intersection" | "analysis-only";
   finalists: number;
   evaluated: number;
   notes: string[];
@@ -124,7 +124,7 @@ const NOTE_LABELS: Record<string, string> = {
   AGENT_CONSENSUS_UNAVAILABLE:
     "Ajanlar ürün başına puan döndürmedi: sonuç yalnızca analiz hattına dayanıyor, ortak kesişim iddia edilmiyor.",
   NO_PRODUCT_INTERSECTION:
-    "İki sıralamanın ilk ürünleri kesişmedi: ortak karar üretilemedi, liste yalnız analiz hattıdır.",
+    "İki bağımsız hattın ilk 5 listesi hiç örtüşmedi: sonuç yine de ağırlıklı birleşimden üretildi.",
   LIVE_EVIDENCE_UNAVAILABLE: "Canlı piyasa kanıtı gelmedi: doğrulama sınırlı.",
   SHARED_EVIDENCE_EMPTY: "Ortak kazıma kanıtı boş: puanlar nötr/varsayılan girdilere dayanıyor.",
   RECOVERED_FROM_WINNER_LEDGER: "Karne kalıcı kazanan kaydından geri kuruldu.",

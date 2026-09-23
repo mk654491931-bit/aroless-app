@@ -353,6 +353,11 @@ services:
       # Sıcak ürün uç noktasının bekleme bütçesi (ms, varsayılan 14.000, üst sınır 25.000).
       - key: HOT_PRODUCTS_WAIT_MS
         sync: false
+      # ScrapAPI / ScraperAPI — ürün fotoğraflarını proxy + anti-bot ile kazımak için.
+      # Tanımlıysa `/api/public/product-image` istekleri bu servis üzerinden gider;
+      # yoksa hat doğrudan kazımaya düşer (özellik devre dışı kalmaz).
+      - key: SCRAPERAPI_KEY
+        sync: false
       # --- Paddle (ödeme) ---
       - key: PADDLE_ENV
         sync: false

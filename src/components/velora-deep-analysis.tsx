@@ -348,9 +348,13 @@ export function VeloraDeepAnalysis({
             <>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Stat
-                  label="Ortak kesişim"
-                  value={`${dossier.intersection_count}/${dossier.requested_top}`}
-                  hint={dossier.rank_source === "intersection" ? "iki hat örtüştü" : "yalnız analiz hattı"}
+                  label="İki hattın ortak ürünü"
+                  value={`${dossier.intersection_count}`}
+                  hint={
+                    dossier.rank_source === "analysis-only"
+                      ? "yalnız analiz hattı"
+                      : "iki bağımsız ilk 5 içinde"
+                  }
                 />
                 <Stat
                   label="İlk ürünün puanı"
@@ -368,14 +372,14 @@ export function VeloraDeepAnalysis({
               <div className="flex flex-wrap items-center gap-2 text-[10px]">
                 <span
                   className={`rounded-full border px-2 py-0.5 font-semibold ${
-                    dossier.rank_source === "intersection"
-                      ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
-                      : "border-amber-400/40 bg-amber-500/12 text-amber-200"
+                    dossier.rank_source === "analysis-only"
+                      ? "border-amber-400/40 bg-amber-500/12 text-amber-200"
+                      : "border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
                   }`}
                 >
-                  {dossier.rank_source === "intersection"
-                    ? "ortak kesişim (analiz ⊕ 14 ajan)"
-                    : "yalnız analiz hattı (ajan oyu yok)"}
+                  {dossier.rank_source === "analysis-only"
+                    ? "yalnız analiz hattı (ajan oyu yok)"
+                    : "ağırlıklı birleşim · %70 14 ajan ⊕ %30 analiz"}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground">
                   {dossier.finalists} finalist değerlendirildi
@@ -395,11 +399,11 @@ export function VeloraDeepAnalysis({
 
               <div>
                 <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
-                  <Users size={12} /> Ortak en iyi ürünler (iki hattın kesişimi)
+                  <Users size={12} /> En yüksek puanlı 3 ürün (14 ajan %70 ⊕ analiz %30)
                 </div>
                 {dossier.products.length === 0 ? (
                   <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] text-muted-foreground">
-                    İki bağımsız hat hiçbir üründe ortak karar veremedi; uydurma sıra ile
+                    Bu koşuda puanlanabilir ürün adayı üretilemedi; uydurma sıra ile
                     doldurulmadı. Nişi daraltıp tekrar deneyin.
                   </p>
                 ) : (

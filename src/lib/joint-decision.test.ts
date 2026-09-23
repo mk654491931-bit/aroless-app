@@ -1,22 +1,23 @@
 // ORTAK KARAR — ürün bulucunun analiz hattı puanı ile 14'lü AI Konsey karnesinin
-// birleşimi. Bu testler, bulucu konseyinin kararı veto değil EŞİT ORTAKLIK
-// olarak birleştirdiğini ve eksik/geçersiz sinyallerde çökmediğini sabitler.
+// birleşimi. Ağırlık AÇIKÇA 14 ajan lehinedir (konsey %70 / analiz %30): karar
+// konseyin ana eksenidir. Bu testler ağırlığı ve eksik/geçersiz sinyallerde
+// çökmediğini sabitler.
 import { describe, expect, it } from "vitest";
 import { combineJointScores } from "./consensus-types";
 
 describe("combineJointScores (analiz hattı + 14'lü konsey ortak kararı)", () => {
-  it("iki sinyal de varsa eşit ortaklıkla ortalar", () => {
+  it("iki sinyal de varsa 14 ajan %70, analiz %30 ağırlığıyla birleşir", () => {
     const decision = combineJointScores({ analysisScore: 80, councilScore: 60 });
-    expect(decision.score).toBe(70);
+    expect(decision.score).toBe(66); // 60*0.7 + 80*0.3
     expect(decision.source).toBe("joint");
-    expect(decision.analysisWeight).toBe(0.5);
-    expect(decision.councilWeight).toBe(0.5);
+    expect(decision.analysisWeight).toBe(0.3);
+    expect(decision.councilWeight).toBe(0.7);
   });
 
-  it("konsey karneyi aldıysa kararın yarısı konseye aittir (veto değil, ortak)", () => {
-    // Analiz hattı 90 derken konsey 50 diyorsa sonuç 70'tir: konsey kararı
-    // aşağı çeker ama tek başına ürünü eleyemez.
-    expect(combineJointScores({ analysisScore: 90, councilScore: 50 }).score).toBe(70);
+  it("konsey kararı analizden daha ağır basar", () => {
+    // Analiz hattı 90 derken konsey 50 diyorsa sonuç 62'dir (50*0.7 + 90*0.3):
+    // 14 ajanlı konsey kararın ana eksenidir, analiz onu destekler.
+    expect(combineJointScores({ analysisScore: 90, councilScore: 50 }).score).toBe(62);
   });
 
   it("karne henüz gelmediyse yalnızca analiz hattı puanı geçerlidir", () => {

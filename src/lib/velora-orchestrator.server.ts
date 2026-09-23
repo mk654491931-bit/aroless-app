@@ -82,13 +82,13 @@ export const VELORA_FINALIST_COUNT = 6;
 export const VELORA_TOP_N = 3;
 
 /**
- * Kesişime giren aday havuzu: her hattın ilk kaç ürünü kesişim için taranır.
+ * Her bağımsız hattın niş için çıkardığı "en iyi ürün" sayısı.
  *
- * 3'ten büyük olmasının nedeni: iki bağımsız sıralama aynı 3 ürünü farklı sırayla
- * dizerse kesişim yine 3 çıkar; havuz daraltılırsa gerçek ortak ürünler gereksiz
- * yere elenirdi.
+ * 14 ajanlı konsey hattı da AI analiz hattı da birbirinden BAĞIMSIZ olarak kendi
+ * ilk 5 ürününü bulur. Ağırlıklı birleşim (%70 konsey ⊕ %30 analiz) bu iki
+ * listenin BİRLEŞİMİNDEN en yüksek puanlı 3 ürünü çıkarır.
  */
-export const VELORA_INTERSECTION_POOL = 5;
+export const VELORA_PIPELINE_TOP_N = 5;
 
 /** Bir ürünün ajan kararı "kabul edilebilir" sayılması için gereken en küçük oy oranı. */
 export const VELORA_MIN_AGENT_COVERAGE = 0.5;
@@ -662,14 +662,17 @@ export const WinnerDtoSchema = z.object({
   joint_score: z.number().min(0).max(100),
   joint_source: z.enum(["joint", "analysis", "council", "none"]),
   listed: z.boolean(),
-  /** İki bağımsız hattın GERÇEK kesişiminden çıkan ortak en iyi ürünler (en fazla 3). */
+  /** İki bağımsız hattın AĞIRLIKLI (%70 konsey ⊕ %30 analiz) birleşiminden çıkan en iyi ürünler (en fazla 3). */
   products: z.array(ProductSchema),
-  /** İstenen ortak ürün sayısı (3). */
+  /** İstenen nihai ürün sayısı (3). */
   requested_top: z.number().int().min(1),
-  /** Kesişimde kaç ortak ürün bulundu — 3'ten azsa eksik sıra DOLDURULMAZ. */
+  /** İki bağımsız ilk-5 listesinin kaç üründe örtüştüğü (ölçülür; eksik sıra DOLDURULMAZ). */
   intersection_count: z.number().int().min(0),
-  /** Sonuç kümesi iki hattın kesişimi mi, yoksa yalnız analiz hattı mı? */
-  rank_source: z.enum(["intersection", "analysis-only"]),
+  /**
+   * Sonuç kümesi iki bağımsız hattın AĞIRLIKLI birleşimi mi (`weighted`), yoksa
+   * ajan oyu hiç gelmediği için yalnız analiz hattı mı (`analysis-only`)?
+   */
+  rank_source: z.enum(["weighted", "intersection", "analysis-only"]),
   /** Değerlendirilen finalist sayısı. */
   finalists: z.number().int().min(0),
   /** En az bir ajan oyu almış ürün sayısı. */
@@ -754,12 +757,15 @@ export function winnerRows(dto: WinnerDto): WinnerRow[] {
  * KOŞU DURUMUNDAN KAZANAN KARNESİ — tamamen deterministik ve saftır.
  *
  * Sonuç kümesi şu üç adımda kurulur:
- *   1. HAT A: her aday `analysisOnlyScore` ile sıralanır (konsey girdisi yok).
- *   2. HAT B: ajanların ürün başına oyları `productConsensus` ile sıralanır.
- *   3. KESİŞİM: iki sıralamanın ilk `VELORA_INTERSECTION_POOL` ürünü karşılaştırılır,
- *      ortak ürünler ürün başına ortak kararla dizilir ve en fazla 3'ü raporlanır.
- * Ajan hiç oy vermediyse "kesişim" iddia edilmez: sonuç yalnız analiz hattı olarak
- * etiketlenir ve neden `notes` içinde yazılır.
+ *   1. HAT A (AI analiz): her aday `analysisOnlyScore` ile sıralanır (konsey girdisi
+ *      yok) ve kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
+ *   2. HAT B (14 ajanlı konsey): ajanların ürün başına oyları `productConsensus`
+ *      ile sıralanır ve kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
+ *   3. AĞIRLIKLI BİRLEŞİM: iki bağımsız listenin birleşimi ürün başına
+ *      `combineJointScores` (konsey %70 ⊕ analiz %30) ile puanlanır ve en yüksek
+ *      `VELORA_TOP_N` ürün raporlanır.
+ * Ajan hiç oy vermediyse konsey hattı yoktur: sonuç yalnız analiz hattı olarak
+ * etiketlenir ve neden `notes` içinde yazılır; sıra DOLDURULMAZ.
  */
 export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const councilAverage = councilAverageOf(state.phases);
@@ -768,7 +774,8 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const consensus = productConsensus(state);
   const notes: string[] = [];
 
-  // HAT A — analiz sıralaması (ürünün kendi kanıtı; konsey girdisi yok).
+  // HAT A — AI ANALİZ HATTI: ürünün KENDİ kanıtına dayanır (konsey girdisi yok).
+  // Bu hat niş için bağımsız olarak kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
   const analysisRanked = (state.candidates as unknown as RetrieverCandidate[])
     .map((candidate, index) => {
       const candidateId = candidateIdOf(candidate as unknown as Record<string, unknown>, index);
@@ -781,27 +788,35 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
     })
     .sort((a, b) => b.analysisScore - a.analysisScore || a.identity.localeCompare(b.identity));
 
-  // HAT B — ürün başına ajan konsensüsü sıralaması (oy almamış ürün yok sayılır).
+  // HAT B — 14 AJANLI KONSEY HATTI: ürün başına ajan oylarına dayanır. Bu hat da
+  // niş için bağımsız olarak kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
   const councilRanked = analysisRanked
     .filter((row) => consensus.has(row.candidateId))
     .map((row) => ({ ...row, councilScore: consensus.get(row.candidateId)!.councilScore }))
     .sort((a, b) => b.councilScore - a.councilScore || a.identity.localeCompare(b.identity));
 
-  const analysisTop = analysisRanked.slice(0, VELORA_INTERSECTION_POOL);
-  const councilIds = new Set(councilRanked.slice(0, VELORA_INTERSECTION_POOL).map((r) => r.candidateId));
-  const intersection = analysisTop.filter((row) => councilIds.has(row.candidateId));
-  const rankSource: "intersection" | "analysis-only" = intersection.length > 0 ? "intersection" : "analysis-only";
+  const analysisTop = analysisRanked.slice(0, VELORA_PIPELINE_TOP_N);
+  const councilTop = councilRanked.slice(0, VELORA_PIPELINE_TOP_N);
+  const councilTopIds = new Set(councilTop.map((row) => row.candidateId));
+  // Gerçek örtüşme: iki bağımsız listenin ORTAK ürünleri (ölçülür, uydurulmaz).
+  const overlapCount = analysisTop.filter((row) => councilTopIds.has(row.candidateId)).length;
+  const twoIndependentPipelines = analysisTop.length > 0 && councilTop.length > 0;
+  const rankSource: "weighted" | "analysis-only" = twoIndependentPipelines
+    ? "weighted"
+    : "analysis-only";
 
   if (consensus.size === 0) notes.push("AGENT_CONSENSUS_UNAVAILABLE");
-  else if (rankSource === "analysis-only") notes.push("NO_PRODUCT_INTERSECTION");
-  if (rankSource === "intersection" && intersection.length < VELORA_TOP_N) {
-    notes.push(`INTERSECTION_BELOW_TARGET:${intersection.length}/${VELORA_TOP_N}`);
-  }
+  else if (overlapCount === 0) notes.push("NO_PRODUCT_INTERSECTION");
   if (!state.live) notes.push("LIVE_EVIDENCE_UNAVAILABLE");
   if (!state.evidenceBlock) notes.push("SHARED_EVIDENCE_EMPTY");
 
-  const selected = rankSource === "intersection" ? intersection : analysisTop;
-  const products: Product[] = selected
+  // AĞIRLIKLI BİRLEŞİM — iki bağımsız listenin tüm adayları; her ürün ürün başına
+  // ağırlıklı puanla (konsey %70 ⊕ analiz %30) değerlendirilir. Eksik sıra
+  // doldurulmaz: yalnız gerçek adaylar yarışır.
+  const selected = new Map<string, (typeof analysisRanked)[number]>();
+  for (const row of [...analysisTop, ...councilTop]) selected.set(row.candidateId, row);
+
+  const products: Product[] = [...selected.values()]
     .map((row) => {
       const entry = consensus.get(row.candidateId);
       const productJoint = combineJointScores({
@@ -868,7 +883,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
     listed: joint.score >= 60,
     products,
     requested_top: VELORA_TOP_N,
-    intersection_count: rankSource === "intersection" ? intersection.length : 0,
+    intersection_count: overlapCount,
     rank_source: rankSource,
     finalists: state.candidates.length,
     evaluated: consensus.size,
@@ -956,7 +971,12 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
     products,
     requested_top: Math.max(1, Math.round(numberOr(first["requested_top"], VELORA_TOP_N))),
     intersection_count: Math.max(0, Math.round(numberOr(first["intersection_count"], 0))),
-    rank_source: first["rank_source"] === "intersection" ? "intersection" : "analysis-only",
+    rank_source:
+      first["rank_source"] === "intersection"
+        ? "intersection"
+        : first["rank_source"] === "weighted"
+          ? "weighted"
+          : "analysis-only",
     finalists: Math.max(0, Math.round(numberOr(first["finalists"], products.length))),
     evaluated: Math.max(0, Math.round(numberOr(first["evaluated"], 0))),
     notes: ["RECOVERED_FROM_WINNER_LEDGER", "AGENT_EVIDENCE_NOT_RECOVERABLE"],
