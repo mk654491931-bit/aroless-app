@@ -105,7 +105,7 @@ export const PipelineOutputSchema = z.object({
 });
 export type PipelineOutput = z.infer<typeof PipelineOutputSchema>;
 
-type RetrieverCandidate = {
+export type RetrieverCandidate = {
   name: string;
   /** "ai" = modelin adlandırdığı ürün, "trend-radar" = kazınmış trend adı. */
   source?: string;

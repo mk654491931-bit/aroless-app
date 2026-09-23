@@ -8,6 +8,9 @@
  *
  * Güvenlik: `JOB_WORKER_SECRET` (QStash forward header'ı ile taşınır) zorunlu.
  * Kredi tetikleyicide düşülür; iş burada başarısız olursa iade edilir.
+ *
+ * Desteklenen işler: `council` (14 üyeli konsey karnesi) ve `velora-phase`
+ * (Velora 14 ajan orkestrasyonunun tek bir fazı — 8 sn tavanlı, stateless adım).
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -16,6 +19,17 @@ function json(payload: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
+}
+
+/** İsteğin public origin'i — QStash faz devrinin hedefi buradan kurulur. */
+function appOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedHost) {
+    return `${forwardedProto ?? url.protocol.replace(":", "")}://${forwardedHost}`;
+  }
+  return url.origin;
 }
 
 /** Tetikleyicinin kullandığı anahtarla BİREBİR aynı olmalı (dedupe). */
@@ -41,8 +55,38 @@ export const Route = createFileRoute("/api/jobs")({
           country?: string;
           category?: string;
           lang?: string;
+          runId?: string;
+          phase?: number;
         } | null;
         if (!payload?.kind) return json({ success: false, error: "Invalid job payload" }, 400);
+
+        // ---- VELORA 14 AJAN · FAZ FAN-OUT ----
+        // Orkestratör her fazı bu uca yayınlar; her adım STATELESS'tir ve durumu
+        // Supabase geçici kovasından yükler. Faz tavanı 8 sn olduğu için bu uç
+        // her koşulda hızlı döner (504 üretmez).
+        if (payload.kind === "velora-phase") {
+          const runId = String(payload.runId ?? "").trim();
+          const phase = Number(payload.phase);
+          if (!runId || ![1, 2, 3, 4].includes(phase)) {
+            return json({ success: false, error: "Invalid velora phase payload" }, 400);
+          }
+          const orchestrator = await import("@/lib/velora-orchestrator.server");
+          const outcome = await orchestrator.resumeVeloraRun(runId, phase as 1 | 2 | 3 | 4, {
+            store: orchestrator.defaultVeloraStore(),
+            handoff: orchestrator.veloraQStashHandoff(appOrigin(request)),
+          });
+          return json(
+            {
+              success: outcome.status !== "failed",
+              runId,
+              status: outcome.status,
+              completedPhases: outcome.completedPhases,
+              nextPhase: outcome.nextPhase ?? null,
+              error: outcome.error ?? null,
+            },
+            outcome.status === "failed" ? 200 : 202,
+          );
+        }
 
         if (payload.kind !== "council") {
           return json({ success: false, error: `UNSUPPORTED_JOB_KIND:${payload.kind}` }, 400);

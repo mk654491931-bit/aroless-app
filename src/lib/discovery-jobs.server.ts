@@ -685,6 +685,23 @@ export async function enqueueRemoteJob(args: {
 }
 
 /**
+ * Genel QStash fan-out yayını — hedef URL'ye taşınan serbest yük.
+ *
+ * Velora orkestratörü 14 ajanlı hattı fazlara böler ve her fazı AYRI bir
+ * QStash mesajı olarak kendine yayınlar (self-chaining fan-out). Böylece hiçbir
+ * istek 8 saniyelik faz tavanını aşan bir iş yükünü taşımaz. Dedupe kimliği
+ * aynı fazın iki kez koşmasını engeller; `x-job-secret` başlığı hedef ucun
+ * doğrulaması için taşınır.
+ */
+export async function qstashFanOut(args: {
+  url: string;
+  body: Record<string, unknown>;
+  dedupeId: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  return qstashPublish(args.url, args.body, args.dedupeId);
+}
+
+/**
  * Ağır bir iş için en iyi yol — **504 garantisi bu sözleşmedir**.
  *
  *  - `in-process`    → kalıcı servis (Render/VPS): süreç içi arka plan kuyruğu.
