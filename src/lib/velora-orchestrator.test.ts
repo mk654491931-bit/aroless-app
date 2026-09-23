@@ -1,11 +1,17 @@
-// VELORA 14 AJAN ORKESTRATÖRÜ — faz dilimleme, 8 sn tavanı, temp state, push ve self-test.
+// VELORA 14 AJAN ORKESTRATÖRÜ — faz dilimleme, 8 sn tavanı, ürün başına konsey,
+// iki hattın kesişimi, QStash tekrar teslimi ve panel yoklaması.
 //
 // Bu testler Vercel Free Tier sözleşmesini sabitler:
 //  1. 14 ajanın tamamı 4 faza eksiksiz dağıtılır (boşluksuz/çakışmasız),
 //  2. her faz KENDİ adımında koşar ve 8 sn tavanını ASLA aşamaz (asılı üye nötr döner),
 //  3. durum adımlar arasında geçici kovada (temp state) taşınır ve QStash devri
 //     sonraki fazı yayınlayıp anında döner,
-//  4. sonuç veritabanına push edilir ve OTOMATİK SELF-TEST kaydı geri okuyup doğrular.
+//  4. AYNI fazın tekrar teslimi idempotenttir: kayıtlı faz yeniden koşmaz,
+//     hâlâ koşan faz ikinci kez başlatılmaz → çift AI harcaması olmaz,
+//  5. nihai karar İKİ BAĞIMSIZ HATTIN kesişimidir (analiz ⊕ ürün başına ajan
+//     konseyi) ve kesişim 3'ten azsa eksik sıra DOLDURULMAZ,
+//  6. sonuç veritabanına push edilir, OTOMATİK SELF-TEST kaydı geri okuyup
+//     doğrular ve panel `runId` ile koşu durumunu yoklayabilir.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -43,9 +49,12 @@ vi.mock("./discovery-jobs.server", async (importOriginal) => ({
 }));
 
 import { COUNCIL_AGENTS } from "./council-chain.server";
+import { combineJointScores } from "./consensus-types";
 import {
+  VELORA_INTERSECTION_POOL,
   VELORA_PHASES,
   VELORA_PHASE_CEILING_MS,
+  VELORA_TOP_N,
   buildWinnerDossier,
   councilAverageOf,
   plannedAgentCount,
@@ -54,6 +63,7 @@ import {
   selfTestVeloraRun,
   startVeloraRun,
   veloraAnalysisScore,
+  veloraRunStatus,
   winnerRows,
   formatVeloraSelfTestReport,
   phaseById,
@@ -91,19 +101,54 @@ function agentLog(agentName: string) {
   return { agent: agentName, provider: "gemini", attempts: 1, latencyMs: 3, ok: true };
 }
 
-/** Sahte AI: retriever gerçek ürün adı döner, her üye kendi `scoreKey`ine 90 verir. */
-function stubRunner(options: { retrieverText?: string; hanging?: Set<string> } = {}) {
+/** Bir fazın üyelerinin EKRAN adları (test stub'ı isimle eşleştirir). */
+function agentNamesOf(phaseId: 1 | 2 | 3 | 4): string[] {
+  return phaseById(phaseId).agents.map(
+    (key) => COUNCIL_AGENTS.find((agent) => agent.key === key)!.name,
+  );
+}
+
+type StubOptions = {
+  retrieverText?: string;
+  hanging?: Set<string>;
+  /** Ürün başına verilecek puanlar. Verilirse YALNIZCA listelenen ürünler oylanır. */
+  votes?: Record<string, number>;
+  /** Ajanlar hiç `product_scores` döndürmez (ürün başına oy yok senaryosu). */
+  omitVotes?: boolean;
+};
+
+/**
+ * Sahte AI:
+ *  - retriever gerçek ürün adı döner,
+ *  - her üye kendi `scoreKey`ine 90 verir ve istemde gördüğü finalist kimlikleri
+ *    için `product_scores` üretir (ürün başına konsey bu diziden kurulur).
+ */
+function stubRunner(options: StubOptions = {}) {
   return (agentName: string, prompt: string) => {
     prompts.push({ agentName, prompt });
     if (options.hanging?.has(agentName)) return new Promise<never>(() => {});
     if (agentName === "Product Retriever") {
       return Promise.resolve({
-        text: options.retrieverText ?? JSON.stringify({ candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen" }] }),
+        text:
+          options.retrieverText ??
+          JSON.stringify({ candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen" }] }),
         log: agentLog(agentName),
       });
     }
     const scoreKey = COUNCIL_AGENTS.find((a) => a.name === agentName)?.scoreKey;
-    return Promise.resolve({ text: scoreKey ? JSON.stringify({ [scoreKey]: 90 }) : "{}", log: agentLog(agentName) });
+    const body: Record<string, unknown> = scoreKey ? { [scoreKey]: 90 } : {};
+    if (!options.omitVotes) {
+      const ids = [...new Set(prompt.match(/\bC\d+\b/g) ?? [])];
+      const scored = options.votes
+        ? ids.filter((id) => options.votes?.[id] !== undefined)
+        : ids;
+      body["product_scores"] = scored.map((id) => ({
+        id,
+        score: options.votes?.[id] ?? 90,
+        note: `kanıt: ${id} canlı piyasa`,
+      }));
+    }
+    return Promise.resolve({ text: JSON.stringify(body), log: agentLog(agentName) });
   };
 }
 
@@ -112,6 +157,8 @@ type FakeStore = VeloraStore & { states: Map<string, VeloraRunState>; rows: Reco
 function fakeStore(): FakeStore {
   const states = new Map<string, VeloraRunState>();
   const rows: Record<string, unknown>[] = [];
+  const payloadOf = (row: Record<string, unknown>) =>
+    (row["payload"] ?? null) as Record<string, unknown> | null;
   return {
     states,
     rows,
@@ -130,11 +177,43 @@ function fakeStore(): FakeStore {
         (row) => row["day"] === day && titles.includes(String(row["title"])),
       ) as never;
     },
+    async fetchRunWinners(runId) {
+      return rows.filter((row) => payloadOf(row)?.["run_id"] === runId) as never;
+    },
   };
 }
 
 const runAgentStub = (runner: ReturnType<typeof stubRunner>) =>
   runner as unknown as typeof import("./ai-router.server").executeAgentWithFallback;
+
+/** Testlerde elle kurulan koşu durumu — yeni alanlar varsayılanlarıyla gelir. */
+function baseState(overrides: Partial<VeloraRunState> = {}): VeloraRunState {
+  return {
+    runId: "r1",
+    query: "mini ice maker",
+    country: "US",
+    platform: "Amazon",
+    language: "tr",
+    startedAtMs: Date.now(),
+    updatedAtMs: Date.now(),
+    status: "running",
+    evidenceBlock: RADAR_BLOCK,
+    scrapedTrends: RADAR,
+    live: true,
+    candidates: [],
+    phases: [],
+    runningPhase: null,
+    push: null,
+    selfTest: null,
+    ...overrides,
+  };
+}
+
+const handoffStub = async ({ phase }: { phase: number }) => ({
+  ok: true,
+  mode: "qstash" as const,
+  messageId: `msg-${phase}`,
+});
 
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -169,25 +248,16 @@ describe("faz planı (14 ajan → 4 faz)", () => {
     expect(VELORA_PHASE_CEILING_MS).toBeLessThanOrEqual(8_000);
     // Toplam istek-içi koşu yolu (4 faz) dar limitlerde bile 504 üretmez.
     expect(VELORA_PHASE_CEILING_MS * VELORA_PHASES.length).toBeLessThanOrEqual(32_000);
+    // Ortak en iyi 3 istenir; kesişim havuzu ondan geniş olmalı ki gerçek ortak
+    // ürünler elenmesin.
+    expect(VELORA_TOP_N).toBe(3);
+    expect(VELORA_INTERSECTION_POOL).toBeGreaterThanOrEqual(VELORA_TOP_N);
   });
 });
 
 describe("runVeloraPhase (izole ve zaman dilimli adım)", () => {
   it("fazın üyelerini koşar ve ortak kanıtı hepsine verir", async () => {
-    const state: VeloraRunState = {
-      runId: "r1",
-      query: "mini ice maker",
-      country: "US",
-      platform: "Amazon",
-      language: "tr",
-      startedAtMs: Date.now(),
-      status: "running",
-      evidenceBlock: RADAR_BLOCK,
-      scrapedTrends: RADAR,
-      live: true,
-      candidates: [],
-      phases: [],
-    };
+    const state = baseState();
     const result = await runVeloraPhase(phaseById(1), state, {
       store: fakeStore(),
       runAgent: runAgentStub(stubRunner()),
@@ -202,20 +272,7 @@ describe("runVeloraPhase (izole ve zaman dilimli adım)", () => {
   });
 
   it("tavanı AŞMAZ: asılı üye nötr/timeout döner, faz yine biter", async () => {
-    const state: VeloraRunState = {
-      runId: "r2",
-      query: "mini ice maker",
-      country: "US",
-      platform: "Amazon",
-      language: "tr",
-      startedAtMs: Date.now(),
-      status: "running",
-      evidenceBlock: "",
-      scrapedTrends: [],
-      live: false,
-      candidates: [],
-      phases: [],
-    };
+    const state = baseState({ runId: "r2", evidenceBlock: "", scrapedTrends: [], live: false });
     const hanging = new Set([COUNCIL_AGENTS.find((a) => a.key === "trend_hunter")!.name]);
     const started = Date.now();
     const result = await runVeloraPhase(phaseById(1), state, {
@@ -255,6 +312,8 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     const saved = store.states.get(result.runId!)!;
     expect(saved.phases.map((p) => p.id)).toEqual([1, 2, 3, 4]);
     expect(saved.phases.every((p) => p.withinCeiling)).toBe(true);
+    expect(saved.status).toBe("completed");
+    expect(saved.runningPhase).toBeNull();
 
     // Ortak karar = analiz hattı ⊕ 14'lü konsey; hepsi 90 verdi.
     expect(result.dossier!.council_average).toBe(90);
@@ -306,21 +365,21 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     expect(handoffCalls).toEqual([2]);
     // Yalnızca Faz 1 koştu: adım gerçekten mikro.
     expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(4);
+    // Faz 1'den sonra durum "running" ve sıradaki faz kaydedilmemiş.
+    expect(store.states.get(result.runId!)!.phases.map((p) => p.id)).toEqual([1]);
   });
 
   it("QStash geri çağrısı kaydedilmiş durumu yükleyip kalan fazları tamamlar", async () => {
     const store = fakeStore();
-    const handoff = async ({ phase }: { phase: number }) =>
-      ({ ok: true, mode: "qstash" as const, messageId: `msg-${phase}` });
     const started = await startVeloraRun(
       { userQuery: "mini ice maker", country: "US" },
-      { store, runAgent: runAgentStub(stubRunner()), handoff },
+      { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub },
     );
 
     const second = await resumeVeloraRun(started.runId!, 2, {
       store,
       runAgent: runAgentStub(stubRunner()),
-      handoff,
+      handoff: handoffStub,
     });
     expect(second.status).toBe("dispatched");
     expect(second.completedPhases).toBe(2);
@@ -328,14 +387,14 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     const third = await resumeVeloraRun(started.runId!, 3, {
       store,
       runAgent: runAgentStub(stubRunner()),
-      handoff,
+      handoff: handoffStub,
     });
     expect(third.completedPhases).toBe(3);
 
     const fourth = await resumeVeloraRun(started.runId!, 4, {
       store,
       runAgent: runAgentStub(stubRunner()),
-      handoff,
+      handoff: handoffStub,
     });
     expect(fourth.status).toBe("completed");
     expect(fourth.dossier!.phases.map((p) => p.id)).toEqual([1, 2, 3, 4]);
@@ -362,10 +421,267 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     expect(result.dossier!.evidence.scraped_trends).toBe(0);
     expect(result.dossier!.evidence.live).toBe(false);
     expect(result.selfTest!.agentsLogged).toBe(14);
-    // Kanıt yokken retriever'ın adlandırdığı gerçek ürün yine kazanan olur.
+    expect(result.dossier!.notes).toContain("LIVE_EVIDENCE_UNAVAILABLE");
+    // Kanıt yokken retriever'ın adlandırdığı gerçek ürün yine kazanır.
     expect(result.dossier!.products[0]!.name).toBe("Mini Ice Maker XR-500");
     const councilCalls = prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName));
     expect(councilCalls.every((c) => c.prompt.includes("none available for this run"))).toBe(true);
+  });
+
+  it("14 ajanın HEPSİ finalist listesini görür ve ürün başına puan istenir", async () => {
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+
+    const councilCalls = prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName));
+    expect(councilCalls).toHaveLength(14);
+    expect(councilCalls.every((c) => c.prompt.includes("FINALIST PRODUCTS"))).toBe(true);
+    expect(councilCalls.every((c) => c.prompt.includes("product_scores"))).toBe(true);
+    expect(councilCalls.every((c) => /C1\./.test(c.prompt))).toBe(true);
+    // Adaylar sabit kimlik taşır: iki hattın eşleştirme anahtarı budur.
+    const saved = store.states.get(result.runId!)!;
+    expect(saved.candidates.map((c) => c["candidateId"])).toEqual(["C1", "C2", "C3"]);
+  });
+});
+
+describe("ürün başına ajan konsensüsü (run geneli ortalama kopyalanmaz)", () => {
+  it("her ürün KENDİ oylarıyla puanlanır ve ürün başına ortak karar hesaplanır", async () => {
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner({ votes: { C1: 90, C2: 60, C3: 30 } })) },
+    );
+
+    const products = result.dossier!.products;
+    expect(products).toHaveLength(3);
+    expect(products.map((p) => p.councilScore).sort((a, b) => a - b)).toEqual([30, 60, 90]);
+    expect(new Set(products.map((p) => p.councilScore)).size).toBe(3);
+    // Run geneli ortalama tek bir sayıdır ve ürünlere KOPYALANMAZ: üç farklı ürünün
+    // konsey puanı üç farklı değerdir (hepsi aynı ortalamaya sabitlenmez).
+    expect(result.dossier!.council_average).toBe(90);
+    expect(new Set(products.map((p) => p.councilScore)).size).toBeGreaterThan(1);
+
+    for (const product of products) {
+      expect(product.councilVotes).toBe(14);
+      expect(product.councilCoverage).toBe(1);
+      const expected = combineJointScores({
+        analysisScore: product.analysisScore,
+        councilScore: product.councilScore,
+      });
+      expect(product.winnerScore).toBe(expected.score);
+      expect((product.agentEvidence ?? []).length).toBeGreaterThan(0);
+      // Canlı kanıt var + tüm ajanlar oy verdi → doğrulanmış.
+      expect(product.verification).toBe("verified");
+    }
+  });
+
+  it("canlı kanıt yoksa 'verified' DENMEZ: dürüst etiket 'unverified' kalır", async () => {
+    mocks.buildLiveEvidenceBlock.mockResolvedValue("");
+
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+
+    expect(result.dossier!.evidence.live).toBe(false);
+    expect(result.dossier!.notes).toContain("LIVE_EVIDENCE_UNAVAILABLE");
+    expect(result.dossier!.products.every((p) => p.verification === "unverified")).toBe(true);
+  });
+});
+
+describe("ortak karar: iki bağımsız hattın GERÇEK kesişimi", () => {
+  it("ajan oyu olmayan ürün listeye girmez, eksik sıra DOLDURULMAZ", async () => {
+    const store = fakeStore();
+    // Ajanlar yalnızca C2 ve C3'ü puanlar → ajan sıralaması C2,C3.
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner({ votes: { C2: 88, C3: 70 } })) },
+    );
+    const dossier = result.dossier!;
+
+    expect(dossier.rank_source).toBe("intersection");
+    expect(dossier.products).toHaveLength(2);
+    expect(dossier.intersection_count).toBe(2);
+    expect(dossier.requested_top).toBe(3);
+    expect(dossier.finalists).toBe(3);
+    expect(dossier.evaluated).toBe(2);
+    expect(dossier.notes).toContain("INTERSECTION_BELOW_TARGET:2/3");
+    // Analiz hattının 1. ürünü ajan oyu almadığı için kesişimde YOK.
+    expect(dossier.products.map((p) => p.name)).not.toContain("Mini Ice Maker XR-500");
+    expect(dossier.products.map((p) => p.councilScore).sort((a, b) => b - a)).toEqual([88, 70]);
+    expect(dossier.products.map((p) => p.rank)).toEqual([1, 2]);
+  });
+
+  it("ajan hiç ürün puanı vermezse kesişim İDDİA EDİLMEZ ve sonuç dürüstçe etiketlenir", async () => {
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner({ omitVotes: true })) },
+    );
+    const dossier = result.dossier!;
+
+    expect(dossier.rank_source).toBe("analysis-only");
+    expect(dossier.intersection_count).toBe(0);
+    expect(dossier.evaluated).toBe(0);
+    expect(dossier.notes).toContain("AGENT_CONSENSUS_UNAVAILABLE");
+    expect(dossier.products.every((p) => p.councilVotes === 0)).toBe(true);
+    expect(dossier.products.every((p) => p.verification === "unknown")).toBe(true);
+    // Yalnızca analiz hattı sıralaması raporlanır — uydurma kesişim yok.
+    expect(dossier.products[0]!.name).toBe("Mini Ice Maker XR-500");
+    expect(dossier.products.every((p) => (p.analysisScore ?? 0) > 0)).toBe(true);
+  });
+
+  it("kararı analiz hattı ⊕ ürün başına konsey formülüne bağlar ve ürünleri puana göre dizer", async () => {
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+    const state = store.states.get(result.runId!)!;
+    const dossier = buildWinnerDossier(state);
+
+    expect(dossier.council_average).toBe(councilAverageOf(state.phases));
+    expect(dossier.analysis_score).toBe(veloraAnalysisScore(state));
+    const scores = dossier.products.map((p) => p.winnerScore);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(dossier.products.map((p) => p.rank)).toEqual(dossier.products.map((_, i) => i + 1));
+    expect(dossier.phases.every((p) => p.agents > 0)).toBe(true);
+  });
+});
+
+describe("QStash tekrar teslimi (idempotent faz yönetimi)", () => {
+  it("kayıtlı faz YENİDEN koşmaz: aynı mesaj iki kez gelse de AI ikinci kez harcanmaz", async () => {
+    const store = fakeStore();
+    const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
+    const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
+
+    const phaseTwoNames = agentNamesOf(2);
+    const countPhaseTwo = () => prompts.filter((p) => phaseTwoNames.includes(p.agentName)).length;
+    expect(countPhaseTwo()).toBe(0);
+
+    const first = await resumeVeloraRun(started.runId!, 2, deps);
+    expect(first.completedPhases).toBe(2);
+    expect(countPhaseTwo()).toBe(4);
+
+    // AYNI faz İKİNCİ kez teslim edildi (QStash retry): faz yeniden koşmadı.
+    const replay = await resumeVeloraRun(started.runId!, 2, deps);
+    expect(countPhaseTwo()).toBe(4);
+    expect(replay.completedPhases).toBe(3);
+    // Faz kayıtları tekilleşti: 2 numaralı faz iki kez yazılmadı.
+    const phases = store.states.get(started.runId!)!.phases.map((p) => p.id);
+    expect(phases).toEqual([1, 2, 3]);
+  });
+
+  it("HÂLÂ koşan faz ikinci kez BAŞLATILMAZ (eşzamanlı teslim kilidi)", async () => {
+    const store = fakeStore();
+    const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
+    const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
+
+    const state = store.states.get(started.runId!)!;
+    state.runningPhase = { id: 2, startedAtMs: Date.now() };
+    await store.saveState(state);
+
+    const result = await resumeVeloraRun(started.runId!, 2, deps);
+
+    expect(result.deduped).toBe(true);
+    expect(result.status).toBe("dispatched");
+    expect(result.completedPhases).toBe(1);
+    expect(prompts.filter((p) => agentNamesOf(2).includes(p.agentName))).toHaveLength(0);
+  });
+
+  it("tamamlanmış koşuya gelen tekrar teslim yeni iş üretmez, karneyi döner", async () => {
+    const store = fakeStore();
+    const deps = { store, runAgent: runAgentStub(stubRunner()) };
+    const done = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
+
+    const replay = await resumeVeloraRun(done.runId!, 4, deps);
+    expect(replay.deduped).toBe(true);
+    expect(replay.status).toBe("completed");
+    expect(replay.dossier!.products.length).toBeGreaterThan(0);
+    // Hiçbir ajan yeniden çağrılmadı (14 çağrı sabit kaldı).
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(14);
+  });
+});
+
+describe("veloraRunStatus (panel yoklaması)", () => {
+  it("bilinmeyen runId için 'unknown' döner (çökmez)", async () => {
+    const status = await veloraRunStatus("yok-boyle-bir-kosu", { store: fakeStore() });
+    expect(status.status).toBe("unknown");
+    expect(status.completedPhases).toBe(0);
+    expect(status.dossier).toBeNull();
+    expect(status.notes).toContain("RUN_STATE_NOT_FOUND");
+  });
+
+  it("koşu sürerken ilerlemeyi, bitince karneyi yoklanabilir biçimde döner", async () => {
+    const store = fakeStore();
+    const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
+    const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
+
+    const middle = await veloraRunStatus(started.runId!, { store });
+    expect(middle.status).toBe("running");
+    expect(middle.completedPhases).toBe(1);
+    expect(middle.nextPhase).toBe(2);
+    expect(middle.activePhase).toBeNull();
+    expect(middle.dossier).toBeNull();
+    expect(middle.stale).toBe(false);
+    expect(middle.pollIntervalMs).toBeGreaterThan(0);
+
+    await resumeVeloraRun(started.runId!, 2, deps);
+    await resumeVeloraRun(started.runId!, 3, deps);
+    await resumeVeloraRun(started.runId!, 4, deps);
+
+    const done = await veloraRunStatus(started.runId!, { store });
+    expect(done.status).toBe("completed");
+    expect(done.completedPhases).toBe(4);
+    expect(done.nextPhase).toBeNull();
+    expect(done.recovered).toBe(false);
+    expect(done.dossier!.products.length).toBeGreaterThan(0);
+    expect(done.dossier!.rank_source).toBe("intersection");
+    expect(done.push!.ok).toBe(true);
+    expect(done.selfTest!.verdict).toBe("PASS");
+    expect(done.phases.map((p) => p.id)).toEqual([1, 2, 3, 4]);
+    expect(done.phases.every((p) => p.agents > 0 && p.timedOut === 0)).toBe(true);
+  });
+
+  it("geçici kova düşse bile karneyi KALICI kazanan kaydından geri kurar", async () => {
+    const store = fakeStore();
+    const done = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+    const expected = done.dossier!.products.map((p) => p.name);
+
+    // ai_cache TTL'i doldu: koşu durumu kayboldu, radar_items kaydı kaldı.
+    store.states.clear();
+
+    const status = await veloraRunStatus(done.runId!, { store });
+    expect(status.status).toBe("completed");
+    expect(status.recovered).toBe(true);
+    expect(status.notes).toContain("STATE_EXPIRED_USING_WINNER_LEDGER");
+    expect(status.dossier!.notes).toContain("RECOVERED_FROM_WINNER_LEDGER");
+    expect(status.dossier!.products.map((p) => p.name)).toEqual(expected);
+    expect(status.dossier!.rank_source).toBe("intersection");
+    // Geri kurulan kayıt da ürün başına kanıt taşır (uydurma alan yok).
+    expect(status.dossier!.products[0]!.candidateId).toBeTruthy();
+    expect(status.dossier!.products[0]!.verification).toBe("verified");
+  });
+
+  it("ilerleme durmuşsa 'stale' işaretler (panel sonsuz yoklamaz)", async () => {
+    const store = fakeStore();
+    const started = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub },
+    );
+    const state = store.states.get(started.runId!)!;
+    state.updatedAtMs = Date.now() - 10 * 60 * 1000;
+    await store.saveState(state);
+
+    const status = await veloraRunStatus(started.runId!, { store });
+    expect(status.status).toBe("running");
+    expect(status.stale).toBe(true);
   });
 });
 
@@ -408,24 +724,7 @@ describe("self-test (push doğrulaması)", () => {
 });
 
 describe("kazanan karne (dossier) ve DTO", () => {
-  it("ortak kararı analiz ⊕ konsey formülüne bağlar ve ürünleri puana göre dizer", async () => {
-    const store = fakeStore();
-    const result = await startVeloraRun(
-      { userQuery: "mini ice maker", country: "US" },
-      { store, runAgent: runAgentStub(stubRunner()) },
-    );
-    const state = store.states.get(result.runId!)!;
-    const dossier = buildWinnerDossier(state);
-
-    expect(dossier.council_average).toBe(councilAverageOf(state.phases));
-    expect(dossier.analysis_score).toBe(veloraAnalysisScore(state));
-    const scores = dossier.products.map((p) => p.winnerScore);
-    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
-    expect(dossier.products.map((p) => p.rank)).toEqual(dossier.products.map((_, i) => i + 1));
-    expect(dossier.phases.every((p) => p.agents > 0)).toBe(true);
-  });
-
-  it("DTO'dan veritabanı satırı üretir ve fiyat bandını ayrıştırır", () => {
+  it("DTO'dan veritabanı satırı üretir, fiyat bandını ve ürün başına kanıtı ayrıştırır", () => {
     const rows = winnerRows({
       run_id: "r1",
       query: "mini ice maker",
@@ -437,6 +736,12 @@ describe("kazanan karne (dossier) ve DTO", () => {
       joint_score: 85,
       joint_source: "joint",
       listed: true,
+      requested_top: 3,
+      intersection_count: 1,
+      rank_source: "intersection",
+      finalists: 3,
+      evaluated: 2,
+      notes: [],
       evidence: { live: true, scraped_trends: 2, radar: RADAR },
       phases: [],
       products: [
@@ -450,11 +755,18 @@ describe("kazanan karne (dossier) ve DTO", () => {
           sentiment: "positive",
           whyNow: "rising demand",
           risks: [],
-          councilScore: 85,
+          councilScore: 74,
           councilDecision: "LISTED",
           winnerScore: 84,
           rank: 1,
           source: "ai",
+          candidateId: "C1",
+          identity: "mini ice maker xr 500",
+          analysisScore: 91,
+          councilVotes: 12,
+          councilCoverage: 12 / 14,
+          agentEvidence: ["CFO Agent: birim ekonomi canlı kanıtla uyumlu"],
+          verification: "verified",
         },
       ],
     });
@@ -465,6 +777,13 @@ describe("kazanan karne (dossier) ve DTO", () => {
     expect(rows[0]!.price_max).toBe(49);
     expect(rows[0]!.winner_score).toBe(84);
     expect(rows[0]!.niche).toBe("mini ice maker");
-    expect((rows[0]!.payload as Record<string, unknown>)["joint_score"]).toBe(85);
+    const payload = rows[0]!.payload as Record<string, unknown>;
+    expect(payload["joint_score"]).toBe(85);
+    expect(payload["rank_source"]).toBe("intersection");
+    expect(payload["product_council_score"]).toBe(74);
+    expect(payload["product_council_votes"]).toBe(12);
+    expect(payload["product_analysis_score"]).toBe(91);
+    expect(payload["product_verification"]).toBe("verified");
+    expect(payload["intersection_count"]).toBe(1);
   });
 });

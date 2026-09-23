@@ -45,8 +45,51 @@ export const ProductSchema = z.object({
   rank: z.number().int().min(1).default(1),
   /** Adayın kaynağı: modelin adlandırdığı gerçek ürün, kazınmış trend adı ya da genel yedek. */
   source: z.enum(["ai", "trend-radar", "fallback"]).default("ai"),
+  /** Adayın koşu içindeki sabit kimliği (`C1`…). Ajan oyları bu kimlikle eşleşir. */
+  candidateId: z.string().optional(),
+  /**
+   * İki bağımsız hattı AYNI ürün üzerinde buluşturan normalize kimlik
+   * (`normalizeProductIdentity`). Kesişim bu anahtarla hesaplanır.
+   */
+  identity: z.string().optional(),
+  /**
+   * Analiz hattının BU ÜRÜN için verdiği puan (konsey/aJan girdisi olmadan).
+   * Run geneli parmak izi DEĞİLDİR; her ürün kendi kanıtıyla puanlanır.
+   */
+  analysisScore: z.number().min(0).max(100).optional(),
+  /** Bu ürünü puanlayan ajan sayısı (0-14). */
+  councilVotes: z.number().int().min(0).optional(),
+  /** Bu ürünü puanlayan ajan oranı (0-1). */
+  councilCoverage: z.number().min(0).max(1).optional(),
+  /** Ajanların bu ürün için verdiği gerekçeler (kanıt referansları). */
+  agentEvidence: z.array(z.string()).optional(),
+  /**
+   * Dürüst doğrulama durumu: canlı piyasa kanıtı VAR ve ürünü en az yarısı
+   * puanladıysa `verified`, kanıt yoksa `unverified`, ajan oyu yetersizse `unknown`.
+   */
+  verification: z.enum(["verified", "unverified", "unknown"]).optional(),
 });
 export type Product = z.infer<typeof ProductSchema>;
+
+/**
+ * ÜRÜN KİMLİĞİ — iki bağımsız hattı aynı ürün üzerinde buluşturur.
+ *
+ * Analiz hattı ürünü "Mini Ice Maker XR-500", ajan fazı "mini ice maker xr 500"
+ * yazdığında ikisi FARKLI ürün sayılırsa kesişim sahte biçimde boş kalır. Bu
+ * yüzden karşılaştırma ham ad üzerinden değil, normalize edilmiş kimlik üzerinden
+ * yapılır: küçük harf (tr), aksan/ı dönüşümü, alfanümerik olmayanların atılması ve
+ * boşlukların tekilleştirilmesi. Saf ve deterministiktir.
+ */
+export function normalizeProductIdentity(name: string): string {
+  return String(name ?? "")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
 export const PipelineOutputSchema = z.object({
   topProducts: z.array(ProductSchema).max(5),
@@ -303,6 +346,18 @@ export function veloraProductScore(
       source * 0.1,
   );
   return { score, components };
+}
+
+/**
+ * ANALİZ HATTI PUANI — konsey girdisi OLMADAN, yalnızca ürünün kendi kanıtı.
+ *
+ * İki bağımsız hat karşılaştırılırken analiz tarafının `jointScore`u kullanılırsa
+ * karşılaştırma döngüsel olur (konsey kendi kendini doğrular). Bu yüzden analiz
+ * sıralaması `veloraProductScore(candidate, 0)` ile üretilir: talep, marj, rekabet,
+ * kanıt kalitesi ve kaynak güvenilirliği — konsey ağırlığı sıfır.
+ */
+export function analysisOnlyScore(candidate: RetrieverCandidate): number {
+  return veloraProductScore(candidate, 0).score;
 }
 
 /** Adayın kaynağı — ham kazınmış trend adları ve genel yedekler modelin ürünlerinden sonra sıralanır. */

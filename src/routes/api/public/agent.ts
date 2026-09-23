@@ -13,16 +13,46 @@ function publicOrigin(request: Request): string {
 /**
  * Velora 14 ajanlı yönlendirici uç noktası (oturum zorunlu).
  *
- * İki mod:
+ * POST — koşuyu başlatır. İki mod:
  *  - varsayılan: 14 ajanlı zincir tek blokta koşar (`velora-pipeline`).
- *  - `orchestrated: true`: 14 ajan 4 FAZA bölünür ve her faz QStash ile kendine
- *    yayınlanır (self-chaining fan-out). Her adım 8 sn tavanlıdır ve durumu
- *    Supabase geçici kovasında taşır. QStash yoksa fazlar aynı istek içinde
- *    koşar; toplam süre yine 4×8 sn ile sınırlıdır.
+ *  - `orchestrated: true`: ORTAK kanıt toplanır, finalist ürünler belirlenir ve
+ *    14 ajan 4 FAZA bölünerek koşar. Her faz QStash ile KENDİNE yayınlanır
+ *    (self-chaining fan-out), her adım 8 sn tavanlıdır ve durum ortak `runId`
+ *    altında Supabase geçici kovasında taşınır. QStash yoksa fazlar aynı istek
+ *    içinde koşar; toplam süre yine faz tavanlarıyla sınırlıdır.
+ *    Yanıt ilk adımın sonucudur (`dispatched`), nihai karne DEĞİL.
+ *
+ * GET — `?runId=` ile koşu durumunu döner. Panel nihai karneyi bu uçtan yoklar;
+ * böylece istemci yalnızca ilk dağıtım yanıtına mahkûm kalmaz. Durum okuma
+ * nihai karneyi saf olarak koşu durumundan kurar; geçici kova silinmişse sonuç
+ * kalıcı kazanan kayıtlarından geri kurulur (`recovered: true`).
  */
 export const Route = createFileRoute("/api/public/agent")({
   server: {
     handlers: {
+      GET: async ({ request }) => {
+        const guard = await guardAuthed(request, "agent-status", 60, 60);
+        if ("response" in guard) return guard.response;
+
+        const runId = (new URL(request.url).searchParams.get("runId") ?? "").trim();
+        if (runId.length < 3 || runId.length > 120) {
+          return jsonError(400, "Geçerli bir runId gerekli.");
+        }
+
+        try {
+          const orchestrator = await import("@/lib/velora-orchestrator.server");
+          const status = await orchestrator.veloraRunStatus(runId, {
+            store: orchestrator.defaultVeloraStore(),
+          });
+          return new Response(JSON.stringify(status), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+          });
+        } catch (e) {
+          return jsonError(500, "Koşu durumu okunamadı. Lütfen tekrar deneyin.", e);
+        }
+      },
+
       POST: async ({ request }) => {
         const guard = await guardAuthed(request, "agent", 6, 60);
         if ("response" in guard) return guard.response;

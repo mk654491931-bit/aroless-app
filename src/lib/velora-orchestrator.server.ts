@@ -8,34 +8,51 @@
  *
  *   1. 14 ajan 4 FAZA ayrılır; her faz KENDİ yalıtılmış yükünde koşar.
  *   2. Her fazın sert bir tavanı vardır: `VELORA_PHASE_CEILING_MS` (8 sn). Tavan
- *      aşılırsa faz yarıda kesilmez — tamamlanmayan üyeler NÖTR sonuçla döner ve
- *      hat dürüstçe "kısmi" der. Hiçbir faz asla 8 sn'yi geçemez.
+ *      aşılırsa faz yarıda kesilmez — tamamlanmayan üyeler NÖTR sonuçla döner,
+ *      devam eden AI isteği GERÇEKTEN iptal edilir (AbortSignal) ve hat dürüstçe
+ *      "kısmi" der. Hiçbir faz asla 8 sn'yi geçemez.
  *   3. Fazlar arası durum Supabase'deki geçici kovada (`ai_cache`, scope
  *      `velora-orch`) `runId` ile taşınır → her adım STATELESS'tir ve herhangi bir
- *      instance'ta koşabilir.
+ *      instance'ta koşabilir. Aynı runId'nin tekrar teslimi (QStash retry)
+ *      IDEMPOTENTTİR: kayıtlı faz yeniden koşmaz, koşan faz ikinci kez başlatılmaz.
  *   4. Sonraki faz QStash ile KENDİNE yayınlanır (self-chaining fan-out). QStash
- *      yoksa aynı adımlar istek içinde koşar ve toplam süre yine 4×8 sn ≈ 32 sn
- *      ile sınırlı kalır — yani dar limitlerde de 504 üretilmez.
+ *      yoksa aynı adımlar istek içinde koşar ve toplam süre yine tavanlıdır.
  *
  * ORTAK KANIT (ground truth): 14 ajanın HEPSİ trend radarı kazımalarını ve canlı
  * piyasa kanıtını (`data-pipeline.server.ts` + `market-verify.server.ts`) ortak
  * veri olarak görür. Doğrulanmamış/halüsinasyon metrik kural gereği reddedilir.
  *
+ * ORTAK EN İYİ 3 (shared best-3): Tek bir `runId` altında İKİ BAĞIMSIZ SIRALAMA
+ * üretilir ve panel yalnızca KESİŞİMİ gösterir:
+ *   HAT A — analiz sıralaması: her adayın kendi kanıtı (talep, marj, rekabet,
+ *           kanıt kalitesi, kaynak güvenilirliği). Konsey girdisi YOK.
+ *   HAT B — ajan konseyi sıralaması: 14 ajanın ÜRÜN BAŞINA verdiği puanların
+ *           ortalaması (run geneli ortalama her ürüne kopyalanmaz).
+ * Sonuç = iki sıralamanın GERÇEK kesişimi, ürün başına ortak kararla sıralanır,
+ * en fazla 3 ürün. Kesişim 3'ten azsa eksik sıra UYDURULMAZ; kaç ortak ürün
+ * bulunduğu dürüstçe yazılır. Ajan hiç ürün puanı vermezse panel bu durumu
+ * "yalnız analiz hattı" diye etiketler (sessizce sahte kesişim üretmez).
+ *
  * PUSH PROTOKOLÜ: Faz 4 tamamlanınca kazanan karne (dossier) Aroless Winner DTO'ya
  * çevrilir ve nişin kazanan tablosuna (`radar_items` — panelin okuduğu mevcut
  * "winner" tablosu) yazılır. Ardından OTOMATİK SELF-TEST koşar: kayıt geri
  * okunur, alan bütünlüğü ve tavan uyumu doğrulanır.
+ *
+ * DURUM OKUMA: `veloraRunStatus(runId)` koşunun nerede olduğunu döner; panel bu
+ * uçtan `runId` ile yoklar (POST yalnızca ilk adımı tetikler). Kalıcı kovanın
+ * TTL'i dolsa bile nihai sonuç `radar_items` payload'ından geri kurulabilir.
  */
 import { z } from "zod";
 import type { Json } from "@/integrations/supabase/types";
 import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council-chain.server";
 import { DEEP_CHAIN, executeAgentWithFallback, parseAgentJson } from "./ai-router.server";
 import { combineJointScores } from "./consensus-types";
-import { qstashConfigured, qstashFanOut } from "./discovery-jobs.server";
+import { JOB_POLL_INTERVAL_MS, qstashConfigured, qstashFanOut } from "./discovery-jobs.server";
 import {
+  analysisOnlyScore,
   collectVeloraEvidence,
+  normalizeProductIdentity,
   scrapedCandidates,
-  veloraProductScore,
   ProductSchema,
   type PipelineInput,
   type Product,
@@ -57,6 +74,33 @@ export const VELORA_PHASE_CEILING_MS = 8_000;
  * "tavan içinde" kalmasını garanti eder (bulucudaki `RETURN_MARGIN` ile aynı sözleşme).
  */
 export const VELORA_STEP_RETURN_MARGIN_MS = 250;
+
+/** Ajanların odağındaki finalist ürün sayısı. Prompt ve ürün başına puanlama buna göre kurulur. */
+export const VELORA_FINALIST_COUNT = 6;
+
+/** İstenen ORTAK en iyi ürün sayısı (shared best-3). */
+export const VELORA_TOP_N = 3;
+
+/**
+ * Kesişime giren aday havuzu: her hattın ilk kaç ürünü kesişim için taranır.
+ *
+ * 3'ten büyük olmasının nedeni: iki bağımsız sıralama aynı 3 ürünü farklı sırayla
+ * dizerse kesişim yine 3 çıkar; havuz daraltılırsa gerçek ortak ürünler gereksiz
+ * yere elenirdi.
+ */
+export const VELORA_INTERSECTION_POOL = 5;
+
+/** Bir ürünün ajan kararı "kabul edilebilir" sayılması için gereken en küçük oy oranı. */
+export const VELORA_MIN_AGENT_COVERAGE = 0.5;
+
+/**
+ * Koşan bir fazın kilidi (ms). Aynı faz bu süre içinde tekrar teslim edilirse
+ * ikinci kez BAŞLATILMAZ (QStash retry aynı işi iki kez harcayamaz).
+ */
+export const VELORA_PHASE_LEASE_MS = 90_000;
+
+/** Bu süre boyunca hiç ilerleme yazılmadıysa koşu "bayat" sayılır ve panel yoklamayı bırakır. */
+export const VELORA_RUN_STALE_MS = 180_000;
 
 export type VeloraPhaseId = 1 | 2 | 3 | 4;
 
@@ -110,6 +154,15 @@ export function phaseById(id: VeloraPhaseId): VeloraPhaseDefinition {
 // Koşu durumu — stateless adımlar arasında taşınan geçici durum (temp bucket).
 // ---------------------------------------------------------------------------
 
+/** Bir ajanın TEK ÜRÜN için verdiği puan ve gerekçesi (`product_scores` dizisi). */
+export const VeloraProductVoteSchema = z.object({
+  /** Finalist kimliği (`C1`) ya da ürün adı — eşleştirme normalize kimlikle yapılır. */
+  id: z.string().min(1),
+  score: z.number().min(0).max(100),
+  note: z.string().default(""),
+});
+export type VeloraProductVote = z.infer<typeof VeloraProductVoteSchema>;
+
 export const VeloraAgentResultSchema = z.object({
   key: z.string(),
   name: z.string(),
@@ -118,6 +171,8 @@ export const VeloraAgentResultSchema = z.object({
   score: z.number().min(0).max(100),
   latencyMs: z.number().min(0),
   output: z.record(z.string(), z.unknown()).default({}),
+  /** Bu üyenin ÜRÜN BAŞINA verdiği puanlar (ürün başına consensus bunlardan çıkar). */
+  productVotes: z.array(VeloraProductVoteSchema).default([]),
   error: z.string().optional(),
 });
 export type VeloraAgentResult = z.infer<typeof VeloraAgentResultSchema>;
@@ -133,6 +188,39 @@ export const VeloraPhaseResultSchema = z.object({
 });
 export type VeloraPhaseResult = z.infer<typeof VeloraPhaseResultSchema>;
 
+export const VeloraPushResultSchema = z.object({
+  ok: z.boolean(),
+  ids: z.array(z.string()).default([]),
+  error: z.string().optional(),
+});
+export type VeloraPushResult = z.infer<typeof VeloraPushResultSchema>;
+
+export const VeloraSelfTestReportSchema = z.object({
+  status: z.enum(["SUCCESS", "FAILED"]),
+  pushResult: z.object({
+    recordIds: z.array(z.string()).default([]),
+    status: z.enum(["PUSHED", "FAILED"]),
+    error: z.string().optional(),
+  }),
+  performance: z
+    .array(
+      z.object({
+        phase: z.string(),
+        ms: z.number(),
+        ceilingMs: z.number(),
+        withinCeiling: z.boolean(),
+      }),
+    )
+    .default([]),
+  agentsLogged: z.number().int().min(0),
+  expectedAgents: z.number().int().min(0),
+  dbFetchVerified: z.boolean(),
+  payloadIntegrity: z.boolean(),
+  verdict: z.enum(["PASS", "FAIL"]),
+  notes: z.array(z.string()).default([]),
+});
+export type VeloraSelfTestReport = z.infer<typeof VeloraSelfTestReportSchema>;
+
 export const VeloraRunStateSchema = z.object({
   runId: z.string(),
   query: z.string(),
@@ -140,14 +228,25 @@ export const VeloraRunStateSchema = z.object({
   platform: z.string(),
   language: z.string(),
   startedAtMs: z.number(),
+  /** Son yazım anı — panelin "bayat koşu" tespiti bu alana bakar. */
+  updatedAtMs: z.number().default(0),
   status: z.enum(["running", "completed", "failed"]),
   /** Toplanan ORTAK kanıt bloğu — her fazın istemi bunu taşır. */
   evidenceBlock: z.string().default(""),
   scrapedTrends: z.array(z.string()).default([]),
   live: z.boolean().default(false),
-  /** AI retriever'ın adlandırdığı ürünler + kazınmış trend yedekleri. */
+  /** AI retriever'ın adlandırdığı ürünler + kazınmış trend yedekleri (finalistler). */
   candidates: z.array(z.record(z.string(), z.unknown())).default([]),
   phases: z.array(VeloraPhaseResultSchema).default([]),
+  /** Şu an koşan faz — aynı fazın ikinci teslimini idempotent kılar. */
+  runningPhase: z
+    .object({ id: z.number().int().min(1).max(4), startedAtMs: z.number() })
+    .nullable()
+    .default(null),
+  /** Son push sonucu (durum ucu bunu panelde gösterir). */
+  push: VeloraPushResultSchema.nullable().default(null),
+  /** Son otomatik self-test raporu. */
+  selfTest: VeloraSelfTestReportSchema.nullable().default(null),
 });
 export type VeloraRunState = z.infer<typeof VeloraRunStateSchema>;
 
@@ -161,14 +260,38 @@ function stateInput(state: VeloraRunState): PipelineInput {
   };
 }
 
+/** Finalist adayın sabit kimliği (`C1`…) — ajan oyları bu kimlikle eşleşir. */
+export function candidateIdOf(candidate: Record<string, unknown>, index: number): string {
+  const existing = String(candidate["candidateId"] ?? "").trim();
+  return existing || `C${index + 1}`;
+}
+
 // ---------------------------------------------------------------------------
 // Zaman dilimli izole faz yürütücüsü
 // ---------------------------------------------------------------------------
 
-/** Bir sözü sert bir tavana bağlar; tavan aşılırsa reddeder (faz asla asılı kalmaz). */
-function withCeiling<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+/**
+ * Bir sözü sert bir tavana bağlar; tavan aşılırsa reddeder (faz asla asılı kalmaz).
+ *
+ * `onTimeout` GERÇEK iptaldir: tavan dolduğunda çağrılır ve altta yatan AI
+ * isteğini keser. Aksi halde zaman aşımına uğrayan istek arka planda koşmaya
+ * devam edip ücretsiz kotayı yakardı.
+ */
+function withCeiling<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+  onTimeout?: () => void,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label}_TIMEOUT`)), Math.max(1, ms));
+    const timer = setTimeout(() => {
+      try {
+        onTimeout?.();
+      } catch {
+        /* iptal edilemeyen kaynak hattı düşürmesin */
+      }
+      reject(new Error(`${label}_TIMEOUT`));
+    }, Math.max(1, ms));
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -207,8 +330,8 @@ export type VeloraDispatchMode = "qstash" | "inline";
  *
  * Dönen `null`, "devir yapılamıyor" demektir: QStash yapılandırılmamış ya da
  * origin public değil. O durumda orkestratör fazları aynı istek içinde sürer
- * (yine her faz 8 sn tavanlı, toplam ≈ 32 sn). QStash hiçbir koşulda zorunlu
- * değildir; sadece daha küçük adımlar sağlar.
+ * (yine her faz 8 sn tavanlı). QStash hiçbir koşulda zorunlu değildir; sadece
+ * daha küçük adımlar sağlar.
  */
 export function veloraQStashHandoff(
   origin: string,
@@ -228,6 +351,56 @@ export function veloraQStashHandoff(
       ? { ok: true, mode: "qstash", messageId: published.messageId }
       : { ok: false, mode: "qstash", error: published.error };
   };
+}
+
+/**
+ * Bir ajanın yanıtından ÜRÜN BAŞINA puanları çıkarır.
+ *
+ * Toleranslıdır (`product_scores` / `productScores` / `products`) ama UYDURMAZ:
+ * bilinmeyen ürün kimliği ve puanı olmayan kayıt sessizce atlanır. Böylece
+ * olmayan bir ürün için puan üretilemez; eksik veri "eksik" kalır.
+ */
+export function parseProductVotes(
+  output: Record<string, unknown>,
+  state: VeloraRunState,
+): VeloraProductVote[] {
+  const raw =
+    output["product_scores"] ?? output["productScores"] ?? output["product_votes"] ?? output["products"];
+  if (!Array.isArray(raw)) return [];
+
+  const byId = new Map<string, string>();
+  const byIdentity = new Map<string, string>();
+  state.candidates.forEach((candidate, index) => {
+    const candidateId = candidateIdOf(candidate, index);
+    byId.set(candidateId.toLocaleLowerCase("tr-TR"), candidateId);
+    const identity = normalizeProductIdentity(String(candidate["name"] ?? ""));
+    if (identity) byIdentity.set(identity, candidateId);
+  });
+
+  const votes = new Map<string, VeloraProductVote>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const value = item as Record<string, unknown>;
+    const rawId = String(
+      value["id"] ?? value["candidateId"] ?? value["name"] ?? value["title"] ?? "",
+    ).trim();
+    if (!rawId) continue;
+    const candidateId =
+      byId.get(rawId.toLocaleLowerCase("tr-TR")) ?? byIdentity.get(normalizeProductIdentity(rawId));
+    if (!candidateId) continue; // finalist olmayan ürün: yok sayılır
+    const score = Number(value["score"] ?? value["value"] ?? value["rating"]);
+    if (!Number.isFinite(score)) continue; // puan yoksa puan UYDURULMAZ
+    const note = String(value["note"] ?? value["reason"] ?? value["evidence"] ?? value["why"] ?? "")
+      .trim()
+      .slice(0, 240);
+    const previous = votes.get(candidateId);
+    votes.set(candidateId, {
+      id: candidateId,
+      score: clampScore(score),
+      note: note || previous?.note || "",
+    });
+  }
+  return [...votes.values()];
 }
 
 /** Bir üyeyi kendi süre bütçesi içinde koşar; asla fırlatmaz. */
@@ -251,20 +424,24 @@ async function runOneAgent(
     score: 50,
     latencyMs: Date.now() - started,
     output: {},
+    productVotes: [],
     ...(error ? { error } : {}),
   });
 
   if (budget <= 0) return neutral("PHASE_CEILING_REACHED", true);
 
   const run = deps.runAgent ?? executeAgentWithFallback;
+  const controller = new AbortController();
   try {
     const result = await withCeiling(
       run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), DEEP_CHAIN, {
         temperature: 0.3,
         retries: 1,
+        signal: controller.signal,
       }),
       budget,
       `velora:${agentKey}`,
+      () => controller.abort(),
     );
     const output = parseAgentJson<Record<string, unknown>>(result.text, {});
     return {
@@ -275,10 +452,12 @@ async function runOneAgent(
       score: clampScore(output[scoreKey]),
       latencyMs: Date.now() - started,
       output,
+      productVotes: parseProductVotes(output, state),
       ...(result.log.error ? { error: result.log.error } : {}),
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    controller.abort();
     return neutral(message, message.endsWith("_TIMEOUT"));
   }
 }
@@ -314,6 +493,30 @@ export async function runVeloraPhase(
   };
 }
 
+/**
+ * Finalist listesi — 14 ajanın TAMAMI bu ürünleri görür ve HEPSİNİ puanlar.
+ *
+ * Ajanlar koşu sorgusuna değil, ürün başına ölçülebilir bir karara bağlanır: aynı
+ * finalist kimlikleri (`C1`…) istemde listelenir, yanıtta `product_scores` ile
+ * geri istenir ve konsensus bu kimlikler üzerinden kurulur.
+ */
+export function finalistBlock(state: VeloraRunState): string {
+  if (state.candidates.length === 0) {
+    return "FINALIST PRODUCTS: none available — return an empty product_scores array.";
+  }
+  return [
+    "FINALIST PRODUCTS (the ONLY products in scope — you MUST score EVERY one of them):",
+    ...state.candidates.map((candidate, index) => {
+      const id = candidateIdOf(candidate, index);
+      const name = String(candidate["name"] ?? "").trim() || "(unnamed)";
+      const category = String(candidate["category"] ?? "-").trim() || "-";
+      const price = String(candidate["priceRange"] ?? "-").trim() || "-";
+      const source = String(candidate["source"] ?? "ai").trim() || "ai";
+      return `${id}. ${name} · category=${category} · price=${price} · source=${source}`;
+    }),
+  ].join("\n");
+}
+
 function agentPrompt(
   agentKey: CouncilAgentKey,
   task: string,
@@ -337,11 +540,86 @@ ${
     : "SHARED LIVE EVIDENCE: none available for this run. Score neutrally."
 }
 
+${finalistBlock(state)}
+
 CHAIN RULES:
 - Return ONLY valid minified JSON. No markdown or commentary.
-- Return exactly these fields and no extra fields: ${agentSchemaHint(agentKey)}
-- GROUND TRUTH RULE: use only the shared scraped evidence above. Never invent metrics; unverified or hallucinated numbers are rejected. If evidence is missing, use score 50 and explain the neutral fallback.
+- Return exactly these fields and no extra fields: ${agentSchemaHint(agentKey)} PLUS "product_scores".
+- "product_scores" MUST list EVERY finalist exactly once: {"product_scores":[{"id":"C1","score":0-100,"note":"one short evidence-based reason"}]}
+- Score EVERY finalist above and no other product. Never invent products that are not in the list; a missing id is treated as "no opinion".
+- GROUND TRUTH RULE: use only the shared scraped evidence above. Never invent metrics; unverified or hallucinated numbers are rejected. If a finalist cannot be verified from the shared evidence, give it score 50 and write "unverified" in its note.
 - Never return null or a zero score. Numbers must be finite; prefer conservative estimates.`;
+}
+
+// ---------------------------------------------------------------------------
+// ÜRÜN BAŞINA AJAN KONSENSÜSÜ
+// ---------------------------------------------------------------------------
+
+export type VeloraProductConsensus = {
+  candidateId: string;
+  identity: string;
+  name: string;
+  /** Bu ürünü puanlayan ajanların ortalaması (0-100). */
+  councilScore: number;
+  /** Bu ürünü puanlayan ajan sayısı (0-14). */
+  votes: number;
+  /** Oy oranı (0-1) — "kaç ajan gerçekten konuştu". */
+  coverage: number;
+  /** Ajanların bıraktığı gerekçeler (kanıt referansları). */
+  evidence: string[];
+};
+
+/**
+ * 14 ajanın ÜRÜN BAŞINA puanlarını tek konsensüse indirger.
+ *
+ * Run geneli konsey ortalaması her ürüne kopyalanmaz: her ürün yalnızca KENDİSİ
+ * hakkında konuşan ajanların oylarını alır. Hiç oy almamış ürün sonuç kümesine
+ * girmez ("oy yok" ile "50 puan" aynı şey değildir).
+ */
+export function productConsensus(state: VeloraRunState): Map<string, VeloraProductConsensus> {
+  const totals = new Map<
+    string,
+    { candidateId: string; identity: string; name: string; sum: number; votes: number; evidence: string[] }
+  >();
+  const aliases = new Map<string, string>();
+
+  state.candidates.forEach((candidate, index) => {
+    const candidateId = candidateIdOf(candidate, index);
+    const name = String(candidate["name"] ?? "").trim();
+    const identity = normalizeProductIdentity(name);
+    totals.set(candidateId, { candidateId, identity, name, sum: 0, votes: 0, evidence: [] });
+    aliases.set(candidateId.toLocaleLowerCase("tr-TR"), candidateId);
+    if (identity) aliases.set(identity, candidateId);
+  });
+
+  for (const phase of state.phases) {
+    for (const agent of phase.agents) {
+      for (const vote of agent.productVotes) {
+        const candidateId =
+          aliases.get(vote.id.toLocaleLowerCase("tr-TR")) ?? aliases.get(normalizeProductIdentity(vote.id));
+        const slot = candidateId ? totals.get(candidateId) : undefined;
+        if (!slot) continue;
+        slot.sum += vote.score;
+        slot.votes += 1;
+        if (vote.note && slot.evidence.length < 4) slot.evidence.push(`${agent.name}: ${vote.note}`);
+      }
+    }
+  }
+
+  const consensus = new Map<string, VeloraProductConsensus>();
+  for (const slot of totals.values()) {
+    if (slot.votes === 0) continue;
+    consensus.set(slot.candidateId, {
+      candidateId: slot.candidateId,
+      identity: slot.identity,
+      name: slot.name,
+      councilScore: Math.round(slot.sum / slot.votes),
+      votes: slot.votes,
+      coverage: Math.min(1, slot.votes / Math.max(1, plannedAgentCount())),
+      evidence: slot.evidence,
+    });
+  }
+  return consensus;
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +629,7 @@ CHAIN RULES:
 /**
  * Analiz hattı parmak izi (0-100): hat ne kadar GERÇEK kanıt gördü?
  * Bulucunun `productFingerprint`i ile aynı sözleşme — uydurma veri puan üretmez.
+ * (Karar bilgisidir; ürün sıralaması ürün başına `analysisOnlyScore` ile yapılır.)
  */
 export function veloraAnalysisScore(state: VeloraRunState): number {
   const scraped = Math.min(1, state.scrapedTrends.length / 10);
@@ -375,12 +654,28 @@ export const WinnerDtoSchema = z.object({
   country: z.string(),
   platform: z.string(),
   generated_at: z.string(),
+  /** Run geneli konsey ortalaması (bilgi amaçlı; ürün puanı DEĞİL). */
   council_average: z.number().min(0).max(100),
+  /** Run geneli analiz parmak izi (bilgi amaçlı; ürün puanı DEĞİL). */
   analysis_score: z.number().min(0).max(100),
+  /** Run geneli ortak karar (bilgi amaçlı). */
   joint_score: z.number().min(0).max(100),
   joint_source: z.enum(["joint", "analysis", "council", "none"]),
   listed: z.boolean(),
+  /** İki bağımsız hattın GERÇEK kesişiminden çıkan ortak en iyi ürünler (en fazla 3). */
   products: z.array(ProductSchema),
+  /** İstenen ortak ürün sayısı (3). */
+  requested_top: z.number().int().min(1),
+  /** Kesişimde kaç ortak ürün bulundu — 3'ten azsa eksik sıra DOLDURULMAZ. */
+  intersection_count: z.number().int().min(0),
+  /** Sonuç kümesi iki hattın kesişimi mi, yoksa yalnız analiz hattı mı? */
+  rank_source: z.enum(["intersection", "analysis-only"]),
+  /** Değerlendirilen finalist sayısı. */
+  finalists: z.number().int().min(0),
+  /** En az bir ajan oyu almış ürün sayısı. */
+  evaluated: z.number().int().min(0),
+  /** Dürüst uyarılar (eksik kesişim, ajan oyu yok, canlı kanıt yok…). */
+  notes: z.array(z.string()).default([]),
   evidence: z.object({
     live: z.boolean(),
     scraped_trends: z.number().int().min(0),
@@ -426,58 +721,139 @@ export function winnerRows(dto: WinnerDto): WinnerRow[] {
       price_min: band.min,
       price_max: band.max,
       reason: (product.whyNow || product.sentiment || "").slice(0, 500) || null,
+      // Kalıcı kovanın (radar_items) payload'ı, geçici durum TTL'i dolsa bile
+      // karneyi kayıpsız geri kurmaya yetecek kadar bilgi taşır.
       payload: {
         run_id: dto.run_id,
         joint_score: dto.joint_score,
-        analysis_score: dto.analysis_score,
-        council_average: dto.council_average,
+        run_analysis_score: dto.analysis_score,
+        run_council_average: dto.council_average,
         rank: product.rank,
         source: product.source,
+        rank_source: dto.rank_source,
+        intersection_count: dto.intersection_count,
+        requested_top: dto.requested_top,
+        finalists: dto.finalists,
+        evaluated: dto.evaluated,
+        live: dto.evidence.live,
+        scraped_trends: dto.evidence.scraped_trends,
+        candidate_id: product.candidateId ?? null,
+        product_identity: product.identity ?? null,
+        product_analysis_score: product.analysisScore ?? null,
+        product_council_score: product.councilScore ?? null,
+        product_council_votes: product.councilVotes ?? null,
+        product_council_coverage: product.councilCoverage ?? null,
+        product_verification: product.verification ?? null,
         risks: product.risks,
       } as Json,
     };
   });
 }
 
-/** Koşu durumundan kazanan karnesini (dossier) kurar. Tamamen deterministik. */
+/**
+ * KOŞU DURUMUNDAN KAZANAN KARNESİ — tamamen deterministik ve saftır.
+ *
+ * Sonuç kümesi şu üç adımda kurulur:
+ *   1. HAT A: her aday `analysisOnlyScore` ile sıralanır (konsey girdisi yok).
+ *   2. HAT B: ajanların ürün başına oyları `productConsensus` ile sıralanır.
+ *   3. KESİŞİM: iki sıralamanın ilk `VELORA_INTERSECTION_POOL` ürünü karşılaştırılır,
+ *      ortak ürünler ürün başına ortak kararla dizilir ve en fazla 3'ü raporlanır.
+ * Ajan hiç oy vermediyse "kesişim" iddia edilmez: sonuç yalnız analiz hattı olarak
+ * etiketlenir ve neden `notes` içinde yazılır.
+ */
 export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const councilAverage = councilAverageOf(state.phases);
   const analysis = veloraAnalysisScore(state);
   const joint = combineJointScores({ analysisScore: analysis, councilScore: councilAverage });
-  const listed = joint.score >= 60;
-  const products: Product[] = (state.candidates as unknown as RetrieverCandidate[])
-    .map((candidate) => ({
-      candidate,
-      score: veloraProductScore(candidate, joint.score).score,
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score || String(a.candidate["name"]).localeCompare(String(b.candidate["name"])),
-    )
-    .slice(0, 5)
-    .map(({ candidate, score }, index) =>
-      ProductSchema.parse({
-        name: String(candidate["name"] ?? state.query),
-        category: String(candidate["category"] ?? ""),
-        priceRange: String(candidate["priceRange"] ?? ""),
-        estimatedMarginPct: Number(candidate["estimatedMarginPct"] ?? 0),
-        demandScore: clampScore(candidate["demandScore"]),
-        competitionScore: clampScore(candidate["competitionScore"]),
-        sentiment: String(candidate["sentiment"] ?? ""),
-        whyNow: String(candidate["whyNow"] ?? ""),
-        risks: Array.isArray(candidate["risks"]) ? candidate["risks"].map(String) : [],
-        councilScore: joint.score,
-        councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
-        winnerScore: score,
-        rank: index + 1,
-        source:
-          candidate["source"] === "trend-radar"
-            ? "trend-radar"
-            : candidate["source"] === "fallback"
-              ? "fallback"
-              : "ai",
-      }),
-    );
+  const consensus = productConsensus(state);
+  const notes: string[] = [];
+
+  // HAT A — analiz sıralaması (ürünün kendi kanıtı; konsey girdisi yok).
+  const analysisRanked = (state.candidates as unknown as RetrieverCandidate[])
+    .map((candidate, index) => {
+      const candidateId = candidateIdOf(candidate as unknown as Record<string, unknown>, index);
+      return {
+        candidate,
+        candidateId,
+        identity: normalizeProductIdentity(String(candidate.name ?? "")),
+        analysisScore: analysisOnlyScore(candidate),
+      };
+    })
+    .sort((a, b) => b.analysisScore - a.analysisScore || a.identity.localeCompare(b.identity));
+
+  // HAT B — ürün başına ajan konsensüsü sıralaması (oy almamış ürün yok sayılır).
+  const councilRanked = analysisRanked
+    .filter((row) => consensus.has(row.candidateId))
+    .map((row) => ({ ...row, councilScore: consensus.get(row.candidateId)!.councilScore }))
+    .sort((a, b) => b.councilScore - a.councilScore || a.identity.localeCompare(b.identity));
+
+  const analysisTop = analysisRanked.slice(0, VELORA_INTERSECTION_POOL);
+  const councilIds = new Set(councilRanked.slice(0, VELORA_INTERSECTION_POOL).map((r) => r.candidateId));
+  const intersection = analysisTop.filter((row) => councilIds.has(row.candidateId));
+  const rankSource: "intersection" | "analysis-only" = intersection.length > 0 ? "intersection" : "analysis-only";
+
+  if (consensus.size === 0) notes.push("AGENT_CONSENSUS_UNAVAILABLE");
+  else if (rankSource === "analysis-only") notes.push("NO_PRODUCT_INTERSECTION");
+  if (rankSource === "intersection" && intersection.length < VELORA_TOP_N) {
+    notes.push(`INTERSECTION_BELOW_TARGET:${intersection.length}/${VELORA_TOP_N}`);
+  }
+  if (!state.live) notes.push("LIVE_EVIDENCE_UNAVAILABLE");
+  if (!state.evidenceBlock) notes.push("SHARED_EVIDENCE_EMPTY");
+
+  const selected = rankSource === "intersection" ? intersection : analysisTop;
+  const products: Product[] = selected
+    .map((row) => {
+      const entry = consensus.get(row.candidateId);
+      const productJoint = combineJointScores({
+        analysisScore: row.analysisScore,
+        councilScore: entry?.councilScore ?? null,
+      });
+      const verification: "verified" | "unverified" | "unknown" =
+        !entry || entry.coverage < VELORA_MIN_AGENT_COVERAGE
+          ? "unknown"
+          : state.live
+            ? "verified"
+            : "unverified";
+      const candidate = row.candidate as unknown as Record<string, unknown>;
+      return {
+        row,
+        entry,
+        verification,
+        joint: productJoint,
+        product: ProductSchema.parse({
+          name: String(candidate["name"] ?? state.query),
+          category: String(candidate["category"] ?? ""),
+          priceRange: String(candidate["priceRange"] ?? ""),
+          estimatedMarginPct: Number(candidate["estimatedMarginPct"] ?? 0),
+          demandScore: clampScore(candidate["demandScore"]),
+          competitionScore: clampScore(candidate["competitionScore"]),
+          sentiment: String(candidate["sentiment"] ?? ""),
+          whyNow: String(candidate["whyNow"] ?? ""),
+          risks: Array.isArray(candidate["risks"]) ? candidate["risks"].map(String) : [],
+          councilScore: entry?.councilScore ?? 0,
+          councilDecision:
+            productJoint.score >= 60 ? "LISTED" : `REVIEW_${entry?.councilScore ?? 0}`,
+          winnerScore: productJoint.score,
+          rank: 1,
+          source:
+            candidate["source"] === "trend-radar"
+              ? "trend-radar"
+              : candidate["source"] === "fallback"
+                ? "fallback"
+                : "ai",
+          candidateId: row.candidateId,
+          identity: row.identity,
+          analysisScore: row.analysisScore,
+          councilVotes: entry?.votes ?? 0,
+          councilCoverage: entry?.coverage ?? 0,
+          agentEvidence: entry?.evidence ?? [],
+          verification,
+        }),
+      };
+    })
+    .sort((a, b) => b.joint.score - a.joint.score || a.row.identity.localeCompare(b.row.identity))
+    .slice(0, VELORA_TOP_N)
+    .map((item, index) => ({ ...item.product, rank: index + 1 }));
 
   return WinnerDtoSchema.parse({
     run_id: state.runId,
@@ -489,8 +865,14 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
     analysis_score: analysis,
     joint_score: joint.score,
     joint_source: joint.source,
-    listed,
+    listed: joint.score >= 60,
     products,
+    requested_top: VELORA_TOP_N,
+    intersection_count: rankSource === "intersection" ? intersection.length : 0,
+    rank_source: rankSource,
+    finalists: state.candidates.length,
+    evaluated: consensus.size,
+    notes,
     evidence: {
       live: state.live,
       scraped_trends: state.scrapedTrends.length,
@@ -499,6 +881,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
     phases: state.phases.map((phase) => ({
       id: phase.id,
       key: phase.key,
+      name: phase.name,
       ms: phase.ms,
       within_ceiling: phase.withinCeiling,
       agents: phase.agents.length,
@@ -506,8 +889,88 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   });
 }
 
+/**
+ * Kalıcı kazanan kayıtlarından karneyi geri kurar.
+ *
+ * Geçici kovanın (ai_cache) TTL'i dolduğunda panelin boş kalmaması için: sonuç
+ * ürünleri `radar_items` payload'ında kalıcıdır ve kayıpsız geri okunabilir.
+ * Geri kurulamayan alanlar (ör. ajan gerekçe metinleri) dürüstçe `notes` ile
+ * bildirilir; uydurulmaz.
+ */
+export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[]): WinnerDto | null {
+  if (rows.length === 0) return null;
+  const payloadOf = (row: WinnerRow): Record<string, unknown> =>
+    row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>) : {};
+  const numberOr = (value: unknown, fallback: number) =>
+    Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const first = payloadOf(rows[0]!);
+  const sorted = [...rows].sort(
+    (a, b) =>
+      Math.round(numberOr(payloadOf(a)["rank"], 99)) - Math.round(numberOr(payloadOf(b)["rank"], 99)) ||
+      b.winner_score - a.winner_score,
+  );
+  const products: Product[] = sorted.slice(0, VELORA_TOP_N).map((row, index) => {
+    const payload = payloadOf(row);
+    const verification = ["verified", "unverified", "unknown"].includes(String(payload["product_verification"]))
+      ? (String(payload["product_verification"]) as "verified" | "unverified" | "unknown")
+      : "unverified";
+    const source = ["ai", "trend-radar", "fallback"].includes(String(payload["source"]))
+      ? (String(payload["source"]) as "ai" | "trend-radar" | "fallback")
+      : "ai";
+    return ProductSchema.parse({
+      name: row.title,
+      category: row.category,
+      priceRange: row.price_max > 0 ? `${row.price_min} - ${row.price_max}` : "",
+      estimatedMarginPct: Math.max(0, Math.round(Number(row.est_margin_pct) || 0)),
+      demandScore: clampScore(row.momentum),
+      competitionScore: 50,
+      sentiment: "",
+      whyNow: row.reason ?? "",
+      risks: Array.isArray(payload["risks"]) ? (payload["risks"] as unknown[]).map(String) : [],
+      councilScore: clampScore(numberOr(payload["product_council_score"], 0), 0),
+      councilDecision: numberOr(payload["product_council_score"], 0) > 0 ? "LISTED" : "REVIEW_0",
+      winnerScore: clampScore(row.winner_score, 0),
+      rank: Math.max(1, Math.round(numberOr(payload["rank"], index + 1))),
+      source,
+      candidateId: String(payload["candidate_id"] ?? `C${index + 1}`),
+      identity: String(payload["product_identity"] ?? normalizeProductIdentity(row.title)),
+      analysisScore: clampScore(numberOr(payload["product_analysis_score"], 0), 0),
+      councilVotes: Math.max(0, Math.round(numberOr(payload["product_council_votes"], 0))),
+      councilCoverage: Math.max(0, Math.min(1, numberOr(payload["product_council_coverage"], 0))),
+      agentEvidence: [],
+      verification,
+    });
+  });
+
+  return WinnerDtoSchema.parse({
+    run_id: runId,
+    query: rows[0]!.niche,
+    country: rows[0]!.country,
+    platform: rows[0]!.platform,
+    generated_at: `${rows[0]!.day}T00:00:00.000Z`,
+    council_average: clampScore(numberOr(first["run_council_average"], 0), 0),
+    analysis_score: clampScore(numberOr(first["run_analysis_score"], 0), 0),
+    joint_score: clampScore(numberOr(first["joint_score"], 0), 0),
+    joint_source: "joint",
+    listed: rows.some((row) => row.winner_score >= 60),
+    products,
+    requested_top: Math.max(1, Math.round(numberOr(first["requested_top"], VELORA_TOP_N))),
+    intersection_count: Math.max(0, Math.round(numberOr(first["intersection_count"], 0))),
+    rank_source: first["rank_source"] === "intersection" ? "intersection" : "analysis-only",
+    finalists: Math.max(0, Math.round(numberOr(first["finalists"], products.length))),
+    evaluated: Math.max(0, Math.round(numberOr(first["evaluated"], 0))),
+    notes: ["RECOVERED_FROM_WINNER_LEDGER", "AGENT_EVIDENCE_NOT_RECOVERABLE"],
+    evidence: {
+      live: first["live"] === true,
+      scraped_trends: Math.max(0, Math.round(numberOr(first["scraped_trends"], 0))),
+      radar: [],
+    },
+    phases: [],
+  });
+}
+
 // ---------------------------------------------------------------------------
-// Depo (Supabase) — geçici durum + kazanan kaydı
+// Depo (Supabase) — geçici durum + kalıcı kazanan kaydı
 // ---------------------------------------------------------------------------
 
 export type WinnerRow = {
@@ -530,15 +993,27 @@ export type VeloraStore = {
   saveState(state: VeloraRunState): Promise<void>;
   loadState(runId: string): Promise<VeloraRunState | null>;
   /** Kazanan satırlarını yazar ve yazılan kayıt kimliklerini döner. */
-  pushWinners(rows: WinnerRow[]): Promise<{ ok: boolean; ids: string[]; error?: string }>;
+  pushWinners(rows: WinnerRow[]): Promise<VeloraPushResult>;
   /** SELF-TEST: yazılan kayıtları geri okur. */
   fetchWinners(day: string, titles: string[]): Promise<WinnerRow[]>;
+  /** KALICI KOVAN: bir koşunun kazanan kayıtlarını `runId` ile geri okur. */
+  fetchRunWinners(runId: string): Promise<WinnerRow[]>;
 };
 
 /** Geçici koşu durumunun anahtarı (`ai_cache` = mevcut TTL'li geçici kova). */
 export function runStateKey(runId: string): string {
   return `velora-run:${runId}`;
 }
+
+/**
+ * Geçici durumun TTL'i (ms).
+ *
+ * Koşu 4 fazda saniyeler içinde biter ama panel/worker gecikirse ya da QStash bir
+ * fazı saatler sonra tekrar teslim ederse durum kaybolmamalı: 24 saat, koşunun
+ * tamamının (ve yeniden teslimlerin) üzerinde geniş bir güvenlik payıdır. Nihai
+ * sonuç zaten `radar_items`'ta kalıcıdır.
+ */
+export const VELORA_STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Varsayılan Supabase deposu: temp state `ai_cache`, kazananlar `radar_items`. */
 export function defaultVeloraStore(): VeloraStore {
@@ -552,7 +1027,7 @@ export function defaultVeloraStore(): VeloraStore {
         cache_key: runStateKey(state.runId),
         scope: "velora-orch",
         payload: JSON.parse(JSON.stringify(state)) as Json,
-        expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(Date.now() + VELORA_STATE_TTL_MS).toISOString(),
       });
       if (error) throw new Error(error.message);
     },
@@ -610,6 +1085,16 @@ export function defaultVeloraStore(): VeloraStore {
       if (error) throw new Error(error.message);
       return (data ?? []) as unknown as WinnerRow[];
     },
+
+    async fetchRunWinners(runId) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data, error } = await supabaseAdmin
+        .from("radar_items")
+        .select("*")
+        .filter("payload->>run_id", "eq", runId);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as WinnerRow[];
+    },
   };
 }
 
@@ -626,11 +1111,13 @@ async function ingestEvidence(state: VeloraRunState): Promise<void> {
 }
 
 /**
- * Faz 2'de koşan ürün retriever'ı: AI'nın adlandırdığı GERÇEK ürünler.
+ * Analiz hattının ADAY SNAPSHOT'ı: bu koşunun finalistleri.
  *
  * Tek atıştır (relaxation döngüsü monotlitte kalır) — faz tavanı içinde kalması
  * gerekir. AI boş dönerse kazınmış gerçek trend adları ve son çare yedekleri
- * kullanılır; hiçbir koşulda uydurma ürün adı yazılmaz.
+ * kullanılır; hiçbir koşulda uydurma ürün adı yazılmaz. Her adaya koşu boyunca
+ * DEĞİŞMEYEN bir kimlik (`C1`…) verilir: 14 ajanın ürün başına puanları ve iki
+ * hattın kesişimi bu kimlikler üzerinden eşleştirilir.
  */
 async function retrieveCandidates(state: VeloraRunState, deps: VeloraOrchestratorDeps) {
   const run = deps.runAgent ?? executeAgentWithFallback;
@@ -643,15 +1130,21 @@ ${
     ? `\nSHARED LIVE EVIDENCE (the SAME scrapings the 14 council members receive — treat as ground truth):\n${state.evidenceBlock.slice(0, 3_000)}\n`
     : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
 }
-Never return markdown. Return ONLY JSON:
+Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number,"competitionScore":number,"sentiment":string,"whyNow":string,"risks":string[]}]}`;
 
   const named: Record<string, unknown>[] = [];
+  const controller = new AbortController();
   try {
     const result = await withCeiling(
-      run("Product Retriever", prompt, DEEP_CHAIN, { temperature: 0.35, retries: 1 }),
+      run("Product Retriever", prompt, DEEP_CHAIN, {
+        temperature: 0.35,
+        retries: 1,
+        signal: controller.signal,
+      }),
       Math.max(500, deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS),
       "velora:retriever",
+      () => controller.abort(),
     );
     const parsed = parseAgentJson<{ candidates?: unknown[] }>(result.text, {});
     for (const item of parsed.candidates ?? []) {
@@ -665,10 +1158,10 @@ Never return markdown. Return ONLY JSON:
     /* retriever düşse de hat kazınmış trendlerle devam eder */
   }
 
-  const seen = new Set(named.map((c) => String(c["name"]).toLocaleLowerCase("tr-TR")));
+  const seen = new Set(named.map((c) => normalizeProductIdentity(String(c["name"]))));
   const pool = [...named];
   for (const candidate of scrapedCandidates(state.scrapedTrends)) {
-    const identity = candidate.name.toLocaleLowerCase("tr-TR");
+    const identity = normalizeProductIdentity(candidate.name);
     if (seen.has(identity)) continue;
     seen.add(identity);
     pool.push(candidate as unknown as Record<string, unknown>);
@@ -685,7 +1178,10 @@ Never return markdown. Return ONLY JSON:
       competitionScore: 50,
     });
   }
-  state.candidates = pool.slice(0, 24);
+  state.candidates = pool.slice(0, VELORA_FINALIST_COUNT).map((candidate, index) => ({
+    ...candidate,
+    candidateId: `C${index + 1}`,
+  }));
 }
 
 export type VeloraRunResult = {
@@ -695,17 +1191,23 @@ export type VeloraRunResult = {
   nextPhase?: VeloraPhaseId;
   dispatch: VeloraHandoff;
   dossier?: WinnerDto;
-  push?: { ok: boolean; ids: string[]; error?: string };
+  push?: VeloraPushResult;
   selfTest?: VeloraSelfTestReport;
+  /** Bu teslim yeni iş üretmedi: faz zaten kayıtlı ya da hâlâ koşuyor. */
+  deduped?: boolean;
   error?: string;
 };
 
 /**
  * Bir koşuyu `fromPhase`ten itibaren sürer.
  *
+ * IDEMPOTENT: kayıtlı bir faz YENİDEN koşmaz (QStash retry AI kotasını iki kez
+ * harcayamaz). Her faz başlamadan önce `runningPhase` yazılır; böylece eşzamanlı
+ * ikinci teslim aynı fazı ikinci kez başlatamaz (bkz. `resumeVeloraRun`).
+ *
  * Her faz kaydedildikten sonra: QStash devri varsa SONRAKİ FAZ YAYINLANIR ve
  * fonksiyon ANINDA döner (istatistiksel mikro-adım). Devir yoksa aynı istek
- * içinde devam edilir; toplam süre yine 4×8 sn ile sınırlıdır.
+ * içinde devam edilir; toplam süre yine faz tavanlarıyla sınırlıdır.
  */
 async function drive(
   state: VeloraRunState,
@@ -716,10 +1218,21 @@ async function drive(
   try {
     for (let id = fromPhase; id <= 4; id = (id + 1) as VeloraPhaseId) {
       const phase = phaseById(id);
-      // Faz 2 aynı adımda ürün retriever'ını da koşar (paralel, tavanlı).
-      if (id === 2) await retrieveCandidates(state, deps);
+      if (state.phases.some((recorded) => recorded.id === id)) {
+        // Kayıtlı faz: tekrar koşmadan sonraki adıma geç (retry-safe).
+        continue;
+      }
+      // Ürün snapshot'ı yoksa (eski/yarım durum) finalistleri burada kur.
+      if (id === 1 || state.candidates.length === 0) await retrieveCandidates(state, deps);
+
+      state.runningPhase = { id, startedAtMs: Date.now() };
+      state.updatedAtMs = Date.now();
+      await deps.store.saveState(state);
+
       const result = await runVeloraPhase(phase, state, deps);
       state.phases = [...state.phases.filter((p) => p.id !== id), result].sort((a, b) => a.id - b.id);
+      state.runningPhase = null;
+      state.updatedAtMs = Date.now();
       await deps.store.saveState(state);
 
       if (id < 4 && deps.handoff) {
@@ -742,8 +1255,13 @@ async function drive(
     const dossier = buildWinnerDossier(state);
     const push = await deps.store.pushWinners(winnerRows(dossier));
     state.status = "completed";
+    state.push = push;
+    state.runningPhase = null;
+    state.updatedAtMs = Date.now();
     await deps.store.saveState(state);
     const selfTest = await selfTestVeloraRun(state, { store: deps.store, dossier, push });
+    state.selfTest = selfTest;
+    await deps.store.saveState(state);
     return {
       runId: state.runId,
       status: "completed",
@@ -756,12 +1274,14 @@ async function drive(
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     state.status = "failed";
+    state.runningPhase = null;
+    state.updatedAtMs = Date.now();
     await deps.store.saveState(state).catch(() => {});
     return { runId: state.runId, status: "failed", completedPhases: state.phases.length, dispatch, error };
   }
 }
 
-/** Yeni bir koşu açar: ORTAK kanıtı toplar, Faz 1'i koşar ve devreder. */
+/** Yeni bir koşu açar: ORTAK kanıtı toplar, finalistleri belirler, Faz 1'i koşar ve devreder. */
 export async function startVeloraRun(
   input: unknown,
   deps: VeloraOrchestratorDeps,
@@ -774,19 +1294,32 @@ export async function startVeloraRun(
     platform: parsed.platform ?? "General",
     language: parsed.language,
     startedAtMs: Date.now(),
+    updatedAtMs: Date.now(),
     status: "running",
     evidenceBlock: "",
     scrapedTrends: [],
     live: false,
     candidates: [],
     phases: [],
+    runningPhase: null,
+    push: null,
+    selfTest: null,
   };
   await deps.store.saveState(state);
+  // ORTAK KANIT önce gelir: snapshot hem analiz hattını hem 14 ajanı besler.
   await ingestEvidence(state);
+  state.updatedAtMs = Date.now();
+  await deps.store.saveState(state);
   return drive(state, 1, deps, { ok: true, mode: deps.handoff ? "qstash" : "inline" });
 }
 
-/** QStash geri çağrısı: kaydedilmiş durumu yükler ve `phase`i koşar. */
+/**
+ * QStash geri çağrısı: kaydedilmiş durumu yükler ve `phase`i koşar.
+ *
+ * Tekrar teslim güvenliği iki katmanlıdır:
+ *  1. `phase` zaten kayıtlıysa hiçbir ajan çağrılmaz (drive kayıtlı fazı atlar).
+ *  2. Aynı faz hâlâ koşuyorsa (kilit içinde) ikinci teslim HİÇ başlatılmaz.
+ */
 export async function resumeVeloraRun(
   runId: string,
   phase: VeloraPhaseId,
@@ -803,8 +1336,31 @@ export async function resumeVeloraRun(
     };
   }
   if (state.status === "completed") {
-    return { runId, status: "completed", completedPhases: state.phases.length, dispatch: { ok: true, mode: "qstash" } };
+    return {
+      runId,
+      status: "completed",
+      completedPhases: state.phases.length,
+      dispatch: { ok: true, mode: deps.handoff ? "qstash" : "inline" },
+      deduped: true,
+      dossier: buildWinnerDossier(state),
+      ...(state.push ? { push: state.push } : {}),
+      ...(state.selfTest ? { selfTest: state.selfTest } : {}),
+    };
   }
+
+  const running = state.runningPhase;
+  if (running && running.id === phase && Date.now() - running.startedAtMs < VELORA_PHASE_LEASE_MS) {
+    // Aynı faz HÂLÂ koşuyor: yeni iş üretme, çift AI harcamasını engelle.
+    return {
+      runId,
+      status: "dispatched",
+      completedPhases: state.phases.length,
+      nextPhase: phase,
+      dispatch: { ok: true, mode: deps.handoff ? "qstash" : "inline" },
+      deduped: true,
+    };
+  }
+
   state.status = "running";
   return drive(state, phase, deps, { ok: true, mode: deps.handoff ? "qstash" : "inline" });
 }
@@ -818,20 +1374,151 @@ export const VeloraInputSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// OTOMATİK SELF-TEST & TEŞHİS DÖNGÜSÜ
+// DURUM OKUMA — panel `runId` ile koşunun nerede olduğunu buradan öğrenir
 // ---------------------------------------------------------------------------
 
-export type VeloraSelfTestReport = {
-  status: "SUCCESS" | "FAILED";
-  pushResult: { recordIds: string[]; status: "PUSHED" | "FAILED"; error?: string };
-  performance: { phase: string; ms: number; ceilingMs: number; withinCeiling: boolean }[];
-  agentsLogged: number;
-  expectedAgents: number;
-  dbFetchVerified: boolean;
-  payloadIntegrity: boolean;
-  verdict: "PASS" | "FAIL";
+export type VeloraRunPhaseSummary = {
+  id: number;
+  key: string;
+  name: string;
+  ms: number;
+  withinCeiling: boolean;
+  agents: number;
+  timedOut: number;
+};
+
+export type VeloraRunStatus = {
+  runId: string;
+  status: "unknown" | "running" | "completed" | "failed";
+  completedPhases: number;
+  totalPhases: number;
+  /** Hâlâ koşan faz (kilitli). */
+  activePhase: number | null;
+  /** Sıradaki faz (yoksa null → koşu bitti). */
+  nextPhase: number | null;
+  updatedAtMs: number;
+  /** Uzun süredir ilerleme yok: panelin sonsuz yoklamasını engeller. */
+  stale: boolean;
+  pollIntervalMs: number;
+  dossier: WinnerDto | null;
+  push: VeloraPushResult | null;
+  selfTest: VeloraSelfTestReport | null;
+  phases: VeloraRunPhaseSummary[];
+  /** Karne geçici kovadan değil, kalıcı kazanan kayıtlarından geri kuruldu. */
+  recovered: boolean;
   notes: string[];
 };
+
+function phaseSummaries(state: VeloraRunState): VeloraRunPhaseSummary[] {
+  return state.phases.map((phase) => ({
+    id: phase.id,
+    key: phase.key,
+    name: phase.name,
+    ms: phase.ms,
+    withinCeiling: phase.withinCeiling,
+    agents: phase.agents.length,
+    timedOut: phase.agents.filter((agent) => agent.timedOut).length,
+  }));
+}
+
+function nextMissingPhase(state: VeloraRunState): VeloraPhaseId | null {
+  for (const phase of VELORA_PHASES) {
+    if (!state.phases.some((recorded) => recorded.id === phase.id)) return phase.id;
+  }
+  return null;
+}
+
+/**
+ * Koşu durumu + (tamamlandıysa) kazanan karne.
+ *
+ * Karne SAF bir fonksiyondur (`buildWinnerDossier`), bu yüzden ayrıca saklanmaz:
+ * durum okunur ve gerekirse yerinde kurulur. Geçici kova silinmişse (TTL) nihai
+ * sonuç kalıcı `radar_items` kayıtlarından geri kurulur ve `recovered: true` ile
+ * dürüstçe işaretlenir.
+ */
+export async function veloraRunStatus(
+  runId: string,
+  deps: Pick<VeloraOrchestratorDeps, "store">,
+): Promise<VeloraRunStatus> {
+  const totalPhases = VELORA_PHASES.length;
+  const base = {
+    runId,
+    totalPhases,
+    pollIntervalMs: JOB_POLL_INTERVAL_MS,
+  };
+  const notes: string[] = [];
+
+  let state: VeloraRunState | null = null;
+  try {
+    state = await deps.store.loadState(runId);
+  } catch (e) {
+    notes.push(`STATE_READ_FAILED:${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (!state) {
+    try {
+      const rows = await deps.store.fetchRunWinners(runId);
+      const dossier = dossierFromWinnerRows(runId, rows);
+      if (dossier) {
+        return {
+          ...base,
+          status: "completed",
+          completedPhases: totalPhases,
+          activePhase: null,
+          nextPhase: null,
+          updatedAtMs: 0,
+          stale: false,
+          dossier,
+          push: { ok: true, ids: rows.map((row) => row.title) },
+          selfTest: null,
+          phases: [],
+          recovered: true,
+          notes: ["STATE_EXPIRED_USING_WINNER_LEDGER", ...dossier.notes],
+        };
+      }
+    } catch (e) {
+      notes.push(`LEDGER_READ_FAILED:${e instanceof Error ? e.message : String(e)}`);
+    }
+    return {
+      ...base,
+      status: "unknown",
+      completedPhases: 0,
+      activePhase: null,
+      nextPhase: null,
+      updatedAtMs: 0,
+      stale: false,
+      dossier: null,
+      push: null,
+      selfTest: null,
+      phases: [],
+      recovered: false,
+      notes: ["RUN_STATE_NOT_FOUND", ...notes],
+    };
+  }
+
+  const completed = state.status === "completed" || state.phases.length >= totalPhases;
+  const dossier = completed ? buildWinnerDossier(state) : null;
+  const updatedAtMs = state.updatedAtMs || state.startedAtMs;
+  return {
+    ...base,
+    status: state.status,
+    completedPhases: state.phases.length,
+    activePhase: state.runningPhase?.id ?? null,
+    nextPhase: state.status === "running" ? nextMissingPhase(state) : null,
+    updatedAtMs,
+    stale: state.status === "running" && Date.now() - updatedAtMs > VELORA_RUN_STALE_MS,
+    dossier,
+    push: state.push,
+    selfTest: state.selfTest,
+    phases: phaseSummaries(state),
+    recovered: false,
+    notes: [...notes, ...(dossier?.notes ?? [])],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OTOMATİK SELF-TEST & TEŞHİS DÖNGÜSÜ
+// ---------------------------------------------------------------------------
 
 /**
  * Push sonrası teşhis: (1) kaydı geri okuyup alan bütünlüğünü doğrular,
@@ -843,7 +1530,7 @@ export async function selfTestVeloraRun(
   args: {
     store: VeloraStore;
     dossier: WinnerDto;
-    push: { ok: boolean; ids: string[]; error?: string };
+    push: VeloraPushResult;
   },
 ): Promise<VeloraSelfTestReport> {
   const notes: string[] = [];
@@ -885,6 +1572,8 @@ export async function selfTestVeloraRun(
     }
   } else if (!args.push.ok) {
     notes.push(`PUSH_FAILED:${args.push.error ?? "unknown"}`);
+  } else {
+    notes.push("NO_SHARED_WINNERS:INTERSECTION_EMPTY");
   }
 
   if (agentsLogged !== expectedAgents) notes.push(`AGENT_COUNT_MISMATCH:${agentsLogged}/${expectedAgents}`);
@@ -893,6 +1582,7 @@ export async function selfTestVeloraRun(
   }
   const timedOut = state.phases.flatMap((p) => p.agents.filter((a) => a.timedOut).map((a) => a.key));
   if (timedOut.length > 0) notes.push(`AGENTS_TIMED_OUT:${timedOut.join(",")}`);
+  if (state.candidates.length > 0 && agentsLogged === 0) notes.push("PRODUCT_EVIDENCE_EMPTY");
 
   const verdict =
     args.push.ok && dbFetchVerified && payloadIntegrity && agentsLogged === expectedAgents

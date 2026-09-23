@@ -1,17 +1,45 @@
-// Velora derin analiz paneli — duman testi.
+// Velora derin analiz paneli — duman + davranış testi.
 //
-// Panelin DÜRÜSTLÜK sözleşmesini doğrular: hat koşmadan hiçbir skor gösterilmez
-// ve analiz yalnızca geçerli bir nişle başlatılabilir. (Gerçek koşu sunucu
-// tarafındadır; burada yalnızca başlangıç durumu render edilir.)
+// Panelin DÜRÜSTLÜK sözleşmesini doğrular: hat koşmadan hiçbir skor gösterilmez,
+// analiz yalnızca geçerli bir nişle başlatılabilir ve karne gelene kadar koşu
+// `runId` ile yoklanır (sonra yoklama DURUR). Gerçek koşu sunucu tarafındadır.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { VeloraDeepAnalysis } from "./velora-deep-analysis";
+import {
+  noteLabel,
+  veloraPollInterval,
+  veloraRunSettled,
+  veloraStatusLabel,
+  verificationChip,
+  type RunStatusPayload,
+} from "@/lib/velora-run-view";
 
 function render(node: React.ReactElement) {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>,
   );
+}
+
+function payload(overrides: Partial<RunStatusPayload> = {}): RunStatusPayload {
+  return {
+    runId: "velora_test",
+    status: "running",
+    completedPhases: 1,
+    totalPhases: 4,
+    activePhase: null,
+    nextPhase: 2,
+    stale: false,
+    pollIntervalMs: 2_000,
+    dossier: null,
+    push: null,
+    selfTest: null,
+    phases: [],
+    recovered: false,
+    notes: [],
+    ...overrides,
+  };
 }
 
 describe("VeloraDeepAnalysis", () => {
@@ -23,6 +51,9 @@ describe("VeloraDeepAnalysis", () => {
     // Henüz koşmadı: tek bir skor bile render edilmemeli.
     expect(html).not.toContain("/100");
     expect(html).not.toContain("En iyi ürünler");
+    // Koşu yokken durum şeridi de yok (yalnızca açıklama metni kalır).
+    expect(html).not.toContain("14 ajan / 4 faz");
+    expect(html).not.toContain("runId:");
   });
 
   it("jeton harcamadığını ve ortak kanıtı açıkça söyler", () => {
@@ -31,5 +62,53 @@ describe("VeloraDeepAnalysis", () => {
     expect(html).toContain("jeton");
     expect(html).toContain("ortak");
     expect(html).not.toContain("/100");
+  });
+});
+
+describe("koşu yoklaması (panel sözleşmesi)", () => {
+  it("karne gelene kadar yoklanır, hazır/bayat olduğunda DURUR", () => {
+    // Durum henüz okunmadı: ilk tick hemen planlanır.
+    expect(veloraPollInterval(undefined)).toBe(2_000);
+    // Koşuyor: sunucunun verdiği aralık.
+    expect(veloraPollInterval(payload())).toBe(2_000);
+    expect(veloraPollInterval(payload({ pollIntervalMs: 5_000 }))).toBe(5_000);
+    // Aşırı agresif aralık kırpılır.
+    expect(veloraPollInterval(payload({ pollIntervalMs: 100 }))).toBe(1_000);
+
+    // Karne hazır → yoklama BİTTİ (sonsuz yoklama yok).
+    expect(veloraPollInterval(payload({ status: "completed", completedPhases: 4 }))).toBe(false);
+    expect(veloraPollInterval(payload({ status: "failed" }))).toBe(false);
+    expect(veloraPollInterval(payload({ status: "unknown" }))).toBe(false);
+    // İlerleme durduysa da yoklama biter (kullanıcıyı sonsuz bekletmez).
+    expect(veloraPollInterval(payload({ stale: true }))).toBe(false);
+
+    expect(veloraRunSettled(payload())).toBe(false);
+    expect(veloraRunSettled(payload({ status: "completed" }))).toBe(true);
+  });
+
+  it("durum etiketi hangi fazın koştuğunu dürüstçe söyler", () => {
+    expect(veloraStatusLabel(undefined, true)).toBe("kuyruğa alınıyor");
+    expect(veloraStatusLabel(payload())).toBe("faz 2 kuyrukta");
+    expect(veloraStatusLabel(payload({ activePhase: 2 }))).toBe("faz 2 koşuyor");
+    expect(veloraStatusLabel(payload({ status: "completed" }))).toBe("tamamlandı");
+    expect(veloraStatusLabel(payload({ status: "failed" }))).toBe("başarısız");
+    expect(veloraStatusLabel(payload({ stale: true, activePhase: 3 }))).toBe("ilerleme durdu");
+  });
+
+  it("eksik kesişim ve ajan oyu yokluğu ham kod olarak değil, anlaşılır uyarıyla gösterilir", () => {
+    expect(noteLabel("INTERSECTION_BELOW_TARGET:2/3")).toContain("2/3");
+    expect(noteLabel("INTERSECTION_BELOW_TARGET:2/3")).toContain("doldurulmadı");
+    expect(noteLabel("AGENT_CONSENSUS_UNAVAILABLE")).toContain("ortak kesişim iddia edilmiyor");
+    expect(noteLabel("LIVE_EVIDENCE_UNAVAILABLE")).toContain("Canlı piyasa kanıtı gelmedi");
+    expect(noteLabel("RECOVERED_FROM_WINNER_LEDGER")).toContain("kalıcı kazanan kaydından");
+    // Bilinmeyen not gizlenmez, olduğu gibi gösterilir.
+    expect(noteLabel("SOMETHING_NEW")).toBe("SOMETHING_NEW");
+  });
+
+  it("doğrulama rozeti 'verified' kelimesini abartmaz", () => {
+    expect(verificationChip("verified").label).toBe("canlı doğrulandı");
+    expect(verificationChip("unverified").label).toBe("canlı kanıt yok");
+    expect(verificationChip("unknown").label).toBe("ajan oyu yetersiz");
+    expect(verificationChip(undefined).label).toBe("ajan oyu yetersiz");
   });
 });

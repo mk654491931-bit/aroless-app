@@ -493,12 +493,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /**
  * Bir ajanı sağlayıcı zinciri üzerinden çalıştırır.
  * 429 / timeout / hata → sıradaki sağlayıcı; her tur sonunda üstel bekleme.
+ *
+ * `opts.signal` GERÇEK İPTALdir: çağıran (ör. faz tavanı dolan orkestratör) sinyali
+ * iptal ederse hem devam eden HTTP isteği kesilir hem de zincirin kalan
+ * sağlayıcıları/turları denenmez. Eskiden zaman aşımı yalnızca bekleyen sözü
+ * reddediyordu; istek arka planda koşmaya devam edip ücretsiz kotayı yakıyordu.
  */
 export async function executeAgentWithFallback(
   agentName: string,
   prompt: string,
   chain: ProviderId[],
-  opts: { temperature?: number; retries?: number } = {},
+  opts: { temperature?: number; retries?: number; signal?: AbortSignal } = {},
 ): Promise<FallbackResult> {
   prompt = withEstimationRules(prompt);
   const temperature = opts.temperature ?? 0.3;
@@ -506,9 +511,13 @@ export async function executeAgentWithFallback(
   const started = Date.now();
   let attempts = 0;
   let lastError = "";
+  const abortMessage = "ABORTED:signal";
+  const aborted = () => opts.signal?.aborted === true;
 
   for (let round = 0; round < retries; round++) {
+    if (aborted()) break;
     for (const provider of chain) {
+      if (aborted()) break;
       // Unified-pool providers: skip unconfigured / circuit-open groups so the
       // availability router never wastes an attempt on a dead node.
       const poolGroup = POOL_PROVIDER_GROUP[provider];
@@ -517,6 +526,10 @@ export async function executeAgentWithFallback(
       attempts++;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      // Dış sinyal iptal edilirse devam eden sağlayıcı isteği ANINDA kesilir.
+      const onAbort = () => controller.abort();
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
+      if (aborted()) controller.abort();
       try {
         const text = await PROVIDERS[provider](prompt, temperature, controller.signal);
         clearTimeout(timer);
@@ -527,9 +540,15 @@ export async function executeAgentWithFallback(
         };
       } catch (e) {
         clearTimeout(timer);
-        lastError = `${provider}: ${(e as Error).message}`.slice(0, 200);
+        lastError = aborted()
+          ? abortMessage
+          : `${provider}: ${(e as Error).message}`.slice(0, 200);
+      } finally {
+        opts.signal?.removeEventListener("abort", onAbort);
       }
+      if (aborted()) break;
     }
+    if (aborted()) break;
     await sleep(400 * 2 ** round + Math.random() * 250); // üstel geri çekilme + jitter
   }
 
@@ -541,7 +560,7 @@ export async function executeAgentWithFallback(
       attempts,
       latencyMs: Date.now() - started,
       ok: false,
-      error: lastError,
+      error: aborted() ? abortMessage : lastError,
     },
   };
 }

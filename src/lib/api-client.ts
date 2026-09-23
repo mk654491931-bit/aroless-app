@@ -24,6 +24,14 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   });
 }
 
+/** JSON GET kısayolu (ör. koşu durumu yoklaması); hata durumunda mesaj fırlatır. */
+export async function apiGet<T>(path: string): Promise<T> {
+  const res = await apiFetch(path, { method: "GET", headers: { Accept: "application/json" } });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data?.error || "İstek başarısız oldu. Lütfen tekrar deneyin.");
+  return data as T;
+}
+
 /** JSON POST kısayolu; hata durumunda anlaşılır mesaj fırlatır. */
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await apiFetch(path, {

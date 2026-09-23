@@ -82,6 +82,8 @@ export const Route = createFileRoute("/api/jobs")({
               status: outcome.status,
               completedPhases: outcome.completedPhases,
               nextPhase: outcome.nextPhase ?? null,
+              // Tekrar teslimde yeni iş üretilmediyse bunu açıkça bildir.
+              deduped: outcome.deduped ?? false,
               error: outcome.error ?? null,
             },
             outcome.status === "failed" ? 200 : 202,
