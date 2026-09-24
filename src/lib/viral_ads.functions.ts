@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callAiMesh, extractJson } from "@/lib/ai.server";
 import { computeViralMetrics, type ViralMetrics } from "@/lib/viral-metrics";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 
 export type ViralAdRow = {
   id: string;
@@ -88,6 +89,8 @@ const BuildAdInput = z.object({
   uiLang: z.string().max(8).optional().default("tr"),
 });
 
+type BuildAdInputType = z.infer<typeof BuildAdInput>;
+
 const LANG_NAMES: Record<string, string> = {
   tr: "Turkish",
   en: "English",
@@ -104,26 +107,26 @@ const LANG_NAMES: Record<string, string> = {
  * izlenme, yaş, süre) ve her yorumda bu sayılardan en az birini alıntılamak
  * zorundadır; metrik uydurma yasaktır. Çıktı kalitesi için tam sağlayıcı havuzu
  * (callAiMesh) kullanılır — tek sağlayıcı kotası bu özelliği kilitleyemez.
+ *
+ * Gövde, kredi kapısından ayrı tutulur: iş çökerse düşülen jeton `buildViralAd`
+ * içindeki `withCreditRefund` ile iade edilir.
  */
-export const buildViralAd = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BuildAdInput.parse(input))
-  .handler(async ({ data }): Promise<GeneratedViralAd> => {
-    const metrics = computeViralMetrics({
-      views: data.views,
-      likes: data.likes,
-      duration_sec: data.duration_sec,
-      created_at: data.created_at,
-      title: data.title,
-    });
-    const sourceNumbers = `${data.views.toLocaleString("en-US")} views · ${data.likes.toLocaleString("en-US")} likes · ${metrics.engagement_pct}% engagement · ${metrics.views_per_hour.toLocaleString("en-US")} views/hour · ${metrics.age_hours}h old · ${data.duration_sec}s`;
+async function buildViralAdBlueprint(data: BuildAdInputType): Promise<GeneratedViralAd> {
+  const metrics = computeViralMetrics({
+    views: data.views,
+    likes: data.likes,
+    duration_sec: data.duration_sec,
+    created_at: data.created_at,
+    title: data.title,
+  });
+  const sourceNumbers = `${data.views.toLocaleString("en-US")} views · ${data.likes.toLocaleString("en-US")} likes · ${metrics.engagement_pct}% engagement · ${metrics.views_per_hour.toLocaleString("en-US")} views/hour · ${metrics.age_hours}h old · ${data.duration_sec}s`;
 
-    const lang = LANG_NAMES[(data.uiLang ?? "en").slice(0, 2)] ?? "English";
-    const focus = data.product.trim()
-      ? `The seller's own product is: "${data.product.trim()}". Adapt the winning mechanics to THIS product, keep the same format.`
-      : `No product given: keep the same product category as the reference video.`;
+  const lang = LANG_NAMES[(data.uiLang ?? "en").slice(0, 2)] ?? "English";
+  const focus = data.product.trim()
+    ? `The seller's own product is: "${data.product.trim()}". Adapt the winning mechanics to THIS product, keep the same format.`
+    : `No product given: keep the same product category as the reference video.`;
 
-    const prompt = `You are a direct-response creative director. You are given a REAL ad video with MEASURED performance data:
+  const prompt = `You are a direct-response creative director. You are given a REAL ad video with MEASURED performance data:
 
 REFERENCE VIDEO
 - title: ${data.title}
@@ -152,54 +155,64 @@ Return ONLY JSON:
  "why": string (3-4 sentences, cites the measured numbers),
  "predicted": {"hook_rate": string, "ctr": string, "cpm": string}}`;
 
-    const text = await callAiMesh(prompt, { temperature: 0.7, grounded: false });
-    const parsed = extractJson<Record<string, unknown>>(text, {});
+  const text = await callAiMesh(prompt, { temperature: 0.7, grounded: false });
+  const parsed = extractJson<Record<string, unknown>>(text, {});
 
-    const strList = (v: unknown, n: number): string[] =>
-      Array.isArray(v)
-        ? v
-            .slice(0, n)
-            .map((x) => String(x).trim())
-            .filter(Boolean)
-        : [];
-    const script: ViralAdScriptBeat[] = Array.isArray(parsed["script"])
-      ? (parsed["script"] as unknown[]).slice(0, 7).flatMap((raw) => {
-          const b = raw as Record<string, unknown>;
-          const second = String(b?.["second"] ?? "").trim();
-          if (!second) return [];
-          return [
-            {
-              second: second.slice(0, 20),
-              visual: String(b?.["visual"] ?? "").slice(0, 300),
-              voiceover: String(b?.["voiceover"] ?? "").slice(0, 300),
-              text_overlay: String(b?.["text_overlay"] ?? "").slice(0, 200),
-            },
-          ];
-        })
+  const strList = (v: unknown, n: number): string[] =>
+    Array.isArray(v)
+      ? v
+          .slice(0, n)
+          .map((x) => String(x).trim())
+          .filter(Boolean)
       : [];
+  const script: ViralAdScriptBeat[] = Array.isArray(parsed["script"])
+    ? (parsed["script"] as unknown[]).slice(0, 7).flatMap((raw) => {
+        const b = raw as Record<string, unknown>;
+        const second = String(b?.["second"] ?? "").trim();
+        if (!second) return [];
+        return [
+          {
+            second: second.slice(0, 20),
+            visual: String(b?.["visual"] ?? "").slice(0, 300),
+            voiceover: String(b?.["voiceover"] ?? "").slice(0, 300),
+            text_overlay: String(b?.["text_overlay"] ?? "").slice(0, 200),
+          },
+        ];
+      })
+    : [];
 
-    const predictedRaw = (parsed["predicted"] ?? {}) as Record<string, unknown>;
-    const hooks = strList(parsed["hook_variants"], 3);
+  const predictedRaw = (parsed["predicted"] ?? {}) as Record<string, unknown>;
+  const hooks = strList(parsed["hook_variants"], 3);
 
-    // AI bir alanı boş bırakırsa uydurma metin üretmeyiz: ölçülen gerçek
-    // metriklerden türetilmiş dürüst bir varsayılana düşeriz.
-    return {
-      metrics,
-      source_numbers: sourceNumbers,
-      hook_variants: hooks.length
-        ? hooks
-        : [
-            `Bu ${data.platform} reklamı ${metrics.views_per_hour.toLocaleString("en-US")} izlenme/saat hızıyla gidiyor — aynı kancayı kullan.`,
-          ],
-      script,
-      cta: String(parsed["cta"] ?? "").slice(0, 80),
-      targeting: String(parsed["targeting"] ?? "").slice(0, 300),
-      why: String(parsed["why"] ?? "").slice(0, 900),
-      predicted: {
-        hook_rate: String(predictedRaw["hook_rate"] ?? "").slice(0, 40),
-        ctr: String(predictedRaw["ctr"] ?? "").slice(0, 40),
-        cpm: String(predictedRaw["cpm"] ?? "").slice(0, 40),
-      },
-      provider: "çok motorlu havuz (mesh)",
-    };
+  // AI bir alanı boş bırakırsa uydurma metin üretmeyiz: ölçülen gerçek
+  // metriklerden türetilmiş dürüst bir varsayılana düşeriz.
+  return {
+    metrics,
+    source_numbers: sourceNumbers,
+    hook_variants: hooks.length
+      ? hooks
+      : [
+          `Bu ${data.platform} reklamı ${metrics.views_per_hour.toLocaleString("en-US")} izlenme/saat hızıyla gidiyor — aynı kancayı kullan.`,
+        ],
+    script,
+    cta: String(parsed["cta"] ?? "").slice(0, 80),
+    targeting: String(parsed["targeting"] ?? "").slice(0, 300),
+    why: String(parsed["why"] ?? "").slice(0, 900),
+    predicted: {
+      hook_rate: String(predictedRaw["hook_rate"] ?? "").slice(0, 40),
+      ctr: String(predictedRaw["ctr"] ?? "").slice(0, 40),
+      cpm: String(predictedRaw["cpm"] ?? "").slice(0, 40),
+    },
+    provider: "çok motorlu havuz (mesh)",
+  };
+}
+
+export const buildViralAd = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BuildAdInput.parse(input))
+  .handler(async ({ data, context: ctx }): Promise<GeneratedViralAd> => {
+    // Viral reklam üretimi tam sağlayıcı havuzunda gerçek bir AI turudur:
+    // jeton düşmeden koşmaz, üretim çökerse jeton iade edilir.
+    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
+    return withCreditRefund(ctx.userId, () => buildViralAdBlueprint(data));
   });

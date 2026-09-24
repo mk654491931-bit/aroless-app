@@ -22,6 +22,9 @@ export const Route = createFileRoute("/api/public/trend-radar")({
             .slice(0, 8);
           const category = String(body["category"] ?? "General").slice(0, 40);
 
+          /** Oturum sahibi (webhook yolunda yoktur: dış besleme kullanıcı değildir). */
+          let session: { userId: string; token: string } | null = null;
+
           if (action === "webhook") {
             // Dış kaynaklı besleme: yalnızca paylaşılan gizli anahtarla.
             const secret = process.env["TREND_WEBHOOK_SECRET"];
@@ -32,7 +35,36 @@ export const Route = createFileRoute("/api/public/trend-radar")({
           } else {
             const guard = await guardAuthed(request, "trend-radar", 12, 60);
             if ("response" in guard) return guard.response;
+            session = { userId: guard.userId, token: guard.token };
           }
+
+          /**
+           * JETON KAPISI: radar taraması, derin yorum ve ürün brifi gerçek AI +
+           * gerçek kazıma maliyeti üretir; üçü de `radar-scan` fiyatındadır.
+           * İş çökerse jeton İADE edilir. Webhook (dış besleme) ücretsizdir.
+           */
+          const withRadarCredits = async <T>(
+            run: () => Promise<T>,
+            label: string,
+          ): Promise<T | Response> => {
+            if (!session) return run();
+            const { chargeOrRespond, refundFeatureCredits } = await import(
+              "@/lib/credit-charge.server"
+            );
+            const payment = await chargeOrRespond({
+              userId: session.userId,
+              token: session.token,
+              feature: "radar-scan",
+            });
+            // Bakiye yok / doğrulanamadı: işi BAŞLATMADAN kapı yanıtını dön.
+            if (!payment.ok) return payment.response;
+            try {
+              return await run();
+            } catch (error) {
+              await refundFeatureCredits(session.userId, payment.outcome.charged, label);
+              throw error;
+            }
+          };
 
           const mod = await import("@/lib/trend-radar.server");
 
@@ -44,7 +76,12 @@ export const Route = createFileRoute("/api/public/trend-radar")({
               String,
             );
             const niche = body["niche"] ? String(body["niche"]).slice(0, 60) : undefined;
-            const job = await mod.runScrapeJob({ region, category, sources, rssFeeds, niche });
+            const scraped = await withRadarCredits(
+              () => mod.runScrapeJob({ region, category, sources, rssFeeds, niche }),
+              "radar_scrape_failed",
+            );
+            if (scraped instanceof Response) return scraped;
+            const job = scraped;
 
             // Persist to scraped_platform_trends (best-effort — UI works regardless).
             try {
@@ -89,14 +126,24 @@ export const Route = createFileRoute("/api/public/trend-radar")({
                 status: 400,
               });
             }
-            return Response.json(await mod.runDeepAnalysis(trends, mode, region, category));
+            const analysis = await withRadarCredits(
+              () => mod.runDeepAnalysis(trends, mode, region, category),
+              "radar_analyze_failed",
+            );
+            if (analysis instanceof Response) return analysis;
+            return Response.json(analysis);
           }
 
           if (action === "brief") {
             const trend = String(body["trend"] ?? "").slice(0, 160);
             if (!trend)
               return new Response(JSON.stringify({ error: "trend required" }), { status: 400 });
-            return Response.json(await mod.runProductBrief(trend, region, category));
+            const brief = await withRadarCredits(
+              () => mod.runProductBrief(trend, region, category),
+              "radar_brief_failed",
+            );
+            if (brief instanceof Response) return brief;
+            return Response.json(brief);
           }
 
           if (action === "webhook") {

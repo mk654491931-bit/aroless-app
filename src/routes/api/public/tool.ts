@@ -38,7 +38,10 @@ export const Route = createFileRoute("/api/public/tool")({
           const { cacheGet, cacheKey, cacheSet } = await import("@/lib/ai-cache.server");
           const { isCacheableToolResult, toolCacheParts, toolCacheTtlMs } =
             await import("@/lib/tools-cache.server");
+          const { toolCreditCost } = await import("@/lib/credit-costs");
+          const { chargeOrRespond, refundFeatureCredits } = await import("@/lib/credit-charge.server");
           const prompt = buildPrompt(tool, input);
+          const creditCost = toolCreditCost(tool);
 
           // Bütçe platformdan gelir (Vercel 300 sn → 90 sn'lik araç bütçesi),
           // yani çok motorlu tur koşabilir; üst sınır yine de 90 sn'dir ki
@@ -53,7 +56,7 @@ export const Route = createFileRoute("/api/public/tool")({
             ]);
 
           /**
-           * ÖNBELLEK — ücretsiz planın en kritik tasarrufu.
+           * ÖNBELLEK + JETON KAPISI — ücretsiz planın en kritik tasarrufu.
            *
            * AI sağlayıcı kotaları bu mimarideki en dar kaynaktır ve önbellek
            * olmadan aynı girdiyle yapılan her tekrar tıklama kotayı yeniden
@@ -61,23 +64,55 @@ export const Route = createFileRoute("/api/public/tool")({
            * eder; tazeliğin kritik olduğu araçta (`news`) TTL 10 dakikaya iner
            * (bkz. `TOOL_CACHE_TTL_MS`).
            *
-           * Boş/degrade sonuç ASLA yazılmaz: yoksa o girdi saatlerce boş
-           * sonuç döndürürdü — bu, uydurma sonuç kadar kötüdür.
+           * ÖNBELLEK İSABETİ JETON HARCAMAZ. Jeton yalnızca gerçekten AI
+           * çalıştırılacaksa (önbellek boş) düşülür; AI çökerse JETON İADE
+           * edilir (`refundFeatureCredits`) — kullanıcı bedava tıklama görmez,
+           * ama boş sonuç için de ödeme yapmaz.
+           *
+           * Boş/degrade sonuç ASLA önbelleğe yazılmaz: yoksa o girdi saatlerce
+           * boş sonuç döndürürdü — bu, uydurma sonuç kadar kötüdür.
            */
-          const computeCached = async <T>(compute: () => Promise<T>): Promise<T> => {
+          /** `ok: false` → jeton kapısının hazır yanıtı (402 bakiye / 503 altyapı). */
+          type ToolGate<T> = { ok: true; payload: T } | { ok: false; response: Response };
+
+          const computeCached = async <T>(compute: () => Promise<T>): Promise<ToolGate<T>> => {
             const ttlMs = toolCacheTtlMs(tool);
-            if (ttlMs === null) return compute();
             const scope = `tool:${tool}`;
-            const key = await cacheKey(scope, toolCacheParts(tool, input));
-            const hit = await cacheGet<T>(key);
-            if (hit !== null && isCacheableToolResult(hit)) return hit;
-            const fresh = await compute();
-            if (isCacheableToolResult(fresh)) await cacheSet(key, scope, fresh, ttlMs);
-            return fresh;
+            const key =
+              ttlMs === null ? null : await cacheKey(scope, toolCacheParts(tool, input));
+
+            if (key) {
+              const hit = await cacheGet<T>(key);
+              // Önbellek isabeti: AI koşmaz → jeton düşmez.
+              if (hit !== null && isCacheableToolResult(hit)) return { ok: true, payload: hit };
+            }
+
+            const payment = await chargeOrRespond({
+              userId: guard.userId,
+              token: guard.token,
+              feature: `tool:${tool}`,
+            });
+            if (!payment.ok) return { ok: false, response: payment.response };
+
+            try {
+              const fresh = await compute();
+              if (key && ttlMs !== null && isCacheableToolResult(fresh)) {
+                await cacheSet(key, scope, fresh, ttlMs);
+              }
+              return { ok: true, payload: fresh };
+            } catch (error) {
+              // AI çöktü: düşülen jetonu iade et, hatayı yukarı taşı.
+              await refundFeatureCredits(guard.userId, creditCost, `tool_failed:${tool}`);
+              throw error;
+            }
           };
 
+          /** Kapı sonucunu HTTP yanıtına çevirir (402/503 kapı yanıtını geçirir). */
+          const respond = <T>(gate: ToolGate<T>): Response =>
+            gate.ok ? Response.json(gate.payload) : gate.response;
+
           if (tool === "consensus") {
-            return Response.json(await computeCached(() => withBudget(runConsensus(prompt))));
+            return respond(await computeCached(() => withBudget(runConsensus(prompt))));
           }
           if (tool === "news") {
             const { callGemini, callLovableAI, extractJson } = await import("@/lib/ai.server");
@@ -87,23 +122,24 @@ export const Route = createFileRoute("/api/public/tool")({
             };
             // Önce zeminli (arama yapabilen) Gemini; cevap vermezse tüm anahtar
             // havuzunu süpüren yol — araç yine boş dönmez.
-            const payload = await computeCached(async () => {
-              try {
-                return {
-                  items: readItems(
-                    await withBudget(
-                      callGemini(prompt, undefined, 0.5, true),
-                      Math.round(budgetMs * 0.6),
+            return respond(
+              await computeCached(async () => {
+                try {
+                  return {
+                    items: readItems(
+                      await withBudget(
+                        callGemini(prompt, undefined, 0.5, true),
+                        Math.round(budgetMs * 0.6),
+                      ),
                     ),
-                  ),
-                };
-              } catch {
-                return { items: readItems(await withBudget(callLovableAI(prompt, 0.5))) };
-              }
-            });
-            return Response.json(payload);
+                  };
+                } catch {
+                  return { items: readItems(await withBudget(callLovableAI(prompt, 0.5))) };
+                }
+              }),
+            );
           }
-          return Response.json(
+          return respond(
             await computeCached(() =>
               withBudget(runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini", 0.5, budgetMs - 2_000)),
             ),

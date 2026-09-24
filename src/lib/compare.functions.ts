@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini } from "@/lib/ai.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 import type { WinningProduct } from "@/lib/gemini.functions";
 
 const SummarizeInput = z.object({
@@ -24,20 +25,24 @@ const SummarizeInput = z.object({
 export const summarizeComparison = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => SummarizeInput.parse(input))
-  .handler(async ({ data }) => {
-    const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}`;
-    const text = await callGemini(prompt, undefined, 0.3, false);
-    try {
-      const json = JSON.parse(text.replace(/```json|```/g, "").trim());
-      return {
-        winner: String(json.winner || ""),
-        reasoning: String(json.reasoning || ""),
-        runner_up: String(json.runner_up || ""),
-        risks: Array.isArray(json.risks) ? json.risks.map(String) : [],
-      };
-    } catch {
-      return { winner: "", reasoning: text.slice(0, 400), runner_up: "", risks: [] };
-    }
+  .handler(async ({ data, context }) => {
+    // Karşılaştırma gerçek bir AI turudur: düşmeden koşmaz, çökerse iade edilir.
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"));
+    return withCreditRefund(context.userId, async () => {
+      const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}`;
+      const text = await callGemini(prompt, undefined, 0.3, false);
+      try {
+        const json = JSON.parse(text.replace(/```json|```/g, "").trim());
+        return {
+          winner: String(json.winner || ""),
+          reasoning: String(json.reasoning || ""),
+          runner_up: String(json.runner_up || ""),
+          risks: Array.isArray(json.risks) ? json.risks.map(String) : [],
+        };
+      } catch {
+        return { winner: "", reasoning: text.slice(0, 400), runner_up: "", risks: [] };
+      }
+    });
   });
 
 const LoadInput = z.object({ ids: z.array(z.string().uuid()).min(2).max(4) });

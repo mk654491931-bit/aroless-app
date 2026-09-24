@@ -32,6 +32,7 @@ import {
   type GeneratedViralAd,
   type ViralAdScriptBeat,
 } from "@/lib/viral_ads.functions";
+import { creditErrorMessage } from "@/lib/credits";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -548,7 +549,7 @@ function ViralAdModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
       });
       setResult(out);
     } catch (e) {
-      setError((e as Error).message || "Reklam üretilemedi");
+      setError(creditErrorMessage(e, "Reklam üretilemedi"));
     } finally {
       setLoading(false);
     }

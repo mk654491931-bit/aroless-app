@@ -57,21 +57,53 @@ export const Route = createFileRoute("/api/public/agent")({
         const guard = await guardAuthed(request, "agent", 6, 60);
         if ("response" in guard) return guard.response;
 
+        /**
+         * JETON KAPISI: 14 ajanlı hat (retriever + 14 ajan + kanıt taraması) ve
+         * hat bu üründe kaynak tüketimi en yüksek iştir. Fazlı (QStash) koşu
+         * `council`, tek blok hızlı yol `agent-pipeline` fiyatındadır; `GET
+         * ?runId=` durum yoklaması ÜCRETSİZDİR (yoksa panelin nihai karneyi
+         * beklemesi kullanıcıya fatura olurdu). Koşu başlatılamaz/çökerse jeton
+         * İADE edilir.
+         */
         try {
           const body = await readJsonBody<Record<string, unknown>>(request);
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
 
-          if (body["orchestrated"] === true) {
-            const orchestrator = await import("@/lib/velora-orchestrator.server");
-            const result = await orchestrator.startVeloraRun(body, {
-              store: orchestrator.defaultVeloraStore(),
-              handoff: orchestrator.veloraQStashHandoff(publicOrigin(request)),
-            });
-            return Response.json(result);
-          }
+          const isOrchestrated = body["orchestrated"] === true;
+          const feature = isOrchestrated ? ("council" as const) : ("agent-pipeline" as const);
+          const { featureCreditCost } = await import("@/lib/credit-costs");
+          const { chargeOrRespond, refundFeatureCredits } = await import(
+            "@/lib/credit-charge.server"
+          );
+          const cost = featureCreditCost(feature);
 
-          const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
-          return Response.json(await runVeloraAgentPipeline(body));
+          const payment = await chargeOrRespond({
+            userId: guard.userId,
+            token: guard.token,
+            feature,
+          });
+          if (!payment.ok) return payment.response;
+
+          try {
+            if (isOrchestrated) {
+              const orchestrator = await import("@/lib/velora-orchestrator.server");
+              const result = await orchestrator.startVeloraRun(body, {
+                store: orchestrator.defaultVeloraStore(),
+                handoff: orchestrator.veloraQStashHandoff(publicOrigin(request)),
+              });
+              // Koşu hiç başlayamadıysa jetonu iade et (kullanıcı boş sonuç almaz).
+              if (result.status === "failed") {
+                await refundFeatureCredits(guard.userId, cost, "velora_run_failed");
+              }
+              return Response.json(result);
+            }
+
+            const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
+            return Response.json(await runVeloraAgentPipeline(body));
+          } catch (error) {
+            await refundFeatureCredits(guard.userId, cost, "velora_agent_failed");
+            throw error;
+          }
         } catch (e) {
           return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.", e);
         }

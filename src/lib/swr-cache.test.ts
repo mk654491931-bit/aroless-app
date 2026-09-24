@@ -39,7 +39,9 @@ describe("serveStaleWhileRevalidate", () => {
       build,
       isValid: hasItems,
     });
-    expect(result).toEqual({ data: { items: [1] }, status: "ready" });
+    // fromCache: true → bu istek yeni üretim BAŞLATMADI (jeton tahsil eden
+    // uçlar bu bayrağa bakıp önbellek isabetini ücretsiz sayar).
+    expect(result).toEqual({ data: { items: [1] }, status: "ready", fromCache: true });
     expect(build).not.toHaveBeenCalled();
   });
 
@@ -49,7 +51,7 @@ describe("serveStaleWhileRevalidate", () => {
       freshMs: 1_000,
       build: async () => ({ items: [7] }),
     });
-    expect(first).toEqual({ data: { items: [7] }, status: "ready" });
+    expect(first).toEqual({ data: { items: [7] }, status: "ready", fromCache: false });
     expect(swrCacheStats().entries).toBe(1);
 
     const second = await serveStaleWhileRevalidate<Payload>({
@@ -57,7 +59,43 @@ describe("serveStaleWhileRevalidate", () => {
       freshMs: 1_000,
       build: async () => ({ items: [99] }),
     });
-    expect(second).toEqual({ data: { items: [7] }, status: "ready" });
+    expect(second).toEqual({ data: { items: [7] }, status: "ready", fromCache: true });
+  });
+
+  it("yoklamalar koşan üretimi paylaşır ve yeniden ücretlendirmez", async () => {
+    let resolve!: (value: Payload) => void;
+    const pending = new Promise<Payload>((r) => {
+      resolve = r;
+    });
+
+    // 1. istek yavaş üretimi BAŞLATIR (fromCache: false → jeton öder).
+    const first = await serveStaleWhileRevalidate<Payload>({
+      key: "poll",
+      freshMs: 1_000,
+      waitMs: 10,
+      build: () => pending,
+    });
+    expect(first).toEqual({ data: null, status: "warming", fromCache: false });
+
+    // Panelin 4 sn'de bir yoklaması aynı promise'i paylaşır: yeniden AI turu
+    // başlatmaz, dolayısıyla ÜCRETSİZDİR.
+    const poll = await serveStaleWhileRevalidate<Payload>({
+      key: "poll",
+      freshMs: 1_000,
+      waitMs: 10,
+      build: () => pending,
+    });
+    expect(poll.status).toBe("warming");
+    expect(poll.fromCache).toBe(true);
+
+    resolve({ items: [4] });
+    await flush();
+    const settled = await serveStaleWhileRevalidate<Payload>({
+      key: "poll",
+      freshMs: 1_000,
+      build: () => pending,
+    });
+    expect(settled).toEqual({ data: { items: [4] }, status: "ready", fromCache: true });
   });
 
   it("süresi yetmezse warming döner, sonra önbellekten gelir", async () => {
@@ -72,7 +110,7 @@ describe("serveStaleWhileRevalidate", () => {
       waitMs: 20,
       build: () => pending,
     });
-    expect(first).toEqual({ data: null, status: "warming" });
+    expect(first).toEqual({ data: null, status: "warming", fromCache: false });
 
     resolve({ items: [5] });
     await flush();
@@ -83,7 +121,7 @@ describe("serveStaleWhileRevalidate", () => {
       waitMs: 20,
       build: () => pending,
     });
-    expect(second).toEqual({ data: { items: [5] }, status: "ready" });
+    expect(second).toEqual({ data: { items: [5] }, status: "ready", fromCache: true });
   });
 
   it("bayat veriyi beklemeden döner ve arka planda tazeler", async () => {
@@ -94,7 +132,7 @@ describe("serveStaleWhileRevalidate", () => {
       freshMs: 1_000,
       build: async () => ({ items: [2] }),
     });
-    expect(first).toEqual({ data: { items: [1] }, status: "stale" });
+    expect(first).toEqual({ data: { items: [1] }, status: "stale", fromCache: true });
 
     await flush();
     const second = await serveStaleWhileRevalidate<Payload>({
@@ -102,7 +140,7 @@ describe("serveStaleWhileRevalidate", () => {
       freshMs: 1_000,
       build: async () => ({ items: [2] }),
     });
-    expect(second).toEqual({ data: { items: [2] }, status: "ready" });
+    expect(second).toEqual({ data: { items: [2] }, status: "ready", fromCache: true });
   });
 
   it("geçersiz (boş) sonucu önbelleğe yazmaz", async () => {
@@ -114,7 +152,7 @@ describe("serveStaleWhileRevalidate", () => {
       build,
       isValid: hasItems,
     });
-    expect(result).toEqual({ data: null, status: "warming" });
+    expect(result).toEqual({ data: null, status: "warming", fromCache: false });
     await flush();
     expect(swrCacheStats().entries).toBe(0);
     expect(build).toHaveBeenCalledTimes(1);
@@ -129,7 +167,7 @@ describe("serveStaleWhileRevalidate", () => {
         throw new Error("gemini down");
       },
     });
-    expect(result).toEqual({ data: null, status: "failed" });
+    expect(result).toEqual({ data: null, status: "failed", fromCache: false });
     expect(swrCacheStats().entries).toBe(0);
   });
 
@@ -145,6 +183,10 @@ describe("serveStaleWhileRevalidate", () => {
     ]);
     expect(results.every((r) => r.status === "ready")).toBe(true);
     expect(build).toHaveBeenCalledTimes(1);
+    // Jeton kuralı: eşzamanlı üç istekten YALNIZCA biri yeni üretim başlatır,
+    // yani jeton tahsil eden uçlarda tek bir istek öder. (Aksi halde 4 sn'de
+    // bir yoklayan panel aynı analiz için defalarca jeton düşerdi.)
+    expect(results.filter((r) => !r.fromCache)).toHaveLength(1);
   });
 });
 

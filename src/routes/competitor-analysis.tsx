@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryByCode } from "@/lib/countries";
 import { analyzeCompetitors, type CompetitorReport } from "@/lib/competitor.functions";
+import { creditErrorMessage } from "@/lib/credits";
 import { CountryInfoBox } from "@/components/country-info-box";
 import { CountryFlag } from "@/components/country-flag";
 import { Sparkline } from "@/components/sparkline";
@@ -70,7 +71,7 @@ function CompetitorAnalysisPage() {
   const mut = useMutation({
     mutationFn: (q: string) => fn({ data: { query: q, country } }),
     onSuccess: (r) => setReport(r.report),
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(creditErrorMessage(e)),
   });
 
   useEffect(() => {

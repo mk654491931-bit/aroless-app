@@ -24,8 +24,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { CreditCost } from "@/components/credit-cost";
 
 export type ToolResult = {
   headline: string;
@@ -140,6 +142,7 @@ export function ToolCard({
   onRun,
   runLabel = "AI ile Analiz Et",
   disabled,
+  creditCost = 1,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   title: string;
@@ -148,12 +151,19 @@ export function ToolCard({
   onRun: () => Promise<ToolResult>;
   runLabel?: string;
   disabled?: boolean;
+  /**
+   * Bu aracın jeton fiyatı (`credit-costs.ts` ile aynı sayı). Kullanıcı
+   * düğmeye basmadan önce ne harcadığını görür; önbellekten dönen yanıt
+   * harcamaz (sunucu bunu yanıtta uygular, arayüz aynı kuralı yazar).
+   */
+  creditCost?: number;
 }) {
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<ToolResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const qc = useQueryClient();
 
   const run = async () => {
     setLoading(true);
@@ -168,6 +178,9 @@ export function ToolCard({
     } finally {
       clearInterval(timer);
       setLoading(false);
+      // Jeton rozeti anında güncellensin: harcanan (ya da iade edilen) tutarı
+      // kullanıcı burada görür — "jeton eksilmiyor" algısı bunu gerektirir.
+      qc.invalidateQueries({ queryKey: ["profile"] });
     }
   };
 
@@ -200,6 +213,7 @@ export function ToolCard({
             <Icon size={15} className="text-[var(--accent-active)]" />
           </span>
           {title}
+          <CreditCost amount={creditCost} className="ms-auto" />
         </CardTitle>
         <CardDescription className="text-xs">{description}</CardDescription>
       </CardHeader>

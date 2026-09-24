@@ -1,4 +1,6 @@
 import { withProGate } from "@/components/pro-route-gate";
+import { CreditCost } from "@/components/credit-cost";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -196,6 +198,7 @@ function ScoreRing({ value }: { value: number }) {
 }
 
 function TrendRadar() {
+  const qc = useQueryClient();
   const [region, setRegion] = useState("US");
   const [category, setCategory] = useState("General");
   const [mode, setMode] = useState("fast");
@@ -274,6 +277,8 @@ function TrendRadar() {
       toast.error((e as Error).message);
     } finally {
       setScraping(false);
+      // Kazıma 1 jeton harcar (çökerse sunucu iade eder): rozeti yenile.
+      qc.invalidateQueries({ queryKey: ["profile"] });
     }
   }
 
@@ -294,6 +299,7 @@ function TrendRadar() {
       toast.error((e as Error).message);
     } finally {
       setAnalyzing(false);
+      qc.invalidateQueries({ queryKey: ["profile"] });
     }
   }
 
@@ -307,6 +313,7 @@ function TrendRadar() {
       setBrief(null);
     } finally {
       setBriefLoading(false);
+      qc.invalidateQueries({ queryKey: ["profile"] });
     }
   }
 
@@ -476,6 +483,16 @@ function TrendRadar() {
             <Button variant="outline" onClick={() => setSettingsOpen(true)}>
               <Settings2 size={15} /> Ayarlar
             </Button>
+          </div>
+
+          {/* Radar işlemleri gerçek kazıma + AI maliyeti taşır: her işlem 1 jeton. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+            <CreditCost amount={1} label="Kazıma · 1 kredi" />
+            <CreditCost amount={1} label="Deep AI · 1 kredi" />
+            <CreditCost amount={1} label="Ürün brifi · 1 kredi" />
+            <span className="text-muted-foreground">
+              İş çökerse jeton iade edilir; webhook beslemesi ücretsizdir.
+            </span>
           </div>
         </CardContent>
       </Card>

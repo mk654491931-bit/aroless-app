@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Bot, Loader2, ShieldAlert, Target, TrendingUp, Truck, X } from "lucide-react";
 import { Sparkline } from "@/components/sparkline";
 import { hybridBadge } from "@/lib/consensus-types";
 import type { TrendItem } from "@/routes/api/public/predictive-trends";
 import type { TrendAnalysis, TrendAnalysisWarming } from "@/routes/api/public/trend-analysis";
 import { apiFetch } from "@/lib/api-client";
+import { CreditCost } from "@/components/credit-cost";
 
 /** Uç nokta ya hazır analizi ya da "hazırlanıyor" işaretini döner. */
 type TrendAnalysisResponse = TrendAnalysis | TrendAnalysisWarming;
@@ -19,7 +21,12 @@ async function fetchAnalysis(p: TrendItem, country: string): Promise<TrendAnalys
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...p, country }),
   });
-  if (!res.ok) throw new Error("Analiz alınamadı");
+  if (!res.ok) {
+    // Sunucunun dürüst mesajını göster: jeton yetersizse (402) kullanıcı
+    // "Analiz alınamadı" yerine paket yükseltmesi gerektiğini okur.
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Analiz alınamadı");
+  }
   return (await res.json()) as TrendAnalysisResponse;
 }
 
@@ -53,6 +60,11 @@ export function TrendAnalysisModal({
   });
   const { isLoading, isError } = response;
   const warming = isWarming(response.data);
+  const qc = useQueryClient();
+  // Analiz yeni üretildiğinde jeton düşmüş olabilir: rozeti bir kez yenile.
+  useEffect(() => {
+    if (response.data) qc.invalidateQueries({ queryKey: ["profile"] });
+  }, [response.data, qc]);
   // `data` yalnızca hazır analizi tutar; aşağıdaki tüm bloklar aynı kalır.
   const data = response.data && !warming ? (response.data as TrendAnalysis) : null;
 
@@ -69,7 +81,11 @@ export function TrendAnalysisModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-lg font-extrabold">{product.name}</h3>
+            <h3 className="flex flex-wrap items-center gap-2 text-lg font-extrabold">
+              {product.name}
+              {/* Önbellekten dönen analiz ücretsizdir; jeton yalnızca yeni taramada düşer. */}
+              <CreditCost amount={1} label="1 kredi · önbellekte ücretsiz" />
+            </h3>
             <p className="text-[11px] text-muted-foreground">
               {product.category} · {product.marketplace} · Pazar: {country} · Peak:{" "}
               {product.peak_month}
@@ -97,7 +113,7 @@ export function TrendAnalysisModal({
         )}
         {isError && (
           <p className="py-16 text-center text-sm text-muted-foreground">
-            Analiz alınamadı, tekrar dene.
+            {response.error?.message ?? "Analiz alınamadı, tekrar dene."}
           </p>
         )}
 

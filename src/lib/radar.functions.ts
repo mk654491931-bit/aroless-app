@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { callAiMesh, extractJson } from "@/lib/ai.server";
+import { chargeForAi, refundCredit } from "@/lib/credit-guard.server";
 import {
   applyTrendEvidence,
   radarPrompt,
@@ -133,16 +134,23 @@ async function enrichWithTrends(
   return [...enriched, ...rest];
 }
 
-/** Bugünün radar akışı — boşsa üretir (kredi harcamaz). */
+/**
+ * Bugünün radar akışı — boşsa üretir.
+ *
+ * JETON KURALI: Yalnızca AÇIK "tazele" isteği (`refresh: true`, kullanıcı
+ * düğmeye bastı) ücretlidir; sayfa açılışındaki otomatik okuma ve önbellek
+ * isabeti ücretsizdir. AI hiç üretim yapmazsa (Google Trends yedeğine düşerse)
+ * jeton İADE edilir — kullanıcı boş bir tur için ödeme yapmaz.
+ */
 export const getRadar = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RadarInput.parse(input ?? {}))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context: ctx }) => {
     const today = new Date().toISOString().slice(0, 10);
 
     const read = async () =>
       (
-        await context.supabase
+        await ctx.supabase
           .from("radar_items")
           .select("*")
           .eq("day", today)
@@ -156,9 +164,18 @@ export const getRadar = createServerFn({ method: "POST" })
       return { day: today, items: existing, generated: false, source: "cache" as const };
     }
 
+    // Fail-closed: üretim başlamadan tahsil et; sonuç boş/yedek ise iade et.
+    const charged = data.refresh ? 1 : 0;
+    if (charged) await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
+
     const { seeds, keywords, generatedBy } = await generateSeeds(data.country);
     if (seeds.length === 0) {
+      if (charged) await refundCredit(ctx.userId, charged, "radar_refresh_empty");
       return { day: today, items: [], generated: false, source: "unavailable" as const };
+    }
+    // AI yanıt vermedi (Google Trends yedeği koştu): bu tur için jeton alınmaz.
+    if (charged && generatedBy !== "ai") {
+      await refundCredit(ctx.userId, charged, "radar_refresh_no_ai");
     }
 
     const enriched = await enrichWithTrends(seeds, keywords, data.country, generatedBy);

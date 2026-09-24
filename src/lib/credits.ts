@@ -67,3 +67,22 @@ export function chargePoolFor(profile: CreditProfile | null | undefined): Credit
 export function creditBreakdownLabel(balances: CreditBalances): string {
   return `Ürün Bulucu ${balances.finder} · Genel ${balances.general}`;
 }
+
+/**
+ * Sunucudan gelen kredi hatasını panelde okunur bir mesaja çevirir.
+ *
+ * NEDEN GEREKLİ: Jeton kapısı yetersiz bakiyede ham `NO_CREDITS` fırlatır; bunu
+ * doğrudan gösterirsek kullanıcı "NO_CREDITS" yazar ve ne yapacağını bilemez.
+ * Her AI özelliği aynı metni göstersin diye çeviri tek yerde yaşar.
+ */
+export function creditErrorMessage(
+  raw: unknown,
+  fallback = "İşlem tamamlanamadı — lütfen tekrar deneyin.",
+): string {
+  const msg = raw instanceof Error ? raw.message : String(raw ?? "");
+  if (msg.includes("NO_CREDITS") || msg.includes("no_credits"))
+    return "Jeton bakiyeniz yetersiz. Ayarlar → Abonelik bölümünden paketinizi yükseltebilirsiniz.";
+  if (msg.includes("CREDIT_DEDUCT_FAILED"))
+    return "Jeton bakiyesi doğrulanamadı; işlem başlatılmadı ve jeton düşülmedi. Lütfen tekrar deneyin.";
+  return msg || fallback;
+}

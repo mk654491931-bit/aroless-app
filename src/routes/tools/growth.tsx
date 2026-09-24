@@ -1,6 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Gauge,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
+import { CreditCost } from "@/components/credit-cost";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
 
@@ -95,6 +97,7 @@ function ConsensusCard() {
   const [input, setInput] = useState({ product: "", country: "US", price: "39.99", cost: "8.50" });
   const [data, setData] = useState<Consensus | null>(null);
   const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
 
   const run = async () => {
     setLoading(true);
@@ -111,6 +114,8 @@ function ConsensusCard() {
       toast.error("Analiz başarısız", { description: (e as Error).message });
     } finally {
       setLoading(false);
+      // 2 jeton düşer (önbellek isabetinde harcanmaz): rozet hemen yenilenir.
+      qc.invalidateQueries({ queryKey: ["profile"] });
     }
   };
 
@@ -122,6 +127,8 @@ function ConsensusCard() {
             <Gauge size={15} className="text-[var(--ai)]" />
           </span>
           Multi-AI Consensus Score
+          {/* 4 motor bağımsız puanlar + sentez: tek tıklamada en ağır araç. */}
+          <CreditCost amount={2} label="4 motor · 2 kredi" className="ms-auto" />
         </CardTitle>
         <CardDescription className="text-xs">
           Gemini, Groq, OpenRouter ve Lovable AI aynı ürünü bağımsız puanlar; hibrit skor ağırlıklı

@@ -47,6 +47,31 @@ export async function refundCredit(
 }
 
 /**
+ * Server fonksiyonları (`createServerFn`) için standart kredi kapısı.
+ *
+ * NEDEN VAR: Kredi düşme mantığı `*.functions.ts` dosyalarında tekrar tekrar
+ * kopyalanıyordu ve bu yüzden bazı AI özellikleri (ürün karşılaştırma, rakip
+ * denetimi, viral reklam üretimi, radar tazeleme) **tamamen ücretsiz** kalmıştı —
+ * yani anahtar havuzu karşılıksız yanıyordu. Tek kapı, yeni bir AI özelliğinin
+ * sessizce bedava kalmasını engeller.
+ *
+ * @param deduct `context.supabase.rpc("deduct_product_finder_credit")` gibi
+ *   kullanıcı-kapsamlı (RLS + `auth.uid()`) bir düşme çağrısı.
+ * @returns İşin gerçekten koşması durumunda `true`; tahsilat yapılamazsa
+ *   `NO_CREDITS` / `CREDIT_DEDUCT_FAILED` fırlatır (fail-closed).
+ */
+export async function chargeForAi(
+  deduct: () => PromiseLike<{ error: { message?: string | null } | null }>,
+  amount = 1,
+): Promise<void> {
+  const n = Math.max(1, Math.round(amount));
+  for (let i = 0; i < n; i++) {
+    const { error } = await deduct();
+    if (error) throw creditDeductError(error.message);
+  }
+}
+
+/**
  * `deduct_*` çağrısından sonra çalışan analiz gövdesi. Gövde hata fırlatırsa
  * kredi iade edilir ve hata yukarı taşınır.
  */

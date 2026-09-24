@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { summarizeComparison } from "@/lib/compare.functions";
+import { creditErrorMessage } from "@/lib/credits";
 import { CompareModal } from "@/components/compare-tray";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,7 +92,7 @@ export function ComparePage() {
       return (await summarizeFn({ data: { products } })) as Summary;
     },
     onError: (e) =>
-      toast.error("AI karşılaştırması başarısız", { description: (e as Error).message }),
+      toast.error("AI karşılaştırması başarısız", { description: creditErrorMessage(e) }),
   });
 
   if (loading || !user) {

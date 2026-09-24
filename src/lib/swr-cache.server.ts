@@ -24,7 +24,13 @@ import {
 
 export type SwrStatus = "ready" | "stale" | "warming" | "failed";
 
-export type SwrResult<T> = { data: T | null; status: SwrStatus };
+/**
+ * `fromCache: true` → bu istek YENİ BİR ÜRETİM BAŞLATMADI: veri önbellekten
+ * geldi ya da zaten koşan bir tazelemeyi paylaştı. Jeton tahsil eden uçlar
+ * bunu kullanır: önbellekten dönen yanıt ve panelin yoklamaları kredi
+ * harcamaz, yalnızca gerçekten AI turu başlatan istek harcar.
+ */
+export type SwrResult<T> = { data: T | null; status: SwrStatus; fromCache: boolean };
 
 type Entry<T> = { data: T; at: number };
 
@@ -148,9 +154,12 @@ export function swrWaitMs(env: EnvMap = process.env): number {
   return Math.min(warmingWaitMs(env), interactiveRequestBudgetMs(env));
 }
 
-function startRefresh<T>(opts: SwrOptions<T>): Promise<T> {
+function startRefresh<T>(opts: SwrOptions<T>): { promise: Promise<T>; started: boolean } {
   const running = inflight.get(opts.key) as Promise<T> | undefined;
-  if (running) return running;
+  // Zaten koşan bir üretim varsa onu PAYLAŞIRIZ: bu istek yeni iş başlatmaz,
+  // dolayısıyla jeton tahsil eden uçlar onu ücretsiz sayar (yoksa 4 sn'de bir
+  // yoklayan panel aynı analiz için her yoklamada jeton düşerdi).
+  if (running) return { promise: running, started: false };
 
   const isValid = opts.isValid ?? passThrough;
   const p = opts
@@ -175,7 +184,7 @@ function startRefresh<T>(opts: SwrOptions<T>): Promise<T> {
   inflight.set(opts.key, p);
   // Arka planda biten tazeleme hatası isteği düşürmesin (log yeterli).
   p.catch((e) => console.error(`[swr] ${opts.key} tazeleme hatası`, e));
-  return p;
+  return { promise: p, started: true };
 }
 
 /**
@@ -199,25 +208,28 @@ export async function serveStaleWhileRevalidate<T>(opts: SwrOptions<T>): Promise
   const usable = cached && isValid(cached.data) ? cached : undefined;
   const age = usable ? Date.now() - usable.at : Number.POSITIVE_INFINITY;
 
-  if (usable && age < opts.freshMs) return { data: usable.data, status: "ready" };
+  if (usable && age < opts.freshMs) return { data: usable.data, status: "ready", fromCache: true };
 
   const refresh = startRefresh(opts);
 
   // Elimizde bayat ama kullanılabilir veri varsa beklemeden onu dön; taze veri
-  // arka planda hazırlanır.
-  if (usable) return { data: usable.data, status: "stale" };
+  // arka planda hazırlanır. Yanıt yine önbellekten geldiği için ücretsizdir.
+  if (usable) return { data: usable.data, status: "stale", fromCache: true };
 
   const waitMs = Math.min(opts.waitMs ?? swrWaitMs(env), swrWaitMs(env));
-  const outcome = await withDeadlineOutcome(refresh, waitMs);
+  const outcome = await withDeadlineOutcome(refresh.promise, waitMs);
+  // `started: false` → üretim zaten başka bir istekle koşuyordu; bu istek yeni
+  // bir AI turu başlatmadığı için jeton tahsil eden uçlarda ÜCRETSİZDİR.
+  const fromCache = !refresh.started;
   if (outcome.kind === "value") {
     // Üretim bitti: veri kullanılabilirse hazır, değilse (ör. boş liste) istemci
     // yine "hazırlanıyor" görüp tekrar sorsun. Bu bir HATA değildir.
     return isValid(outcome.value)
-      ? { data: outcome.value, status: "ready" }
-      : { data: null, status: "warming" };
+      ? { data: outcome.value, status: "ready", fromCache }
+      : { data: null, status: "warming", fromCache };
   }
   // Hâlâ sürüyorsa `warming`; bitti ve hata verdişse `failed` (çağıran gerçek
   // hata döndürebilsin, sonsuz "hazırlanıyor" olmasın).
-  if (outcome.kind === "pending") return { data: null, status: "warming" };
-  return { data: null, status: "failed" };
+  if (outcome.kind === "pending") return { data: null, status: "warming", fromCache };
+  return { data: null, status: "failed", fromCache };
 }

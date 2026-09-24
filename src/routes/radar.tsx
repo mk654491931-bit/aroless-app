@@ -26,6 +26,8 @@ import {
 import { PageHero } from "@/components/page-hero";
 import { useAuth } from "@/hooks/use-auth";
 import { getRadar, radarWatchlist, type RadarItem } from "@/lib/radar.functions";
+import { creditErrorMessage } from "@/lib/credits";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/radar")({
   ssr: false,
@@ -226,7 +228,11 @@ function RadarPage() {
               onClick={() =>
                 radarFn({ data: { country: country as "US", refresh: true } })
                   .then(() => q.refetch())
-                  .catch(() => q.refetch())
+                  .catch((e: unknown) => {
+                    // Jeton yetersizse sessizce yutma: kullanıcı ne olduğunu görsün.
+                    toast.error(creditErrorMessage(e, "Radar yenilenemedi"));
+                    return q.refetch();
+                  })
               }
               disabled={q.isFetching}
             >

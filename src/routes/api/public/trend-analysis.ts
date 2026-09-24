@@ -180,18 +180,40 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
             competition: String(body["competition"] ?? "Medium").slice(0, 12),
             score: Number(body["score"]) || 0,
           };
-          const { data, status } = await serveStaleWhileRevalidate<TrendAnalysis>({
+          const { data, status, fromCache } = await serveStaleWhileRevalidate<TrendAnalysis>({
             key: cacheKeyOf(input.country, input.name),
             freshMs: FRESH_MS,
             build: () => build(input),
             isValid: (analysis) => Boolean(analysis?.name),
           });
 
+          /**
+           * JETON KAPISI (önbellek duyarlı): derin analiz 4 motoru + canlı
+           * trend/kaynak verisini birlikte koşar. Önbellekten dönen yanıt
+           * ÜCRETSİZDİR; jeton yalnızca bu istek yeni bir analiz başlattıysa
+           * düşülür ve analiz çökerse İADE edilir.
+           */
+          let charged = 0;
+          if (!fromCache) {
+            const { chargeOrRespond } = await import("@/lib/credit-charge.server");
+            const payment = await chargeOrRespond({
+              userId: guard.userId,
+              token: guard.token,
+              feature: "trend-analysis",
+            });
+            if (!payment.ok) return payment.response;
+            charged = payment.outcome.charged;
+          }
+
           if (data)
             return Response.json({ ...data, status: status === "ready" ? "ready" : "stale" });
 
           // Tarama başarısız olduysa gerçek hata dön; hâlâ sürüyorsa "warming".
           if (status === "failed") {
+            if (charged > 0) {
+              const { refundFeatureCredits } = await import("@/lib/credit-charge.server");
+              await refundFeatureCredits(guard.userId, charged, "trend_analysis_failed");
+            }
             return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.");
           }
           const warming: TrendAnalysisWarming = {

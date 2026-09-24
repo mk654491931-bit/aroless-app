@@ -6,7 +6,7 @@
  * - `jsonError`: iç hata detaylarını sızdırmadan hata döndürür.
  */
 
-export type GuardResult = { userId: string } | { response: Response };
+export type GuardResult = { userId: string; token: string } | { response: Response };
 
 function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -65,7 +65,9 @@ export async function requireUser(request: Request): Promise<GuardResult> {
     const user = (await res.json()) as { id?: string };
     if (!user?.id)
       return { response: json(401, { error: "Oturumunuz geçersiz, tekrar giriş yapın." }) };
-    return { userId: user.id };
+    // `token` da döner: jeton düşen uçlar (`chargeAiCredits`) kullanıcı-kapsamlı
+    // RPC'yi çağırmak için ham erişim jetonuna ihtiyaç duyar.
+    return { userId: user.id, token };
   } catch (e) {
     return { response: jsonError(401, "Oturum doğrulanamadı.", e) };
   }
@@ -119,12 +121,12 @@ export async function guardAuthed(
   bucket: string,
   limit = 30,
   windowSeconds = 60,
-): Promise<{ userId: string } | { response: Response }> {
+): Promise<GuardResult> {
   const auth = await requireUser(request);
   if ("response" in auth) return auth;
   const limited = await rateLimit(`${bucket}:u:${auth.userId}`, limit, windowSeconds);
   if (limited) return { response: limited };
-  return { userId: auth.userId };
+  return { userId: auth.userId, token: auth.token };
 }
 
 /** Yalnızca IP tabanlı istek sınırı (herkese açık kalması gereken uçlar). */
