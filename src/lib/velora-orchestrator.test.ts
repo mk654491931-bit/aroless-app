@@ -67,6 +67,7 @@ import {
   winnerRows,
   formatVeloraSelfTestReport,
   phaseById,
+  productConsensus,
   type VeloraRunState,
   type VeloraStore,
 } from "./velora-orchestrator.server";
@@ -115,6 +116,11 @@ type StubOptions = {
   votes?: Record<string, number>;
   /** Ajanlar hiç `product_scores` döndürmez (ürün başına oy yok senaryosu). */
   omitVotes?: boolean;
+  /**
+   * Her ajanın oyuna AJAN BAZLI kaydırılacak puan farkı. Konsey oylarını
+   * yapay olarak bölerek "yayılım" senaryosu üretir.
+   */
+  spread?: number;
 };
 
 /**
@@ -139,12 +145,16 @@ function stubRunner(options: StubOptions = {}) {
     const body: Record<string, unknown> = scoreKey ? { [scoreKey]: 90 } : {};
     if (!options.omitVotes) {
       const ids = [...new Set(prompt.match(/\bC\d+\b/g) ?? [])];
-      const scored = options.votes
-        ? ids.filter((id) => options.votes?.[id] !== undefined)
-        : ids;
+      const scored = options.votes ? ids.filter((id) => options.votes?.[id] !== undefined) : ids;
+      // Ajan bazlı kaydırma: konseyin oy dağılımını yapay olarak böler.
+      const agentIndex = Math.max(
+        0,
+        COUNCIL_AGENTS.findIndex((a) => a.name === agentName),
+      );
+      const offset = options.spread ? (agentIndex % 2 === 0 ? options.spread : -options.spread) : 0;
       body["product_scores"] = scored.map((id) => ({
         id,
-        score: options.votes?.[id] ?? 90,
+        score: Math.max(0, Math.min(100, (options.votes?.[id] ?? 90) + offset)),
         note: `kanıt: ${id} canlı piyasa`,
       }));
     }
@@ -152,7 +162,10 @@ function stubRunner(options: StubOptions = {}) {
   };
 }
 
-type FakeStore = VeloraStore & { states: Map<string, VeloraRunState>; rows: Record<string, unknown>[] };
+type FakeStore = VeloraStore & {
+  states: Map<string, VeloraRunState>;
+  rows: Record<string, unknown>[];
+};
 
 function fakeStore(): FakeStore {
   const states = new Map<string, VeloraRunState>();
@@ -206,6 +219,8 @@ function baseState(overrides: Partial<VeloraRunState> = {}): VeloraRunState {
     live: true,
     candidates: [],
     analysisLine: [],
+    trackRecord: {},
+    requestedBy: null,
     phases: [],
     runningPhase: null,
     push: null,
@@ -318,7 +333,9 @@ describe("HAT A — bağımsız AI analiz hattı, 14 ajanla PARALEL koşar", () 
         return (async () => {
           await Promise.race([gate, new Promise((r) => setTimeout(r, 2_000))]);
           return {
-            text: JSON.stringify({ scores: [{ id: "C1", score: 88, reason: "canlı kanıt güçlü" }] }),
+            text: JSON.stringify({
+              scores: [{ id: "C1", score: 88, reason: "canlı kanıt güçlü" }],
+            }),
             log: agentLog(agentName),
           };
         })();
@@ -345,7 +362,9 @@ describe("HAT A — bağımsız AI analiz hattı, 14 ajanla PARALEL koşar", () 
     expect(lineEntry).toMatchObject({ score: 88, source: "ai" });
     // Puanı olmayan adaylar için dürüstçe formül moduna düşer.
     expect(
-      state.analysisLine.filter((row) => row.candidateId !== "C1").every((r) => r.source === "heuristic"),
+      state.analysisLine
+        .filter((row) => row.candidateId !== "C1")
+        .every((r) => r.source === "heuristic"),
     ).toBe(true);
     // Analiz turu finalistleri GÖRDÜ (bağımsız puanlama, ajan oyuna bakmaz).
     const analysisPrompt = prompts.find((p) => p.agentName === "Analysis Line")!;
@@ -497,7 +516,9 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     expect(result.dispatch).toEqual({ ok: true, mode: "qstash", messageId: "msg-1" });
     expect(handoffCalls).toEqual([2]);
     // Yalnızca Faz 1 koştu: 14 ajanın tamamı tek burst içinde paralel başlar.
-    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(14);
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(
+      14,
+    );
     // Faz 1'den sonra durum "running" ve sıradaki faz kaydedilmemiş.
     expect(store.states.get(result.runId!)!.phases.map((p) => p.id)).toEqual([1]);
   });
@@ -558,7 +579,9 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     // Kanıt yokken retriever'ın adlandırdığı gerçek ürün yine kazanır.
     expect(result.dossier!.products[0]!.name).toBe("Mini Ice Maker XR-500");
     const councilCalls = prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName));
-    expect(councilCalls.every((c) => c.prompt.includes("independent scrape returned no data"))).toBe(true);
+    expect(
+      councilCalls.every((c) => c.prompt.includes("independent scrape returned no data")),
+    ).toBe(true);
   });
 
   it("14 ajanın HEPSİ finalist listesini görür ve ürün başına puan istenir", async () => {
@@ -622,6 +645,133 @@ describe("ürün başına ajan konsensüsü (run geneli ortalama kopyalanmaz)", 
     expect(result.dossier!.evidence.live).toBe(false);
     expect(result.dossier!.notes).toContain("LIVE_EVIDENCE_UNAVAILABLE");
     expect(result.dossier!.products.every((p) => p.verification === "unverified")).toBe(true);
+  });
+});
+
+describe("C) ajan katılım göstergesi (yayılım, yalnız ortalama değil)", () => {
+  /** 14 ajanın belirli oylarıyla konsensüs üreten koşu durumu. */
+  const stateWithVotes = (scores: number[]): VeloraRunState =>
+    baseState({
+      candidates: [{ name: "Ürün A", candidateId: "C1" }],
+      phases: [
+        {
+          id: 1,
+          key: "parallel-council",
+          name: "council",
+          ms: 10,
+          withinCeiling: true,
+          agents: scores.map((score, index) => ({
+            key: `a${index}`,
+            name: `Agent ${index}`,
+            ok: true,
+            timedOut: false,
+            score,
+            latencyMs: 5,
+            output: {},
+            productVotes: [{ id: "C1", score, note: "" }],
+          })),
+        },
+      ],
+    });
+
+  it("dar yayılım → 'unanimous'", () => {
+    const entry = productConsensus(stateWithVotes(Array(14).fill(72))).get("C1")!;
+    expect(entry.councilScore).toBe(72);
+    expect(entry.spread).toBe(0);
+    expect(entry.alignment).toBe("unanimous");
+  });
+
+  it("geniş yayılım → 'contested'", () => {
+    // 7 ajan 95, 7 ajan 45 → stddev 25... daha da açık uç: 100/40 → 30.
+    const votes = Array.from({ length: 14 }, (_, i) => (i % 2 === 0 ? 100 : 40));
+    const entry = productConsensus(stateWithVotes(votes)).get("C1")!;
+    expect(entry.spread).toBeGreaterThan(26);
+    expect(entry.alignment).toBe("contested");
+  });
+
+  it("ORTALAMA AYNI olsa bile yayılım farklıysa etiket farklılaşır", () => {
+    const tight = productConsensus(stateWithVotes(Array(14).fill(71))).get("C1")!;
+    const split = productConsensus(
+      stateWithVotes(Array.from({ length: 14 }, (_, i) => (i % 2 === 0 ? 92 : 50))),
+    ).get("C1")!;
+    expect(tight.councilScore).toBe(split.councilScore);
+    expect(tight.alignment).not.toBe(split.alignment);
+  });
+
+  it("min/max oy gerçek değerleri taşır", () => {
+    const votes = Array.from({ length: 14 }, (_, i) => (i % 2 === 0 ? 88 : 54));
+    const entry = productConsensus(stateWithVotes(votes)).get("C1")!;
+    expect(entry.minScore).toBe(54);
+    expect(entry.maxScore).toBe(88);
+  });
+
+  it("az oy varsa etiket 'none' — iki ajanın uyuşması fikir birliği sayılmaz", () => {
+    const entry = productConsensus(stateWithVotes([70, 72])).get("C1")!;
+    expect(entry.alignment).toBe("none");
+  });
+
+  it("dossier ürüne yayılımı ve etiketi taşır", async () => {
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store: fakeStore(), runAgent: runAgentStub(stubRunner({ spread: 40 })) },
+    );
+    const product = result.dossier!.products[0]!;
+    expect(product.councilSpread!).toBeGreaterThan(0);
+    expect(["split", "contested"]).toContain(product.councilAlignment);
+  });
+});
+
+describe("D) pazar erişimi (kural tabanlı, ücretsiz)", () => {
+  it("her ürün için pazar satırı üretilir ve kanal bilinmiyorsa UYDURMAZ", async () => {
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store: fakeStore(), runAgent: runAgentStub(stubRunner()) },
+    );
+    const reach = result.dossier!.products[0]!.marketReach;
+    expect(reach).toBeDefined();
+    expect(reach!.entries.length).toBeGreaterThan(0);
+    expect(reach!.entries.every((e) => e.country && e.verdict)).toBe(true);
+  });
+});
+
+describe("E) sonuç geri besleme (geçmiş performans)", () => {
+  it("geçmiş PARMAK İZİYLE eşleşir — farklı yazılmış aynı ürün de bulunur", async () => {
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      {
+        store: fakeStore(),
+        runAgent: runAgentStub(stubRunner()),
+        fetchTrackRecord: async () => ({
+          // Anahtar normalize parmak izi; ürün adı farklı yazılmış olabilir.
+          "mini ice maker xr 500": {
+            title: "MINI ICE MAKER XR-500 (2.5L)",
+            appearances: 3,
+            avgScore: 78,
+            bestRank: 1,
+            lastSeenDay: "2026-09-20",
+            daysSinceSeen: 5,
+          },
+        }),
+      },
+    );
+    const product = result.dossier!.products[0]!;
+    expect(product.trackRecord).toMatchObject({ appearances: 3, avgScore: 78, bestRank: 1 });
+  });
+
+  it("geçmiş okunamazsa koşu yine tamamlanır (zenginleştirici, zorunlu değil)", async () => {
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      {
+        store: fakeStore(),
+        runAgent: runAgentStub(stubRunner()),
+        fetchTrackRecord: async () => {
+          throw new Error("geçmiş okunamadı");
+        },
+      },
+    );
+    expect(result.status).toBe("completed");
+    expect(result.dossier!.products.length).toBeGreaterThan(0);
+    expect(result.dossier!.products.every((p) => p.trackRecord === undefined)).toBe(true);
   });
 });
 
@@ -762,7 +912,9 @@ describe("QStash tekrar teslimi (idempotent faz yönetimi)", () => {
     expect(replay.status).toBe("completed");
     expect(replay.dossier!.products.length).toBeGreaterThan(0);
     // Hiçbir ajan yeniden çağrılmadı (14 çağrı sabit kaldı).
-    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(14);
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(
+      14,
+    );
   });
 });
 

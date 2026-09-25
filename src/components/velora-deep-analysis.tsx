@@ -10,6 +10,9 @@ import {
   veloraPollInterval,
   veloraStatusLabel,
   verificationChip,
+  alignmentChip,
+  trackRecordLabel,
+  marketReachLabel,
   type OrchestratedDispatch,
   type RunStatusPayload,
 } from "@/lib/velora-run-view";
@@ -71,14 +74,22 @@ export function VeloraDeepAnalysis({
         platform: platforms[0] ?? "global",
         language: "tr",
       }),
-    onSuccess: (data) => setRunId(data.runId ?? null),
+    onSuccess: (data) => {
+      setRunId(data.runId ?? null);
+      if (data.cached) {
+        toast.info(
+          "Bu niş 24 saat içinde çalıştırıldı — önceki karne gösteriliyor, jeton harcanmadı.",
+        );
+      }
+    },
     onError: (err: Error) => toast.error(err.message || "Orkestre koşu tamamlanamadı."),
   });
 
   // KOŞU YOKLAMASI: nihai karne hazır olana kadar 2 sn'de bir `runId` sorgulanır.
   const status = useQuery({
     queryKey: ["velora-run", runId],
-    queryFn: () => apiGet<RunStatusPayload>(`/api/public/agent?runId=${encodeURIComponent(runId ?? "")}`),
+    queryFn: () =>
+      apiGet<RunStatusPayload>(`/api/public/agent?runId=${encodeURIComponent(runId ?? "")}`),
     enabled: Boolean(runId),
     // Karne gelene kadar yokla, hazır/bayat olunca DUR (sonsuz yoklama yok).
     refetchInterval: (query) =>
@@ -158,9 +169,21 @@ export function VeloraDeepAnalysis({
       {result && (
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Stat label="Ortak karar" value={`${result.metrics.jointScore}/100`} hint={result.metrics.jointSource} />
-            <Stat label="Konsey ortalaması" value={`${result.metrics.councilAverage}/100`} hint="14 ajan" />
-            <Stat label="Analiz paritesi" value={`${result.metrics.analysisScore}/100`} hint="retriever kanıtı" />
+            <Stat
+              label="Ortak karar"
+              value={`${result.metrics.jointScore}/100`}
+              hint={result.metrics.jointSource}
+            />
+            <Stat
+              label="Konsey ortalaması"
+              value={`${result.metrics.councilAverage}/100`}
+              hint="14 ajan"
+            />
+            <Stat
+              label="Analiz paritesi"
+              value={`${result.metrics.analysisScore}/100`}
+              hint="retriever kanıtı"
+            />
             <Stat
               label="Koşan ajan"
               value={`${result.metrics.agentCount}/${result.metrics.agentCount}`}
@@ -200,7 +223,10 @@ export function VeloraDeepAnalysis({
             </div>
             <ul className="space-y-2">
               {result.topProducts.map((p) => (
-                <li key={`${p.rank}-${p.name}`} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <li
+                  key={`${p.rank}-${p.name}`}
+                  className="rounded-xl border border-white/10 bg-white/5 p-3"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-bold">
                       {p.rank}
@@ -218,14 +244,22 @@ export function VeloraDeepAnalysis({
                             : "border-white/10 bg-white/5 text-muted-foreground"
                       }`}
                     >
-                      {p.source === "ai" ? "model ürünü" : p.source === "trend-radar" ? "kazınmış trend" : "genel yedek"}
+                      {p.source === "ai"
+                        ? "model ürünü"
+                        : p.source === "trend-radar"
+                          ? "kazınmış trend"
+                          : "genel yedek"}
                     </span>
                   </div>
                   {p.whyNow && (
-                    <div className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{p.whyNow}</div>
+                    <div className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                      {p.whyNow}
+                    </div>
                   )}
                   {p.risks.length > 0 && (
-                    <div className="mt-1 text-[10px] text-amber-200/80">Risk: {p.risks.join(" · ")}</div>
+                    <div className="mt-1 text-[10px] text-amber-200/80">
+                      Risk: {p.risks.join(" · ")}
+                    </div>
                   )}
                 </li>
               ))}
@@ -361,7 +395,11 @@ export function VeloraDeepAnalysis({
                   value={`${dossier.products[0]?.winnerScore ?? 0}/100`}
                   hint={dossier.listed ? "listelendi" : "incelemeye"}
                 />
-                <Stat label="Konsey (run)" value={`${dossier.council_average}/100`} hint={`${dossier.evaluated} ürün oy aldı`} />
+                <Stat
+                  label="Konsey (run)"
+                  value={`${dossier.council_average}/100`}
+                  hint={`${dossier.evaluated} ürün oy aldı`}
+                />
                 <Stat
                   label="Kazınan trend"
                   value={`${dossier.evidence.scraped_trends}`}
@@ -403,13 +441,16 @@ export function VeloraDeepAnalysis({
                 </div>
                 {dossier.products.length === 0 ? (
                   <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] text-muted-foreground">
-                    Bu koşuda puanlanabilir ürün adayı üretilemedi; uydurma sıra ile
-                    doldurulmadı. Nişi daraltıp tekrar deneyin.
+                    Bu koşuda puanlanabilir ürün adayı üretilemedi; uydurma sıra ile doldurulmadı.
+                    Nişi daraltıp tekrar deneyin.
                   </p>
                 ) : (
                   <ul className="space-y-2">
                     {dossier.products.map((product) => {
                       const chip = verificationChip(product.verification);
+                      const agreement = alignmentChip(product);
+                      const track = trackRecordLabel(product);
+                      const reach = marketReachLabel(product);
                       return (
                         <li
                           key={`${product.rank}-${product.name}`}
@@ -419,13 +460,25 @@ export function VeloraDeepAnalysis({
                             <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-bold">
                               {product.rank}
                             </span>
-                            <span className="min-w-0 flex-1 text-xs font-semibold">{product.name}</span>
+                            <span className="min-w-0 flex-1 text-xs font-semibold">
+                              {product.name}
+                            </span>
                             <span className="rounded-full border border-[oklch(0.62_0.17_255)]/40 bg-[oklch(0.62_0.17_255)]/12 px-2 py-0.5 text-[10px] font-semibold text-[oklch(0.88_0.10_255)]">
                               {product.winnerScore}/100
                             </span>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${chip.cls}`}>
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] ${chip.cls}`}
+                            >
                               {chip.label}
                             </span>
+                            {agreement && (
+                              <span
+                                title={agreement.hint}
+                                className={`rounded-full border px-2 py-0.5 text-[10px] ${agreement.cls}`}
+                              >
+                                {agreement.label}
+                              </span>
+                            )}
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
                             <span className="rounded-full border border-white/10 px-2 py-0.5">
@@ -444,6 +497,14 @@ export function VeloraDeepAnalysis({
                                   : "genel yedek"}
                             </span>
                           </div>
+                          {reach && (
+                            <div className="mt-1 text-[10px] text-sky-200/80">Pazar: {reach}</div>
+                          )}
+                          {track && (
+                            <div className="mt-1 text-[10px] text-emerald-200/80">
+                              Geçmiş performans: {track}
+                            </div>
+                          )}
                           {product.agentEvidence && product.agentEvidence.length > 0 && (
                             <ul className="mt-1.5 space-y-0.5 text-[10px] text-muted-foreground">
                               {product.agentEvidence.slice(0, 3).map((line) => (
@@ -487,15 +548,18 @@ export function VeloraDeepAnalysis({
                   </div>
                   <ul className="space-y-0.5 text-[11px] text-muted-foreground">
                     <li>
-                      DB geri okuma: {payload.selfTest.dbFetchVerified ? "doğrulandı" : "başarısız"} · alan
-                      bütünlüğü: {payload.selfTest.payloadIntegrity ? "tam" : "eksik"}
+                      DB geri okuma: {payload.selfTest.dbFetchVerified ? "doğrulandı" : "başarısız"}{" "}
+                      · alan bütünlüğü: {payload.selfTest.payloadIntegrity ? "tam" : "eksik"}
                     </li>
                     <li>
-                      Ajan alt çıktıları: {payload.selfTest.agentsLogged}/{payload.selfTest.expectedAgents}
+                      Ajan alt çıktıları: {payload.selfTest.agentsLogged}/
+                      {payload.selfTest.expectedAgents}
                     </li>
                     <li>
                       Durum: {payload.selfTest.status}
-                      {payload.selfTest.notes.length > 0 ? ` · ${payload.selfTest.notes.join(", ")}` : ""}
+                      {payload.selfTest.notes.length > 0
+                        ? ` · ${payload.selfTest.notes.join(", ")}`
+                        : ""}
                     </li>
                   </ul>
                 </div>

@@ -9,59 +9,11 @@ import { netMarginOf } from "./profitability";
 import { parseMoney } from "./unit-economics";
 import { countryFit, PLATFORM_MARKETS } from "./platform-market";
 import { buildVerdict, type MarketVerdict, type VerdictCheck } from "./market-verdict";
+// Ülke bariyeri kuralları `market-barriers.ts`te yaşıyor: aynı tablo hem bu
+// eleme hem de kazanan kartındaki "hangi pazarda satılabilir" görünümü tarafından
+// kullanılıyor, böylece iki yer birbirinden ayrışamıyor.
+import { barriersFor } from "./market-barriers";
 import type { Platform } from "./gemini.functions";
-
-/** Ülkeye özel sertifika / gümrük bariyeri olan ürün kalıpları. */
-const COUNTRY_BARRIERS: Record<string, { re: RegExp; why: string }[]> = {
-  SA: [
-    {
-      re: /(elektronik|electronic|cosmetic|kozmetik|toy|oyuncak|charger|şarj)/i,
-      why: "Suudi Arabistan SABER/SASO belgesi gerektiriyor",
-    },
-  ],
-  AE: [
-    {
-      re: /(cosmetic|kozmetik|supplement|takviye|food|gıda|charger|şarj)/i,
-      why: "BAE ESMA/MoHAP tescili gerektiriyor",
-    },
-  ],
-  DE: [
-    {
-      re: /(battery|pil|batarya|elektronik|electronic|packaging)/i,
-      why: "Almanya VerpackG (ambalaj kaydı) + WEEE/BattG zorunluluğu",
-    },
-  ],
-  FR: [
-    {
-      re: /(battery|pil|elektronik|electronic|textile|tekstil)/i,
-      why: "Fransa EPR (Triman) kayıt zorunluluğu",
-    },
-  ],
-  TR: [
-    {
-      re: /(supplement|takviye|cosmetic|kozmetik|medikal|medical)/i,
-      why: "Türkiye'de Tarım/Sağlık Bakanlığı izni gerekiyor",
-    },
-  ],
-  IN: [
-    {
-      re: /(elektronik|electronic|charger|şarj|toy|oyuncak)/i,
-      why: "Hindistan BIS sertifikası gerekiyor",
-    },
-  ],
-  BR: [
-    {
-      re: /(elektronik|electronic|charger|şarj|wireless|telsiz)/i,
-      why: "Brezilya ANATEL/INMETRO onayı gerekiyor",
-    },
-  ],
-  JP: [
-    {
-      re: /(charger|şarj|battery|pil|wireless|telsiz)/i,
-      why: "Japonya PSE/GİTELEC onayı gerekiyor",
-    },
-  ],
-};
 
 export type GateInput = {
   name?: string;
@@ -183,7 +135,7 @@ export function winnerGate<T extends GateInput>(
   const usable = platforms.filter(
     (p) => p in PLATFORM_MARKETS && countryFit(p as Platform, country) !== "unavailable",
   );
-  const barriers = COUNTRY_BARRIERS[country] ?? [];
+  const barriers = barriersFor(country);
 
   const unique = dedupeCandidates(items);
   const survivors: T[] = [];

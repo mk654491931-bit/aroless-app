@@ -15,6 +15,9 @@ export type OrchestratedDispatch = {
   nextPhase?: number;
   dispatch?: { ok: boolean; mode: string; messageId?: string; error?: string };
   deduped?: boolean;
+  /** Karne 24 saatlik sorgu önbelleğinden geldi: yeni koşu yapılmadı, JETON HARCANMADI. */
+  cached?: boolean;
+  cachedAt?: string;
   error?: string;
 };
 
@@ -28,6 +31,25 @@ export type DossierProduct = {
   councilScore: number;
   councilVotes?: number;
   councilCoverage?: number;
+  /** Ajan oylarının yayılımı (standart sapma): konsey ne kadar hemfikir? */
+  councilSpread?: number;
+  councilMin?: number;
+  councilMax?: number;
+  councilAlignment?: "unanimous" | "strong" | "split" | "contested" | "none";
+  /** Kanal bazında pazar erişimi (kural tabanlı; vergi hesabı değildir). */
+  marketReach?: {
+    country: string;
+    openMarkets: number;
+    entries: { country: string; fit: string; barrier: string | null; verdict: string }[];
+  };
+  /** Geçmiş performans: önceki koşularda kaç kez çıktı (satış verisi DEĞİLDİR). */
+  trackRecord?: {
+    appearances: number;
+    avgScore: number;
+    bestRank: number;
+    lastSeenDay: string;
+    daysSinceSeen: number;
+  };
   agentEvidence?: string[];
   verification?: "verified" | "unverified" | "unknown";
   whyNow?: string;
@@ -146,8 +168,75 @@ export function noteLabel(note: string): string {
   return note;
 }
 
-/** Doğrulama durumunun rozet metni ve rengi — "verified" ASLA abartılmaz. */
-export function verificationChip(value: DossierProduct["verification"]): {
+// ---------------------------------------------------------------------------
+// C) Ajan katılımı rozeti
+// ---------------------------------------------------------------------------
+
+/**
+ * Ortalama puan TEK BAŞINA yeterlidir: 14 ajanın hepsinin 71 vermesi ile
+ * 7'sinin 90, 7'sinin 52 vermesi aynı ortalamayı üretir. Rozet, yayılımdan
+ * türeyen katılımı gösterir ve hangisinin ne anlama geldiğini bir ipucuyla
+ * söyler — panelde tek başına bir renk kodu olarak bırakılmaz.
+ */
+export function alignmentChip(product: DossierProduct): {
+  label: string;
+  cls: string;
+  hint: string;
+} | null {
+  if (!product.councilAlignment || product.councilAlignment === "none") return null;
+  const detail =
+    product.councilSpread !== undefined ? ` (${Math.round(product.councilSpread)} yayılım)` : "";
+  const base: Record<string, { label: string; cls: string; hint: string }> = {
+    unanimous: {
+      label: "oy birliği",
+      cls: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
+      hint: "Ajanlar bu üründe neredeyse aynı puanı verdi.",
+    },
+    strong: {
+      label: "geniş mutabakat",
+      cls: "border-sky-400/30 bg-sky-500/10 text-sky-200",
+      hint: "Ajanlar çoğunlukla aynı yönde, küçük sapmalarla.",
+    },
+    split: {
+      label: "bölünmüş",
+      cls: "border-amber-400/30 bg-amber-500/10 text-amber-200",
+      hint: "Ajanlar belirgin farklı puanlar verdi; karar tartışmalı.",
+    },
+    contested: {
+      label: "çok tartışmalı",
+      cls: "border-rose-400/30 bg-rose-500/10 text-rose-200",
+      hint: "Ajanlar birbirinden çok uzak puanlar verdi; ortalama yanıltıcıdır.",
+    },
+  };
+  const chip = base[product.councilAlignment];
+  if (!chip) return null;
+  return { ...chip, label: `${chip.label}${detail}` };
+}
+
+/** Geçmiş performansın tek cümlelik, SATIŞ iddiası içermeyen özeti. */
+export function trackRecordLabel(product: DossierProduct): string | null {
+  const t = product.trackRecord;
+  if (!t || t.appearances < 1) return null;
+  const when = t.daysSinceSeen === 0 ? "bugün" : `${t.daysSinceSeen} gün önce`;
+  return `Bu ürün ${t.appearances} önceki koşuda da çıktı · ort. puan ${t.avgScore} · en iyi sıra ${t.bestRank} · son görülme ${when} (satış verisi değil, bağımsız koşu teyidi)`;
+}
+
+/** Pazar erişimi satırlarının okunur özeti. */
+export function marketReachLabel(product: DossierProduct): string | null {
+  const reach = product.marketReach;
+  if (!reach || reach.entries.length === 0) return null;
+  const parts = reach.entries.map((e) => {
+    if (e.verdict === "barrier") return `${e.country} bariyer`;
+    if (e.verdict === "unavailable") return `${e.country} kanal yok`;
+    if (e.verdict === "cross-border") return `${e.country} sınır ötesi`;
+    return `${e.country} yerel`;
+  });
+  return `${parts.join(" · ")} — vergi/gümrük hesabı yapılmaz`;
+}
+
+/** Doğrulama durumunun rozet metni ve rengi — "verified" ASLA abartılmaz. */ export function verificationChip(
+  value: DossierProduct["verification"],
+): {
   label: string;
   cls: string;
 } {

@@ -50,6 +50,16 @@ import type { Json } from "@/integrations/supabase/types";
 import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council-chain.server";
 import { DEEP_CHAIN, executeAgentWithFallback, parseAgentJson } from "./ai-router.server";
 import { combineJointScores } from "./consensus-types";
+import { fetchTrackRecords } from "./velora-track-record.server";
+import { writeVeloraQueryCache } from "./velora-query-cache.server";
+import {
+  councilAlignment,
+  marketReach,
+  marketReachLine,
+  voteSpread,
+  type CouncilAlignment,
+  type MarketReach,
+} from "./velora-insights";
 import { JOB_POLL_INTERVAL_MS, qstashConfigured, qstashFanOut } from "./discovery-jobs.server";
 import {
   analysisOnlyScore,
@@ -304,6 +314,29 @@ export const VeloraRunStateSchema = z.object({
    * üyesi koşarken PARALEL üretilir ve karne ağırlıklı birleşiminde kullanılır.
    */
   analysisLine: z.array(VeloraAnalysisEntrySchema).default([]),
+  /**
+   * SONUÇ GERİ BİLDİRİM: aday ürünlerin önceki koşulardaki performansı.
+   * Anahtar = ürün adı. Satış ölçümü DEĞİLDİR: bağımsız koşuların aynı üründe
+   * birbirini doğrulamasıdır, o yüzden "track record" denir.
+   */
+  trackRecord: z
+    .record(
+      z.string(),
+      z.object({
+        title: z.string().default(""),
+        appearances: z.number().int().min(0),
+        avgScore: z.number().min(0).max(100),
+        bestRank: z.number().int().min(1),
+        lastSeenDay: z.string(),
+        daysSinceSeen: z.number().int().min(0),
+      }),
+    )
+    .default({}),
+  /**
+   * Koşuyu başlatan kullanıcı. Ürün kararına GİRMEZ; yalnızca 24 saatlik sorgu
+   * önbelleğinin kimin için yazılacağını bilmek için tutulur.
+   */
+  requestedBy: z.string().max(80).nullable().default(null),
   phases: z.array(VeloraPhaseResultSchema).default([]),
   /** Şu an koşan faz — aynı fazın ikinci teslimini idempotent kılar. */
   runningPhase: z
@@ -351,14 +384,17 @@ function withCeiling<T>(
   onTimeout?: () => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      try {
-        onTimeout?.();
-      } catch {
-        /* iptal edilemeyen kaynak hattı düşürmesin */
-      }
-      reject(new Error(`${label}_TIMEOUT`));
-    }, Math.max(1, ms));
+    const timer = setTimeout(
+      () => {
+        try {
+          onTimeout?.();
+        } catch {
+          /* iptal edilemeyen kaynak hattı düşürmesin */
+        }
+        reject(new Error(`${label}_TIMEOUT`));
+      },
+      Math.max(1, ms),
+    );
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -389,9 +425,16 @@ export type VeloraOrchestratorDeps = {
   handoff?: ((args: { runId: string; phase: VeloraPhaseId }) => Promise<VeloraHandoff>) | null;
   /** Test ve özel sağlayıcılar için kanıt kazıyıcısı; varsayılan canlı scraper'dır. */
   collectEvidence?: typeof collectVeloraEvidence;
+  /** Test ve özel sağlayıcılar için geçmiş performans okuyucusu. */
+  fetchTrackRecord?: typeof fetchTrackRecords;
 };
 
-export type VeloraHandoff = { ok: boolean; mode: VeloraDispatchMode; messageId?: string; error?: string };
+export type VeloraHandoff = {
+  ok: boolean;
+  mode: VeloraDispatchMode;
+  messageId?: string;
+  error?: string;
+};
 export type VeloraDispatchMode = "qstash" | "inline";
 
 /**
@@ -434,7 +477,10 @@ export function parseProductVotes(
   state: VeloraRunState,
 ): VeloraProductVote[] {
   const raw =
-    output["product_scores"] ?? output["productScores"] ?? output["product_votes"] ?? output["products"];
+    output["product_scores"] ??
+    output["productScores"] ??
+    output["product_votes"] ??
+    output["products"];
   if (!Array.isArray(raw)) return [];
 
   const byId = new Map<string, string>();
@@ -592,15 +638,44 @@ export function finalistBlock(state: VeloraRunState): string {
   }
   return [
     "FINALIST PRODUCTS (the ONLY products in scope — you MUST score EVERY one of them):",
+    "A `track=` suffix means the product was also picked by EARLIER independent runs (past performance, NOT sales data). Weight it as weak corroboration only; never let it override the scraped evidence.",
     ...state.candidates.map((candidate, index) => {
       const id = candidateIdOf(candidate, index);
       const name = String(candidate["name"] ?? "").trim() || "(unnamed)";
       const category = String(candidate["category"] ?? "-").trim() || "-";
       const price = String(candidate["priceRange"] ?? "-").trim() || "-";
       const source = String(candidate["source"] ?? "ai").trim() || "ai";
-      return `${id}. ${name} · category=${category} · price=${price} · source=${source}`;
+      const history = state.trackRecord[normalizeProductIdentity(name)];
+      // Geçmiş performans yalnızca VARSA yazılır; yoksa "bilinmiyor" anlamına
+      // gelen bir satır uydurmak yerine alan boş bırakılır.
+      const track = history
+        ? ` · track=${history.appearances}x önceki koşuda, ort=${history.avgScore}, en iyi sıra=${history.bestRank}, ${history.daysSinceSeen}g önce`
+        : "";
+      return `${id}. ${name} · category=${category} · price=${price} · source=${source}${track}`;
     }),
   ].join("\n");
+}
+
+/**
+ * Pazar erişimi özeti — hangi kanal hangi pazarda satılabilir?
+ *
+ * Kural tabanlıdır (kanal pazarı + bilinen sertifika bariyerleri) ve ÜRÜNLERİN
+ * ADLARI BİRLEŞTİRİLEREK tek satırda verilir: 14 ajanın her biri kendi ürününe
+ * bariyer denk gelip gelmediğini kendisi eşleştirir. Bu bilgi ajanların kendi
+ * puanına eklediği bir yargı değil, GÖRÜNÜR GEÇEN kuraldır.
+ *
+ * "Uygun" yalnızca bilinen bir engel çıkmadığı anlamına gelir; vergi/gümrük
+ * hesabı yapılmaz ve iddia edilmez.
+ */
+function marketReachBlock(state: VeloraRunState): string {
+  const productText = state.candidates
+    .map((c) => `${String(c["name"] ?? "")} ${String(c["category"] ?? "")}`)
+    .join(" · ");
+  if (!productText.trim()) return "";
+  const line = marketReachLine(marketReach({ platform: state.platform || "General", productText }));
+  return line
+    ? `MARKET REACH (rule-based channel availability — NOT a tax/duty calculation; match products to markets yourself): ${line}\n`
+    : "";
 }
 
 function agentPrompt(
@@ -629,6 +704,7 @@ ${
 
 ${finalistBlock(state)}
 
+${marketReachBlock(state)}
 CHAIN RULES:
 - Return ONLY valid minified JSON. No markdown or commentary.
 - Return exactly these fields and no extra fields: ${agentSchemaHint(agentKey)} PLUS "product_scores".
@@ -652,6 +728,16 @@ export type VeloraProductConsensus = {
   votes: number;
   /** Oy oranı (0-1) — "kaç ajan gerçekten konuştu". */
   coverage: number;
+  /**
+   * Oy YAYILIMI (popülasyon standart sapması). Ortalama tek başına yanıltıcıdır:
+   * 14 ajanın hepsinin 71 vermesi ile 7'sinin 90, 7'sinin 52 vermesi aynı ortalamayı
+   * verir. Yayılım "hepsi hemfikir" ile "konsey bölünmüş" durumlarını ayırır.
+   */
+  spread: number;
+  minScore: number;
+  maxScore: number;
+  /** Yayılımdan türeyen katılım etiketi (panelde rozet olarak gösterilir). */
+  alignment: CouncilAlignment;
   /** Ajanların bıraktığı gerekçeler (kanıt referansları). */
   evidence: string[];
 };
@@ -666,7 +752,17 @@ export type VeloraProductConsensus = {
 export function productConsensus(state: VeloraRunState): Map<string, VeloraProductConsensus> {
   const totals = new Map<
     string,
-    { candidateId: string; identity: string; name: string; sum: number; votes: number; evidence: string[] }
+    {
+      candidateId: string;
+      identity: string;
+      name: string;
+      sum: number;
+      votes: number;
+      minScore: number;
+      maxScore: number;
+      scores: number[];
+      evidence: string[];
+    }
   >();
   const aliases = new Map<string, string>();
 
@@ -674,7 +770,17 @@ export function productConsensus(state: VeloraRunState): Map<string, VeloraProdu
     const candidateId = candidateIdOf(candidate, index);
     const name = String(candidate["name"] ?? "").trim();
     const identity = normalizeProductIdentity(name);
-    totals.set(candidateId, { candidateId, identity, name, sum: 0, votes: 0, evidence: [] });
+    totals.set(candidateId, {
+      candidateId,
+      identity,
+      name,
+      sum: 0,
+      votes: 0,
+      minScore: 100,
+      maxScore: 0,
+      scores: [],
+      evidence: [],
+    });
     aliases.set(candidateId.toLocaleLowerCase("tr-TR"), candidateId);
     if (identity) aliases.set(identity, candidateId);
   });
@@ -683,12 +789,17 @@ export function productConsensus(state: VeloraRunState): Map<string, VeloraProdu
     for (const agent of phase.agents) {
       for (const vote of agent.productVotes) {
         const candidateId =
-          aliases.get(vote.id.toLocaleLowerCase("tr-TR")) ?? aliases.get(normalizeProductIdentity(vote.id));
+          aliases.get(vote.id.toLocaleLowerCase("tr-TR")) ??
+          aliases.get(normalizeProductIdentity(vote.id));
         const slot = candidateId ? totals.get(candidateId) : undefined;
         if (!slot) continue;
         slot.sum += vote.score;
         slot.votes += 1;
-        if (vote.note && slot.evidence.length < 4) slot.evidence.push(`${agent.name}: ${vote.note}`);
+        slot.scores.push(vote.score);
+        slot.minScore = Math.min(slot.minScore, vote.score);
+        slot.maxScore = Math.max(slot.maxScore, vote.score);
+        if (vote.note && slot.evidence.length < 4)
+          slot.evidence.push(`${agent.name}: ${vote.note}`);
       }
     }
   }
@@ -696,13 +807,19 @@ export function productConsensus(state: VeloraRunState): Map<string, VeloraProdu
   const consensus = new Map<string, VeloraProductConsensus>();
   for (const slot of totals.values()) {
     if (slot.votes === 0) continue;
+    const mean = slot.sum / slot.votes;
+    const spread = voteSpread(slot.scores);
     consensus.set(slot.candidateId, {
       candidateId: slot.candidateId,
       identity: slot.identity,
       name: slot.name,
-      councilScore: Math.round(slot.sum / slot.votes),
+      councilScore: Math.round(mean),
       votes: slot.votes,
       coverage: Math.min(1, slot.votes / Math.max(1, plannedAgentCount())),
+      spread,
+      minScore: slot.minScore,
+      maxScore: slot.maxScore,
+      alignment: councilAlignment(slot.votes, spread),
       evidence: slot.evidence,
     });
   }
@@ -784,6 +901,45 @@ export const WinnerDtoSchema = z.object({
 });
 export type WinnerDto = z.infer<typeof WinnerDtoSchema>;
 
+/** Katılım etiketi beyaz listeden mi? Bozuk veri `none`a düşer. */
+function alignmentOf(value: unknown): CouncilAlignment {
+  const known: CouncilAlignment[] = ["unanimous", "strong", "split", "contested", "none"];
+  const raw = String(value ?? "");
+  return known.includes(raw as CouncilAlignment) ? (raw as CouncilAlignment) : "none";
+}
+
+/**
+ * Pazar erişimi kayıttan okunur; yoksa ÜRÜNÜN ADINDAN yeniden hesaplanır.
+ * Böylece geçmiş koşuların kaydı eksik olsa bile kart boş kalmaz.
+ */
+function marketReachOf(
+  value: unknown,
+  title: string,
+  category: string,
+  platform: string,
+): MarketReach | undefined {
+  if (value && typeof value === "object") {
+    const parsed = ProductSchema.shape.marketReach.safeParse(value);
+    if (parsed.success) return parsed.data as MarketReach;
+  }
+  if (!title) return undefined;
+  return marketReach({ platform, productText: `${title} ${category ?? ""}` });
+}
+
+function trackRecordOf(value: unknown):
+  | {
+      title: string;
+      appearances: number;
+      avgScore: number;
+      bestRank: number;
+      lastSeenDay: string;
+      daysSinceSeen: number;
+    }
+  | undefined {
+  const parsed = ProductSchema.shape.trackRecord.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function parsePriceBand(band: string): { min: number; max: number } {
   const numbers = String(band ?? "")
     .replace(/[^0-9.,\s-]/g, " ")
@@ -835,6 +991,10 @@ export function winnerRows(dto: WinnerDto): WinnerRow[] {
         product_council_votes: product.councilVotes ?? null,
         product_council_coverage: product.councilCoverage ?? null,
         product_verification: product.verification ?? null,
+        product_council_spread: product.councilSpread ?? null,
+        product_council_alignment: product.councilAlignment ?? null,
+        product_market_reach: product.marketReach ?? null,
+        product_track_record: product.trackRecord ?? null,
         risks: product.risks,
       } as Json,
     };
@@ -919,14 +1079,25 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
             ? "verified"
             : "unverified";
       const candidate = row.candidate as unknown as Record<string, unknown>;
+      const productName = String(candidate["name"] ?? state.query);
+      const productCategory = String(candidate["category"] ?? "");
+      // Pazar erişimi kural tabanlıdır (kanal pazarı + bilinen sertifika
+      // bariyerleri); ek AI çağrısı YOK, maliyet sıfır.
+      const reach = marketReach({
+        platform: state.platform || "General",
+        productText: `${productName} ${productCategory}`,
+      });
+      // Geçmiş performans: aynı ürünün önceki koşularda nasıl durduğu. Anahtar
+      // ham ad DEĞİL, normalize parmak izidir — farklı yazımlar aynı üründür.
+      const history = state.trackRecord?.[normalizeProductIdentity(productName)];
       return {
         row,
         entry,
         verification,
         joint: productJoint,
         product: ProductSchema.parse({
-          name: String(candidate["name"] ?? state.query),
-          category: String(candidate["category"] ?? ""),
+          name: productName,
+          category: productCategory,
           priceRange: String(candidate["priceRange"] ?? ""),
           estimatedMarginPct: Number(candidate["estimatedMarginPct"] ?? 0),
           demandScore: clampScore(candidate["demandScore"]),
@@ -950,6 +1121,21 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
           analysisScore: row.analysisScore,
           councilVotes: entry?.votes ?? 0,
           councilCoverage: entry?.coverage ?? 0,
+          councilSpread: entry?.spread ?? 0,
+          councilMin: entry?.minScore ?? 0,
+          councilMax: entry?.maxScore ?? 0,
+          councilAlignment: entry?.alignment ?? "none",
+          marketReach: reach as MarketReach,
+          trackRecord: history
+            ? {
+                title: history.title,
+                appearances: history.appearances,
+                avgScore: history.avgScore,
+                bestRank: history.bestRank,
+                lastSeenDay: history.lastSeenDay,
+                daysSinceSeen: history.daysSinceSeen,
+              }
+            : undefined,
           agentEvidence: entry?.evidence ?? [],
           verification,
         }),
@@ -960,8 +1146,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   // KALİTE KAPISI: yedek metinler (gerçek ürün DEĞİL) ve ağırlıklı puanı barajın
   // altında kalan zayıf adaylar nihai listeye ALINMAZ; eksik sıra DOLDURULMAZ.
   const qualified = ranked.filter(
-    (item) =>
-      item.product.source !== "fallback" && item.joint.score >= VELORA_MIN_PRODUCT_SCORE,
+    (item) => item.product.source !== "fallback" && item.joint.score >= VELORA_MIN_PRODUCT_SCORE,
   );
   const gateDropped = ranked.length - qualified.length;
   if (gateDropped > 0) notes.push(`QUALITY_GATE_DROPPED:${gateDropped}`);
@@ -1020,12 +1205,14 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
   const first = payloadOf(rows[0]!);
   const sorted = [...rows].sort(
     (a, b) =>
-      Math.round(numberOr(payloadOf(a)["rank"], 99)) - Math.round(numberOr(payloadOf(b)["rank"], 99)) ||
-      b.winner_score - a.winner_score,
+      Math.round(numberOr(payloadOf(a)["rank"], 99)) -
+        Math.round(numberOr(payloadOf(b)["rank"], 99)) || b.winner_score - a.winner_score,
   );
   const products: Product[] = sorted.slice(0, VELORA_TOP_N).map((row, index) => {
     const payload = payloadOf(row);
-    const verification = ["verified", "unverified", "unknown"].includes(String(payload["product_verification"]))
+    const verification = ["verified", "unverified", "unknown"].includes(
+      String(payload["product_verification"]),
+    )
       ? (String(payload["product_verification"]) as "verified" | "unverified" | "unknown")
       : "unverified";
     const source = ["ai", "trend-radar", "fallback"].includes(String(payload["source"]))
@@ -1051,6 +1238,15 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
       analysisScore: clampScore(numberOr(payload["product_analysis_score"], 0), 0),
       councilVotes: Math.max(0, Math.round(numberOr(payload["product_council_votes"], 0))),
       councilCoverage: Math.max(0, Math.min(1, numberOr(payload["product_council_coverage"], 0))),
+      councilSpread: Math.max(0, numberOr(payload["product_council_spread"], 0)),
+      councilAlignment: alignmentOf(payload["product_council_alignment"]),
+      marketReach: marketReachOf(
+        payload["product_market_reach"],
+        row.title,
+        row.category,
+        row.platform,
+      ),
+      trackRecord: trackRecordOf(payload["product_track_record"]),
       agentEvidence: [],
       verification,
     });
@@ -1229,10 +1425,7 @@ export function defaultVeloraStore(): VeloraStore {
  * zaten hata izole toplar; dış hata yakalayıcısı bir hat çökerse diğerinin sonucunu
  * da düşürmez.
  */
-async function ingestEvidence(
-  state: VeloraRunState,
-  deps: VeloraOrchestratorDeps,
-): Promise<void> {
+async function ingestEvidence(state: VeloraRunState, deps: VeloraOrchestratorDeps): Promise<void> {
   const collect = deps.collectEvidence ?? collectVeloraEvidence;
   const input = stateInput(state);
   const collectLine = async (): Promise<VeloraEvidenceSnapshot> => {
@@ -1341,6 +1534,19 @@ Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Nev
     ...candidate,
     candidateId: `C${index + 1}`,
   }));
+
+  // SONUÇ GERİ BİLDİRİM: bu adayların önceki koşulardaki performansı. Ajanlar
+  // karar verirken görür; okunamazsa boş geçilir (hat engellenmez).
+  const loadHistory = deps.fetchTrackRecord ?? fetchTrackRecords;
+  try {
+    state.trackRecord = await loadHistory({
+      titles: state.candidates.map((c) => String(c["name"] ?? "")),
+      country: state.country,
+      platform: state.platform,
+    });
+  } catch {
+    state.trackRecord = {};
+  }
 }
 
 /**
@@ -1370,10 +1576,7 @@ export function analysisScoreFor(
  * ZAMAN SÖZÜ: faz tavanına bağlıdır ve Faz 1 ajanlarıyla PARALEL yürür; tavan
  * dolarsa tur iptal edilir, formül puanı yazılır ve koşu ASLA düşmez.
  */
-async function runAnalysisLine(
-  state: VeloraRunState,
-  deps: VeloraOrchestratorDeps,
-): Promise<void> {
+async function runAnalysisLine(state: VeloraRunState, deps: VeloraOrchestratorDeps): Promise<void> {
   const candidates = state.candidates.slice(0, VELORA_FINALIST_COUNT);
   if (candidates.length === 0) return;
 
@@ -1382,8 +1585,7 @@ async function runAnalysisLine(
 
   /** Tur tamamlanmazsa dürüstçe formül puanı — `source: "heuristic"`. */
   const heuristicEntry = (index: number): VeloraAnalysisEntry => {
-    const candidate = candidates[index] as unknown as RetrieverCandidate &
-      Record<string, unknown>;
+    const candidate = candidates[index] as unknown as RetrieverCandidate & Record<string, unknown>;
     const name = String(candidate.name ?? "").trim();
     return {
       candidateId: candidateIdAt(index),
@@ -1394,7 +1596,8 @@ async function runAnalysisLine(
       source: "heuristic",
     };
   };
-  const heuristic = (): VeloraAnalysisEntry[] => candidates.map((_, index) => heuristicEntry(index));
+  const heuristic = (): VeloraAnalysisEntry[] =>
+    candidates.map((_, index) => heuristicEntry(index));
 
   const list = candidates
     .map((candidate, index) => {
@@ -1533,7 +1736,9 @@ async function drive(
       await deps.store.saveState(state);
 
       const result = await runVeloraPhase(phase, state, deps);
-      state.phases = [...state.phases.filter((p) => p.id !== id), result].sort((a, b) => a.id - b.id);
+      state.phases = [...state.phases.filter((p) => p.id !== id), result].sort(
+        (a, b) => a.id - b.id,
+      );
       state.runningPhase = null;
       state.updatedAtMs = Date.now();
       await deps.store.saveState(state);
@@ -1562,6 +1767,21 @@ async function drive(
     state.runningPhase = null;
     state.updatedAtMs = Date.now();
     await deps.store.saveState(state);
+
+    // SORGUL ÖNBELEĞİ: yalnızca TAMAMLANAN koşu yazılır, üstelik KULLANICIYA ÖZEL
+    // (anahtar kullanıcı kimliğini içerir). Aynı nişi 24 saat içinde tekrar
+    // çalıştıran kullanıcı 14 ajanı yeniden ücretlemeden önceki karneyi görür.
+    if (state.requestedBy) {
+      await writeVeloraQueryCache(
+        {
+          userId: state.requestedBy,
+          query: state.query,
+          country: state.country,
+          platform: state.platform,
+        },
+        state.runId,
+      );
+    }
     const selfTest = await selfTestVeloraRun(state, { store: deps.store, dossier, push });
     state.selfTest = selfTest;
     await deps.store.saveState(state);
@@ -1580,7 +1800,13 @@ async function drive(
     state.runningPhase = null;
     state.updatedAtMs = Date.now();
     await deps.store.saveState(state).catch(() => {});
-    return { runId: state.runId, status: "failed", completedPhases: state.phases.length, dispatch, error };
+    return {
+      runId: state.runId,
+      status: "failed",
+      completedPhases: state.phases.length,
+      dispatch,
+      error,
+    };
   }
 }
 
@@ -1591,7 +1817,8 @@ export async function startVeloraRun(
 ): Promise<VeloraRunResult> {
   const parsed = VeloraInputSchema.parse(input);
   const state: VeloraRunState = {
-    runId: parsed.runId ?? `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+    runId:
+      parsed.runId ?? `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     query: parsed.userQuery,
     country: (parsed.country ?? "GLOBAL").toUpperCase(),
     platform: parsed.platform ?? "General",
@@ -1608,6 +1835,8 @@ export async function startVeloraRun(
     live: false,
     candidates: [],
     analysisLine: [],
+    trackRecord: {},
+    requestedBy: parsed.requestedBy ?? null,
     phases: [],
     runningPhase: null,
     push: null,
@@ -1679,6 +1908,7 @@ export const VeloraInputSchema = z.object({
   country: z.string().trim().max(60).optional(),
   platform: z.string().trim().max(60).optional(),
   language: z.string().max(10).default("tr"),
+  requestedBy: z.string().trim().max(80).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -1884,11 +2114,14 @@ export async function selfTestVeloraRun(
     notes.push("NO_SHARED_WINNERS:INTERSECTION_EMPTY");
   }
 
-  if (agentsLogged !== expectedAgents) notes.push(`AGENT_COUNT_MISMATCH:${agentsLogged}/${expectedAgents}`);
+  if (agentsLogged !== expectedAgents)
+    notes.push(`AGENT_COUNT_MISMATCH:${agentsLogged}/${expectedAgents}`);
   for (const phase of performance) {
     if (!phase.withinCeiling) notes.push(`PHASE_CEILING_EXCEEDED:${phase.phase}`);
   }
-  const timedOut = state.phases.flatMap((p) => p.agents.filter((a) => a.timedOut).map((a) => a.key));
+  const timedOut = state.phases.flatMap((p) =>
+    p.agents.filter((a) => a.timedOut).map((a) => a.key),
+  );
   if (timedOut.length > 0) notes.push(`AGENTS_TIMED_OUT:${timedOut.join(",")}`);
   if (state.candidates.length > 0 && agentsLogged === 0) notes.push("PRODUCT_EVIDENCE_EMPTY");
 
@@ -1916,9 +2149,7 @@ export async function selfTestVeloraRun(
 
 /** İstenen biçimde son durum raporu (panelde ve logda gösterilir). */
 export function formatVeloraSelfTestReport(report: VeloraSelfTestReport, runId: string): string {
-  const perf = report.performance
-    .map((p) => `${p.phase}=${p.ms}ms`)
-    .join(" · ");
+  const perf = report.performance.map((p) => `${p.phase}=${p.ms}ms`).join(" · ");
   const compliant = report.performance.every((p) => p.withinCeiling);
   return [
     `[RUN]: ${runId}`,

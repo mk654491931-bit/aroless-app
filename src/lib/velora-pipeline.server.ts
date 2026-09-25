@@ -68,6 +68,46 @@ export const ProductSchema = z.object({
    * puanladıysa `verified`, kanıt yoksa `unverified`, ajan oyu yetersizse `unknown`.
    */
   verification: z.enum(["verified", "unverified", "unknown"]).optional(),
+  /** Ajan oylarının YAYILIMI (standart sapma): konsey ne kadar hemfikir? */
+  councilSpread: z.number().min(0).optional(),
+  /** Bu ürüne verilen EN DÜŞÜK / EN YÜKSEK ajan puanı. */
+  councilMin: z.number().min(0).max(100).optional(),
+  councilMax: z.number().min(0).max(100).optional(),
+  /** Yayılımdan türeyen katılım etiketi (panelde rozet). */
+  councilAlignment: z.enum(["unanimous", "strong", "split", "contested", "none"]).optional(),
+  /**
+   * Bu ürünün kanal bazında pazar erişimi (hangi ülkede satılabilir / bariyerli).
+   * Kural tabanlıdır; vergi-gümrük hesabı YAPILMAZ.
+   */
+  marketReach: z
+    .object({
+      country: z.string(),
+      openMarkets: z.number().int().min(0),
+      entries: z.array(
+        z.object({
+          country: z.string(),
+          fit: z.enum(["native", "cross-border", "unavailable"]),
+          barrier: z.string().nullable(),
+          verdict: z.enum(["open", "cross-border", "barrier", "unavailable"]),
+        }),
+      ),
+    })
+    .optional(),
+  /**
+   * Geçmiş performans (sonuç geri besleme): bu ürün KAÇ KOŞUDA kaç kez çıktı,
+   * ortalama puanı ve en son ne zaman görüldü. Satış ölçümü DEĞİLDİR —
+   * bağımsız koşuların birbirini doğrulamasıdır.
+   */
+  trackRecord: z
+    .object({
+      title: z.string(),
+      appearances: z.number().int().min(0),
+      avgScore: z.number().min(0).max(100),
+      bestRank: z.number().int().min(1),
+      lastSeenDay: z.string(),
+      daysSinceSeen: z.number().int().min(0),
+    })
+    .optional(),
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -77,19 +117,13 @@ export type Product = z.infer<typeof ProductSchema>;
  * Analiz hattı ürünü "Mini Ice Maker XR-500", ajan fazı "mini ice maker xr 500"
  * yazdığında ikisi FARKLI ürün sayılırsa kesişim sahte biçimde boş kalır. Bu
  * yüzden karşılaştırma ham ad üzerinden değil, normalize edilmiş kimlik üzerinden
- * yapılır: küçük harf (tr), aksan/ı dönüşümü, alfanümerik olmayanların atılması ve
- * boşlukların tekilleştirilmesi. Saf ve deterministiktir.
+ * yapılır. Saf ve deterministiktir.
+ *
+ * Tanım `product-identity.ts`te yaşar; kazanan hattı ve koşular arası geçmiş
+ * performans eşleştirmesi aynı fonksiyonu paylaşır. Buradan yeniden dışa
+ * aktarılır: mevcut import yolları bozulmaz.
  */
-export function normalizeProductIdentity(name: string): string {
-  return String(name ?? "")
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
+export { normalizeProductIdentity } from "./product-identity";
 
 export const PipelineOutputSchema = z.object({
   topProducts: z.array(ProductSchema).max(5),
@@ -287,9 +321,7 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
           estimatedMarginPct: Number.isFinite(Number(value.estimatedMarginPct))
             ? Number(value.estimatedMarginPct)
             : 0,
-          demandScore: Number.isFinite(Number(value.demandScore))
-            ? Number(value.demandScore)
-            : 50,
+          demandScore: Number.isFinite(Number(value.demandScore)) ? Number(value.demandScore) : 50,
           competitionScore: Number.isFinite(Number(value.competitionScore))
             ? Number(value.competitionScore)
             : 50,
@@ -523,26 +555,24 @@ function toPipelineProducts(
   // KALİTE KAPISI: yedek/dolgu metinleri, GERÇEK aday varsa listeye alınmaz —
   // uydurma ürün adı göstermek yerine daha az ama gerçek ürün gösterilir.
   const real = ranked.filter((row) => candidateSource(row.candidate) !== "fallback");
-  return (real.length > 0 ? real : ranked)
-    .slice(0, 5)
-    .map(({ candidate, score }, index) =>
-      ProductSchema.parse({
-        name: candidate.name,
-        category: candidate.category ?? "",
-        priceRange: candidate.priceRange ?? "",
-        estimatedMarginPct: Number(candidate.estimatedMarginPct ?? 0),
-        demandScore: Math.max(0, Math.min(100, Number(candidate.demandScore ?? 50))),
-        competitionScore: Math.max(0, Math.min(100, Number(candidate.competitionScore ?? 50))),
-        sentiment: candidate.sentiment ?? "",
-        whyNow: candidate.whyNow ?? "",
-        risks: candidate.risks ?? [],
-        councilScore: jointScore,
-        councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
-        winnerScore: score,
-        rank: index + 1,
-        source: candidateSource(candidate),
-      }),
-    );
+  return (real.length > 0 ? real : ranked).slice(0, 5).map(({ candidate, score }, index) =>
+    ProductSchema.parse({
+      name: candidate.name,
+      category: candidate.category ?? "",
+      priceRange: candidate.priceRange ?? "",
+      estimatedMarginPct: Number(candidate.estimatedMarginPct ?? 0),
+      demandScore: Math.max(0, Math.min(100, Number(candidate.demandScore ?? 50))),
+      competitionScore: Math.max(0, Math.min(100, Number(candidate.competitionScore ?? 50))),
+      sentiment: candidate.sentiment ?? "",
+      whyNow: candidate.whyNow ?? "",
+      risks: candidate.risks ?? [],
+      councilScore: jointScore,
+      councilDecision: listed ? "LISTED" : `REVIEW_${councilAverage}`,
+      winnerScore: score,
+      rank: index + 1,
+      source: candidateSource(candidate),
+    }),
+  );
 }
 
 /** 14 agents receive the prior JSON state sequentially; no member can erase it. */
@@ -594,12 +624,10 @@ export async function runVeloraAgentPipeline(rawInput: unknown): Promise<Pipelin
     run: async (agent, prompt) => {
       bus.emit("agent:start", { traceId, agent: agent.name, tier: 2 });
       const agentStart = Date.now();
-      const result = await executeAgentWithFallback(
-        `Council ${agent.name}`,
-        prompt,
-        DEEP_CHAIN,
-        { temperature: 0.3, retries: 2 },
-      );
+      const result = await executeAgentWithFallback(`Council ${agent.name}`, prompt, DEEP_CHAIN, {
+        temperature: 0.3,
+        retries: 2,
+      });
       logs.push(result.log);
       bus.emit("agent:complete", {
         traceId,

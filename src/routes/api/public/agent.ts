@@ -71,10 +71,33 @@ export const Route = createFileRoute("/api/public/agent")({
 
           const isOrchestrated = body["orchestrated"] === true;
           const feature = isOrchestrated ? ("council" as const) : ("agent-pipeline" as const);
+
+          // SORGUL ÖNBELEĞİ: aynı nişi 24 saat içinde çalıştıran kullanıcıya 14 ajanı
+          // yeniden ücretlemeden ÖNCEKİ koşunun karnesi geri oynatılır. Kontrol
+          // jeton alınmadan yapılır → önbellek bir indirim değil, ücretsiz tekrar.
+          if (isOrchestrated) {
+            const { readVeloraQueryCache } = await import("@/lib/velora-query-cache.server");
+            const cached = await readVeloraQueryCache({
+              userId: guard.userId,
+              query: String(body["userQuery"] ?? ""),
+              country: String(body["country"] ?? "GLOBAL"),
+              platform: String(body["platform"] ?? "General"),
+            });
+            if (cached) {
+              // İstemci aynı yoklama yolunu kullanır; karne `radar_items`'tan geri kurulur.
+              return Response.json({
+                runId: cached.runId,
+                status: "completed",
+                completedPhases: 4,
+                cached: true,
+                cachedAt: cached.cachedAt,
+              });
+            }
+          }
+
           const { featureCreditCost } = await import("@/lib/credit-costs");
-          const { chargeOrRespond, refundFeatureCredits } = await import(
-            "@/lib/credit-charge.server"
-          );
+          const { chargeOrRespond, refundFeatureCredits } =
+            await import("@/lib/credit-charge.server");
           const cost = featureCreditCost(feature);
 
           const payment = await chargeOrRespond({
@@ -87,10 +110,13 @@ export const Route = createFileRoute("/api/public/agent")({
           try {
             if (isOrchestrated) {
               const orchestrator = await import("@/lib/velora-orchestrator.server");
-              const result = await orchestrator.startVeloraRun(body, {
-                store: orchestrator.defaultVeloraStore(),
-                handoff: orchestrator.veloraQStashHandoff(publicOrigin(request)),
-              });
+              const result = await orchestrator.startVeloraRun(
+                { ...body, requestedBy: guard.userId },
+                {
+                  store: orchestrator.defaultVeloraStore(),
+                  handoff: orchestrator.veloraQStashHandoff(publicOrigin(request)),
+                },
+              );
               // Koşu hiç başlayamadıysa jetonu iade et (kullanıcı boş sonuç almaz).
               if (result.status === "failed") {
                 await refundFeatureCredits(guard.userId, cost, "velora_run_failed");
