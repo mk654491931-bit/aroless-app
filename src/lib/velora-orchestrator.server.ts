@@ -1,26 +1,29 @@
 /**
- * VELORA AUTONOMOUS MULTI-AGENT ORCHESTRATOR — 14 ajan · 4 faz · ücretsiz plan güvenli.
+ * VELORA AUTONOMOUS MULTI-AGENT ORCHESTRATOR — 14 ajan · tek paralel burst · ücretsiz plan güvenli.
  *
  * NEDEN AYRI BİR KATMAN: `velora-pipeline.server.ts` 14 ajanı TEK bir bloklayan
  * istek içinde, sırayla koşar. Vercel Hobby gibi dar bir fonksiyon limitinde bu
  * ya 504 üretir ya da hattı ortasında keser. Bu modül aynı 14 ajanı
  * **istatistiksel mikro-adımlara** böler:
  *
- *   1. 14 ajan 4 FAZA ayrılır; her faz KENDİ yalıtılmış yükünde koşar.
- *   2. Her fazın sert bir tavanı vardır: `VELORA_PHASE_CEILING_MS` (8 sn). Tavan
+ *   1. 14 ajan TEK FAZDA, birbirinden bağımsız Promise.all yükünde başlar.
+ *   2. AI analiz hattı aynı fazda aynı anda finalistleri puanlar. 14 ajanın
+ *      tamamı ve bağımsız analiz turu aynı deadline'ı paylaşır.
+ *   3. Fazın sert tavanı vardır: `VELORA_PHASE_CEILING_MS` (8 sn). Tavan
  *      aşılırsa faz yarıda kesilmez — tamamlanmayan üyeler NÖTR sonuçla döner,
  *      devam eden AI isteği GERÇEKTEN iptal edilir (AbortSignal) ve hat dürüstçe
  *      "kısmi" der. Hiçbir faz asla 8 sn'yi geçemez.
- *   3. Fazlar arası durum Supabase'deki geçici kovada (`ai_cache`, scope
+ *   4. Burst durumu Supabase'deki geçici kovada (`ai_cache`, scope
  *      `velora-orch`) `runId` ile taşınır → her adım STATELESS'tir ve herhangi bir
  *      instance'ta koşabilir. Aynı runId'nin tekrar teslimi (QStash retry)
  *      IDEMPOTENTTİR: kayıtlı faz yeniden koşmaz, koşan faz ikinci kez başlatılmaz.
- *   4. Sonraki faz QStash ile KENDİNE yayınlanır (self-chaining fan-out). QStash
- *      yoksa aynı adımlar istek içinde koşar ve toplam süre yine tavanlıdır.
+ *   5. Burst tamamlanınca saf kalite kapısı, %70/%30 birleşimi ve sıralama çalışır;
+ *      ek QStash zinciri yoktur.
  *
- * ORTAK KANIT (ground truth): 14 ajanın HEPSİ trend radarı kazımalarını ve canlı
- * piyasa kanıtını (`data-pipeline.server.ts` + `market-verify.server.ts`) ortak
- * veri olarak görür. Doğrulanmamış/halüsinasyon metrik kural gereği reddedilir.
+ * İKİ BAĞIMSIZ KANIT HATTI: ürün analizi ve 14 ajanlı konsey, aynı anda kendi
+ * trend radarı + canlı piyasa kazımasını başlatır. Snapshots ayrı state alanlarında
+ * tutulur; hiçbir hat diğerinin kazınmış kanıtını görmez. Doğrulanmamış/halüsinasyon
+ * metrik kural gereği reddedilir.
  *
  * ORTAK EN İYİ 3 (shared best-3): Tek bir `runId` altında İKİ BAĞIMSIZ SIRALAMA
  * üretilir ve panel yalnızca KESİŞİMİ gösterir:
@@ -33,7 +36,7 @@
  * bulunduğu dürüstçe yazılır. Ajan hiç ürün puanı vermezse panel bu durumu
  * "yalnız analiz hattı" diye etiketler (sessizce sahte kesişim üretmez).
  *
- * PUSH PROTOKOLÜ: Faz 4 tamamlanınca kazanan karne (dossier) Aroless Winner DTO'ya
+ * PUSH PROTOKOLÜ: Burst tamamlanınca kazanan karne (dossier) Aroless Winner DTO'ya
  * çevrilir ve nişin kazanan tablosuna (`radar_items` — panelin okuduğu mevcut
  * "winner" tablosu) yazılır. Ardından OTOMATİK SELF-TEST koşar: kayıt geri
  * okunur, alan bütünlüğü ve tavan uyumu doğrulanır.
@@ -60,10 +63,10 @@ import {
 } from "./velora-pipeline.server";
 
 // ---------------------------------------------------------------------------
-// Faz planı — 14 ajanın tamamı, boşluksuz ve çakışmasız 4 faza dağıtılır.
+// Burst planı — 14 ajanın tamamı aynı anda paralel başlar; sonraki aşamalar safdır.
 // ---------------------------------------------------------------------------
 
-/** Her fazın sert tavanı: ücretsiz plan fonksiyon limitinin ALTINDA kalır. */
+/** Burst'ın sert tavanı: ücretsiz plan fonksiyon limitinin ALTINDA kalır. */
 export const VELORA_PHASE_CEILING_MS = 8_000;
 
 /**
@@ -118,35 +121,40 @@ export type VeloraPhaseDefinition = {
   id: VeloraPhaseId;
   key: string;
   name: string;
-  /** Bu fazda koşan üyeler — hepsi AYNI ortak kanıt bloğunu görür. */
+  /** Bu burst'ta koşan üyeler — hepsi AYNI ortak kanıt bloğunu görür. */
   agents: readonly CouncilAgentKey[];
 };
 
 export const VELORA_PHASES: readonly VeloraPhaseDefinition[] = [
   {
     id: 1,
-    key: "ingestion",
-    name: "Data Ingestion & Discovery",
-    agents: ["trend_hunter", "competitor_intel", "ux_specialist", "independent_data_auditor"],
+    key: "parallel-council",
+    name: "14-Agent Council + Independent AI Analysis",
+    // Kullanıcı şartı: 14 üyenin tamamı aynı anda başlar. Her üye aynı ortak
+    // kanıtı ve aynı finalist listesini görür; sıralı zincir yoktur.
+    agents: [
+      "cfo",
+      "cmo",
+      "cro",
+      "trend_hunter",
+      "competitor_intel",
+      "ux_specialist",
+      "supply_chain",
+      "pricing_strategist",
+      "logistics_cost",
+      "compliance_officer",
+      "retention_ltv",
+      "creative_director",
+      "channel_fit",
+      "independent_data_auditor",
+    ],
   },
-  {
-    id: 2,
-    key: "economics",
-    name: "Product & Competitor Analysis",
-    agents: ["cfo", "supply_chain", "logistics_cost", "pricing_strategist"],
-  },
-  {
-    id: 3,
-    key: "strategy",
-    name: "Strategy & Creative Drafting",
-    agents: ["cmo", "creative_director", "channel_fit"],
-  },
-  {
-    id: 4,
-    key: "synthesis",
-    name: "Critique, Validation & Synthesis",
-    agents: ["cro", "compliance_officer", "retention_ltv"],
-  },
+  // Bundan sonraki üç adım yeni model çağrısı yapmaz; 14 ajanın ortak ürün
+  // puanlarını kalite kapısı, %70/%30 birleşimi ve push için deterministik
+  // olarak kaydeden checkpoint'lerdir.
+  { id: 2, key: "quality-gate", name: "Evidence Quality Gate", agents: [] },
+  { id: 3, key: "weighted-decision", name: "70/30 Weighted Decision", agents: [] },
+  { id: 4, key: "ranking-push", name: "Final Ranking & Push", agents: [] },
 ];
 
 /** Planın kapsadığı üye sayısı — 14 ajanın tamamı olmalı (test bunu doğrular). */
@@ -231,6 +239,40 @@ export const VeloraSelfTestReportSchema = z.object({
 });
 export type VeloraSelfTestReport = z.infer<typeof VeloraSelfTestReportSchema>;
 
+/**
+ * HAT A — BAĞIMSIZ AI ANALİZ HATTI'nın ürün başına puanı.
+ *
+ * NEDEN VAR: 14 ajanlı konsey (HAT B) koşarken analiz hattı yalnız deterministik
+ * bir formülle (`analysisOnlyScore`) sıralama yapıyordu; yani %30'luk ağırlık
+ * gerçek bir AI yorumuna değil, hesaba dayanıyordu. Artık analiz hattı finalistleri
+ * KENDİ AI turuyla puanlar ve bu puan ağırlıklı birleşime girer.
+ *
+ * DÜRÜSTLÜK: tur tamamlanamazsa giriş `source: "heuristic"` ile işaretlenir ve
+ * formül puanı kullanılır — sessizce uydurma AI puanı üretilmez.
+ */
+export const VeloraAnalysisEntrySchema = z.object({
+  candidateId: z.string(),
+  identity: z.string().default(""),
+  name: z.string().default(""),
+  score: z.number().min(0).max(100),
+  reason: z.string().default(""),
+  source: z.enum(["ai", "heuristic"]).default("ai"),
+});
+export type VeloraAnalysisEntry = z.infer<typeof VeloraAnalysisEntrySchema>;
+
+/** Bir hattın kendi canlı scraping snapshot'ı; diğer hatta aktarılmaz. */
+export const VeloraEvidenceSnapshotSchema = z.object({
+  block: z.string().default(""),
+  radar: z.array(z.string()).default([]),
+  live: z.boolean().default(false),
+  error: z.string().optional(),
+});
+export type VeloraEvidenceSnapshot = z.infer<typeof VeloraEvidenceSnapshotSchema>;
+
+function emptyEvidenceSnapshot(): VeloraEvidenceSnapshot {
+  return { block: "", radar: [], live: false };
+}
+
 export const VeloraRunStateSchema = z.object({
   runId: z.string(),
   query: z.string(),
@@ -241,12 +283,27 @@ export const VeloraRunStateSchema = z.object({
   /** Son yazım anı — panelin "bayat koşu" tespiti bu alana bakar. */
   updatedAtMs: z.number().default(0),
   status: z.enum(["running", "completed", "failed"]),
-  /** Toplanan ORTAK kanıt bloğu — her fazın istemi bunu taşır. */
+  /**
+   * İki hattın AYRI scraping sonuçları. Product Retriever + Analysis Line yalnız
+   * `analysis`, 14 ajan ise yalnız `council` snapshot'ını görür.
+   */
+  evidenceByLine: z
+    .object({
+      analysis: VeloraEvidenceSnapshotSchema.default(emptyEvidenceSnapshot()),
+      council: VeloraEvidenceSnapshotSchema.default(emptyEvidenceSnapshot()),
+    })
+    .default({ analysis: emptyEvidenceSnapshot(), council: emptyEvidenceSnapshot() }),
+  /** Geriye dönük dossier/panel özeti: iki hattın kanıtının birleşik görünümü. */
   evidenceBlock: z.string().default(""),
   scrapedTrends: z.array(z.string()).default([]),
   live: z.boolean().default(false),
   /** AI retriever'ın adlandırdığı ürünler + kazınmış trend yedekleri (finalistler). */
   candidates: z.array(z.record(z.string(), z.unknown())).default([]),
+  /**
+   * HAT A çıktısı: bağımsız AI analiz hattının ürün başına puanları. Faz 1'in 14
+   * üyesi koşarken PARALEL üretilir ve karne ağırlıklı birleşiminde kullanılır.
+   */
+  analysisLine: z.array(VeloraAnalysisEntrySchema).default([]),
   phases: z.array(VeloraPhaseResultSchema).default([]),
   /** Şu an koşan faz — aynı fazın ikinci teslimini idempotent kılar. */
   runningPhase: z
@@ -330,6 +387,8 @@ export type VeloraOrchestratorDeps = {
   phaseCeilingMs?: number;
   /** Sonraki fazı devretme yolu (QStash). `null` ise adımlar istek içinde koşar. */
   handoff?: ((args: { runId: string; phase: VeloraPhaseId }) => Promise<VeloraHandoff>) | null;
+  /** Test ve özel sağlayıcılar için kanıt kazıyıcısı; varsayılan canlı scraper'dır. */
+  collectEvidence?: typeof collectVeloraEvidence;
 };
 
 export type VeloraHandoff = { ok: boolean; mode: VeloraDispatchMode; messageId?: string; error?: string };
@@ -489,9 +548,26 @@ export async function runVeloraPhase(
   const ceiling = deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS;
   const margin = Math.min(VELORA_STEP_RETURN_MARGIN_MS, Math.floor(ceiling / 4));
   const deadlineAt = started + ceiling - margin;
+  /**
+   * İKİ HAT AYNI ANDA BAŞLAR.
+   *
+   * Analiz hattının bağımsız AI puanlama turu burada, Faz 1'in 14 üyesiyle
+   * PARALEL başlatılır: ajanlar ürünleri puanlarken analiz hattı AYNI finalistleri
+   * kendi turuyla puanlar. Tur tavanlıdır ve çökerse deterministik formüle düşer;
+   * ajan kararı bu yüzden asla gecikmez veya bozulmaz. `ms` iki kol da
+   * tamamlandıktan sonra ölçülür — 15 çağrı için 8 sn sözü ölçümde de geçerlidir.
+   */
+  const analysisLineTask =
+    phase.id === 1 && state.analysisLine.length === 0 && state.candidates.length > 0
+      ? runAnalysisLine(state, deps)
+      : null;
   const agents = await Promise.all(
     phase.agents.map((key) => runOneAgent(key, phase, state, deadlineAt, deps)),
   );
+  // Paralel koşan analiz turu karne kurulmadan ÖNCE katılır. Ölçüm ajanlardan
+  // hemen sonra değil, iki kol da bittiğinde alınır; 8 sn sözü 15 çağrı için de
+  // geçerli kalır.
+  if (analysisLineTask) await analysisLineTask;
   const ms = Date.now() - started;
   return {
     id: phase.id,
@@ -536,6 +612,7 @@ function agentPrompt(
   const definition = COUNCIL_AGENTS.find((a) => a.key === agentKey);
   const name = definition?.name ?? agentKey;
   const index = COUNCIL_AGENTS.findIndex((a) => a.key === agentKey) + 1;
+  const councilEvidence = state.evidenceByLine.council;
   return `You are ${name}, member ${index}/14 of the Aroless AI Council.
 VELORA PHASE ${phase.id}/4 — ${phase.name}
 TASK: ${task}
@@ -545,9 +622,9 @@ COUNTRY: ${state.country || "GLOBAL"}
 PLATFORM: ${state.platform || "any"}
 
 ${
-  state.evidenceBlock
-    ? `SHARED LIVE EVIDENCE (trend radar scrapings + live market verification — the SAME ground truth every council member receives):\n${state.evidenceBlock.slice(0, 4_000)}`
-    : "SHARED LIVE EVIDENCE: none available for this run. Score neutrally."
+  councilEvidence.block
+    ? `COUNCIL SCRAPING EVIDENCE (this line's independent trend radar + live market scrape; do not assume the analysis line sees the same snapshot):\n${councilEvidence.block.slice(0, 4_000)}`
+    : "COUNCIL SCRAPING EVIDENCE: this line's independent scrape returned no data. Score neutrally."
 }
 
 ${finalistBlock(state)}
@@ -642,9 +719,10 @@ export function productConsensus(state: VeloraRunState): Map<string, VeloraProdu
  * (Karar bilgisidir; ürün sıralaması ürün başına `analysisOnlyScore` ile yapılır.)
  */
 export function veloraAnalysisScore(state: VeloraRunState): number {
-  const scraped = Math.min(1, state.scrapedTrends.length / 10);
+  const analysisEvidence = state.evidenceByLine.analysis; // line-specific snapshot
+  const scraped = Math.min(1, analysisEvidence.radar.length / 10);
   const named = Math.min(1, state.candidates.filter((c) => c["source"] === "ai").length / 3);
-  const live = state.live ? 1 : 0;
+  const live = analysisEvidence.live ? 1 : 0;
   return Math.round((scraped * 0.3 + named * 0.4 + live * 0.3) * 100);
 }
 
@@ -793,7 +871,8 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
         candidate,
         candidateId,
         identity: normalizeProductIdentity(String(candidate.name ?? "")),
-        analysisScore: analysisOnlyScore(candidate),
+        // HAT A: bağımsız AI analiz turunun puanı; tur yoksa deterministik formül.
+        analysisScore: analysisScoreFor(state, candidateId, analysisOnlyScore(candidate)),
       };
     })
     .sort((a, b) => b.analysisScore - a.analysisScore || a.identity.localeCompare(b.identity));
@@ -818,7 +897,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   if (consensus.size === 0) notes.push("AGENT_CONSENSUS_UNAVAILABLE");
   else if (overlapCount === 0) notes.push("NO_PRODUCT_INTERSECTION");
   if (!state.live) notes.push("LIVE_EVIDENCE_UNAVAILABLE");
-  if (!state.evidenceBlock) notes.push("SHARED_EVIDENCE_EMPTY");
+  if (!state.evidenceByLine.analysis.block) notes.push("SHARED_EVIDENCE_EMPTY");
 
   // AĞIRLIKLI BİRLEŞİM — iki bağımsız listenin tüm adayları; her ürün ürün başına
   // ağırlıklı puanla (konsey %70 ⊕ analiz %30) değerlendirilir. Eksik sıra
@@ -1142,12 +1221,45 @@ export function defaultVeloraStore(): VeloraStore {
 // ORKESTRASYON — faza faza ilerle, aradaki devri QStash ile yap
 // ---------------------------------------------------------------------------
 
-/** Faz 1'den önce toplanan ORTAK kanıt (trend radarı kazımaları + canlı piyasa). */
-async function ingestEvidence(state: VeloraRunState): Promise<void> {
-  const evidence = await collectVeloraEvidence(stateInput(state));
-  state.evidenceBlock = evidence.block;
-  state.scrapedTrends = evidence.radar;
-  state.live = evidence.live;
+/**
+ * Faz 1'den önce iki hattın scraping'ini AYRI AYRI ve paralel başlatır.
+ *
+ * Buradaki iki collector çağrısı bilinçlidir: analysis hattı ve council hattı
+ * aynı provider sonucunu paylaşmaz. `collectVeloraEvidence` kendi içinde iki kaynağı
+ * zaten hata izole toplar; dış hata yakalayıcısı bir hat çökerse diğerinin sonucunu
+ * da düşürmez.
+ */
+async function ingestEvidence(
+  state: VeloraRunState,
+  deps: VeloraOrchestratorDeps,
+): Promise<void> {
+  const collect = deps.collectEvidence ?? collectVeloraEvidence;
+  const input = stateInput(state);
+  const collectLine = async (): Promise<VeloraEvidenceSnapshot> => {
+    try {
+      const evidence = await collect(input);
+      return {
+        block: String(evidence.block ?? ""),
+        radar: [...(evidence.radar ?? [])],
+        live: Boolean(evidence.live),
+      };
+    } catch (error) {
+      return {
+        ...emptyEvidenceSnapshot(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const [analysis, council] = await Promise.all([collectLine(), collectLine()]);
+  state.evidenceByLine = { analysis, council };
+
+  // Eski panel/DTO sözleşmesi için birleşik özet; prompt'lar artık yukarıdaki
+  // line-specific snapshot'ları kullanır.
+  const radar = [...new Set([...analysis.radar, ...council.radar])];
+  state.scrapedTrends = radar;
+  state.evidenceBlock = [analysis.block, council.block].filter(Boolean).join("\n\n");
+  state.live = analysis.live || council.live;
 }
 
 /**
@@ -1161,20 +1273,21 @@ async function ingestEvidence(state: VeloraRunState): Promise<void> {
  */
 async function retrieveCandidates(state: VeloraRunState, deps: VeloraOrchestratorDeps) {
   const run = deps.runAgent ?? executeAgentWithFallback;
+  const analysisEvidence = state.evidenceByLine.analysis; // line-specific snapshot
   const prompt = `You are the Product Retriever for Aroless. Name real, specific, buyable products for the query.
 QUERY: ${state.query}
 COUNTRY: ${state.country || "GLOBAL"}
 PLATFORM: ${state.platform || "any"}
 ${
-  state.evidenceBlock
-    ? `\nSHARED LIVE EVIDENCE (the SAME scrapings the 14 council members receive — treat as ground truth):\n${state.evidenceBlock.slice(0, 3_000)}\n`
-    : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
+  analysisEvidence.block
+    ? `\nANALYSIS-LINE SCRAPING EVIDENCE (this line's independent trend radar + live market scrape; the 14-member council uses a separate snapshot):\n${analysisEvidence.block.slice(0, 3_000)}\n`
+    : "\nANALYSIS-LINE SCRAPING EVIDENCE: this line's independent scrape returned no data.\n"
 }
 QUALITY BAR (bu koşunun amacı GERÇEKTEN iyi ürünler göstermek — zayıf aday listeye girmemeli):
 - Yalnızca GERÇEK, SOMUT ve satın alınabilir ürünler döndür (ör. "katlanabilir silikon su şişesi 750ml"), asla geniş kategori ("ev gereçleri", "aksesuar") veya "için alternatif" gibi dolgu metni.
 - Uydurma marka/model adı ve doğrulanamayan sayı YASAK. Emin değilsen aralık ver.
 - Her ürün için: gerçekçi fiyat bandı, paylaşılan kanıta dayanan SOMUT bir "neden şimdi", ve en az bir gerçek risk.
-- Talebi paylaşılan kanıtta görünen ürünleri tercih et; her aday birbirinden FARKLI olmalı.
+- Talebi ANALYSIS-LINE SCRAPING EVIDENCE içinde görünen ürünleri tercih et; her aday birbirinden FARKLI olmalı.
 - Kaliteli aday azsa daha az ürün döndürmek, uydurmaktan iyidir.
 Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number,"competitionScore":number,"sentiment":string,"whyNow":string,"risks":string[]}]}`;
@@ -1188,7 +1301,7 @@ Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Nev
         retries: 1,
         signal: controller.signal,
       }),
-      Math.max(500, deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS),
+      Math.max(1, Math.floor((deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS) * 0.75)),
       "velora:retriever",
       () => controller.abort(),
     );
@@ -1206,7 +1319,7 @@ Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Nev
 
   const seen = new Set(named.map((c) => normalizeProductIdentity(String(c["name"]))));
   const pool = [...named];
-  for (const candidate of scrapedCandidates(state.scrapedTrends)) {
+  for (const candidate of scrapedCandidates(state.evidenceByLine.analysis.radar)) {
     const identity = normalizeProductIdentity(candidate.name);
     if (seen.has(identity)) continue;
     seen.add(identity);
@@ -1228,6 +1341,150 @@ Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Nev
     ...candidate,
     candidateId: `C${index + 1}`,
   }));
+}
+
+/**
+ * Ürünün ANALİZ HATTI puanı: bağımsız AI turu bir puan verdiyse O, yoksa
+ * deterministik kanıt formülü. Böylece sıralama hiçbir koşulda boş kalmaz ve
+ * AI turu tamamlanmadığında hat dürüstçe "formül" moduna düşer.
+ */
+export function analysisScoreFor(
+  state: VeloraRunState,
+  candidateId: string,
+  fallback: number,
+): number {
+  const entry = state.analysisLine.find((row) => row.candidateId === candidateId);
+  if (!entry) return clampScore(fallback);
+  return clampScore(entry.score);
+}
+
+/**
+ * HAT A — BAĞIMSIZ AI ANALİZ HATTI (14 ajanla AYNI ANDA koşar).
+ *
+ * NEDEN AYRI TUR: 14 ajanlı konsey ürünleri kendi oylarıyla sıralar. Analiz
+ * hattı eskiden yalnız deterministik formülle (`analysisOnlyScore`) sıralıyordu;
+ * yani %30'luk ağırlık gerçek bir AI yorumuna değil hesaba dayanıyordu. Bu tur
+ * finalistleri KENDİ BAĞIMSIZ scraping snapshot'ıyla puanlar. 14 ajan kendi
+ * ayrı council snapshot'ını görür; iki hat birbirinin kazıma sonucunu paylaşmaz.
+ *
+ * ZAMAN SÖZÜ: faz tavanına bağlıdır ve Faz 1 ajanlarıyla PARALEL yürür; tavan
+ * dolarsa tur iptal edilir, formül puanı yazılır ve koşu ASLA düşmez.
+ */
+async function runAnalysisLine(
+  state: VeloraRunState,
+  deps: VeloraOrchestratorDeps,
+): Promise<void> {
+  const candidates = state.candidates.slice(0, VELORA_FINALIST_COUNT);
+  if (candidates.length === 0) return;
+
+  const candidateIdAt = (index: number) =>
+    candidateIdOf(candidates[index] as unknown as Record<string, unknown>, index);
+
+  /** Tur tamamlanmazsa dürüstçe formül puanı — `source: "heuristic"`. */
+  const heuristicEntry = (index: number): VeloraAnalysisEntry => {
+    const candidate = candidates[index] as unknown as RetrieverCandidate &
+      Record<string, unknown>;
+    const name = String(candidate.name ?? "").trim();
+    return {
+      candidateId: candidateIdAt(index),
+      identity: normalizeProductIdentity(name),
+      name,
+      score: clampScore(analysisOnlyScore(candidate)),
+      reason: "Deterministik kanıt formülü (AI analiz turu tamamlanamadı).",
+      source: "heuristic",
+    };
+  };
+  const heuristic = (): VeloraAnalysisEntry[] => candidates.map((_, index) => heuristicEntry(index));
+
+  const list = candidates
+    .map((candidate, index) => {
+      const risks = Array.isArray(candidate["risks"]) ? (candidate["risks"] as unknown[]) : [];
+      return [
+        `${candidateIdAt(index)}: ${String(candidate["name"] ?? "").trim()}`,
+        `   price=${String(candidate["priceRange"] ?? "-")} · margin=${String(candidate["estimatedMarginPct"] ?? "-")}% · demand=${String(candidate["demandScore"] ?? "-")} · competition=${String(candidate["competitionScore"] ?? "-")}`,
+        `   whyNow=${String(candidate["whyNow"] ?? "-")}`,
+        `   risks=${risks.map(String).join("; ") || "-"}`,
+      ].join("\n");
+    })
+    .join("\n");
+
+  // Yalnizca KENDI hat snapshot'i: 14 ajan ayri bir council kazimasi goruyor,
+  // bu yuzden birlesik `evidenceBlock` bilerek kullanilmaz.
+  const analysisEvidence = state.evidenceByLine.analysis;
+  const prompt = `You are the INDEPENDENT AI ANALYSIS LINE for Aroless. A separate 14-member council scores these SAME finalists in parallel with its own independent scrape; your verdict must be YOUR OWN — never assume anyone else's score.
+QUERY: ${state.query}
+COUNTRY: ${state.country || "GLOBAL"}
+PLATFORM: ${state.platform || "any"}
+${
+  state.evidenceBlock
+    ? `\nANALYSIS-LINE SCRAPING EVIDENCE (this line's own trend radar + live market scrape):\n${analysisEvidence.block.slice(0, 2_000)}\n`
+    : "\nANALYSIS-LINE SCRAPING EVIDENCE: this line's independent scrape returned no data.\n"
+}
+FINALISTS:
+${list}
+
+Score EVERY finalist 0-100 for: would this really make money in this country/platform right now?
+Rules:
+- Ground every score in the LIVE EVIDENCE and the finalist's own numbers; never invent metrics.
+- Be discriminating and use the full range: saturated competition, thin margin or weak evidence must pull the score DOWN.
+- A vague or undifferentiated product must never score high.
+Return ONLY JSON:
+{"scores":[{"id":"C1","score":0,"reason":"short, concrete justification"}]}`;
+
+  const run = deps.runAgent ?? executeAgentWithFallback;
+  const controller = new AbortController();
+  const ceiling = Math.max(500, deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS);
+  try {
+    const result = await withCeiling(
+      run("Analysis Line", prompt, DEEP_CHAIN, {
+        temperature: 0.25,
+        retries: 1,
+        signal: controller.signal,
+      }),
+      ceiling,
+      "velora:analysis-line",
+      () => controller.abort(),
+    );
+    const parsed = parseAgentJson<{ scores?: unknown[] }>(result.text, {});
+    const votes = new Map<string, { score: number; reason: string }>();
+    for (const raw of parsed.scores ?? []) {
+      if (!raw || typeof raw !== "object") continue;
+      const value = raw as Record<string, unknown>;
+      const id = String(value.id ?? value.candidateId ?? "").trim();
+      const score = Number(value.score);
+      if (!id || !Number.isFinite(score)) continue;
+      votes.set(id.toLocaleLowerCase("tr-TR"), {
+        score: clampScore(score),
+        reason: String(value.reason ?? "").slice(0, 240),
+      });
+    }
+    if (votes.size === 0) {
+      // AI yanıt verdi ama puan üretmedi: uydurma sıfır yazmak yerine formüle düş.
+      state.analysisLine = heuristic();
+      return;
+    }
+    state.analysisLine = candidates.map((candidate, index) => {
+      const candidateId = candidateIdAt(index);
+      const name = String(candidate["name"] ?? "").trim();
+      const identity = normalizeProductIdentity(name);
+      const hit =
+        votes.get(candidateId.toLocaleLowerCase("tr-TR")) ??
+        votes.get(identity) ??
+        votes.get(name.toLocaleLowerCase("tr-TR"));
+      if (!hit) return heuristicEntry(index);
+      return {
+        candidateId,
+        identity,
+        name,
+        score: hit.score,
+        reason: hit.reason,
+        source: "ai" as const,
+      };
+    });
+  } catch {
+    controller.abort();
+    state.analysisLine = heuristic();
+  }
 }
 
 export type VeloraRunResult = {
@@ -1346,6 +1603,7 @@ export async function startVeloraRun(
     scrapedTrends: [],
     live: false,
     candidates: [],
+    analysisLine: [],
     phases: [],
     runningPhase: null,
     push: null,
@@ -1353,7 +1611,7 @@ export async function startVeloraRun(
   };
   await deps.store.saveState(state);
   // ORTAK KANIT önce gelir: snapshot hem analiz hattını hem 14 ajanı besler.
-  await ingestEvidence(state);
+  await ingestEvidence(state, deps);
   state.updatedAtMs = Date.now();
   await deps.store.saveState(state);
   return drive(state, 1, deps, { ok: true, mode: deps.handoff ? "qstash" : "inline" });

@@ -197,10 +197,15 @@ function baseState(overrides: Partial<VeloraRunState> = {}): VeloraRunState {
     startedAtMs: Date.now(),
     updatedAtMs: Date.now(),
     status: "running",
+    evidenceByLine: {
+      analysis: { block: RADAR_BLOCK, radar: RADAR, live: true },
+      council: { block: RADAR_BLOCK, radar: RADAR, live: true },
+    },
     evidenceBlock: RADAR_BLOCK,
     scrapedTrends: RADAR,
     live: true,
     candidates: [],
+    analysisLine: [],
     phases: [],
     runningPhase: null,
     push: null,
@@ -240,7 +245,7 @@ describe("faz planı (14 ajan → 4 faz)", () => {
 
   it("her fazın bir kimliği ve adı vardır; bilinmeyen faz kimliği hata verir", () => {
     expect(VELORA_PHASES.map((p) => p.id)).toEqual([1, 2, 3, 4]);
-    expect(phaseById(2).key).toBe("economics");
+    expect(phaseById(2).key).toBe("quality-gate");
     expect(() => phaseById(9 as 1)).toThrow(/UNKNOWN_VELORA_PHASE/);
   });
 
@@ -255,7 +260,7 @@ describe("faz planı (14 ajan → 4 faz)", () => {
   });
 });
 
-describe("iki hat da AYNI Trend Radar kazımalarını kullanır (paralel, bağımsız)", () => {
+describe("iki hat ayrı Trend Radar kazımalarını kullanır (paralel, bağımsız)", () => {
   it("kanıt kazımadan gelir ve HEM analiz hattına HEM 14 üyenin tamamına verilir", async () => {
     const store = fakeStore();
     await startVeloraRun(
@@ -264,15 +269,17 @@ describe("iki hat da AYNI Trend Radar kazımalarını kullanır (paralel, bağı
     );
 
     // Kanıt Trend Radar kazıma hattından gelir (`collectSignals` → `runScrapeJob`),
-    // ve koşu başına BİR KEZ çekilir: iki hat aynı kazımayı paylaşır, çift
-    // kazıma (çift maliyet) yapılmaz.
-    expect(mocks.collectSignals).toHaveBeenCalledTimes(1);
+    // Her hat kendi scraping snapshot'ını çeker: iki bağımsız kaynak taraması
+    // paralel başlar, sonuçlar yalnız karar katmanında birleştirilir.
+    expect(mocks.collectSignals).toHaveBeenCalledTimes(2);
     expect(mocks.collectSignals).toHaveBeenCalledWith("mini ice maker", "US", "General");
     // Canlı piyasa kanıtı da aynı anda (paralel) çekildi.
-    expect(mocks.buildLiveEvidenceBlock).toHaveBeenCalledTimes(1);
+    expect(mocks.buildLiveEvidenceBlock).toHaveBeenCalledTimes(2);
 
     // 14 üyenin HEPSİ kazınan bloğu gördü.
-    const council = prompts.filter((p) => p.agentName !== "Product Retriever");
+    const council = prompts.filter(
+      (p) => p.agentName !== "Product Retriever" && p.agentName !== "Analysis Line",
+    );
     expect(council).toHaveLength(14);
     expect(council.every((p) => p.prompt.includes(RADAR[0]!))).toBe(true);
 
@@ -281,7 +288,103 @@ describe("iki hat da AYNI Trend Radar kazımalarını kullanır (paralel, bağı
     const retriever = prompts.find((p) => p.agentName === "Product Retriever");
     expect(retriever).toBeDefined();
     expect(retriever!.prompt).toContain(RADAR[0]!);
-    expect(retriever!.prompt).toContain("SHARED LIVE EVIDENCE");
+    expect(retriever!.prompt).toContain("ANALYSIS-LINE SCRAPING EVIDENCE");
+  });
+});
+
+describe("HAT A — bağımsız AI analiz hattı, 14 ajanla PARALEL koşar", () => {
+  it("analiz turu ajanlar koşarken puan üretir ve ağırlıklı birleşime girer", async () => {
+    const store = fakeStore();
+    let councilStarted = false;
+    let openGate: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+
+    // Analiz turu, bir konsey üyesi koşmaya BAŞLAYANA kadar bekler. İki hat
+    // paralel değilse (ajanlar bitmeden analiz başlamıyorsa) bu söz asla
+    // çözülmez ve puan `heuristic` olarak kalır → test kırılır.
+    const runner = (agentName: string, prompt: string) => {
+      prompts.push({ agentName, prompt });
+      if (agentName === "Product Retriever") {
+        return Promise.resolve({
+          text: JSON.stringify({
+            candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen" }],
+          }),
+          log: agentLog(agentName),
+        });
+      }
+      if (agentName === "Analysis Line") {
+        return (async () => {
+          await Promise.race([gate, new Promise((r) => setTimeout(r, 2_000))]);
+          return {
+            text: JSON.stringify({ scores: [{ id: "C1", score: 88, reason: "canlı kanıt güçlü" }] }),
+            log: agentLog(agentName),
+          };
+        })();
+      }
+      if (!councilStarted) {
+        councilStarted = true;
+        openGate?.();
+      }
+      const scoreKey = COUNCIL_AGENTS.find((a) => a.name === agentName)?.scoreKey;
+      const body: Record<string, unknown> = scoreKey ? { [scoreKey]: 90 } : {};
+      const ids = [...new Set(prompt.match(/\bC\d+\b/g) ?? [])];
+      body["product_scores"] = ids.map((id) => ({ id, score: 90, note: `kanıt: ${id}` }));
+      return Promise.resolve({ text: JSON.stringify(body), log: agentLog(agentName) });
+    };
+
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runner as never },
+    );
+    const state = store.states.get(result.runId!)!;
+
+    // Analiz hattı KENDİ AI turunun puanını yazdı (formül değil).
+    const lineEntry = state.analysisLine.find((row) => row.candidateId === "C1")!;
+    expect(lineEntry).toMatchObject({ score: 88, source: "ai" });
+    // Puanı olmayan adaylar için dürüstçe formül moduna düşer.
+    expect(
+      state.analysisLine.filter((row) => row.candidateId !== "C1").every((r) => r.source === "heuristic"),
+    ).toBe(true);
+    // Analiz turu finalistleri GÖRDÜ (bağımsız puanlama, ajan oyuna bakmaz).
+    const analysisPrompt = prompts.find((p) => p.agentName === "Analysis Line")!;
+    expect(analysisPrompt.prompt).toContain("C1");
+    expect(analysisPrompt.prompt).toContain("INDEPENDENT AI ANALYSIS LINE");
+    // Karne bu puanı kullanır: %30'luk hat gerçek AI yorumuna bağlandı.
+    const product = result.dossier!.products.find((p) => p.name === "Mini Ice Maker XR-500")!;
+    expect(product.analysisScore).toBe(88);
+  });
+
+  it("analiz turu çökerse deterministik formüle düşer, koşu yine tamamlanır", async () => {
+    const store = fakeStore();
+    const runner = (agentName: string, prompt: string) => {
+      prompts.push({ agentName, prompt });
+      if (agentName === "Product Retriever") {
+        return Promise.resolve({
+          text: JSON.stringify({
+            candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen", demandScore: 80 }],
+          }),
+          log: agentLog(agentName),
+        });
+      }
+      if (agentName === "Analysis Line") return Promise.reject(new Error("PROVIDER_DOWN"));
+      const body: Record<string, unknown> = { score: 90 };
+      const ids = [...new Set(prompt.match(/\bC\d+\b/g) ?? [])];
+      body["product_scores"] = ids.map((id) => ({ id, score: 90, note: `kanıt: ${id}` }));
+      return Promise.resolve({ text: JSON.stringify(body), log: agentLog(agentName) });
+    };
+
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store, runAgent: runner as never },
+    );
+    const state = store.states.get(result.runId!)!;
+
+    expect(state.analysisLine.length).toBeGreaterThan(0);
+    expect(state.analysisLine.every((row) => row.source === "heuristic")).toBe(true);
+    expect(state.analysisLine.every((row) => Number.isFinite(row.score))).toBe(true);
+    expect(result.status).toBe("completed");
   });
 });
 
@@ -293,10 +396,10 @@ describe("runVeloraPhase (izole ve zaman dilimli adım)", () => {
       runAgent: runAgentStub(stubRunner()),
     });
 
-    expect(result.agents).toHaveLength(4);
+    expect(result.agents).toHaveLength(14);
     expect(result.withinCeiling).toBe(true);
     expect(result.agents.every((a) => a.ok && a.score === 90)).toBe(true);
-    expect(prompts).toHaveLength(4);
+    expect(prompts).toHaveLength(14);
     expect(prompts.every((p) => p.prompt.includes("TREND RADAR"))).toBe(true);
     expect(prompts.every((p) => p.prompt.includes("PHASE 1/4"))).toBe(true);
   });
@@ -318,7 +421,7 @@ describe("runVeloraPhase (izole ve zaman dilimli adım)", () => {
     expect(timedOut[0]!.score).toBe(50);
     expect(timedOut[0]!.ok).toBe(false);
     // Diğer üyeler tavan yüzünden kaybolmadı.
-    expect(result.agents.filter((a) => a.ok)).toHaveLength(3);
+    expect(result.agents.filter((a) => a.ok)).toHaveLength(13);
   });
 });
 
@@ -393,8 +496,8 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     expect(result.nextPhase).toBe(2);
     expect(result.dispatch).toEqual({ ok: true, mode: "qstash", messageId: "msg-1" });
     expect(handoffCalls).toEqual([2]);
-    // Yalnızca Faz 1 koştu: adım gerçekten mikro.
-    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(4);
+    // Yalnızca Faz 1 koştu: 14 ajanın tamamı tek burst içinde paralel başlar.
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(14);
     // Faz 1'den sonra durum "running" ve sıradaki faz kaydedilmemiş.
     expect(store.states.get(result.runId!)!.phases.map((p) => p.id)).toEqual([1]);
   });
@@ -455,7 +558,7 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     // Kanıt yokken retriever'ın adlandırdığı gerçek ürün yine kazanır.
     expect(result.dossier!.products[0]!.name).toBe("Mini Ice Maker XR-500");
     const councilCalls = prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName));
-    expect(councilCalls.every((c) => c.prompt.includes("none available for this run"))).toBe(true);
+    expect(councilCalls.every((c) => c.prompt.includes("independent scrape returned no data"))).toBe(true);
   });
 
   it("14 ajanın HEPSİ finalist listesini görür ve ürün başına puan istenir", async () => {
@@ -605,7 +708,7 @@ describe("ortak karar: iki bağımsız hattın AĞIRLIKLI birleşimi", () => {
     const scores = dossier.products.map((p) => p.winnerScore);
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
     expect(dossier.products.map((p) => p.rank)).toEqual(dossier.products.map((_, i) => i + 1));
-    expect(dossier.phases.every((p) => p.agents > 0)).toBe(true);
+    expect(dossier.phases.filter((p) => p.agents > 0)).toHaveLength(1);
   });
 });
 
@@ -621,11 +724,11 @@ describe("QStash tekrar teslimi (idempotent faz yönetimi)", () => {
 
     const first = await resumeVeloraRun(started.runId!, 2, deps);
     expect(first.completedPhases).toBe(2);
-    expect(countPhaseTwo()).toBe(4);
+    expect(countPhaseTwo()).toBe(0);
 
     // AYNI faz İKİNCİ kez teslim edildi (QStash retry): faz yeniden koşmadı.
     const replay = await resumeVeloraRun(started.runId!, 2, deps);
-    expect(countPhaseTwo()).toBe(4);
+    expect(countPhaseTwo()).toBe(0);
     expect(replay.completedPhases).toBe(3);
     // Faz kayıtları tekilleşti: 2 numaralı faz iki kez yazılmadı.
     const phases = store.states.get(started.runId!)!.phases.map((p) => p.id);
@@ -700,7 +803,10 @@ describe("veloraRunStatus (panel yoklaması)", () => {
     expect(done.push!.ok).toBe(true);
     expect(done.selfTest!.verdict).toBe("PASS");
     expect(done.phases.map((p) => p.id)).toEqual([1, 2, 3, 4]);
-    expect(done.phases.every((p) => p.agents > 0 && p.timedOut === 0)).toBe(true);
+    // Model çağrıları tek Faz 1 burst'unda; sonraki checkpoint fazları temizlenmiş raporlanır.
+    expect(done.phases[0]?.agents).toBe(14);
+    expect(done.phases[0]?.timedOut).toBe(0);
+    expect(done.phases.slice(1).every((p) => p.agents === 0 && p.timedOut === 0)).toBe(true);
   });
 
   it("geçici kova düşse bile karneyi KALICI kazanan kaydından geri kurar", async () => {
