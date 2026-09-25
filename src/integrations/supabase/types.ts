@@ -1154,6 +1154,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      apply_for_affiliate: { Args: never; Returns: string };
       apply_subscription_credits: {
         Args: {
           _credits: number;

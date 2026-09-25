@@ -6,6 +6,7 @@ import {
   REFERRAL_CLAIM_WINDOW_MS,
   type ReferralClaimResult,
 } from "@/lib/referral-rules";
+import { adminOrUserClient, missingServiceRoleError } from "@/lib/service-client";
 
 export const REFERRER_BONUS = 1;
 export const REFERRED_BONUS = 0;
@@ -80,18 +81,18 @@ async function readReferralEvents(
   uid: string,
 ): Promise<ReferralEventRow[]> {
   const columns = "id, referrer_id, referred_user_id, code, referrer_credits, created_at";
-  try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
+  const { client, isServiceRole } = await adminOrUserClient(context);
+  if (isServiceRole) {
+    const { data, error } = await client
       .from("referral_events")
       .select(columns)
       .or(`referrer_id.eq.${uid},referred_user_id.eq.${uid}`)
       .order("created_at", { ascending: false })
       .limit(500);
     if (!error && data) return data as ReferralEventRow[];
-  } catch {
-    // SUPABASE_SERVICE_ROLE_KEY tanımlı değil → RLS'li istemciye düş.
   }
+  // RLS politikası ("Users view own referral events") zaten iki tarafı da
+  // kapsar: auth.uid() = referrer_id OR referred_user_id.
   const { data, error } = await context.supabase
     .from("referral_events")
     .select(columns)
@@ -109,7 +110,10 @@ export const claimReferral = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(4).max(16) }).parse(i))
   .handler(async ({ data, context }): Promise<ReferralClaimResult> => {
     const code = data.code.trim().toUpperCase();
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Davet kaydı + davet edene kredi yazımı başka kullanıcının satırına
+    // dokunduğu için kasıtlı olarak servis rolüne bağlıdır.
+    const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
+    if (!isServiceRole) throw missingServiceRoleError();
 
     const { data: me } = await supabaseAdmin
       .from("profiles")

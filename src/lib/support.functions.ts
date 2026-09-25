@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { adminOrUserClient } from "@/lib/service-client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
@@ -47,15 +48,28 @@ export const createTicket = createServerFn({ method: "POST" })
       .gte("created_at", since);
     if ((count ?? 0) >= 3) throw new Error("Çok fazla talep gönderdin, lütfen biraz bekle.");
 
-    const { error } = await context.supabase.from("support_tickets").insert({
-      user_id: context.userId,
-      email: String(context.claims?.email ?? "") || null,
-      category: data.category,
-      subject: data.subject,
-      message: data.message,
-    });
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    const { data: row, error } = await context.supabase
+      .from("support_tickets")
+      .insert({
+        user_id: context.userId,
+        email: String(context.claims?.email ?? "") || null,
+        category: data.category,
+        subject: data.subject,
+        message: data.message,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      // RLS reddi genelde "kayıt başarısız" gibi görünür; kullanıcıya ne
+      // yapması gerektiğini söyle ve sunucu günlüğüne gerçek nedeni yaz.
+      console.error("[support] ticket insert failed:", error.message, error.code);
+      throw new Error(
+        error.code === "42501"
+          ? "Talebin kaydedilemedi (yetki hatası). Lütfen biraz sonra tekrar dene."
+          : "Talebin kaydedilemedi. Lütfen biraz sonra tekrar dene.",
+      );
+    }
+    return { ok: true, id: row?.id ?? null };
   });
 
 export const listMyTickets = createServerFn({ method: "GET" })
@@ -74,8 +88,10 @@ export const adminListTickets = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<TicketRow[]> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
+    // "Admins manage tickets" RLS politikası admin'e tüm talepleri açar; servis
+    // rolü anahtarı yoksa bile gönderilen talepler burada görünür.
+    const { client } = await adminOrUserClient(context);
+    const { data, error } = await client
       .from("support_tickets")
       .select("id, email, category, subject, message, status, admin_note, created_at")
       .order("created_at", { ascending: false })
@@ -97,11 +113,11 @@ export const adminUpdateTicket = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { client } = await adminOrUserClient(context);
     const patch: { status?: string; admin_note?: string } = {};
     if (data.status) patch.status = data.status;
     if (data.admin_note !== undefined) patch.admin_note = data.admin_note;
-    const { error } = await supabaseAdmin.from("support_tickets").update(patch).eq("id", data.id);
+    const { error } = await client.from("support_tickets").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, LifeBuoy } from "lucide-react";
+import { Loader2, LifeBuoy, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { adminListTickets, adminUpdateTicket } from "@/lib/support.functions";
 
@@ -46,12 +46,27 @@ export function AdminTickets() {
           <Loader2 className="animate-spin" size={18} />
         </div>
       )}
-      {!q.isLoading && rows.length === 0 && (
+      {q.isError && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm">
+          <TriangleAlert size={14} className="text-rose-300" />
+          <span className="text-rose-200">
+            Destek talepleri yüklenemedi — gönderilen talepler kaybolmuş DEĞİL, liste okunamadı.
+          </span>
+          <button
+            onClick={() => q.refetch()}
+            className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10"
+          >
+            Tekrar dene
+          </button>
+        </div>
+      )}
+      {!q.isLoading && !q.isError && rows.length === 0 && (
         <p className="text-sm text-muted-foreground">Henüz destek talebi yok.</p>
       )}
 
       <div className="space-y-3">
-        {rows.map((tk) => (
+        {!q.isError &&
+          rows.map((tk) => (
           <div key={tk.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-white/10 px-2 py-0.5">{tk.category}</span>

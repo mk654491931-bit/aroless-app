@@ -13,6 +13,7 @@ import {
   type PromoRedemptionRow,
   type PromoTransactionRow,
 } from "@/lib/promo-attribution";
+import { adminOrUserClient, missingServiceRoleError } from "@/lib/service-client";
 
 /** 403 (not 500) for RBAC denials — TanStack Start serializes statusCode. */
 function forbidden(): Error & { statusCode: number } {
@@ -65,7 +66,7 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AffiliateSummary> => {
     const uid = context.userId;
-    const client = await serviceRoleOrUserClient(context);
+    const { client } = await adminOrUserClient(context);
 
     const [affiliateRes, profileRes, commissionsRes] = await Promise.all([
       client
@@ -103,23 +104,6 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
   });
 
 /**
- * Servis rolü anahtarı varsa onu, yoksa RLS'li (kullanıcı kapsamlı) istemciyi
- * döndürür. Anahtar eksikse supabaseAdmin erişimi throw eder.
- */
-async function serviceRoleOrUserClient(context: { supabase: any }): Promise<any> {
-  try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // supabaseAdmin bir Proxy: istemci ilk ÖZELLİK erişiminde kurulur ve
-    // ortam değişkeni yoksa burada throw eder.
-    const probe = supabaseAdmin.from;
-    void probe;
-    return supabaseAdmin;
-  } catch {
-    return context.supabase;
-  }
-}
-
-/**
  * Affiliate programına başvur. Idempotent: daha önce başvurmuşsa mevcut
  * durumunu döner, asla durumunu değiştirmez (yalnızca admin onaylayabilir).
  */
@@ -129,7 +113,6 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
     async ({
       context,
     }): Promise<{ ok: boolean; status: AffiliateStatus | null; reason?: string }> => {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { rateLimit } = await import("@/lib/api-guard.server");
 
       // Basit kötüye kullanım koruması: aynı hesap 1 saatte en fazla 5 kez.
@@ -138,7 +121,9 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
         return { ok: false, status: null, reason: "Çok fazla deneme yaptın, biraz sonra tekrar dene." };
       }
 
-      const { data: existing, error: existingError } = await supabaseAdmin
+      const { client, isServiceRole } = await adminOrUserClient(context);
+
+      const { data: existing, error: existingError } = await client
         .from("affiliates")
         .select("status")
         .eq("user_id", context.userId)
@@ -150,14 +135,22 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
         return { ok: true, status };
       }
 
-      const { error } = await supabaseAdmin.from("affiliates").insert({
-        user_id: context.userId,
-        status: "pending",
-        commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
-      });
-      if (error)
+      if (isServiceRole) {
+        const { error } = await client.from("affiliates").insert({
+          user_id: context.userId,
+          status: "pending",
+          commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
+        });
+        if (error) return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
+        return { ok: true, status: "pending" };
+      }
+
+      // Servis rolü anahtarı yok: SECURITY DEFINER apply_for_affiliate() kendi
+      // başvurusunu kullanıcı oturumuyla oluşturur (durum/oran sunucuda sabit).
+      const { data: status, error: rpcError } = await context.supabase.rpc("apply_for_affiliate");
+      if (rpcError || !isAffiliateStatus(status))
         return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
-      return { ok: true, status: "pending" };
+      return { ok: true, status };
     },
   );
 
@@ -184,7 +177,7 @@ export const getMyPromoPerformance = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MyPromoPerformance | null> => {
     const uid = context.userId;
-    const client = await serviceRoleOrUserClient(context);
+    const { client } = await adminOrUserClient(context);
 
     // Yalnızca admin'in görevlendirdiği (verified) hesaplar kendi kodunu görür.
     const { data: affiliate } = await client
@@ -280,7 +273,7 @@ export const findAdminAffiliateTarget = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => DesignateInput.pick({ email: true }).parse(input))
   .handler(async ({ data, context }): Promise<AdminAffiliateTarget> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { client: supabaseAdmin } = await adminOrUserClient(context);
     const { data: row, error } = await supabaseAdmin
       .from("profiles")
       .select("id, email, subscription_tier, referral_code, promo_code")
@@ -319,7 +312,8 @@ export const designateAdminAffiliate = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => DesignateInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true; target: AdminAffiliateTarget }> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
+    if (!isServiceRole) throw missingServiceRoleError();
 
     const { data: row, error } = await supabaseAdmin
       .from("profiles")
@@ -469,11 +463,12 @@ const SetStatusSchema = z.object({
  */
 export const adminSetAffiliateStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SetStatusSchema.parse(input))
-  .handler(
-    async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
-      await assertAdmin(context);
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .inputValidator((input: unknown) => SetStatusSchema.parse(input))  .handler(async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
+    await assertAdmin(context);
+    const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
+    // verify_affiliate() bilinçli olarak service_role'a açıktır; anahtar yoksa
+    // kullanıcıya ham bir ortam hatası yerine ne yapması gerektiğini söyle.
+    if (!isServiceRole) throw missingServiceRoleError();
 
       const { data: result, error } = await supabaseAdmin.rpc("verify_affiliate", {
         _admin_id: context.userId,

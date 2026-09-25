@@ -79,11 +79,25 @@ export function ReferralPanel() {
             </code>
             <button
               onClick={copy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              disabled={!link}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
               {copied ? <Check size={14} /> : <Copy size={14} />} Kopyala
             </button>
           </div>
+
+          {!link && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Davet kodun henüz oluşmadı. Sayfayı yenilersen oluşur; oluşmazsa{" "}
+              <button
+                onClick={() => q.refetch()}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                tekrar dene
+              </button>
+              .
+            </p>
+          )}
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
