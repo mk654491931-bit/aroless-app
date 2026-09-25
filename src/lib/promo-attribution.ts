@@ -238,3 +238,61 @@ export function summarizePromoByCode(
     (a, b) => b.signups - a.signups || a.code.localeCompare(b.code),
   );
 }
+
+/**
+ * Bir affiliate'in KENDİ promo kodunun performansı.
+ *
+ * Yalnızca toplamlar ve paket dağılımı döner: başka kullanıcıların e-posta
+ * adresleri veya kimlikleri SIZINTIYA UĞRAMAZ, böylece affiliate panelinden
+ * yalnızca "kodum kaç kişi getirdi, hangi paketler alındı" sorusu yanıtlanır.
+ * Kodu olmayan hesaplar için null döner.
+ */
+export type MyPromoPerformance = {
+  code: string;
+  signups: number;
+  purchases: number;
+  conversion_pct: number;
+  revenue_cents: number;
+  by_tier: Array<{ tier: string; users: number }>;
+  first_signup_at: string | null;
+  last_signup_at: string | null;
+  /** Affiliate hesabının kendi paketi ("Free" dahil). */
+  own_tier: string;
+};
+
+export function myPromoPerformance(
+  users: AdminPromoUser[],
+  code: string | null | undefined,
+  ownTier?: string | null,
+): MyPromoPerformance | null {
+  const key = normalizeCode(code);
+  if (!key) return null;
+
+  const mine = users.filter((u) => u.code === key);
+  const tierCounts = new Map<string, number>();
+  const dates: string[] = [];
+  let purchases = 0;
+  let revenue = 0;
+
+  for (const u of mine) {
+    if (u.converted) purchases += 1;
+    revenue += u.revenue_cents;
+    for (const plan of u.plans) tierCounts.set(plan, (tierCounts.get(plan) ?? 0) + 1);
+    if (u.signed_up_at) dates.push(u.signed_up_at);
+  }
+  dates.sort();
+
+  return {
+    code: key,
+    signups: mine.length,
+    purchases,
+    conversion_pct: mine.length === 0 ? 0 : Math.round((purchases / mine.length) * 100),
+    revenue_cents: revenue,
+    by_tier: Array.from(tierCounts.entries())
+      .map(([tier, count]) => ({ tier, users: count }))
+      .sort((a, b) => b.users - a.users || a.tier.localeCompare(b.tier)),
+    first_signup_at: dates[0] ?? null,
+    last_signup_at: dates[dates.length - 1] ?? null,
+    own_tier: normalizeTier(ownTier) ?? "Free",
+  };
+}

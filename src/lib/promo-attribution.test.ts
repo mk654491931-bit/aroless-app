@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAdminPromoUsers,
+  myPromoPerformance,
   summarizePromoByCode,
   type AdminPromoUser,
   type PromoProfileRow,
@@ -253,5 +254,137 @@ describe("summarizePromoByCode", () => {
       purchases: 1,
       revenue_cents: 7900,
     });
+  });
+});
+
+describe("myPromoPerformance", () => {
+  // Affiliate "u0" kendi koduyla (VLRWELCOME) kaydolmuş bir hesap.
+  const users: AdminPromoUser[] = [
+    {
+      user_id: "u1",
+      email: "a@example.com",
+      code: "VLRWELCOME",
+      signed_up_at: "2026-01-10T00:00:00.000Z",
+      purchased_tier: null,
+      purchased_at: null,
+      plans: ["Pro"],
+      revenue_cents: 2900,
+      first_purchase_at: "2026-01-12T00:00:00.000Z",
+      current_tier: "Pro",
+      subscription_status: "active",
+      converted: true,
+      pending_activation: false,
+    },
+    {
+      user_id: "u2",
+      email: "b@example.com",
+      code: "VLRWELCOME",
+      signed_up_at: "2026-01-11T00:00:00.000Z",
+      purchased_tier: null,
+      purchased_at: null,
+      plans: ["Starter", "Pro"],
+      revenue_cents: 990,
+      first_purchase_at: "2026-01-20T00:00:00.000Z",
+      current_tier: "Pro",
+      subscription_status: "active",
+      converted: true,
+      pending_activation: false,
+    },
+    {
+      user_id: "u3",
+      email: "c@example.com",
+      code: "VLRWELCOME",
+      signed_up_at: "2026-01-12T00:00:00.000Z",
+      purchased_tier: null,
+      purchased_at: null,
+      plans: [],
+      revenue_cents: 0,
+      first_purchase_at: null,
+      current_tier: "Free",
+      subscription_status: "inactive",
+      converted: false,
+      pending_activation: false,
+    },
+    {
+      user_id: "u9",
+      email: "someone-else@example.com",
+      code: "VLROTHER",
+      signed_up_at: "2026-01-09T00:00:00.000Z",
+      purchased_tier: null,
+      purchased_at: null,
+      plans: ["Business"],
+      revenue_cents: 7900,
+      first_purchase_at: "2026-01-09T00:00:00.000Z",
+      current_tier: "Business",
+      subscription_status: "active",
+      converted: true,
+      pending_activation: false,
+    },
+  ];
+
+  it("returns null when the account has no promo code", () => {
+    expect(myPromoPerformance(users, null)).toBeNull();
+    expect(myPromoPerformance(users, "   ")).toBeNull();
+  });
+
+  it("aggregates only the account's own code", () => {
+    const perf = myPromoPerformance(users, "vlrwelcome", "Pro")!;
+    expect(perf.code).toBe("VLRWELCOME");
+    expect(perf.signups).toBe(3);
+    expect(perf.purchases).toBe(2);
+    expect(perf.conversion_pct).toBe(67);
+    expect(perf.revenue_cents).toBe(3890);
+    // Başka bir kodun kullanıcısı (u9) HİÇ sayılmaz.
+    expect(perf.by_tier).not.toContainEqual({ tier: "Business", users: 1 });
+  });
+
+  it("breaks the signups down by plan, most used first", () => {
+    const perf = myPromoPerformance(users, "VLRWELCOME")!;
+    expect(perf.by_tier).toEqual([
+      { tier: "Pro", users: 2 },
+      { tier: "Starter", users: 1 },
+    ]);
+  });
+
+  it("reports the first and last signup dates", () => {
+    const perf = myPromoPerformance(users, "VLRWELCOME")!;
+    expect(perf.first_signup_at).toBe("2026-01-10T00:00:00.000Z");
+    expect(perf.last_signup_at).toBe("2026-01-12T00:00:00.000Z");
+  });
+
+  it("falls back to Free when the account's own plan is unknown", () => {
+    expect(myPromoPerformance(users, "VLRWELCOME")!.own_tier).toBe("Free");
+    expect(myPromoPerformance(users, "VLRWELCOME", "Business")!.own_tier).toBe("Business");
+  });
+
+  it("handles a code that exists but has no signups", () => {
+    const perf = myPromoPerformance([], "VLRNEW", "Starter")!;
+    expect(perf).toMatchObject({
+      signups: 0,
+      purchases: 0,
+      conversion_pct: 0,
+      revenue_cents: 0,
+      by_tier: [],
+      first_signup_at: null,
+      last_signup_at: null,
+      own_tier: "Starter",
+    });
+  });
+
+  it("leaks no user identity — only totals and plan counts", () => {
+    const perf = myPromoPerformance(users, "VLRWELCOME")!;
+    expect(Object.keys(perf).sort()).toEqual(
+      [
+        "by_tier",
+        "code",
+        "conversion_pct",
+        "first_signup_at",
+        "last_signup_at",
+        "own_tier",
+        "purchases",
+        "revenue_cents",
+        "signups",
+      ].sort(),
+    );
   });
 });

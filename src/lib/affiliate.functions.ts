@@ -6,6 +6,13 @@ import {
   isAffiliateStatus,
   type AffiliateStatus,
 } from "@/lib/affiliate";
+import {
+  buildAdminPromoUsers,
+  myPromoPerformance,
+  type PromoProfileRow,
+  type PromoRedemptionRow,
+  type PromoTransactionRow,
+} from "@/lib/promo-attribution";
 
 /** 403 (not 500) for RBAC denials — TanStack Start serializes statusCode. */
 function forbidden(): Error & { statusCode: number } {
@@ -153,6 +160,220 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
       return { ok: true, status: "pending" };
     },
   );
+
+/* ------------------------------------------------------------------ */
+/* Affiliate hesabı performansı: admin'in görevlendirdiği hesaplar     */
+/* KENDİ promo kodunun rakamlarını görür (başka kodların verisi       */
+/* sorgulanmaz; toplam ve paket dağılımı dışında kimlik sızmaz).        */
+/* ------------------------------------------------------------------ */
+
+export type MyPromoPerformance = {
+  code: string;
+  signups: number;
+  purchases: number;
+  conversion_pct: number;
+  revenue_cents: number;
+  by_tier: Array<{ tier: string; users: number }>;
+  first_signup_at: string | null;
+  last_signup_at: string | null;
+  own_tier: string;
+};
+
+/** Onaylı affiliate'in kendi promo kodunun performansı. */
+export const getMyPromoPerformance = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<MyPromoPerformance | null> => {
+    const uid = context.userId;
+    const client = await serviceRoleOrUserClient(context);
+
+    // Yalnızca admin'in görevlendirdiği (verified) hesaplar kendi kodunu görür.
+    const { data: affiliate } = await client
+      .from("affiliates")
+      .select("status")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (!affiliate || affiliate.status !== "verified") return null;
+
+    const { data: profile } = await client
+      .from("profiles")
+      .select("promo_code, subscription_tier")
+      .eq("id", uid)
+      .maybeSingle();
+
+    // Hesabın kendi kodu: profilde kayıtlı kod, yoksa redemptions kaydı.
+    let code = (profile as { promo_code?: string | null } | null)?.promo_code ?? null;
+    if (!code) {
+      const { data: own } = await client
+        .from("promo_redemptions")
+        .select("code")
+        .eq("user_id", uid)
+        .maybeSingle();
+      code = (own as { code?: string | null } | null)?.code ?? null;
+    }
+    const normalized = String(code ?? "")
+      .trim()
+      .toUpperCase();
+    if (!normalized) return null;
+
+    // Yalnızca BU kodun kayıtları okunur.
+    const { data: redemptions } = await client
+      .from("promo_redemptions")
+      .select("code, user_id, email, signed_up_at, purchased_tier, purchased_at")
+      .eq("code", normalized)
+      .order("signed_up_at", { ascending: false })
+      .limit(2000);
+    const rows = (redemptions ?? []) as PromoRedemptionRow[];
+    const ids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
+
+    const [profilesRes, txRes] = await Promise.all([
+      ids.length
+        ? client
+            .from("profiles")
+            .select("id, email, subscription_tier, subscription_status")
+            .in("id", ids)
+        : Promise.resolve({ data: [] as PromoProfileRow[] }),
+      ids.length
+        ? client
+            .from("transactions")
+            .select("user_id, tier, amount_cents, created_at")
+            .in("user_id", ids)
+            .order("created_at", { ascending: true })
+            .limit(5000)
+        : Promise.resolve({ data: [] as PromoTransactionRow[] }),
+    ]);
+
+    const users = buildAdminPromoUsers(
+      rows,
+      (profilesRes.data ?? []) as PromoProfileRow[],
+      (txRes.data ?? []) as PromoTransactionRow[],
+    );
+
+    return myPromoPerformance(
+      users,
+      normalized,
+      (profile as { subscription_tier?: string | null } | null)?.subscription_tier,
+    );
+  });
+
+/* ------------------------------------------------------------------ */
+/* Admin: bir hesabı affiliate olarak GÖREVLENDİRME (başvuru beklemez)  */
+/* ------------------------------------------------------------------ */
+
+const DesignateInput = z.object({
+  email: z.string().trim().toLowerCase().email("Geçerli bir e-posta adresi girin.").max(200),
+  /** null → program varsayılanı (%30). */
+  ratePct: z.number().int().min(0).max(100).nullable().optional(),
+});
+
+export type AdminAffiliateTarget = {
+  id: string;
+  email: string | null;
+  tier: string;
+  referral_code: string | null;
+  promo_code: string | null;
+  affiliate_status: string | null;
+};
+
+/** Görevlendirilecek hesabı e-posta ile bulur. */
+export const findAdminAffiliateTarget = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => DesignateInput.pick({ email: true }).parse(input))
+  .handler(async ({ data, context }): Promise<AdminAffiliateTarget> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, subscription_tier, referral_code, promo_code")
+      .ilike("email", data.email)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) {
+      const err = new Error("Bu e-posta ile kayıtlı kullanıcı bulunamadı.") as Error & {
+        statusCode: number;
+      };
+      err.statusCode = 404;
+      throw err;
+    }
+    const { data: affiliate } = await supabaseAdmin
+      .from("affiliates")
+      .select("status")
+      .eq("user_id", row.id as string)
+      .maybeSingle();
+    return {
+      id: row.id as string,
+      email: (row.email as string | null) ?? null,
+      tier: (row.subscription_tier as string | null) ?? "Free",
+      referral_code: (row.referral_code as string | null) ?? null,
+      promo_code: (row.promo_code as string | null) ?? null,
+      affiliate_status: (affiliate as { status?: string } | null)?.status ?? null,
+    };
+  });
+
+/**
+ * Hesabı affiliate olarak görevlendirir — başvuru yapmış olması gerekmez.
+ * Satır yoksa oluşturulur, sonra RBAC'yi veritabanında da doğrulayan
+ * SECURITY DEFINER `verify_affiliate()` ile onaylanır.
+ */
+export const designateAdminAffiliate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => DesignateInput.parse(input))
+  .handler(async ({ data, context }): Promise<{ ok: true; target: AdminAffiliateTarget }> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, subscription_tier, referral_code, promo_code")
+      .ilike("email", data.email)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) {
+      const err = new Error("Bu e-posta ile kayıtlı kullanıcı bulunamadı.") as Error & {
+        statusCode: number;
+      };
+      err.statusCode = 404;
+      throw err;
+    }
+    const userId = row.id as string;
+
+    // Satır yoksa oluştur (başvuru yapmamış hesaplar da görevlendirilebilsin).
+    const { data: existing } = await supabaseAdmin
+      .from("affiliates")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!existing) {
+      const { error: insertError } = await supabaseAdmin.from("affiliates").insert({
+        user_id: userId,
+        status: "pending",
+        commission_rate_pct: data.ratePct ?? DEFAULT_COMMISSION_RATE_PCT,
+      });
+      // Eşzamanlı iki istek olursa unique ihlali yutulur; RPC zaten satırı bulur.
+      if (insertError && !/duplicate|already exists/i.test(insertError.message)) {
+        throw new Error(insertError.message);
+      }
+    }
+
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc("verify_affiliate", {
+      _admin_id: context.userId,
+      _user_id: userId,
+      _status: "verified",
+      _rate_pct: data.ratePct ?? null,
+    });
+    if (rpcError || String(result) !== "ok") throw forbidden();
+
+    return {
+      ok: true,
+      target: {
+        id: userId,
+        email: (row.email as string | null) ?? null,
+        tier: (row.subscription_tier as string | null) ?? "Free",
+        referral_code: (row.referral_code as string | null) ?? null,
+        promo_code: (row.promo_code as string | null) ?? null,
+        affiliate_status: "verified",
+      },
+    };
+  });
 
 export type AdminAffiliateRow = {
   user_id: string;

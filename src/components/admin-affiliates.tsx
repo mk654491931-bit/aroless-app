@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Megaphone, ShieldCheck, ShieldX } from "lucide-react";
+import { Loader2, Megaphone, ShieldCheck, ShieldX, UserPlus } from "lucide-react";
 import {
   adminListAffiliates,
   adminSetAffiliateStatus,
+  designateAdminAffiliate,
+  findAdminAffiliateTarget,
   type AdminAffiliateRow,
 } from "@/lib/affiliate.functions";
+import { DEFAULT_COMMISSION_RATE_PCT } from "@/lib/affiliate";
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending: {
@@ -28,8 +32,28 @@ export function AdminAffiliates() {
   const qc = useQueryClient();
   const listFn = useServerFn(adminListAffiliates);
   const setFn = useServerFn(adminSetAffiliateStatus);
+  const findFn = useServerFn(findAdminAffiliateTarget);
+  const designateFn = useServerFn(designateAdminAffiliate);
+  const [email, setEmail] = useState("");
+  const [rate, setRate] = useState("");
 
   const q = useQuery({ queryKey: ["admin-affiliates"], queryFn: () => listFn() });
+
+  const lookup = useMutation({
+    mutationFn: (v: string) => findFn({ data: { email: v } }),
+  });
+
+  const designate = useMutation({
+    mutationFn: (v: string) => designateFn({ data: { email: v, ratePct: rate ? Number(rate) : null } }),
+    onSuccess: (res) => {
+      toast.success(`${res.target.email} affiliate olarak görevlendirildi`);
+      setEmail("");
+      setRate("");
+      lookup.reset();
+      qc.invalidateQueries({ queryKey: ["admin-affiliates"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const setStatus = useMutation({
     mutationFn: (v: { userId: string; status: "verified" | "revoked" }) =>
@@ -56,6 +80,78 @@ export function AdminAffiliates() {
           {rows.filter((r) => r.status === "pending").length} bekleyen
         </span>
       </div>
+      {/* Görevlendirme: başvuru beklenmeden herhangi bir hesabı affiliate yap. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          designate.mutate(email);
+        }}
+        className="grid gap-3 border-b border-white/10 p-5 sm:grid-cols-[1fr_8rem_auto]"
+      >
+        <label className="text-xs">
+          <span className="mb-1 block text-muted-foreground">
+            Hesabı affiliate olarak görevlendir (e-posta)
+          </span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="influencer@ornek.com"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+          />
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block text-muted-foreground">
+            Komisyon oranı % (boş = {DEFAULT_COMMISSION_RATE_PCT})
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder={String(DEFAULT_COMMISSION_RATE_PCT)}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={designate.isPending}
+          className="self-end inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {designate.isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <UserPlus size={14} />
+          )}
+          Görevlendir
+        </button>
+
+        <div className="sm:col-span-3 -mt-1 flex flex-wrap items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => lookup.mutate(email)}
+            disabled={!email || lookup.isPending}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
+          >
+            {lookup.isPending ? "Aranıyor…" : "Hesabı kontrol et"}
+          </button>
+          {lookup.data && (
+            <span className="text-muted-foreground">
+              <b className="text-foreground">{lookup.data.email}</b> · paket{" "}
+              <b className="text-foreground">{lookup.data.tier}</b> · promo kodu{" "}
+              <b className="text-foreground">{lookup.data.promo_code ?? "—"}</b> · referral{" "}
+              <b className="text-foreground">{lookup.data.referral_code ?? "—"}</b> · mevcut durum{" "}
+              <b className="text-foreground">{lookup.data.affiliate_status ?? "yok"}</b>
+            </span>
+          )}
+          {lookup.isError && (
+            <span className="text-rose-300">Bu e-posta ile kayıtlı kullanıcı bulunamadı.</span>
+          )}
+        </div>
+      </form>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-white/[0.02]">

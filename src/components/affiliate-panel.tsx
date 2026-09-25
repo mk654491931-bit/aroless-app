@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { BadgeCheck, Copy, Check, Loader2, Megaphone, Coins, CalendarClock, ShieldCheck, TriangleAlert } from "lucide-react";
+import { BadgeCheck, Copy, Check, Loader2, Megaphone, Coins, CalendarClock, ShieldCheck, Ticket, TriangleAlert } from "lucide-react";
 import {
   getMyAffiliateStatus,
+  getMyPromoPerformance,
   applyForAffiliate,
   type AffiliateSummary,
 } from "@/lib/affiliate.functions";
@@ -28,10 +29,18 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 export function AffiliatePanel() {
   const qc = useQueryClient();
   const summaryFn = useServerFn(getMyAffiliateStatus);
+  const promoFn = useServerFn(getMyPromoPerformance);
   const applyFn = useServerFn(applyForAffiliate);
   const [copied, setCopied] = useState(false);
 
   const q = useQuery({ queryKey: ["affiliate"], queryFn: () => summaryFn() });
+  // Yalnızca admin'in görevlendirdiği (verified) hesaplar kendi promo kodunun
+  // rakamlarını görür; sunucu başka kodların verisini hiç sorgulamaz.
+  const promoQ = useQuery({
+    queryKey: ["affiliate-promo"],
+    queryFn: () => promoFn(),
+    enabled: q.data?.status === "verified",
+  });
 
   const apply = useMutation({
     mutationFn: () => applyFn(),
@@ -170,6 +179,60 @@ export function AffiliatePanel() {
                 </div>
               </div>
 
+              {/* Kendi promo kodunun performansı — yalnızca toplamlar. */}
+              {promoQ.data && (
+                <div className="mt-4 rounded-xl border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/[0.06] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Ticket size={14} className="text-[oklch(0.75_0.19_150)]" />
+                    <span className="text-sm font-semibold">Promo kodun</span>
+                    <code className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-xs">
+                      {promoQ.data.code}
+                    </code>
+                    <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px]">
+                      Paketin: {promoQ.data.own_tier}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Metric label="Getirdiği kullanıcı" value={promoQ.data.signups} />
+                    <Metric label="Pakete dönüşen" value={promoQ.data.purchases} />
+                    <Metric label="Dönüşüm" value={`%${promoQ.data.conversion_pct}`} />
+                    <Metric
+                      label="Toplam ciro"
+                      value={`$${(promoQ.data.revenue_cents / 100).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
+                    />
+                  </div>
+
+                  {promoQ.data.by_tier.length > 0 && (
+                    <div className="mt-3">
+                      <div className="mb-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        Kodun getirdiklerinin paketleri
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {promoQ.data.by_tier.map((t) => (
+                          <span
+                            key={t.tier}
+                            className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px]"
+                          >
+                            {t.tier}: <b className="text-foreground">{t.users}</b>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {promoQ.data.last_signup_at && (
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      Son kayıt: {new Date(promoQ.data.last_signup_at).toLocaleDateString()} · bu
+                      bilgiler yalnızca senin koduna aittir.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {(data?.recent.length ?? 0) > 0 && (
                 <div className="mt-4">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -193,6 +256,16 @@ export function AffiliatePanel() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** Küçük sayı kartı (etiket + değer). */
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-lg font-bold">{value}</div>
     </div>
   );
 }
