@@ -4,25 +4,19 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/paddle.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
-import { validatePromoCode, getMyPromoCode } from "@/lib/promo.functions";
 import { useMoney } from "@/lib/currency";
-import { X, Check, Sparkles, Zap, Crown, Ticket, Loader2 } from "lucide-react";
+import { X, Check, Sparkles, Zap, Crown } from "lucide-react";
 import { PLANS, type PlanId } from "@/lib/plans";
 
 const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
 export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const checkout = useServerFn(createCheckout);
-  const validateFn = useServerFn(validatePromoCode);
-  const myPromoFn = useServerFn(getMyPromoCode);
   const { currency, rate, fmt, isLive } = useMoney();
   const [loading, setLoading] = useState<PlanId | null>(null);
-  const [promo, setPromo] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [discount, setDiscount] = useState(0);
-  const [autoApplied, setAutoApplied] = useState(false);
 
-  // Kayıt sırasında girilen promosyon kodunu otomatik uygula.
+  // İndirim kodunun tek kaynağı Paddle'dır: kullanıcı ödeme ekranında
+  // kodu kendisi girer, uygulama checkout'a kod dayatmaz.
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
@@ -31,46 +25,13 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await myPromoFn();
-        if (cancelled || !res?.code || !res.discount_pct) return;
-        setPromo(res.code);
-        setDiscount(res.discount_pct);
-        setAutoApplied(true);
-      } catch {
-        /* sessizce yoksay */
-      }
-    })();
     return () => {
-      cancelled = true;
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, myPromoFn, onClose]);
+  }, [open, onClose]);
 
   if (!open) return null;
-
-  const applyPromo = async () => {
-    if (!promo.trim()) return;
-    setChecking(true);
-    try {
-      const res = await validateFn({ data: { code: promo } });
-      if (res.valid) {
-        setDiscount(res.discount_pct);
-        toast.success(`%${res.discount_pct} indirim uygulandı`);
-      } else {
-        setDiscount(0);
-        toast.error(res.reason ?? "Geçersiz kod");
-      }
-    } catch (e) {
-      setDiscount(0);
-      toast.error(e instanceof Error ? e.message : "Kod doğrulanamadı");
-    } finally {
-      setChecking(false);
-    }
-  };
 
   const subscribe = async (plan: PlanId) => {
     setLoading(plan);
@@ -91,7 +52,6 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           email: session.email,
         },
         {
-          discountCode: discount > 0 ? promo : null,
           email: session.email,
           onEvent: (event: unknown) => {
             if (
@@ -113,7 +73,6 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     // doğrudan ilgili planın public price ID'siyle açılır.
     if (!opened) {
       opened = await openPaddlePlanCheckout(plan, {
-        discountCode: discount > 0 ? promo : null,
         email,
         onEvent: (event: unknown) => {
           if (
@@ -162,42 +121,17 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
           <p className="text-sm text-muted-foreground mt-1">
             Tüm modüller her pakette açık. Paket büyüdükçe aylık kullanım hakkın artar.
           </p>
-          <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
-            <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
-              <Ticket size={13} className="text-[oklch(0.68_0.15_255)]" />
-              <input
-                value={promo}
-                onChange={(e) => {
-                  setPromo(e.target.value.toUpperCase());
-                  setDiscount(0);
-                }}
-                placeholder="Promosyon kodu"
-                className="w-36 bg-transparent text-sm font-mono uppercase outline-none placeholder:font-sans placeholder:normal-case"
-              />
-              <button
-                onClick={applyPromo}
-                disabled={checking}
-                className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold hover:bg-white/15 disabled:opacity-60"
-              >
-                {checking ? <Loader2 size={12} className="animate-spin" /> : "Uygula"}
-              </button>
-            </div>
-            {discount > 0 && (
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
-                %{discount} indirim aktif{autoApplied ? " · kayıt kodunuzdan otomatik" : ""}
-              </span>
-            )}
-            {currency !== "USD" && (
+          {currency !== "USD" && (
+            <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-muted-foreground">
                 {isLive ? "Canlı kur" : "Yedek kur"}: 1 USD = {fmt(rate, currency)}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => {
             const Icon = ICONS[p.id];
-            const final = p.usd * (1 - discount / 100);
             return (
               <div
                 key={p.id}
@@ -213,10 +147,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                   <h3 className="text-lg font-bold">{p.label}</h3>
                 </div>
                 <div className="mb-1 flex items-baseline gap-2">
-                  {discount > 0 && (
-                    <span className="text-lg text-muted-foreground line-through">${p.usd}</span>
-                  )}
-                  <span className="text-4xl font-bold">${final.toFixed(0)}</span>
+                  <span className="text-4xl font-bold">${p.usd.toFixed(0)}</span>
                   <span className="text-sm text-muted-foreground">/ay</span>
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
@@ -229,7 +160,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
                 {currency !== "USD" && (
                   <div className="mb-4 text-xs text-muted-foreground">
-                    ≈ {fmt(final * rate, currency)} / ay · güncel kur ile
+                    ≈ {fmt(p.usd * rate, currency)} / ay · güncel kur ile
                   </div>
                 )}
                 {currency === "USD" && <div className="mb-4" />}
@@ -249,7 +180,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 >
                   {loading === p.id
                     ? "Ödeme sayfası açılıyor…"
-                    : `Satın al — ${currency === "USD" ? `$${final.toFixed(2)}` : fmt(final * rate, currency)}/ay`}
+                    : `Satın al — ${currency === "USD" ? `$${p.usd.toFixed(2)}` : fmt(p.usd * rate, currency)}/ay`}
                 </button>
               </div>
             );
