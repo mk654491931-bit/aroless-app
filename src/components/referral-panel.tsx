@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Gift, Copy, Check, Users, Coins, Loader2 } from "lucide-react";
+import { Gift, Copy, Check, Users, Coins, Loader2, TriangleAlert } from "lucide-react";
 import { getMyReferral, claimReferral, REFERRER_BONUS } from "@/lib/referral.functions";
 
 export function ReferralPanel() {
@@ -18,12 +18,16 @@ export function ReferralPanel() {
     mutationFn: (c: string) => claimFn({ data: { code: c } }),
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success(`Davet kodu uygulandı · +${res.credits} kredi`);
+        toast.success(`Davet kodu uygulandı · +${res.credits ?? 0} kredi`);
         setCode("");
         qc.invalidateQueries({ queryKey: ["referral"] });
         qc.invalidateQueries({ queryKey: ["profile"] });
         qc.invalidateQueries({ queryKey: ["profile-full"] });
-      } else toast.error(res.reason ?? "Kod uygulanamadı");
+      } else {
+        toast.error(res.reason ?? "Kod uygulanamadı");
+        // Kalıcı değilse formu açık bırak ki kullanıcı tekrar deneyebilsin.
+        if (res.code === "profile_missing") qc.invalidateQueries({ queryKey: ["referral"] });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -55,6 +59,17 @@ export function ReferralPanel() {
       {q.isLoading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 size={14} className="animate-spin" /> Yükleniyor…
+        </div>
+      ) : q.isError ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm">
+          <TriangleAlert size={14} className="text-rose-300" />
+          <span className="text-rose-200">Davet bilgileri yüklenemedi.</span>
+          <button
+            onClick={() => q.refetch()}
+            className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10"
+          >
+            Tekrar dene
+          </button>
         </div>
       ) : (
         <>
@@ -105,10 +120,16 @@ export function ReferralPanel() {
               </div>
             </div>
           )}
-          {q.data?.referred_by_code && (
+          {q.data?.referred_by_code ? (
             <p className="mt-3 text-xs text-muted-foreground">
               Davet kodu kullanıldı: <b>{q.data.referred_by_code}</b>
             </p>
+          ) : (
+            !q.data?.claimable && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Davet kodu yalnızca hesabının ilk 30 günü içinde kullanılabilir.
+              </p>
+            )
           )}
         </>
       )}

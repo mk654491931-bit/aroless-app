@@ -47,29 +47,30 @@ export type AffiliateSummary = {
   }>;
 };
 
-/** Kullanıcının affiliate başvurusu, durumu ve birikmiş komisyonları. */
+/**
+ * Kullanıcının affiliate başvurusu, durumu ve birikmiş komisyonları.
+ *
+ * Önce servis rolü (RLS'in ötesinden) okunur; SUPABASE_SERVICE_ROLE_KEY
+ * tanımlı değilse aynı sorgular kullanıcının KENDİ satırlarıyla RLS'li
+ * istemci üzerinden çalışır — panel bu durumda da çalışır durumda kalır.
+ */
 export const getMyAffiliateStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AffiliateSummary> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const uid = context.userId;
+    const client = await serviceRoleOrUserClient(context);
 
     const [affiliateRes, profileRes, commissionsRes] = await Promise.all([
-      supabaseAdmin
+      client
         .from("affiliates")
         .select("user_id, status, commission_rate_pct, verified_by, verified_at, created_at")
-        .eq("user_id", context.userId)
+        .eq("user_id", uid)
         .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", context.userId)
-        .maybeSingle(),
-      supabaseAdmin
+      client.from("profiles").select("referral_code").eq("id", uid).maybeSingle(),
+      client
         .from("affiliate_commissions")
-        .select(
-          "id, tier, gross_amount_cents, commission_cents, created_at",
-        )
-        .eq("affiliate_id", context.userId)
+        .select("id, tier, gross_amount_cents, commission_cents, created_at")
+        .eq("affiliate_id", uid)
         .order("created_at", { ascending: false })
         .limit(50),
     ]);
@@ -95,33 +96,63 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
   });
 
 /**
+ * Servis rolü anahtarı varsa onu, yoksa RLS'li (kullanıcı kapsamlı) istemciyi
+ * döndürür. Anahtar eksikse supabaseAdmin erişimi throw eder.
+ */
+async function serviceRoleOrUserClient(context: { supabase: any }): Promise<any> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // supabaseAdmin bir Proxy: istemci ilk ÖZELLİK erişiminde kurulur ve
+    // ortam değişkeni yoksa burada throw eder.
+    const probe = supabaseAdmin.from;
+    void probe;
+    return supabaseAdmin;
+  } catch {
+    return context.supabase;
+  }
+}
+
+/**
  * Affiliate programına başvur. Idempotent: daha önce başvurmuşsa mevcut
  * durumunu döner, asla durumunu değiştirmez (yalnızca admin onaylayabilir).
  */
 export const applyForAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ ok: boolean; status: AffiliateStatus | null }> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(
+    async ({
+      context,
+    }): Promise<{ ok: boolean; status: AffiliateStatus | null; reason?: string }> => {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { rateLimit } = await import("@/lib/api-guard.server");
 
-    const { data: existing, error: existingError } = await supabaseAdmin
-      .from("affiliates")
-      .select("status")
-      .eq("user_id", context.userId)
-      .maybeSingle();
-    if (existingError) return { ok: false, status: null };
-    if (existing) {
-      const status = isAffiliateStatus(existing.status) ? existing.status : null;
-      return { ok: true, status };
-    }
+      // Basit kötüye kullanım koruması: aynı hesap 1 saatte en fazla 5 kez.
+      const limited = await rateLimit(`affiliate:apply:${context.userId}`, 5, 3600);
+      if (limited) {
+        return { ok: false, status: null, reason: "Çok fazla deneme yaptın, biraz sonra tekrar dene." };
+      }
 
-    const { error } = await supabaseAdmin.from("affiliates").insert({
-      user_id: context.userId,
-      status: "pending",
-      commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
-    });
-    if (error) return { ok: false, status: null };
-    return { ok: true, status: "pending" };
-  });
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from("affiliates")
+        .select("status")
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (existingError)
+        return { ok: false, status: null, reason: "Başvuru durumu okunamadı, tekrar dene." };
+      if (existing) {
+        const status = isAffiliateStatus(existing.status) ? existing.status : null;
+        return { ok: true, status };
+      }
+
+      const { error } = await supabaseAdmin.from("affiliates").insert({
+        user_id: context.userId,
+        status: "pending",
+        commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
+      });
+      if (error)
+        return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
+      return { ok: true, status: "pending" };
+    },
+  );
 
 export type AdminAffiliateRow = {
   user_id: string;

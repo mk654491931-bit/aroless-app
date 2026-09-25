@@ -41,6 +41,8 @@ export function SupportPanel() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const recent = q.data ?? [];
+
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
@@ -84,27 +86,47 @@ export function SupportPanel() {
         </button>
       </div>
 
-      {(q.data?.length ?? 0) > 0 && (
-        <div className="mt-5 space-y-2">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Taleplerin</div>
-          {q.data!.map((t) => (
-            <div key={t.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">{t.subject}</div>
+      <div className="mt-5 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">Taleplerin</span>
+          {q.isError && (
+            <button
+              onClick={() => q.refetch()}
+              className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-2.5 py-1 text-[11px] text-rose-200 hover:bg-rose-400/20"
+            >
+              Talepler yüklenemedi · tekrar dene
+            </button>
+          )}
+        </div>
+        {q.isLoading && <div className="text-sm text-muted-foreground">Yükleniyor…</div>}
+        {!q.isLoading && !q.isError && recent.length === 0 && (
+          <div className="text-sm text-muted-foreground">Henüz talep göndermedin.</div>
+        )}
+        {recent.map((t) => (
+          <div key={t.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-medium">{t.subject}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px]">
+                  {LABELS[t.category as keyof typeof LABELS] ?? t.category}
+                </span>
                 <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px]">
                   {STATUS[t.status] ?? t.status}
                 </span>
               </div>
-              <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{t.message}</div>
-              {t.admin_note && (
-                <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">
-                  Yanıt: {t.admin_note}
-                </div>
-              )}
             </div>
-          ))}
-        </div>
-      )}
+            <div className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{t.message}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {new Date(t.created_at).toLocaleString()}
+            </div>
+            {t.admin_note && (
+              <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">
+                Yanıt: {t.admin_note}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

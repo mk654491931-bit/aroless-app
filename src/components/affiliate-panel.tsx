@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { BadgeCheck, Copy, Check, Loader2, Megaphone, Coins, CalendarClock, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Copy, Check, Loader2, Megaphone, Coins, CalendarClock, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   getMyAffiliateStatus,
   applyForAffiliate,
@@ -39,9 +39,16 @@ export function AffiliatePanel() {
       if (res.ok) {
         toast.success("Affiliate başvurun alındı — admin onayından sonra komisyon kazanmaya başlarsın.");
         qc.invalidateQueries({ queryKey: ["affiliate"] });
-      } else toast.error("Başvuru kaydedilemedi, lütfen tekrar dene.");
+      } else {
+        toast.error(res.reason ?? "Başvuru kaydedilemedi, lütfen tekrar dene.");
+        qc.invalidateQueries({ queryKey: ["affiliate"] });
+      }
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      // Sunucuya ulaşılamadıysa panelde "başvurulmadı" gibi görünmesin.
+      qc.invalidateQueries({ queryKey: ["affiliate"] });
+    },
   });
 
   const data: AffiliateSummary | undefined = q.data;
@@ -85,6 +92,17 @@ export function AffiliatePanel() {
       {q.isLoading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 size={14} className="animate-spin" /> Yükleniyor…
+        </div>
+      ) : q.isError ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm">
+          <TriangleAlert size={14} className="text-rose-300" />
+          <span className="text-rose-200">Affiliate durumu yüklenemedi.</span>
+          <button
+            onClick={() => q.refetch()}
+            className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10"
+          >
+            Tekrar dene
+          </button>
         </div>
       ) : (
         <>

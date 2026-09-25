@@ -22,6 +22,7 @@ import {
 } from "@/lib/admin.functions";
 import { AdminPlanAssign } from "@/components/admin-plan-assign";
 import { AdminPromoCodes } from "@/components/admin-promo-codes";
+import { AdminPromoUsers } from "@/components/admin-promo-users";
 import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
 import { AdminAbuseAlerts } from "@/components/admin-abuse-alerts";
@@ -174,6 +175,7 @@ function AdminPage() {
         <AdminPlanAssign />
 
         <AdminPromoCodes />
+        <AdminPromoUsers />
         <AdminTickets />
         <AdminAbuseAlerts />
         <AdminFreeCredits />
@@ -191,6 +193,7 @@ function AdminPage() {
               <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-white/[0.02]">
                 <tr>
                   <Th>Email</Th>
+                  <Th>Promo</Th>
                   <Th className="text-right">Credits</Th>
                   <Th className="text-right">Spent</Th>
                   <Th>Tier</Th>
@@ -201,7 +204,7 @@ function AdminPage() {
               <tbody>
                 {usersQ.isLoading && (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-10 text-center text-muted-foreground">
                       <Loader2 className="inline animate-spin" />
                     </td>
                   </tr>
@@ -210,6 +213,15 @@ function AdminPage() {
                   (usersQ.data ?? []).map((u) => (
                     <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.02]">
                       <Td className="font-medium">{u.email ?? "—"}</Td>
+                      <Td>
+                        {u.promo_code ? (
+                          <code className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px]">
+                            {u.promo_code}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </Td>
                       <Td className="text-right">{u.credits}</Td>
                       <Td className="text-right text-muted-foreground">{u.credits_spent}</Td>
                       <Td>
@@ -226,7 +238,7 @@ function AdminPage() {
                   ))}
                 {!usersQ.isLoading && (usersQ.data ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-10 text-center text-muted-foreground">
                       No users yet
                     </td>
                   </tr>

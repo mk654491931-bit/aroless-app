@@ -1,6 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  buildAdminPromoUsers,
+  summarizePromoByCode,
+  type AdminPromoUser,
+  type PromoCodeStat,
+  type PromoProfileRow,
+  type PromoRedemptionRow,
+  type PromoTransactionRow,
+} from "@/lib/promo-attribution";
 
 async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -142,14 +151,57 @@ export const getMyPromoCode = createServerFn({ method: "GET" })
     return { code, discount_pct: row.discount_pct };
   });
 
-export type PromoCodeStat = {
-  code: string;
-  discount_pct: number;
-  signups: number;
-  purchases: number;
-  revenue_cents: number;
-  by_tier: Record<string, number>;
-};
+export type { PromoCodeStat, AdminPromoUser } from "@/lib/promo-attribution";
+
+/** Admin panelde kullanılan ortak ham veri seti: redemptions + profil + ödemeler. */
+async function loadPromoAttribution() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: redemptions } = await supabaseAdmin
+    .from("promo_redemptions")
+    .select("code, user_id, email, signed_up_at, purchased_tier, purchased_at")
+    .order("signed_up_at", { ascending: false })
+    .limit(2000);
+
+  const rows = (redemptions ?? []) as PromoRedemptionRow[];
+  const ids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
+
+  const [profilesRes, txRes] = await Promise.all([
+    ids.length
+      ? supabaseAdmin
+          .from("profiles")
+          .select("id, email, subscription_tier, subscription_status")
+          .in("id", ids)
+      : Promise.resolve({ data: [] as PromoProfileRow[] }),
+    ids.length
+      ? supabaseAdmin
+          .from("transactions")
+          .select("user_id, tier, amount_cents, created_at")
+          .in("user_id", ids)
+          .order("created_at", { ascending: true })
+          .limit(5000)
+      : Promise.resolve({ data: [] as PromoTransactionRow[] }),
+  ]);
+
+  return {
+    users: buildAdminPromoUsers(
+      rows,
+      (profilesRes.data ?? []) as PromoProfileRow[],
+      (txRes.data ?? []) as PromoTransactionRow[],
+    ),
+  };
+}
+
+/**
+ * Admin panel: hangi kullanıcı hangi promosyon kodundan geldi, hangi paketi
+ * aldı, ne kadar ciro yaptı. (Kod bazlı özetle aynı veriden beslenir.)
+ */
+export const listAdminPromoUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AdminPromoUser[]> => {
+    await assertAdmin(context);
+    const { users } = await loadPromoAttribution();
+    return users;
+  });
 
 /** Admin panel: hangi kodla kaç kişi kaydoldu, kaçı hangi paketi aldı. */
 export const getPromoCodeStats = createServerFn({ method: "GET" })
@@ -157,44 +209,14 @@ export const getPromoCodeStats = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<PromoCodeStat[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ data: codes }, { data: reds }] = await Promise.all([
+    const [{ data: codes }, { users }] = await Promise.all([
       supabaseAdmin.from("promo_codes").select("code, discount_pct").limit(200),
-      supabaseAdmin
-        .from("promo_redemptions")
-        .select("code, purchased_tier, amount_cents")
-        .limit(5000),
+      loadPromoAttribution(),
     ]);
-    const map = new Map<string, PromoCodeStat>();
-    for (const c of codes ?? []) {
-      map.set(c.code, {
-        code: c.code,
-        discount_pct: c.discount_pct,
-        signups: 0,
-        purchases: 0,
-        revenue_cents: 0,
-        by_tier: {},
-      });
-    }
-    for (const r of reds ?? []) {
-      const key = String(r.code ?? "").toUpperCase();
-      if (!key) continue;
-      const stat = map.get(key) ?? {
-        code: key,
-        discount_pct: 0,
-        signups: 0,
-        purchases: 0,
-        revenue_cents: 0,
-        by_tier: {},
-      };
-      stat.signups += 1;
-      if (r.purchased_tier) {
-        stat.purchases += 1;
-        stat.revenue_cents += r.amount_cents ?? 0;
-        stat.by_tier[r.purchased_tier] = (stat.by_tier[r.purchased_tier] ?? 0) + 1;
-      }
-      map.set(key, stat);
-    }
-    return Array.from(map.values()).sort(
-      (a, b) => b.signups - a.signups || a.code.localeCompare(b.code),
-    );
+    return summarizePromoByCode(users, {
+      allCodes: (codes ?? []).map((c) => String(c.code ?? "")),
+      discountByCode: Object.fromEntries(
+        (codes ?? []).map((c) => [String(c.code ?? "").toUpperCase(), c.discount_pct ?? 0]),
+      ),
+    });
   });

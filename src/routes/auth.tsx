@@ -27,6 +27,7 @@ import {
   verifyEmailSignup,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
+import { removeBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 import { SignupLegalConsent } from "@/components/legal/signup-legal-consent";
 import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
@@ -283,8 +284,18 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (referralCode) {
-          const referral = await claimReferralFn({ data: { code: referralCode } });
-          if (referral.ok) toast.success(`Davet bonusu uygulandı · +${referral.credits} kredi`);
+          // Profil satırı girişten hemen sonra oluşmayabilir; tekrar denemek
+          // için kodu localStorage'da birak (index.tsx bu işi tamamlar).
+          const referral = await claimReferralFn({ data: { code: referralCode } }).catch(() => null);
+          if (referral?.ok) {
+            removeBrandedItem("aroless.ref");
+            toast.success(`Davet bonusu uygulandı · +${referral.credits ?? 0} kredi`);
+          } else if (referral && referral.code === "profile_missing") {
+            setBrandedItem("aroless.ref", referralCode);
+          } else if (referral) {
+            removeBrandedItem("aroless.ref");
+            toast.error(referral.reason ?? "Davet kodu uygulanamadı.");
+          }
         }
         toast.success("E-posta doğrulandı. Hesabınız hazır.");
         nav({ to: getRedirectPath() });

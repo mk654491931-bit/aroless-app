@@ -36,11 +36,14 @@ export const createTicket = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }) => {
-    // Basit kötüye kullanım koruması: son 10 dakikada en fazla 3 talep.
+    // Basit kötüye kullanım koruması: kullanıcı başına son 10 dakikada en fazla
+    // 3 talep. Sayım KENDİ kullanıcıya sınırlıdır — aksi halde üç talebi olan
+    // herkes için tüm destek kapatılırdı.
     const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { count } = await context.supabase
       .from("support_tickets")
       .select("id", { count: "exact", head: true })
+      .eq("user_id", context.userId)
       .gte("created_at", since);
     if ((count ?? 0) >= 3) throw new Error("Çok fazla talep gönderdin, lütfen biraz bekle.");
 

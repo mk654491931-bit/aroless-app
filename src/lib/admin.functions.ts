@@ -73,6 +73,8 @@ export type AdminUserRow = {
   subscription_tier: string;
   subscription_status: string;
   current_period_end: string | null;
+  /** Kayıt anında kullanılan promosyon kodu (yoksa null). */
+  promo_code: string | null;
   created_at: string;
 };
 
@@ -84,7 +86,7 @@ export const listAdminUsers = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .select(
-        "id, email, credits, credits_spent, subscription_tier, subscription_status, current_period_end, created_at",
+        "id, email, credits, credits_spent, subscription_tier, subscription_status, current_period_end, promo_code, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(50);

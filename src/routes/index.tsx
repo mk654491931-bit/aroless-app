@@ -90,6 +90,8 @@ import { X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
 import { OnboardingWizard, ActivationChecklist, useOnboarding, sanitizeOnboardingResult } from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
+import { storedRefAction, type ReferralClaimResult } from "@/lib/referral-rules";
+import { getBrandedItem, removeBrandedItem } from "@/lib/brand-storage";
 
 // Finder feature modules
 import { FINDER_EXAMPLE_NICHES, type Tab } from "@/features/finder/constants";
@@ -232,32 +234,38 @@ function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
-    let code: string | null = null;
-    try {
-      code = window.localStorage.getItem("aroless.ref") ?? window.localStorage.getItem("velora.ref");
-      if (code) {
-        // dual-read migrasyon: yeniye taşı
-        try { window.localStorage.setItem("aroless.ref", code); } catch {}
-        try { window.localStorage.removeItem("velora.ref"); } catch {}
-      }
-    } catch {
-      code = null;
-    }
-    if (!code) return;
-    try {
-      window.localStorage.removeItem("aroless.ref");
-      window.localStorage.removeItem("velora.ref");
-    } catch {
-      /* yoksay */
-    }
-    claimReferralFn({ data: { code } })
-      .then((res) => {
-        if (res.ok) {
-          toast.success(`Davet bonusu eklendi · +${res.credits} kredi`);
-          qc.invalidateQueries({ queryKey: ["profile"] });
+    let cancelled = false;
+    void (async () => {
+      const code = (getBrandedItem("aroless.ref") ?? "").trim().toUpperCase();
+      if (!code) return;
+      // Kod, başarılı olana kadar SİLİNMEZ. Yeni kayıtta profil satırı
+      // (DB trigger) girişten birkaç saniye sonra oluşabildiği için
+      // "profile_missing" geçici sayılır ve bir kez daha denenir.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
+        let res: ReferralClaimResult;
+        try {
+          res = await claimReferralFn({ data: { code } });
+        } catch {
+          return; // ağ hatası: kod saklı kalır, sonraki açılışta yeniden denenir
         }
-      })
-      .catch(() => {});
+        if (cancelled) return;
+        if (res.ok) {
+          removeBrandedItem("aroless.ref");
+          toast.success(`Davet bonusu eklendi · +${res.credits ?? 0} kredi`);
+          qc.invalidateQueries({ queryKey: ["profile"] });
+          return;
+        }
+        const action = storedRefAction(res.code);
+        if (action === "clear") removeBrandedItem("aroless.ref");
+        if (action === "retry" && attempt === 0) continue;
+        toast.error(res.reason ?? "Davet kodu uygulanamadı.");
+        return;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, claimReferralFn, qc]);
 
   const profileQ = useQuery({
