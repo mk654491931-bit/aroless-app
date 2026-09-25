@@ -1599,6 +1599,10 @@ export async function startVeloraRun(
     startedAtMs: Date.now(),
     updatedAtMs: Date.now(),
     status: "running",
+    evidenceByLine: {
+      analysis: emptyEvidenceSnapshot(),
+      council: emptyEvidenceSnapshot(),
+    },
     evidenceBlock: "",
     scrapedTrends: [],
     live: false,
