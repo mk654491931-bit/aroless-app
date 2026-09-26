@@ -14,12 +14,16 @@ export type RadarSeed = {
   reason: string;
 };
 
-/** Google Trends ile doğrulanmış canlı kanıt (radar_items.payload içinde saklanır). */
+/** Google Trends / Wikipedia pageviews ile doğrulanmış canlı kanıt (radar_items.payload içinde saklanır). */
 export type RadarEvidence = {
   keyword: string;
-  /** Momentumun kaynağı: gerçek Google Trends mi, yoksa tahmin mi? */
-  trend_source: "google-trends" | "estimated";
-  /** Google Trends'ten gelen gerçek 30 günlük değişim (%). */
+  /**
+   * Momentumun kaynağı: gerçek ölçüm mü, yoksa tahmin mi?
+   * `wikipedia-views` = Google datacenter IP'lerinde 429 verdiğinde devreye
+   * giren, yine GERÇEK ölçülen talep proksisi (Wikipedia sayfa görüntülenmeleri).
+   */
+  trend_source: "google-trends" | "wikipedia-views" | "estimated";
+  /** Ölçülen gerçek 30 günlük değişim (%). */
   trend_momentum_pct: number;
   /** 12 aylık ilgi serisi (0-100), sparkline için. */
   series: number[];
@@ -120,13 +124,15 @@ export function radarKeyword(raw: unknown, title: string): string {
  * modelin nitel değerlendirmesi hem ölçülmüş talep artışı yansır.
  */
 export function applyTrendEvidence(seed: RadarSeed, evidence: RadarEvidence): RadarSeed {
-  if (evidence.trend_source !== "google-trends") {
+  // Wikipedia pageviews de ölçülmüş talep olduğu için (Google 429'da devreye
+  // girer) skora DAHİL EDİLİR; yalnız `estimated` skora giremez.
+  if (evidence.trend_source !== "google-trends" && evidence.trend_source !== "wikipedia-views") {
     return { ...seed, momentum: evidence.trend_momentum_pct || seed.momentum };
   }
   const trendScore = Math.max(5, Math.min(98, Math.round(50 + evidence.trend_momentum_pct * 0.8)));
   const blended = Math.round(seed.winner_score * 0.65 + trendScore * 0.35);
   const sign = evidence.trend_momentum_pct >= 0 ? "+" : "";
-  const proof = ` Google Trends "${evidence.keyword}": ${sign}${evidence.trend_momentum_pct}% / 30 gün.`;
+  const proof = ` ${evidence.trend_source === "google-trends" ? "Google Trends" : "Wikipedia pageviews"} "${evidence.keyword}": ${sign}${evidence.trend_momentum_pct}% / 30 gün.`;
   return {
     ...seed,
     momentum: Math.max(-50, Math.min(200, evidence.trend_momentum_pct)),

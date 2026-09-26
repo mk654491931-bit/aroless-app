@@ -179,7 +179,12 @@ export const getRadar = createServerFn({ method: "POST" })
     }
 
     const enriched = await enrichWithTrends(seeds, keywords, data.country, generatedBy);
-    const liveCount = enriched.filter((e) => e.evidence.trend_source === "google-trends").length;
+    // Wikipedia pageviews da ölçülmüş talep olduğu için "canlı" sayılır.
+    const liveCount = enriched.filter(
+      (e) =>
+        e.evidence.trend_source === "google-trends" ||
+        e.evidence.trend_source === "wikipedia-views",
+    ).length;
 
     const now = new Date().toISOString();
     const rows = enriched.map(({ seed, evidence }) => ({

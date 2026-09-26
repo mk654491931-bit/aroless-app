@@ -210,6 +210,60 @@ export function isComplaintTitle(title: string): boolean {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Reddit ATOM arama akışı — talep kanıtının ASIL kaynağı.
+ *
+ * NEDEN YENİDEN ÖNCELİKLİ: ölçüldü ki arşiv (`arctic-shift`) bu sunucudan
+ * kararsız: konuya özel sorgular (`title=robot`, `selftext=robot`) 422
+ * "Timeout. Maybe slow down a bit" döndürüyor; aynı uç nokta filtresiz
+ * çağrıda 200 ile 25 satır veriyor. Yani arşiv "tüketici talebi" iddiasını
+ * çoğu koşuda BOŞ dönüyordu (ölçülen: 3/3 koşuda 0 reddit sinyali) ve
+ * UX/CFO ajanları kanıtsız kalıyordu.
+ *
+ * `search.rss` ise ölçüldüğü gibi kararlı: 200, 25 `<entry>`, ~680 ms ve
+ * BAŞLIKLAR NİŞE GERÇEKTEN İLGİLİ ("What's the best robot vacuum that is
+ * actually worth buying right now?"). Ayıca `relevance` sıralaması
+ * gürültüyü eler. RSS aynı zamanda `score` vermez; bu yüzden `score` 0 bırakılır
+ * ve SIHALET (upvote+yorum) bunun yerine YORUM SAYISI + başlık sinyaliyle
+ * ölçülür. Sıralamada bu fark telafi edilir.
+ */
+async function scrapeRedditRss(niche: string): Promise<RedditSignal[]> {
+  const q = encodeURIComponent(`"${niche.slice(0, 60)}"`);
+  const xml = await grabText(
+    `https://www.reddit.com/search.rss?q=${q}&sort=relevance&limit=25&t=year`,
+    5_000,
+  );
+  const entries = xml.split(/<entry[\s>]/i).slice(1, 26);
+  const words = niche
+    .toLowerCase()
+    .split(/[^a-z0-9çğıöşü]+/i)
+    .filter((w) => w.length >= 4)
+    .slice(0, 3);
+
+  const out: RedditSignal[] = [];
+  for (const block of entries) {
+    const title = decodeEntities(rssTag(block, "title"));
+    if (!title) continue;
+    // Reddit RSS tam metin aramada alakasız topluluk adları da döner; en az bir
+    // niş kelimesi geçmeyen başlık kanıt değildir.
+    if (words.length && !words.some((w) => title.toLowerCase().includes(w))) continue;
+    const updated = rssTag(block, "updated");
+    const ts = updated ? Date.parse(updated) : Number.NaN;
+    out.push({
+      title: title.slice(0, 180),
+      // RSS'te topluluk adı `<name>` alanındaki `r/<sub>` biçiminden gelir.
+      subreddit: (rssTag(block, "name").match(/r\/([A-Za-z0-9_]+)/)?.[1] ?? "search").slice(0, 40),
+      score: 0,
+      // Sıralama ölçütü: tazelik. Eski bir tartışma "şu an talep" kanıtı değildir.
+      comments: Number.isFinite(ts) ? Math.max(0, Math.round((Date.now() - ts) / 86_400_000)) : 0,
+      url: rssTag(block, "link"),
+      complaint: isComplaintTitle(title),
+    });
+  }
+  if (!out.length) throw new Error("no reddit rss entries");
+  return out.slice(0, 12);
+}
+
+/**
  * Arşivden talep + şikâyet sinyali kazır.
  *
  * SORGULAMA DİSİPLİNİ (ölçülmüş): arşiv paralel sorgularda kendi içinde
@@ -259,6 +313,94 @@ async function scrapeReddit(niche: string): Promise<RedditSignal[]> {
   }
   // Önce en çok konuşulanlar; aynı ses yoğunluğunda şikâyetler öne çıkar.
   return out.sort((a, b) => b.score + b.comments - (a.score + a.comments)).slice(0, 12);
+}
+
+/**
+ * Reddit sinyali toplayıcı — İKİ KAYNAK, SIRA KORUNARAK.
+ *
+ * ÖLÇÜLEN GERÇEK: arşiv (`arctic-shift`) bu IP'de konuya özel sorgularda
+ * düzenli 422 döndürüyor, `search.rss` ise kararlı ve **daha alakalı** sonuç
+ * veriyor. Bu yüzden önce RSS denenir; RSS boş/çökerse arşive düşülür.
+ * İkisi de sessizce boş dönmez — `collect` kaynağı `error` olarak raporlar.
+ */
+async function scrapeRedditCombined(niche: string): Promise<RedditSignal[]> {
+  // ÖLÇÜLEN: Reddit bu IP'yi hız sınırına alıyor (arka arkaya istek → 429).
+  // 429 bir "yavaş" yanıt DEĞİL, ~100 ms'de gelen bir ret yanıtıdır; yine de
+  // önceki sürüm yedeğe düşerken toplam bütçeyi (6 sn) aşıp `error` oluyordu.
+  // Bu yüzden bütçe açıkça paylaştırılır ve ret HIZLI algılanır.
+  const deadline = Date.now() + 5_400; // Faz 0 reddit tavanı (6 sn) içinde kalsın
+
+  // 1) RSS araması — TEK istek (~750 ms ölçüldü).
+  try {
+    const rss = await scrapeRedditRss(niche);
+    if (rss.length) return rss;
+  } catch {
+    // 429 / ağ hatası → alt topluluk RSS'ine düş.
+  }
+
+  // 2) Alt topluluk RSS'i — yalnız BÜTÇE KALDIYSA, tek seferde.
+  if (Date.now() < deadline) {
+    try {
+      const sub = await scrapeRedditSubredditRss(niche, deadline);
+      if (sub.length) return sub;
+    } catch {
+      // Son çare: arşiv.
+    }
+  }
+
+  // 3) Arşiv — yalnız gerçekten zaman varsa; `scrapeReddit` kendi içinde
+  //    alt topluluk başına zaman tavanına sahiptir.
+  if (Date.now() >= deadline) throw new Error("reddit rate-limited");
+  return scrapeReddit(niche);
+}
+
+/**
+ * Alt topluluk RSS araması — `search.rss` 429 yediğinde yedek yol.
+ *
+ * Reddit genel arama uç noktası hız limiti uygularken alt topluluk uçları
+ * daha gevşek davranır. Paylaşılan `deadline` aşıldığında yeni istek ATILMAZ
+ * (aksi halde 3 alt topluluk × 2.5 sn = 7.5 sn ile 6 sn'lik tavan aşılıyor).
+ */
+async function scrapeRedditSubredditRss(niche: string, deadline: number): Promise<RedditSignal[]> {
+  const words = niche
+    .toLowerCase()
+    .split(/[^a-z0-9çğıöşü]+/i)
+    .filter((w) => w.length >= 4)
+    .slice(0, 2);
+  if (!words.length) throw new Error("no keywords");
+
+  const out: RedditSignal[] = [];
+  const seen = new Set<string>();
+  for (const sub of SUBREDDITS) {
+    // Kalan bütçeyi isteğe göre sınırla; en az 400 ms kalmalı ki işe yarasın.
+    const left = deadline - Date.now();
+    if (left < 400) break;
+    try {
+      const xml = await grabText(
+        `https://www.reddit.com/r/${sub}/search.rss?q=${encodeURIComponent(words[0])}&restrict_sr=1&sort=relevance&limit=15&t=year`,
+        Math.min(2_000, left),
+      );
+      for (const block of xml.split(/<entry[\s>]/i).slice(1, 16)) {
+        const title = decodeEntities(rssTag(block, "title"));
+        if (!title || seen.has(title)) continue;
+        if (!words.some((w) => title.toLowerCase().includes(w))) continue;
+        seen.add(title);
+        out.push({
+          title: title.slice(0, 180),
+          subreddit: sub,
+          score: 0,
+          comments: 0,
+          url: rssTag(block, "link"),
+          complaint: isComplaintTitle(title),
+        });
+      }
+      if (out.length >= 8) break;
+    } catch {
+      continue; // bu alt topluluk kapalı, sıradakine geç
+    }
+  }
+  if (!out.length) throw new Error("no subreddit rss entries");
+  return out.slice(0, 12);
 }
 
 /* --------------------------------------------------------- 2. Hacker News */
@@ -386,8 +528,14 @@ type RadarJob = {
  * döndürse bile diğer kaynaklar etkilenmez.
  */
 const SOURCE_BUDGET_MS = {
-  trends: 2_500, // 429 → hızlı hata (80 ms)
-  reddit: 6_000, // 5-8.7 sn ölçüldü; 6 sn'de kesilir, diğer kanıt yaşar
+  // Google 429 verdiğinde (datacenter IP'lerinde ÖLÇÜLEN durum) devreye giren
+  // Wikipedia pageviews zinciri ~1.5-2 sn sürüyor; 2.5 sn tavan bu yedeği
+  // kesip trend kanıtını yine öldürüyordu. 5 sn hem iki kaynağı da kapsar
+  // hem de 12 sn'lik Faz 0 tavanının içinde kalır.
+  trends: 5_000,
+  // Reddit RSS tek istekte ~750 ms ölçüldü; 429 gelirse anında döner ve arşiv
+  // yedeğine düşer. 6 sn, 8-9 sn ölçülen ESKİ arşiv yolunu da kapsar.
+  reddit: 6_000,
   hackerNews: 3_000, // ~300 ms
   news: 3_000, // 40-450 ms
   prices: 4_000, // 3 kaynak + bot-guard beklemesi ~1.4 sn
@@ -429,8 +577,8 @@ export async function harvestNicheSignals(input: {
         SOURCE_BUDGET_MS.trends,
       ),
       collect(
-        "Reddit arşivi",
-        () => scrapeReddit(niche),
+        "Reddit talep",
+        () => scrapeRedditCombined(niche),
         (r) => r.length,
         statuses,
         SOURCE_BUDGET_MS.reddit,
@@ -497,9 +645,12 @@ export async function harvestNicheSignals(input: {
       16,
     );
 
-    // Google Trends canlı veri vermediyse `source: "estimated"` işaretlidir;
-    // momentum bu durumda null'dur — "ölçtük" demiyoruz.
-    const trendsLive = Boolean(trends && trends.source === "google-trends");
+    // Talep ölçümü: `google-trends` veya (Google 429 verdiğinde) `wikipedia-views`.
+    // İKİSİ DE gerçek ölçümdür; yalnız `estimated` (uydurma seri) kanıttan
+    // dışlanır ve momentum `null` bırakılır — "ölçtük" demiyoruz.
+    const trendsLive = Boolean(
+      trends && (trends.source === "google-trends" || trends.source === "wikipedia-views"),
+    );
 
     return NicheSignalsSchema.parse({
       niche,

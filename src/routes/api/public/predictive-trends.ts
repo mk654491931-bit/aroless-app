@@ -21,7 +21,7 @@ export type TrendItem = {
   season: string;
   momentum_pct: number;
   series: number[];
-  trend_source: "google-trends" | "estimated";
+  trend_source: "google-trends" | "wikipedia-views" | "estimated";
   competition: "Low" | "Medium" | "High";
   marketplace: string;
   audience: string;

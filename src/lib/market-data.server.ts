@@ -32,7 +32,7 @@ export type TrendSeries = {
   /** 30-day interest values, 0-100. */
   monthly: number[];
   momentum_pct: number;
-  source: "google-trends" | "estimated";
+  source: "google-trends" | "wikipedia-views" | "estimated";
 };
 
 function stripGuard(text: string): unknown {
@@ -152,6 +152,164 @@ export function sparklineForPreview(keyword: string, n = 12): number[] {
   return estimatedSeries(keyword.slice(0, 80), n);
 }
 
+/* ------------------------------------------- Wikipedia pageviews (demand) */
+
+/**
+ * GOOGLE TRENDS ÖLÇÜLEN ŞEKİLDE ÖLÜ — Wikipedia ile GERÇEK TALEP ÖLÇÜMÜ.
+ *
+ * ÖLÇÜLEN: Vercel/datacenter IP'lerinden `trends.google.com/trends/api/explore`
+ * **429 (Too Many Requests)** döndürüyor; `?req=` ile 200 alsa bile ikinci
+ * `widgetdata` çağrısı da engelleniyor. Sonuç: Faz 0'da `trendSeries` her
+ * koşuda BOŞ, `trendMomentumPct` `null` idi ve trend_hunter ajanı 14 ajanın
+ * içinde kanıtsız çalışan tek ajandı. Bunu "tahmini seri" ile doldurmak
+ * uydurmak olurdu.
+ *
+ * Wikipedia Pageviews API ise aynı ölçümü bedava ve anahtarsız veriyor:
+ * günlük görüntülenme serisi + önceki dönemle karşılaştırma. Karşılaştırma
+ * sonucu 0-100'e normalize edilerek `TrendSeries` sözleşmesine döner ve
+ * `source: "wikipedia-views"` ile AYRIŞTIRILIR — yani ajan "ölçülen talep"
+ * ile "Google ölçümü" arasındaki farkı görebilir.
+ *
+ * DÜRÜSTLÜK: ilgili makale bulunamazsa seri ÜRETİLMEZ, çağıran taraf
+ * `estimated` (yani "ölçülemedi") moduna düşer.
+ */
+const WIKI_PV = "https://wikimedia.org/api/rest_v1/metrics/pageviews";
+
+/** "robot vacuum" → "Robot_vacuum" (başlık çözümlemesi, en iyi tahmin). */
+function wikiTitleCandidates(keyword: string): string[] {
+  const k = keyword.trim().toLowerCase();
+  if (!k) return [];
+  const words = k.split(/\s+/).filter(Boolean);
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const titleish = words.map(cap).join("_");
+  return Array.from(
+    new Set([titleish, k.replace(/\s+/g, "_"), words[0] ? cap(words[0]) : ""]),
+  ).filter(Boolean);
+}
+
+/**
+ * Wikimedia ARAMA ağ geçidi — nişi gerçek bir makale başlığına bağlar.
+ *
+ * ÖLÇÜLEN GEREKÇE: ilk sürüm yalnız başlık tahminiyle ("dog harness" →
+ * "Dog_harness") gidiyordu ve bu tahmin çoğu nişte 404 veriyordu; "dog
+ * harness" için makale yoktur (var olan "Dog harness" değil "Harness" ya da
+ * alakasız bir sayfadır). Arama ağ geçidi ise `Air_fryer` gibi gerçek
+ * makaleleri bulur ve aynı zamanda **kanonik başlığı** verir — yani
+ * "Air fryer" yerine "Air_fryer" gibi gerçek sayfa adını öğreniyoruz.
+ *
+ * Anahtarsız, ücretsiz, 200 dönüyor. Bulunamazsa `[]` döner ve çağıran taraf
+ * başlık tahminine düşer.
+ */
+async function wikiSearchTitles(keyword: string): Promise<string[]> {
+  const url =
+    "https://api.wikimedia.org/core/v1/wikipedia/en/search/page" +
+    `?q=${encodeURIComponent(keyword.slice(0, 80))}&limit=5`;
+  try {
+    const res = await timedFetch(url, {}, 4_000);
+    if (!res.ok) return [];
+    const json = (await res.json()) as { pages?: { title?: string }[] };
+    return (json.pages ?? [])
+      .map((p) => String(p.title ?? "").trim())
+      .filter(Boolean)
+      .map((t) => t.replace(/\s+/g, "_"));
+  } catch {
+    return [];
+  }
+}
+
+type WikiPvResponse = {
+  items?: { timestamp: string; views: number }[];
+};
+
+/** Bir makalenin günlük görüntülenmelerini çeker; yoksa `null`. */
+async function wikiPageviews(title: string, from: string, to: string): Promise<number[]> {
+  const url = `${WIKI_PV}/per-article/en.wikipedia/all-access/user/${encodeURIComponent(
+    title,
+  )}/daily/${from}/${to}`;
+  const res = await timedFetch(url, {}, 5_000);
+  if (!res.ok) return [];
+  const json = (await res.json()) as WikiPvResponse;
+  const values = (json.items ?? [])
+    .map((i) => Number(i.views))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  return values;
+}
+
+/** Gün sayısını ISO tarih damgasına çevirir (Pageviews API saat dilimi ister). */
+function wikiStamp(daysAgo: number): string {
+  const d = new Date(Date.now() - daysAgo * 86_400_000);
+  return `${d.toISOString().slice(0, 10).replace(/-/g, "")}00`;
+}
+
+/** Seriyi 0-100'e normalize eder (0 veya tek değer ise dokunmaz). */
+function normalize100(values: number[]): number[] {
+  if (!values.length) return [];
+  const max = Math.max(...values);
+  if (max <= 0) return values;
+  return values.map((v) => Math.round((v / max) * 100));
+}
+
+/** Günlük seri → 52 haftalık nokta (tekrar kırpmadan ortalama). */
+function resampleWeekly(values: number[], buckets = 52): number[] {
+  if (values.length <= buckets) return values;
+  const size = values.length / buckets;
+  return Array.from({ length: buckets }, (_, i) => {
+    const slice = values.slice(
+      Math.floor(i * size),
+      Math.max(Math.floor((i + 1) * size), Math.floor(i * size) + 1),
+    );
+    return Math.round(slice.reduce((a, b) => a + b, 0) / (slice.length || 1));
+  });
+}
+
+/**
+ * Wikipedia tabanlı GERÇEK talep ölçümü.
+ *
+ * Dönen seriler YILIĞILK (52 hafta) ve AYLIK (30 gün) ve momentum yüzdesidir.
+ * Makale bulunamazsa `null` döner → çağıran taraf `estimated` moduna düşer ve
+ * trend alanları kanıttan çıkarılır (uydurma seri üretilmez).
+ */
+export async function getWikipediaDemand(
+  keyword: string,
+): Promise<{ yearly: number[]; monthly: number[]; momentum: number; title: string } | null> {
+  // ÖNCE kanonik başlık çözümle (ölçüldü: arama ağ geçidi gerçek makaleyi bulur),
+  // olmazsa başlık tahminine düş. 13 aylık pencere 52 haftalık seriyi tam çıkarır.
+  const searched = await wikiSearchTitles(keyword);
+  const candidates = Array.from(new Set([...searched, ...wikiTitleCandidates(keyword)])).filter(
+    Boolean,
+  );
+  if (!candidates.length) return null;
+
+  const yearlyRaw = await (async (): Promise<number[]> => {
+    for (const title of candidates) {
+      const v = await wikiPageviews(title, wikiStamp(400), wikiStamp(0));
+      if (v.length > 20) return v;
+    }
+    return [];
+  })();
+  if (!yearlyRaw.length) return null;
+
+  const monthlyRaw = await (async (): Promise<number[]> => {
+    for (const title of candidates) {
+      const v = await wikiPageviews(title, wikiStamp(30), wikiStamp(0));
+      if (v.length > 5) return v;
+    }
+    return [];
+  })();
+
+  const half = Math.max(1, Math.floor(monthlyRaw.length / 2));
+  const first = monthlyRaw.slice(0, half).reduce((a, b) => a + b, 0) / half;
+  const last = monthlyRaw.slice(-half).reduce((a, b) => a + b, 0) / half;
+  const momentum = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+
+  return {
+    yearly: resampleWeekly(normalize100(yearlyRaw), 52),
+    monthly: normalize100(monthlyRaw),
+    momentum,
+    title: candidates[0] ?? keyword,
+  };
+}
+
 function downsample(v: number[], n: number): number[] {
   if (v.length <= n) return v;
   const step = v.length / n;
@@ -172,6 +330,16 @@ export async function getGoogleTrends(keyword: string, country: string): Promise
     // UYDURMAK, 14 ajanın tamamına "ölçülmüş ilgi" diye yalan söylemekti.
     // Bunun yerine boş seri + `estimated` döner; Faz 0 bu bayrağı görüp trend
     // satırlarını kanıta katmaz ve ajan "VERİ YOK" deyip nötr puanlar.
+    //
+    // ÖLÇÜLEN DÜZELTME: datacenter IP'lerinde Google Trends kalıcı olarak
+    // 429 döndüğü için trend_hunter ajanı daima kanıtsız kalıyordu. Şimdi
+    // Google ölçülemezse **gerçek** bir talep ölçümü olan Wikipedia
+    // pageviews denenir ve `source` ayrımı korunur; Wikipedia da ölçemezse
+    // ancak O ZAMAN `estimated` (dolu ama tahmini) moda düşülür.
+    const wiki = await getWikipediaDemand(kw).catch(() => null);
+    if (wiki && wiki.yearly.length) {
+      return finalize(kw, geo, wiki.yearly, wiki.monthly, "wikipedia-views");
+    }
     return finalize(kw, geo, [], [], "estimated");
   }
 }

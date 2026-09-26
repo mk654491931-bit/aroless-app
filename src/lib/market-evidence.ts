@@ -16,7 +16,15 @@ export type MarketEvidence = {
   trend_monthly: number[];
   trend_yearly: number[];
   trend_momentum_pct: number;
-  trend_source: "google-trends" | "estimated";
+  /**
+   * Talep serisinin GERÇEK kaynağı.
+   *
+   * `google-trends`   → Google'ın kendi ölçümü.
+   * `wikipedia-views` → Google datacenter IP'lerinde 429 verdiği için devreye
+   *                     giren Wikipedia pageviews TALEP ölçümü (gerçek veri).
+   * `estimated`       → hiçbir kaynak ölçemedi; seri boştur, sayı UYDURULMAZ.
+   */
+  trend_source: "google-trends" | "wikipedia-views" | "estimated";
   /** Real supplier price discovered on AliExpress (or heuristic estimate). */
   supplier_price_usd: number;
   supplier_shipping_usd: number;

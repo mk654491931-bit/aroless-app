@@ -29,9 +29,9 @@ export async function buildLiveEvidenceBlock(niche: string, country: string): Pr
     scrapeMarketplaceSellers(niche, country).catch(() => []),
   ]);
   const lines: string[] = [];
-  if (trends && trends.source === "google-trends") {
+  if (trends && (trends.source === "google-trends" || trends.source === "wikipedia-views")) {
     lines.push(
-      `- Google Trends (${trends.geo || "GLOBAL"}) for "${trends.keyword}": 30-day momentum ${trends.momentum_pct > 0 ? "+" : ""}${trends.momentum_pct}%, last 12-month interest range ${Math.min(...trends.yearly)}-${Math.max(...trends.yearly)} (0-100 scale).`,
+      `- ${trends.source === "google-trends" ? "Google Trends" : "Wikipedia pageviews (demand proxy)"} (${trends.geo || "GLOBAL"}) for "${trends.keyword}": 30-day momentum ${trends.momentum_pct > 0 ? "+" : ""}${trends.momentum_pct}%, last 12-month interest range ${Math.min(...trends.yearly)}-${Math.max(...trends.yearly)} (0-100 scale).`,
     );
   }
   if (sellers.length) {
@@ -174,7 +174,17 @@ export async function verifyProduct(
   const verified: string[] = [];
   const unverified: string[] = [];
 
-  if (trends?.source === "google-trends") verified.push("Google Trends talep eğrisi");
+  // Wikipedia pageviews da GERÇEK bir talep ölçümüdür (Google 429 verdiğinde
+  // devreye girer); bu yüzden "tahmini" sayılmaz.
+  const hasMeasuredTrend =
+    trends?.source === "google-trends" || trends?.source === "wikipedia-views";
+
+  if (hasMeasuredTrend)
+    verified.push(
+      trends?.source === "google-trends"
+        ? "Google Trends talep eğrisi"
+        : "Wikipedia pageviews talep eğrisi (ölçülen)",
+    );
   else unverified.push("Talep eğrisi (tahmini)");
 
   if (sourcing?.source === "aliexpress") verified.push("AliExpress tedarik fiyatı");
@@ -191,7 +201,7 @@ export async function verifyProduct(
 
   // ---- realism scoring -------------------------------------------------
   let score = 40;
-  if (trends?.source === "google-trends") score += 15;
+  if (hasMeasuredTrend) score += 15;
   if (sourcing?.source === "aliexpress") score += 15;
   score += Math.min(15, sellers.length * 5);
   if (hasViral) score += 8;
@@ -217,7 +227,7 @@ export async function verifyProduct(
 
   // Momentum vs. claimed trend score: a "hot" product with collapsing search
   // interest is a red flag.
-  if (trends?.source === "google-trends" && typeof p.trend_score === "number") {
+  if (hasMeasuredTrend && typeof p.trend_score === "number") {
     if (p.trend_score >= 80 && trends.momentum_pct < -20) score -= 12;
     if (p.trend_score >= 70 && trends.momentum_pct > 10) score += 6;
   }
