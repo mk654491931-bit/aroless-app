@@ -36,6 +36,8 @@ export type DossierProduct = {
   councilMin?: number;
   councilMax?: number;
   councilAlignment?: "unanimous" | "strong" | "split" | "contested" | "none";
+  /** 14 ajan ortalamasına uygulanan güven çarpanı (katılım × uzlaşma, 0-1). */
+  councilConfidence?: number;
   /** Kanal bazında pazar erişimi (kural tabanlı; vergi hesabı değildir). */
   marketReach?: {
     country: string;
@@ -65,7 +67,7 @@ export type Dossier = {
   products: DossierProduct[];
   requested_top: number;
   intersection_count: number;
-  rank_source: "weighted" | "intersection" | "analysis-only";
+  rank_source: "council-average" | "analysis-only";
   finalists: number;
   evaluated: number;
   notes: string[];

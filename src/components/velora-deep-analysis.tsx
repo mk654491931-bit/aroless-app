@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ export function VeloraDeepAnalysis({
   country: string;
   platforms: string[];
   disabled?: boolean;
-}) {
+}): JSX.Element {
   const runFn = useServerFn(runAgentPipeline);
   const [runId, setRunId] = useState<string | null>(null);
 
@@ -416,8 +416,8 @@ export function VeloraDeepAnalysis({
                   }`}
                 >
                   {dossier.rank_source === "analysis-only"
-                    ? "yalnız analiz hattı (ajan oyu yok)"
-                    : "ağırlıklı birleşim · %70 14 ajan ⊕ %30 analiz"}
+                    ? "yalnız analiz hattı (14 ajan oyu gelmedi)"
+                    : "14 ajan ortalaması (katılım + uzlaşma düzeltmeli)"}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground">
                   {dossier.finalists} finalist değerlendirildi
@@ -437,7 +437,8 @@ export function VeloraDeepAnalysis({
 
               <div>
                 <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
-                  <Users size={12} /> En yüksek puanlı 3 ürün (14 ajan %70 ⊕ analiz %30)
+                  <Users size={12} /> En yüksek puanlı {dossier.requested_top} ürün — 14 ajan
+                  ortalamasına göre
                 </div>
                 {dossier.products.length === 0 ? (
                   <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] text-muted-foreground">

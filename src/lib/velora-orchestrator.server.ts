@@ -25,16 +25,24 @@
  * tutulur; hiçbir hat diğerinin kazınmış kanıtını görmez. Doğrulanmamış/halüsinasyon
  * metrik kural gereği reddedilir.
  *
- * ORTAK EN İYİ 3 (shared best-3): Tek bir `runId` altında İKİ BAĞIMSIZ SIRALAMA
- * üretilir ve panel yalnızca KESİŞİMİ gösterir:
- *   HAT A — analiz sıralaması: her adayın kendi kanıtı (talep, marj, rekabet,
- *           kanıt kalitesi, kaynak güvenilirliği). Konsey girdisi YOK.
- *   HAT B — ajan konseyi sıralaması: 14 ajanın ÜRÜN BAŞINA verdiği puanların
- *           ortalaması (run geneli ortalama her ürüne kopyalanmaz).
- * Sonuç = iki sıralamanın GERÇEK kesişimi, ürün başına ortak kararla sıralanır,
- * en fazla 3 ürün. Kesişim 3'ten azsa eksik sıra UYDURULMAZ; kaç ortak ürün
- * bulunduğu dürüstçe yazılır. Ajan hiç ürün puanı vermezse panel bu durumu
- * "yalnız analiz hattı" diye etiketler (sessizce sahte kesişim üretmez).
+ * FAZ 0 — 14 AJAN DEVREYE GİRMEDEN ÖNCEKİ NİŞ KAZIMASI:
+ * `harvestNicheSignals` seçilen niş için GERÇEK veriyi (Google Trends momentum,
+ * Reddit talebi + şikâyetleri, Hacker News, Google News, gözlenen marketplace
+ * fiyatları, AliExpress tedarik maliyeti, trend radarı, GitHub) ajanlardan
+ * bağımsız olarak toplar. Her kaynak `active`/`error` olarak RAPORLANIR; yavaş
+ * veya ölü kaynak diğerlerini düşürmez. Bu kanıt iki hatta da aynı şekilde
+ * dağıtılır ve her ajan kendi uzmanlığına ait DİLİMİ ayrıca görür
+ * (`velora-agent-focus.ts`) — mali müşavir fiyatı, telif denetçisi marka
+ * izini, UX ajanı şikâyeti görür.
+ *
+ * NİHAİ SONUÇ — 14 AJAN ORTALAMASI:
+ * Sıralamanın birincil anahtarı 14 ajanın ÜRÜN BAŞINA oy ortalamasıdır
+ * (`velora-council-score.ts` → `councilFinalScore`). Ortalama, oyun sayısı
+ * (katılım) ve yayılım (uzlaşma) ile düzeltilir: 3 ajandan gelen yüksek puan,
+ * 14 ajandan gelen orta puanın üstüne ÇIKAMAZ. Bağımsız analiz hattı kararı
+ * bozmaz — yalnız eşitlik bozucu (tie-break) ve "ajan oyu hiç gelmedi" durumunda
+ * tek başına çalışan yedek hat olarak görev yapar. Kullanıcıya en iyi
+ * `VELORA_TOP_N` (5) ürün gösterilir; eksik sıra UYDURULMAZ.
  *
  * PUSH PROTOKOLÜ: Burst tamamlanınca kazanan karne (dossier) Aroless Winner DTO'ya
  * çevrilir ve nişin kazanan tablosuna (`radar_items` — panelin okuduğu mevcut
@@ -50,6 +58,15 @@ import type { Json } from "@/integrations/supabase/types";
 import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council-chain.server";
 import { DEEP_CHAIN, executeAgentWithFallback, parseAgentJson } from "./ai-router.server";
 import { combineJointScores } from "./consensus-types";
+import { agentFocusBlock } from "./velora-agent-focus";
+import { councilFinalScore, councilRankKey } from "./velora-council-score";
+import {
+  NicheSignalsSchema,
+  emptyNicheSignals,
+  nicheSignalsBlock,
+  type NicheSignals,
+} from "./velora-niche-signals";
+import { harvestNicheSignalsCached } from "./velora-niche-scrape.server";
 import { fetchTrackRecords } from "./velora-track-record.server";
 import { writeVeloraQueryCache } from "./velora-query-cache.server";
 import {
@@ -63,11 +80,9 @@ import {
 import { JOB_POLL_INTERVAL_MS, qstashConfigured, qstashFanOut } from "./discovery-jobs.server";
 import {
   analysisOnlyScore,
-  collectVeloraEvidence,
   normalizeProductIdentity,
   scrapedCandidates,
   ProductSchema,
-  type PipelineInput,
   type Product,
   type RetrieverCandidate,
 } from "./velora-pipeline.server";
@@ -80,6 +95,15 @@ import {
 export const VELORA_PHASE_CEILING_MS = 8_000;
 
 /**
+ * FAZ 0 (niş kazıması) tavanı — AI çağrısı YOK, yalnız ağ.
+ *
+ * Ajan fazlarından biraz geniş olabilir çünkü burada 8 kaynak paralel kazılır ve
+ * yavaş bir kaynak diğerlerini bekletmemelidir. Yine de Vercel Hobby'nin 300 sn
+ * fonksiyon payının çok altındadır; toplam istek-içi yol 8·4 + 12 = 44 sn'dir.
+ */
+export const VELORA_HARVEST_CEILING_MS = 12_000;
+
+/**
  * Fazın ZAMANINDA dönebilmesi için ayrılan pay.
  *
  * Üyelerin bütçesi tavanın tamamı olsaydı, zaman aşımı tam sınırda tetiklenir ve
@@ -88,20 +112,25 @@ export const VELORA_PHASE_CEILING_MS = 8_000;
  */
 export const VELORA_STEP_RETURN_MARGIN_MS = 250;
 
-/** Ajanların odağındaki finalist ürün sayısı. Prompt ve ürün başına puanlama buna göre kurulur. */
-export const VELORA_FINALIST_COUNT = 6;
+/**
+ * Ajanların odağındaki finalist ürün sayısı.
+ *
+ * Kullanıcıya 5 ürün göstereceğimiz için havuz 8 olmalı: 5'i seçebilmek için
+ * en az 5 gerçek aday gerekir, kalite kapısı da eleyebildiği için pay bırakılır.
+ */
+export const VELORA_FINALIST_COUNT = 8;
 
-/** İstenen ORTAK en iyi ürün sayısı (shared best-3). */
-export const VELORA_TOP_N = 3;
+/** İstenen en iyi ürün sayısı — 14 ajan ortalamasına göre. */
+export const VELORA_TOP_N = 5;
 
 /**
  * Her bağımsız hattın niş için çıkardığı "en iyi ürün" sayısı.
  *
  * 14 ajanlı konsey hattı da AI analiz hattı da birbirinden BAĞIMSIZ olarak kendi
- * ilk 5 ürününü bulur. Ağırlıklı birleşim (%70 konsey ⊕ %30 analiz) bu iki
- * listenin BİRLEŞİMİNDEN en yüksek puanlı 3 ürünü çıkarır.
+ * ilk 8 ürününü bulur. Nihai sıralama 14 ajan ortalamasıdır; bu iki liste yalnız
+ * aday havuzunu genişletir.
  */
-export const VELORA_PIPELINE_TOP_N = 5;
+export const VELORA_PIPELINE_TOP_N = 8;
 
 /** Bir ürünün ajan kararı "kabul edilebilir" sayılması için gereken en küçük oy oranı. */
 export const VELORA_MIN_AGENT_COVERAGE = 0.5;
@@ -125,7 +154,7 @@ export const VELORA_PHASE_LEASE_MS = 90_000;
 /** Bu süre boyunca hiç ilerleme yazılmadıysa koşu "bayat" sayılır ve panel yoklamayı bırakır. */
 export const VELORA_RUN_STALE_MS = 180_000;
 
-export type VeloraPhaseId = 1 | 2 | 3 | 4;
+export type VeloraPhaseId = 0 | 1 | 2 | 3 | 4;
 
 export type VeloraPhaseDefinition = {
   id: VeloraPhaseId;
@@ -136,6 +165,16 @@ export type VeloraPhaseDefinition = {
 };
 
 export const VELORA_PHASES: readonly VeloraPhaseDefinition[] = [
+  {
+    // FAZ 0 — 14 AJANDAN ÖNCE. AI çağrısı YOK: yalnız gerçek veri kazınır.
+    // 8 ücretsiz kaynak paralel taranır, her biri `active`/`error` olarak
+    // raporlanır ve sonuç koşu durumuna yazılır. Böylece kazıma da QStash
+    // ile adım adım taşınır: 14 ajanın burst'ü ağ kazımasıyla asla yarışmaz.
+    id: 0,
+    key: "niche-harvest",
+    name: "Deep Niche Harvest (pre-council scrape)",
+    agents: [],
+  },
   {
     id: 1,
     key: "parallel-council",
@@ -160,12 +199,17 @@ export const VELORA_PHASES: readonly VeloraPhaseDefinition[] = [
     ],
   },
   // Bundan sonraki üç adım yeni model çağrısı yapmaz; 14 ajanın ortak ürün
-  // puanlarını kalite kapısı, %70/%30 birleşimi ve push için deterministik
+  // puanlarını kalite kapısı, 14 ajan ortalaması ve push için deterministik
   // olarak kaydeden checkpoint'lerdir.
   { id: 2, key: "quality-gate", name: "Evidence Quality Gate", agents: [] },
-  { id: 3, key: "weighted-decision", name: "70/30 Weighted Decision", agents: [] },
+  { id: 3, key: "council-average", name: "14-Agent Average Decision", agents: [] },
   { id: 4, key: "ranking-push", name: "Final Ranking & Push", agents: [] },
 ];
+
+/** Bir fazın sert tavanı — Faz 0 (kazıma) AI çağrısı yapmadığı için geniştir. */
+export function phaseCeilingFor(id: VeloraPhaseId): number {
+  return id === 0 ? VELORA_HARVEST_CEILING_MS : VELORA_PHASE_CEILING_MS;
+}
 
 /** Planın kapsadığı üye sayısı — 14 ajanın tamamı olmalı (test bunu doğrular). */
 export function plannedAgentCount(): number {
@@ -206,7 +250,7 @@ export const VeloraAgentResultSchema = z.object({
 export type VeloraAgentResult = z.infer<typeof VeloraAgentResultSchema>;
 
 export const VeloraPhaseResultSchema = z.object({
-  id: z.number().int().min(1).max(4),
+  id: z.number().int().min(0).max(4),
   key: z.string(),
   name: z.string(),
   ms: z.number().min(0),
@@ -294,8 +338,20 @@ export const VeloraRunStateSchema = z.object({
   updatedAtMs: z.number().default(0),
   status: z.enum(["running", "completed", "failed"]),
   /**
-   * İki hattın AYRI scraping sonuçları. Product Retriever + Analysis Line yalnız
-   * `analysis`, 14 ajan ise yalnız `council` snapshot'ını görür.
+   * FAZ 0'ın ÖLÇÜLEN kanıtı. 14 ajanın hepsi bu TEK kazımanın üstünde kendi
+   * uzmanlık dilimini alır; ağ kazıması ajanlarla yarışmaz ve 24 saat önbellekli
+   * çalıştığı için aynı niş ikinci kez taranmaz.
+   */
+  nicheSignals: NicheSignalsSchema.default(emptyNicheSignals()),
+  /**
+   * Faz 0 tamamen çökerse hata nedeni burada saklanır. Boş bir string
+   * "sorun yok" demek DEĞİLDİR: panelde ve dossier notlarında görünür.
+   */
+  harvestError: z.string().default(""),
+  /**
+   * İki hattın AYRI kanıt görünümü. Product Retriever + Analysis Line yalnız
+   * `analysis`, 14 ajan ise yalnız `council` snapshot'ını görür; ikisi de Faz 0'ın
+   * aynı kazımasından türetilir ama karar hâlâ bağımsızdır.
    */
   evidenceByLine: z
     .object({
@@ -340,7 +396,7 @@ export const VeloraRunStateSchema = z.object({
   phases: z.array(VeloraPhaseResultSchema).default([]),
   /** Şu an koşan faz — aynı fazın ikinci teslimini idempotent kılar. */
   runningPhase: z
-    .object({ id: z.number().int().min(1).max(4), startedAtMs: z.number() })
+    .object({ id: z.number().int().min(0).max(4), startedAtMs: z.number() })
     .nullable()
     .default(null),
   /** Son push sonucu (durum ucu bunu panelde gösterir). */
@@ -349,16 +405,6 @@ export const VeloraRunStateSchema = z.object({
   selfTest: VeloraSelfTestReportSchema.nullable().default(null),
 });
 export type VeloraRunState = z.infer<typeof VeloraRunStateSchema>;
-
-/** Faz sonuçlarını hattın gördüğü `PipelineInput` şekline çevirir. */
-function stateInput(state: VeloraRunState): PipelineInput {
-  return {
-    userQuery: state.query,
-    country: state.country || undefined,
-    platform: state.platform || undefined,
-    language: state.language,
-  };
-}
 
 /** Finalist adayın sabit kimliği (`C1`…) — ajan oyları bu kimlikle eşleşir. */
 export function candidateIdOf(candidate: Record<string, unknown>, index: number): string {
@@ -423,8 +469,11 @@ export type VeloraOrchestratorDeps = {
   phaseCeilingMs?: number;
   /** Sonraki fazı devretme yolu (QStash). `null` ise adımlar istek içinde koşar. */
   handoff?: ((args: { runId: string; phase: VeloraPhaseId }) => Promise<VeloraHandoff>) | null;
-  /** Test ve özel sağlayıcılar için kanıt kazıyıcısı; varsayılan canlı scraper'dır. */
-  collectEvidence?: typeof collectVeloraEvidence;
+  /**
+   * FAZ 0 kazıyıcısı; varsayılan 24 saatlik önbellekli canlı kazımadır.
+   * Testler bunu stub'lar — ağ çağrısı yapılmaz.
+   */
+  harvest?: typeof harvestNicheSignalsCached;
   /** Test ve özel sağlayıcılar için geçmiş performans okuyucusu. */
   fetchTrackRecord?: typeof fetchTrackRecords;
 };
@@ -688,6 +737,14 @@ function agentPrompt(
   const name = definition?.name ?? agentKey;
   const index = COUNCIL_AGENTS.findIndex((a) => a.key === agentKey) + 1;
   const councilEvidence = state.evidenceByLine.council;
+  // Her ajan kendi UZMANLIK DİLİMİNİ ayrıca görür: aynı kazıma, o rolün
+  // kararına etki eden ölçülmüş alanlara indirgenir (fiyat, şikâyet, bariyer,
+  // tedarik, kanal…). Ek AI çağrısı YOKTUR — maliyet sıfırdır.
+  const focus = agentFocusBlock(
+    agentKey,
+    state.nicheSignals,
+    state.candidates.map((candidate) => String(candidate["name"] ?? "")),
+  );
   return `You are ${name}, member ${index}/14 of the Aroless AI Council.
 VELORA PHASE ${phase.id}/4 — ${phase.name}
 TASK: ${task}
@@ -698,9 +755,11 @@ PLATFORM: ${state.platform || "any"}
 
 ${
   councilEvidence.block
-    ? `COUNCIL SCRAPING EVIDENCE (this line's independent trend radar + live market scrape; do not assume the analysis line sees the same snapshot):\n${councilEvidence.block.slice(0, 4_000)}`
-    : "COUNCIL SCRAPING EVIDENCE: this line's independent scrape returned no data. Score neutrally."
+    ? `PRE-COUNCIL SCRAPING EVIDENCE (collected by phase 0 BEFORE any agent ran — trend radar, Google Trends, Reddit, Hacker News, Google News, observed marketplace prices, supplier cost):\n${councilEvidence.block.slice(0, 3_200)}`
+    : 'PRE-COUNCIL SCRAPING EVIDENCE: the pre-council harvest returned no data. Score neutrally and say "unverified".'
 }
+
+${focus ?? ""}
 
 ${finalistBlock(state)}
 
@@ -853,6 +912,9 @@ export function councilAverageOf(phases: readonly VeloraPhaseResult[]): number {
 // KAZANAN KARNESİ (Winner Dossier) ve Aroless Winner DTO
 // ---------------------------------------------------------------------------
 
+/** Nihai listenin dayandığı hat — panelde dürüstçe etiketlenir. */
+export type WinnerRankSource = "council-average" | "analysis-only";
+
 export const WinnerDtoSchema = z.object({
   run_id: z.string(),
   query: z.string(),
@@ -867,17 +929,17 @@ export const WinnerDtoSchema = z.object({
   joint_score: z.number().min(0).max(100),
   joint_source: z.enum(["joint", "analysis", "council", "none"]),
   listed: z.boolean(),
-  /** İki bağımsız hattın AĞIRLIKLI (%70 konsey ⊕ %30 analiz) birleşiminden çıkan en iyi ürünler (en fazla 3). */
+  /** 14 ajan ortalamasına göre sıralanan en iyi ürünler (en fazla 5). */
   products: z.array(ProductSchema),
-  /** İstenen nihai ürün sayısı (3). */
+  /** İstenen nihai ürün sayısı (5). */
   requested_top: z.number().int().min(1),
   /** İki bağımsız ilk-5 listesinin kaç üründe örtüştüğü (ölçülür; eksik sıra DOLDURULMAZ). */
   intersection_count: z.number().int().min(0),
   /**
-   * Sonuç kümesi iki bağımsız hattın AĞIRLIKLI birleşimi mi (`weighted`), yoksa
+   * Sonuç kümesi 14 AJAN ORTALAMASINA göre mi kuruldu (`council-average`), yoksa
    * ajan oyu hiç gelmediği için yalnız analiz hattı mı (`analysis-only`)?
    */
-  rank_source: z.enum(["weighted", "intersection", "analysis-only"]),
+  rank_source: z.enum(["council-average", "analysis-only"]),
   /** Değerlendirilen finalist sayısı. */
   finalists: z.number().int().min(0),
   /** En az bir ajan oyu almış ürün sayısı. */
@@ -1004,16 +1066,19 @@ export function winnerRows(dto: WinnerDto): WinnerRow[] {
 /**
  * KOŞU DURUMUNDAN KAZANAN KARNESİ — tamamen deterministik ve saftır.
  *
- * Sonuç kümesi şu üç adımda kurulur:
- *   1. HAT A (AI analiz): her aday `analysisOnlyScore` ile sıralanır (konsey girdisi
- *      yok) ve kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
- *   2. HAT B (14 ajanlı konsey): ajanların ürün başına oyları `productConsensus`
- *      ile sıralanır ve kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
- *   3. AĞIRLIKLI BİRLEŞİM: iki bağımsız listenin birleşimi ürün başına
- *      `combineJointScores` (konsey %70 ⊕ analiz %30) ile puanlanır ve en yüksek
- *      `VELORA_TOP_N` ürün raporlanır.
- * Ajan hiç oy vermediyse konsey hattı yoktur: sonuç yalnız analiz hattı olarak
- * etiketlenir ve neden `notes` içinde yazılır; sıra DOLDURULMAZ.
+ * Sıralama KURALI (kullanıcı isteği): nihai liste 14 ajanın ÜRÜN BAŞINA verdiği
+ * puanların ORTALAMASINA göre kurulur. Ortalama tek başına kullanılmaz; iki ölçülebilir
+ * güven çarpanı ile düzeltilir (`velora-council-score.ts`):
+ *   • KATILIM — kaç ajan gerçekten oy verdi (az oy = cezalı),
+ *   • UZLAŞMA — oyların yayılımı (bölünmüş konsey = cezalı).
+ *
+ * Bağımsız analiz hattı kararı BOZMAZ: yalnız eşitlik bozucudur ve konsey
+ * hiç oy vermediyse kararın tamamıdır (bu durum `rank_source: "analysis-only"`
+ * ile dürüstçe etiketlenir).
+ *
+ * Aday havuzu iki bağımsız hattın ilk `VELORA_PIPELINE_TOP_N` listesinin
+ * BİRLEŞİMİDİR: hiçbir ajan oyu gelmezse liste boş kalmaz, ama sonuç
+ * "yalnız analiz hattı" diye işaretlenir. Eksik sıra DOLDURULMAZ.
  */
 export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const councilAverage = councilAverageOf(state.phases);
@@ -1021,9 +1086,9 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const joint = combineJointScores({ analysisScore: analysis, councilScore: councilAverage });
   const consensus = productConsensus(state);
   const notes: string[] = [];
+  const agentCount = Math.max(1, plannedAgentCount());
 
   // HAT A — AI ANALİZ HATTI: ürünün KENDİ kanıtına dayanır (konsey girdisi yok).
-  // Bu hat niş için bağımsız olarak kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
   const analysisRanked = (state.candidates as unknown as RetrieverCandidate[])
     .map((candidate, index) => {
       const candidateId = candidateIdOf(candidate as unknown as Record<string, unknown>, index);
@@ -1031,14 +1096,12 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
         candidate,
         candidateId,
         identity: normalizeProductIdentity(String(candidate.name ?? "")),
-        // HAT A: bağımsız AI analiz turunun puanı; tur yoksa deterministik formül.
         analysisScore: analysisScoreFor(state, candidateId, analysisOnlyScore(candidate)),
       };
     })
     .sort((a, b) => b.analysisScore - a.analysisScore || a.identity.localeCompare(b.identity));
 
-  // HAT B — 14 AJANLI KONSEY HATTI: ürün başına ajan oylarına dayanır. Bu hat da
-  // niş için bağımsız olarak kendi ilk `VELORA_PIPELINE_TOP_N` ürününü bulur.
+  // HAT B — 14 AJANLI KONSEY HATTI: ajanların ürün başına oyları.
   const councilRanked = analysisRanked
     .filter((row) => consensus.has(row.candidateId))
     .map((row) => ({ ...row, councilScore: consensus.get(row.candidateId)!.councilScore }))
@@ -1047,30 +1110,36 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
   const analysisTop = analysisRanked.slice(0, VELORA_PIPELINE_TOP_N);
   const councilTop = councilRanked.slice(0, VELORA_PIPELINE_TOP_N);
   const councilTopIds = new Set(councilTop.map((row) => row.candidateId));
-  // Gerçek örtüşme: iki bağımsız listenin ORTAK ürünleri (ölçülür, uydurulmaz).
   const overlapCount = analysisTop.filter((row) => councilTopIds.has(row.candidateId)).length;
-  const twoIndependentPipelines = analysisTop.length > 0 && councilTop.length > 0;
-  const rankSource: "weighted" | "analysis-only" = twoIndependentPipelines
-    ? "weighted"
-    : "analysis-only";
+  const hasCouncilLine = councilTop.length > 0;
+  const rankSource: WinnerRankSource = hasCouncilLine ? "council-average" : "analysis-only";
 
   if (consensus.size === 0) notes.push("AGENT_CONSENSUS_UNAVAILABLE");
   else if (overlapCount === 0) notes.push("NO_PRODUCT_INTERSECTION");
   if (!state.live) notes.push("LIVE_EVIDENCE_UNAVAILABLE");
   if (!state.evidenceByLine.analysis.block) notes.push("SHARED_EVIDENCE_EMPTY");
+  if (state.harvestError) notes.push(`HARVEST_FAILED:${state.harvestError.slice(0, 80)}`);
+  const thinVotes = [...consensus.values()].filter(
+    (entry) => entry.votes < Math.ceil(agentCount * VELORA_MIN_AGENT_COVERAGE),
+  ).length;
+  if (thinVotes > 0) notes.push(`THIN_AGENT_COVERAGE:${thinVotes}`);
 
-  // AĞIRLIKLI BİRLEŞİM — iki bağımsız listenin tüm adayları; her ürün ürün başına
-  // ağırlıklı puanla (konsey %70 ⊕ analiz %30) değerlendirilir. Eksik sıra
-  // doldurulmaz: yalnız gerçek adaylar yarışır.
+  // ADAY HAVUZU: iki bağımsız hattın ilk-N listelerinin birleşimi. Konsey oyu
+  // olmayan adaylar da havuzda kalır — karar saf fonksiyonda dürüstçe
+  // "analysis-only" işaretlenir.
   const selected = new Map<string, (typeof analysisRanked)[number]>();
   for (const row of [...analysisTop, ...councilTop]) selected.set(row.candidateId, row);
 
   const ranked = [...selected.values()]
     .map((row) => {
       const entry = consensus.get(row.candidateId);
-      const productJoint = combineJointScores({
+      // NİHAİ PUAN = 14 ajan ortalaması × güven (katılım × uzlaşma).
+      const verdict = councilFinalScore({
+        councilScore: entry?.councilScore ?? 0,
+        votes: entry?.votes ?? 0,
+        spread: entry?.spread ?? 0,
+        agentCount,
         analysisScore: row.analysisScore,
-        councilScore: entry?.councilScore ?? null,
       });
       const verification: "verified" | "unverified" | "unknown" =
         !entry || entry.coverage < VELORA_MIN_AGENT_COVERAGE
@@ -1094,7 +1163,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
         row,
         entry,
         verification,
-        joint: productJoint,
+        verdict,
         product: ProductSchema.parse({
           name: productName,
           category: productCategory,
@@ -1106,9 +1175,8 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
           whyNow: String(candidate["whyNow"] ?? ""),
           risks: Array.isArray(candidate["risks"]) ? candidate["risks"].map(String) : [],
           councilScore: entry?.councilScore ?? 0,
-          councilDecision:
-            productJoint.score >= 60 ? "LISTED" : `REVIEW_${entry?.councilScore ?? 0}`,
-          winnerScore: productJoint.score,
+          councilDecision: verdict.score >= 60 ? "LISTED" : `REVIEW_${entry?.councilScore ?? 0}`,
+          winnerScore: verdict.score,
           rank: 1,
           source:
             candidate["source"] === "trend-radar"
@@ -1125,6 +1193,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
           councilMin: entry?.minScore ?? 0,
           councilMax: entry?.maxScore ?? 0,
           councilAlignment: entry?.alignment ?? "none",
+          councilConfidence: verdict.confidence,
           marketReach: reach as MarketReach,
           trackRecord: history
             ? {
@@ -1141,12 +1210,29 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
         }),
       };
     })
-    .sort((a, b) => b.joint.score - a.joint.score || a.row.identity.localeCompare(b.row.identity));
+    .sort((a, b) =>
+      councilRankKey({
+        verdict: a.verdict,
+        councilScore: a.entry?.councilScore ?? 0,
+        votes: a.entry?.votes ?? 0,
+        analysisScore: a.row.analysisScore,
+        identity: a.row.identity,
+      }).localeCompare(
+        councilRankKey({
+          verdict: b.verdict,
+          councilScore: b.entry?.councilScore ?? 0,
+          votes: b.entry?.votes ?? 0,
+          analysisScore: b.row.analysisScore,
+          identity: b.row.identity,
+        }),
+      ),
+    );
 
-  // KALİTE KAPISI: yedek metinler (gerçek ürün DEĞİL) ve ağırlıklı puanı barajın
-  // altında kalan zayıf adaylar nihai listeye ALINMAZ; eksik sıra DOLDURULMAZ.
+  // KALİTE KAPISI: yedek metinler (gerçek ürün DEĞİL) nihai listeye ALINMAZ;
+  // eksik sıra DOLDURULMAZ. Konsey oyu olmayan aday da "14 ajan ortalaması"
+  // iddiası taşıyamaz, bu yüzden o koşulda liste bilinçli olarak kısalabilir.
   const qualified = ranked.filter(
-    (item) => item.product.source !== "fallback" && item.joint.score >= VELORA_MIN_PRODUCT_SCORE,
+    (item) => item.product.source !== "fallback" && item.verdict.score >= VELORA_MIN_PRODUCT_SCORE,
   );
   const gateDropped = ranked.length - qualified.length;
   if (gateDropped > 0) notes.push(`QUALITY_GATE_DROPPED:${gateDropped}`);
@@ -1164,7 +1250,7 @@ export function buildWinnerDossier(state: VeloraRunState): WinnerDto {
     analysis_score: analysis,
     joint_score: joint.score,
     joint_source: joint.source,
-    listed: joint.score >= 60,
+    listed: products.some((product) => product.winnerScore >= 60),
     products,
     requested_top: VELORA_TOP_N,
     intersection_count: overlapCount,
@@ -1266,12 +1352,7 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
     products,
     requested_top: Math.max(1, Math.round(numberOr(first["requested_top"], VELORA_TOP_N))),
     intersection_count: Math.max(0, Math.round(numberOr(first["intersection_count"], 0))),
-    rank_source:
-      first["rank_source"] === "intersection"
-        ? "intersection"
-        : first["rank_source"] === "weighted"
-          ? "weighted"
-          : "analysis-only",
+    rank_source: first["rank_source"] === "council-average" ? "council-average" : "analysis-only",
     finalists: Math.max(0, Math.round(numberOr(first["finalists"], products.length))),
     evaluated: Math.max(0, Math.round(numberOr(first["evaluated"], 0))),
     notes: ["RECOVERED_FROM_WINNER_LEDGER", "AGENT_EVIDENCE_NOT_RECOVERABLE"],
@@ -1418,41 +1499,51 @@ export function defaultVeloraStore(): VeloraStore {
 // ---------------------------------------------------------------------------
 
 /**
- * Faz 1'den önce iki hattın scraping'ini AYRI AYRI ve paralel başlatır.
+ * FAZ 0 — 14 AJAN DEVREYE GİRMEDEN ÖNCEKİ NİŞ KAZIMASI.
  *
- * Buradaki iki collector çağrısı bilinçlidir: analysis hattı ve council hattı
- * aynı provider sonucunu paylaşmaz. `collectVeloraEvidence` kendi içinde iki kaynağı
- * zaten hata izole toplar; dış hata yakalayıcısı bir hat çökerse diğerinin sonucunu
- * da düşürmez.
+ * Seçilen niş için gerçek veri toplar (bkz. `velora-niche-scrape.server.ts`):
+ * Google Trends momentum, Reddit talebi + şikâyetleri, Hacker News, Google News,
+ * gözlenen marketplace fiyatları, AliExpress tedarik maliyeti, trend radarı ve
+ * GitHub. Her kaynak `active`/`error` olarak raporlanır; hiçbiri hattı düşüremez.
+ *
+ * NEDEN AYRI ADIM: kazıma ağ işidir, ajanlar model işidir. Aynı istek içinde
+ * koşsalardı yavaş bir kaynak 14 ajanın burst bütçesini yerdi. Ayrı adımda
+ * kazımanın kendi tavanı, kaydı ve QStash devri vardır; Faz 1 yalnızca hazır
+ * kanıtla açılır.
+ *
+ * İKİ HAT NEDEN AYRI GÖRÜNÜYOR: iki hat aynı kazımayı okur ama kararı
+ * BAĞIMSIZ verir (retriever/analiz hattı konsey oylarını hiç görmez). Aynı
+ * kazımayı iki kez ÇEKMİYORUZ: bu yalnız iki kat ağ yükü ve iki kat bekleme
+ * demekti, fazladan bilgi değil.
  */
-async function ingestEvidence(state: VeloraRunState, deps: VeloraOrchestratorDeps): Promise<void> {
-  const collect = deps.collectEvidence ?? collectVeloraEvidence;
-  const input = stateInput(state);
-  const collectLine = async (): Promise<VeloraEvidenceSnapshot> => {
-    try {
-      const evidence = await collect(input);
-      return {
-        block: String(evidence.block ?? ""),
-        radar: [...(evidence.radar ?? [])],
-        live: Boolean(evidence.live),
-      };
-    } catch (error) {
-      return {
-        ...emptyEvidenceSnapshot(),
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  };
+async function runHarvestPhase(state: VeloraRunState, deps: VeloraOrchestratorDeps): Promise<void> {
+  const harvest = deps.harvest ?? harvestNicheSignalsCached;
+  let signals: NicheSignals;
+  try {
+    const outcome = await harvest({
+      niche: state.query,
+      country: state.country,
+      platform: state.platform,
+    });
+    signals = NicheSignalsSchema.parse(outcome.data);
+  } catch (error) {
+    // Kazıma hattı tamamen çökerse hata DÜŞÜRÜLMEZ: boş ama geçerli kanıtla
+    // konsey çalışır ve sonuç "unverified" olarak işaretlenir.
+    signals = emptyNicheSignals({
+      niche: state.query,
+      country: state.country,
+      platform: state.platform,
+    });
+    state.harvestError = error instanceof Error ? error.message : String(error);
+  }
 
-  const [analysis, council] = await Promise.all([collectLine(), collectLine()]);
-  state.evidenceByLine = { analysis, council };
-
-  // Eski panel/DTO sözleşmesi için birleşik özet; prompt'lar artık yukarıdaki
-  // line-specific snapshot'ları kullanır.
-  const radar = [...new Set([...analysis.radar, ...council.radar])];
-  state.scrapedTrends = radar;
-  state.evidenceBlock = [analysis.block, council.block].filter(Boolean).join("\n\n");
-  state.live = analysis.live || council.live;
+  state.nicheSignals = signals;
+  const block = nicheSignalsBlock(signals);
+  const snapshot: VeloraEvidenceSnapshot = { block, radar: signals.radar, live: signals.live };
+  state.evidenceByLine = { analysis: snapshot, council: snapshot };
+  state.scrapedTrends = signals.radar;
+  state.evidenceBlock = block;
+  state.live = signals.live;
 }
 
 /**
@@ -1728,12 +1819,49 @@ async function drive(
         // Kayıtlı faz: tekrar koşmadan sonraki adıma geç (retry-safe).
         continue;
       }
-      // Ürün snapshot'ı yoksa (eski/yarım durum) finalistleri burada kur.
-      if (id === 1 || state.candidates.length === 0) await retrieveCandidates(state, deps);
 
       state.runningPhase = { id, startedAtMs: Date.now() };
       state.updatedAtMs = Date.now();
       await deps.store.saveState(state);
+
+      // FAZ 0: AI çağrısı yok, yalnız niş kazıması. Ürün snapshot'ı ve 14 ajan
+      // bundan SONRA kurulur; kazıma ile model burst'ü asla yarışmaz.
+      if (id === 0) {
+        const harvestStarted = Date.now();
+        await runHarvestPhase(state, deps);
+        const harvestMs = Date.now() - harvestStarted;
+        state.phases = [
+          ...state.phases.filter((p) => p.id !== id),
+          {
+            id,
+            key: phase.key,
+            name: phase.name,
+            ms: harvestMs,
+            withinCeiling: harvestMs <= (deps.phaseCeilingMs ?? VELORA_HARVEST_CEILING_MS),
+            agents: [],
+          },
+        ];
+        state.runningPhase = null;
+        state.updatedAtMs = Date.now();
+        await deps.store.saveState(state);
+        if (deps.handoff) {
+          const published = await deps.handoff({ runId: state.runId, phase: 1 });
+          if (published.ok) {
+            return {
+              runId: state.runId,
+              status: "dispatched",
+              completedPhases: 0,
+              nextPhase: 1,
+              dispatch: published,
+            };
+          }
+          dispatch = published;
+        }
+        continue;
+      }
+
+      // Ürün snapshot'ı yoksa (eski/yarım durum) finalistleri burada kur.
+      if (id === 1 || state.candidates.length === 0) await retrieveCandidates(state, deps);
 
       const result = await runVeloraPhase(phase, state, deps);
       state.phases = [...state.phases.filter((p) => p.id !== id), result].sort(
@@ -1788,7 +1916,7 @@ async function drive(
     return {
       runId: state.runId,
       status: "completed",
-      completedPhases: 4,
+      completedPhases: VELORA_PHASES.length,
       dispatch,
       dossier,
       push,
@@ -1826,6 +1954,12 @@ export async function startVeloraRun(
     startedAtMs: Date.now(),
     updatedAtMs: Date.now(),
     status: "running",
+    nicheSignals: emptyNicheSignals({
+      niche: parsed.userQuery,
+      country: (parsed.country ?? "GLOBAL").toUpperCase(),
+      platform: parsed.platform ?? "General",
+    }),
+    harvestError: "",
     evidenceByLine: {
       analysis: emptyEvidenceSnapshot(),
       council: emptyEvidenceSnapshot(),
@@ -1843,11 +1977,9 @@ export async function startVeloraRun(
     selfTest: null,
   };
   await deps.store.saveState(state);
-  // ORTAK KANIT önce gelir: snapshot hem analiz hattını hem 14 ajanı besler.
-  await ingestEvidence(state, deps);
-  state.updatedAtMs = Date.now();
-  await deps.store.saveState(state);
-  return drive(state, 1, deps, { ok: true, mode: deps.handoff ? "qstash" : "inline" });
+  // FAZ 0 kazıması 14 ajandan ÖNCE koşar (drive → phase 0) ve ölçülen kanıtı
+  // duruma yazar; Faz 1 yalnızca hazır kanıtla açılır.
+  return drive(state, 0, deps, { ok: true, mode: deps.handoff ? "qstash" : "inline" });
 }
 
 /**

@@ -76,6 +76,12 @@ export const ProductSchema = z.object({
   /** Yayılımdan türeyen katılım etiketi (panelde rozet). */
   councilAlignment: z.enum(["unanimous", "strong", "split", "contested", "none"]).optional(),
   /**
+   * 14 ajan ortalamasına uygulanan GÜVEN çarpanı (katılım × uzlaşma, 0-1).
+   * Az ajanın oyu ya da bölünmüş bir konsey bu çarpanı düşürür; panelde
+   * "ortalama 74 ama yalnız 4 ajan oyladı" ayrımı görünür kılınır.
+   */
+  councilConfidence: z.number().min(0).max(1).optional(),
+  /**
    * Bu ürünün kanal bazında pazar erişimi (hangi ülkede satılabilir / bariyerli).
    * Kural tabanlıdır; vergi-gümrük hesabı YAPILMAZ.
    */
