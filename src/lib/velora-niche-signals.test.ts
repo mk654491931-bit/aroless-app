@@ -164,7 +164,16 @@ describe("nicheSignalsBlock (prompt metni)", () => {
           { platform: "AliExpress", priceUsd: 21.5 },
         ],
         retailMedianUsd: 30.75,
-        supplier: { priceUsd: 18, shippingUsd: 4, live: true, sampleTitle: "x" },
+        supplier: {
+          priceUsd: 18,
+          shippingUsd: 4,
+          live: true,
+          sampleTitle: "x",
+          samples: 214,
+          currency: "USD",
+          fxRate: null,
+          fxSource: "",
+        },
         sources: [
           { name: "Reddit", status: "active", items: 5, detail: "" },
           { name: "GitHub", status: "error", items: 0, detail: "403" },
@@ -180,7 +189,18 @@ describe("nicheSignalsBlock (prompt metni)", () => {
 
   it("tedarik fiyatı tahminse bunu 'ESTIMATE' diye açıklar", () => {
     const block = nicheSignalsBlock(
-      signals({ supplier: { priceUsd: 11, shippingUsd: 2, live: false, sampleTitle: "" } }),
+      signals({
+        supplier: {
+          priceUsd: 11,
+          shippingUsd: 2,
+          live: false,
+          sampleTitle: "",
+          samples: 0,
+          currency: "USD",
+          fxRate: null,
+          fxSource: "",
+        },
+      }),
     );
     expect(block).toContain("ESTIMATE, not scraped");
   });

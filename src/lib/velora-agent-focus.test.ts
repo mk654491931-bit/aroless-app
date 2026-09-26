@@ -154,7 +154,16 @@ describe("veri yokken dürüstlük", () => {
   it("tedarikçi fiyatı tahminse canlıymış gibi sunulmaz", () => {
     const block = blockFor("supply_chain", {
       ...empty(),
-      supplier: { priceUsd: 11, shippingUsd: 2, live: false, sampleTitle: "" },
+      supplier: {
+        priceUsd: 11,
+        shippingUsd: 2,
+        live: false,
+        sampleTitle: "",
+        samples: 0,
+        currency: "USD",
+        fxRate: null,
+        fxSource: "",
+      },
     });
     expect(block).toContain("TAHMİN (kazıma dönmedi)");
     expect(block).not.toContain("canlı kazınmış fiyat");

@@ -104,6 +104,22 @@ export type RunStatusPayload = {
     agents: number;
     timedOut: number;
   }[];
+  /**
+   * FAZ 0 KAZIMA TABLOSU — 14 ajan devreye girmeden önce hangi kaynaktan ne
+   * geldi. Panelde gösterilir: "kanıt toplandı" demek, ölü kaynakları
+   * gizlemek değildir; ajan o alanda nötr puan verdi.
+   */
+  harvest: {
+    niche: string;
+    live: boolean;
+    sources: { name: string; status: "active" | "error"; items: number; detail: string }[];
+    reddit: number;
+    complaints: number;
+    prices: number;
+    priceMedianUsd: number | null;
+    supplierLive: boolean;
+    trendMomentumPct: number | null;
+  } | null;
   recovered: boolean;
   notes: string[];
 };

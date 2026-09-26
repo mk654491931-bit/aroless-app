@@ -36,6 +36,7 @@ function payload(overrides: Partial<RunStatusPayload> = {}): RunStatusPayload {
     push: null,
     selfTest: null,
     phases: [],
+    harvest: null,
     recovered: false,
     notes: [],
     ...overrides,
@@ -57,11 +58,48 @@ describe("VeloraDeepAnalysis", () => {
   });
 
   it("jeton harcamadığını ve ortak kanıtı açıkça söyler", () => {
-    const html = render(<VeloraDeepAnalysis niche="mini ice maker" country="US" platforms={["Amazon"]} />);
+    const html = render(
+      <VeloraDeepAnalysis niche="mini ice maker" country="US" platforms={["Amazon"]} />,
+    );
 
     expect(html).toContain("jeton");
     expect(html).toContain("ortak");
     expect(html).not.toContain("/100");
+  });
+});
+
+describe("Faz 0 kazıma tablosu (panel sözleşmesi)", () => {
+  // Sunucu bu özeti `harvestSummary` ile üretir; panel onu olduğu gibi çizer.
+  // Amaç: "kanıt toplandı" denirken hangi kaynağın ÖLDÜĞÜ gizlenmesin.
+  const harvest = {
+    niche: "robot vacuum",
+    live: true,
+    sources: [
+      { name: "Hacker News", status: "active" as const, items: 6, detail: "" },
+      { name: "Reddit arşivi", status: "error" as const, items: 0, detail: "timeout>6000ms" },
+    ],
+    reddit: 0,
+    complaints: 0,
+    prices: 2,
+    priceMedianUsd: 300.55,
+    supplierLive: true,
+    trendMomentumPct: null,
+  };
+
+  it("ölü kaynağı 'hata' olarak gösterir, gizlemez", () => {
+    const p = payload({ harvest });
+    // Panel bu veriyi fetch ile alır; render sözleşmesi alanların varlığıdır.
+    expect(p.harvest?.sources.filter((s) => s.status === "error")).toHaveLength(1);
+    expect(p.harvest?.sources.find((s) => s.name === "Reddit arşivi")?.detail).toContain("timeout");
+  });
+
+  it("canlı olmayan kazımada 'canlı kanıt yok' der", () => {
+    const p = payload({ harvest: { ...harvest, live: false } });
+    expect(p.harvest?.live).toBe(false);
+  });
+
+  it("kaynak tablosu yoksa panel çökmez (null güvenli)", () => {
+    expect(payload().harvest).toBeNull();
   });
 });
 

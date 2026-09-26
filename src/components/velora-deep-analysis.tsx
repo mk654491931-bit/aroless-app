@@ -325,6 +325,61 @@ export function VeloraDeepAnalysis({
             </p>
           )}
 
+          {payload?.harvest && (
+            <div className="rounded-xl border border-sky-400/25 bg-sky-500/5 p-3">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+                <Radar size={12} /> Faz 0 · 14 ajandan ÖNCE niş kazıması
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                    payload.harvest.live
+                      ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
+                      : "border-amber-400/40 bg-amber-500/12 text-amber-200"
+                  }`}
+                >
+                  {payload.harvest.live ? "canlı kanıt" : "canlı kanıt yok"}
+                </span>
+                {payload.harvest.complaints > 0 && (
+                  <span className="rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-200">
+                    {payload.harvest.complaints} şikâyet
+                  </span>
+                )}
+                {payload.harvest.priceMedianUsd !== null && (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">
+                    gözlenen medyan ${payload.harvest.priceMedianUsd}
+                  </span>
+                )}
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  tedarik {payload.harvest.supplierLive ? "canlı" : "tahmin"}
+                </span>
+              </div>
+              <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
+                Ajanlar kendi alanlarına düşen bu tabloyu okur. Bir kaynak{" "}
+                <strong className="text-red-200">hata</strong> ise o alanda puan uydurmak yerine
+                nötr puan verirler.
+              </p>
+              <ul className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                {payload.harvest.sources.map((source) => (
+                  <li
+                    key={source.name}
+                    title={source.detail}
+                    className="flex items-center justify-between gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px]"
+                  >
+                    <span className="truncate">{source.name}</span>
+                    <span
+                      className={
+                        source.status === "active" && source.items > 0
+                          ? "font-semibold text-emerald-300"
+                          : "font-semibold text-amber-300"
+                      }
+                    >
+                      {source.status === "active" ? `${source.items} satır` : "hata"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {payload && payload.phases.length > 0 && (
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">

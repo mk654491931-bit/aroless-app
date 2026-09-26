@@ -64,7 +64,11 @@ function sourcingLine(signals: NicheSignals): string {
   return [
     `TEDARİKÇİ MALİYETİ: ürün ${usd(s.priceUsd)} + navlun ${usd(s.shippingUsd)} = toplam ${usd(landed)}`,
     s.live
-      ? "KAYNAK: canlı kazınmış fiyat"
+      ? `KAYNAK: canlı kazınmış fiyat (${s.samples} ilan${
+          s.currency !== "USD" && s.fxRate
+            ? `, ${s.currency}→USD kuruş ${n1(s.fxRate)} @ ${s.fxSource}`
+            : ""
+        })`
       : "KAYNAK: TAHMİN (kazıma dönmedi) — düşük güvenle değerlendir",
     s.sampleTitle ? `ÖRNEK İLAN: ${s.sampleTitle.slice(0, 90)}` : "",
   ]
@@ -89,7 +93,7 @@ function demandLine(signals: NicheSignals): string {
     bits.push(`Amazon hareketlilik: ${signals.amazonMovers.slice(0, 4).join(" | ")}`);
   if (signals.reddit.length)
     bits.push(
-      `Reddit ilgi yoğunluğu: ${redditEngagement(signals.reddit)} (${signals.reddit.length} başlık, ${complaintCount(signals.reddit)} şikâyet)`,
+      `Reddit ARŞİVİ ilgi yoğunluğu: ${redditEngagement(signals.reddit)} (${signals.reddit.length} başlık, ${complaintCount(signals.reddit)} şikâyet) — arşiv canlı değil günceldir`,
     );
   if (signals.hackerNews.length)
     bits.push(

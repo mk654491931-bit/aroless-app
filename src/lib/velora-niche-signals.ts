@@ -59,6 +59,14 @@ export const SupplierPriceSchema = z.object({
   /** `true` yalnızca gerçekten kazınmış bir fiyat döndüğünde. */
   live: z.boolean().default(false),
   sampleTitle: z.string().default(""),
+  /** Kaç tedarikçi ilanından medyan alındı (canlı kazımada ölçülen sayı). */
+  samples: z.number().int().min(0).default(0),
+  /** Fiyatın orijinal para birimi — kur dönüşümü şeffaf olsun diye. */
+  currency: z.string().default("USD"),
+  /** Ölçülen kur çarpanı (yoksa null; kuruş çarpanı ASLA uydurulmaz). */
+  fxRate: z.number().min(0).nullable().default(null),
+  /** Kurun geldiği ücretsiz kaynak. */
+  fxSource: z.string().default(""),
 });
 export type SupplierPrice = z.infer<typeof SupplierPriceSchema>;
 

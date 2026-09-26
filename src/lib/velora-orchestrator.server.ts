@@ -2074,6 +2074,22 @@ export type VeloraRunStatus = {
   push: VeloraPushResult | null;
   selfTest: VeloraSelfTestReport | null;
   phases: VeloraRunPhaseSummary[];
+  /**
+   * FAZ 0 KAZIMA TABLOSU — 14 ajan devreye girmeden ÖNCE hangi kaynaktan ne
+   * geldi. Panel bunu gösterir çünkü "kanıt toplandı" demek, hangi kaynağın
+   * öldüğünü gizlemek değildir: kaynak `error` ise ajan o alanda nötr puanlar.
+   */
+  harvest: {
+    niche: string;
+    live: boolean;
+    sources: { name: string; status: "active" | "error"; items: number; detail: string }[];
+    reddit: number;
+    complaints: number;
+    prices: number;
+    priceMedianUsd: number | null;
+    supplierLive: boolean;
+    trendMomentumPct: number | null;
+  } | null;
   /** Karne geçici kovadan değil, kalıcı kazanan kayıtlarından geri kuruldu. */
   recovered: boolean;
   notes: string[];
@@ -2089,6 +2105,34 @@ function phaseSummaries(state: VeloraRunState): VeloraRunPhaseSummary[] {
     agents: phase.agents.length,
     timedOut: phase.agents.filter((agent) => agent.timedOut).length,
   }));
+}
+
+/**
+ * Faz 0 kazıma özetini panel için düzleştirir.
+ *
+ * Burada "kaç kaynak öldü" bilgisi kasıtlı olarak KAYBOLMAZ. 14 ajanın
+ * puanları bu tabloya dayandığı için, kullanıcının hangi alanda kanıt olmadığını
+ * görmesi kararın güvenilirliği için zorunludur.
+ */
+function harvestSummary(state: VeloraRunState): VeloraRunStatus["harvest"] {
+  const s = state.nicheSignals;
+  if (!s || (!s.sources.length && !s.niche)) return null;
+  return {
+    niche: s.niche,
+    live: s.live,
+    sources: s.sources.map((row) => ({
+      name: row.name,
+      status: row.status,
+      items: row.items,
+      detail: row.detail,
+    })),
+    reddit: s.reddit.length,
+    complaints: s.reddit.filter((r) => r.complaint).length,
+    prices: s.priceSamples.length,
+    priceMedianUsd: s.retailMedianUsd ?? null,
+    supplierLive: Boolean(s.supplier?.live),
+    trendMomentumPct: Number.isFinite(s.trendMomentumPct) ? s.trendMomentumPct : null,
+  };
 }
 
 function nextMissingPhase(state: VeloraRunState): VeloraPhaseId | null {
@@ -2142,6 +2186,7 @@ export async function veloraRunStatus(
           push: { ok: true, ids: rows.map((row) => row.title) },
           selfTest: null,
           phases: [],
+          harvest: null,
           recovered: true,
           notes: ["STATE_EXPIRED_USING_WINNER_LEDGER", ...dossier.notes],
         };
@@ -2161,6 +2206,7 @@ export async function veloraRunStatus(
       push: null,
       selfTest: null,
       phases: [],
+      harvest: null,
       recovered: false,
       notes: ["RUN_STATE_NOT_FOUND", ...notes],
     };
@@ -2181,6 +2227,7 @@ export async function veloraRunStatus(
     push: state.push,
     selfTest: state.selfTest,
     phases: phaseSummaries(state),
+    harvest: harvestSummary(state),
     recovered: false,
     notes: [...notes, ...(dossier?.notes ?? [])],
   };
