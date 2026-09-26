@@ -141,6 +141,32 @@ describe("expansionQueries (nişin tamamını tarama)", () => {
     expect(expansionQueries("")).toEqual([]);
   });
 
+  it("açı seti dile göre seçilir (Türkçe nişe 'compact' gelmez)", () => {
+    // Türkçe açılar Türkçe nişe uygulanır; İngilizce karşılık AYRI bir sorgu
+    // olarak eklenir (aşağıdaki testte doğrulanır), Türkçe açı yerine değil.
+    const tr = expansionQueries("robot süpürge").slice(1);
+    const en = expansionQueries("robot vacuum").slice(1);
+    expect(tr.some((q) => /kompakt/.test(q))).toBe(true);
+    expect(en.some((q) => /\bcompact\b/.test(q))).toBe(true);
+    // İngilizce nişe Türkçe açı SIZMAZ.
+    expect(en.some((q) => /kompakt/.test(q))).toBe(false);
+  });
+
+  it("Türkçe nişe İngilizce karşılık bilinçli OLARAK eklenir", () => {
+    const queries = expansionQueries("robot süpürge");
+    // Bedava kaynaklar İngilizce ağırlıklı olduğu için Türkçe nişin İngilizce
+    // karşılığı da taranır. "compact" burada Türkçe AÇI değil, İngilizce
+    // taramanın parçasıdır.
+    expect(queries.some((q) => /vacuum cleaner/i.test(q))).toBe(true);
+    expect(queries.some((q) => /vacuum cleaner compact/i.test(q))).toBe(true);
+  });
+
+  it("çeviri bilinmeyen Türkçe nişte çökmez, yalnız kendi dilinde açılır", () => {
+    const queries = expansionQueries("mavi boncuk tane");
+    expect(queries.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(queries).size).toBe(queries.length);
+  });
+
   it("bütçeler ücretsiz planı aşmaz", () => {
     // Aday bütçesi: havuz geniş ama model çağrısı sınırlı.
     expect(RETRIEVER_MAX_CANDIDATES).toBeGreaterThanOrEqual(40);

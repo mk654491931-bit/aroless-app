@@ -57,14 +57,34 @@ describe("VeloraDeepAnalysis", () => {
     expect(html).not.toContain("runId:");
   });
 
-  it("jeton harcamadığını ve ortak kanıtı açıkça söyler", () => {
+  it("jeton iadesini ve ortak kanıt kullanımını açıkça söyler", () => {
     const html = render(
       <VeloraDeepAnalysis niche="mini ice maker" country="US" platforms={["Amazon"]} />,
     );
 
     expect(html).toContain("jeton");
+    // Faz 0 kazıması hem analiz hattının hem konseyin ortak kanıtıdır.
     expect(html).toContain("ortak");
     expect(html).not.toContain("/100");
+  });
+
+  it("panel açılışta kendiliğinden koşar: buton tek yol değildir", () => {
+    // Kullanıcı "değişiklikler canlıda yok" diyordu. Sebep: `runId` yalnızca
+    // butona tıklanınca doluyordu, panel açılışta boş kalıyor ve eski veri
+    // ekranda duruyordu. Artık niş yazılınca koşu kendiliğinden başlar.
+    const html = render(
+      <VeloraDeepAnalysis niche="robot vacuum" country="US" platforms={["Amazon"]} />,
+    );
+    // Panel otomatik koşuyu açıkça söyler ve elle yeniden koşturulabilir.
+    expect(html).toContain("otomatik");
+    expect(html).toContain("Yeniden koş");
+  });
+
+  it("disabled iken otomatik koşu tetiklenmez", () => {
+    const html = render(
+      <VeloraDeepAnalysis niche="robot vacuum" country="US" platforms={["Amazon"]} disabled />,
+    );
+    expect(html).toContain("Velora 14 ajan derin analizi");
   });
 });
 

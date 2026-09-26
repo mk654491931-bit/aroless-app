@@ -455,6 +455,88 @@ export const RETRIEVER_MAX_CANDIDATES = 60;
 export const RETRIEVER_DEADLINE_MS = 18_000;
 
 /**
+ * Tarama sorgusu tavanı — bir koşuda denenebilecek AZAMİ tur sayısı.
+ *
+ * 18 saniyelik süre bütçesinde ~2 sn/tur ölçülüyle 8-9 tur garantidir.
+ * Tavan 14'tür: süre dolmadan tüm çeşitlilik denenebilsin, ama kota israfi
+ * olmasın. Türkçe nişlerde sorgular iki dala (Türkçe + İngilizce) paylaştığı
+ * için bu sayı ikisini de kapsar.
+ */
+export const EXPANSION_QUERY_LIMIT = 14;
+
+/**
+ * Bir çağrının kota sınırına çarptığını (429/402) anlama yardımcısı.
+ *
+ * NEDEN: ücretsiz katmanlarda bir sağlayıcı tıktığında zincir içindeki her
+ * sağlayıcıya sırayla uğramak dakikalarca sürebilir ve ücretsiz başka
+ * sağlayıcı varken boşa yener. Bu yüzden turlar arasında kısa bir bekleme
+ * konur ve "tüm zincirde kota" durumunda tarama erken sonlanır.
+ */
+export function isQuotaError(log: { ok: boolean; attempts: number } | undefined): boolean {
+  if (!log) return false;
+  // Birden çok deneme yapılıp da hiçbiri olmadıysa kota tükenmiş demektir.
+  return !log.ok && log.attempts >= 3;
+}
+
+/**
+ * Nişin dilini tahmin eder — Türkçe mi, İngilizce mi?
+ *
+ * NEDEN GEREKLİ: Faz 0'daki tüm bedava kaynaklar (Google News, Hacker News,
+ * Reddit, Bing, Amazon) İNGİLİZCE ağırlıklıdır. "robot süpürge" gibi bir Türkçe
+ * nişte İngilizce açı eklemek (*"robot süpürge premium"*) hiç sonuç üretmez.
+ * Bu yüzden açı seti dile göre seçilir ve Türkçe nişe İngilizce karşılığı da
+ * denenir — çünkü asıl satış verisi İngilizce kaynaklarda duruyor.
+ */
+function isTurkish(text: string): boolean {
+  const turkish = text.match(/[çğıöşü]/gi)?.length ?? 0;
+  return turkish > 0;
+}
+
+/** Sık kullanılan Türkçe niş terimlerinin İngilizce karşılığı (genişletme için). */
+const TR_TO_EN: [RegExp, string][] = [
+  [/süpürge/i, "vacuum cleaner"],
+  [/robot/i, "robot"],
+  [/telefon/i, "phone"],
+  [/telefon kılıf|kılıf/i, "phone case"],
+  [/kulaklık/i, "headphones"],
+  [/laptop| dizüstü/i, "laptop"],
+  [/saat/i, "watch"],
+  [/ayakkabı/i, "shoes"],
+  [/çanta/i, "bag"],
+  [/televizyon/i, "tv"],
+  [/yatak| yastık/i, "bedding"],
+  [/mutfak/i, "kitchen"],
+  [/dekorasyon/i, "home decor"],
+  [/bahçe/i, "garden"],
+  [/egzersiz| fitness/i, "fitness"],
+  [/spor/i, "sports"],
+  [/kedi| köpek| evcil/i, "pet"],
+  [/oyuncak/i, "toys"],
+  [/hediye/i, "gift"],
+  [/takı/i, "jewelry"],
+  [/saç| saç bakımı/i, "hair care"],
+  [/cilt| kozmetik/i, "skincare"],
+  [/çocuk| bebek/i, "baby"],
+  [/oyun/i, "gaming"],
+  [/ofis/i, "office"],
+  [/seyahat/i, "travel"],
+  [/balık| av/i, "fishing"],
+  [/bisiklet/i, "cycling"],
+  [/drone| drone/i, "drone"],
+  [/kamera/i, "camera"],
+  [/hoparlör/i, "speaker"],
+  [/powerbank| şarj/i, "charger"],
+  [/kablosuz| bluetooth/i, "wireless"],
+];
+
+/** Türkçe niş terimlerini İngilizceye çevirir; çeviri yoksa girdiyi döner. */
+function toEnglishHint(niche: string): string {
+  let out = niche;
+  for (const [tr, en] of TR_TO_EN) out = out.replace(tr, en);
+  return out.trim();
+}
+
+/**
  * Tarama turunu genişleten sorgular — nişin TAMAMINI taramak için.
  *
  * `relaxSearchQuery` yalnızca 3 varyant üretiyordu (tam ifade, ilk 3 kelime,
@@ -513,7 +595,10 @@ export function expansionQueries(query: string): string[] {
   for (const w of words.slice(0, 4)) add(w);
 
   // 2) AÇI DEĞİŞTİREN ekler: her turda model başka bir kesit arar.
-  const angles = [
+  //    AÇI SETİ DİLE GÖRE SEÇİLİR — Türkçe nişe İngilizce ek ("kompakt")
+  //    hiç sonuç üretmez. Buna karşılık Türkçe nişin İngilizce karşılığı da
+  //    denenir, çünkü gerçek satış verisi İngilizce kaynaklarda duruyor.
+  const TURKISH_ANGLES = [
     "en çok satan",
     "yeni çıkan",
     "profesyonel",
@@ -530,12 +615,50 @@ export function expansionQueries(query: string): string[] {
     "bahçe",
     "araç için",
   ];
-  const base = words.slice(0, 2).join(" ");
-  if (base) {
-    for (const angle of angles) add(`${base} ${angle}`);
-  }
+  const ENGLISH_ANGLES = [
+    "best selling",
+    "new release",
+    "professional",
+    "compact",
+    "premium",
+    "budget",
+    "for kids",
+    "home use",
+    "for travel",
+    "gift",
+    "sports",
+    "office",
+    "kitchen",
+    "garden",
+    "for car",
+  ];
+  const turkish = isTurkish(normalized);
+  const angles = turkish ? TURKISH_ANGLES : ENGLISH_ANGLES;
 
-  return out.slice(0, 14);
+  const base = words.slice(0, 2).join(" ");
+
+  // 3) TÜRKÇE NİŞ → İNGİLİZCE KARŞILIK: bedava kaynaklar (Google News, HN,
+  //    Reddit, Bing) İngilizce ağırlıklı olduğu için terim karşılığı bilinen
+  //    nişlerde İngilizce tarama da yapılır. "robot süpürge" arayan kullanıcıya
+  //    İngilizce pazar verisi (asıl satış verisi) böylece açılır.
+  const englishBase = turkish ? toEnglishHint(base || normalized) : "";
+  const hasEnglish = Boolean(englishBase) && englishBase.toLowerCase() !== base.toLowerCase();
+
+  // Bütçe iki dala DENGELİ dağıtılır. Önceki hâlde 15 Türkçe açı tüm yeri
+  // dolduruyor ve İngilizce karşılık hiç sorguya giremiyordu.
+  if (base) {
+    if (hasEnglish) {
+      for (let i = 0; i < angles.length; i++) {
+        add(`${base} ${angles[i]!}`);
+        if (i < 6) add(`${englishBase} ${ENGLISH_ANGLES[i]!}`);
+      }
+    } else {
+      for (const angle of angles) add(`${base} ${angle}`);
+    }
+  }
+  if (hasEnglish) add(englishBase);
+
+  return out.slice(0, EXPANSION_QUERY_LIMIT);
 }
 
 async function retrieveCandidates(
@@ -555,10 +678,15 @@ async function retrieveCandidates(
   // Tur sayısı sabit olmadığı için burada gerçek ölçüm kullanılır.
   const deadlineAt = Date.now() + RETRIEVER_DEADLINE_MS;
   const controller = new AbortController();
+  // 429 farkındalıklı duraklama: zincir boyunca tüm sağlayıcılar tıkıyorsa
+  // (Gemini 15 RPM gibi) kalan turları yapmak boşuna çağrıdır.
+  let quotaStrikes = 0;
   for (const query of queries) {
     // Bütçe veya süre dolduysa daha fazla tur YAPILMAZ (ücretsiz kota israfı).
     if (collected.length >= RETRIEVER_MAX_CANDIDATES) break;
     if (Date.now() >= deadlineAt) break;
+    // Üst üste 2 tam-kota turu olduysa bu koşuda sağlayıcı yok demektir.
+    if (quotaStrikes >= 2) break;
     attempts++;
     const remaining = RETRIEVER_MAX_CANDIDATES - collected.length;
     const result = await executeAgentWithFallback(
@@ -568,6 +696,8 @@ async function retrieveCandidates(
       { temperature: 0.35, retries: 1, signal: controller.signal },
     );
     logs.push(result.log);
+    if (isQuotaError(result.log)) quotaStrikes++;
+    else if (result.log.ok) quotaStrikes = 0;
     const parsed = parseAgentJson<{ candidates?: unknown[] }>(result.text, {});
     const candidates = normalizeRetrieverCandidates(
       parsed,

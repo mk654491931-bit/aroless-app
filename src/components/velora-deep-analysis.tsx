@@ -1,4 +1,4 @@
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -96,6 +96,29 @@ export function VeloraDeepAnalysis({
       veloraPollInterval(query.state.data as RunStatusPayload | undefined),
   });
 
+  // NİŞ DEĞİŞTİĞİNDE ESKİ KARNE GÖSTERİLMEZ. Önceden `runId` yalnızca
+  // butona tıklanınca doluyordu; panel açıldığında boş kalıyor ve kullanıcı
+  // "değişiklikler canlıda yok" izlenimiyle eski veriyi görüyordu.
+  const nicheKey = `${country}|${platforms[0] ?? "global"}|${niche.trim().toLowerCase()}`;
+  const lastNicheKey = useRef<string | null>(null);
+  useEffect(() => {
+    // Aynı niş için tekrar tetikleme: her render'da yeni koşu başlatmaz.
+    if (lastNicheKey.current === nicheKey) return;
+    lastNicheKey.current = nicheKey;
+    setRunId(null);
+    if (disabled) return;
+    // YAZMA SÜRECİNDE TETİKLEME: kullanıcı nişi harf harf yazıyor ve her
+    // tuşta bir koşu başlatmak jeton kapısını (6/dk) delip geçerdi. Metin
+    // 1.2 saniye dinlenince ve anlamlı bir uzunluğa gelince tek koşu atılır.
+    const trimmed = niche.trim();
+    if (trimmed.length < 3) return;
+    const timer = setTimeout(() => {
+      if (!orchestrate.isPending) orchestrate.mutate();
+    }, 1_200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nicheKey, disabled]);
+
   const ready = niche.trim().length >= 2;
   const result = run.data;
   const dossier = status.data?.dossier ?? null;
@@ -112,11 +135,10 @@ export function VeloraDeepAnalysis({
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold">Velora 14 ajan derin analizi</div>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            14 ajanın tamamı (6 uzman + 6 hakem + müdür + bağımsız denetçi) sırayla koşar; trend
-            radarı kazımaları ve canlı piyasa kanıtı bulucuyla <strong>ortak</strong> veri olarak
-            kullanılır. Orkestre koşuda her ajan finalist ürünleri <strong>ürün başına</strong>{" "}
-            puanlar; panel iki bağımsız sıralamanın ortak en iyi ürünlerini gösterir. Bu koşu jeton
-            harcamaz.
+            Niş yazılınca <strong>otomatik</strong> başlar. Faz 0 önce ücretsiz kaynaklardan kazıma
+            yapar; bu kanıt iki hattın <strong>ortak</strong> verisidir. Ardından 14 ajanın tamamı
+            taranan ürünleri <strong>ürün başına</strong> puanlar ve sonuç 14 ajan ortalamasıdır.
+            Başarısız olursa jeton iade edilir.
           </p>
         </div>
         <button
@@ -131,7 +153,7 @@ export function VeloraDeepAnalysis({
             </>
           ) : (
             <>
-              <Layers size={13} /> 14 ajanı 4 fazda orkestre et
+              <Layers size={13} /> Yeniden koş
             </>
           )}
         </button>
