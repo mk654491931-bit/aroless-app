@@ -475,7 +475,7 @@ export function VeloraDeepAnalysis({
                     : "14 ajan ortalaması (katılım + uzlaşma düzeltmeli)"}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground">
-                  {dossier.finalists} finalist değerlendirildi
+                  {dossier.finalists} ürün taranıp 14 ajana puanlatıldı
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-muted-foreground">
                   {dossier.products.length} ortak ürün

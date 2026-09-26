@@ -39,7 +39,11 @@ vi.mock("./market-verify.server", () => ({
 import { COUNCIL_AGENTS } from "./council-chain.server";
 import { combineJointScores } from "./consensus-types";
 import {
+  RETRIEVER_DEADLINE_MS,
+  RETRIEVER_MAX_CANDIDATES,
+  RETRIEVER_ROUND_SIZE,
   collectVeloraEvidence,
+  expansionQueries,
   runVeloraAgentPipeline,
   scrapedCandidates,
   veloraProductScore,
@@ -100,7 +104,9 @@ beforeEach(() => {
   mocks.signalsBlock.mockReturnValue(RADAR_BLOCK);
   mocks.buildLiveEvidenceBlock.mockResolvedValue(LIVE_BLOCK);
   mocks.executeAgentWithFallback.mockImplementation(
-    stubRunner(JSON.stringify({ candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen" }] })),
+    stubRunner(
+      JSON.stringify({ candidates: [{ name: "Mini Ice Maker XR-500", category: "Kitchen" }] }),
+    ),
   );
 });
 
@@ -108,9 +114,48 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("expansionQueries (nişin tamamını tarama)", () => {
+  it("3 üründe değil, çok açılı bir tarama turu üretir", () => {
+    const queries = expansionQueries("robot vacuum");
+    expect(queries).toContain("robot vacuum");
+    // Eski `relaxSearchQuery` yalnızca 3 varyant veriyordu → tarama 3 üründe
+    // bitiyordu. Şimdi en az 8 farklı açı deneniyor.
+    expect(queries.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(queries).size).toBe(queries.length);
+  });
+
+  it("stop-word ve gürültü kelimelerini genişletilmiş sorgulardan temizler", () => {
+    const queries = expansionQueries("en iyi robot vacuum ürünleri listesi");
+    // İlk sorgu ham kullanıcı ifadesidir (kullanıcının kelimeleri korunur);
+    // açılım sorguları stop-word'lardan arındırılmış hâldedir.
+    expect(queries[0]).toBe("en iyi robot vacuum ürünleri listesi");
+    expect(queries).toContain("robot vacuum");
+    const expanded = queries.slice(1);
+    for (const noise of ["ürünleri", "listesi", "bul", "en iyi"]) {
+      expect(expanded.some((q) => q.includes(noise))).toBe(false);
+    }
+  });
+
+  it("tek kelime ve boş girdide çökmez", () => {
+    expect(expansionQueries("yoga").length).toBeGreaterThanOrEqual(3);
+    expect(expansionQueries("")).toEqual([]);
+  });
+
+  it("bütçeler ücretsiz planı aşmaz", () => {
+    // Aday bütçesi: havuz geniş ama model çağrısı sınırlı.
+    expect(RETRIEVER_MAX_CANDIDATES).toBeGreaterThanOrEqual(40);
+    expect(RETRIEVER_ROUND_SIZE).toBeGreaterThanOrEqual(8);
+    // Süre bütçesi Vercel Hobby fonksiyon payının çok altında.
+    expect(RETRIEVER_DEADLINE_MS).toBeLessThanOrEqual(20_000);
+  });
+});
+
 describe("collectVeloraEvidence (ortak kazıma kanıtı)", () => {
   it("trend radarı kazımalarını ve canlı piyasa kanıtını tek blokta birleştirir", async () => {
-    const evidence = await collectVeloraEvidence({ userQuery: "mini ice maker", language: "en" }, 5_000);
+    const evidence = await collectVeloraEvidence(
+      { userQuery: "mini ice maker", language: "en" },
+      5_000,
+    );
 
     expect(evidence.block).toContain("TREND RADAR");
     expect(evidence.block).toContain("LIVE MARKET");
@@ -123,7 +168,10 @@ describe("collectVeloraEvidence (ortak kazıma kanıtı)", () => {
     mocks.collectSignals.mockRejectedValue(new Error("scrape down"));
     mocks.buildLiveEvidenceBlock.mockRejectedValue(new Error("live down"));
 
-    const evidence = await collectVeloraEvidence({ userQuery: "mini ice maker", language: "en" }, 5_000);
+    const evidence = await collectVeloraEvidence(
+      { userQuery: "mini ice maker", language: "en" },
+      5_000,
+    );
 
     expect(evidence).toEqual({ block: "", radar: [], sources: [], live: false });
   });
@@ -131,7 +179,12 @@ describe("collectVeloraEvidence (ortak kazıma kanıtı)", () => {
 
 describe("scrapedCandidates (kazınmış trend → aday ürün)", () => {
   it("kaynak etiketini korur, tekrarları eler ve kısa isimleri atlar", () => {
-    const candidates = scrapedCandidates(["TikTok: mini ice maker", "TikTok: mini ice maker", "RSS: ", "ab"]);
+    const candidates = scrapedCandidates([
+      "TikTok: mini ice maker",
+      "TikTok: mini ice maker",
+      "RSS: ",
+      "ab",
+    ]);
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0]!.name).toBe("mini ice maker");
@@ -161,11 +214,27 @@ describe("veloraProductScore (nişteki en iyi ürün sıralaması)", () => {
 
   it("yüksek talep + marj + düşük rekabet daha yüksek puan verir", () => {
     const strong = veloraProductScore(
-      { name: "a", demandScore: 95, estimatedMarginPct: 60, competitionScore: 10, whyNow: "x", risks: [], priceRange: "$40" },
+      {
+        name: "a",
+        demandScore: 95,
+        estimatedMarginPct: 60,
+        competitionScore: 10,
+        whyNow: "x",
+        risks: [],
+        priceRange: "$40",
+      },
       90,
     ).score;
     const weak = veloraProductScore(
-      { name: "b", demandScore: 20, estimatedMarginPct: 5, competitionScore: 90, whyNow: "", risks: ["a", "b", "c"], priceRange: "" },
+      {
+        name: "b",
+        demandScore: 20,
+        estimatedMarginPct: 5,
+        competitionScore: 90,
+        whyNow: "",
+        risks: ["a", "b", "c"],
+        priceRange: "",
+      },
       40,
     ).score;
 
@@ -186,6 +255,59 @@ describe("veloraProductScore (nişteki en iyi ürün sıralaması)", () => {
 });
 
 describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
+  it("nişin TAMAMINI tarar: tur 3 üründe bitmez, genişletilmiş sorgular dener", async () => {
+    // Her tur FARKLI ve yeni ürünler döndüren sahte retriever. Eğer sistem
+    // 3 üründe dursaydı burada yalnızca 1 tur görürdük.
+    const seen = new Set<string>();
+    let round = 0;
+    mocks.executeAgentWithFallback.mockImplementation((agentName: string) => {
+      prompts.push({ agentName, prompt: "" });
+      if (agentName.startsWith("Product Retriever")) {
+        round++;
+        // Her turda o ana dek görülmemiş 12 ürün üret.
+        const candidates = Array.from({ length: 12 }, (_, i) => {
+          const n = (round - 1) * 12 + i + 1;
+          seen.add(`Ürün ${n}`);
+          return {
+            name: `Ürün ${n}`,
+            category: "Test",
+            priceRange: "$10-20",
+            demandScore: 60,
+            competitionScore: 40,
+            sentiment: "n",
+            whyNow: "w",
+            risks: [],
+          };
+        });
+        return Promise.resolve({
+          text: JSON.stringify({ candidates }),
+          log: agentLog(agentName),
+        });
+      }
+      const scoreKey = COUNCIL_AGENTS.find((a) => `Council ${a.name}` === agentName)?.scoreKey;
+      return Promise.resolve({
+        text: scoreKey ? JSON.stringify({ [scoreKey]: 80 }) : "{}",
+        log: agentLog(agentName),
+      });
+    });
+
+    const result = await runVeloraAgentPipeline({
+      userQuery: "robot vacuum",
+      country: "US",
+      platform: "Amazon",
+    });
+
+    // 1) Tarama 1 turda bitmiyor — eski `>= 3` kırılması en az 3 tur isterdi.
+    expect(round).toBeGreaterThan(1);
+    // 2) Gerçekleşen tur sayısı raporlanıyor ve bütçeyi aşmıyor.
+    expect(result.metrics.retrieverAttempts).toBe(round);
+    expect(round).toBeLessThanOrEqual(14);
+    // 3) Her tur yeni ürün getirdi → toplam aday havuzu 3'ün çok üstünde.
+    //    (Ürünler tekilleştirildiği için isim sayısı == aday sayısı.)
+    expect(seen.size).toBe(round * 12);
+    expect(seen.size).toBeGreaterThan(24);
+  });
+
   it("14 ajanın tamamını koşar, ortak kanıtı herkese verir ve ortak kararı hesaplar", async () => {
     const result = await runVeloraAgentPipeline({
       userQuery: "mini ice maker",
@@ -225,16 +347,16 @@ describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
     expect(result.metrics.finalScore).toBe(expected.score);
     expect(result.metrics.listed).toBe(expected.score >= 60);
     expect(result.topProducts[0]!.councilScore).toBe(expected.score);
-    expect(result.topProducts[0]!.councilDecision).toBe(result.metrics.listed ? "LISTED" : `REVIEW_90`);
+    expect(result.topProducts[0]!.councilDecision).toBe(
+      result.metrics.listed ? "LISTED" : `REVIEW_90`,
+    );
 
     // 5) En iyi ürün sıralaması: modelin adlandırdığı gerçek ürün başta, genel
     //    yedek metin onun önüne geçemez ve sıralama 1'den başlar.
     expect(result.topProducts[0]!.name).toBe("Mini Ice Maker XR-500");
     expect(result.topProducts[0]!.source).toBe("ai");
     expect(result.topProducts[0]!.rank).toBe(1);
-    expect(result.topProducts.map((p) => p.rank)).toEqual(
-      result.topProducts.map((_, i) => i + 1),
-    );
+    expect(result.topProducts.map((p) => p.rank)).toEqual(result.topProducts.map((_, i) => i + 1));
     const scores = result.topProducts.map((p) => p.winnerScore);
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
     expect(scores.every((s) => s >= 0 && s <= 100)).toBe(true);
@@ -256,7 +378,11 @@ describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
     expect(result.metrics.evidence.scrapedTrends).toBe(RADAR.length);
     expect(result.metrics.agentCount).toBe(14);
     // Konsey kanıtsız kalmadı: kazınmış kanıt yine de 14 üyeye gitti.
-    expect(prompts.filter((p) => p.agentName.startsWith("Council ")).every((c) => c.prompt.includes("TREND RADAR"))).toBe(true);
+    expect(
+      prompts
+        .filter((p) => p.agentName.startsWith("Council "))
+        .every((c) => c.prompt.includes("TREND RADAR")),
+    ).toBe(true);
   });
 
   it("kazıma düşse bile 14 ajan koşar, karar dürüstçe 'kanıt yok' der ve hat kanıtsız tamamlanır", async () => {
@@ -266,7 +392,12 @@ describe("runVeloraAgentPipeline (14 ajan + ortak karar)", () => {
     const result = await runVeloraAgentPipeline({ userQuery: "mini ice maker" });
 
     expect(result.metrics.agentCount).toBe(14);
-    expect(result.metrics.evidence).toEqual({ live: false, scrapedTrends: 0, radar: [], sources: [] });
+    expect(result.metrics.evidence).toEqual({
+      live: false,
+      scrapedTrends: 0,
+      radar: [],
+      sources: [],
+    });
     expect(result.metrics.jointSource).toBe("joint");
     expect(result.metrics.finalScore).toBe(result.metrics.jointScore);
     const councilCalls = prompts.filter((p) => p.agentName.startsWith("Council "));

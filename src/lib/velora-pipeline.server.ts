@@ -14,10 +14,10 @@ import {
   COUNCIL_AGENTS,
   emitDebugLog,
   makeDebugLog,
-  relaxSearchQuery,
   runStrictCouncilChain,
   type CouncilDebugLog,
 } from "./council-chain.server";
+import { normalizeProductIdentity } from "./product-identity";
 
 export const PipelineInputSchema = z.object({
   userQuery: z.string().trim().min(2).max(2000),
@@ -304,7 +304,7 @@ export function scrapedCandidates(radar: string[]): RetrieverCandidate[] {
   return out;
 }
 
-function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
+function normalizeRetrieverCandidates(raw: unknown, limit = 12): RetrieverCandidate[] {
   const source =
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as { candidates?: unknown[] })
@@ -337,7 +337,7 @@ function normalizeRetrieverCandidates(raw: unknown): RetrieverCandidate[] {
         },
       ];
     })
-    .slice(0, 12);
+    .slice(0, limit);
 }
 
 /**
@@ -408,7 +408,12 @@ function candidateSource(candidate: RetrieverCandidate): "ai" | "trend-radar" | 
   return "ai";
 }
 
-function retrieverPrompt(input: PipelineInput, query: string, evidenceBlock = ""): string {
+function retrieverPrompt(
+  input: PipelineInput,
+  query: string,
+  evidenceBlock = "",
+  want = RETRIEVER_ROUND_SIZE,
+): string {
   return `You are the Product Retriever for Aroless. Search broadly for real, specific, nameable products related to the query.
 
 QUERY: ${query}
@@ -419,8 +424,118 @@ ${
     ? `\nSHARED LIVE EVIDENCE (trend radar scrapings + live market verification — the SAME data the finder's analysis pipeline and the 14-member council use). Treat it as ground truth and prefer products that appear here:\n${evidenceBlock.slice(0, 4_000)}\n`
     : "\nSHARED LIVE EVIDENCE: none available for this run.\n"
 }
-QUALITY BAR: return only REAL, specific, buyable products (e.g. "katlanabilir silikon su şişesi 750ml"), never vague categories ("ev gereçleri") or filler like "... için alternatif". No invented brand/model names and no unverifiable precision — give ranges. Each product needs a plausible price band, a concrete reason it is winning NOW tied to the shared evidence, and at least one real risk. Prefer products visible in the shared evidence; keep every candidate distinct. Returning fewer, stronger products beats inventing any. Never return markdown. Return ONLY JSON:
+OUTPUT SIZE: return up to ${want} DISTINCT candidates. The council needs breadth, not five near-duplicates: cover different segments, price tiers, formats and use cases of this niche. Do not return the same product twice, and do not pad the list with minor wording variants of one product.
+QUALITY BAR: return only REAL, specific, buyable products (e.g. "katlanabilir silikon su şişesi 750ml"), never vague categories ("ev gereçleri") or filler like "... için alternatif". No invented brand/model names and no unverifiable precision — give ranges. Each product needs a plausible price band, a concrete reason it is winning NOW tied to the shared evidence, and at least one real risk. Prefer products visible in the shared evidence. Returning fewer, stronger products beats inventing any. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number 0-100,"competitionScore":number 0-100,"sentiment":string,"whyNow":string,"risks":string[]}],"search_note":string}`;
+}
+
+/**
+ * Bir tarama turunun ADAY BÜTÇESİ.
+ *
+ * Niş "tam taranmalı" olduğu için tek turda 3 ürün yetmez. 12, modelin hem
+ * hızını hem de bir turda gerçekçi bulabildiği ürün sayısını ölçülmüş
+ * dengeler. 14 ajan bu havuzun tamamını puanlayacak; dar havuz "en iyi 5"
+ * dediğimiz hâlde ilk gelen 5'i seçmekten ibaret kalırdı.
+ */
+export const RETRIEVER_ROUND_SIZE = 12;
+
+/** Turların toplam aday bütçesi — tavan, hedef değil. */
+export const RETRIEVER_MAX_CANDIDATES = 60;
+
+/**
+ * Retriever'ın toplam duvar saati bütçesi (ms).
+ *
+ * ÖLÇÜM: Groq ücretsiz katmanı tek ürün-retriever çağrısını ~1.5-2.5 sn'de
+ * tamamlıyor. 14 tur sıralı ≈ 25-35 sn, bu da Vercel Hobby fonksiyon
+ * payını ve QStash adım penceresini zorlar. 18 saniye, 6-8 turu garanti
+ * eder; kalan turlar süre dolunca atlanır ve o ana dek toplanan adaylar
+ * kullanılır. KALİTE BÜTÇEDEN ÖNCE GELMEZ, ama süre bütçeden önce gelir:
+ * tavan aşmak 429 üretir, 429 da tüm koşuyu düşürür.
+ */
+export const RETRIEVER_DEADLINE_MS = 18_000;
+
+/**
+ * Tarama turunu genişleten sorgular — nişin TAMAMINI taramak için.
+ *
+ * `relaxSearchQuery` yalnızca 3 varyant üretiyordu (tam ifade, ilk 3 kelime,
+ * ilk kelime) ve `collected.length >= 3` koşulunda tur kesiliyordu. Yani
+ * kullanıcı "robot vacuum" yazdığında sistem yalnızca 3 ürün görüyordu.
+ * Burada her kelime, kelime çifti ve niş-genişletme sorguları üretilir; her
+ * turda modele FARKLI bir açı verilir, yeni adaylar birikir.
+ */
+export function expansionQueries(query: string): string[] {
+  const stopWords = new Set([
+    "en",
+    "iyi",
+    "best",
+    "ürün",
+    "product",
+    "ürünleri",
+    "listesi",
+    "list",
+    "için",
+    "ile",
+    "veya",
+    "or",
+    "the",
+    "a",
+    "an",
+    "for",
+    "of",
+    "with",
+    "and",
+    "bul",
+    "find",
+    "nasıl",
+    "how",
+    "en iyi",
+    "kaç",
+    "ne",
+    "var",
+  ]);
+  const normalized = query.trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!normalized) return [];
+
+  const words = normalized
+    .split(/[\s,;|/]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !stopWords.has(w.toLocaleLowerCase("tr-TR")));
+
+  const out: string[] = [normalized];
+  const add = (value: string) => {
+    const v = value.trim();
+    if (v.length >= 2 && !out.includes(v)) out.push(v);
+  };
+
+  // 1) Geniş ifadeler (ilk 3, ilk 2, ilk kelime) — nişin alt türleri.
+  add(words.slice(0, 3).join(" "));
+  add(words.slice(0, 2).join(" "));
+  for (const w of words.slice(0, 4)) add(w);
+
+  // 2) AÇI DEĞİŞTİREN ekler: her turda model başka bir kesit arar.
+  const angles = [
+    "en çok satan",
+    "yeni çıkan",
+    "profesyonel",
+    "kompakt",
+    "premium",
+    "bütçe dostu",
+    "çocuklar için",
+    "evde kullanım",
+    "seyahat için",
+    "hediye",
+    "spor",
+    "ofis",
+    "mutfak",
+    "bahçe",
+    "araç için",
+  ];
+  const base = words.slice(0, 2).join(" ");
+  if (base) {
+    for (const angle of angles) add(`${base} ${angle}`);
+  }
+
+  return out.slice(0, 14);
 }
 
 async function retrieveCandidates(
@@ -429,45 +544,62 @@ async function retrieveCandidates(
   councilLogs: CouncilDebugLog[],
   evidence: VeloraEvidence,
 ): Promise<{ candidates: RetrieverCandidate[]; attempts: number }> {
-  const queries = relaxSearchQuery(input.userQuery);
+  const queries = expansionQueries(input.userQuery);
   let attempts = 0;
   const collected: RetrieverCandidate[] = [];
   const seen = new Set<string>();
 
+  // ZAMAN TAVANI — zorunludur. Vercel Hobby'nin fonksiyon payı sınırlıdır ve
+  // 14 tur sıralı gidecekse ~28 sn sürebilir. Tarama "tüm niş" olmalı ama
+  // tavanı da AŞMAMALIDIR: süre dolunca o an elimizde olan adayla devam eder.
+  // Tur sayısı sabit olmadığı için burada gerçek ölçüm kullanılır.
+  const deadlineAt = Date.now() + RETRIEVER_DEADLINE_MS;
+  const controller = new AbortController();
   for (const query of queries) {
+    // Bütçe veya süre dolduysa daha fazla tur YAPILMAZ (ücretsiz kota israfı).
+    if (collected.length >= RETRIEVER_MAX_CANDIDATES) break;
+    if (Date.now() >= deadlineAt) break;
     attempts++;
+    const remaining = RETRIEVER_MAX_CANDIDATES - collected.length;
     const result = await executeAgentWithFallback(
       `Product Retriever (${attempts})`,
-      retrieverPrompt(input, query, evidence.block),
+      retrieverPrompt(input, query, evidence.block, Math.min(RETRIEVER_ROUND_SIZE, remaining)),
       DEEP_CHAIN,
-      { temperature: 0.35, retries: 2 },
+      { temperature: 0.35, retries: 1, signal: controller.signal },
     );
     logs.push(result.log);
     const parsed = parseAgentJson<{ candidates?: unknown[] }>(result.text, {});
-    const candidates = normalizeRetrieverCandidates(parsed);
+    const candidates = normalizeRetrieverCandidates(
+      parsed,
+      Math.min(RETRIEVER_ROUND_SIZE, remaining),
+    );
+    let added = 0;
     for (const candidate of candidates) {
-      const identity = candidate.name.toLocaleLowerCase("tr-TR");
-      if (!seen.has(identity)) {
-        seen.add(identity);
-        collected.push(candidate);
-      }
+      // Parmak izi yalnız küçük harfe indirgenerek değil, normalize de
+      // edilerek karşılaştırılır: "Xiaomi Vacuum S11" ile "xiaomi  vacuum
+      // s11" aynı üründür ve havuzu şişirmez.
+      const identity = normalizeProductIdentity(candidate.name);
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      collected.push(candidate);
+      added++;
     }
-    const status = candidates.length
-      ? "SUCCESS"
-      : attempts < queries.length
-        ? "FALLBACK_TRIGGERED"
-        : "EMPTY";
+    const status =
+      added > 0 ? "SUCCESS" : attempts < queries.length ? "FALLBACK_TRIGGERED" : "EMPTY";
     const debug = makeDebugLog(
       "Product Retriever",
-      { query, attempt: attempts },
+      { query, attempt: attempts, added, total: collected.length },
       parsed,
-      candidates.length,
+      added,
       status,
     );
     councilLogs.push(debug);
     emitDebugLog(debug);
-    if (collected.length >= 3) break;
+    // ESKİ DAVRANIŞ: `if (collected.length >= 3) break;` — tarama 3 üründe
+    // bitiyordu. Artık yalnızca BÜTÇE, SÜRE veya sorgular tükenince durulur.
   }
+  // Uzun süren tur varsa kalan çağrılar iptal edilir; kaynak temiz bırakılır.
+  controller.abort();
 
   const queryLabel = input.userQuery.trim();
   const fallbackNames = [
@@ -497,7 +629,8 @@ async function retrieveCandidates(
   // değil, ölçülebilir bileşenlerin toplamı en yüksek olan adaydır.
   const merged: RetrieverCandidate[] = [...collected];
   const pushUnique = (candidate: RetrieverCandidate) => {
-    const identity = candidate.name.toLocaleLowerCase("tr-TR");
+    // Aynı ürün farklı yazımlarla gelebilir; normalize parmak izi tekilleştirir.
+    const identity = normalizeProductIdentity(candidate.name);
     if (seen.has(identity)) return;
     seen.add(identity);
     merged.push(candidate);
@@ -539,7 +672,10 @@ async function retrieveCandidates(
   );
   councilLogs.push(debug);
   emitDebugLog(debug);
-  return { candidates: merged.slice(0, 24), attempts };
+  // Havuz tavanı 24 → RETRIEVER_MAX_CANDIDATES. 14 ajanın tamamı bu havuzu
+  // puanlayacak; havuz daraldığında "nişin tamamı taranmış" iddiası doğru
+  // olmazdı, çünkü gerçekte ilk 3 üründe durulmuş olurdu.
+  return { candidates: merged.slice(0, RETRIEVER_MAX_CANDIDATES), attempts };
 }
 
 /**

@@ -56,7 +56,12 @@
 import { z } from "zod";
 import type { Json } from "@/integrations/supabase/types";
 import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council-chain.server";
-import { DEEP_CHAIN, executeAgentWithFallback, parseAgentJson } from "./ai-router.server";
+import {
+  DEEP_CHAIN,
+  councilChainFor,
+  executeAgentWithFallback,
+  parseAgentJson,
+} from "./ai-router.server";
 import { combineJointScores } from "./consensus-types";
 import { agentFocusBlock } from "./velora-agent-focus";
 import { councilFinalScore, councilRankKey } from "./velora-council-score";
@@ -113,12 +118,20 @@ export const VELORA_HARVEST_CEILING_MS = 12_000;
 export const VELORA_STEP_RETURN_MARGIN_MS = 250;
 
 /**
- * Ajanların odağındaki finalist ürün sayısı.
+ * Ajanların odağındaki finalist ürün sayısı — yani 14 ajanın TÜMÜNÜN
+ * puanladığı havuz.
  *
- * Kullanıcıya 5 ürün göstereceğimiz için havuz 8 olmalı: 5'i seçebilmek için
- * en az 5 gerçek aday gerekir, kalite kapısı da eleyebildiği için pay bırakılır.
+ * Neden 12: kullanıcı "nişin TAMAMINI tarasın, 3 ürünü değil" dedi. 8 üründe
+ * tarama yapılırsa konsey gerçekte yalnızca 8 adayı görüyor, 60 adaylık tarama
+ * havuzunun geri kalanı hiç puanlanmıyor ve "en iyi 5" iddiası eksik bir
+ * taramaya dayanıyordu. 12, her ajana makul bir bağlam bütçesi (≈3 KB metin)
+ * bırakırken havuzu genişletir; 14 ajan × 12 ürün = 168 oy.
+ *
+ * Üst sınır bilinçlidir: bağlam penceresi ve 8 saniyelik faz tavanı korunur.
+ * Havuz `VELORA_PIPELINE_TOP_N` ile kesişir, yani en az iki bağımsız hattın
+ * ilk-N listesinin birleşimi garanti edilir.
  */
-export const VELORA_FINALIST_COUNT = 8;
+export const VELORA_FINALIST_COUNT = 12;
 
 /** İstenen en iyi ürün sayısı — 14 ajan ortalamasına göre. */
 export const VELORA_TOP_N = 5;
@@ -127,10 +140,15 @@ export const VELORA_TOP_N = 5;
  * Her bağımsız hattın niş için çıkardığı "en iyi ürün" sayısı.
  *
  * 14 ajanlı konsey hattı da AI analiz hattı da birbirinden BAĞIMSIZ olarak kendi
- * ilk 8 ürününü bulur. Nihai sıralama 14 ajan ortalamasıdır; bu iki liste yalnız
- * aday havuzunu genişletir.
+ * ilk-N listesini bulur. Nihai sıralama 14 ajan ortalamasıdır; bu iki liste
+ * yalnız aday havuzunu genişletir.
+ *
+ * Neden `VELORA_FINALIST_COUNT` eşit: kullanıcı nişin TAMAMININ taranmasını
+ * istedi. İki hat 8'er üründe dursaydı havuz en fazla 16 ile sınırlı kalır ve
+ * 60 adaylık taramanın geri kalanı hiç değerlendirilmezdi. Değerler eşit
+ * olduğunda her iki hat da finalist havuzunun tamamını doldurur.
  */
-export const VELORA_PIPELINE_TOP_N = 8;
+export const VELORA_PIPELINE_TOP_N = VELORA_FINALIST_COUNT;
 
 /** Bir ürünün ajan kararı "kabul edilebilir" sayılması için gereken en küçük oy oranı. */
 export const VELORA_MIN_AGENT_COVERAGE = 0.5;
@@ -574,6 +592,8 @@ async function runOneAgent(
   state: VeloraRunState,
   deadlineAt: number,
   deps: VeloraOrchestratorDeps,
+  /** 0-13: sağlayıcı dağılımı için konsey içindeki sıra. */
+  councilIndex: number,
 ): Promise<VeloraAgentResult> {
   const definition = COUNCIL_AGENTS.find((a) => a.key === agentKey);
   const name = definition?.name ?? agentKey;
@@ -597,8 +617,13 @@ async function runOneAgent(
   const run = deps.runAgent ?? executeAgentWithFallback;
   const controller = new AbortController();
   try {
+    // SAĞLAYICI DAĞITIMI: her ajan kendi birincil sağlayıcısından başlar
+    // (`councilChainFor`). 14 ajanın hepsi gemini ile başlardı ve ücretsiz
+    // 15 RPM sınırı anında 429 üretirdi; şimdi yük 5 Groq + 5 Gemini +
+    // Cerebras + SambaNova + 5 OpenRouter + 5 HF arasında paylaşılır.
+    const chain = deps.runAgent ? DEEP_CHAIN : councilChainFor(councilIndex);
     const result = await withCeiling(
-      run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), DEEP_CHAIN, {
+      run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), chain, {
         temperature: 0.3,
         retries: 1,
         signal: controller.signal,
@@ -657,7 +682,18 @@ export async function runVeloraPhase(
       ? runAnalysisLine(state, deps)
       : null;
   const agents = await Promise.all(
-    phase.agents.map((key) => runOneAgent(key, phase, state, deadlineAt, deps)),
+    // `councilIndex` konsey içindeki GLOBAL sıradır, böylece sağlayıcı
+    // dağılımı 14 ajana eşit yayılır.
+    phase.agents.map((key) =>
+      runOneAgent(
+        key,
+        phase,
+        state,
+        deadlineAt,
+        deps,
+        COUNCIL_AGENTS.findIndex((a) => a.key === key),
+      ),
+    ),
   );
   // Paralel koşan analiz turu karne kurulmadan ÖNCE katılır. Ölçüm ajanlardan
   // hemen sonra değil, iki kol da bittiğinde alınır; 8 sn sözü 15 çağrı için de
@@ -1572,6 +1608,7 @@ QUALITY BAR (bu koşunun amacı GERÇEKTEN iyi ürünler göstermek — zayıf a
 - Uydurma marka/model adı ve doğrulanamayan sayı YASAK. Emin değilsen aralık ver.
 - Her ürün için: gerçekçi fiyat bandı, paylaşılan kanıta dayanan SOMUT bir "neden şimdi", ve en az bir gerçek risk.
 - Talebi ANALYSIS-LINE SCRAPING EVIDENCE içinde görünen ürünleri tercih et; her aday birbirinden FARKLI olmalı.
+- ${VELORA_FINALIST_COUNT} adaya kadar DÖN. Konsey 14 ajandan oluşuyor ve havuzu tümüyle puanlayacak: yakın varyantları tekrarlamak yerine farklı segment, fiyat kademesi, format ve kullanım senaryolarını kapsa. Beş benzer ürün beş farklı üründen değersizdir.
 - Kaliteli aday azsa daha az ürün döndürmek, uydurmaktan iyidir.
 Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Never return markdown. Return ONLY JSON:
 {"candidates":[{"name":string,"category":string,"priceRange":string,"estimatedMarginPct":number,"demandScore":number,"competitionScore":number,"sentiment":string,"whyNow":string,"risks":string[]}]}`;

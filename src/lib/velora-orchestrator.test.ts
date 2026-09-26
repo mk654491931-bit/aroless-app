@@ -61,6 +61,7 @@ import {
   VELORA_PHASES,
   VELORA_PHASE_CEILING_MS,
   VELORA_HARVEST_CEILING_MS,
+  VELORA_FINALIST_COUNT,
   VELORA_PIPELINE_TOP_N,
   VELORA_TOP_N,
   phaseCeilingFor,
@@ -326,6 +327,17 @@ describe("faz planı (14 ajan → 4 faz)", () => {
     // havuzu daha geniş olmalı ki kalite kapısı eleyince de sıra doldurulsun.
     expect(VELORA_TOP_N).toBe(5);
     expect(VELORA_PIPELINE_TOP_N).toBeGreaterThan(VELORA_TOP_N);
+  });
+
+  it("havuz ÜRÜN başına değil NİŞin TAMAMI ölçeğinde: 3 üründe durmaz", () => {
+    // Eski davranış: retriever `collected.length >= 3` ile duruyordu ve
+    // finalist havuzu 8 ile sınırlıydı. "Nişin tamamını tara" isteği bunu
+    // gereksiz kılıyor. Havuz en az 12 ürün tutmalı.
+    expect(VELORA_FINALIST_COUNT).toBeGreaterThanOrEqual(12);
+    // İki bağımsız hat havuzun tamamını doldurabilmeli.
+    expect(VELORA_PIPELINE_TOP_N).toBe(VELORA_FINALIST_COUNT);
+    // 14 ajanın tamamı havuzu puanlıyor → toplam oy sayısı.
+    expect(plannedAgentCount() * VELORA_FINALIST_COUNT).toBeGreaterThanOrEqual(168);
   });
 });
 

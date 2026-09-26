@@ -59,6 +59,47 @@ export const DEEP_CHAIN: ProviderId[] = [
 ];
 export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = DEEP_CHAIN;
 
+/**
+ * KONSEY ZİNCİRİ — 14 ajanın sağlayıcı yükünü SAĞLAYICIYA GÖRE DAĞITIR.
+ *
+ * SORUN: 14 ajanın TAMAMI `DEEP_CHAIN` ile koşuyordu ve `DEEP_CHAIN[0] =
+ * "gemini"`. Ücretsiz katmanlarda Gemini 15 RPM/dakika sınırı olduğu için
+ * 14 paralel istek sınırı zorlar, 429 üretir, anahtar 90 sn park edilir ve
+ * zincir yavaş sağlayıcılara kayar. Sonuç: 22 anahtarın 5'i kullanılır,
+ * geri kalan 17 hiç işe yaramaz — hem yavaş hem verimsiz.
+ *
+ * ÇÖZÜM: Ajanlar sağlayıcıya GÖRE DAĞITILIR. Her ajan kendi birincil
+ * sağlayıcısından başlar, 429 alırsa sıradakine geçer. Böylece ücretsiz
+ * kotalar toplanır: 5 Groq + 5 Gemini + 5 OpenRouter + 5 HF + Cerebras +
+ * SambaNova aynı anda kullanılabilir hale gelir.
+ *
+ * `cycleCouncilChain` SAF bir fonksiyondur: aynı ajan sırası → aynı dağılım.
+ */
+const COUNCIL_PRIMARY_ORDER: ProviderId[] = [
+  "groq", // 5 anahtar, en hızlı, 14 ajanın dağılımının omurgası
+  "gemini", // 5 anahtar, en güçlü doğruluk
+  "cerebras", // hızlı, tek anahtar → yükü düşük tutar
+  "sambanova", // tek anahtar, yüksek bağlam
+  "openrouter", // 5 anahtar, ücretsiz modeller
+  "huggingface", // 5 token, en son çare
+];
+
+/**
+ * Ajan indeksi → sağlayıcı dağıtılmış zincir.
+ *
+ * Her sağlayıcı "resmi sırası" ile birincil olur; kalan sağlayıcılar hata
+ * durumunda yedek olarak arkasına eklenir. Groq gibi 5 anahtarlı gruplar
+ * daha fazla ajan alır, tek anahtarlı gruplar (cerebras/sambanova) daha az —
+ * böylece ücretsiz kota daha verimli tüketilir.
+ */
+export function councilChainFor(agentIndex: number): ProviderId[] {
+  const total = COUNCIL_PRIMARY_ORDER.length;
+  const primary = COUNCIL_PRIMARY_ORDER[((agentIndex % total) + total) % total] ?? "groq";
+  // Ajanın kendi sağlayıcısı + diğerleri (kendi sağlayıcısı hariç sona).
+  const rest = COUNCIL_PRIMARY_ORDER.filter((p) => p !== primary);
+  return [primary, ...rest];
+}
+
 export type ProviderId =
   | "cerebras"
   | "sambanova"
@@ -95,8 +136,7 @@ function pooledProvider(group: PoolGroup): ProviderCall {
   return async (prompt, temperature, signal) => {
     const keys = readPoolGroupKeys(group);
     const { baseUrl, model } = poolGroupConfig(group);
-    if (!keys.length || !baseUrl)
-      throw new Error(`no api key/endpoint configured for ${group}`);
+    if (!keys.length || !baseUrl) throw new Error(`no api key/endpoint configured for ${group}`);
     const modelName = model || "Meta-Llama-3.3-70B-Instruct";
     try {
       const text = await rotate(group, keys, [modelName], (key, m) =>
@@ -182,7 +222,10 @@ function routerErrorKind(e: unknown): "quota" | "server" | "network" {
   const status = (e as { status?: number }).status ?? 0;
   const msg = e instanceof Error ? e.message : "";
   if (
-    status === 429 || status === 401 || status === 402 || status === 403 ||
+    status === 429 ||
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
     msg.startsWith("QUOTA:")
   )
     return "quota";
@@ -218,7 +261,10 @@ async function rotate(
         last = e;
         const status = (e as { status?: number }).status;
         const isQuota =
-          status === 429 || status === 402 || status === 401 || status === 403 ||
+          status === 429 ||
+          status === 402 ||
+          status === 401 ||
+          status === 403 ||
           (e instanceof Error && e.message.startsWith("QUOTA:"));
         if (isQuota) {
           parkPoolKey(group, key); // anahtar tükendi → beklemeye al, sonraki anahtara geç
@@ -354,20 +400,16 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
 
   huggingface: async (prompt, temperature, signal) => {
     try {
-      const text = await rotate(
-        "huggingface",
-        hfEnvKeys(),
-        HF_MODELS,
-        (key, model) =>
-          openAICompatible({
-            url: "https://router.huggingface.co/v1/chat/completions",
-            key,
-            model,
-            prompt,
-            temperature,
-            signal,
-            json: false,
-          }),
+      const text = await rotate("huggingface", hfEnvKeys(), HF_MODELS, (key, model) =>
+        openAICompatible({
+          url: "https://router.huggingface.co/v1/chat/completions",
+          key,
+          model,
+          prompt,
+          temperature,
+          signal,
+          json: false,
+        }),
       );
       markPoolGroupOutcome("hf", 1, "ok");
       return text;
@@ -540,9 +582,7 @@ export async function executeAgentWithFallback(
         };
       } catch (e) {
         clearTimeout(timer);
-        lastError = aborted()
-          ? abortMessage
-          : `${provider}: ${(e as Error).message}`.slice(0, 200);
+        lastError = aborted() ? abortMessage : `${provider}: ${(e as Error).message}`.slice(0, 200);
       } finally {
         opts.signal?.removeEventListener("abort", onAbort);
       }
