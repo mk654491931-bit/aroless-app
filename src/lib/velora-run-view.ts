@@ -120,6 +120,15 @@ export type RunStatusPayload = {
     supplierLive: boolean;
     trendMomentumPct: number | null;
   } | null;
+  /**
+   * AI HAVUZ SAĞLIĞI — Vercel'de gerçekten kaç ücretsiz anahtar tanımlı ve
+   * o an kullanılabilir. Anahtar değerleri ASLA dışa vurulmaz.
+   */
+  aiPool: {
+    total: number;
+    available: number;
+    groups: { group: string; configured: number; available: number }[];
+  } | null;
   recovered: boolean;
   notes: string[];
 };

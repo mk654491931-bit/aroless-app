@@ -56,6 +56,7 @@
 import { z } from "zod";
 import type { Json } from "@/integrations/supabase/types";
 import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council-chain.server";
+import { poolHealthSummary } from "./ai-pool.server";
 import {
   DEEP_CHAIN,
   councilChainFor,
@@ -2127,6 +2128,15 @@ export type VeloraRunStatus = {
     supplierLive: boolean;
     trendMomentumPct: number | null;
   } | null;
+  /**
+   * AI HAVUZ SAĞLIĞI — Vercel'de gerçekten kaç ücretsiz anahtar tanımlı ve
+   * o an kullanılabilir. Anahtar değerleri ASLA dışa vurulmaz.
+   */
+  aiPool: {
+    total: number;
+    available: number;
+    groups: { group: string; configured: number; available: number }[];
+  } | null;
   /** Karne geçici kovadan değil, kalıcı kazanan kayıtlarından geri kuruldu. */
   recovered: boolean;
   notes: string[];
@@ -2170,6 +2180,35 @@ function harvestSummary(state: VeloraRunState): VeloraRunStatus["harvest"] {
     supplierLive: Boolean(s.supplier?.live),
     trendMomentumPct: Number.isFinite(s.trendMomentumPct) ? s.trendMomentumPct : null,
   };
+}
+
+/**
+ * AI HAVUZ SAĞLIĞI — panelde "kaç anahtar gerçekten çalışıyor" gösterilir.
+ *
+ * NEDEN GEREKLİ: konsey 14 ajanı 6 sağlayıcıya dağıtıyor. Kullanıcı "22
+ * anahtarım var" diyor; bu alan Vercel'de GERÇEKTEN kaç anahtarın tanımlı
+ * ve o an kullanılabilir olduğunu gösterir. Anahtar DEĞERLERİ ASLA
+ * dışa vurulmaz — yalnız grup adı ve sayaçlar.
+ *
+ * Sağlayıcı dağıtımı sessizce tek sağlayıcıya düşerse (anahtarlar tanımlı
+ * değilse) panel bunu "0 kullanılabilir" olarak açıkça söyler.
+ */
+function aiPoolSummary(): VeloraRunStatus["aiPool"] {
+  try {
+    const h = poolHealthSummary();
+    return {
+      total: h.total,
+      available: h.available,
+      groups: Object.entries(h.byGroup).map(([group, counts]) => ({
+        group,
+        configured: counts.configured,
+        available: counts.available,
+      })),
+    };
+  } catch {
+    // Havuz okunamazsa panel çökmez; "bilinmiyor" anlamına gelen null döner.
+    return null;
+  }
 }
 
 function nextMissingPhase(state: VeloraRunState): VeloraPhaseId | null {
@@ -2224,6 +2263,8 @@ export async function veloraRunStatus(
           selfTest: null,
           phases: [],
           harvest: null,
+          // Karne kalıcı kayıttan geri kuruldu; o koşunun canlı havuzu yoktur.
+          aiPool: aiPoolSummary(),
           recovered: true,
           notes: ["STATE_EXPIRED_USING_WINNER_LEDGER", ...dossier.notes],
         };
@@ -2244,6 +2285,7 @@ export async function veloraRunStatus(
       selfTest: null,
       phases: [],
       harvest: null,
+      aiPool: aiPoolSummary(),
       recovered: false,
       notes: ["RUN_STATE_NOT_FOUND", ...notes],
     };
@@ -2265,6 +2307,7 @@ export async function veloraRunStatus(
     selfTest: state.selfTest,
     phases: phaseSummaries(state),
     harvest: harvestSummary(state),
+    aiPool: aiPoolSummary(),
     recovered: false,
     notes: [...notes, ...(dossier?.notes ?? [])],
   };

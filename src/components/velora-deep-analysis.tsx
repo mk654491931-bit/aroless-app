@@ -347,6 +347,54 @@ export function VeloraDeepAnalysis({
             </p>
           )}
 
+          {payload?.aiPool && (
+            <div className="rounded-xl border border-violet-400/25 bg-violet-500/5 p-3">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+                <Activity size={12} /> Ücretsiz AI havuzu
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                    payload.aiPool.available > 0
+                      ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
+                      : "border-red-400/40 bg-red-500/12 text-red-200"
+                  }`}
+                >
+                  {payload.aiPool.available}/{payload.aiPool.total} anahtar kullanılabilir
+                </span>
+              </div>
+              <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
+                14 ajan bu havuzdaki sağlayıcılara dağıtılır; 429 alan anahtar beklemeye alınır ve
+                sıradakine geçilir. Anahtar değerleri asla gösterilmez.
+              </p>
+              <ul className="grid grid-cols-3 gap-1 sm:grid-cols-6">
+                {payload.aiPool.groups.map((g) => (
+                  <li
+                    key={g.group}
+                    className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-center text-[10px]"
+                  >
+                    <div className="truncate font-semibold uppercase">{g.group}</div>
+                    <div
+                      className={
+                        g.available > 0
+                          ? "text-emerald-300"
+                          : g.configured === 0
+                            ? "text-amber-300"
+                            : "text-red-300"
+                      }
+                    >
+                      {g.configured === 0 ? "yok" : `${g.available}/${g.configured}`}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {payload.aiPool.available === 0 && (
+                <p className="mt-2 text-[10px] text-red-200">
+                  Hiçbir ücretsiz anahtar kullanılabilir değil — 14 ajan nötr puan verecek. Vercel
+                  ortam değişkenlerini kontrol edin.
+                </p>
+              )}
+            </div>
+          )}
+
           {payload?.harvest && (
             <div className="rounded-xl border border-sky-400/25 bg-sky-500/5 p-3">
               <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted-foreground">

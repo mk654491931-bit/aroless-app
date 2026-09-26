@@ -37,6 +37,7 @@ function payload(overrides: Partial<RunStatusPayload> = {}): RunStatusPayload {
     selfTest: null,
     phases: [],
     harvest: null,
+    aiPool: null,
     recovered: false,
     notes: [],
     ...overrides,
@@ -120,6 +121,35 @@ describe("Faz 0 kazıma tablosu (panel sözleşmesi)", () => {
 
   it("kaynak tablosu yoksa panel çökmez (null güvenli)", () => {
     expect(payload().harvest).toBeNull();
+  });
+});
+
+describe("AI havuz sağlığı (panel sözleşmesi)", () => {
+  const pool = {
+    total: 22,
+    available: 22,
+    groups: [
+      { group: "groq", configured: 5, available: 5 },
+      { group: "gemini", configured: 5, available: 5 },
+      { group: "hf", configured: 5, available: 0 },
+    ],
+  };
+
+  it("kaç anahtarın tanımlı ve kullanılabilir olduğunu bildirir", () => {
+    const p = payload({ aiPool: pool });
+    expect(p.aiPool?.total).toBe(22);
+    expect(p.aiPool?.available).toBe(22);
+    // Kullanıcı "22 anahtarım var" diyor; bu alan doğrular.
+    expect(p.aiPool?.groups).toHaveLength(3);
+  });
+
+  it("hiç anahtar yoksa dürüstçe bildirir (sessizce başarı gibi görünmez)", () => {
+    const p = payload({ aiPool: { total: 0, available: 0, groups: [] } });
+    expect(p.aiPool?.available).toBe(0);
+  });
+
+  it("havuz okunamazsa null döner, panel çökmez", () => {
+    expect(payload().aiPool).toBeNull();
   });
 });
 
