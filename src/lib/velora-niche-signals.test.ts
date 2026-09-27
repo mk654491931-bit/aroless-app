@@ -150,9 +150,9 @@ describe("nicheSignalsBlock (prompt metni)", () => {
   });
 
   it("momentum ölçülemediyse 'ÖLÇÜLEMEDİ' der, sayı uydurmaz", () => {
-    expect(nicheSignalsBlock(signals())).toContain("Google Trends momentum: ÖLÇÜLEMEDİ");
+    expect(nicheSignalsBlock(signals())).toContain("Search interest momentum: ÖLÇÜLEMEDİ");
     expect(nicheSignalsBlock(signals({ trendMomentumPct: -12, trendSeries: [1, 2, 3] }))).toContain(
-      "Google Trends momentum: -12%",
+      "Search interest momentum: -12%",
     );
   });
 

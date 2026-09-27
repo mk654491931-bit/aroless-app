@@ -72,11 +72,15 @@ describe.skipIf(!LIVE)("Faz 0 niş kazıması (canlı ağ)", () => {
           expect(lower).toContain(niche.toLowerCase().split(/\s+/)[0]!);
         }
 
-        // 5) TALEP ÖLÇÜMÜ DÜRÜSTLÜĞÜ: Google Trends bu IP'de kalıcı 429
-        //    verdiği için Wikipedia pageviews yedeği devreye girmeli. Sözleşme:
-        //    trend varsa GERÇEK ölçümdür (0-100 aralığında ölçülmüş seri) ve
-        //    momentum uydurma değildir; trend yoksa kaynak `active` DEĞİLDİR.
-        const trendSource = signals.sources.find((s) => s.name === "Google Trends");
+        // 5) TALEP ÖLÇÜMÜ DÜRÜSTLÜĞÜ: Google bu IP'de 429 verdiği için
+        //    Wikipedia pageviews yedeği devreye girer. Sözleşme: trend varsa
+        //    GERÇEK ölçümdür (0-100 aralığında ölçülmüş seri) ve momentum
+        //    uydurma değildir; trend yoksa kaynak `active` DEĞİLDİR.
+        //
+        //    Slot etiketi düzeltildi: artık "Search interest" — çünkü ölçüm
+        //    Google'dan geldiğinde değil, Wikipedia yedeğinden geldiğinde de
+        //    "Google Trends" demek kaynağı yanlış gösteriyordu.
+        const trendSource = signals.sources.find((s) => s.name === "Search interest");
         if (signals.trendSeries.length) {
           expect(trendSource?.status).toBe("active");
           expect(signals.trendSeries.every((v) => Number.isFinite(v) && v >= 0 && v <= 100)).toBe(

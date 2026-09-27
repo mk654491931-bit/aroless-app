@@ -454,6 +454,63 @@ export const wikipediaSource: ProductSource = {
   },
 };
 
+/* ------------------------------------------- 5b. Google Trends (niş talebi) */
+
+/**
+ * Google Trends — nişin GERÇEK arama ilgisi ve momentum.
+ *
+ * Bu ölçüm trend radar hattında (`velora-niche-scrape.server.ts`) ZATEN
+ * çalışıyordu; discovery katmanı onu atlıyordu. Sonuç: talep momentumu YALNIZCA
+ * Wikipedia'ya bağlıydı, yani nişte gerçek bir trend varsa ama hakkında Wikipedia
+ * maddesi yoksa talep sinyalimiz KÖR kalıyordu.
+ *
+ * ÖLÇÜLDÜ (2026-09-27, bu sunucudan): `getGoogleTrends` → `active`, 52 nokta,
+ * momentum -1 / +5 / -10 (robot vacuum / air fryer / dog harness). Önceki
+ * dönemlerde bu uç datacenter IP'lerinde 429 veriyordu; `getGoogleTrends`
+ * bunu zaten yedekliyor, bu yüzden biz yedek YAZMIYORUZ.
+ *
+ * DÜRÜSTLÜK — çift sayım ve uydurma koruması:
+ *   • `getGoogleTrends` kendi içinde iki kademe yedekle çalışır: Google ölçemezse
+ *     Wikipedia'ya, o da ölçemezse `estimated` serisine düşer.
+ *   • YALNIZ `source === "google-trends"` ise satır üretiriz. `wikipedia-views`
+ *     ZATEN `wikipediaSource`da ölçülüyor; ikisini de saymak aynı kanıtı iki
+ *     kez saymak ve bütünlük puanını şişirmek olurdu.
+ *   • `estimated` seri KESİNLİKLE kanıta girmez: 14 ajana "ölçülmüş ilgi" diye
+ *     uydurma verilmez.
+ */
+export const googleTrendsSource: ProductSource = {
+  name: "google-trends",
+  timeoutMs: 8_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { getGoogleTrends } = await import("./market-data.server");
+    const series = await getGoogleTrends(niche, "US");
+    // Google'dan GERÇEKTEN ölçülmediyse bu kaynak bilerek boş döner.
+    if (series.source !== "google-trends" || !Number.isFinite(series.momentum_pct)) return [];
+    const momentum = Math.round(series.momentum_pct);
+    const avgIndex = series.monthly.length
+      ? series.monthly.reduce((a, b) => a + b, 0) / series.monthly.length
+      : 0;
+    return [
+      {
+        title: `${niche} — Google Trends arama ilgisi`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "google-trends",
+        url: `https://trends.google.com/trends/explore?q=${encodeURIComponent(niche.slice(0, 60))}`,
+        // "momentum ±N%" hâlinde yazılır: `product-discovery-pipeline.server.ts`
+        // bu deseni okuyup `nicheMomentumPct` üretir.
+        notes: `30 günlük momentum ${momentum > 0 ? "+" : ""}${momentum}% · ortalama indeks ${Math.round(
+          avgIndex,
+        ).toLocaleString("en-US")}`,
+      },
+    ];
+  },
+};
+
 /* --------------------------------------------------- 6. Marketplace (fiyat) */
 
 /**
@@ -1233,6 +1290,9 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.
+  // ÖNCE Google Trends, SONRA Wikipedia: momentum tek kaynaktan okunur, ikisi
+  // birden kanıta girmez (bkz. `googleTrendsSource` çift sayım notu).
+  googleTrendsSource,
   googleNewsSource,
   wikipediaSource,
   hackerNewsSource,

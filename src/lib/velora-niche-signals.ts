@@ -110,9 +110,12 @@ export const NicheSignalsSchema = z.object({
   collectedAt: z.string().default(""),
 
   /* --- TALEP ---------------------------------------------------------- */
-  /** Google Trends 12 aylık ilgi (0-100). */
+  /**
+   * 12 aylık arama ilgisi (0-100). Google Trends ya da pageviews yedeği.
+   * Kaynak `sources` içinde DÜRÜSTÇE adıyla belirtilir.
+   */
   trendSeries: z.array(z.number()).default([]),
-  /** Google Trends momentum (%). `null` = ölçülemedi. */
+  /** Momentum (%). `null` = ölçülemedi. */
   trendMomentumPct: z.number().nullable().default(null),
   googleRising: z.array(z.string()).default([]),
   tiktok: z.array(z.string()).default([]),
@@ -232,7 +235,9 @@ const pct = (value: number | null): string =>
 export function nicheSignalsBlock(signals: NicheSignals): string {
   const lines: string[] = [
     `NICHE: ${signals.niche} | TARGET: ${signals.country} | CHANNEL: ${signals.platform} | COLLECTED: ${signals.collectedAt.slice(0, 16).replace("T", " ")} UTC`,
-    `DEMAND — Google Trends momentum: ${pct(signals.trendMomentumPct)}; 12-month interest: ${signals.trendSeries.slice(-12).join(",") || "n/a"}`,
+    // Kaynak etiketi "Search interest": ölçüm Google'dan geldiğinde de, 429
+    // verip pageviews yedeğine düştüğümüzde de aynı umursal blokta görünür.
+    `DEMAND — Search interest momentum: ${pct(signals.trendMomentumPct)}; 12-month interest: ${signals.trendSeries.slice(-12).join(",") || "n/a"}`,
   ];
   if (signals.googleRising.length)
     lines.push(`RISING QUERIES: ${signals.googleRising.slice(0, 8).join(" | ")}`);

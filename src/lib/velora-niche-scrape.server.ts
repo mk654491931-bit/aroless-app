@@ -114,6 +114,21 @@ async function collect<T>(
   count: (value: T) => number,
   statuses: NicheSourceStatus[],
   perSourceMs: number,
+  /**
+   * Varsa çağrılan kaynağın ÖLÇÜM KALİTESİNİ bildirir.
+   *
+   * NEDEN VAR: `getGoogleTrends` HATA FIRLATMAZ. Google 429 verdiğinde
+   * `estimated` (uydurma) seriye düşer ve `yearly.length` yine 52 olur.
+   * Satır sayısına bakan `collect` bunu "active" sayıp trend radar'a
+   * "Google Trends active, 52 kayıt" yazıyordu — oysa 14 ajana UYDURULMUŞ
+   * bir seri veriliyordu. Dosyanın kendi sözleşmesi ("SAYI UYDURULMAZ")
+   * `source` bayrağıyla ayrımı zaten taşıyordu; burada o bayrak atılıyordu.
+   *
+   * DÖNÜŞ: ölçüm gerçekse `null`; değilse nedeni anlatan kısa not. Not
+   * boş değilse durum `error` olur ve `items` sıfırlanır — çünkü "ölçtük" ile
+   * "uydurduk" arasındaki fark panelde GÖRÜNMELİDİR.
+   */
+  quality?: (value: T) => string | null,
 ): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -123,6 +138,11 @@ async function collect<T>(
         timer = setTimeout(() => reject(new Error(`timeout>${perSourceMs}ms`)), perSourceMs);
       }),
     ]);
+    const note = quality?.(value) ?? "";
+    if (note) {
+      statuses.push({ name, status: "error", items: 0, detail: note });
+      return null;
+    }
     const items = Math.max(0, count(value));
     statuses.push({ name, status: "active", items, detail: "" });
     return value;
@@ -570,11 +590,18 @@ export async function harvestNicheSignals(input: {
   const harvest = (async (): Promise<NicheSignals> => {
     const [trends, reddit, hackerNews, news, prices, radar, github, supplier] = await Promise.all([
       collect(
-        "Google Trends",
+        // Etiket DÜRÜST olmalı: Google 429 verdiğinde `getGoogleTrends` tek
+        // başına Wikipedia pageviews'a düşüyor. "Google Trends" yazmak o ölçümü
+        // Google'ın sayısı gibi gösterirdi — kaynak yalan söylüyordu.
+        "Search interest",
         () => getGoogleTrends(niche, country),
         (t) => t.yearly.length,
         statuses,
         SOURCE_BUDGET_MS.trends,
+        // YALNIZ `estimated` (uydurma) seri reddedilir. `wikipedia-views`
+        // GERÇEK bir ölçümdür — atmak kanıt kaybı olurdu; sadece kaynağı
+        // yukarıdaki etiketle dürüstçe belirtiyoruz.
+        (t) => (t.source === "estimated" ? "ölçülemedi → estimated seri kanıta girmiyor" : null),
       ),
       collect(
         "Reddit talep",

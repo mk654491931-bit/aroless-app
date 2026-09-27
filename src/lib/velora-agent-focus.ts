@@ -81,8 +81,8 @@ function demandLine(signals: NicheSignals): string {
   const bits: string[] = [];
   bits.push(
     signals.trendMomentumPct === null
-      ? "Google Trends momentum: ÖLÇÜLEMEDİ"
-      : `Google Trends momentum: ${signals.trendMomentumPct > 0 ? "+" : ""}${signals.trendMomentumPct}%`,
+      ? "Search interest momentum: ÖLÇÜLEMEDİ"
+      : `Search interest momentum: ${signals.trendMomentumPct > 0 ? "+" : ""}${signals.trendMomentumPct}%`,
   );
   if (signals.trendSeries.length)
     bits.push(`12 aylık ilgi (son 6): ${signals.trendSeries.slice(-6).join(",")}`);
