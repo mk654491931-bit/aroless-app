@@ -14,29 +14,61 @@
 //
 // YEREL GELİŞTİRME: `NODE_ENV=development` ve imza başlığı yoksa, imza
 // kontrolü ATLANIR — ama bu modda SADECE localhost'a açıktır ve loglanır.
+//
+// İMZA ANAHTARI ≠ YAYINLAMA TOKEN'ı (üretimde canlıya çıkan tuzak):
+//   `QSTASH_TOKEN` (`qstash_...`) QStash REST API'ye istek atarken Bearer
+//   olarak kullanılır. Teslimatı imzalayan şey O DEĞİL, QStash panelindeki
+//   "Current/Next Signing Key" değeridir. Token'ı imza anahtarı sanmak
+//   üretimde her adımı 401'e düşürür: hat sessizce hiç ilerlemez, kredi
+//   yanmış görünür. Bu yüzden önce `QSTASH_CURRENT_SIGNING_KEY` /
+//   `QSTASH_NEXT_SIGNING_KEY` aranır.
 // ============================================================================
 
 import { Receiver } from "@upstash/qstash";
 
 /* ------------------------------------------------------ Ortam kontrolü */
 
-/** İmza doğrulama açık mı kapalı mı? QStash token'ı yoksa devre dışı. */
+/** İmza doğrulama açık mı kapalı mı? Anahtar çifti yoksa devre dışı. */
 export function signatureVerificationEnabled(envMap: NodeJS.ProcessEnv = process.env): boolean {
+  return qstashSigningKeys(envMap) !== null;
+}
+
+/**
+ * Doğrulama için kullanılacak imza anahtarı çifti.
+ *
+ * Öncelik: `QSTASH_CURRENT_SIGNING_KEY` (+ `QSTASH_NEXT_SIGNING_KEY`, yoksa
+ * aynısı). Anahtar rotasyonunda imza eski anahtarla üretilmiş bir teslimat
+ * olabileceğinden `next` de tanımlanmalıdır.
+ *
+ * Geriye dönük uyum: ayrı anahtar tanımlı değilse `QSTASH_TOKEN` imza
+ * anahtarı olarak kullanılır. Bu, imza üretmeyen yerel kurulumlar ve mevcut
+ * testler için gereklidir; GERÇEK QStash üretiminde ayrı anahtarlar
+ * tanımlanmalıdır.
+ */
+export function qstashSigningKeys(
+  envMap: NodeJS.ProcessEnv = process.env,
+): { current: string; next: string } | null {
+  const current = (envMap["QSTASH_CURRENT_SIGNING_KEY"] ?? "").trim();
+  if (current) {
+    const next = (envMap["QSTASH_NEXT_SIGNING_KEY"] ?? "").trim();
+    return { current, next: next || current };
+  }
   const token = (envMap["QSTASH_TOKEN"] ?? "").trim();
-  return token.length > 0;
+  return token ? { current: token, next: token } : null;
 }
 
 let receiver: Receiver | null = null;
 let receiverFor: string | null = null;
 
-/** QStash `Receiver` örneğini token'a göre lazy kurar. */
-function getReceiver(token: string): Receiver {
-  if (receiver && receiverFor === token) return receiver;
+/** `Receiver` örneğini imza anahtarı çiftine göre lazy kurar. */
+function getReceiver(keys: { current: string; next: string }): Receiver {
+  const fingerprint = `${keys.current}|${keys.next}`;
+  if (receiver && receiverFor === fingerprint) return receiver;
   receiver = new Receiver({
-    currentSigningKey: token,
-    nextSigningKey: token,
+    currentSigningKey: keys.current,
+    nextSigningKey: keys.next,
   });
-  receiverFor = token;
+  receiverFor = fingerprint;
   return receiver;
 }
 
@@ -67,11 +99,11 @@ export async function verifyQStashSignature(
   signature: string | null,
   envMap: NodeJS.ProcessEnv = process.env,
 ): Promise<SignatureResult> {
-  const token = (envMap["QSTASH_TOKEN"] ?? "").trim();
+  const keys = qstashSigningKeys(envMap);
 
   // QStash yapılandırılmamışsa: koruma kapalı, imza YOK sayılır (imza
   // üretilemediği için) — bu, imza üretmeyen yerel/önizleme ortamı içindir.
-  if (!token) {
+  if (!keys) {
     // Yalnızca geliştirme ortamında bu kabul edilebilir. Üretimde QSTASH_TOKEN
     // yoksa iş açmak, imza doğrulamasını anlamsız kılar.
     if ((envMap["NODE_ENV"] ?? "production") !== "production") {
@@ -104,7 +136,7 @@ export async function verifyQStashSignature(
   }
 
   try {
-    const body = await getReceiver(token).verify({
+    const body = await getReceiver(keys).verify({
       signature: signature.trim(),
       body: raw,
     });

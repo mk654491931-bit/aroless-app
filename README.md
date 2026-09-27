@@ -119,12 +119,19 @@ SUPABASE_SERVICE_ROLE_KEY
 
 ```text
 QSTASH_TOKEN
+QSTASH_CURRENT_SIGNING_KEY
+QSTASH_NEXT_SIGNING_KEY
 JOB_WORKER_SECRET
 UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
 ```
 
 QStash'in callback adresi `https://aroless.tech/api/worker` olacağı için `APP_URL` kesinlikle Render servisinin geçici adresi değil, DNS geçişinden sonra gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
+
+> `QSTASH_TOKEN` (yayınlama) ile `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY`
+> (imza doğrulama) **farklı iki şeydir**; ikisi de QStash panelinde ayrı yerlerde
+> görünür. İmza anahtarları tanımlı değilse Product Discovery hattının her adımı
+> 401 ile reddedilir.
 
 #### 504 koruması (Render'ın en kritik ayarı)
 
@@ -168,6 +175,26 @@ yoktur ve hiçbir şey ücretli plan gerektirmez.
 
 QStash anahtarları hiç yoksa hat istek içinde (`inline`) koşar: yine 280 sn sözü
 korunur (260 sn < 300 sn), ama ön sonuç/arka plan dayanıklılığı olmaz.
+
+#### Product Discovery hattı (Vercel) — gereken anahtarlar
+
+Yeni hat (`/api/product-discovery/*`) dört adımlık QStash zinciridir ve Vercel'de
+şu anahtarlar olmadan **çalışmaz** (kod değişikliği değil, env eksikliği):
+
+| Anahtar | Zorunlu | Neden |
+| --- | --- | --- |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | evet | İş kaydı, sahiplik ve kredi iadesi servis rolüyle yazılır (RLS bypass) |
+| `QSTASH_TOKEN` | evet | Adımları kuyruğa alan yayınlama isteği |
+| `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | evet | Adım uçlarının imza doğrulaması |
+| `JOB_WORKER_SECRET` | hayır* | `qstashFanOut` ikisinden biri yoksa `inline` moda düşer |
+| `GEMINI_API_KEY` (veya `GEMINI_API_KEY_1..8`) | evet | Yalnız iki AI adımı: Top 75→15 kısa liste ve 14 ajan konseyi |
+| `APP_URL` | önerilir | Adım adresleri boş env'den istek origin'ine düşer; sabit adres daha güvenli |
+
+*Bir zamanlar `/api/worker` için zorunluydu; Product Discovery hattının kendi
+kuyruğu `QSTASH_TOKEN` yeterlidir.
+
+Eksik anahtar davranışı kontrollüdür: kredi düşülür, `503` döner ve kredi tam
+bir kez iade edilir — kullanıcı çalışmayan bir iş için ödeme yapmaz.
 
 #### 504'ü yapısal olarak imkânsız kılan kesme noktası (`src/server.ts`)
 
