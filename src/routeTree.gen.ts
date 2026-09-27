@@ -41,6 +41,8 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/product-discovery.start'
+import { Route as ApiProductDiscoveryStepRouteImport } from './routes/api/product-discovery.step'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicCountryRouteImport } from './routes/api/public/country'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
@@ -213,6 +215,17 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProductDiscoveryStartRoute =
+  ApiProductDiscoveryStartRouteImport.update({
+    id: '/api/product-discovery/start',
+    path: '/api/product-discovery/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductDiscoveryStepRoute = ApiProductDiscoveryStepRouteImport.update({
+  id: '/api/product-discovery/step',
+  path: '/api/product-discovery/step',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   id: '/api/public/agent',
   path: '/api/public/agent',
@@ -303,6 +316,8 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -348,6 +363,8 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -394,6 +411,8 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
+  '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -441,6 +460,8 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/step'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -486,6 +507,8 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/step'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -531,6 +554,8 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/start'
+    | '/api/product-discovery/step'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -576,6 +601,8 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
+  ApiProductDiscoveryStepRoute: typeof ApiProductDiscoveryStepRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
   ApiPublicCountryRoute: typeof ApiPublicCountryRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
@@ -815,6 +842,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/product-discovery/start': {
+      id: '/api/product-discovery/start'
+      path: '/api/product-discovery/start'
+      fullPath: '/api/product-discovery/start'
+      preLoaderRoute: typeof ApiProductDiscoveryStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-discovery/step': {
+      id: '/api/product-discovery/step'
+      path: '/api/product-discovery/step'
+      fullPath: '/api/product-discovery/step'
+      preLoaderRoute: typeof ApiProductDiscoveryStepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/agent': {
       id: '/api/public/agent'
       path: '/api/public/agent'
@@ -937,6 +978,8 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,
+  ApiProductDiscoveryStepRoute: ApiProductDiscoveryStepRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
   ApiPublicCountryRoute: ApiPublicCountryRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,

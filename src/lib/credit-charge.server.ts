@@ -97,7 +97,8 @@ export async function chargeAiCredits(opts: {
   // Ön kontrol: bakiye yetmiyorsa HİÇ düşmeden reddet (kısmi düşme olmasın).
   // Bakiye okunamazsa kararı aşağıdaki gerçek düşme denemesi verir.
   const available = await spendableCredits(client, opts.userId);
-  if (available !== null && available < amount) return { ok: false, reason: "NO_CREDITS", charged: 0 };
+  if (available !== null && available < amount)
+    return { ok: false, reason: "NO_CREDITS", charged: 0 };
 
   let charged = 0;
   let remaining: number | null = null;
@@ -163,7 +164,9 @@ export async function chargeOrRespond(opts: {
   token: string;
   feature: AiCreditFeature;
   amount?: number;
-}): Promise<{ ok: true; outcome: Extract<ChargeOutcome, { ok: true }> } | { ok: false; response: Response }> {
+}): Promise<
+  { ok: true; outcome: Extract<ChargeOutcome, { ok: true }> } | { ok: false; response: Response }
+> {
   const outcome = await chargeAiCredits(opts);
   if (outcome.ok) return { ok: true, outcome };
   if (outcome.reason === "NO_CREDITS") {
@@ -176,4 +179,61 @@ export async function chargeOrRespond(opts: {
     };
   }
   return { ok: false, response: creditUnavailableResponse() };
+}
+
+/* ------------------------------------------------------------ IDEMPOTENCY */
+
+/**
+ * QSTASH RETRY'LARINA KARŞI İDEMPOTENT TAHSİLAT.
+ *
+ * ÖLÇÜLEN SORUN: `chargeAiCredits` `amount` kez `deduct_product_finder_credit`
+ * RPC'si çağırıyor ve HİÇBİR KİMLİK taşımıyor. QStash bir adımı 3 kez
+ * yeniden dener veya istemci ağ hatasıyla isteği tekrarlarsa, aynı iş için
+ * kredi 3 KEZ düşerdi. Kullanıcıya 3 katı ödeme yaptırmak kabul edilemez.
+ *
+ * ÇÖZÜM: Aynı süreç içinde `chargeKey` ile bir kez tahsil edilmişse ikinci
+ * çağrı `alreadyCharged` döner ve HİÇ DÜŞMEZ. QStash retry'ları aynı
+ * fonksiyon örneğini (aynı Node sürecini) çalıştırdığı için bellek içi kayıt
+ * yeterlidir; kalıcılık için `searches.run_id` üzerindeki `charged` bayrağı
+ * ayrıca DB'de tutulur (aşağıda `chargeDiscoveryRun`).
+ *
+ * NOT: Bu katman mevcut `chargeAiCredits` DAVRANIŞINI DEĞİŞTİRMEZ; sadece
+ * üstüne bir kez-çalışma kilidi koyar. `chargeKey` verilmezse davranış
+ * bire bir eskisi gibidir (geriye uyumlu).
+ */
+const settled = new Set<string>();
+
+export type IdempotentChargeOutcome =
+  | { ok: true; charged: number; remaining: number | null; alreadyCharged: boolean }
+  | { ok: false; reason: "NO_CREDITS" | "UNAVAILABLE"; charged: number };
+
+export async function chargeOnce(opts: {
+  userId: string;
+  token: string;
+  feature: AiCreditFeature;
+  amount?: number;
+  /**
+   * İdempotency anahtarı (ör. `discovery:<runId>`). AYNI anahtar ikinci kez
+   * gelirse düşme YAPILMAZ, `alreadyCharged:true` döner.
+   */
+  chargeKey?: string;
+}): Promise<IdempotentChargeOutcome> {
+  const key = opts.chargeKey ? `${opts.userId}:${opts.feature}:${opts.chargeKey}` : null;
+  if (key && settled.has(key)) {
+    // Zaten bu süreçte tahsil edildi — QStash retry'ı.
+    return { ok: true, charged: 0, remaining: null, alreadyCharged: true };
+  }
+  const outcome = await chargeAiCredits(opts);
+  if (outcome.ok) {
+    // Anahtarı SADECE başarılı tahsilatta işaretle: başarısız deneme
+    // (bakiye yetersiz) yeniden denenebilir olmalıdır.
+    if (key) settled.add(key);
+    return { ...outcome, alreadyCharged: false };
+  }
+  return { ok: false, reason: outcome.reason, charged: outcome.charged };
+}
+
+/** Test/serbest bırakma için bellek kilidini temizler. */
+export function resetChargeKeys(): void {
+  settled.clear();
 }
