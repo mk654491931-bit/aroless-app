@@ -14,7 +14,7 @@
 // zamanla iki farklı "14 ajan" anlamına gelirdi. Tek kaynak kalır.
 // ============================================================================
 
-import { buildConsensus, type AgentVote } from "./product-discovery-consensus";
+import { buildConsensus, completenessPenalty, type AgentVote } from "./product-discovery-consensus";
 import { COUNCIL_AGENT_KEYS, COUNCIL_AGENTS } from "./council-chain.server";
 import type { Consensus, NormalizedProduct } from "./product-discovery.types";
 
@@ -62,12 +62,28 @@ export function deterministicVotes(product: NormalizedProduct): AgentVote[] {
     independent_data_auditor: (thinData ? 25 : 60) + product.dataCompleteness * 5,
   };
 
-  return COUNCIL_AGENTS.map((agent) => ({
-    agentKey: agent.key,
-    agentName: agent.name,
-    score: Math.max(0, Math.min(100, Math.round(byKey[agent.key] ?? 50))),
-    note: describe(agent.key, product),
-  }));
+  // VERİ BÜTÜNLÜĞÜ PENALTISI: eksik alan sayısı arttıkça HER ajanın puanı
+  // aşağı çekilir. Penaltı yalnız güven puanında uygulanıp `councilScore`'a
+  // yansımadığı sürece kanıtsız ürün, kanıtlı ürünle eşit puanı taşıyabilirdi.
+  // Burada uygulanınca 14 ajan zaten bölünür: `independent_data_auditor`
+  // kanıtsızlığı en sert cezalandırır, talep ajanları fiyatsızlığı görür.
+  //
+  // Penaltı AJAN BAZINDA kırpılır (tümünden aynı miktarda düşmek, bölünmeyi
+  // ve dolayısıyla güven hesabını bozmazdı).
+  const penalty = completenessPenalty(product);
+
+  return COUNCIL_AGENTS.map((agent) => {
+    // Denetçi ajan kanıtsızlığı zaten kendi cezasını taşıyor; ikinci kez
+    // kırpmak onu tek başına haksız yere çökerdi.
+    const applied = agent.key === "independent_data_auditor" ? 0 : penalty;
+    const base = byKey[agent.key] ?? 50;
+    return {
+      agentKey: agent.key,
+      agentName: agent.name,
+      score: Math.max(0, Math.min(100, Math.round(base - applied))),
+      note: describe(agent.key, product),
+    };
+  });
 }
 
 function describe(key: string, p: NormalizedProduct): string {

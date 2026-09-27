@@ -5,12 +5,20 @@
  *   1. Oturumu doğrular (`requireUser`) — kimse başkasının işini başlatamaz.
  *   2. Girdiyi zod ile doğrular.
  *   3. Krediyi **idempotent** düşer (QStash retry → tek düşüm).
- *   4. İş kaydını oluşturur ve SAHİPLİĞİ KALICI OLARAK yazar.
+ *   4. İş kaydını DB'de oluşturur — SAHİPLİĞİN KALICI KAYDI buradadır.
  *   5. İlk adımı (`scrape_filter`) QStash'e kuyruğa alır.
  *
  * ASENKRON SÖZLEŞME: Bu uç HIZLI döner (200) ve ağır iş yapmaz. Kullanıcı
- * `runId` alır ve ilerlemeyi ayrı bir uçtan izler. Vercel Hobby'de 10 sn'lik
- * fonksiyon sınırı aşılmaz.
+ * `runId` alır ve ilerlemeyi `/api/product-discovery/stream` ucundan izler.
+ * Vercel Hobby'de 10 sn'lik fonksiyon sınırı aşılmaz.
+ *
+ * KREDİ SIRASI (kullanıcı parasını koruyan sıra):
+ *   düş → kayıt aç → kuyruğa al.
+ * Kayıt `charged_credits` ile açıldığı için, sonraki her adım kredinin
+ * ALINDIĞINI ve daha önce iade EDİLMEDİĞİNİ satırdan görebilir. Herhangi bir
+ * adımda iş çökerse `failAndRefund` krediyi tam olarak bir kez iade eder.
+ * Kuyruk başarısız olursa aynı yol işler: kullanıcı çalışmayan bir iş için
+ * ödemiş olmaz.
  *
  * $0 MALİYET: İlk adım (`scrape_filter`) saf kod olduğu için kazıma + ön
  * filtreleme hiç token harcamaz. AI yalnız sonraki iki adımda çalışır.
@@ -18,13 +26,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { requireUser } from "@/lib/api-guard.server";
+import { appOrigin } from "@/lib/discovery-jobs.server";
 import {
   chargeOnce,
   noCreditsResponse,
   creditUnavailableResponse,
+  refundFeatureCredits,
 } from "@/lib/credit-charge.server";
 import { enqueueDiscoveryStep } from "@/lib/product-discovery-qstash.server";
-import { rememberOwnership, jsonResponse } from "@/lib/product-discovery-security.server";
+import { jsonResponse } from "@/lib/product-discovery-security.server";
+import { createDiscoveryJob, failAndRefund } from "@/lib/product-discovery-jobs.server";
 import { ProductDiscoveryInputSchema } from "@/lib/product-discovery.types";
 
 function json(payload: unknown, status = 200): Response {
@@ -51,7 +62,7 @@ export const Route = createFileRoute("/api/product-discovery/start")({
         }
         const input = parsed.data;
 
-        // 3) İŞ KİMLİĞİ — kredi kilidi ve QStash dedupe anahtarı budur.
+        // 3) İŞ KİMLİĞİ — kredi kilidi, DB kaydı ve QStash dedupe anahtarı budur.
         const runId = crypto.randomUUID();
 
         // 4) KREDİ — idempotent. Aynı `runId` ikinci kez gelirse düşmez.
@@ -67,8 +78,28 @@ export const Route = createFileRoute("/api/product-discovery/start")({
             : creditUnavailableResponse();
         }
 
-        // 5) SAHİPLİK — her adımda doğrulanacak kalıcı kayıt.
-        rememberOwnership({ runId, userId, createdAt: new Date().toISOString() });
+        // 5) KALICI İŞ KAYDI — sahiplik ve iade hakkı buradan okunur.
+        //    `charged_credits` yazıldığı için bir sonraki adım, kredinin bu iş
+        //    için alındığını görebilir (bellek taşımıyoruz).
+        try {
+          await createDiscoveryJob({
+            runId,
+            userId,
+            input,
+            chargedCredits: charge.charged,
+          });
+        } catch (error) {
+          // Kayıt açılamadıysa kredi havada kalır → hemen iade et.
+          await refundFeatureCredits(userId, charge.charged, "job_row_failed");
+          return json(
+            {
+              error: "İş kaydı oluşturulamadı; jeton iade edildi.",
+              code: "JOB_ROW_FAILED",
+              detail: error instanceof Error ? error.message : "unknown",
+            },
+            503,
+          );
+        }
 
         // 6) İLK ADIMI KUYRUĞA AL. Kuyruk bozuşsa kredi iade edilir —
         //    kullanıcı, çalışmayan bir iş için ödemiş olmamalı.
@@ -79,11 +110,15 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           step: "scrape_filter",
           products: [],
           progress: 10,
+          // Adres kendi isteğimizden türetilir; QStash geri çağrısı internete
+          // açık olmak zorundadır, localhost olamaz.
+          origin: appOrigin(request),
         });
 
         if (!queued.ok) {
-          const { refundFeatureCredits } = await import("@/lib/credit-charge.server");
-          await refundFeatureCredits(userId, charge.charged, "queue_failed");
+          await failAndRefund(runId, `queue_failed: ${queued.error}`, (amount) =>
+            refundFeatureCredits(userId, amount, "queue_failed"),
+          );
           return json(
             {
               error: "İş kuyruğa alınamadı; jeton iade edildi.",
@@ -102,6 +137,7 @@ export const Route = createFileRoute("/api/product-discovery/start")({
             charged: charge.charged,
             alreadyCharged: charge.alreadyCharged,
             steps: ["scrape_filter", "gemini", "deep", "final"],
+            stream: `/api/product-discovery/stream?runId=${runId}`,
           },
           200,
         );

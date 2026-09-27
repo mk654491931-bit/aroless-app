@@ -744,7 +744,12 @@ export type Database = {
       };
       searches: {
         Row: {
+          charged_credits: number;
           created_at: string;
+          discovery_progress: number;
+          discovery_stats: Json | null;
+          discovery_status: string;
+          discovery_step: string;
           error: string | null;
           id: string;
           params: Json;
@@ -755,7 +760,12 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          charged_credits?: number;
           created_at?: string;
+          discovery_progress?: number;
+          discovery_stats?: Json | null;
+          discovery_status?: string;
+          discovery_step?: string;
           error?: string | null;
           id?: string;
           params?: Json;
@@ -766,7 +776,12 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          charged_credits?: number;
           created_at?: string;
+          discovery_progress?: number;
+          discovery_stats?: Json | null;
+          discovery_status?: string;
+          discovery_step?: string;
           error?: string | null;
           id?: string;
           params?: Json;

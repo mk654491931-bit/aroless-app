@@ -178,7 +178,7 @@ export async function runGeminiShortlistStep(
   // Gemini çağrısı burada yapılır (mevcut AI yönlendiricisi üzerinden).
   // Bu dosya saf kalmaya devam eder; çağrı route katmanında enjekte edilir
   // (bağımlılık enjeksiyonu) ki testlerde sahte (mock) çağrı kullanılabilsin.
-  const shortlist = await selectWithGemini(products, niche, topN);
+  const shortlist = await selectWithGemini(products, niche, topN, geminiShortlistSelector);
   return {
     ok: true,
     status: "gemini_shortlist",
@@ -187,6 +187,80 @@ export async function runGeminiShortlistStep(
     next: "deep_analysis",
     notes: [`Gemini ${products.length} → ${shortlist.length} aday seçti.`],
   };
+}
+
+/**
+ * GERÇEK Gemini seçicisi — hatta bağlanan AI katmanı.
+ *
+ * $0 MALİYET KURALI: AI yalnız burada ve 14 ajan adımında çağrılır. Girdi
+ * zaten deterministik ön sıralamadan geçmiş Top-75 adaydır, yani model
+ * elemesi gereksiz olan satırları görmez.
+ *
+ * GÜVENLİ TASARIM: Modelden yalnız ÜRÜN DİZİNİ (indeks) istenir, ürün verisi
+ * değil. Modelin uydurduğu bir başlık/fiyat listeye giremez — yalnız mevcut
+ * adaylardan birini SEÇEBİLİR. Ayrıca yanıt zod ile doğrulanır ve geçersizse
+ * deterministik sıralamaya düşülür; model hattı asla bozamaz.
+ */
+async function geminiShortlistSelector(
+  products: readonly NormalizedProduct[],
+  niche: string,
+): Promise<NormalizedProduct[]> {
+  const { callGemini } = await import("./ai.server");
+  const { z } = await import("zod");
+
+  const roster = products
+    .slice(0, 75)
+    .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
+    .join("\n");
+
+  const prompt = [
+    `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
+    `Aşağıdaki ${Math.min(products.length, 75)} adaydan ticari olarak EN GÜÇLÜ 15'ini seç.`,
+    "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
+    "Sadece numara listesi ver, açıklama yazma.",
+    "",
+    roster,
+  ].join("\n");
+
+  const raw = await callGemini(prompt, undefined, 0.2);
+  const Parsed = z.object({
+    picks: z.array(z.number().int().min(1).max(75)).min(1),
+  });
+  const parsed = Parsed.safeParse(parseLooseJson(raw));
+  if (!parsed.success) return [];
+
+  // Geçersiz/tekrar eden indeksler elenir; model sırası korunur.
+  const seen = new Set<number>();
+  const picked: NormalizedProduct[] = [];
+  for (const index of parsed.data.picks) {
+    if (seen.has(index)) continue;
+    seen.add(index);
+    const product = products[index - 1];
+    if (product) picked.push(product);
+  }
+  return picked;
+}
+
+/**
+ * Model yanıtını JSON'a çevirir — model sıklıkla ```json bloğü veya ön/son
+ * metin sarar. Katı `JSON.parse` başarısız olursa ilk `{...}` dilimini alır.
+ */
+export function parseLooseJson(text: string): unknown {
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
+  const body = fenced?.[1]?.trim() ?? raw;
+  try {
+    return JSON.parse(body);
+  } catch {
+    const slice = /\{[\s\S]*\}/.exec(body);
+    if (!slice) return null;
+    try {
+      return JSON.parse(slice[0]);
+    } catch {
+      return null;
+    }
+  }
 }
 
 /**

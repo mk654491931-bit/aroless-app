@@ -19,8 +19,10 @@
 import { z } from "zod";
 
 import {
+  ConsensusSchema,
   DiscoveryStepPayloadSchema,
   ProductDiscoveryInputSchema,
+  type Consensus,
   type DiscoveryStepPayload,
   type ProductDiscoveryInput,
 } from "./product-discovery.types";
@@ -35,21 +37,56 @@ const StepPublishSchema = z.object({
   input: ProductDiscoveryInputSchema,
   step: z.enum(DISCOVERY_STEPS),
   products: z.array(z.any()).default([]),
+  consensus: z.array(ConsensusSchema).default([]),
   progress: z.number().min(0).max(100).default(0),
 });
+
+/** `enqueueDiscoveryStep` argümanı — `consensus` isteğe bağlıdır. */
+type StepPublishArgs = Omit<z.input<typeof StepPublishSchema>, "consensus"> & {
+  consensus?: unknown[];
+};
 
 /** Adım ucunun mutlak adresi. `PUBLIC_ORIGIN` yoksa istek origin'i kullanılır. */
 export function stepEndpoint(origin: string, step: DiscoveryStep): string {
   return `${origin.replace(/\/$/, "")}/api/product-discovery/step?step=${step}`;
 }
 
+/**
+ * QStash'in geri çağıracağı KENDİ AÇIK adresimizi çözer.
+ *
+ * DÜZELTME: Önceki sürüm `args.origin` değerini koşulda kontrol ediyor ama
+ * gövdede yalnız ortam değişkenlerini okuyordu. Sonuç: açıkça geçilen origin
+ * SESSİZCE yok sayılıyor, ortam değişkenleri de boşsa hedef `https://` gibi
+ * geçersiz bir adrese dönüşüyordu ve hat ilk adımda ölüyordu. Artık
+ * öncelik sırası: açık argüman → ortam → boş.
+ *
+ * Boş dönmesi "bilmiyorum" demektir; çağıran dürüstçe `NO_ORIGIN` hatası
+ * verip işi kuyruğa almaz — sahte bir kuyruk onayı üretmek, kullanıcıdan
+ * para alıp işi yapmamak anlamına gelirdi.
+ */
+export function resolveOrigin(explicit?: string, envMap: NodeJS.ProcessEnv = process.env): string {
+  const raw =
+    explicit?.trim() ||
+    envMap["APP_URL"]?.trim() ||
+    envMap["PUBLIC_APP_URL"]?.trim() ||
+    envMap["PUBLIC_ORIGIN"]?.trim() ||
+    envMap["VERCEL_PROJECT_PRODUCTION_URL"]?.trim() ||
+    envMap["VERCEL_URL"]?.trim() ||
+    "";
+  if (!raw) return "";
+  // `https://` öneki zaten varsa elle eklenmez (çift önek `https://https://` yapar).
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
 /** QStash'e yayınlanacak gövdeyi kurar (test edilebilir saf fonksiyon). */
-export function buildStepBody(args: z.infer<typeof StepPublishSchema>): DiscoveryStepPayload {
+export function buildStepBody(args: StepPublishArgs): DiscoveryStepPayload {
   return DiscoveryStepPayloadSchema.parse({
     runId: args.runId,
     userId: args.userId,
     input: args.input,
     batch: args.products,
+    consensus: args.consensus,
     progress: args.progress,
     status: "queued",
   });
@@ -69,6 +106,7 @@ export async function enqueueDiscoveryStep(args: {
   input: ProductDiscoveryInput;
   step: DiscoveryStep;
   products: unknown[];
+  consensus?: Consensus[];
   progress: number;
   origin?: string;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
@@ -78,19 +116,14 @@ export async function enqueueDiscoveryStep(args: {
     input: args.input,
     step: args.step,
     products: args.products,
+    consensus: args.consensus ?? [],
     progress: args.progress,
   });
   if (!parsed.success) {
     return { ok: false, error: `INVALID_STEP_PAYLOAD:${parsed.error.issues[0]?.code ?? "?"}` };
   }
 
-  const origin =
-    (args.origin ??
-    process.env["PUBLIC_ORIGIN"] ??
-    process.env["VERCEL_URL"]?.replace(/^https?:\/\//, ""))
-      ? `https://${(process.env["PUBLIC_ORIGIN"] ?? process.env["VERCEL_URL"] ?? "").replace(/^https?:\/\//, "")}`
-      : "";
-
+  const origin = resolveOrigin(args.origin);
   if (!origin) return { ok: false, error: "NO_ORIGIN" };
 
   // Mevcut istemciyi kullanır (QSTASH_TOKEN, timeout, forward başlıkları).

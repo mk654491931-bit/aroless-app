@@ -280,6 +280,16 @@ export const DiscoveryStepPayloadSchema = z.object({
   input: ProductDiscoveryInputSchema,
   /** Bu adımın ürettiği geçici çıktı (varsa). */
   batch: z.array(NormalizedProductSchema).default([]),
+  /**
+   * Uzlaşma sonuçları — `deep` → `final` aktarımı.
+   *
+   * Neden ayrı alan: uzlaşma kaydı `NormalizedProduct` DEĞİLDİR (agent
+   * oyları, güven skoru, kanıt listesi taşır). `batch` içine konmaya
+   * çalışılırsa zdo şeması onu eler ve `final` adımı boş listeyle çalışıp
+   * sahte bir "nihai sonuç" üretirdi. Ayrı alan hat boyunca taşınacak tek
+   * doğru tipi garanti eder.
+   */
+  consensus: z.array(ConsensusSchema).default([]),
   /** İlerleme yüzdesi (panel/SSE). */
   progress: z.number().min(0).max(100).default(0),
   /** Önceki adımın istatistikleri (şeffaflık). */

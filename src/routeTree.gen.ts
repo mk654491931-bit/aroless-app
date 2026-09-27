@@ -43,6 +43,7 @@ import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
 import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/product-discovery.start'
 import { Route as ApiProductDiscoveryStepRouteImport } from './routes/api/product-discovery.step'
+import { Route as ApiProductDiscoveryStreamRouteImport } from './routes/api/product-discovery.stream'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
 import { Route as ApiPublicCountryRouteImport } from './routes/api/public/country'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
@@ -226,6 +227,12 @@ const ApiProductDiscoveryStepRoute = ApiProductDiscoveryStepRouteImport.update({
   path: '/api/product-discovery/step',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProductDiscoveryStreamRoute =
+  ApiProductDiscoveryStreamRouteImport.update({
+    id: '/api/product-discovery/stream',
+    path: '/api/product-discovery/stream',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   id: '/api/public/agent',
   path: '/api/public/agent',
@@ -318,6 +325,7 @@ export interface FileRoutesByFullPath {
   '/legal/': typeof LegalIndexRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
+  '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -365,6 +373,7 @@ export interface FileRoutesByTo {
   '/legal': typeof LegalIndexRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
+  '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -413,6 +422,7 @@ export interface FileRoutesById {
   '/legal/': typeof LegalIndexRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
+  '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/legal/'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
+    | '/api/product-discovery/stream'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -509,6 +520,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
+    | '/api/product-discovery/stream'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -556,6 +568,7 @@ export interface FileRouteTypes {
     | '/legal/'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
+    | '/api/product-discovery/stream'
     | '/api/public/agent'
     | '/api/public/country'
     | '/api/public/fx'
@@ -603,6 +616,7 @@ export interface RootRouteChildren {
   LegalIndexRoute: typeof LegalIndexRoute
   ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
   ApiProductDiscoveryStepRoute: typeof ApiProductDiscoveryStepRoute
+  ApiProductDiscoveryStreamRoute: typeof ApiProductDiscoveryStreamRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
   ApiPublicCountryRoute: typeof ApiPublicCountryRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
@@ -856,6 +870,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProductDiscoveryStepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/product-discovery/stream': {
+      id: '/api/product-discovery/stream'
+      path: '/api/product-discovery/stream'
+      fullPath: '/api/product-discovery/stream'
+      preLoaderRoute: typeof ApiProductDiscoveryStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/agent': {
       id: '/api/public/agent'
       path: '/api/public/agent'
@@ -980,6 +1001,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalIndexRoute: LegalIndexRoute,
   ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,
   ApiProductDiscoveryStepRoute: ApiProductDiscoveryStepRoute,
+  ApiProductDiscoveryStreamRoute: ApiProductDiscoveryStreamRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
   ApiPublicCountryRoute: ApiPublicCountryRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
@@ -995,13 +1017,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
