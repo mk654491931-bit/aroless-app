@@ -1088,6 +1088,111 @@ export const webReviewSource: ProductSource = {
   },
 };
 
+/* --------------------------------- 12. Bing Shopping (GERÇEK puan + hacim) */
+
+/**
+ * Bing Shopping — hattın EKSİK KALAN tek alanını kapatan kaynak: fiziksel
+ * ürünün GERÇEK kullanıcı puanı ve değerlendirme sayısı.
+ *
+ * ÖLÇÜLDÜ (2026-09-27, bu sunucudan): `bing.com/shop/search?q=air+fryer`
+ *   → HTTP 200, ~800 ms, ~1,7 MB, ANAHTARSIZ.
+ * Her kart şu alanları DETERMİNİSTIK olarak taşıyor:
+ *   • `br-offTtl > span[title]`  → tam ürün adı
+ *   • `br-price`                 → fiyat
+ *   • `br-offSlrTxt`             → satıcı (ör. "Walmart")
+ *   • `sa_rating`                → `aria-label="Star Rating: 4.5 out of 5."`
+ *   • `sa_rt_num`                → değerlendirme SAYISI (74)
+ *   • `br-offSecLbl[title]`      → "More than 1K people from Bing viewed this
+ *                                   product in the last 90 days" → 90 GÜNLÜK
+ *                                   GERÇEK TALEP ÖLÇÜMÜ
+ *
+ * NEDEN BU KAYNAK KİTAPTIR: `itunes`/`openlibrary` gerçek puan verir ama
+ * dijital ürünlerde; fiziksel nişte `matchesNiche()` onları doğru şekilde
+ * eliyor ve sonuç "0 gerçek puan" oluyordu. Amazon bu boşluğu kapatamıyor
+ * (ölçüldü: bestseller sayfası bir JS kabuğu, ürün kartı 0; arama 503).
+ * Bing Shopping aynı veriyi anahtarsız veriyor.
+ *
+ * DÜRÜSTLÜK: `sa_rating` bloğu olmayan kartta puan `null` kalır. "4.5" gibi
+ * bir sayıyı GÖRÜNTÜDEN tahmin etmeyiz; kart yazmıyorsa ölçemedik deriz.
+ */
+export const bingShoppingSource: ProductSource = {
+  name: "bing-shopping",
+  timeoutMs: 6_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const body = await grab(
+      `https://www.bing.com/shop/search?q=${encodeURIComponent(niche.slice(0, 60))}&setlang=en`,
+      5_500,
+    );
+    // Kart sınırları sunucu tarafında sabit: her ürün bir `br-gOffCard`.
+    const cards = body.split(/(?=<div class="br-gOffCard)/).slice(1);
+    if (!cards.length) throw new Error("no shopping cards in response");
+
+    const out: RawProduct[] = [];
+    const seen = new Set<string>();
+    for (const card of cards) {
+      const title = decode(
+        /<span title="([^"]{10,200})"/.exec(card)?.[1] ??
+          /<div class="br-offTtl[^"]*"[^>]*>([\s\S]{0,200}?)<\/div>/.exec(card)?.[1] ??
+          "",
+      );
+      if (!title || title.length < 8) continue;
+      if (!matchesNiche(title, niche)) continue;
+
+      const key = title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const price = priceFromText(
+        /class="br-price"[^>]*>([\s\S]{0,40}?)<\/div>/.exec(card)?.[1] ?? "",
+      );
+      const starRaw = /aria-label="Star Rating:\s*([0-9.]+)\s*out of 5/i.exec(card)?.[1];
+      const rating = starRaw !== undefined ? Number(starRaw) : NaN;
+      const countRaw = /class="sa_rt_num"[^>]*>\s*([0-9][0-9,]*)/.exec(card)?.[1];
+      const ratingCount = countRaw !== undefined ? Number(countRaw.replace(/,/g, "")) : NaN;
+      // Kart yazdıysa ölçülmüş talep; yazmadıysa talep ÖLÇÜLELEMEDİ.
+      //
+      // DİKKAT: `br-offSecLbl` açılış etiketinde `style="top:150px;"` vardır;
+      // HTML'i düz metin gibi tarayan geniş bir regex ilk `>`'da kesilip boş
+      // bir dize yakalar ve "görüntülenme" iddiası SAYI ÜRETMEZ. Bu yüzden
+      // yalnız `resp-one-line` kutusu okunur ve içinde RAKAM olması şartı
+      // aranır — kanıtsız talep satışı yapmayız.
+      const viewedRaw = /class="resp-one-line[^"]*"[^>]*>([^<]{1,24})</.exec(card)?.[1]?.trim();
+      // "1K+ viewed" → "1K+": kaynak zaten "görüntülenme" kelimesini biz ekliyoruz.
+      const viewed =
+        viewedRaw && /\d/.test(viewedRaw) ? viewedRaw.replace(/\s*viewed\s*$/i, "").trim() : "";
+      const href = /<a class="br-offLink"[^>]*href="([^"]+)"/.exec(card)?.[1];
+
+      const row: RawProduct = {
+        title: title.slice(0, 180),
+        brand: brandFromTitle(title),
+        seller: decode(/class="br-offSlrTxt"[^>]*>([^<]{2,40})</.exec(card)?.[1] ?? ""),
+        priceUsd: price,
+        rating: Number.isFinite(rating) && rating >= 0 && rating <= 5 ? rating : null,
+        ratingCount: Number.isFinite(ratingCount) && ratingCount >= 0 ? ratingCount : null,
+        // Kart stok durumu bildirmiyor → bilinmiyor (`null` = eleme yok).
+        inStock: null,
+        source: "bing-shopping",
+        url: href ? bingRealUrl(decode(href)) : "",
+        notes: [
+          viewed ? `${viewed.trim()} görüntülenme / 90g` : "",
+          Number.isFinite(ratingCount) ? `${ratingCount} değerlendirme` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")
+          .slice(0, 200),
+      };
+      // Gürültü kapısı: ne fiyatı ne puanı olan kart kanıt değildir.
+      if (!hasMeasuredField(row)) continue;
+      out.push(row);
+    }
+    // Kart vardı ama hiçbiri ölçülebilir değildi → bu bir HATA değil, kaynağın
+    // dürüst cevabı: "bu nişte bana ölçülebilir ürün yok". `ok:true, items:0`
+    // döner (dosyanın gürültü kapısı sözleşmesi). Hata yalnız SAYFA yapısı
+    // değişmiş / engellenmişse atılır.
+    return out.slice(0, 16);
+  },
+};
+
 /* -------------------------------------------------------- Kaynak kaydı */
 
 /**
@@ -1104,6 +1209,8 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   openLibrarySource,
   marketplacePriceSource,
   webReviewSource,
+  // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
+  bingShoppingSource,
   // Talep/hype ölçümü.
   googleNewsSource,
   wikipediaSource,

@@ -22,6 +22,7 @@ import {
   normalizeRaw,
   scoreDeterministically,
 } from "./product-discovery-filter.server";
+import { bingShoppingSource } from "./product-discovery-sources.server";
 import {
   buildConsensus,
   confidenceScore,
@@ -446,5 +447,213 @@ describe("QStash step payload", () => {
     expect(() =>
       buildStepBody({ runId: "", userId: "u", input, step: "gemini", products: [], progress: 0 }),
     ).toThrow();
+  });
+});
+
+/* ==================================================== 7. Kanıt modeli */
+
+describe("kanıt modeli (evidence slots)", () => {
+  it("hiç kanıt yoksa bütünlük 0 ve BEŞ çekirdek eksik raporlanır", () => {
+    const p = normalizeRaw(
+      raw({
+        priceUsd: null,
+        brand: "",
+        seller: "",
+        url: "",
+        notes: "",
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+      }),
+    );
+    expect(p.dataCompleteness).toBe(0);
+    expect([...p.missingFields].sort()).toEqual(["brand", "demand", "price", "seller", "url"]);
+  });
+
+  it("her alan doluyken bütünlük 5'tir (ölçek tavanı aşılmaz)", () => {
+    const p = normalizeRaw(
+      raw({
+        brand: "Philips",
+        seller: "Amazon",
+        url: "https://x.test/1",
+        notes: "4.6 puan · 1.204 değerlendirme",
+      }),
+    );
+    expect(p.dataCompleteness).toBe(5);
+    expect(p.missingFields).toEqual([]);
+  });
+
+  it("bonus alanların (rating/stok) yokluğu EKSİK sayılmaz", () => {
+    // Puanı ve stoğu olmayan kaynaklar çoğunlukta; yoklukları kanıtsızlık
+    // sayılırsa doğru satırlar haksız cezalanır.
+    const p = normalizeRaw(
+      raw({
+        priceUsd: 29.99,
+        brand: "Cosori",
+        url: "https://x.test/2",
+        notes: "412 değerlendirme",
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+      }),
+    );
+    // price + brand + url + demand = 4; bonusların hiçbiri dolu değil.
+    expect(p.dataCompleteness).toBe(4);
+    for (const bonus of ["rating", "ratingCount", "stock"]) {
+      expect(p.missingFields).not.toContain(bonus);
+    }
+  });
+
+  it("notes içindeki sayısal sinyal talep kanıtı sayılır", () => {
+    const base = {
+      priceUsd: null,
+      brand: "",
+      seller: "",
+      rating: null,
+      ratingCount: null,
+      inStock: null,
+    };
+    const withNumber = normalizeRaw(raw({ ...base, url: "https://x.test/3", notes: "842 yorum" }));
+    const without = normalizeRaw(
+      raw({ ...base, url: "https://x.test/3", notes: "tartışma sürüyor" }),
+    );
+    expect(withNumber.dataCompleteness).toBe(2); // url + demand
+    expect(without.dataCompleteness).toBe(1); // yalnız url
+    expect(without.missingFields).toContain("demand");
+  });
+
+  it("yalnız boşluktan gelen marka kanıt sayılmaz", () => {
+    const p = normalizeRaw(raw({ brand: "   " }));
+    expect(p.missingFields).toContain("brand");
+  });
+});
+
+/* ============================================ 8. Bing Shopping kaynağı */
+
+/**
+ * ÖLÇÜLEN GERÇEK SUNUCU HTML'İNİN KÜÇÜLTÜLMÜŞ HALİ.
+ *
+ * Fixture bilerek CANLI YAPIDAN kopyalandı (2026-09-27): kart sınıfı
+ * `br-gOffCard`, puan `aria-label="Star Rating: …"`, hacim `sa_rt_num`,
+ * talep `br-offSecLbl[title]`, yönlendirme `a` href'inde base64 `u=a1…`.
+ * Parser bu sınıflara bağlı olduğu için fixture de yapıyı bozmamalı.
+ */
+const shopCard = (inner: string) =>
+  `<div class="br-gOffCard" data-offerId="1"><a class="br-offLink" href="https://www.bing.com/aclick?u=a1aHR0cHM6Ly93d3cud2FsbWFydC5jb20vaXAvYWlyLWZyeWVyLXBybz9hMTIz">${inner}</div>`;
+
+const shopHtml = (...cards: string[]) =>
+  `<html><body><div class="slide">${cards.join("")}</div></body></html>`;
+
+const withRating = shopCard(`
+  <div class="br-offSecLbl" title="More than 1K people from Bing viewed this product in the last 90 days">
+    <div class="resp-one-line ">1K+ viewed</div></div>
+  <div class="br-offTtl b_primtxt"><span title="Cosori Pro II Air Fryer 6.5QT">Cosori Pro II Air Fryer 6.5QT</span></div>
+  <div class="br-offPrice"><div class="br-price">$129.99</div></div>
+  <div class="br-offSlr"><span class="br-offSlrTxt">Walmart</span></div>
+  <div id="polerat_9" class="br-offDec sa_rating">
+    <div class="tags ratingNeutral"><span class="csrc" role="img" aria-label="Star Rating: 4.6 out of 5."></span>
+    <div class="sa_lw_rt">4.6</div><div class="sa_lw_rt_sp">&#183;</div>
+    <div class="sa_rt_num">1,204</div></div></div>`);
+
+const withPriceOnly = shopCard(`
+  <div class="br-offTtl b_primtxt"><span title="Generic Air Fryer Basket 8L">Generic Air Fryer Basket 8L</span></div>
+  <div class="br-offPrice"><div class="br-price">$18.40</div></div>
+  <div class="br-offSlr"><span class="br-offSlrTxt">AliExpress</span></div>`);
+
+/** `fetch`'i tek seferlik sahte yanıtla değiştirir ve geri alır. */
+async function withShopHtml<T>(html: string, run: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(html, { status: 200 })) as unknown as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+describe("bingShoppingSource", () => {
+  it("GERÇEK puanı, değerlendirme sayısını, satıcıyı ve fiyatı okur", async () => {
+    const [row] = await withShopHtml(shopHtml(withRating), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row).toBeDefined();
+    expect(row!.rating).toBe(4.6);
+    // "1,204" → 1204: hacimsiz puan yanıltıcıdır, sayı doğru çözülmeli.
+    expect(row!.ratingCount).toBe(1204);
+    expect(row!.seller).toBe("Walmart");
+    expect(row!.priceUsd).toBe(129.99);
+    expect(row!.brand).toBe("Cosori");
+    expect(row!.notes).toContain("1K+ görüntülenme / 90g");
+  });
+
+  it("SAYISIZ 'görüntülenme' kutusu talep kanıtı ÜRETMEZ", async () => {
+    // Regresyon: geniş regex `style="top:150px;">` açılışındaki `>`'da
+    // kesilip BOŞ dize yakalıyor, "görüntülenme" iddiası sayı üretmeden
+    // notlara yazılıyordu. Kanıtsız talep satışı yapmayız.
+    const noNumber = shopCard(`
+      <div class="br-offSecLbl" title="More than people from Bing viewed this product"
+           style="top:150px;"><div class="resp-one-line ">viewed</div></div>
+      <div class="br-offTtl"><span title="Ninja Air Fryer Pro 8QT">Ninja Air Fryer Pro 8QT</span></div>
+      <div class="br-offPrice"><div class="br-price">$99.99</div></div>`);
+    const [row] = await withShopHtml(shopHtml(noNumber), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row!.priceUsd).toBe(99.99);
+    expect(row!.notes).toBe("");
+  });
+
+  it("yönlendirme adresini gerçek ürün URL'sine çözer", async () => {
+    const [row] = await withShopHtml(shopHtml(withRating), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row!.url).toBe("https://www.walmart.com/ip/air-fryer-pro?a123");
+  });
+
+  it("puan yazmayan kartta puan UYDURMAZ, null bırakır", async () => {
+    const [row] = await withShopHtml(shopHtml(withPriceOnly), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row!.rating).toBeNull();
+    expect(row!.ratingCount).toBeNull();
+    expect(row!.priceUsd).toBe(18.4);
+  });
+
+  it("fiyatı da puanı da olmayan kartı gürültü olarak DROPS", async () => {
+    const bare = shopCard(
+      `<div class="br-offTtl"><span title="Air Fryer Cookbook Volume One">Air Fryer Cookbook Volume One</span></div>`,
+    );
+    const rows = await withShopHtml(shopHtml(bare), () => bingShoppingSource.scrape("air fryer"));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("nişle ilgisiz kartı eler", async () => {
+    const offNiche = shopCard(`
+      <div class="br-offTtl"><span title="Ergonomic Office Chair Lumbar Support">Ergonomic Office Chair Lumbar Support</span></div>
+      <div class="br-offPrice"><div class="br-price">$189.00</div></div>`);
+    const rows = await withShopHtml(shopHtml(offNiche), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("ölçülebilir kart yoksa kaynak HATA VERMEZ, 0 satır döner", async () => {
+    // Kaynak doğru çalıştı, sadece bu nişte ölçülebilir ürün bulamadı. Bu bir
+    // hat değil; `ok:true, items:0` demek dürüst cevaptır (dosyanın gürültü
+    // kapısı sözleşmesi). Hata, ancak SAYFA yapısı değişmiş/engellenmişse.
+    const bare = shopCard(
+      `<div class="br-offTtl"><span title="Air Fryer Recipe Book Deluxe Edition">Air Fryer Recipe Book Deluxe Edition</span></div>`,
+    );
+    const rows = await withShopHtml(shopHtml(bare), () => bingShoppingSource.scrape("air fryer"));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("sayfa yapısı bozulursa (kart yok) kaynak hata bildirir", async () => {
+    // `runSources` bunu yakalayıp `ok:false` yazar; diğer kaynaklar yaşar.
+    // Sessiz "başarılı ama 0 satır" demek, engellenmeyi gizlerdi.
+    await expect(
+      withShopHtml("<html><body>yapı değişti</body></html>", () =>
+        bingShoppingSource.scrape("air fryer"),
+      ),
+    ).rejects.toThrow();
   });
 });

@@ -37,35 +37,57 @@ export const MIN_RATING_COUNT = 3;
 /** Veri bütünlüğü bu altındaysa ürün listeye giremez. */
 export const MIN_COMPLETENESS = 1;
 
+/**
+ * ÇEKİRDEK KANIT YUVALARI (5).
+ *
+ * Eski model (`MEASURABLE = 4` + `__demand_bonus__`) iki yönde bozuktu:
+ *   • Payda sabit 4'tü, oysa "ticari olarak ölçülebilen alan" listesi kaynaktan
+ *     kaynağa değişiyor; `name` zaten şemada `min(1)` olduğu halde sayılmıyordu.
+ *   • `demand` bir "bonus" gibi muamele görüyordu: talep kanıtı OLAN satır 4
+ *     eksik alanla birlikte 1 puan alıyor, olmayan satır 0 alıyordu. Yani
+ *     Hacker News / Reddit / Wikipedia gibi ürün SATMAYAN ama talep ÖLÇEN
+ *     kaynaklar, kanıtsız satırlarla aynı sınıfta kalıyordu.
+ *
+ * Yeni model: kanıt, o alanı DOLDURAN kaynaktan gelir. Beş çekirdek yuva
+ * (price, brand, seller, url, demand) birlikte 0-5 ölçeğini verir. `rating`,
+ * `ratingCount` ve `stock` yalnızca ARTIRAN bonuslardır: boş olmaları kanıt
+ * eksikliği sayılmaz, çünkü kaynakların çoğu onları hiç vermez.
+ */
+const EVIDENCE_SLOTS = [
+  ["price", (p: RawProduct) => p.priceUsd !== null],
+  ["brand", (p: RawProduct) => p.brand.trim() !== ""],
+  ["seller", (p: RawProduct) => p.seller.trim() !== ""],
+  ["url", (p: RawProduct) => p.url.trim() !== ""],
+  // ÖLÇÜLMÜŞ talep: `notes` içinde sayısal bir sinyal (puan, yorum, yıldız,
+  // momentum, fiyat aralığı) var mı? Söylem değil, ölçüm arıyoruz.
+  ["demand", (p: RawProduct) => /\d/.test(p.notes)],
+] as const satisfies readonly (readonly [string, (p: RawProduct) => boolean])[];
+
+/**
+ * BONUS YUVALARI — doluysa `dataCompleteness` artar, boşsa `missingFields`'e
+ * YAZILMAZ. Puan/stok kaynakların çoğunda yoktur; yokluğu kanıtsızlık saymak
+ * doğru bir ürünü haksız cezalandırırdı.
+ */
+const BONUS_SLOTS = [
+  ["rating", (p: RawProduct) => p.rating !== null],
+  ["ratingCount", (p: RawProduct) => p.ratingCount !== null],
+  ["stock", (p: RawProduct) => p.inStock !== null],
+] as const satisfies readonly (readonly [string, (p: RawProduct) => boolean])[];
+
 /** Kaynak satırlarını normalize eder ve parmak izi üretir. */
 export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   const parsed = RawProductSchema.parse(raw);
   const missing: string[] = [];
-  if (parsed.priceUsd === null) missing.push("price");
-  if (parsed.rating === null) missing.push("rating");
-  if (parsed.ratingCount === null) missing.push("ratingCount");
-  if (parsed.inStock === null) missing.push("stock");
-  // `name` her zaman vardır (şema `min(1)`), yani ticari olarak ölçülebilen
-  // alan sayısı 4'tür: price, rating, ratingCount, stock.
-  //
-  // ÖNEMLİ DÜZELTME: önceki sürüm `5 - missing.length` idi ve bu, HİÇBİR
-  // alanı ölçülmemiş ürüne (4 eksik) yanlışlıkla 1 puan veriyordu; yani
-  // sıfır kanıtlı ürün `MIN_COMPLETENESS(1)` eşiğini geçiyor ve kanıtsız
-  // listeye giriyordu. Payda ölçülebilen alan SAYISI olmalı, sabit 5 değil.
-  const MEASURABLE = 4;
-  // TALEP KANITI (5. ölçülebilir alan): ticari alanları olmayan kaynaklar
-  // (Hacker News, Reddit, GitHub, Wikipedia) ürün SATMAZ ama ÖLÇÜLMÜŞ talep
-  // sinyali taşır (`notes` içinde puan/yorum/yıldız/momentum rakamı).
-  //
-  // Bu alan ÖLÇÜLEBİLİR bir kanıt olduğu için `missing`'e değil, tam tersine
-  // bütünlüğü ARTIRAN tarafa sayılır. Aksi halde (ilk deneme) talep
-  // ajanları (CMO/trend_hunter) hiçbir zaman kanıtla çalışamaz ve 14 ajanın
-  // en önemli talep kanıtı hattan tamamen düşer.
-  const hasDemandEvidence = /\d/.test(parsed.notes);
-  if (hasDemandEvidence) missing.push("__demand_bonus__");
-  // Bonus etiketini gerçek eksik sayımından çıkar.
-  const missingCount = missing.filter((m) => m !== "__demand_bonus__").length;
-  const demandBonus = hasDemandEvidence ? 1 : 0;
+  // Dolu yuva sayısı = veri bütünlüğü puanı (0-5). Çekirdek yuvalar hem
+  // puana hem `missingFields` listesine yazılır; bonus yuvalar yalnızca puana.
+  let filled = 0;
+  for (const [field, hasEvidence] of EVIDENCE_SLOTS) {
+    if (hasEvidence(parsed)) filled++;
+    else missing.push(field);
+  }
+  for (const [, hasEvidence] of BONUS_SLOTS) {
+    if (hasEvidence(parsed)) filled++;
+  }
 
   return {
     name: parsed.title.slice(0, 180),
@@ -87,7 +109,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     preScore: 0,
     // Skorlanmadan önce nötr sinyaller: puanlama sonrası hepsi dolar.
     signals: { demand: 50, competition: 50, margin: 50, rating: 50, availability: 50 },
-    dataCompleteness: Math.max(0, Math.min(5, MEASURABLE - missingCount + demandBonus)),
+    dataCompleteness: Math.max(0, Math.min(5, filled)),
     missingFields: missing,
     source: "scraped",
   };
