@@ -71,10 +71,15 @@ function toRecord(row: Record<string, unknown>): DiscoveryJobRecord {
 /**
  * Başlatma anında iş kaydını açar.
  *
- * KREDİ SIRA NUMARASI ÖNEMLİ: Kayıt, kredi düşülmeden ÖNCE açılır ve
- * `charged_credits` yazılır. Aksi halde "kredi düştü ama kayıt açılamadı"
- * durumunda kullanıcı hem parasını hem işini kaybederdi. Kuyruğa alma
- * başarısız olursa `failDiscoveryJob` + iade devreye girer.
+ * KREDİ SIRA NUMARASI ÖNEMLİ: `chargeOnce` krediyi ÖNCE düşer, kayıt SONRA
+ * açılır. Kayıt açılamazsa çağıran `refundFeatureCredits` ile jetonu geri
+ * verir; kuyruğa alma başarısız olursa `failAndRefund` devreye girer. Yani
+ * bu satır "para alındı ama hat yok" durumunu ÜRETMEZ, yalnızca kaydı açar.
+ *
+ * `credit_charged = true` ZORUNLUDUR: `mark_discovery_credit_refunded`
+ * RPC'si `WHERE credit_charged = true AND credit_refunded = false` ile
+ * çalışır. Bu bayrak yazılmazsa RPC `false` döner, `failAndRefund` iade
+ * yapmadan döner ve kullanıcı hatalı bir iş için kredisini kaybeder.
  *
  * `id` = `runId`: QStash dedupe anahtarı, job kimliği ve istemcinin
  * gördüğü kimlik aynı değerdir; ayrı ikinci bir kimlik üretmek hat boyunca
@@ -100,6 +105,9 @@ export async function createDiscoveryJob(args: {
       discovery_progress: 5,
       discovery_step: "scrape_filter",
       charged_credits: args.chargedCredits,
+      // `chargeOnce` bu iş için krediyi gerçekten düştü; bayrak yalnızca
+      // "alındı" bilgisini satırda tutar ve tek seferlik iadeyi mümkün kılar.
+      credit_charged: true,
     } as never);
   if (error) throw new Error(error.message);
   return {

@@ -85,7 +85,8 @@ BEGIN
       WHEN _to = 'failed' THEN 'failed'
       ELSE status
     END,
-    error = CASE WHEN _to = 'failed' THEN error ELSE error END,
+    -- `error` bilerek dokunulmaz: hata metnini yalnızca `finish_discovery_job`
+    -- yazar (tek seferlik, atomik). Ara adımlar hata metnini silmez.
     updated_at = now()
   WHERE id = _job_id
     AND discovery_status = _from
