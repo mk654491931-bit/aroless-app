@@ -69,7 +69,10 @@ const QSTASH_REGIONAL_ENDPOINTS: Record<string, string> = {
 };
 
 function cleanQStashToken(value: string): string {
-  let cleaned = value.trim().replace(/^["']|["']$/g, "").trim();
+  let cleaned = value
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
   cleaned = cleaned.replace(/^Bearer\s+/i, "").trim();
   cleaned = cleaned.replace(/^QSTASH_TOKEN\s*=\s*/i, "").trim();
   return cleaned.replace(/^["']|["']$/g, "").trim();
@@ -86,9 +89,7 @@ function qstashToken(): string | undefined {
 export function qstashBaseUrl(): string {
   const configured = env("QSTASH_URL");
   if (configured && /^https?:\/\//i.test(configured)) {
-    return configured
-      .replace(/\/v2\/publish\/?$/i, "")
-      .replace(/\/+$/, "");
+    return configured.replace(/\/v2\/publish\/?$/i, "").replace(/\/+$/, "");
   }
   // The project has been configured against the EU QStash account. Keep this
   // explicit default so an omitted region cannot send an EU token to the
@@ -258,11 +259,13 @@ export const DISCOVERY_MIN_USEFUL_BUDGET_MS = 45_000;
  * Artık bütçe SÖZÜN BAŞLANGICINDAN ölçülür: platform ne kadar uyutursa uyutsun
  * uçtan uca süre 280 sn'yi aşmaz.
  */
-export function remainingWorkerBudgetMs(args: {
-  enqueuedAtMs?: number;
-  now?: number;
-  platformBudgetMs?: number;
-} = {}): number {
+export function remainingWorkerBudgetMs(
+  args: {
+    enqueuedAtMs?: number;
+    now?: number;
+    platformBudgetMs?: number;
+  } = {},
+): number {
   const platform = args.platformBudgetMs ?? workerBudgetMs();
   const enqueuedAtMs = args.enqueuedAtMs;
   if (typeof enqueuedAtMs !== "number" || !Number.isFinite(enqueuedAtMs)) return platform;
@@ -623,6 +626,24 @@ export function qstashConfigured(): boolean {
 }
 
 /**
+ * Product Discovery hattı, QStash'ten gelen teslimatın imzasını
+ * doğrulayabilir mi?
+ *
+ *   "dedicated" → `QSTASH_CURRENT_SIGNING_KEY` tanımlı → DOĞRU kurulum
+ *   "token"     → yalnız `QSTASH_TOKEN` var → gerçek QStash imzası
+ *                 doğrulanamaz (token imzalayan şey değildir); hat üretimde
+ *                 her adımda 401 alır. Yerel/kendi imzalayan kurulumlar ve
+ *                 testler için kabul görür.
+ *   "none"      → hiçbiri yok → hat kuyruğa bile alınamaz
+ *
+ * Sır içermez; yalnız anahtarların VARLIĞINI bildirir (değerleri asla).
+ */
+export function discoverySignatureMode(): "dedicated" | "token" | "none" {
+  if ((env("QSTASH_CURRENT_SIGNING_KEY") ?? "").trim()) return "dedicated";
+  return qstashToken() ? "token" : "none";
+}
+
+/**
  * İşi hangi yolla çalıştıracağımız: QStash, süreç içi arka plan veya istek
  * içinde (inline). Tek karar noktasıdır; hem server function hem `/api/search`
  * buradan okur, böylece iki yol farklı davranamaz.
@@ -743,7 +764,7 @@ export function longJobPlan(envMap: EnvMap = process.env): LongJobPlan {
   if (runtime.serverless) {
     const qstashReady = Boolean(
       cleanQStashToken(readEnvValue(envMap, "QSTASH_TOKEN") ?? "") &&
-        readEnvValue(envMap, "JOB_WORKER_SECRET"),
+      readEnvValue(envMap, "JOB_WORKER_SECRET"),
     );
     if (qstashReady && remoteWorkerConfigured(envMap)) return "qstash-worker";
     return inlineHeavyWorkFits(envMap) ? "inline" : "unavailable";
@@ -949,15 +970,13 @@ export async function createJobRow(args: {
   userId: string;
   input: DiscoveryInput;
 }): Promise<void> {
-  const { error } = await jobStore()
-    .from(JOB_TABLE)
-    .insert({
-      id: args.jobId,
-      user_id: args.userId,
-      query: args.input.niche,
-      params: args.input,
-      status: "processing",
-    });
+  const { error } = await jobStore().from(JOB_TABLE).insert({
+    id: args.jobId,
+    user_id: args.userId,
+    query: args.input.niche,
+    params: args.input,
+    status: "processing",
+  });
   if (error) throw new Error(error.message);
 }
 
@@ -972,10 +991,10 @@ export async function setJobMessageId(jobId: string, messageId: string): Promise
 function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
   return Boolean(
     error &&
-      (error.code === "42883" ||
-        /could not find the function|function .* does not exist|undefined function/i.test(
-          error.message ?? "",
-        )),
+    (error.code === "42883" ||
+      /could not find the function|function .* does not exist|undefined function/i.test(
+        error.message ?? "",
+      )),
   );
 }
 
@@ -1003,8 +1022,7 @@ export async function claimSearchJob(jobId: string): Promise<SearchJobClaim> {
     ) {
       return {
         state,
-        attemptCount:
-          typeof raw.attempt_count === "number" ? raw.attempt_count : undefined,
+        attemptCount: typeof raw.attempt_count === "number" ? raw.attempt_count : undefined,
         reliable: true,
       };
     }

@@ -16,6 +16,7 @@ import {
   discoveryDispatchPlan,
   longJobPlan,
   qstashConfigured,
+  discoverySignatureMode,
   remoteWorkerConfigured,
 } from "./lib/discovery-jobs.server";
 
@@ -147,6 +148,10 @@ export default {
               longJob: longJobPlan(),
               qstashConfigured: qstashConfigured(),
               remoteWorkerConfigured: remoteWorkerConfigured(),
+              // Product Discovery adımlarının imzası doğrulanabiliyor mu?
+              // "token" görünüyorsa teslimat imza anahtarı eksiktir (QStash
+              // panelindeki Current/Next Signing Key): hat sessizce 401 alır.
+              discoverySignature: discoverySignatureMode(),
             },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),
