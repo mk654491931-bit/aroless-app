@@ -29,6 +29,11 @@ import {
   TOTAL_AGENTS,
 } from "./product-discovery-council.server";
 import { parseLooseJson } from "./product-discovery-pipeline.server";
+import {
+  buildShortlistPrompt,
+  selectWithGemini,
+  GEMINI_SHORTLIST_SIZE,
+} from "./product-discovery-pipeline.server";
 
 /** Tam ölçülmüş bir ürün (bütünlük 5/5 → penaltı sıfır). */
 const fullProduct = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => {
@@ -318,5 +323,98 @@ describe("Gemini kısa liste seçicisi", () => {
       consensus: [],
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+/* ================================== 6. Gemini kısa listesi (gerçek sözleşme) */
+
+/**
+ * Bu blokun var olma sebebi: Gemini adımı DAHA HİÇ ÇALIŞMAMIŞTI ve iki sebeple
+ * çalışamazdı. Bu testler o iki sebebi geri dönüşe kapatır.
+ */
+describe("buildShortlistPrompt", () => {
+  const pool = Array.from({ length: 30 }, (_, i) => fullProduct({ name: `Ürün ${i + 1}` }));
+
+  it("DOĞRULAYICIYA AYNI SÖZDİZİMİNİ söyler (picks + geçerli JSON)", () => {
+    // Regresyon: istem "sadece numara listesi ver" derken doğrulayıcı
+    // {"picks":[...]} bekliyordu. Model talimatı izleyince hata yapmiyor,
+    // doğru davranıyor ve hat sessizce yedeğe düşüyordu.
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain('"picks"');
+    expect(prompt).toMatch(/geçerli JSON/);
+    expect(prompt).not.toMatch(/Sadece numara listesi ver/i);
+  });
+
+  it("istenen adet sayısını sabit bir sayı olarak yazar", () => {
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain(`tam olarak ${GEMINI_SHORTLIST_SIZE} farklı indeks`);
+  });
+
+  it("her adayı 1'den başlayan indeksle numaralandırır", () => {
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain("1. Ürün 1");
+    expect(prompt).toContain("2. Ürün 2");
+  });
+
+  it("havuz kısa istenen sayıyı havuza indirir (1 üründen 25 istemez)", () => {
+    const prompt = buildShortlistPrompt([fullProduct()], "air fryer");
+    expect(prompt).toContain("tam olarak 1 farklı indeks");
+  });
+});
+
+describe("selectWithGemini", () => {
+  const pool = Array.from({ length: 40 }, (_, i) =>
+    fullProduct({ name: `Ürün ${i + 1}`, preScore: 100 - i }),
+  );
+
+  it("Gemini seçimini kullanır ve sırayı korur", async () => {
+    const res = await selectWithGemini(pool, "air fryer", 25, async (rows) => [rows[39], rows[38]]);
+    expect(res.via).toBe("gemini");
+    expect(res.geminiPicks).toBe(2);
+    expect(res.products[0].name).toBe("Ürün 40");
+    expect(res.products[1].name).toBe("Ürün 39");
+  });
+
+  it("AZ seçim dönerse deterministik sıradan TAMAMLAR (huni daralmaz)", async () => {
+    // Regresyon: Gemini 3 dönerse 14 ajana 3 ürün gidiyordu. Huni 25'te
+    // kalmalı; modelin seçimi önde, yedekleme arkada.
+    const res = await selectWithGemini(pool, "air fryer", 25, async (rows) => [
+      rows[39],
+      rows[38],
+      rows[37],
+    ]);
+    expect(res.products).toHaveLength(25);
+    expect(res.geminiPicks).toBe(3);
+    // İlk 3 modelden, kalan 22 deterministik en iyi sıradan.
+    expect(res.products[0].name).toBe("Ürün 40");
+    expect(res.products[3].name).toBe("Ürün 1");
+    expect(new Set(res.products).size).toBe(25);
+  });
+
+  it("Gemini hata verirse deterministik yedeğe düşer", async () => {
+    const res = await selectWithGemini(pool, "air fryer", 25, async () => {
+      throw new Error("429");
+    });
+    expect(res.via).toBe("fallback");
+    expect(res.geminiPicks).toBe(0);
+    expect(res.products[0].name).toBe("Ürün 1");
+  });
+
+  it("Gemini boş liste döndürürse yedeğe düşer", async () => {
+    const res = await selectWithGemini(pool, "air fryer", 25, async () => []);
+    expect(res.via).toBe("fallback");
+    expect(res.products).toHaveLength(25);
+  });
+
+  it("seçici hiç verilmezse yine 25 ürün üretir (hat düşmez)", async () => {
+    const res = await selectWithGemini(pool, "air fryer", 25);
+    expect(res.via).toBe("fallback");
+    expect(res.products).toHaveLength(25);
+  });
+
+  it("havuz 25'ten küçükse mevcut olanın tamamını döndürür", async () => {
+    const small = pool.slice(0, 7);
+    const res = await selectWithGemini(small, "air fryer", 25);
+    expect(res.products).toHaveLength(7);
   });
 });

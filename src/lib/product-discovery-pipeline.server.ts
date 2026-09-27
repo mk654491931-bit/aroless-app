@@ -183,6 +183,17 @@ export async function runGeminiShortlistStep(
   products: readonly NormalizedProduct[],
   niche: string,
   topN = GEMINI_SHORTLIST_SIZE,
+  /**
+   * Gemini seçicisi — varsayılan gerçek model çağrısıdır. DIŞARIDAN
+   * DEĞİŞTİRİLEBİLİR ki testler (ve canlı E2E) model yanıtını taklit
+   * ederek "Gemini yolu"nun gerçekten çalıştığını kanıtlayabilsin.
+   * Önceden gömülüydü; bu yüzden bu adım test edilebilir değildi ve
+   * istem/doğrulayıcı uyuşmazlığı gibi hatalar fark edilemedi.
+   */
+  geminiSelect: (
+    products: readonly NormalizedProduct[],
+    niche: string,
+  ) => Promise<NormalizedProduct[]> = geminiShortlistSelector,
 ): Promise<DiscoveryStepResult> {
   if (products.length === 0) {
     return {
@@ -197,12 +208,11 @@ export async function runGeminiShortlistStep(
   // Gemini çağrısı burada yapılır (mevcut AI yönlendiricisi üzerinden).
   // Bu dosya saf kalmaya devam eder; çağrı route katmanında enjekte edilir
   // (bağımlılık enjeksiyonu) ki testlerde sahte (mock) çağrı kullanılabilsin.
-  const { products: shortlist, via: shortlistVia } = await selectWithGemini(
-    products,
-    niche,
-    topN,
-    geminiShortlistSelector,
-  );
+  const {
+    products: shortlist,
+    via: shortlistVia,
+    geminiPicks,
+  } = await selectWithGemini(products, niche, topN, geminiSelect);
   // DÜRÜST RAPOR: not, GERÇEKTE ne olduğunu söyler. Ölçüldü (2026-09-27):
   // anahtar yokken çağrı ~30 ms'de düşüyor (yani Gemini'ye HİÇ gidilmiyor)
   // ama not "Gemini N → M aday seçti" yazıyordu. Kullanıcı ve panel modelin
@@ -214,8 +224,10 @@ export async function runGeminiShortlistStep(
     consensus: [],
     next: "deep_analysis",
     notes: [
-      `${shortlistVia === "gemini" ? "Gemini" : "deterministik yedek"} ${products.length} → ` +
-        `${shortlist.length} aday seçti.`,
+      shortlistVia === "gemini"
+        ? `Gemini ${products.length} → ${shortlist.length} aday seçti ` +
+          `(${geminiPicks} seçim modelden, ${shortlist.length - geminiPicks} deterministik yedekleme).`
+        : `deterministik yedek ${products.length} → ${shortlist.length} aday seçti.`,
       ...(shortlistVia === "gemini"
         ? []
         : ["Gemini çağrısı yapılmadı; ön skor sıralaması kullanıldı."]),
@@ -242,23 +254,19 @@ async function geminiShortlistSelector(
   const { callGemini } = await import("./ai.server");
   const { z } = await import("zod");
 
-  const roster = products
-    .slice(0, DISCOVERY_TOP_N)
-    .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
-    .join("\n");
+  // DİKKAT: istem ile doğrulayıcı AYNI SÖZDİZİMİNİ konuşmalıdır.
+  // Önceki sürüm isteme "sadece numara listesi ver" yazıyor, doğrulayıcı ise
+  // yalnız `{"picks":[...]}` kabul ediyordu. Model talimatı izleyince (yani
+  // DÜZGÜN çalışınca) yanıt doğrulamadan düşüyor ve hat sessizce yedeğe
+  // kayıyordu — yani Gemini hiçbir zaman seçim yapamıyordu.
+  const prompt = buildShortlistPrompt(products, niche);
 
-  const prompt = [
-    `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
-    `Aşağıdaki ${Math.min(products.length, DISCOVERY_TOP_N)} adaydan ticari olarak EN GÜÇLÜ ${GEMINI_SHORTLIST_SIZE}'ini seç.`,
-    "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
-    "Sadece numara listesi ver, açıklama yazma.",
-    "",
-    roster,
-  ].join("\n");
-
-  const raw = await callGemini(prompt, undefined, 0.2);
+  // `grounded=false`: aday listesi SABİT ve elimizde. Google Search grounding
+  // yalnız gecikmeyi artırır ve modelin JSON dışında arama metni sarmalamasına
+  // yol açar. Bu adım sorgulamaz, yalnız sıralar.
+  const raw = await callGemini(prompt, undefined, 0.2, false);
   const Parsed = z.object({
-    picks: z.array(z.number().int().min(1).max(DISCOVERY_TOP_N)).min(1),
+    picks: z.array(z.number().int().min(1).max(Math.min(products.length, DISCOVERY_TOP_N))).min(1),
   });
   const parsed = Parsed.safeParse(parseLooseJson(raw));
   if (!parsed.success) return [];
@@ -273,6 +281,37 @@ async function geminiShortlistSelector(
     if (product) picked.push(product);
   }
   return picked;
+}
+
+/**
+ * Gemini istemi — DIŞA AKTARILIR çünkü sözleşmesi bir TEST ile kilitlenir.
+ *
+ * Uyarı buraya yazıldı çünkü bu hatta iki kez aynı sınıf hata düştü: isteme
+ * "sadece numara listesi ver" yazıp doğrulayıcıdan `{"picks":[…]}`
+ * beklemek. Model talimatı İZLEDİĞİ için hata değil, doğru davranışıydı —
+ * ve doğrulayıcı onu reddedip hat sessizce yedeğe düşürüyordu. İstem ile
+ * doğrulayıcı aynı söz dizimini konuşmalıdır.
+ */
+export function buildShortlistPrompt(
+  products: readonly NormalizedProduct[],
+  niche: string,
+): string {
+  const roster = products
+    .slice(0, DISCOVERY_TOP_N)
+    .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
+    .join("\n");
+  const want = Math.min(GEMINI_SHORTLIST_SIZE, products.length);
+  return [
+    `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
+    `Aşağıdaki ${Math.min(products.length, DISCOVERY_TOP_N)} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
+    "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
+    "",
+    "YANITINI SADECE geçerli JSON olarak ver, başka hiçbir metin yazma:",
+    '{"picks":[1,7,3]}',
+    `picks içinde tam olarak ${want} farklı indeks olsun, en güçlüden zayıfa doğru sıralansın.`,
+    "",
+    roster,
+  ].join("\n");
 }
 
 /**
@@ -313,27 +352,44 @@ export async function selectWithGemini(
     products: readonly NormalizedProduct[],
     niche: string,
   ) => Promise<NormalizedProduct[]>,
-): Promise<{ products: NormalizedProduct[]; via: "gemini" | "fallback" }> {
+): Promise<{
+  products: NormalizedProduct[];
+  via: "gemini" | "fallback";
+  geminiPicks: number;
+}> {
+  // Deterministik sıra: ön skor, sonra kanıt zenginliği, sonra kaynak sayısı.
+  const ranked = [...products].sort(
+    (a, b) =>
+      b.preScore - a.preScore ||
+      b.dataCompleteness - a.dataCompleteness ||
+      b.sources.length - a.sources.length,
+  );
+
   if (geminiSelect) {
     try {
       const selected = await geminiSelect(products, niche);
-      if (selected.length) return { products: selected.slice(0, topN), via: "gemini" };
+      if (selected.length) {
+        // Gemini her zaman tam `topN` döndürmez (bütçe, hata, kısa yanıt).
+        // DÖNMEDİĞİ adaylar deterministik sıradan TAMAMLANIR; aksi hâlde 25
+        // istenirken 14 ajana 3 ürün giderdi ve hattın darboğazı modele
+        // bağımlı hâle gelirdi. Modelin seçimi ÖNDE, yedekleme arkadadır.
+        const out: NormalizedProduct[] = [...selected];
+        const chosen = new Set(out);
+        for (const p of ranked) {
+          if (out.length >= topN) break;
+          if (!chosen.has(p)) {
+            out.push(p);
+            chosen.add(p);
+          }
+        }
+        return { products: out.slice(0, topN), via: "gemini", geminiPicks: selected.length };
+      }
     } catch {
       // Gemini başarısız → deterministik seçime düş (aşağıda).
     }
   }
   // Yedek: ön skora göre ilk `topN`, ama kanıtı EN ZENGİN olan önce gelir.
-  return {
-    via: "fallback",
-    products: [...products]
-      .sort(
-        (a, b) =>
-          b.preScore - a.preScore ||
-          b.dataCompleteness - a.dataCompleteness ||
-          b.sources.length - a.sources.length,
-      )
-      .slice(0, topN),
-  };
+  return { products: ranked.slice(0, topN), via: "fallback", geminiPicks: 0 };
 }
 
 /* ------------------------------------------------ Adım 3: 14 ajan derin analiz */

@@ -184,7 +184,7 @@ async function handleStep(request: Request, step: string): Promise<Response> {
       }
 
       case "gemini": {
-        // AI #1 — Gemini kısa listesi (Top 75 → 15).
+        // AI #1 — Gemini kısa listesi (Top 75 → 25).
         const result = await runGeminiShortlistStep(payload.batch as never, input.niche);
         if (!result.ok) return failStep(runId, job.userId, "gemini_shortlist başarısız.");
         if (result.products.length === 0) {

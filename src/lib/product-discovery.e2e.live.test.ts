@@ -129,5 +129,65 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
       // bölündüğü için tek adım çok altında kalmalı.
       expect(total).toBeLessThan(120_000);
     });
+
+    /**
+     * GEMINI YOLUNUN KANITI.
+     *
+     * Yukarıdaki koşu, anahtar yoksa notun dediği gibi "deterministik yedek"
+     * yolunu kanıtlar. Bu ikinci koşu, model yanıtı GELİYORMUŞ GİBİ davranan
+     * bir seçici enjekte eder ve zincirin Gemini dalının gerçekten 25'e
+     * indirdiğini, sonra 14 ajanı ve nihai 5'i ürettiğini ölçer. Anahtarsız
+     * ortamda Gemini'nin kendisi çağrılamaz; ama hat O ZAMAN NE YAPAR sorusu
+     * cevapsız kalmasın diye kanıtlanır.
+     */
+    it(`"${niche}": Gemini dalı 75 → 25 → 14 ajan → 5 ürün`, async () => {
+      const scrape = await runScrapeFilterStep(niche, "US", "General", DISCOVERY_TOP_N);
+      expect(scrape.products.length).toBeGreaterThan(0);
+
+      // Modelin seçimi simüle et: en iyi 40. adayı, 25'ini alıp karıştır.
+      const shortlist = await runGeminiShortlistStep(
+        scrape.products,
+        niche,
+        GEMINI_SHORTLIST_SIZE,
+        async (rows) => {
+          const picks = rows
+            .slice(0, Math.min(rows.length, 40))
+            .filter((_, i) => i % 2 === 0)
+            .slice(0, GEMINI_SHORTLIST_SIZE);
+          return picks;
+        },
+      );
+
+      console.log(
+        `[E2E-GEMINI] "${niche}" · ${scrape.products.length} → ${shortlist.products.length} · ` +
+          `${shortlist.notes.join(" | ")}`,
+      );
+
+      // Gemini yolu gerçekten kullanıldı (yedek DEĞİL).
+      expect(shortlist.notes.join(" ")).toContain("Gemini");
+      expect(shortlist.notes.join(" ")).not.toContain("Gemini çağrısı yapılmadı");
+      expect(shortlist.products.length).toBe(GEMINI_SHORTLIST_SIZE);
+
+      // Model az seçse bile huni 25'te kalıyor (yedekleme).
+      const partial = await runGeminiShortlistStep(
+        scrape.products,
+        niche,
+        GEMINI_SHORTLIST_SIZE,
+        async (rows) => rows.slice(0, 3),
+      );
+      expect(partial.products.length).toBe(GEMINI_SHORTLIST_SIZE);
+      expect(partial.notes.join(" ")).toContain("3 seçim modelden");
+
+      // Ve bu dal da nihai listeyi dolduruyor.
+      const deep = await runDeepAnalysisStep(shortlist.products, niche, runCouncilOnProducts);
+      expect(deep.consensus).toHaveLength(GEMINI_SHORTLIST_SIZE);
+      const byId = new Map<string, NormalizedProduct>(
+        deep.products.map((p) => [String(p.fingerprint ?? ""), p]),
+      );
+      const ranked = runFinalRankStep(deep.consensus, 5, byId);
+      expect(ranked.products.length).toBeGreaterThan(0);
+      expect(ranked.products.length).toBeLessThanOrEqual(5);
+      for (const p of ranked.products) expect(p.votes).toBe(14);
+    });
   }
 });
