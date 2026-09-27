@@ -6,7 +6,7 @@
 // kendi fonksiyonunda BİTER ve bir sonrakini QStash ile kuyruğa alır:
 //
 //   /start ──► scraping+filtering (saf kod, 0 token)
-//                 └─► gemini_shortlist  (Top 75 → 15, Gemini 1)
+//                 └─► gemini_shortlist  (Top 75 → 25, Gemini 1)
 //                       └─► deep_analysis (14 ajan, ücretsiz havuz)
 //                             └─► sıralama + Top 5 + 'completed'
 //
@@ -157,13 +157,22 @@ export async function runScrapeFilterStep(
   };
 }
 
-/* ---------------------------------------------- Adım 2: Gemini shortlist (15) */
+/* ---------------------------------------------- Adım 2: Gemini shortlist (25) */
 
-/** Top-75 listesinden Gemini ile en iyi 15 adayı seçer. */
+/**
+ * Top-75 listesinden Gemini ile en iyi 25 adayı seçer.
+ *
+ * 25 NEDEN (ve neden 15 değil): 14 ajan konsesinde oy çeşitliliği, aday
+ * sayısıyla artar — 15 adayda her ajan aynı 15 ürüne yoğunlaşıp oy
+ * dağılımını yapay biçimde daraltıyordu. 25 aday, Top-5 seçimi için hem
+ * yeterli çeşitlilik hem de maliyet açısından hâlâ ucuz (TEK Gemini çağrısı).
+ */
+export const GEMINI_SHORTLIST_SIZE = 25;
+
 export async function runGeminiShortlistStep(
   products: readonly NormalizedProduct[],
   niche: string,
-  topN = 15,
+  topN = GEMINI_SHORTLIST_SIZE,
 ): Promise<DiscoveryStepResult> {
   if (products.length === 0) {
     return {
@@ -215,7 +224,7 @@ async function geminiShortlistSelector(
 
   const prompt = [
     `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
-    `Aşağıdaki ${Math.min(products.length, 75)} adaydan ticari olarak EN GÜÇLÜ 15'ini seç.`,
+    `Aşağıdaki ${Math.min(products.length, 75)} adaydan ticari olarak EN GÜÇLÜ ${GEMINI_SHORTLIST_SIZE}'ini seç.`,
     "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
     "Sadece numara listesi ver, açıklama yazma.",
     "",
@@ -288,7 +297,7 @@ export async function selectWithGemini(
       // Gemini başarısız → deterministik seçime düş (aşağıda).
     }
   }
-  // Yedek: ön skora göre ilk 15, ama kanıtı EN ZENGİN olan önce gelir.
+  // Yedek: ön skora göre ilk `topN`, ama kanıtı EN ZENGİN olan önce gelir.
   return [...products]
     .sort(
       (a, b) =>
@@ -330,20 +339,57 @@ export async function runDeepAnalysisStep(
 
 /* -------------------------------------------------- Adım 4: final rank (Top5) */
 
-/** Uzlaşmaya göre nihai en iyi 5 ürünü seçer ve 'completed' durumunu verir. */
-export function runFinalRankStep(consensus: readonly Consensus[], topN = 5): DiscoveryStepResult {
+/**
+ * Uzlaşmaya göre nihai en iyi 5 ürünü seçer ve 'completed' durumunu verir.
+ *
+ * KRİTİK (arayüzun gördüğü veri): `consensus` kaydı ürünün KENDİSİ değildir;
+ * yalnız oy skorlarını taşır. Kullanıcıya ürünü göstermek için fiyat, marka,
+ * görsel ve kanıt bağlantısı gerekir. Bu yüzden uzlaşma satırları
+ * `productsById` (fingerprint → ürün) ile BİRLEŞTİRİLİR ve kazanan ürünler
+ * `products` alanında döner. Ölçek eşleşmezse (ör. eski bir `final` gövdesi)
+ * ürün boş kalır ama HAT ÇÖKMEZ — consensus yine döner.
+ */
+export function runFinalRankStep(
+  consensus: readonly Consensus[],
+  topN = 5,
+  productsById?: ReadonlyMap<string, NormalizedProduct>,
+): DiscoveryStepResult {
   // Sıralama: councilScore DESC, eşitlikte confidenceScore DESC.
   const ranked = [...consensus].sort(
     (a, b) => b.councilScore - a.councilScore || b.confidenceScore - a.confidenceScore,
   );
   const winners = ranked.slice(0, topN);
+  const products = productsById
+    ? winners
+        .map((row) => {
+          const product = productsById.get(row.candidateId);
+          if (!product) return null;
+          // Konsenyus skoru ürünün ÜZERİNE yazılır: arayüz tek listede hem
+          // ürünü hem 14 ajan puanını görür, ayrı birleştirme adımı gerekmez.
+          return {
+            ...product,
+            councilScore: row.councilScore,
+            confidenceScore: row.confidenceScore,
+            votes: row.votes,
+            agreement: row.coverage,
+            evidence: row.evidence.slice(0, 6),
+          } as unknown as NormalizedProduct;
+        })
+        .filter((p): p is NormalizedProduct => p !== null)
+    : [];
+  const missing = winners.length - products.length;
   return {
     ok: true,
     status: "completed",
-    products: [],
+    products,
     consensus: winners,
     next: "",
-    notes: [`${winners.length} ürün nihai listeye girdi.`],
+    notes: [
+      `${winners.length} ürün nihai listeye girdi.`,
+      ...(missing > 0
+        ? [`${missing} kazananın ürün kaydı taşınmadı (sadece oy satırı geldi).`]
+        : []),
+    ],
   };
 }
 

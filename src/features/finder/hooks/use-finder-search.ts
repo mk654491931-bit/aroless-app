@@ -7,6 +7,11 @@ import { countryName } from "@/lib/countries";
 import { countryFit } from "@/lib/platform-market";
 import type { WinningProduct, Platform, Budget } from "@/lib/gemini.functions";
 import { generateProducts, getDiscoveryJob } from "@/lib/gemini.functions";
+import {
+  getDiscoveryRun,
+  startDiscoveryRun,
+  type DiscoveryWinner,
+} from "@/lib/product-discovery.functions";
 import { huggingFaceSearch } from "@/lib/hf.functions";
 import { storedHfToken, type EngineId, type MarketplaceId } from "@/lib/engines";
 import type { DeepSearchOptions } from "@/components/deep-search-panel";
@@ -15,6 +20,7 @@ import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
+import { toWinningProducts } from "../utils/discovery-result";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
 /**
@@ -29,6 +35,17 @@ const DEFAULT_POLL_INTERVAL_MS = 2_000;
 /** İlk 30 sn sık, sonrası seyrek yoklanır: uzun Render işlerinde istek sayısı düşer. */
 const POLL_BACKOFF_AFTER_MS = 30_000;
 const POLL_SLOW_INTERVAL_MS = 5_000;
+
+/**
+ * YENİ HATIN YOKLAMA BÜTÇESİ.
+ *
+ * Dört adım Vercel'de QStash ile arka planda çalışır; tipik koşu 1-3
+ * dakika sürer. Tavan eski hatla AYNI sözü tutar (280 sn) ki kullanıcı iki
+ * yol arasında fark görmesin. Süre dolarsa eski hat devreye girer.
+ */
+const PIPELINE_MAX_WAIT_MS = DEFAULT_POLL_MAX_MS;
+/** Adım adım ilerleme 1,5 sn'de bir görünür; yoklama bu sıklıkta yapılır. */
+const PIPELINE_POLL_MS = 1_500;
 /** Güvenlik zamanlayıcısı yoklama bütçesinin hemen üstünde kalsın ki mesajı yoklama üretsin. */
 const SAFETY_GRACE_MS = 15_000;
 
@@ -87,6 +104,8 @@ export function useFinderSearch(opts: {
   const saveAnalysisFn = useServerFn(saveAnalysis);
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
   const hfFn = useServerFn(huggingFaceSearch);
+  const startDiscoveryFn = useServerFn(startDiscoveryRun);
+  const getDiscoveryRunFn = useServerFn(getDiscoveryRun);
 
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
@@ -237,7 +256,8 @@ export function useFinderSearch(opts: {
       try {
         const products = toProductList(res);
         const fallbackMessage =
-          (res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ?? null;
+          (res as { fallback?: { message?: string } | null } | undefined)?.fallback?.message ??
+          null;
         // Hat 280 sn ile sınırlı: konsey karneye yer kalmadıysa bunu dürüstçe
         // söyle ("neden bazı ürünlerde konsey kartı yok?" sorusunun cevabı).
         const councilSkipped = Boolean(
@@ -262,10 +282,15 @@ export function useFinderSearch(opts: {
           return;
         }
         toast.success(`${products.length} winning products generated!`);
-        saveAnalysisFn({ data: { search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`, results: products } }).catch(
+        saveAnalysisFn({
+          data: {
+            search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
+            results: products,
+          },
+        }).catch(() => {});
+        insertProductsFn({ data: { products, target_country: vars.target_country } }).catch(
           () => {},
         );
-        insertProductsFn({ data: { products, target_country: vars.target_country } }).catch(() => {});
       } catch (err) {
         console.error("Ürün arama sonucu işlenirken hata:", err);
         toast.error("Sonuçlar işlenirken bir sorun oluştu. Lütfen tekrar dene.");
@@ -328,7 +353,8 @@ export function useFinderSearch(opts: {
         setStalled(false);
         qc.invalidateQueries({ queryKey: ["profile"] });
         const model = (res as { model?: string } | undefined)?.model ?? "Hugging Face";
-        if (products.length === 0) toast.error("Hugging Face returned no products — try another niche.");
+        if (products.length === 0)
+          toast.error("Hugging Face returned no products — try another niche.");
         else toast.success(`${products.length} products from ${model}`);
       } catch (err) {
         console.error("HF arama sonucu işlenirken hata:", err);
@@ -363,7 +389,147 @@ export function useFinderSearch(opts: {
     },
   });
 
-  const searching = gen.isPending || hfGen.isPending;
+  /**
+   * ESKİ HATA: YENİ HAT — BİRİNCİL YOL.
+   *
+   * Kazıma → deterministik filtre (Top 75) → Gemini kısa liste (25) → 14 ajan →
+   * Top 5. Dört adım QStash'e bölünmüş hâlde arka planda çalışır; bu
+   * fonksiyon yalnız başlatır ve yoklar.
+   *
+   * GERİ DÜŞME SÖZLEŞMESİ: yeni hat kurulamazsa (kuyruk yok, QStash yok,
+   * zaman aşımı) `fallback` döner ve `onSuccess` ESKİ hatta (`gen.mutate`)
+   * düşer. Yani yeni hatın bir sorunu ürün arama özelliğini KAPATMAZ — yalnız
+   * eski yol devreye girer. Kullanıcı farkı görmez, hat çalışır.
+   *
+   * Kredi: yeni hat krediyi kendi düşer (`startDiscoveryRun`). Düşülemezse
+   * `no-credits` döner ve ESKİ hat DENEMEZ — yoksa kullanıcı iki kez ücret
+   * öderdi. Kuyruk/timeout gibi "para alındı ama iş yapılmadı" durumlarında
+   * yeni hat krediyi tam bir kez iade eder, sonra eski hat kendi kredisini
+   * düşer: net bir kredi.
+   */
+  const pipeline = useMutation({
+    mutationFn: async (
+      vars: GenVars,
+    ): Promise<
+      | { ok: true; rows: DiscoveryWinner[] }
+      | { ok: false; fallback: true; reason: string; paid: boolean }
+    > => {
+      const country =
+        vars.target_country === "GLOBAL"
+          ? "US"
+          : vars.target_country.slice(0, 2).toUpperCase() || "US";
+      const started = await startDiscoveryFn({
+        data: {
+          niche: vars.niche,
+          country,
+          platform: (vars.platforms[0] ?? "General").slice(0, 40),
+          topN: 5,
+        },
+      });
+      if (!started.ok) {
+        // Kredi bittiyse düşme: kullanıcıya yükseltme gösterilir.
+        if (started.reason === "no-credits" || started.reason === "credit-unavailable") {
+          throw new Error(started.reason === "no-credits" ? "NO_CREDITS" : "CREDIT_UNAVAILABLE");
+        }
+        return { ok: false, fallback: true, reason: started.detail ?? "queue_failed", paid: false };
+      }
+
+      armSafetyTimer(PIPELINE_MAX_WAIT_MS);
+      const deadline = Date.now() + PIPELINE_MAX_WAIT_MS;
+      while (Date.now() < deadline) {
+        const state = await getDiscoveryRunFn({ data: { runId: started.runId } });
+        // Sahiplik reddi (başkasının runId'si) veya satırın kaybolması.
+        if (!state.ok) return { ok: false, fallback: true, reason: "run_not_visible", paid: false };
+        if (state.status === "failed") {
+          return {
+            ok: false,
+            fallback: true,
+            reason: state.error ?? "pipeline_failed",
+            paid: false,
+          };
+        }
+        if (state.status === "completed") {
+          const rows = state.result?.products ?? [];
+          if (rows.length === 0) {
+            return { ok: false, fallback: true, reason: "empty_result", paid: true };
+          }
+          return { ok: true, rows };
+        }
+        await new Promise((resolve) => setTimeout(resolve, PIPELINE_POLL_MS));
+      }
+      // Zaman aşımı: iş hâlâ koşuyor olabilir, kredi HARCANMIŞTIR.
+      return { ok: false, fallback: true, reason: "timeout", paid: true };
+    },
+    onSuccess: (outcome, vars) => {
+      if (!outcome.ok) {
+        if (outcome.paid) {
+          // Kredi harcanmış durumda: eski hat KENDİ kredisini düşeceği için
+          // düşmek, kullanıcıyı aynı arama için İKİ KEZ ücretlendirmek demek.
+          // Kullanıcı dürüstçe bilgilendirilir; ikinci kez denemesi yeterli.
+          toast.error(
+            "Arama zaman aşımına uğradı ve kredi bu çalışma için kullanıldı. Tekrar denemek istersen kredi düşülecek.",
+          );
+          setStalled(false);
+          return;
+        }
+        // Kredi İADE EDİLMİŞ durumda (kuyruk/hata) → eski hatta düşmek bedava.
+        console.warn(`[finder] yeni hat düştü (${outcome.reason}) — eski hatta geri dönülüyor`);
+        setFallbackNotice(
+          "Yeni arama hattı bu denemede kurulamadı; klasik motorla devam ediliyor.",
+        );
+        gen.mutate(vars);
+        return;
+      }
+      const products = attachWinnerScores(toWinningProducts(outcome.rows, outcome.rows));
+      partialDeliveredRef.current = false;
+      setEnriching(false);
+      setCouncilPending(false);
+      opts.onResults(products, [], null);
+      setStalled(false);
+      setSearchError(null);
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.success(`${products.length} ürün 14 ajan konsesiyle seçildi.`);
+      saveAnalysisFn({
+        data: {
+          search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
+          results: products,
+        },
+      }).catch(() => {});
+      insertProductsFn({
+        data: { products, target_country: vars.target_country },
+      }).catch(() => {});
+    },
+    onError: (err: Error) => {
+      setStalled(false);
+      if (err.message.includes("NO_CREDITS")) {
+        toast.error("Out of credits — upgrade to keep going.");
+        opts.onNeedUpgrade();
+        return;
+      }
+      if (err.message.includes("CREDIT_UNAVAILABLE")) {
+        opts.onClearResults();
+        setSearchError({
+          kind: "auth",
+          title: "Kredi alınamadı",
+          body: err.message,
+          hint: "",
+          raw: err.message,
+        });
+        return;
+      }
+      opts.onClearResults();
+      setSearchError({ ...describeSearchFailure(err.message), raw: err.message });
+    },
+    onSettled: () => {
+      setStalled(false);
+      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+    },
+  });
+  /**
+   * Bekleme göstergesi üç yolun birleşimidir: yeni hat, eski hat, HF motoru.
+   * `pipeline` YUKARIDA tanımlıdır; aşağıda yazmak TDZ hatası verirdi.
+   */
+  const searching = gen.isPending || hfGen.isPending || pipeline.isPending;
 
   const runSearch = useCallback(
     (nicheValue: string, resultQuerySetter?: (v: string) => void) => {
@@ -384,18 +550,26 @@ export function useFinderSearch(opts: {
       searchNicheRef.current = nicheValue;
 
       const effectivePlatforms = (() => {
-        const allBlocked = opts.platforms.every((p) => countryFit(p, opts.effectiveCountry) === "unavailable");
+        const allBlocked = opts.platforms.every(
+          (p) => countryFit(p, opts.effectiveCountry) === "unavailable",
+        );
         if (!allBlocked) return opts.platforms;
-        const cb = opts.platforms.filter((p) => countryFit(p, opts.effectiveCountry) === "cross-border").slice(0, 3);
+        const cb = opts.platforms
+          .filter((p) => countryFit(p, opts.effectiveCountry) === "cross-border")
+          .slice(0, 3);
         if (cb.length > 0) {
-          toast.info(`All selected platforms are unavailable in ${countryName(opts.effectiveCountry)}. Using cross-border options.`);
+          toast.info(
+            `All selected platforms are unavailable in ${countryName(opts.effectiveCountry)}. Using cross-border options.`,
+          );
           return cb;
         }
         const globalFallback = ["Amazon", "Shopify", "eBay"].filter(
           (p) => countryFit(p as Platform, opts.effectiveCountry) !== "unavailable",
         ) as Platform[];
         if (globalFallback.length > 0) {
-          toast.info(`Switching to global platforms for ${countryName(opts.effectiveCountry)} market.`);
+          toast.info(
+            `Switching to global platforms for ${countryName(opts.effectiveCountry)} market.`,
+          );
           return globalFallback;
         }
         return opts.platforms;
@@ -406,10 +580,15 @@ export function useFinderSearch(opts: {
       armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
       if (opts.engine !== "default") {
-        hfGen.mutate({ engine: opts.engine as "qwen" | "llama" | "hybrid", platforms: effectivePlatforms });
+        hfGen.mutate({
+          engine: opts.engine as "qwen" | "llama" | "hybrid",
+          platforms: effectivePlatforms,
+        });
         return;
       }
-      gen.mutate({
+      // Varsayılan motor: YENİ HAT birincil. Başlatma/sonuç başarısız olursa
+      // `pipeline` kendi içinde eski hatta (`gen`) düşer.
+      pipeline.mutate({
         niche: nicheValue,
         category: opts.category,
         audience: opts.audience,

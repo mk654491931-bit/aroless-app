@@ -138,8 +138,25 @@ export async function readDiscoveryJob(runId: string): Promise<DiscoveryJobRecor
   return toRecord(data as Record<string, unknown>);
 }
 
-/* ------------------------------------------------------------ Durum geçişi */
+/**
+ * Nihai sonucu (`result` sütunu) okur — YALNIZ terminal durumda.
+ *
+ * Neden ayrı okuma: `result` sütunu büyüktür (kazanan ürünler + uzlaşma +
+ * kaynak raporu). Her yoklama turunda taşımak hem gereksiz bant hem gereksiz
+ * bellek demek. Bu yüzden akış ucu önce durumu okur, iş bitince SADECE
+ * sonucu çeker.
+ */
+export async function readDiscoveryResult(runId: string): Promise<unknown | null> {
+  const { data, error } = await jobStore()
+    .from(JOB_TABLE)
+    .select("result")
+    .eq("id", runId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return (data as { result?: unknown }).result ?? null;
+}
 
+/* ------------------------------------------------------------ Durum geçişi */
 /**
  * Durumu ilerletir ve geçişin meşru olduğunu KALICI OLARAK doğrular.
  *

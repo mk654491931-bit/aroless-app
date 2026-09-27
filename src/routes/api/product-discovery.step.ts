@@ -226,12 +226,17 @@ async function handleStep(request: Request, step: string): Promise<Response> {
 
         // Nihai sıralama AYRI bir adım olarak kuyruğa alınır: `deep` ve
         // `final` ayrı fonksiyonlarda bölmelenir, hiçbir istek zinciri taşımaz.
+        //
+        // `products` BİLEREK boş GÖNDERİLMEZ: uzlaşma satırı ürünün kendisi
+        // değildir, yalnız oy skorudur. Arayüzün fiyat/marka/görsel görebilmesi
+        // için aday ürünler de taşınır; `final` ikisini fingerprint ile
+        // birleştirir.
         const queued = await enqueueDiscoveryStep({
           runId,
           userId,
           input,
           step: "final",
-          products: [],
+          products: result.products ?? [],
           consensus,
           progress: 90,
           origin: appOrigin(request),
@@ -243,14 +248,21 @@ async function handleStep(request: Request, step: string): Promise<Response> {
       }
 
       case "final": {
-        const ranked = runFinalRankStep(payload.consensus as never, input.topN);
+        // Uzlaşma (oy) satırları fingerprint ile aday ürünlere eşleşir.
+        const byId = new Map(
+          (payload.batch as { fingerprint?: string }[]).map((p) => [
+            String(p.fingerprint ?? ""),
+            p,
+          ]),
+        );
+        const ranked = runFinalRankStep(payload.consensus as never, input.topN, byId as never);
         if (!ranked.ok) return failStep(runId, job.userId, "final sıralama başarısız.");
         // Terminal yazma: `finish_discovery_job` `status='processing'` koşuluyla
         // çalıştığı için iki teslimat çift sonuç üretemez.
         const written = await finishDiscoveryJob(runId, {
           runId,
           input,
-          products: [],
+          products: ranked.products,
           consensus: ranked.consensus as Consensus[],
           stats: job.stats,
           stepStats: {},

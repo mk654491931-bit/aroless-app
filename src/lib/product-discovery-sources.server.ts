@@ -54,6 +54,103 @@ async function grab(
   return res.text();
 }
 
+async function grabJson<T>(url: string, ms: number): Promise<T> {
+  return JSON.parse(await grab(url, ms, "application/json")) as T;
+}
+
+/**
+ * Marka tahmini — BAŞLIKTAN, UYDURMADAN.
+ *
+ * Neden gerekli: bu katmandaki KAYNAKLARIN TAMAMI `brand` alanını boş
+ * bırakıyordu (ölçülen gerçek: 5 kaynak, 0 marka). Marka iki yerde kritik:
+ *   1. `productFingerprint` markayı girdi olarak alır → markasız ürünler
+ *      aynı ürünün kopyaları gibi görünür veya kopya sayılıp elenir.
+ *   2. 14 ajanın CFO/strateji oyları markayı okur.
+ *
+ * KURAL: yalnız başlığın İLK kelimesi büyük harfle başlıyorsa ve
+ * sayı içermiyorsa marka sayılır. Bu bilinçli olarak KABAT bir tahmindir:
+ * yanlış marka uydurmak, marka olmamaktan daha kötüdür (fingerprint çöker).
+ * Bir dizi `MARKA_DEĞİL` ile maskelenir.
+ */
+const NOT_A_BRAND = new Set([
+  "the",
+  "a",
+  "an",
+  "best",
+  "top",
+  "new",
+  "how",
+  "why",
+  "what",
+  "when",
+  "amazon",
+  "ebay",
+  "walmart",
+  "target",
+  "etsy",
+  "alibaba",
+  "shopify",
+  "review",
+  "reviews",
+  "guide",
+  "buying",
+  "buy",
+  "cheap",
+  "sale",
+  "deals",
+]);
+
+export function brandFromTitle(title: string): string {
+  const first =
+    String(title ?? "")
+      .trim()
+      .split(/\s+/)[0] ?? "";
+  const cleaned = first.replace(/[^\p{L}\p{N}\-&'.]/gu, "");
+  if (cleaned.length < 2 || cleaned.length > 24) return "";
+  if (/\d/.test(cleaned)) return "";
+  if (!/^\p{Lu}/u.test(cleaned)) return "";
+  if (NOT_A_BRAND.has(cleaned.toLowerCase())) return "";
+  return cleaned;
+}
+
+/**
+ * Görünür metinden yıldız puanı + değerlendirme sayısı okur.
+ *
+ * Sadece GERÇEKTEN yazılmış sayıları kabul eder: "4.5 out of 5",
+ * "4,5 yıldız", "Rated 4.3 by 128 buyers", "4.5/5". Tahmin UYDURMAZ; metinde
+ * sayı yoksa `null` döner ve hard filter bu ürünü puan yok diye eler.
+ */
+export function ratingFromText(text: string): { rating: number | null; count: number | null } {
+  const clean = decode(text).replace(/\u00a0/g, " ");
+  const star =
+    /(\d[.,]\d)\s*(?:\/\s*5|out of 5|stars?\b|★|yıldız)/i.exec(clean) ??
+    /rated?\s+(\d[.,]\d)/i.exec(clean);
+  const rating = star ? Number(star[1]!.replace(",", ".")) : NaN;
+  const countMatch =
+    /(\d[\d.,]*)\s*(?:reviews?|ratings?|değerlendirme|yorum|değerlendirmeleri)\b/i.exec(clean) ??
+    /(?:by|)\s*(\d[\d.,]*)\s*(?:buyers?|customers?|kişi)/i.exec(clean);
+  const count = countMatch ? Number(countMatch[1]!.replace(/[.,]/g, "")) : NaN;
+  return {
+    rating: Number.isFinite(rating) && rating >= 0 && rating <= 5 ? rating : null,
+    count: Number.isFinite(count) && count >= 0 ? count : null,
+  };
+}
+
+/** HTML entity'lerini çözer (fiyat/puan metni okunurken gerekir). */
+function decode(text: string): string {
+  return String(text ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;|&rsquo;/gi, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /* ------------------------------------------------- 1. Hacker News (Algolia) */
 
 /**
@@ -155,7 +252,12 @@ export function isComplaintTitle(title: string): boolean {
 
 export const redditArchiveSource: ProductSource = {
   name: "reddit-archive",
-  timeoutMs: 6_000,
+  // ÖLÇÜM (2026-09-27): bu kaynak 5,7 sn ile hattın DUĞURLAYAN adımıydı
+  // (11 kaynak paralel koştuğunda toplam süre = en yavaşınki). Arşiv 3 alt
+  // topluluğu sırayla ve aralarında bekleyerek tarıyor; tavan 4 sn'ye
+  // indirildi. Ücretsiz sinyali 1,7 sn'de kaybetmek, tüm hattı 1,7 sn
+  // uzatmaktan iyi: Vercel bütçesi adım adımda daralıyor.
+  timeoutMs: 4_000,
   async scrape(niche: string): Promise<RawProduct[]> {
     const words = niche
       .toLowerCase()
@@ -170,7 +272,7 @@ export const redditArchiveSource: ProductSource = {
     for (const sub of REDDIT_SUBS) {
       try {
         const res = await fetch(`${ARCTIC}/posts/search?subreddit=${sub}&limit=100&sort=desc`, {
-          signal: AbortSignal.timeout(2_500),
+          signal: AbortSignal.timeout(1_800),
           headers: { "user-agent": UA },
         });
         if (!res.ok) continue;
@@ -393,15 +495,624 @@ export const marketplacePriceSource: ProductSource = {
   },
 };
 
+/* ------------------------------------------------- Filtre yardımcıları */
+
+/**
+ * Niş alakalılık kapısı — kaynak kendi içinde uygular.
+ *
+ * NEDEN VAR (ölçülen gerçek, 2026-09-27): iTunes "air fryer" aramasına 20
+ * satır döndü ama bunların çoğu UYGULAMA/ŞARKI; "robot vacuum"a ise kitap.
+ * Bu satırlar ne ilgiliydi ne de ölçülebilir bir alan taşıyordu; filtreye
+ * girmeleri listeyi GÜRÜLTÜYLE dolduruyordu (ölçüm: 59 hayatta kalandan
+ * 0'ında gerçek puan vardı).
+ *
+ * Bu yüzden her satır İKİ kapıdan geçmeli:
+ *   1. Başlık nişin en az bir kelimesini içermeli (alakalılık).
+ *   2. En az BİR ölçülebilir ticari alanı olmalı (fiyat veya puan).
+ * Kapıdan geçemeyen satır DÜŞÜRÜLMEZ, üstüne yazılmaz — kaynak dürüstçe
+ * "bu nişte bana ölçülebilir ürün yok" der ve 0 satır döner.
+ */
+export function nicheTokens(niche: string): string[] {
+  return niche
+    .toLowerCase()
+    .split(/[^a-z0-9çğıöşü]+/i)
+    .filter((w) => w.length >= 4)
+    .slice(0, 4);
+}
+
+export function matchesNiche(title: string, niche: string): boolean {
+  const tokens = nicheTokens(niche);
+  if (!tokens.length) return true;
+  const lower = String(title ?? "").toLowerCase();
+  return tokens.some((t) => lower.includes(t));
+}
+
+/** En az bir ÖLÇÜLEBİLİR ticari alan var mı? */
+export function hasMeasuredField(row: { priceUsd: number | null; rating: number | null }): boolean {
+  return row.priceUsd !== null || row.rating !== null;
+}
+
+/* --------------------------------------- 7. iTunes Search (GERÇEK ürün + puan) */
+
+/**
+ * iTunes Search API — GERÇEK ürün, GERÇEK fiyat, GERÇEK kullanıcı puanı.
+ *
+ * Neden bu kaynak en değerli addedir: hattın problemi "ölçülmüş ticari alan"
+ * eksikliğiydi. Hacker News/Reddit/GitHub/Wikipedia ürün SATMAZ, talep
+ * sinyali verir; `marketplace-price` fiyat verir ama puansız gelir. Bu kaynak
+ * `priceUsd` + `rating` + `ratingCount` ÜÇÜNÜ birden gerçekten döndürür —
+ * `dataCompleteness` tam 5'e çıkar ve ürün gerçekten satın alınabilir bir
+ * şeydir (uygulama mağazasında fiyatı var).
+ *
+ * DÜRÜSTLÜK: `inStock` veri sunmaz → `null`. Para birimi USD değilse fiyat
+ * `null` yapılır; 12.99 TL'yi "12.99 $" diye yazmak yanlış olurdu. Kur
+ * dönüşümü yapılmaz, bunun yerine `notes`'e para birimi yazılır.
+ *
+ * $0 ve anahtarsız: `https://performance-partners.apple.com/search-api`
+ * dokümanı açıkça anahtarsız kullanımı destekler.
+ *
+ * DIKKAT: bu kaynak NİŞ RELEVANSI DÜŞÜK bir katalogdur (uygulama, şarkı,
+ * kitap). Ölçüldü ki fiziksel ürün nişlerinde alakasız satır üretir; bu
+ * yüzden `matchesNiche` + `hasMeasuredField` kapısından geçemeyen satır
+ * alınmaz. Medya/kitap nişlerinde gerçek fiyat+puan sağlar, "air fryer"
+ * gibi nişlerde dürüstçe 0 döner.
+ */
+export const itunesSource: ProductSource = {
+  name: "itunes",
+  timeoutMs: 4_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const q = encodeURIComponent(niche.slice(0, 60));
+    const json = await grabJson<{
+      resultCount?: number;
+      results?: {
+        kind?: string;
+        trackName?: string | null;
+        collectionName?: string | null;
+        artistName?: string | null;
+        trackPrice?: number | null;
+        collectionPrice?: number | null;
+        currency?: string | null;
+        primaryGenreName?: string | null;
+        trackViewUrl?: string | null;
+        collectionViewUrl?: string | null;
+        averageUserRating?: number | null;
+        userRatingCount?: number | null;
+      }[];
+    }>(`https://itunes.apple.com/search?term=${q}&limit=25&country=US`, 3_500);
+
+    const out: RawProduct[] = [];
+    const seen = new Set<string>();
+    for (const item of json.results ?? []) {
+      // `collection`/`software` türleri üründür; `song` tek parça kaydı da
+      // satın alınabilir bir üründür — hepsi kabul edilir.
+      const title = String(item.trackName ?? item.collectionName ?? "").trim();
+      if (!title) continue;
+      const key = title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const currency = String(item.currency ?? "USD").toUpperCase();
+      const raw = Number(item.trackPrice ?? item.collectionPrice);
+      const priceUsd = Number.isFinite(raw) && raw > 0 && currency === "USD" ? raw : null;
+      const rating =
+        Number.isFinite(Number(item.averageUserRating)) &&
+        Number(item.averageUserRating) > 0 &&
+        Number(item.userRatingCount) >= 3
+          ? Number(item.averageUserRating)
+          : null;
+      const ratingCount =
+        Number.isFinite(Number(item.userRatingCount)) && Number(item.userRatingCount) > 0
+          ? Number(item.userRatingCount)
+          : null;
+
+      const notesParts: string[] = [];
+      if (item.primaryGenreName) notesParts.push(String(item.primaryGenreName));
+      if (priceUsd === null && raw > 0) notesParts.push(`fiyat ${currency} ${raw}`);
+      if (ratingCount) notesParts.push(`${ratingCount} kullanıcı puanı`);
+
+      const row: RawProduct = {
+        title: title.slice(0, 180),
+        brand: String(item.artistName ?? "").slice(0, 60),
+        seller: "Apple",
+        priceUsd,
+        rating,
+        ratingCount,
+        inStock: null,
+        source: "itunes",
+        url: String(item.trackViewUrl ?? item.collectionViewUrl ?? ""),
+        notes: notesParts.join(" · ").slice(0, 200),
+      };
+      // Kapı 1: alakalılık. Kapı 2: en az bir ölçülebilir alan.
+      if (!matchesNiche(row.title, niche)) continue;
+      if (!hasMeasuredField(row)) continue;
+      out.push(row);
+    }
+    return out.slice(0, 20);
+  },
+};
+
+/* ------------------------------------- 8. Open Library (GERÇEK kitap + puan) */
+
+/**
+ * Open Library — gerçek kitaplar, GERÇEK okur puanları (ortalama + sayı).
+ *
+ * Anahtarsız, CORS'lu, hızlı. `ratings_average` + `ratings_count` sayesinde
+ * "kaç kişi okudu ve beğendi" kanıtı geliyor. Fiyat para birimi belirtmediği
+ * için `null` yazılır (DÜRÜSTLÜK: kur bilgisi olmadan USD uydurulmaz).
+ *
+ * Ölçüldüğü gibi: kitap dışındaki nişlerde alakasız sonuç verir. Aynı kapı
+ * (niş alakalılığı + en az bir ölçülebilir alan) burada da uygulanır.
+ */
+export const openLibrarySource: ProductSource = {
+  name: "openlibrary",
+  timeoutMs: 4_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const q = encodeURIComponent(niche.slice(0, 60));
+    const json = await grabJson<{
+      docs?: {
+        title?: string | null;
+        author_name?: string[] | null;
+        ratings_average?: number | null;
+        ratings_count?: number | null;
+        first_publish_year?: number | null;
+        key?: string | null;
+      }[];
+    }>(
+      `https://openlibrary.org/search.json?q=${q}&limit=20` +
+        `&fields=title,author_name,ratings_average,ratings_count,first_publish_year,key`,
+      3_500,
+    );
+
+    const out: RawProduct[] = [];
+    for (const doc of json.docs ?? []) {
+      const title = String(doc.title ?? "").trim();
+      if (!title) continue;
+      const rating =
+        Number.isFinite(Number(doc.ratings_average)) &&
+        Number(doc.ratings_average) > 0 &&
+        Number(doc.ratings_count) >= 3
+          ? Number(doc.ratings_average)
+          : null;
+      const ratingCount =
+        Number.isFinite(Number(doc.ratings_count)) && Number(doc.ratings_count) > 0
+          ? Number(doc.ratings_count)
+          : null;
+      const year = Number(doc.first_publish_year);
+      const row: RawProduct = {
+        title: title.slice(0, 180),
+        brand: String(doc.author_name?.[0] ?? "").slice(0, 60),
+        seller: "Open Library",
+        priceUsd: null,
+        rating,
+        ratingCount,
+        inStock: null,
+        source: "openlibrary",
+        url: `https://openlibrary.org${String(doc.key ?? "")}`,
+        notes: [
+          ratingCount ? `${ratingCount} okur puanı` : "",
+          Number.isFinite(year) ? `${year} basımı` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")
+          .slice(0, 200),
+      };
+      if (!matchesNiche(row.title, niche)) continue;
+      if (!hasMeasuredField(row)) continue;
+      out.push(row);
+    }
+    return out.slice(0, 20);
+  },
+};
+
+/* ------------------------------- 9. Open Food Facts (gıda nişi genişletme) */
+
+/**
+ * Open Food Facts — market genişliği sinyali (ürün listesi DEĞİL).
+ *
+ * Neden sinyal olarak kullanılıyor: API ürün adı/marka verir ama fiyat ve
+ * kullanıcı puanı YOKTUR. Bu satırlar ürün olarak eklenseydi hard filter
+ * (puan eşiği + veri bütünlüğü) hepsini elerdi; yani kaynak boşuna bütçe
+ * harcardı. Bunun yerine ölçülebilir bir genişlik sinyali üretir:
+ * "marketplace'de N ürün bulundu, en çok şu markalar".
+ *
+ * Niş gıda/kahve/diyet ise hattın bugünkü kaynakları HİÇ ürün vermiyordu;
+ * bu kaynak o boşluğu doldurur. Lisans: Open Database, anahtarsız.
+ *
+ * ÖLÇÜLEN İKİ GERÇEK (2026-09-27):
+ *   1. Bu API tarayıcı User-Agent'ı ile **503** döndürüyor; kendini tanımlayan
+ *      bot UA'sı ile 200 dönüyor. Bu yüzden `FOOD_FACTS_UA` kullanılır.
+ *   2. Sunucu **kararsız**: ardışık üç sorguda 200 / 503 / 200 ölçüldü. Bu
+ *      yüzden bir kez yeniden denenir; yine 503 gelirse kaynak `ok:false`
+ *      olarak raporlanır ve diğer kaynaklar etkilenmez (fail-soft sözleşmesi).
+ *   3. Kapsamı dar: market sayısı 0 dönebiliyor ("robot vacuum" → 0 ölçüldü).
+ *      Bu kaynak sinyal üretir, ürün listesi DEĞİL.
+ */
+const FOOD_FACTS_UA = "ArolessBot/1.0 (https://aroless.tech; product research)";
+
+export const openFoodFactsSource: ProductSource = {
+  name: "openfoodfacts",
+  timeoutMs: 5_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const q = encodeURIComponent(niche.slice(0, 60));
+    const url =
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}` +
+      `&json=1&page_size=10&fields=product_name,brands`;
+
+    type OffResponse = {
+      count?: number;
+      products?: { product_name?: string | null; brands?: string | null }[];
+    };
+    let json: OffResponse | null = null;
+    let lastError = "";
+    for (let attempt = 0; attempt < 2 && !json; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 600));
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(2_000),
+          headers: { "user-agent": FOOD_FACTS_UA, accept: "application/json" },
+        });
+        if (!res.ok) {
+          lastError = `HTTP ${res.status}`;
+          continue;
+        }
+        json = (await res.json()) as OffResponse;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "unreachable";
+      }
+    }
+    if (!json) throw new Error(lastError || "no response");
+
+    const count = Number(json.count ?? 0);
+    if (count <= 0) return [];
+    const top = (json.products ?? [])
+      .map(
+        (p) =>
+          String(p.brands ?? "")
+            .split(",")[0]
+            ?.trim() ?? "",
+      )
+      .filter(Boolean);
+    const brandCounts = new Map<string, number>();
+    for (const brand of top) brandCounts.set(brand, (brandCounts.get(brand) ?? 0) + 1);
+    const leaders = [...brandCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([brand]) => brand);
+
+    return [
+      {
+        title: `${niche} — Open Food Facts market genişliği`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "openfoodfacts",
+        url: `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}`,
+        notes:
+          `market genişliği ${count} ürün` +
+          (leaders.length ? ` · öne çıkan markalar ${leaders.join(", ")}` : ""),
+      },
+    ];
+  },
+};
+
+/* ------------------------------------------ 10. Google News RSS (hype/ilgi) */
+
+/**
+ * Google News RSS — son 30 gündeki haber hacmi = hype ölçümü.
+ *
+ * Anahtarsız, ücretsiz, stabil. Arama motoru değil haber RSS'i olduğu için
+ * bot korumasına takılmaz (ölçüm: 200 + ~300 ms). "Hype var mı?" sorusuna
+ * gerçek sayıyla yanıt verir; `demand` sinyaline beslenir.
+ *
+ * Google Trends datacenter IP'lerinde 429 verdiği için (daha önce ölçüldü)
+ * talep ölçümü burada yapılır.
+ */
+export const googleNewsSource: ProductSource = {
+  name: "google-news",
+  timeoutMs: 4_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const q = encodeURIComponent(`${niche.slice(0, 60)} when:30d`);
+    const xml = await grab(
+      `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`,
+      3_500,
+      "application/rss+xml,application/xml,text/xml",
+    );
+    const items = xml.match(/<item>/g)?.length ?? 0;
+    if (items === 0) return [];
+    return [
+      {
+        title: `${niche} — Google News hype ölçümü (son 30 gün)`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "google-news",
+        url: `https://news.google.com/search?q=${encodeURIComponent(niche)}`,
+        notes: `son 30 günde ${items} haber · hype yoğunluğu ${items >= 20 ? "yüksek" : items >= 6 ? "orta" : "düşük"}`,
+      },
+    ];
+  },
+};
+
+/* ------------------------------------------------- 11. Wikidata (kapsam) */
+
+/**
+ * Wikidata — nişin kavramsal GENİŞLİĞİ.
+ *
+ * Arama toplamı (`query.searchinfo.totalhits`) "bu nişte kaç ayrı kavram var"
+ * sorusunu yanıtlar: dar mı (tek ürün grubu) geniş mi (çok dallı pazar).
+ *
+ * ÖLÇÜLEN (2026-09-27): `action=wbsearchentities` toplamı DÖNDÜRMEDİ
+ * (`searchinfo` yalnız `search` anahtarını taşıyordu → 0 satır). MediaWiki
+ * arama uçları `totalhits` verir; `list=search&srinfo=totalhits` ile 200,
+ * ~290 ms ve `totalhits: 17` ölçüldü. Bu yüzden o uç kullanılır.
+ *
+ * Anahtarsız, tek istek. Ürün satmaz — talep kapsamı sinyalidir.
+ */
+export const wikidataSource: ProductSource = {
+  name: "wikidata",
+  timeoutMs: 3_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const q = encodeURIComponent(niche.slice(0, 60));
+    const json = await grabJson<{
+      query?: {
+        searchinfo?: { totalhits?: number };
+        search?: { title?: string; snippet?: string }[];
+      };
+    }>(
+      `https://www.wikidata.org/w/api.php?action=query&list=search` +
+        `&srsearch=${q}&srlimit=20&srinfo=totalhits&srnamespace=0&format=json`,
+      3_000,
+    );
+    const hits = Number(json.query?.searchinfo?.totalhits ?? 0);
+    if (hits <= 0) return [];
+    const first = json.query?.search?.[0];
+    const qid = String(first?.title ?? "").replace(/^Q/, "");
+    const snippet = decode(String(first?.snippet ?? "")).slice(0, 70);
+    return [
+      {
+        title: `${niche} — Wikidata kapsam ölçümü`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "wikidata",
+        url: qid
+          ? `https://www.wikidata.org/wiki/Q${qid}`
+          : `https://www.wikidata.org/w/index.php?search=${q}`,
+        notes: `${hits} ilgili kavram` + (snippet ? ` · ${snippet}` : ""),
+      },
+    ];
+  },
+};
+
+/* --------------------------- 12. Web inceleme/arama (EN GENİŞ, EN KIRILGAN) */
+
+/**
+ * Serbest web — inceleme yazıları + liste sayfaları, iki motor (DDG + Bing).
+ *
+ * Bu kaynak "en geniş, en kırılgan" olan: niş ne olursa olsun bir şeyler
+ * bulur. İki motor SIRA ile denenir; biri ölürse diğeri dener.
+ *
+ * DEĞERİ: (a) marka alanını doldurur — diğer kaynakların hepsi `brand`
+ * boş bırakıyordu; (b) snippet içindeki fiyat/puanı okur; (c) niş dışı
+ * (arbitrary) ürünler için tek umut.
+ *
+ * KIRILGANLIK DÜRÜST KABULÜ: arama motoru HTML'i değişirse bu kaynak boş
+ * döner — `runSources` onu `ok:false` olarak RAPORLAR, diğer kaynaklar etkilenmez.
+ * Yapı değişiklikleri dosya yorumlarında ölçümle birlikte not edilir.
+ */
+const REVIEW_SUFFIX = "review";
+
+function priceFromText(text: string): number | null {
+  const m = /(?:US\s*)?\$\s?(\d{1,4}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)/.exec(decode(text));
+  if (!m) return null;
+  const value = Number(m[1]!.replace(/,/g, ""));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+interface WebHit {
+  title: string;
+  url: string;
+  host: string;
+  snippet: string;
+}
+
+/** DuckDuckGo HTML sonuçları — bot-guard 202 döndüğünde tekrar denenir. */
+async function duckduckgoHits(niche: string): Promise<WebHit[]> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(
+    `${niche} ${REVIEW_SUFFIX}`,
+  )}`;
+  let html = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 900));
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(3_000),
+        headers: { "user-agent": UA, accept: "text/html" },
+      });
+      if (!res.ok) continue;
+      const candidate = await res.text();
+      // `202` bot-guard sayfasında sonuç bloğu bulunmaz.
+      if (candidate.includes("result__a")) {
+        html = candidate;
+        break;
+      }
+    } catch {
+      // sonraki denemeye geç
+    }
+  }
+  if (!html) return [];
+
+  // Blok yapısı: split sonrası ` href="…">BAŞLIK</a> … result__snippet…SNIP`
+  const hits: WebHit[] = [];
+  for (const block of html.split(/result__a/).slice(1, 20)) {
+    const href = /href="([^"]+)"/.exec(block)?.[1] ?? "";
+    const raw = decodeURIComponent(/uddg=([^&"]+)/.exec(href)?.[1] ?? href);
+    if (!raw || raw.includes("duckduckgo")) continue;
+    // Başlık, ilk `>` ile `</a>` arasındaki metindir.
+    const title = decode(/^\s*[^>]*>([\s\S]{4,200}?)<\/a>/.exec(block)?.[1] ?? "");
+    if (!title) continue;
+    let host = "";
+    try {
+      host = new URL(raw).hostname.replace(/^www\./, "");
+    } catch {
+      continue;
+    }
+    // Snippet, `result__snippet` işaretinden sonraki metindir.
+    const after = block.split("result__snippet")[1] ?? "";
+    const snippet = decode(/^\s*[^>]*>([\s\S]{0,600}?)(?:<\/a|<)/.exec(after)?.[1] ?? "");
+    hits.push({ title, url: raw, host, snippet: `${title} ${snippet}` });
+  }
+  return hits;
+}
+
+/**
+ * Bing sonuçları — DDG'yi yedekleyen motor (ve şu an ÖNCE gelen motor).
+ *
+ * ÖLÇÜLEN (2026-09-27): Bing bu IP'den **200 + 10 sonuç / ~220 ms** döndü;
+ * DDG ise ardışık isteklerden sonra **202 bot-guard** sayfası veriyor
+ * (`result__a` = 0). Bu yüzden motor sırası Bing → DDG'dir: önce çalışan
+ * motoru sor, DDG'ye yük bindirme (DDG aynı zamanda `marketplace-price`
+ * kaynağının arkasındaki motor).
+ *
+ * ÖNEMLİ: Bing `href` alanı gerçek adresi değil, yönlendirme adresidir:
+ * `https://www.bing.com/ck/a?...&u=a1<base64url>`. `bingRealUrl` bunu çözer.
+ */
+function bingRealUrl(href: string): string {
+  const encoded = /[?&]u=a1([A-Za-z0-9_-]+)/.exec(href)?.[1];
+  if (!encoded) return href;
+  try {
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return new TextDecoder().decode(Uint8Array.from(atob(padded), (c) => c.charCodeAt(0)));
+  } catch {
+    return href;
+  }
+}
+
+async function bingHits(niche: string): Promise<WebHit[]> {
+  const url = `https://www.bing.com/search?q=${encodeURIComponent(
+    `${niche} ${REVIEW_SUFFIX}`,
+  )}&setlang=en`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(3_000),
+    headers: { "user-agent": UA, accept: "text/html" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+  const hits: WebHit[] = [];
+  for (const block of html.split(/class="b_algo"/).slice(1, 16)) {
+    // Blok, `<h2>` öncesi uzun bir stil/bağlantı dump'u içerir; başlıktan
+    // başlayan pencereye bakmak hem hızlı hem güvenilir.
+    const start = block.indexOf("<h2");
+    if (start < 0) continue;
+    const window = block.slice(start, start + 3_000);
+    const title = decode(/<a\b[^>]*>([\s\S]{2,200}?)<\/a>/.exec(window)?.[1] ?? "");
+    const href = bingRealUrl(decode(/<a\b[^>]*href="([^"]+)"/.exec(window)?.[1] ?? ""));
+    if (!title || !href) continue;
+    let host = "";
+    try {
+      host = new URL(href).hostname.replace(/^www\./, "");
+    } catch {
+      continue;
+    }
+    const snippet = decode(/<p\b[^>]*>([\s\S]{2,400}?)<\/p>/.exec(window)?.[1] ?? "");
+    hits.push({ title, url: href, host, snippet: `${title} ${snippet}` });
+  }
+  return hits;
+}
+
+export const webReviewSource: ProductSource = {
+  name: "web-reviews",
+  timeoutMs: 7_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    // SIRA ÖLÇÜMLE BELİRLENDİ: Bing önce (ölçüldü: 200, ~220 ms, 10 sonuç),
+    // DDG yedek (ölçüldü: ardışık isteklerden sonra 202 bot-guard).
+    const engines = [bingHits, duckduckgoHits];
+    let hits: WebHit[] = [];
+    let enginesUsed = 0;
+    for (const engine of engines) {
+      try {
+        const found = await engine(niche);
+        if (found.length) {
+          hits = hits.concat(found);
+          enginesUsed++;
+        }
+      } catch {
+        // bu motor öldü — sıradaki denenir
+      }
+      if (hits.length >= 12) break;
+    }
+    if (!hits.length) {
+      throw new Error(enginesUsed === 0 ? "no engine returned results (ddg+bing)" : "no results");
+    }
+
+    const out: RawProduct[] = [];
+    const seen = new Set<string>();
+    for (const hit of hits) {
+      const key = hit.url.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const { rating, count } = ratingFromText(hit.snippet);
+      const price = priceFromText(hit.snippet);
+      out.push({
+        title: hit.title.slice(0, 180),
+        brand: brandFromTitle(hit.title),
+        seller: hit.host.split(".")[0]?.replace(/^\w/, (m) => m.toUpperCase()) ?? "",
+        priceUsd: price,
+        rating,
+        ratingCount: count,
+        // Sayfa metninde stok ifadesi geçiyorsa bilinir, yoksa bilinmiyor.
+        inStock: /\bout of stock\b|\bsold out\b/i.test(hit.snippet)
+          ? false
+          : /in stock|available/i.test(hit.snippet)
+            ? true
+            : null,
+        source: "web-reviews",
+        url: hit.url,
+        notes: [hit.host, price ? `$${price}` : "", count ? `${count} değerlendirme` : ""]
+          .filter(Boolean)
+          .join(" · ")
+          .slice(0, 200),
+      });
+    }
+    return out.slice(0, 16);
+  },
+};
+
 /* -------------------------------------------------------- Kaynak kaydı */
 
-/** Tüm kaynaklar — sıra, eşzamanlılık ve rapor sırasını belirler. */
+/**
+ * Tüm kaynaklar — sıra, eşzamanlılık ve rapor sırasını belirler.
+ *
+ * SIRA ÖNEMLİ DEĞİL, HEPSİ PARALEL koşar; ama liste "ürün getirenler önce"
+ * okunabilirliği için korunur. `runSources` `Promise.all` kullandığı için
+ * 11 kaynağın toplam süresi en yavaşınki kadardır (≈7 sn tavan), toplamı
+ * değil — Vercel Hobby bütçesi için bu kritiktir.
+ */
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
+  // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
+  itunesSource,
+  openLibrarySource,
+  marketplacePriceSource,
+  webReviewSource,
+  // Talep/hype ölçümü.
+  googleNewsSource,
+  wikipediaSource,
   hackerNewsSource,
   redditArchiveSource,
   githubSource,
-  wikipediaSource,
-  marketplacePriceSource,
+  // Kapsam ölçümü.
+  openFoodFactsSource,
+  wikidataSource,
 ];
 
 /**

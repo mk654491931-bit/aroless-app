@@ -79,6 +79,22 @@ describe.skipIf(!LIVE)("Product Discovery kaynakları (canlı ağ)", () => {
       expect(stats.survivors + rejected).toBeLessThanOrEqual(stats.inputCount);
       expect(survivors.length).toBeLessThanOrEqual(75);
 
+      // KANIT KALİTESİ (yeni kaynakların asıl kazancı): kaç üründe GERÇEK
+      // kullanıcı puanı var, kaçında ölçülebilir alanların çoğu dolu, kaçında
+      // marka var? Haber/repo kaynakları yalnız talep sinyali verir; iTunes ve
+      // Open Library gerçek `rating` + `ratingCount` getirir.
+      const withRating = survivors.filter((s) => s.rating !== null).length;
+      const withPrice = survivors.filter((s) => s.priceUsd !== null).length;
+      const fullEvidence = survivors.filter((s) => s.dataCompleteness >= 4).length;
+      const withBrand = survivors.filter((s) => Boolean(s.brand)).length;
+      /* eslint-disable no-console */
+      console.log(
+        `   kanıt: ${withPrice}/${survivors.length} üründe gerçek fiyat · ` +
+          `${withRating} üründe gerçek puan · ${fullEvidence} üründe ≥4/5 alan · ` +
+          `${withBrand} üründe marka\n`,
+      );
+      /* eslint-enable no-console */
+
       // 4) Hayatta kalan her ürün FİNGERPRINT taşır ve gerçek kaynağa bağlıdır.
       for (const s of survivors) {
         expect(s.fingerprint.length).toBeGreaterThan(0);

@@ -20,7 +20,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { requireUser } from "@/lib/api-guard.server";
-import { readDiscoveryJob } from "@/lib/product-discovery-jobs.server";
+import { readDiscoveryJob, readDiscoveryResult } from "@/lib/product-discovery-jobs.server";
 
 /** Akışın en uzun açık kalacağı süre (ms). Sunucusuz sınırların altında. */
 const MAX_STREAM_MS = 55_000;
@@ -85,10 +85,15 @@ export const Route = createFileRoute("/api/product-discovery/stream")({
                 stats: current.stats,
               });
               if (current.discoveryStatus === "completed" || current.discoveryStatus === "failed") {
+                // Nihai sonuç YALNIZ terminal durumda okunur (büyük sütun; her
+                // turda taşımak gereksiz). Arayüz ürünleri buradan alır.
+                const result =
+                  current.discoveryStatus === "completed" ? await readDiscoveryResult(runId) : null;
                 send("result", {
                   runId,
                   status: current.discoveryStatus,
                   error: current.error,
+                  result,
                 });
                 closed = true;
                 controller.close();

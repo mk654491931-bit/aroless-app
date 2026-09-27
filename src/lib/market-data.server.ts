@@ -729,8 +729,13 @@ export async function scrapeMarketplaceSellers(
       // Sonraki denemeye geç; en sonunda boş döner.
     }
   }
-  if (!html) return [];
-
+  if (!html) {
+    // DDG bu IP'den bot-guard (202) döndürüyor — canlı ölçümde tek başına
+    // `scrapeMarketplaceSellers` boş döndü. Dosyanın kendi notu zaten
+    // "DDG 202 veriyor, Bing News RSS sabit çalışıyor" diyor; o yol buraya
+    // bağlanmamıştı. DDG boşsa ÖLÇÜLMÜŞ fiyat yoluna düşüyoruz.
+    return await scrapeBingPriceSignals(query);
+  }
   // Sonuçları link üzerinden ayır; her blokta hem başlık hem snippet var.
   const blocks = html.split(/result__a/).slice(1, 26);
   const out: ScrapedSeller[] = [];
