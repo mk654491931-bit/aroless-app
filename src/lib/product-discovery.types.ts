@@ -183,6 +183,42 @@ export function productFingerprint(input: {
     .join("|");
 }
 
+/**
+ * Model kodu anahtarı — `productFingerprint`in YAKALAMADIĞI kopyaları yakalar.
+ *
+ * Sorun: fingerprint TAM normalize başlığı gömer. Aynı ürünün iki mağaza
+ * yazımı farklı olduğunda (canlı ölçüm — "CASABREWS CM5418 Compact Espresso
+ * Machine With Milk Frother" / "Casabrews CM5418 20 Bar Espresso Machine And
+ * Coffee Maker") iki ayrı ürün sanılır ve NİHAİ 5'LİK LİSTEYE İKİ KEZ GİRER.
+ * Gerçek ayırt edici model kodu (CM5418), oysa o iki başlıkta aynı.
+ *
+ * Kural BİLEREK MUHAFAZAKÂR — yanlış birleştirme, kaçırılan kopyadan çok
+ * daha kötüdür (iki farklı ürünü birbirine karıştırır):
+ *   • Anahtarda HARFLE başlayıp 2+ hane gelen kodlar sayılır (CM5418, L10S,
+ *     AF100). Rakamla başlayanlar SAYILMAZ: "8000 PA", "10,000Pa", "20 BAR"
+ *     ölçü/spec'tir, model kodu değildir.
+ *   • Marka boşsa anahtar üretilmez.
+ *   • Başlıkta TAM OLARAK bir model kodu yoksa anahtar üretilmez (belirsiz
+ *     başlık hiçbir eşleştirmeye giremez).
+ */
+export function productModelKey(input: { title: string; brand?: string }): string {
+  const brand = productFingerprint({ title: input.brand ?? "" });
+  if (!brand) return "";
+
+  const title = String(input.title ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+  const codes = new Set<string>();
+  for (const m of title.matchAll(/\b([A-Z]{1,5}\d{2,6}[A-Z]{0,2})\b/g)) {
+    codes.add(m[1].replace(/[^A-Z0-9]/g, ""));
+  }
+  // 0 kod → belirsiz. 1'den fazla kod → hangisi model kodu belirsiz.
+  if (codes.size !== 1) return "";
+  return `${brand}|${[...codes][0]}`;
+}
+
 /** Başlıktan marka tahmini — UYDURMA YAPMAZ, bilinmiyorsa boş döner. */
 export function inferBrand(title: string, known?: readonly string[]): string {
   const t = productFingerprint({ title });

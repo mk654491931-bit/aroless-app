@@ -24,6 +24,7 @@
 
 import {
   productFingerprint,
+  productModelKey,
   RawProductSchema,
   type FilterStats,
   type NormalizedProduct,
@@ -254,6 +255,17 @@ export function scoreDeterministically(
 
 /* --------------------------------------------------------- Hard filter */
 
+/** Bir ürünün tüm tekilleştirme anahtarları (fingerprint + model kodu). */
+function dedupKeys(p: NormalizedProduct): string[] {
+  const keys: string[] = [];
+  const fp = p.fingerprint || productFingerprint({ title: p.name });
+  if (fp) keys.push(`f:${fp}`);
+  const mk = productModelKey({ title: p.name, brand: p.brand });
+  if (mk) keys.push(`m:${mk}`);
+  // Hiç anahtar üretilemeyen satır (boş başlık) tek başına geçsin.
+  return keys.length > 0 ? keys : [`x:${p.name}`];
+}
+
 /**
  * Sert eleme — AI YOK, saf kural.
  *
@@ -339,17 +351,25 @@ export function applyHardFilter(
     byCompleteness.push(p);
   }
 
-  // 6) Tekilleştirme (fingerprint). En yüksek puanlı temsilci kalır; aynı
-  //    ürünü gören ek kaynaklar `sources` listesine eklenir (kanıt gücü artar).
+  // 6) Tekilleştirme. İKİ anahtar kullanılır:
+  //      `f:<fingerprint>` → tam normalize başlık aynı (aynı kaynaktan iki kez)
+  //      `m:<modelKey>`    → marka + model kodu aynı, BAŞLIK FARKLI
+  //    İkincisi olmadan aynı ürün iki farklı yazımla nihai listeye iki kez
+  //    giriyordu (canlı ölçüm: espresso CM5418). `productModelKey` yalnız
+  //    tek model kodu bulunan markalı ürünlerde anahtar ürettiği için yanlış
+  //    birleştirme riski düşük kalır.
+  //    En yüksek puanlı temsilci kalır; aynı ürünü gören ek kaynaklar `sources`
+  //    listesine eklenir (kanıt gücü artar).
   const best = new Map<string, NormalizedProduct>();
   for (const p of byCompleteness) {
-    const key = p.fingerprint || productFingerprint({ title: p.name });
-    const incumbent = best.get(key);
-    if (!incumbent) {
-      best.set(key, p);
+    const keys = dedupKeys(p);
+    const hit = keys.find((k) => best.has(k));
+    if (hit === undefined) {
+      for (const k of keys) best.set(k, p);
       continue;
     }
     stats.rejectedByDuplicate++;
+    const incumbent = best.get(hit) as NormalizedProduct;
     // En yüksek puanlı temsilci temel alınır, ama ALAN EN DOLU olan seçilir:
     // fiyatı bilinen ama puanı bilinmeyen bir satır, tam tersini göremedir.
     const base = p.preScore > incumbent.preScore ? p : incumbent;
@@ -357,16 +377,20 @@ export function applyHardFilter(
     // ÖNEMLİ: birleşik alanlar (`sources`, `notes`) spread SONRASINA yazılır.
     // Ters sırada olsaydı `richest` onları ezerdi ve "iki kaynakta görüldü"
     // kanıtı kaybolurdu — güven hesabını sessizce yanlış yapar.
-    best.set(key, {
+    const merged: NormalizedProduct = {
       ...richest,
       preScore: base.preScore,
       signals: base.signals,
       sources: Array.from(new Set([...incumbent.sources, ...p.sources])),
       notes: [incumbent.notes, p.notes].filter(Boolean).join(" · ").slice(0, 200),
-    });
+    };
+    // Birleşen ürünün TÜM anahtarları yeni temsilciye yönelmelidir; aksi
+    // hâlde diğer anahtarı eski nesneyi gösterir ve kopya listede kalır.
+    for (const [k, v] of best) if (v === incumbent) best.set(k, merged);
+    for (const k of keys) best.set(k, merged);
   }
 
-  const survivors = [...best.values()].sort((a, b) => b.preScore - a.preScore);
+  const survivors = [...new Set(best.values())].sort((a, b) => b.preScore - a.preScore);
   stats.survivors = survivors.length;
   return { survivors, stats };
 }

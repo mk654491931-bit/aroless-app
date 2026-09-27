@@ -31,6 +31,15 @@ import {
   type ProductDiscoveryStatus,
 } from "./product-discovery.types";
 
+/**
+ * ADIM 1'in üst sınırı: 75 aday.
+ *
+ * Daha önce `75` dört ayrı yerde gömülüydü (varsayılan parametre, ön sıralama
+ * dilimi, istem metni ve zod şeması). Biri değiştiğinde diğerleri sessizce
+ * eski kalıyordu — hat "en iyi 75" sözünü kendi büyüklüğüne göre tutardı.
+ */
+export const DISCOVERY_TOP_N = 75;
+
 /** Adım sonuçlarının ortak sözleşmesi. */
 export const DiscoveryStepResultSchema = z.object({
   ok: z.boolean(),
@@ -104,7 +113,7 @@ export async function runScrapeFilterStep(
   niche: string,
   _country: string,
   _platform: string,
-  topN = 75,
+  topN = DISCOVERY_TOP_N,
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
   const { filterAndPreRank } = await import("./product-discovery-filter.server");
@@ -188,14 +197,29 @@ export async function runGeminiShortlistStep(
   // Gemini çağrısı burada yapılır (mevcut AI yönlendiricisi üzerinden).
   // Bu dosya saf kalmaya devam eder; çağrı route katmanında enjekte edilir
   // (bağımlılık enjeksiyonu) ki testlerde sahte (mock) çağrı kullanılabilsin.
-  const shortlist = await selectWithGemini(products, niche, topN, geminiShortlistSelector);
+  const { products: shortlist, via: shortlistVia } = await selectWithGemini(
+    products,
+    niche,
+    topN,
+    geminiShortlistSelector,
+  );
+  // DÜRÜST RAPOR: not, GERÇEKTE ne olduğunu söyler. Ölçüldü (2026-09-27):
+  // anahtar yokken çağrı ~30 ms'de düşüyor (yani Gemini'ye HİÇ gidilmiyor)
+  // ama not "Gemini N → M aday seçti" yazıyordu. Kullanıcı ve panel modelin
+  // seçtiğini sanırken aslında deterministik ön sıralama geçerlidir.
   return {
     ok: true,
     status: "gemini_shortlist",
     products: shortlist,
     consensus: [],
     next: "deep_analysis",
-    notes: [`Gemini ${products.length} → ${shortlist.length} aday seçti.`],
+    notes: [
+      `${shortlistVia === "gemini" ? "Gemini" : "deterministik yedek"} ${products.length} → ` +
+        `${shortlist.length} aday seçti.`,
+      ...(shortlistVia === "gemini"
+        ? []
+        : ["Gemini çağrısı yapılmadı; ön skor sıralaması kullanıldı."]),
+    ],
   };
 }
 
@@ -219,13 +243,13 @@ async function geminiShortlistSelector(
   const { z } = await import("zod");
 
   const roster = products
-    .slice(0, 75)
+    .slice(0, DISCOVERY_TOP_N)
     .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
     .join("\n");
 
   const prompt = [
     `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
-    `Aşağıdaki ${Math.min(products.length, 75)} adaydan ticari olarak EN GÜÇLÜ ${GEMINI_SHORTLIST_SIZE}'ini seç.`,
+    `Aşağıdaki ${Math.min(products.length, DISCOVERY_TOP_N)} adaydan ticari olarak EN GÜÇLÜ ${GEMINI_SHORTLIST_SIZE}'ini seç.`,
     "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
     "Sadece numara listesi ver, açıklama yazma.",
     "",
@@ -234,7 +258,7 @@ async function geminiShortlistSelector(
 
   const raw = await callGemini(prompt, undefined, 0.2);
   const Parsed = z.object({
-    picks: z.array(z.number().int().min(1).max(75)).min(1),
+    picks: z.array(z.number().int().min(1).max(DISCOVERY_TOP_N)).min(1),
   });
   const parsed = Parsed.safeParse(parseLooseJson(raw));
   if (!parsed.success) return [];
@@ -289,24 +313,27 @@ export async function selectWithGemini(
     products: readonly NormalizedProduct[],
     niche: string,
   ) => Promise<NormalizedProduct[]>,
-): Promise<NormalizedProduct[]> {
+): Promise<{ products: NormalizedProduct[]; via: "gemini" | "fallback" }> {
   if (geminiSelect) {
     try {
       const selected = await geminiSelect(products, niche);
-      if (selected.length) return selected.slice(0, topN);
+      if (selected.length) return { products: selected.slice(0, topN), via: "gemini" };
     } catch {
       // Gemini başarısız → deterministik seçime düş (aşağıda).
     }
   }
   // Yedek: ön skora göre ilk `topN`, ama kanıtı EN ZENGİN olan önce gelir.
-  return [...products]
-    .sort(
-      (a, b) =>
-        b.preScore - a.preScore ||
-        b.dataCompleteness - a.dataCompleteness ||
-        b.sources.length - a.sources.length,
-    )
-    .slice(0, topN);
+  return {
+    via: "fallback",
+    products: [...products]
+      .sort(
+        (a, b) =>
+          b.preScore - a.preScore ||
+          b.dataCompleteness - a.dataCompleteness ||
+          b.sources.length - a.sources.length,
+      )
+      .slice(0, topN),
+  };
 }
 
 /* ------------------------------------------------ Adım 3: 14 ajan derin analiz */

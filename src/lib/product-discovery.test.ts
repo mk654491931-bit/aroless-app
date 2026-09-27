@@ -14,6 +14,7 @@ import {
   ProductDiscoveryInputSchema,
   ProductDiscoveryStatusSchema,
   productFingerprint,
+  productModelKey,
   PRODUCT_DISCOVERY_STATUSES,
   type RawProduct,
 } from "./product-discovery.types";
@@ -81,6 +82,101 @@ describe("productFingerprint", () => {
     expect(productFingerprint({ title: "Kablo Işıklı Şarj" })).toBe(
       productFingerprint({ title: "kablo isikli sarj" }),
     );
+  });
+});
+
+/* ==================================================== 1b. Model kodu anahtarı */
+
+/**
+ * Bu blok CANLI KOŞUNUN ÜRÜNÜDÜR. Espresso nişinde ölçüldü: nihai 5'lik
+ * listenin 1. ve 3. sırası aynı üründü (CASABREWS CM5418), iki farklı
+ * başlık yazımı geldiği için fingerprint ayırt edememişti. Yanlış çözüm
+ * (benzerlik eşiği) iki farklı ürünü birleştirirdi; buradaki kural kasıtlı
+ * olarak MUHAFAZAKÂR: yalnız markası ve tam bir model kodu belli olan ürün.
+ */
+describe("productModelKey", () => {
+  it("aynı ürünün iki farklı başlık yazımını eşleştirir (canlı bulgu)", () => {
+    const a = productModelKey({
+      title: "CASABREWS CM5418 Compact Espresso Machine With Milk Frother",
+      brand: "CASABREWS",
+    });
+    const b = productModelKey({
+      title: "Casabrews CM5418 20 Bar Espresso Machine And Coffee Maker",
+      brand: "Casabrews",
+    });
+    expect(a).not.toBe("");
+    expect(a).toBe(b);
+  });
+
+  it("farklı markada aynı model kodu AYRI kalır", () => {
+    const a = productModelKey({ title: "Dreame L10s Ultra", brand: "Dreame" });
+    const b = productModelKey({ title: "Roborock L10s Ultra", brand: "Roborock" });
+    expect(a).not.toBe(b);
+  });
+
+  it("farklı model kodu AYRI kalır", () => {
+    const a = productModelKey({ title: "Dreame L10s Ultra", brand: "Dreame" });
+    const b = productModelKey({ title: "Dreame L9 Ultra", brand: "Dreame" });
+    expect(a).not.toBe(b);
+  });
+
+  it("RAKAMLA başlayan spec'leri model sanmaz (8000 Pa, 20 Bar, 10,000Pa)", () => {
+    // Ölçü kodu model kodudur denirse aynı markanın ölçüleri birleşir ve
+    // kullanıcıya üç ayrı ürün yerine tek ürün gider.
+    for (const title of [
+      "Roborock Q7 L5 Robot Vacuum And Mop With 8,000 Pa Power",
+      "Philips 2000 4.4 Qt. Air Fryer With Rapid Air Technology",
+      "Yabano 3.5 Bar 4 Cup Steam Espresso Maker",
+    ]) {
+      expect(productModelKey({ title, brand: "" })).toBe("");
+    }
+  });
+
+  it("markasız ürün anahtar üretmez (uydurma eşleşme olmaz)", () => {
+    expect(productModelKey({ title: "CM5418 Espresso Machine", brand: "" })).toBe("");
+  });
+
+  it("birden çok model kodu varsa BELIRSIZ sayılır, eşleştirme yapmaz", () => {
+    expect(productModelKey({ title: "Dreame L10s with S20 accessory", brand: "Dreame" })).toBe("");
+  });
+});
+
+describe("model kodu tekilleştirmesi", () => {
+  it("farklı yazılmış aynı modeli tekleştirir ve kaynakları birleştirir", () => {
+    const { survivors, stats } = filterAndPreRank(
+      [
+        raw({
+          title: "CASABREWS CM5418 Compact Espresso Machine With Milk Frother",
+          brand: "CASABREWS",
+          priceUsd: 139.99,
+          rating: 4.5,
+          ratingCount: 1,
+        }),
+        raw({
+          title: "Casabrews CM5418 20 Bar Espresso Machine And Coffee Maker",
+          brand: "Casabrews",
+          priceUsd: 139.99,
+          rating: null,
+          ratingCount: null,
+        }),
+      ],
+      { nicheMomentumPct: 10, nicheEngagement: 100 },
+    );
+    expect(stats.rejectedByDuplicate).toBe(1);
+    expect(survivors).toHaveLength(1);
+    // Alan en dolu temsilci seçilir: puanı bilinen satır korunur.
+    expect(survivors[0].rating).toBe(4.5);
+  });
+
+  it("farklı markalı ürünleri YANLIŞLIKLA birleştirmez", () => {
+    const { survivors } = filterAndPreRank(
+      [
+        raw({ title: "Dreame L10s Ultra Robot Vacuum", brand: "Dreame" }),
+        raw({ title: "Roborock L10s Ultra Robot Vacuum", brand: "Roborock" }),
+      ],
+      { nicheMomentumPct: 10, nicheEngagement: 100 },
+    );
+    expect(survivors).toHaveLength(2);
   });
 });
 

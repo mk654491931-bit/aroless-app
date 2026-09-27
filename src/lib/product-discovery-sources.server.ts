@@ -592,6 +592,49 @@ export function hasMeasuredField(row: {
  * alınmaz. Medya/kitap nişlerinde gerçek fiyat+puan sağlar, "air fryer"
  * gibi nişlerde dürüstçe 0 döner.
  */
+/**
+ * Apple'ın medya türleri — bunlar fiziksel ürün nişinde ürün DEĞİLDİR.
+ *
+ * ÖNEMLİ: tam liste DEĞİL, ÖN EK deseni. iTunes Search API varlık adlarını
+ * döndürüyor: `feature-movie`, `tv-episode`, `tv-season`, `music-song`,
+ * `podcast`, `audiobook`… İlk denemede sabit bir `Set` ile eşleştirdim ve
+ * canlı koşuda filmler yine sızdı (tesadüf değil, VEYA çünkü listede
+ * `movie` vardı ama API `feature-movie` döndürüyor). Yeni bir medya türü
+ * çıksa bile yakalanır.
+ */
+const MEDIA_KIND = /^(feature-movie|short-film|movie|tv-|music-|song|podcast|audiobook)/;
+
+/** Nişin kendisi medya mı? (o zaman medya kayıtları üründür) */
+const MEDIA_NICHE_WORDS = [
+  "film",
+  "movie",
+  "dizi",
+  "series",
+  "music",
+  "müzik",
+  "şarkı",
+  "sarki",
+  "song",
+  "album",
+  "albüm",
+  "kitap",
+  "book",
+  "novel",
+  "roman",
+  "oyun",
+  "game",
+  "app",
+  "uygulama",
+  "podcast",
+  " audiobook",
+  "sesli",
+];
+
+function isMediaNiche(niche: string): boolean {
+  const lower = String(niche ?? "").toLowerCase();
+  return MEDIA_NICHE_WORDS.some((w) => w.trim() !== "" && lower.includes(w.trim()));
+}
+
 export const itunesSource: ProductSource = {
   name: "itunes",
   timeoutMs: 4_000,
@@ -618,10 +661,28 @@ export const itunesSource: ProductSource = {
     const out: RawProduct[] = [];
     const seen = new Set<string>();
     for (const item of json.results ?? []) {
-      // `collection`/`software` türleri üründür; `song` tek parça kaydı da
-      // satın alınabilir bir üründür — hepsi kabul edilir.
       const title = String(item.trackName ?? item.collectionName ?? "").trim();
       if (!title) continue;
+      // MEDYA KAPISI — canlı ölçümle bulundu (2026-09-27, "espresso machine"):
+      // iTunes "Terminator: Rise of the Espresso Machines" ($9.99) ve
+      // "Politics @ Coffee Machine" ($9.99) döndürdü. İkisi de SESLİ KİTAP;
+      // nişte "espresso" kelimesi geçtiği için `matchesNiche` geçiriyordu ve
+      // 5'li nihai listeye girdiler — kullanıcıya ürün olmayan kayıt gitti.
+      //
+      // AYIRT EDİCİ İKİ ALAN VAR, ikisi de gerekiyor (ölçümle öğrenildi):
+      //   • `kind` — filmler için `feature-movie`, diziler için `tv-episode`.
+      //   • URL   — SESLİ KİTAPLARDA `kind` YOKTUR; ayrım yalnız
+      //     `books.apple.com/.../audiobook/...` adresinden anlaşılıyor.
+      // İlk denemede yalnız `kind`'a bakıldı ve sesli kitaplar sızdı.
+      //
+      // Medya türleri YALNIZ niş kendisi medya ise kabul edilir ("müzik albümü"
+      // arayan şarkı görmek ister, "espresso machine" arayan görmez). Böylece
+      // dijital nişler kaynağı kaybetmez, fiziksel nişler kirlenmez.
+      const viewUrl = String(item.trackViewUrl ?? item.collectionViewUrl ?? "");
+      const isMedia =
+        MEDIA_KIND.test(String(item.kind ?? "")) ||
+        /books\.apple\.com|\/audiobook\//i.test(viewUrl);
+      if (isMedia && !isMediaNiche(niche)) continue;
       const key = title.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
