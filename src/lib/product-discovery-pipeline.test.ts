@@ -44,6 +44,7 @@ const fullProduct = (over: Partial<NormalizedProduct> = {}): NormalizedProduct =
     sources: ["test"],
     url: "https://example.test/p",
     notes: "4.6 puan · 210 değerlendirme",
+    viewed90d: null,
     fingerprint: productFingerprint({ title: "Air Fryer 5.5L", brand: "Acme", seller: "shop" }),
     preScore: 72,
     signals: { demand: 70, competition: 60, margin: 80, rating: 75, availability: 85 },

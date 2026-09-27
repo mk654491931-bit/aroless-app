@@ -117,10 +117,11 @@ export async function runScrapeFilterStep(
   let nicheMomentumPct: number | null = null;
   let nicheEngagement = 0;
   for (const row of raw) {
-    const m = /momentum ([+-]?\d+)%/.exec(row.notes);
+    const notes = row.notes ?? "";
+    const m = /momentum ([+-]?\d+)%/.exec(notes);
     if (m && nicheMomentumPct === null) nicheMomentumPct = Number(m[1]);
     // Etkileşim: upvote+yorum veya yıldız.
-    const e = /(\d+)\s*(?:↑|yorum|yıldız)/.exec(row.notes);
+    const e = /(\d+)\s*(?:↑|yorum|yıldız)/.exec(notes);
     if (e) nicheEngagement += Number(e[1]);
   }
 

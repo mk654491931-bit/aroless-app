@@ -217,6 +217,46 @@ describe("deterministic pre-scoring", () => {
     expect(full!.preScore).toBeGreaterThan(thin!.preScore);
   });
 
+  it("90 günlük GÖRÜNTÜLENME talep sinyalini yükseltir (kohort içi)", () => {
+    // Aynı fiyat/puan, tek fark: kaç kişi ürünü gerçekten GÖRDÜ. Bu ölçülmüş
+    // perakende talebidir; "popüler görünüyor" ile "gerçekten ilgileniliyor"
+    // ayrımını deterministik olarak yapar.
+    const base = { notes: "", priceUsd: 59.9, rating: 4.4, ratingCount: 500 };
+    const [hot, cold] = scoreDeterministically(
+      [
+        normalizeRaw(raw({ ...base, title: "Air Fryer Pro X", viewed90d: 9000 })),
+        normalizeRaw(raw({ ...base, title: "Air Fryer Lite Y", viewed90d: 300 })),
+      ],
+      { nicheMomentumPct: null, nicheEngagement: 0 },
+    );
+    expect(hot!.signals.demand).toBeGreaterThan(cold!.signals.demand);
+  });
+
+  it("görüntülenme ÖLÇÜLMEDİYSE talep sinyali nötr kalır (0 sayılmaz)", () => {
+    // "kimse görmedi" ile "ölçemedik" farklıdır. Ölçülmemiş satır 0
+    // puanlanırsa gerçekten ilgi görmeyen ürünle aynı sınıfa düşer.
+    const [unknown] = scoreDeterministically([normalizeRaw(raw({ notes: "", viewed90d: null }))], {
+      nicheMomentumPct: null,
+      nicheEngagement: 0,
+    });
+    expect(unknown!.signals.demand).toBe(50);
+  });
+
+  it("hiçbir kaynak görüntülenme ölçmediyse mevcut davranış BOZULMAZ", () => {
+    // Geriye dönük uyum: view alanı eklenmeden önceki sonuçlar aynı kalmalı.
+    // momentum 12 → 62; etkileşim 300 → 50 + (300/400)*50 − 25 = 62,5;
+    // iki sinyalin ortalaması 62. Görüntülenme devreye girmez.
+    const products = [
+      normalizeRaw(raw({ title: "Ürün A" })),
+      normalizeRaw(raw({ title: "Ürün B" })),
+    ];
+    const scored = scoreDeterministically(products, {
+      nicheMomentumPct: 12,
+      nicheEngagement: 300,
+    });
+    expect(scored.map((p) => p.signals.demand)).toEqual([62, 62]);
+  });
+
   it("yüksek momentum talep sinyalini yükseltir", () => {
     const [up] = scoreDeterministically([normalizeRaw(raw())], {
       nicheMomentumPct: 80,

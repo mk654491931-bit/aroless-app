@@ -27,6 +27,7 @@ import {
   RawProductSchema,
   type FilterStats,
   type NormalizedProduct,
+  type ParsedRawProduct,
   type RawProduct,
 } from "./product-discovery.types";
 
@@ -54,14 +55,14 @@ export const MIN_COMPLETENESS = 1;
  * eksikliği sayılmaz, çünkü kaynakların çoğu onları hiç vermez.
  */
 const EVIDENCE_SLOTS = [
-  ["price", (p: RawProduct) => p.priceUsd !== null],
-  ["brand", (p: RawProduct) => p.brand.trim() !== ""],
-  ["seller", (p: RawProduct) => p.seller.trim() !== ""],
-  ["url", (p: RawProduct) => p.url.trim() !== ""],
+  ["price", (p: ParsedRawProduct) => p.priceUsd !== null],
+  ["brand", (p: ParsedRawProduct) => p.brand.trim() !== ""],
+  ["seller", (p: ParsedRawProduct) => p.seller.trim() !== ""],
+  ["url", (p: ParsedRawProduct) => p.url.trim() !== ""],
   // ÖLÇÜLMÜŞ talep: `notes` içinde sayısal bir sinyal (puan, yorum, yıldız,
   // momentum, fiyat aralığı) var mı? Söylem değil, ölçüm arıyoruz.
-  ["demand", (p: RawProduct) => /\d/.test(p.notes)],
-] as const satisfies readonly (readonly [string, (p: RawProduct) => boolean])[];
+  ["demand", (p: ParsedRawProduct) => /\d/.test(p.notes)],
+] as const satisfies readonly (readonly [string, (p: ParsedRawProduct) => boolean])[];
 
 /**
  * BONUS YUVALARI — doluysa `dataCompleteness` artar, boşsa `missingFields`'e
@@ -69,10 +70,10 @@ const EVIDENCE_SLOTS = [
  * doğru bir ürünü haksız cezalandırırdı.
  */
 const BONUS_SLOTS = [
-  ["rating", (p: RawProduct) => p.rating !== null],
-  ["ratingCount", (p: RawProduct) => p.ratingCount !== null],
-  ["stock", (p: RawProduct) => p.inStock !== null],
-] as const satisfies readonly (readonly [string, (p: RawProduct) => boolean])[];
+  ["rating", (p: ParsedRawProduct) => p.rating !== null],
+  ["ratingCount", (p: ParsedRawProduct) => p.ratingCount !== null],
+  ["stock", (p: ParsedRawProduct) => p.inStock !== null],
+] as const satisfies readonly (readonly [string, (p: ParsedRawProduct) => boolean])[];
 
 /** Kaynak satırlarını normalize eder ve parmak izi üretir. */
 export function normalizeRaw(raw: RawProduct): NormalizedProduct {
@@ -101,6 +102,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     sources: [parsed.source].filter(Boolean),
     url: parsed.url,
     notes: parsed.notes.slice(0, 200),
+    viewed90d: parsed.viewed90d,
     fingerprint: productFingerprint({
       title: parsed.title,
       brand: parsed.brand,
@@ -124,10 +126,21 @@ const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
  * Talep sinyali (0-100).
  *
  * Ölçülebilir kanıt: niş etkileşim yoğunluğu (upvote+yorum), GitHub yıldız,
- * Wikipedia momentum. Kanıt YOKSA 50 (nötr) döner — 0 değil, çünkü "ilgi yok"
- * demek "ölçemedim" demek değildir ve 0 puan ürünleri haksız cezalandırır.
+ * Wikipedia momentum VE perakendede 90 günlük görüntülenme. Kanıt YOKSA 50
+ * (nötr) döner — 0 değil, çünkü "ilgi yok" demek "ölçemedim" demek değildir
+ * ve 0 puan ürünleri haksız cezalandırır.
+ *
+ * `viewedMax` aynı koşudaki EN YÜKSEK görüntülenmedir. Görüntülenme ancak
+ * kohort içinde anlamlıdır (1K bir air fryer için güçlü, bir drone için
+ * zayıf sinyaldir), bu yüzden mutlak değere değil kohorttaki oranına bakılır.
+ * Hiçbir ürün ölçülmediyse `viewedMax` 0 gelir ve bu sinyal HİÇ devreye
+ * girmez — mevcut davranış bozulmaz.
  */
-function demandScore(_product: NormalizedProduct, context: DemandContext): number {
+function demandScore(
+  product: NormalizedProduct,
+  context: DemandContext,
+  viewedMax: number,
+): number {
   const signals: number[] = [];
   // Wikipedia momentum en güçlü talep göstergesidir.
   if (context.nicheMomentumPct !== null) {
@@ -137,6 +150,12 @@ function demandScore(_product: NormalizedProduct, context: DemandContext): numbe
   // Etkileşim yoğunluğu: nişe özel toplam konuşma hacmi.
   if (context.nicheEngagement > 0) {
     signals.push(50 + clamp01(context.nicheEngagement / 400) * 50 - 25);
+  }
+  // PERAKENDE TALEBİ: kaç kişi ürünü gerçekten GÖRDÜ (90 gün). Söylem değil,
+  // ölçüm. Kohorttaki en yükseğe göre oranlanır: en çok görüntülenen → 100,
+  // yarısı → 50, yok denecek kadar az → 25.
+  if (product.viewed90d !== null && viewedMax > 0) {
+    signals.push(50 + clamp01(product.viewed90d / viewedMax) * 50 - 25);
   }
   return signals.length ? Math.round(signals.reduce((a, b) => a + b, 0) / signals.length) : 50;
 }
@@ -202,9 +221,12 @@ export function scoreDeterministically(
   products: readonly NormalizedProduct[],
   context: DemandContext,
 ): NormalizedProduct[] {
+  // Görüntülenme yalnızca aynı koşu içinde karşılaştırılabilir; bu yüzden
+  // normalizasyon tabanı burada, TÜM adaylar görüldükten sonra hesaplanır.
+  const viewedMax = products.reduce((max, p) => Math.max(max, p.viewed90d ?? 0), 0);
   return products.map((product) => {
     const signals = {
-      demand: demandScore(product, context),
+      demand: demandScore(product, context, viewedMax),
       competition: competitionScore(product, products),
       margin: marginScore(product.priceUsd),
       rating: ratingScore(product.rating, product.ratingCount),

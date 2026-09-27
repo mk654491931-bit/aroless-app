@@ -42,8 +42,32 @@ export const RawProductSchema = z.object({
   url: z.string().default(""),
   /** Serbest metin: nişe özgü ham sinyal (şikâyet, hype, trend notu…). */
   notes: z.string().default(""),
+  /**
+   * KAÇ KİŞİ BU ÜRÜNÜ GÖRDÜ (90 günlük pencere). `null` = ölçülmedi.
+   *
+   * Neden ayrı alan, `notes` içinde bırakmadık: talep puanı bu sayıya BAKAR.
+   * Metinden geri ayrıştırmak kırılgan olurdu (aynı sayı "1K+", "1,204"
+   * veya "842" olarak yazılabilir). Kaynak sayıyı ölçer, biz karşılaştırırız.
+   *
+   * SADECE Aynı koşu içinde karşılaştırılır: 1K görüntülenme bir air fryer
+   * için güçlü, bir drone için zayıf sinyaldir. Mutlak değer değil, kohort
+   * içi sıra anlamlıdır.
+   */
+  viewed90d: z.number().int().min(0).nullable().default(null),
 });
-export type RawProduct = z.infer<typeof RawProductSchema>;
+/**
+ * Kaynakların döndürdüğü HAM şekil.
+ *
+ * BILEREK `z.input` (çıktı değil): bir kaynak yalnız gerçekten ölçebildiği
+ * alanları yazmalıdır. Çıkı tipi (`z.infer`) kullanılsaydı her kaynak
+ * `viewed90d: null` gibi on alanı da yazmak zorunda kalırdı — ölçmediğini
+ * yazmak zorunda olmak, ölçtüğünü sandırma riskini artırır.
+ * Varsayılanları `RawProductSchema.parse()` doldurur.
+ */
+export type RawProduct = z.input<typeof RawProductSchema>;
+
+/** `RawProductSchema.parse()` sonrası, varsayılanları DOLMUŞ ham satır. */
+export type ParsedRawProduct = z.infer<typeof RawProductSchema>;
 
 /* ------------------------------------------------------- NormalizedProduct */
 
@@ -71,6 +95,8 @@ export const NormalizedProductSchema = z.object({
   sources: z.array(z.string()).default([]),
   url: z.string().default(""),
   notes: z.string().default(""),
+  /** 90 günlük görüntülenme (ölçüldüyse). `signals.demand` bunu kullanır. */
+  viewed90d: z.number().int().min(0).nullable().default(null),
 
   /**
    * Tekilleştirme anahtarı: normalize başlık + marka + satıcı.

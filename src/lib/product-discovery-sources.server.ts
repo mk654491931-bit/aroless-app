@@ -528,8 +528,11 @@ export function matchesNiche(title: string, niche: string): boolean {
 }
 
 /** En az bir ÖLÇÜLEBİLİR ticari alan var mı? */
-export function hasMeasuredField(row: { priceUsd: number | null; rating: number | null }): boolean {
-  return row.priceUsd !== null || row.rating !== null;
+export function hasMeasuredField(row: {
+  priceUsd?: number | null;
+  rating?: number | null;
+}): boolean {
+  return (row.priceUsd ?? null) !== null || (row.rating ?? null) !== null;
 }
 
 /* --------------------------------------- 7. iTunes Search (GERÇEK ürün + puan) */
@@ -1088,6 +1091,23 @@ export const webReviewSource: ProductSource = {
   },
 };
 
+/**
+ * Bing'in "1K+ viewed" / "12,4K" / "842" gösterimini SAYIYA çevirir.
+ *
+ * DÖNÜŞ: ölçülemediyse `null` — asla 0 değil. "0" demek "kimse görmedi"
+ * demektir; "hiç ölçülmedi" ile aynı şey DEĞİLDİR ve talep puanını
+ * haksız yere çekerdi.
+ */
+function parseViewed90d(text: string): number | null {
+  const m = /([0-9][0-9.,]*)\s*([KkMm]?)/.exec(String(text ?? ""));
+  if (!m) return null;
+  const base = Number(m[1]!.replace(/[.,]/g, ""));
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const unit = m[2]!.toLowerCase();
+  const scaled = unit === "k" ? base * 1_000 : unit === "m" ? base * 1_000_000 : base;
+  return Math.round(scaled);
+}
+
 /* --------------------------------- 12. Bing Shopping (GERÇEK puan + hacim) */
 
 /**
@@ -1173,6 +1193,7 @@ export const bingShoppingSource: ProductSource = {
         inStock: null,
         source: "bing-shopping",
         url: href ? bingRealUrl(decode(href)) : "",
+        viewed90d: parseViewed90d(viewed),
         notes: [
           viewed ? `${viewed.trim()} görüntülenme / 90g` : "",
           Number.isFinite(ratingCount) ? `${ratingCount} değerlendirme` : "",
