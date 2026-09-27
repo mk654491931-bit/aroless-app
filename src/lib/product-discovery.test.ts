@@ -24,6 +24,11 @@ import {
 } from "./product-discovery-filter.server";
 import { bingShoppingSource } from "./product-discovery-sources.server";
 import {
+  arcticPostUrl,
+  fetchArcticPosts,
+  fetchHackerNewsStories,
+} from "./shared-niche-scrapers.server";
+import {
   buildConsensus,
   confidenceScore,
   rankByConsensus,
@@ -695,5 +700,75 @@ describe("bingShoppingSource", () => {
         bingShoppingSource.scrape("air fryer"),
       ),
     ).rejects.toThrow();
+  });
+});
+
+/* ================================= 9. Ortak niş kazıyıcı uçları */
+
+describe("sharedNicheScrapers", () => {
+  it("Hacker News çağrısı limiti URL'ye yazar ve alanları normalize eder", async () => {
+    const original = globalThis.fetch;
+    let seenUrl = "";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      seenUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          hits: [
+            {
+              title: "Show HN: air fryer automation",
+              points: 42,
+              num_comments: 7,
+              objectID: "123",
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    try {
+      const stories = await fetchHackerNewsStories("air fryer", 8, 1_000);
+      expect(seenUrl).toContain("hitsPerPage=8");
+      expect(seenUrl).toContain("query=air%20fryer");
+      expect(stories).toEqual([
+        {
+          title: "Show HN: air fryer automation",
+          points: 42,
+          comments: 7,
+          // `url` alanı yoksa HN kalıcı bağlantısına düşülür (asla boş kalmaz).
+          url: "https://news.ycombinator.com/item?id=123",
+        },
+      ]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("arşiv çağrısı `selftext` indekli alanını kullanır (title sorgusu bozuk)", async () => {
+    const original = globalThis.fetch;
+    let seenUrl = "";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      seenUrl = String(input);
+      return new Response(JSON.stringify({ data: [{ title: "air fryer" }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      const posts = await fetchArcticPosts({
+        subreddit: "amazonfinds",
+        selftext: "air fryer",
+        limit: 30,
+        ms: 1_000,
+      });
+      expect(seenUrl).toContain("selftext=air+fryer");
+      expect(seenUrl).toContain("limit=30");
+      expect(posts).toHaveLength(1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("permalink adresine çevrilir, yoksa topluluk sayfasına düşer", () => {
+    expect(arcticPostUrl({ permalink: "/r/x/comments/1" }, "amazonfinds")).toBe(
+      "https://reddit.com/r/x/comments/1",
+    );
+    expect(arcticPostUrl({}, "amazonfinds")).toBe("https://reddit.com/r/amazonfinds/");
   });
 });

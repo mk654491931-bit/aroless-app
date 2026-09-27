@@ -27,6 +27,13 @@
 import { cached } from "./ai-cache.server";
 import { fetchGitHubTrendsForNiche } from "./github-trends.server";
 import {
+  arcticPostUrl,
+  fetchArcticPosts,
+  fetchHackerNewsStories,
+  REDDIT_SUBS,
+  type ArcticPost,
+} from "./shared-niche-scrapers.server";
+import {
   eurToUsdRate,
   getGoogleTrends,
   getSourcingEstimate,
@@ -62,15 +69,6 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
 
 /* ------------------------------------------------------------------ utils */
-
-async function grabJson<T>(url: string, ms: number): Promise<T> {
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(ms),
-    headers: { "user-agent": UA, accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(String(res.status));
-  return (await res.json()) as T;
-}
 
 async function grabText(url: string, ms: number): Promise<string> {
   const res = await fetch(url, {
@@ -178,18 +176,9 @@ async function collect<T>(
  *   • sonuç boşsa kaynak `active` DEĞİL, `error` olarak raporlanır,
  *   • ajan istemi başlığında "ARŞİV" ibaresi görünür.
  */
-const SUBREDDITS = ["TikTokMadeMeBuyIt", "amazonfinds", "BuyItForLife"];
-
-const ARCTIC_BASE = "https://arctic-shift.photon-reddit.com/api";
-
-type ArcticPost = {
-  title?: unknown;
-  subreddit?: unknown;
-  score?: unknown;
-  num_comments?: unknown;
-  permalink?: unknown;
-  created_utc?: unknown;
-};
+// Topluluk listesi ortak modülde (discovery katmanı da aynı listeyi kullanır).
+// SIRA burada kasıtlı: önce en yüksek hacimli topluluk.
+const SUBREDDITS = ["TikTokMadeMeBuyIt", ...REDDIT_SUBS.filter((s) => s !== "TikTokMadeMeBuyIt")];
 
 /**
  * ŞİKÂYET KELİMELERİ — kural tabanlı, dile bağlı değil.
@@ -307,9 +296,12 @@ async function scrapeReddit(niche: string): Promise<RedditSignal[]> {
     try {
       // `selftext` gövdede geçen kelimeyi arayan indeksli alan; `title` sorgusu
       // zaman aşımına uğradığı için gövde taranır, sonuç istemcide süzülür.
-      const url = `${ARCTIC_BASE}/posts/search?subreddit=${sub}&selftext=${encodeURIComponent(words[0])}&limit=30`;
-      const json = await grabJson<{ data?: ArcticPost[] }>(url, 5_000);
-      rows = json.data ?? [];
+      rows = await fetchArcticPosts({
+        subreddit: sub,
+        selftext: words[0],
+        limit: 30,
+        ms: 5_000,
+      });
     } catch {
       await sleep(200);
       continue; // bu alt topluluk için sonuç yok, sıradakine geç
@@ -325,7 +317,7 @@ async function scrapeReddit(niche: string): Promise<RedditSignal[]> {
         subreddit: String(post.subreddit ?? sub),
         score: Number(post.score ?? 0),
         comments: Number(post.num_comments ?? 0),
-        url: `https://reddit.com${String(post.permalink ?? "")}`,
+        url: arcticPostUrl(post, sub),
         complaint: isComplaintTitle(title),
       });
     }
@@ -425,31 +417,15 @@ async function scrapeRedditSubredditRss(niche: string, deadline: number): Promis
 
 /* --------------------------------------------------------- 2. Hacker News */
 
-type HnResponse = {
-  hits?: {
-    title?: string | null;
-    points?: number | null;
-    num_comments?: number | null;
-    url?: string | null;
-    objectID?: string;
-  }[];
-};
-
+/** HTTP katmanı ortak modülde; burada yalnız ajan isteminin şekli üretilir. */
 async function scrapeHackerNews(niche: string): Promise<HackerNewsSignal[]> {
-  const q = encodeURIComponent(niche.slice(0, 60));
-  const url = `https://hn.algolia.com/api/v1/search?query=${q}&tags=story&hitsPerPage=8`;
-  const json = await grabJson<HnResponse>(url, 5_000);
-  const out: HackerNewsSignal[] = [];
-  for (const hit of json.hits ?? []) {
-    const title = String(hit.title ?? "").trim();
-    if (!title) continue;
-    out.push({
-      title: title.slice(0, 180),
-      points: Number(hit.points ?? 0),
-      comments: Number(hit.num_comments ?? 0),
-      url: String(hit.url ?? `https://news.ycombinator.com/item?id=${hit.objectID ?? ""}`),
-    });
-  }
+  const stories = await fetchHackerNewsStories(niche, 8, 5_000);
+  const out: HackerNewsSignal[] = stories.map((s) => ({
+    title: s.title.slice(0, 180),
+    points: s.points,
+    comments: s.comments,
+    url: s.url,
+  }));
   // Konuşma hacmi yüksek olanlar gerçek ilgi sinyalidir.
   return out.sort((a, b) => b.points + b.comments - (a.points + a.comments)).slice(0, 6);
 }

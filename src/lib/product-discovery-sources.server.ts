@@ -14,6 +14,12 @@
 // ============================================================================
 
 import type { RawProduct } from "./product-discovery.types";
+import {
+  arcticPostUrl,
+  fetchArcticPosts,
+  fetchHackerNewsStories,
+  REDDIT_SUBS,
+} from "./shared-niche-scrapers.server";
 
 /** Bir scraping kaynağının sözleşmesi. Yeni kaynak = bu arayüzü uygulamak. */
 export interface ProductSource {
@@ -156,8 +162,8 @@ function decode(text: string): string {
 /**
  * Hacker News — nişe dair gerçek teknik tartışma hacmi.
  *
- * ÖLÇÜLDÜ: 200, ~300 ms, anahtarsız. Ürün satmaz ama "niş gerçekten mi
- * hareketli?" sorusuna gerçek yanıt verir (demand sinyaline beslenir).
+ * HTTP katmanı ortak modülde (`shared-niche-scrapers.server`); burada yalnız
+ * `RawProduct` şekline önerilir. ÖLÇÜLDÜ: 200, ~200-300 ms, anahtarsız.
  * `rating`/`price` YOKTUR → alanlar `null` kalır, hard filter bunları
  * gereksiz yere elemez (sadece fiyat geçersizse eler).
  */
@@ -165,41 +171,20 @@ export const hackerNewsSource: ProductSource = {
   name: "hackernews",
   timeoutMs: 3_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const q = encodeURIComponent(niche.slice(0, 60));
-    const json = JSON.parse(
-      await grab(
-        `https://hn.algolia.com/api/v1/search?query=${q}&tags=story&hitsPerPage=10`,
-        2_500,
-        "application/json",
-      ),
-    ) as {
-      hits?: {
-        title?: string | null;
-        points?: number | null;
-        num_comments?: number | null;
-        url?: string | null;
-        objectID?: string;
-      }[];
-    };
-    const out: RawProduct[] = [];
-    for (const hit of json.hits ?? []) {
-      const title = String(hit.title ?? "").trim();
-      if (!title) continue;
-      out.push({
-        title,
-        brand: "",
-        seller: "",
-        priceUsd: null,
-        rating: null,
-        ratingCount: null,
-        inStock: null,
-        source: "hackernews",
-        url: String(hit.url ?? `https://news.ycombinator.com/item?id=${hit.objectID ?? ""}`),
-        // Etkileşim hacmi niş hareketliliğinin gerçek ölçüsü.
-        notes: `${Number(hit.points ?? 0)} puan · ${Number(hit.num_comments ?? 0)} yorum`,
-      });
-    }
-    return out.slice(0, 8);
+    const stories = await fetchHackerNewsStories(niche, 10, 2_500);
+    return stories.slice(0, 8).map((s) => ({
+      title: s.title,
+      brand: "",
+      seller: "",
+      priceUsd: null,
+      rating: null,
+      ratingCount: null,
+      inStock: null,
+      source: "hackernews",
+      url: s.url,
+      // Etkileşim hacmi niş hareketliliğinin gerçek ölçüsü.
+      notes: `${s.points} puan · ${s.comments} yorum`,
+    }));
   },
 };
 
@@ -218,9 +203,6 @@ export const hackerNewsSource: ProductSource = {
  * (allorigins/corsproxy/r.jina.ai) denendi — HEPSİ ÖLÜ ya da Reddit'a
  * kendisi 403 dönüyor. Arşiv bu yüzden tek güvenilir yol.
  */
-const ARCTIC = "https://arctic-shift.photon-reddit.com/api";
-const REDDIT_SUBS = ["amazonfinds", "TikTokMadeMeBuyIt", "BuyItForLife"];
-
 const COMPLAINT_TERMS = [
   "broke",
   "broken",
@@ -271,20 +253,13 @@ export const redditArchiveSource: ProductSource = {
     // Sıralı: arşiv paralel istekleri kuyruğa alıyor (ölçüldü).
     for (const sub of REDDIT_SUBS) {
       try {
-        const res = await fetch(`${ARCTIC}/posts/search?subreddit=${sub}&limit=100&sort=desc`, {
-          signal: AbortSignal.timeout(1_800),
-          headers: { "user-agent": UA },
+        const posts = await fetchArcticPosts({
+          subreddit: sub,
+          limit: 100,
+          sort: "desc",
+          ms: 1_800,
         });
-        if (!res.ok) continue;
-        const json = (await res.json()) as {
-          data?: {
-            title?: unknown;
-            score?: unknown;
-            num_comments?: unknown;
-            permalink?: unknown;
-          }[];
-        };
-        for (const post of json.data ?? []) {
+        for (const post of posts) {
           const title = String(post.title ?? "").trim();
           if (!title || seen.has(title)) continue;
           // NİŞ RELEVANSI İSTEMCİDE: arşivin sunucu filtresi bozuk olduğu için
@@ -300,7 +275,7 @@ export const redditArchiveSource: ProductSource = {
             ratingCount: null,
             inStock: null,
             source: "reddit-archive",
-            url: `https://reddit.com${String(post.permalink ?? "")}`,
+            url: arcticPostUrl(post, sub),
             notes: `${Number(post.score ?? 0)}↑ ${Number(post.num_comments ?? 0)}yorum${
               isComplaintTitle(title) ? " · ŞİKÂYET" : ""
             }`,
