@@ -74,9 +74,14 @@ describe.skipIf(!LIVE)("Product Discovery kaynakları (canlı ağ)", () => {
       );
       /* eslint-enable no-console */
 
-      expect(stats.survivors).toBe(survivors.length);
+      // DEĞİŞMEZ (canlı koşuda kırılan eski varsayım): `stats.survivors`
+      // elemeden SONRA, 75 diliminden ÖNCEKİ sayıdır; `survivors` ise dilimin
+      // kendisidir. Ham havuz 75'in altındayken ikisi tesadüfen eşitti ve test
+      // bunu kural sanmıştı. Doğru ilişki: survivors = min(stats.survivors, 75).
+      expect(stats.survivors).toBeGreaterThanOrEqual(survivors.length);
       // Elenen sayı, kalan + elenen toplamını aşamaz (her satır ya elenir ya kalır).
       expect(stats.survivors + rejected).toBeLessThanOrEqual(stats.inputCount);
+      expect(survivors.length).toBe(Math.min(stats.survivors, 75));
       expect(survivors.length).toBeLessThanOrEqual(75);
 
       // KANIT KALİTESİ (yeni kaynakların asıl kazancı): kaç üründe GERÇEK

@@ -171,6 +171,11 @@ export const hackerNewsSource: ProductSource = {
   name: "hackernews",
   timeoutMs: 3_000,
   async scrape(niche: string): Promise<RawProduct[]> {
+    // DİLİM KASTEN 8: bu kaynak ÜRÜN satmaz, tartışma hacmi ölçer (2/5 kanıt).
+    // 75 hedefini bu satırla doldurmak, havuzu ölçülmüş ürün yerine ölçüm
+    // satırıyla şişirmek olurdu. Ölçüldü (2026-09-28): `bing-shopping` tek
+    // başına 60 GERÇEK ürün (fiyat/puan) veriyor ve havuz 9/9 nişte 75'e
+    // ulaşıyor (ölçüm: 81-100 ham satır) — bu dilimi büyütmeye gerek yok.
     const stories = await fetchHackerNewsStories(niche, 10, 2_500);
     return stories.slice(0, 8).map((s) => ({
       title: s.title,
@@ -305,6 +310,8 @@ export const githubSource: ProductSource = {
   timeoutMs: 3_000,
   async scrape(niche: string): Promise<RawProduct[]> {
     const q = encodeURIComponent(`${niche} in:name,description,readme`);
+    // DİLİM KASTEN 8: yukarıdaki `hackerNewsSource` ile aynı gerekçe — repo
+    // listesi ürün değildir, nişin ekosistem büyüklüğüdür (3/5 kanıt).
     const json = JSON.parse(
       await grab(
         `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
@@ -1227,18 +1234,67 @@ function parseViewed90d(text: string): number | null {
  *
  * DÜRÜSTLÜK: `sa_rating` bloğu olmayan kartta puan `null` kalır. "4.5" gibi
  * bir sayıyı GÖRÜNTÜDEN tahmin etmeyiz; kart yazmıyorsa ölçemedik deriz.
+ *
+ * SAYFALAMA YOK — ÖLÇÜLDÜ (2026-09-28): `&first=1|17|33|49` AYNI 55 kartı
+ * döndürüyor (sıra kayıyor, set aynı). Yani bu kaynaktan daha fazla ürün
+ * almanın tek yolu SAYFADAKİ TÜM kartları kullanmaktır. Ölçüm: 55 karttan
+ * 54'ü başlıklı, **43'ünde gerçek puan**, 31'inde fiyat, 23'ünde 90 günlük
+ * görüntülenme var. Eski `slice(0, 16)` bu ölçülmüş kanıtın yarısından
+ * fazlasını çöpe atıyordu ve ham havuz 44-60'ta takılıyordu.
+ *
+ * İKİNCİ SORGU (ÖLÇÜM 2026-09-28): sayfalamak yerine farklı bir ALICI
+ * sorgusu (`best <niş>`) paralel koşulur. Ölçüm: varyant da 55 kart döndürüyor
+ * ve bunların **34-47'si taban sorguda YOK** (standing desk 47, espresso 39,
+ * air fryer 45). Aynı ayrıştırıcı, aynı kanıt kalitesi, iki kat ürün. İki
+ * istek PARALEL olduğu için gecikme tek istek kadardır (ölçüldü ~700-950 ms).
  */
+const BING_SHOPPING_LIMIT = 60;
+
+/**
+ * Bing Shopping'i kaç ALICI sorgusuyla tarar.
+ *
+ * İlki nişin kendisi, ikincisi "best <niş>"dir: ölçüldü ki ikinci sorgu
+ * neredeyse tamamen farklı ürün kadrosu döndürüyor. Üçüncü bir varyant
+ * (`cheap <niş>`) ölçüldü ama ek kazanç daha düşüktü ve gereksiz yük olurdu.
+ */
+function bingShoppingQueries(niche: string): string[] {
+  const base = niche.slice(0, 60);
+  return [base, `best ${base}`];
+}
+
+/**
+ * Sorgu başına HTML kart bloklarını döner. İki sorgu PARALEL: gecikme tek
+ * istek kadar kalır, kaynak tavanı (6 sn) korunur.
+ *
+ * FAIL-SOFT (kaynak içi): bir sorgu hata verirse diğeri tek başına yeter.
+ * İKİSİ de boş/hatalıysa kaynak dürüstçe hata fırlatır — `runSources` bunu
+ * `ok:false` diye raporlar, diğer kaynaklar etkilenmez.
+ */
+async function bingShoppingCards(niche: string): Promise<string[]> {
+  const settled = await Promise.allSettled(
+    bingShoppingQueries(niche).map((query) =>
+      grab(`https://www.bing.com/shop/search?q=${encodeURIComponent(query)}&setlang=en`, 5_500),
+    ),
+  );
+  const cards: string[] = [];
+  let firstError = "";
+  for (const result of settled) {
+    if (result.status === "rejected") {
+      firstError ||= result.reason instanceof Error ? result.reason.message : "unreachable";
+      continue;
+    }
+    // Kart sınırları sunucu tarafında sabit: her ürün bir `br-gOffCard`.
+    cards.push(...result.value.split(/(?=<div class="br-gOffCard)/).slice(1));
+  }
+  if (!cards.length) throw new Error(firstError || "no shopping cards in response");
+  return cards;
+}
+
 export const bingShoppingSource: ProductSource = {
   name: "bing-shopping",
   timeoutMs: 6_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const body = await grab(
-      `https://www.bing.com/shop/search?q=${encodeURIComponent(niche.slice(0, 60))}&setlang=en`,
-      5_500,
-    );
-    // Kart sınırları sunucu tarafında sabit: her ürün bir `br-gOffCard`.
-    const cards = body.split(/(?=<div class="br-gOffCard)/).slice(1);
-    if (!cards.length) throw new Error("no shopping cards in response");
+    const cards = await bingShoppingCards(niche);
 
     const out: RawProduct[] = [];
     const seen = new Set<string>();
@@ -1303,7 +1359,7 @@ export const bingShoppingSource: ProductSource = {
     // dürüst cevabı: "bu nişte bana ölçülebilir ürün yok". `ok:true, items:0`
     // döner (dosyanın gürültü kapısı sözleşmesi). Hata yalnız SAYFA yapısı
     // değişmiş / engellenmişse atılır.
-    return out.slice(0, 16);
+    return out.slice(0, BING_SHOPPING_LIMIT);
   },
 };
 

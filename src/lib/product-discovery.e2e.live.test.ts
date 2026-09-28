@@ -61,9 +61,14 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
           }
         | undefined;
 
+      // DİKKAT: `stats.survivors` kesme ÖNCESİ sayıdır (elemeden geçen her
+      // satır), `scrape.products` ise 75 tavanına kesilmiş LİSTEDİR. Ham havuz
+      // 75'i aştığı için ikisi artık farklı; ikisini de yazmazsak "100 kalan
+      // ama 25'e indi" gibi okunaksız bir log çıkar.
       console.log(
         `[E2E] "${niche}" · kazıma ${tScrape}ms · ${stats?.inputCount ?? 0} ham → ` +
-          `${stats?.survivors ?? 0} kalan (puan:${stats?.rejectedByRating ?? 0} ` +
+          `${stats?.survivors ?? 0} kalan → ${scrape.products.length} aday / ${DISCOVERY_TOP_N} tavan ` +
+          `(puan:${stats?.rejectedByRating ?? 0} ` +
           `fiyat:${stats?.rejectedByPrice ?? 0} dup:${stats?.rejectedByDuplicate ?? 0} ` +
           `eksik:${stats?.rejectedByCompleteness ?? 0})`,
       );

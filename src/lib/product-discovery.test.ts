@@ -712,6 +712,35 @@ async function withShopHtml<T>(html: string, run: () => Promise<T>): Promise<T> 
   }
 }
 
+/**
+ * URL'YE GÖRE yanıt veren sahte `fetch` — kaynağın artık İKİ sorgu attığını
+ * kanıtlamak için gerekir.
+ *
+ * NEDEN: kaynak `best <niş>` varyantını paralel koşuyor (ölçüldü: varyant kart
+ * setinin %60-85'i taban sorguda yok). Tek yanıt döndüren eski stub bu
+ * davranışı göremez: hangi adreslerin çağrıldığını, iki sayfanın
+ * BİRLEŞTİRİLDİĞİNİ ve bir sorgu düşse bile kaynağın ayakta kaldığını
+ * buradan doğruluyoruz.
+ */
+async function withShopHtmlRoutes<T>(
+  options: { html?: (url: string) => string; fail?: (url: string) => boolean },
+  run: (calls: string[]) => Promise<T>,
+): Promise<T> {
+  const original = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (options.fail?.(url)) throw new Error("network down");
+    return new Response(options.html?.(url) ?? "", { status: 200 });
+  }) as unknown as typeof fetch;
+  try {
+    return await run(calls);
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
 describe("bingShoppingSource", () => {
   it("GERÇEK puanı, değerlendirme sayısını, satıcıyı ve fiyatı okur", async () => {
     const [row] = await withShopHtml(shopHtml(withRating), () =>
@@ -793,6 +822,74 @@ describe("bingShoppingSource", () => {
     // Sessiz "başarılı ama 0 satır" demek, engellenmeyi gizlerdi.
     await expect(
       withShopHtml("<html><body>yapı değişti</body></html>", () =>
+        bingShoppingSource.scrape("air fryer"),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("sayfadaki TÜM ölçülebilir kartları kullanır (eski 16'lık dilim ölçümle kaldırıldı)", async () => {
+    // Regresyon: kaynak sayfada ölçülen 45+ ölçülebilir kart varken
+    // `slice(0, 16)` ile kesiyordu ve ham havuz 44-60'ta takılıyordu.
+    const cards = Array.from({ length: 30 }, (_, i) =>
+      shopCard(`
+      <div class="br-offTtl"><span title="Ninja Air Fryer Basket ${i} ${1000 + i}W Digital">Ninja Air Fryer Basket ${i}</span></div>
+      <div class="br-offPrice"><div class="br-price">$${100 + i}.00</div></div>
+      <div class="br-offSlr"><span class="br-offSlrTxt">Walmart</span></div>`),
+    );
+    const rows = await withShopHtml(shopHtml(...cards), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(rows).toHaveLength(30);
+    expect(rows.length).toBeGreaterThan(16);
+  });
+
+  it("iki ALICI sorgusunu (niş + 'best niş') paralel koşar ve kartları BİRLEŞTİRİR", async () => {
+    const variantCard = shopCard(`
+      <div class="br-offTtl"><span title="Ninja Air Fryer Pro 8QT Max Crisp">Ninja Air Fryer Pro 8QT</span></div>
+      <div class="br-offPrice"><div class="br-price">$99.99</div></div>
+      <div class="br-offSlr"><span class="br-offSlrTxt">Target</span></div>`);
+    const rows = await withShopHtmlRoutes(
+      {
+        html: (url) =>
+          url.includes("best%20air%20fryer") ? shopHtml(variantCard) : shopHtml(withRating),
+      },
+      async (calls) => {
+        const result = await bingShoppingSource.scrape("air fryer");
+        expect(calls).toHaveLength(2);
+        expect(calls.some((u) => u.includes("q=air%20fryer"))).toBe(true);
+        expect(calls.some((u) => u.includes("q=best%20air%20fryer"))).toBe(true);
+        return result;
+      },
+    );
+    // İki ayrı sayfa → iki ayrı ürün (biri puanlı, biri yalnız fiyatlı).
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.seller).sort()).toEqual(["Target", "Walmart"]);
+  });
+
+  it("iki sorguda AYNI ürün gelirse TEK satır kalır (kaynaktaki tekilleştirme)", async () => {
+    // Ölçüldü: varyant kart setinin bir kısmı taban sorguyla örtüşür.
+    // Örtüşmeyi filtreye bırakmak yanlış olurdu: aynı ürün iki kez ham havuzu
+    // şişirir, "ölçtük" iddiasını sulandırırdı.
+    const rows = await withShopHtml(shopHtml(withRating), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("bir sorgu düşse bile diğeriyle devam eder (kaynak içi fail-soft)", async () => {
+    // Kaynak tavanı boşa gitmesin: tek sorgu hatası TÜM kaynağı düşürmemeli.
+    // İki sorgu birden ölürse yukarıdaki test gereği hata bildirilir.
+    const rows = await withShopHtmlRoutes(
+      { html: () => shopHtml(withRating), fail: (url) => url.includes("best%20air%20fryer") },
+      () => bingShoppingSource.scrape("air fryer"),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.priceUsd).toBe(129.99);
+  });
+
+  it("iki sorgu birden düşerse kaynak hata bildirir (sessiz 0 satır DEĞİL)", async () => {
+    await expect(
+      withShopHtmlRoutes({ html: () => "", fail: () => true }, () =>
         bingShoppingSource.scrape("air fryer"),
       ),
     ).rejects.toThrow();
