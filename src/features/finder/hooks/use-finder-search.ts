@@ -13,8 +13,12 @@ import {
   startDiscoveryRun,
   type DiscoveryWinner,
 } from "@/lib/product-discovery.functions";
-import { huggingFaceSearch } from "@/lib/hf.functions";
-import { storedHfToken, engineLabel, type EngineId, type MarketplaceId } from "@/lib/engines";
+import {
+  engineLabel,
+  normalizeEngineId,
+  type EngineId,
+  type MarketplaceId,
+} from "@/lib/engines";
 import type { DeepSearchOptions } from "@/components/deep-search-panel";
 import type { RejectedCandidate } from "@/components/winner-score-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
@@ -109,7 +113,6 @@ export function useFinderSearch(opts: {
   const getDiscoveryJobFn = useServerFn(getDiscoveryJob);
   const saveAnalysisFn = useServerFn(saveAnalysis);
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
-  const hfFn = useServerFn(huggingFaceSearch);
   const startDiscoveryFn = useServerFn(startDiscoveryRun);
   const getDiscoveryRunFn = useServerFn(getDiscoveryRun);
   const getPreflightFn = useServerFn(getDiscoveryPreflight);
@@ -340,69 +343,9 @@ export function useFinderSearch(opts: {
     },
   });
 
-  const hfGen = useMutation({
-    mutationFn: (vars: { engine: "qwen" | "llama" | "hybrid"; platforms?: Platform[] }) =>
-      hfFn({
-        data: {
-          niche: opts.niche,
-          category: opts.category,
-          audience: opts.audience,
-          platforms: vars.platforms ?? opts.platforms,
-          budget: opts.budget,
-          target_country: opts.marketplace === "turkey" ? "TR" : opts.targetCountry,
-          marketplace: opts.marketplace,
-          lang: (opts.lang.slice(0, 2) as "en" | "tr") ?? "en",
-          engine: vars.engine,
-          token: storedHfToken(),
-        },
-      }),
-    onSuccess: (res) => {
-      partialDeliveredRef.current = false;
-      setEnriching(false);
-      setCouncilPending(false);
-      try {
-        const products = toProductList(res);
-        opts.onResults(products.length > 0 ? attachWinnerScores(products) : [], [], null);
-        setFallbackNotice(null);
-        setSearchError(null);
-        setStalled(false);
-        qc.invalidateQueries({ queryKey: ["profile"] });
-        const model = (res as { model?: string } | undefined)?.model ?? "Hugging Face";
-        if (products.length === 0)
-          toast.error("Hugging Face returned no products — try another niche.");
-        else toast.success(`${products.length} products from ${model}`);
-      } catch (err) {
-        console.error("HF arama sonucu işlenirken hata:", err);
-        toast.error("Sonuçlar işlenirken bir sorun oluştu. Lütfen tekrar dene.");
-      }
-    },
-    onError: (err: Error) => {
-      if (err.message.includes("NO_CREDITS")) {
-        toast.error("Out of credits — upgrade to keep going.");
-        opts.onNeedUpgrade();
-        return;
-      }
-      opts.onClearResults();
-      setStalled(false);
-      setEnriching(false);
-      setCouncilPending(false);
-      setSearchError(
-        err.message.includes("HF_TOKEN_MISSING")
-          ? {
-              kind: "auth",
-              title: "Hugging Face token eksik",
-              body: "Bu motor senin kendi Hugging Face token'ınla çalışır, bu yüzden istek yetkilendirilemedi.",
-              hint: "Ayarlar → API anahtarları bölümünden HF_TOKEN ekleyip tekrar dene.",
-              raw: err.message,
-            }
-          : { ...describeSearchFailure(err.message), raw: err.message },
-      );
-    },
-    onSettled: () => {
-      setStalled(false);
-      if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
-    },
-  });
+  // HuggingFace yolu (Llama/Qwen/Hybrid) KALDIRILDI: bu seçenekler seçiliyken
+  // ürün arama Product Discovery hattını hiç denemeden klasik üretime geçiyordu.
+  // `hfFn`, `storedHfToken` ve `hfGen` referansları da aynı sebepten kaldırıldı.
 
   /**
    * ESKİ HATA: YENİ HAT — BİRİNCİL YOL.
@@ -556,7 +499,7 @@ export function useFinderSearch(opts: {
    * Bekleme göstergesi üç yolun birleşimidir: yeni hat, eski hat, HF motoru.
    * `pipeline` YUKARIDA tanımlıdır; aşağıda yazmak TDZ hatası verirdi.
    */
-  const searching = gen.isPending || hfGen.isPending || pipeline.isPending;
+  const searching = gen.isPending || pipeline.isPending;
 
   const runSearch = useCallback(
     (nicheValue: string, resultQuerySetter?: (v: string) => void) => {
@@ -606,19 +549,16 @@ export function useFinderSearch(opts: {
       // mutationFn içinde gerçek bütçeyle yeniden kurulur.
       armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
-      if (opts.engine !== "default") {
-        // DÜRÜSTLÜK: bu yol Product Discovery hattını ÇALIŞTIRMAZ (klasik
-        // HuggingFace üretimi). Önceden hiçbir şey söylenmediği için kullanıcı
-        // hattan ötürü eski sistemde kaldığını sanıyordu. Artık sebep ekranda.
+      if (normalizeEngineId(opts.engine) !== "default") {
+        // normalizeEngineId bugün her şeyi "default"a indirdiği için buraya
+        // düşmek imkânsız; dallanma yalnız tip güvenliği için duruyor.
         setFallbackNotice(nonDefaultEngineNotice(engineLabel(opts.engine).label));
-        hfGen.mutate({
-          engine: opts.engine as "qwen" | "llama" | "hybrid",
-          platforms: effectivePlatforms,
-        });
         return;
       }
-      // Varsayılan motor: YENİ HAT birincil. Başlatma/sonuç başarısız olursa
-      // `pipeline` kendi içinde eski hatta (`gen`) düşer.
+      // SEÇİCİ ARTIK TEK MOTOR: `normalizeEngineId` sayesinde tarayıcıda
+      // kalmış eski bir seçim ("qwen") de "default"a iner. Yeni hat her zaman
+      // birincil yoldur; başlatma/sonuç başarısız olursa `pipeline` kendi
+      // içinde eski hatta (`gen`) düşer ve sebebi ekranda yazar.
       pipeline.mutate({
         niche: nicheValue,
         category: opts.category,
@@ -655,7 +595,6 @@ export function useFinderSearch(opts: {
       opts.niche,
       armSafetyTimer,
       gen,
-      hfGen,
     ],
   );
 
@@ -676,7 +615,6 @@ export function useFinderSearch(opts: {
     searchAttempt,
     stalled,
     gen,
-    hfGen,
     runSearch,
     setSearchError,
     setStalled,

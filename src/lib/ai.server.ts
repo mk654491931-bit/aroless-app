@@ -776,7 +776,33 @@ export async function callGemini(
       // quota or hard failure on this key — rotate to the next one
     }
   }
-  // Every Gemini key exhausted — keep the app working on the built-in gateway.
+  // Every Gemini key exhausted — now walk the rest of the 22-key pool before
+  // the built-in gateway.
+  //
+  // NEDEN: “Gemini öncelikli, olmazsa havuzdaki hangisi müsaitse o” sözü
+  // ancak burada tutulabilir. Gemini 5 anahtarı da tükenirse (ücretsiz katman
+  // kotası dolduğunda sık olur) çağrı ya ağ geçidine ya da hiçbir yere
+  // düşüyordu; Groq/OpenRouter/HF/Cerebras/SambaNova'daki müsait anahtarlar
+  // hiç kullanılmıyordu. Havuz turu aynı istemi alır, ilk yanıt veren düğüm
+  // kazanır. `grounded=false` ise grounding gerektirmeyen çağrılarda havuza
+  // daha erken geçilir (arama gecikmesi bütçesi için).
+  if (deadlineAt === undefined || deadlineAt - Date.now() > 0) {
+    try {
+      const { runPoolWithFailover } = await import("./ai-pool.server");
+      const { text, node } = await runPoolWithFailover(grounded ? "deep" : "all", {
+        prompt,
+        temperature,
+        jsonMode: !grounded,
+      });
+      if (text) {
+        console.log(`[ai] gemini exhausted → pool node ${node?.id ?? "?"}`);
+        return text;
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  // Pool empty or all nodes cooling down — keep the app working on the gateway.
   try {
     return await callLovableAI(prompt, temperature);
   } catch {
