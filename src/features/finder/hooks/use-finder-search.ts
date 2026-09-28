@@ -14,14 +14,18 @@ import {
   type DiscoveryWinner,
 } from "@/lib/product-discovery.functions";
 import { huggingFaceSearch } from "@/lib/hf.functions";
-import { storedHfToken, type EngineId, type MarketplaceId } from "@/lib/engines";
+import { storedHfToken, engineLabel, type EngineId, type MarketplaceId } from "@/lib/engines";
 import type { DeepSearchOptions } from "@/components/deep-search-panel";
 import type { RejectedCandidate } from "@/components/winner-score-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import { toWinningProducts, discoverySetupNotice } from "../utils/discovery-result";
+import {
+  toWinningProducts,
+  discoverySetupNotice,
+  nonDefaultEngineNotice,
+} from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
@@ -603,6 +607,10 @@ export function useFinderSearch(opts: {
       armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
       if (opts.engine !== "default") {
+        // DÜRÜSTLÜK: bu yol Product Discovery hattını ÇALIŞTIRMAZ (klasik
+        // HuggingFace üretimi). Önceden hiçbir şey söylenmediği için kullanıcı
+        // hattan ötürü eski sistemde kaldığını sanıyordu. Artık sebep ekranda.
+        setFallbackNotice(nonDefaultEngineNotice(engineLabel(opts.engine).label));
         hfGen.mutate({
           engine: opts.engine as "qwen" | "llama" | "hybrid",
           platforms: effectivePlatforms,

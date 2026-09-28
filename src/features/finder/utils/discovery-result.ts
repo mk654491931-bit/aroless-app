@@ -158,6 +158,20 @@ export function describeDiscoveryFailure(reason: string): string {
   return raw ? `Yeni hat kurulamadı: ${raw.slice(0, 160)}` : "Yeni hat kurulamadı.";
 }
 
+/**
+ * Seçili motor Product Discovery hattını kullanmıyorsa ekranda söylenir.
+ *
+ * NEDEN VAR (ölçülen davranış): `runSearch` yeni hattı YALNIZ
+ * `engine === "default"` iken dener. `HF: Llama` / `HF: Qwen` / `Hybrid`
+ * seçiliyse `hfGen` (klasik yol) çalışır ve **hiçbir uyarı üretilmez** —
+ * kullanıcı "sistem hâlâ eski çalışıyor" sanır, oysa hata değil seçimdir.
+ * Sessizliği kırmak, hat için yapılan teşhisin aynısıdır: olan biteni
+ * söylemek.
+ */
+export function nonDefaultEngineNotice(engineLabel: string): string {
+  return `Seçili motor "${engineLabel}" Product Discovery hattını kullanmıyor; bu hat (kazıma → 75 → Gemini 25 → 14 ajan → ilk 5) yalnız "Default AI" motorunda çalışır. Motoru "Default AI" yapıp tekrar ara.`;
+}
+
 /** Kurulum raporunun arayüze giden en küçük şekli. */
 export type SetupReport = {
   ok: boolean;

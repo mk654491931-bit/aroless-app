@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeDiscoveryFailure,
   discoverySetupNotice,
+  nonDefaultEngineNotice,
   type SetupReport,
 } from "./discovery-result";
 import {
@@ -135,6 +136,17 @@ describe("discoverySetupNotice", () => {
   it("rapor boş dönerse yine de sebebi gösterir", () => {
     const notice = discoverySetupNotice("timeout", { ok: true, summary: "", checks: [] });
     expect(notice).toContain("zaman aşımına");
+  });
+});
+
+describe("nonDefaultEngineNotice", () => {
+  it("seçili motorun hattan çıktığını ve ne yapılacağını söyler", () => {
+    // Bu, canlıdaki ikinci sessiz yoldu: HF motoru seçiliyken yeni hat hiç
+    // denenmeden klasik üretime geçiyor, kullanıcı hiçbir şey öğrenmiyordu.
+    const notice = nonDefaultEngineNotice("HF: Qwen 2.5");
+    expect(notice).toContain("HF: Qwen 2.5");
+    expect(notice).toContain("Default AI");
+    expect(notice).toContain("75");
   });
 });
 
