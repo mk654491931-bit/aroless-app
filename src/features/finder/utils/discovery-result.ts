@@ -158,7 +158,38 @@ export function describeDiscoveryFailure(reason: string): string {
   return raw ? `Yeni hat kurulamadı: ${raw.slice(0, 160)}` : "Yeni hat kurulamadı.";
 }
 
-/** Geri düşüş bildiriminin tam metni (arayüzde tek yerden üretilir). */
-export function discoveryFallbackNotice(reason: string): string {
-  return `${describeDiscoveryFailure(reason)} Bu yüzden klasik motor kullanıldı. Teşhis: /api/product-discovery/preflight`;
+/** Kurulum raporunun arayüze giden en küçük şekli. */
+export type SetupReport = {
+  ok: boolean;
+  summary: string;
+  checks: { id: string; label: string; ok: boolean; fix: string; optional?: boolean }[];
+};
+
+/**
+ * Hat kurulamadığında ekranda gösterilecek TAM bildirim.
+ *
+ * NEDEN İKİ KAYNAK BİRLEŞTİRİLİYOR: (1) hat neden kurulamadı (ham hata metni
+ * çevrilmiş hali), (2) kurulumda ne eksik (canlı yoklama). Kullanıcı ikisini
+ * ayrı ayrı aramak zorunda kalmamalı: ekranda sebep + eksik + ÇÖZÜM yazmalı.
+ *
+ * Eksik kontrol YOKSA: yalnız teşhis ucunun adresi verilir — çünkü o zaman
+ * kurulum hazırdır ve sorun başka yerdedir (ör. QStash'e ulaşılamıyor).
+ *
+ * ÖNEMLİ: `fix` metinlerinde gizli değer YOKTUR (yalnız anahtar adı/SQL yolu),
+ * bu yüzden ekrana yazmak güvenlidir.
+ */
+export function discoverySetupNotice(reason: string, report: SetupReport | null): string {
+  const cause = describeDiscoveryFailure(reason);
+  if (!report || !report.checks.length) {
+    // Rapor gelemedi (ağ/sunucu hatası): sebebi gizleme, teşhis yolunu göster.
+    return `${cause} Bu yüzden klasik motor kullanıldı. Kurulum raporu alınamadı.`;
+  }
+  const missing = report.checks.filter((c) => !c.ok && !c.optional);
+  if (!missing.length) {
+    return `${cause} Kurulum tamam görünüyor, bu yüzden klasik motor kullanıldı.`;
+  }
+  const labels = missing.map((c) => c.label).join(", ");
+  const fix = missing[0]?.fix ?? "";
+  const extra = missing.length > 1 ? ` (+${missing.length - 1} eksik daha)` : "";
+  return `${cause} Eksik: ${labels}${extra}. Çözüm: ${fix} Bu yüzden klasik motor kullanıldı.`;
 }

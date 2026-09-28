@@ -8,6 +8,7 @@ import { countryFit } from "@/lib/platform-market";
 import type { WinningProduct, Platform, Budget } from "@/lib/gemini.functions";
 import { generateProducts, getDiscoveryJob } from "@/lib/gemini.functions";
 import {
+  getDiscoveryPreflight,
   getDiscoveryRun,
   startDiscoveryRun,
   type DiscoveryWinner,
@@ -20,7 +21,7 @@ import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import { toWinningProducts, discoveryFallbackNotice } from "../utils/discovery-result";
+import { toWinningProducts, discoverySetupNotice } from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
@@ -107,6 +108,7 @@ export function useFinderSearch(opts: {
   const hfFn = useServerFn(huggingFaceSearch);
   const startDiscoveryFn = useServerFn(startDiscoveryRun);
   const getDiscoveryRunFn = useServerFn(getDiscoveryRun);
+  const getPreflightFn = useServerFn(getDiscoveryPreflight);
 
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
@@ -488,9 +490,15 @@ export function useFinderSearch(opts: {
         console.warn(`[finder] yeni hat düştü (${outcome.reason}) — eski hatta geri dönülüyor`);
         // DÜRÜST BİLDİRİM: eskiden tek satırlık genel bir mesaj vardı ve kullanıcı
         // hatta ne olduğunu öğrenemiyordu. "5 ürün" gördüğü için hattın hiç
-        // çalışmadığını fark etmiyordu. Artık GERÇEK sebep yazılır
-        // (`describeDiscoveryFailure`), hatta da teşhis ucunun adresi verilir.
-        setFallbackNotice(discoveryFallbackNotice(outcome.reason));
+        // çalışmadığını fark etmiyordu. Artık ekranda: sebep + eksik olan şey +
+        // ÇÖZÜM yazıyor. Teşhis `getDiscoveryPreflight` sunucu fonksiyonuyla
+        // çekilir (HTTP ucu tarayıcıdan açılamaz: Bearer başlığı ister).
+        setFallbackNotice(discoverySetupNotice(outcome.reason, null));
+        void getPreflightFn({ data: {} })
+          .then((report) => setFallbackNotice(discoverySetupNotice(outcome.reason, report)))
+          .catch(() => {
+            /* teşhis alınamazsa yukarıdaki kısa mesaj kalır */
+          });
         gen.mutate(vars);
         return;
       }

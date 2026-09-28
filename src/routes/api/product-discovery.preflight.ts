@@ -13,6 +13,13 @@
  *   • HİÇBİR sır döndürülmez: yalnız anahtarın VAR/YOK durumu, kontrol
  *     etiketleri ve Supabase'in HATA METNİ (anahtar değeri içermez).
  *
+ * ⚠ TARAYICIDA AÇILMAZ (ölçüldü): `requireUser` `Authorization: Bearer` başlığı
+ * zorunlu tutuyor; adres çubuğu bu başlığı gönderemez. Bu uç, JWT ile çağıran
+ * istemciler (curl, sunucu) içindir. Tarayıcıdaki tek yol
+ * `getDiscoveryPreflight` sunucu fonksiyonudur; arama ekranı hat kurulamayınca
+ * onu kendiliğinden çağırır. Başlıksız istekte aşağıdaki ipucu döner ki
+ * kullanıcı aynı 401'i tekrar tekrar görmesin.
+ *
  * `Cache-Control: no-store`: bu cevap ortam durumunu yansıtır; önbelleğe
  * alınırsa kullanıcı anahtarı ekledikten sonra "yine eksik" görür.
  */
@@ -25,6 +32,20 @@ export const Route = createFileRoute("/api/product-discovery/preflight")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        // Başlık yoksa anlamlı bir 401 döndür: kullanıcı "giriş yap" deyip
+        // aynı sayfayı tekrar açmasın, neden açılamadığını görsün.
+        if (!request.headers.get("authorization")) {
+          return new Response(
+            JSON.stringify({
+              error: "Bu uç tarayıcı adresinden açılamaz.",
+              hint: "Oturum jetonu başlığı ister. Uygulama içindeki teşhis aynı bilgiyi gösterir.",
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+            },
+          );
+        }
         const guard = await requireUser(request);
         if ("response" in guard) return guard.response;
 

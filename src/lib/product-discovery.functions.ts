@@ -205,6 +205,40 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
     return { ok: true, runId, charged: charge.charged };
   });
 
+/* ------------------------------------------------------------- Teşhis */
+
+/**
+ * Hat çalışmaya hazır mı? (tarayıcıdan çağrılabilen TEK yol)
+ *
+ * NEDEN SUNUCU FONKSİYONU ve neden ayrıca bir HTTP ucu yetmiyor: bu projenin
+ * `requireUser`/`requireSupabaseAuth` koruması `Authorization: Bearer <jeton>`
+ * başlığını ZORUNLU tutuyor. Bir tarayıcı adres çubuğu bu başlığı gönderemez
+ * (gönderirse sayfa geçersiz olur). Yani aynı bilgiyi döndüren bir
+ * `GET /api/...` ucu kurmak, kullanıcıya "giriş yapmalısınız" cevabından başka
+ * bir şey göstermiyor — ölçüldü: kullanıcı adresi açtı ve tam olarak bu cevabı
+ * aldı. Sunucu fonksiyonu ise oturum jetonunu sunucuda okur, bu yüzden
+ * uygulamanın İÇİNDEN çağrılabilir.
+ *
+ * Hata YUTMAZ: teşhis aracının kendisi çökerse `ok:false` döner; çağıran yine
+ * de ham sebebi gösterebilir.
+ */
+export const getDiscoveryPreflight = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({}))
+  .handler(async () => {
+    const { runDiscoveryPreflight } = await import("@/lib/product-discovery-preflight.server");
+    try {
+      return await runDiscoveryPreflight();
+    } catch (error) {
+      return {
+        ok: false as const,
+        checks: [],
+        summary: "Kurulum durumu okunamadı",
+        error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      };
+    }
+  });
+
 /* ---------------------------------------------------------------- Durum */
 
 /**

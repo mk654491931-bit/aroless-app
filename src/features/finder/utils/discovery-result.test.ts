@@ -8,7 +8,11 @@
 // ============================================================================
 import { describe, expect, it } from "vitest";
 
-import { discoveryFallbackNotice, describeDiscoveryFailure } from "./discovery-result";
+import {
+  describeDiscoveryFailure,
+  discoverySetupNotice,
+  type SetupReport,
+} from "./discovery-result";
 import {
   isDiscoveryPipelineActive,
   setDiscoveryPipelineActive,
@@ -61,13 +65,76 @@ describe("describeDiscoveryFailure", () => {
   });
 });
 
-describe("discoveryFallbackNotice", () => {
-  it("sebebi, geri düşüşü ve teşhis adresini birlikte söyler", () => {
-    const notice = discoveryFallbackNotice('column "discovery_status" does not exist');
-    expect(notice).toContain("migration");
+describe("discoverySetupNotice", () => {
+  const passing = (id: string, label: string) => ({ id, label, ok: true, fix: "" });
+
+  it("rapor gelmezse sebebi gizlemez, yine de ne yapılacağını söyler", () => {
+    const notice = discoverySetupNotice("queue_failed: fetch failed", null);
+    expect(notice).toContain("QStash");
     expect(notice).toContain("klasik motor");
-    // Kullanıcı tek tıkla teşhise gidebilsin: teşhis ucu gizli kalmamalı.
-    expect(notice).toContain("/api/product-discovery/preflight");
+    expect(notice).toContain("Kurulum raporu alınamadı");
+  });
+
+  it("eksik olanı ve ÇÖZÜMÜNÜ birlikte yazar", () => {
+    // Kullanıcının gerçek ihtiyacı bu: ne eksik ve ne yapmalı.
+    const report: SetupReport = {
+      ok: false,
+      summary: "",
+      checks: [
+        passing("qstash_token", "QStash yayın jetonu"),
+        {
+          id: "db_columns",
+          label: "searches keşif kolonları",
+          ok: false,
+          fix: "supabase/migrations/20260927000000_product_discovery_pipeline.sql",
+        },
+      ],
+    };
+    const notice = discoverySetupNotice("column discovery_status does not exist", report);
+    expect(notice).toContain("searches keşif kolonları");
+    expect(notice).toContain("20260927000000_product_discovery_pipeline.sql");
+    expect(notice).toContain("klasik motor");
+  });
+
+  it("birden fazla eksikte ilk çözümü gösterir, kalanını sayar", () => {
+    const report: SetupReport = {
+      ok: false,
+      summary: "",
+      checks: [
+        { id: "a", label: "A eksik", ok: false, fix: "A çözümü" },
+        { id: "b", label: "B eksik", ok: false, fix: "B çözümü" },
+        { id: "c", label: "C eksik", ok: false, fix: "C çözümü" },
+      ],
+    };
+    const notice = discoverySetupNotice("x", report);
+    expect(notice).toContain("A çözümü");
+    expect(notice).toContain("+2 eksik daha");
+    // Kullanıcı ekrana bakan biri: üçünü de birden dökmek gürültü olurdu.
+    expect(notice).not.toContain("C çözümü");
+  });
+
+  it("İSTEĞE BAĞLI eksik (Gemini) kurulumu bozuk saymaz", () => {
+    const report: SetupReport = {
+      ok: true,
+      summary: "",
+      checks: [
+        passing("qstash_token", "QStash yayın jetonu"),
+        { id: "gemini", label: "Gemini seçici", ok: false, optional: true, fix: "—" },
+      ],
+    };
+    expect(discoverySetupNotice("x", report)).toContain("Kurulum tamam görünüyor");
+  });
+
+  it("kurulum hazırsa sorunun başka yerde olduğunu söyler", () => {
+    const report: SetupReport = { ok: true, summary: "", checks: [passing("a", "A")] };
+    const notice = discoverySetupNotice("fetch failed", report);
+    expect(notice).toContain("Kurulum tamam görünüyor");
+    expect(notice).toContain("klasik motor");
+  });
+
+  it("rapor boş dönerse yine de sebebi gösterir", () => {
+    const notice = discoverySetupNotice("timeout", { ok: true, summary: "", checks: [] });
+    expect(notice).toContain("zaman aşımına");
   });
 });
 
