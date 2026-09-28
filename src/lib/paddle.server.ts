@@ -80,13 +80,27 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
     process.env["PADDLE_API_KEY"],
     process.env["PADDLE_CLIENT_TOKEN"],
     process.env["VITE_PADDLE_CLIENT_TOKEN"],
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
   return /test_|_sdbx_|sandbox/i.test(probe) ? "sandbox" : "production";
 }
 
 /**
  * Load and validate the Paddle configuration. Returns null (and logs the missing
  * variables) when the integration is not configured — callers decide how to fail.
+ *
+ * KATALOG KISMİ OLUR (ölçülen hatanın kaynağı): `apiKey`/`webhookSecret`/
+ * `clientToken` olmadan Paddle ile konuşulamaz, bu yüzden bunlar ZORUNLUDUR.
+ * Fiyat ID'leri ise ZORUNLU DEĞİLDİR: bir planın fiyat ID'si eksik olduğünde
+ * önceden tüm entegrasyon `null` dönüyordu. Bunun ölçülen sonucu şuydu:
+ * checkout sunucu yolundan düşüyor, tarayıcı `customData`sız ham fiyat
+ * checkout'una geçiyor ve webhook ödemeyi hiçbir kullanıcıya bağlayamadığı için
+ * "satın alma var, pakette ne?" durumu oluşuyordu — yani TEK eksik fiyat ID'si
+ * TÜM ödemeleri sahipsiz bırakıyordu.
+ *
+ * Artık yalnız gerçekten konuşulamaz durumda `null` döner; eksik fiyat ID'leri
+ * loglanır ve yalnız O planın checkout'u reddedilir.
  */
 export function paddleSettings(): PaddleSettings | null {
   const apiKey = process.env["PADDLE_API_KEY"];
@@ -101,14 +115,21 @@ export function paddleSettings(): PaddleSettings | null {
     if (id) priceIds[plan] = id;
   }
 
-  if (!apiKey || !webhookSecret || !clientToken || !priceIds.Starter || !priceIds.Pro || !priceIds.Business) {
+  const missingPlans = (["Starter", "Pro", "Business"] as const).filter((plan) => !priceIds[plan]);
+  if (missingPlans.length) {
+    // Katalog eksik ama ödeme altyapısı ayakta: yalnız bu planlar satın
+    // alınamaz. Webhook ÇALIŞMAYA DEVAM EDER — aksi hâlde tek bir eksik fiyat
+    // ID'si daha önce olduğu gibi bütün ödemeleri sahipsiz bırakıyordu.
+    console.warn(
+      `[Paddle] Missing price id(s) for: ${missingPlans.join(", ")} — only those plans cannot be checked out.`,
+    );
+  }
+
+  if (!apiKey || !webhookSecret || !clientToken) {
     const missing = [
       ...(!apiKey ? ["PADDLE_API_KEY"] : []),
       ...(!webhookSecret ? ["PADDLE_WEBHOOK_SECRET_KEY"] : []),
       ...(!clientToken ? ["PADDLE_CLIENT_TOKEN"] : []),
-      ...(!priceIds.Starter ? ["PADDLE_STARTER_PRICE_ID"] : []),
-      ...(!priceIds.Pro ? ["PADDLE_PRO_PRICE_ID"] : []),
-      ...(!priceIds.Business ? ["PADDLE_BUSINESS_PRICE_ID"] : []),
     ];
     console.error(`[Paddle] Missing environment variable(s): ${missing.join(", ")}`);
     return null;
@@ -121,6 +142,33 @@ export function paddleSettings(): PaddleSettings | null {
     webhookSecret,
     priceIds: priceIds as Record<PlanId, string>,
   };
+}
+
+/**
+ * İşlemde UYGULANMIŞ indirim kodunun kimliği (yoksa `null`).
+ *
+ * NEDEN VAR: sahibi “%100 indirim kodu kullandım ama Paddle bunu doğrulamadı”
+ * diye bildirdi. Paddle indirimi `details.discounts[].discount_id` (bazı
+ * olaylarda düz `discount_id`) alanında taşır. Bu işlev YALNIZ gerçekten
+ * yazılmış kimliği okur; alan yoksa `null` döner — uydurma değer basılmaz.
+ * Ham gövde zaten `process_paddle_event` içinde `_payload` ile saklanır, yani
+ * bu değer log/denetim için okunabilir bir alan sağlar.
+ */
+export function appliedDiscountId(data: unknown): string | null {
+  const record = (data ?? {}) as Record<string, unknown>;
+  const details = record["details"] as Record<string, unknown> | undefined;
+  const list = Array.isArray(record["discounts"])
+    ? (record["discounts"] as unknown[])
+    : Array.isArray(details?.["discounts"])
+      ? (details["discounts"] as unknown[])
+      : [];
+  for (const entry of list) {
+    const item = (entry ?? {}) as Record<string, unknown>;
+    const id = item["discount_id"] ?? item["id"];
+    if (typeof id === "string" && id) return id;
+  }
+  const direct = record["discount_id"];
+  return typeof direct === "string" && direct ? direct : null;
 }
 
 /** Paddle price ID configured for a plan, or the configured price that matches a given Paddle price ID. */
@@ -190,6 +238,13 @@ export async function createPaddleCheckoutSession(opts: {
   }
 
   const priceId = priceIdForPlan(settings, plan);
+  // Katalog kısmi olabilir; bu planın fiyatı tanımlı değilse AÇIK hata ver.
+  // (Eskiden bu, tüm entegrasyonu düşürüyordu.)
+  if (!priceId) {
+    throw new Error(
+      `"${plan}" planı için Paddle fiyat ID'si tanımlı değil (${PLAN_PRICE_ENV[plan][0]}).`,
+    );
+  }
   const paddle = getPaddleClient();
 
   try {
@@ -246,10 +301,7 @@ const SUBSCRIPTION_EVENTS = new Set([
 ]);
 
 /** Transaction events handled for payment attribution / credit grants. */
-const TRANSACTION_EVENTS = new Set([
-  "transaction.completed",
-  "transaction.updated",
-]);
+const TRANSACTION_EVENTS = new Set(["transaction.completed", "transaction.updated"]);
 
 /** Statuses that must revoke entitlements (payment stopped / failing). */
 const REVOKING_STATUSES = new Set(["canceled", "past_due", "paused", "refunded", "reversed"]);
@@ -266,7 +318,8 @@ export function isRefundPayload(data: unknown): boolean {
   if (typeof gt === "string" && gt.trim().startsWith("-")) return true;
   if (typeof gt === "number" && gt < 0) return true;
   const adj = d["adjustment"] as Record<string, unknown> | undefined;
-  if (adj && typeof adj["type"] === "string" && adj["type"].toLowerCase().includes("refund")) return true;
+  if (adj && typeof adj["type"] === "string" && adj["type"].toLowerCase().includes("refund"))
+    return true;
   return false;
 }
 
@@ -307,11 +360,11 @@ export function mapPaddleEvent(
     data && typeof data === "object" && data.customData && typeof data.customData === "object"
       ? data.customData
       : {};
-  const items: Array<{ price?: { id?: string } | null }> =
-    Array.isArray(data?.items) ? data.items : [];
+  const items: Array<{ price?: { id?: string } | null }> = Array.isArray(data?.items)
+    ? data.items
+    : [];
   const priceId: string | null = items[0]?.price?.id ?? null;
-  const customerId: string | null =
-    typeof data?.customerId === "string" ? data.customerId : null;
+  const customerId: string | null = typeof data?.customerId === "string" ? data.customerId : null;
   const requestedPlan: PlanId | null = isPlanId(customData.plan) ? customData.plan : null;
   const rawUserId: string | null =
     typeof customData.userId === "string" && customData.userId ? customData.userId : null;
@@ -399,8 +452,7 @@ export function mapPaddleEvent(
 
     // Tier is taken from the active price, then customData (copied to renewals by
     // Paddle), then left null so the DB preserves the user's current plan.
-    const tier: PlanId | null =
-      planForPriceId(settings, priceId) ?? requestedPlan ?? null;
+    const tier: PlanId | null = planForPriceId(settings, priceId) ?? requestedPlan ?? null;
 
     // Out-of-order guard: a refund/reversal that arrives with a positive
     // grandTotal due to Paddle's eventual consistency still must not mint

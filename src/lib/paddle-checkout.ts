@@ -45,6 +45,26 @@ function reportMissingClientToken(): void {
   );
 }
 
+/**
+ * Ödeme yapanın kullanıcı kimliği — checkout'un sahipsiz olmaması için.
+ *
+ * Sunucu yolu bu bilgiyi `createPaddleCheckoutSession` içinde güvenilir biçimde
+ * yazar; yedek (ham fiyat) yolunda tek şansımız oturumdur. Supabase istemcisi
+ * zaten sayfada çalışıyor, bu yüzden ek bir uç turu yapılmaz. Oturum yoksa
+ * `null` döner ve checkout yine açılır — ama bu durumda webhook yalnız plan
+ * bilgisiyle çalışabilir, o yüzden durum loglanır.
+ */
+async function currentUserId(): Promise<string | null> {
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user?.id ?? null;
+  } catch (error) {
+    console.warn("[Paddle] Oturum okunamadı, checkout customData.userId yok:", error);
+    return null;
+  }
+}
+
 /** Detect the app's active theme to mirror it in the overlay checkout. */
 function detectTheme(): "light" | "dark" {
   const root = document.documentElement;
@@ -74,9 +94,12 @@ export async function openPaddleOverlay(
     return false;
   }
 
-  const priceId = session.priceId ?? (options?.plan ? paddlePriceIdForPlan(options.plan) : undefined);
+  const priceId =
+    session.priceId ?? (options?.plan ? paddlePriceIdForPlan(options.plan) : undefined);
   if (!session.transactionId && !priceId) {
-    console.error("Paddle fiyat ID bulunamadı. İlgili VITE_PADDLE_PRICE_* değişkenini kontrol edin.");
+    console.error(
+      "Paddle fiyat ID bulunamadı. İlgili VITE_PADDLE_PRICE_* değişkenini kontrol edin.",
+    );
     return false;
   }
 
@@ -94,12 +117,28 @@ export async function openPaddleOverlay(
     }
 
     const origin = window.location.origin;
+    // ÖNEMLİ: `customData` olmadan ham fiyat checkout'u, webhook'un ödemeyi
+    // kime bağlayacağını bilemediği için SAHİPSİZ bir ödeme üretir: kullanıcı
+    // öder, Paddle onay maili atar, sistemde pakete dönüşmez. Sunucu yolu
+    // customData'yı sunucuda yazar; bu yol yedek olduğu için aynı bilgiyi
+    // burada da taşıyoruz. Kullanıcı kimliği oturumdan okunur.
+    const plan = options?.plan;
+    const customData: Record<string, string> = { source: "aroless-web" };
+    if (plan) customData["plan"] = plan;
+    const userId = await currentUserId();
+    if (userId) customData["userId"] = userId;
+    // Kullanıcı kimliği alınamadıysa bile plan bilgisi paketin doğru
+    // tanımlanmasını sağlar; webhook kullanıcıyı e-posta/customer ile eşler.
+    if (userId || plan)
+      console.info("[Paddle] checkout customData:", Object.keys(customData).join(","));
+
     const checkout = session.transactionId
       ? { transactionId: session.transactionId }
       : { items: [{ priceId: priceId!, quantity: 1 }] };
 
     paddle.Checkout.open({
       ...checkout,
+      customData,
       settings: {
         displayMode: "overlay",
         theme: detectTheme(),

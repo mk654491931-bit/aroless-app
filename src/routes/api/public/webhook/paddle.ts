@@ -31,6 +31,7 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           paddleSettings,
           verifyPaddleWebhook,
           mapPaddleEvent,
+          appliedDiscountId,
           SUBSCRIPTION_CREDIT_GRANTS,
         } = await import("@/lib/paddle.server");
 
@@ -63,9 +64,10 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           let auditPayload: unknown = null;
           try {
             const parsed: unknown = JSON.parse(raw);
-            auditPayload = JSON.stringify(parsed).length > 50_000
-              ? { eventId: event.eventId, eventType: event.eventType, truncated: true }
-              : parsed;
+            auditPayload =
+              JSON.stringify(parsed).length > 50_000
+                ? { eventId: event.eventId, eventType: event.eventType, truncated: true }
+                : parsed;
           } catch {
             /* raw body was validated by unmarshal already */
           }
@@ -82,9 +84,8 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
 
           // 6. Attribute the event to a user: customData userId first, then the
           //    Paddle customer id recorded on the profile (renewal fallback).
-          let userId: string | null = command.userId && UUID_RE.test(command.userId)
-            ? command.userId
-            : null;
+          let userId: string | null =
+            command.userId && UUID_RE.test(command.userId) ? command.userId : null;
 
           if (!userId && command.customerId) {
             const { data: byCustomer } = await supabaseAdmin
@@ -105,17 +106,23 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           // 7. For successful payments where the price/customData didn't reveal the
           //    plan (defensive), fall back to the user's current profile tier.
           //    Covers both transaction.completed and transaction.updated (self-healing).
+          //
+          //    ÖNEMLİ: burada "tutar > 0" koşulu ARTIK ARANMAZ. Ölçülen hata tam
+          //    buradaydı: %100 indirim koduyla alınan pakette `grandTotal` 0
+          //    olduğu için kendi kendini onarma yolu devre dışı kalıyor, paket
+          //    tanımlanmıyor ve hesap "Free" görünüyordu. İndirim kodu kullanıldığı
+          //    hâlde ücret ödenmemiş olmak bir hata değil, meşru bir alışveriş.
           if (
             TRANSACTION_EVENTS.has(event.eventType) &&
-            (!command.tier || command.tier === "Free") &&
-            (command.amountCents ?? 0) > 0
+            (!command.tier || command.tier === "Free")
           ) {
             const { data: profile } = await supabaseAdmin
               .from("profiles")
               .select("subscription_tier")
               .eq("id", userId as never)
               .maybeSingle();
-            const currentTier = (profile as { subscription_tier?: string } | null)?.subscription_tier;
+            const currentTier = (profile as { subscription_tier?: string } | null)
+              ?.subscription_tier;
             const planKey = (["Starter", "Pro", "Business"] as const).find(
               (p) => p.toLowerCase() === String(currentTier ?? "").toLowerCase(),
             );
@@ -123,6 +130,13 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
               command.tier = planKey;
               command.searchCredits = SUBSCRIPTION_CREDIT_GRANTS[planKey].search;
               command.simCredits = SUBSCRIPTION_CREDIT_GRANTS[planKey].sim;
+            } else if (appliedDiscountId(event.data)) {
+              // İndirimli ama plansız bir işlem: sessizce "Free" bırakıp
+              // kaybolmak yerine kayda geçirilir. Yönetici gerçek nedeni görür.
+              console.warn(
+                `[Paddle Webhook] ${event.eventType}: indirimli işlemde plan çözülemedi ` +
+                  `(priceId=${command.priceId ?? "-"}), paket tanımlanmadı.`,
+              );
             }
           }
 
@@ -189,7 +203,9 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
           }
 
           console.log(
-            `[Paddle Webhook] ✓ ${event.eventType} (${event.eventId}) → ${result ?? "ok"} for user ${userId}`,
+            `[Paddle Webhook] ✓ ${event.eventType} (${event.eventId}) → ${result ?? "ok"} ` +
+              `for user ${userId} · plan=${command.tier ?? "-"} · ` +
+              `tutar=${command.amountCents ?? "-"} · indirim=${appliedDiscountId(event.data) ?? "-"}`,
           );
           return text("ok", 200);
         } catch (err) {
@@ -205,3 +221,9 @@ export const Route = createFileRoute("/api/public/webhook/paddle")({
 function text(payload: string, status: number) {
   return new Response(payload, { status });
 }
+
+/**
+ * Kalan not: indirim okuma ve “paket tanımlanmadı” uyarısı, `paddle.server`dan
+ * dinamik olarak gelen `appliedDiscountId` ile İŞLEYİCİİN İÇİNDE yapılır
+ * (Paddle SDK'si istemci paketine sızmasın diye statik import yasak).
+ */
