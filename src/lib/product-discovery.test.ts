@@ -108,6 +108,29 @@ describe("productModelKey", () => {
     expect(a).toBe(b);
   });
 
+  it("ayrı kelimelere bölünmüş model kodunu TEK kod sayar (canlı E2E: Q7 L5)", () => {
+    // Canlı "robot vacuum" koşusunda ürün ilk 5'te İKİ KEZ çıktı: iki mağaza
+    // aynı ürünü "Q7 L5" ve "Q7 L5 … - WiFi" yazımıyla vermişti. Eski desen
+    // yalnız bitişik kodları (CM5418) yakaladığı için burada 0 kod buluyor ve
+    // iki yazım ayrı ürün sanılıyordu.
+    const a = productModelKey({
+      title: "Roborock Q7 L5 Robot Vacuum And Mop With 8,000 Pa Power",
+      brand: "Roborock",
+    });
+    const b = productModelKey({
+      title: "Roborock Q7 L5 Robot Vacuum And Mop With 8,000 Pa Power - WiFi",
+      brand: "Roborock",
+    });
+    expect(a).not.toBe("");
+    expect(a).toBe(b);
+  });
+
+  it("ayrı kodların bitişik olmayan hâli yine belirsizdir (aşırı birleştirme yok)", () => {
+    // "Q7 L5" bir model; "L10s" ve "S20" ise aralarında kelime olduğu için
+    // İKİ modeldir. Birleştirilirse iki farklı ürün birbirine karışır.
+    expect(productModelKey({ title: "Roborock Q7 L5 with S20 dock", brand: "Roborock" })).toBe("");
+  });
+
   it("farklı markada aynı model kodu AYRI kalır", () => {
     const a = productModelKey({ title: "Dreame L10s Ultra", brand: "Dreame" });
     const b = productModelKey({ title: "Roborock L10s Ultra", brand: "Roborock" });

@@ -192,11 +192,20 @@ export function productFingerprint(input: {
  * Coffee Maker") iki ayrı ürün sanılır ve NİHAİ 5'LİK LİSTEYE İKİ KEZ GİRER.
  * Gerçek ayırt edici model kodu (CM5418), oysa o iki başlıkta aynı.
  *
+ * ÖLÇÜLEN İKİNCİ KAÇIRMA (canlı E2E, "robot vacuum" koşusu): nihai listede
+ * "Roborock Q7 L5 … 8,000 Pa" İKİ KEZ göründü. Sebep: model kodu "Q7" ve "L5"
+ * olarak İKİ AYRI kelime yazılmış; eski desen `[A-Z]\d{2,6}` yalnız bitişik
+ * kodları (CM5418) yakaladığı için 0 kod buldu → anahtar üretilmedi → iki
+ * farklı yazımdaki aynı ürün ayrı sayıldı. Artık birbirine bitişik kodlar
+ * (boşlık/tireyle ayrılmış) TEK model kodu sayılır: "Q7 L5" → "Q7L5".
+ *
  * Kural BİLEREK MUHAFAZAKÂR — yanlış birleştirme, kaçırılan kopyadan çok
  * daha kötüdür (iki farklı ürünü birbirine karıştırır):
- *   • Anahtarda HARFLE başlayıp 2+ hane gelen kodlar sayılır (CM5418, L10S,
- *     AF100). Rakamla başlayanlar SAYILMAZ: "8000 PA", "10,000Pa", "20 BAR"
+ *   • Anahtarda HARFLE başlayan kodlar sayılır (CM5418, L10S, AF100, Q7L5).
+ *     Rakamla başlayanlar SAYILMAZ: "8000 PA", "10,000Pa", "20 BAR"
  *     ölçü/spec'tir, model kodu değildir.
+ *   • Bitişiklik şartı korunur: "Dreame L10s with S20" iki AYRI koddur
+ *     ("with" aralarında kelime var) → belirsiz → eşleştirme yapılmaz.
  *   • Marka boşsa anahtar üretilmez.
  *   • Başlıkta TAM OLARAK bir model kodu yoksa anahtar üretilmez (belirsiz
  *     başlık hiçbir eşleştirmeye giremez).
@@ -211,7 +220,11 @@ export function productModelKey(input: { title: string; brand?: string }): strin
     .toUpperCase();
 
   const codes = new Set<string>();
-  for (const m of title.matchAll(/\b([A-Z]{1,5}\d{2,6}[A-Z]{0,2})\b/g)) {
+  // BİRİBİRİNE BİTİŞİK kodlar tek model kodu sayılır: "Q7 L5" → "Q7L5".
+  // Aralarında kelime varsa biteşiklik bozulur → ayrı kod → belirsiz.
+  for (const m of title.matchAll(
+    /\b([A-Z]{1,5}\d{1,6}[A-Z]{0,2}(?:[\s-]+[A-Z]{1,5}\d{1,6}[A-Z]{0,2})*)\b/g,
+  )) {
     codes.add(m[1].replace(/[^A-Z0-9]/g, ""));
   }
   // 0 kod → belirsiz. 1'den fazla kod → hangisi model kodu belirsiz.

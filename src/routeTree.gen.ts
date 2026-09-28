@@ -42,6 +42,7 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiProductDiscoveryPreflightRouteImport } from './routes/api/product-discovery.preflight'
 import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/product-discovery.start'
 import { Route as ApiProductDiscoveryStepRouteImport } from './routes/api/product-discovery.step'
 import { Route as ApiProductDiscoveryStreamRouteImport } from './routes/api/product-discovery.stream'
@@ -222,6 +223,12 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProductDiscoveryPreflightRoute =
+  ApiProductDiscoveryPreflightRouteImport.update({
+    id: '/api/product-discovery/preflight',
+    path: '/api/product-discovery/preflight',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiProductDiscoveryStartRoute =
   ApiProductDiscoveryStartRouteImport.update({
     id: '/api/product-discovery/start',
@@ -330,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
@@ -379,6 +387,7 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
@@ -429,6 +438,7 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
@@ -480,6 +490,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
@@ -529,6 +540,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
@@ -578,6 +590,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
@@ -627,6 +640,7 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiProductDiscoveryPreflightRoute: typeof ApiProductDiscoveryPreflightRoute
   ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
   ApiProductDiscoveryStepRoute: typeof ApiProductDiscoveryStepRoute
   ApiProductDiscoveryStreamRoute: typeof ApiProductDiscoveryStreamRoute
@@ -876,6 +890,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/product-discovery/preflight': {
+      id: '/api/product-discovery/preflight'
+      path: '/api/product-discovery/preflight'
+      fullPath: '/api/product-discovery/preflight'
+      preLoaderRoute: typeof ApiProductDiscoveryPreflightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/product-discovery/start': {
       id: '/api/product-discovery/start'
       path: '/api/product-discovery/start'
@@ -1020,6 +1041,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiProductDiscoveryPreflightRoute: ApiProductDiscoveryPreflightRoute,
   ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,
   ApiProductDiscoveryStepRoute: ApiProductDiscoveryStepRoute,
   ApiProductDiscoveryStreamRoute: ApiProductDiscoveryStreamRoute,

@@ -110,6 +110,7 @@ SET search_path = public
 AS $$
 DECLARE
   target uuid;
+  ledger_id bigint;
 BEGIN
   FOR target IN
     SELECT p.id
@@ -128,7 +129,12 @@ BEGIN
       'admin-daily:' || target::text || ':' || current_date::text,
       jsonb_build_object('note', 'günlük admin kotası')
     )
-    ON CONFLICT (ref_key) WHERE ref_key IS NOT NULL DO NOTHING;
+    ON CONFLICT (ref_key) WHERE ref_key IS NOT NULL DO NOTHING
+    RETURNING id INTO ledger_id;
+
+    -- Kullanıcı bugün kullandıysa defter kaydı çakışır ve kredi SIFIRLANMAZ.
+    -- (Aksi hâlde gün içinde kazanılan krediler bir sonraki çağrıda ezilirdi.)
+    IF ledger_id IS NULL THEN CONTINUE; END IF;
 
     UPDATE public.profiles
     SET credits = 250, credits_reset_at = current_date, updated_at = now()
