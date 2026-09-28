@@ -206,13 +206,27 @@ async function handleStep(request: Request, step: string): Promise<Response> {
       }
 
       case "deep": {
-        // AI #2 — 14 ajan derin analizi (deterministik oylar, $0 token).
+        // AI #2 — 14 AJAN GERÇEK OYU. Ölçülen hata: burada yalnız `runCouncilOnProducts`
+        // çağrılıyordu, o da ikinci parametre verilmediği için `deterministicVotes`a
+        // düşüyordu; ekranda "14 ajan" yazarken modele hiçbir şey sorulmuyordu.
+        // Artık ROL BAŞINA tek çağrı yapılır (25 aday tek seferde puanlanır) ve
+        // kaç rolün gerçekten konuştuğu nota yazılır — kısmen AI konuştuysa
+        // bunu gizlemek dürüst olmaz.
         const result = await runDeepAnalysisStep(
           payload.batch as never,
           input.niche,
           async (rows) => {
-            const { runCouncilOnProducts } = await import("@/lib/product-discovery-council.server");
-            return runCouncilOnProducts(rows);
+            const { runCouncilWithAi } = await import("@/lib/product-discovery-council-ai.server");
+            const run = await runCouncilWithAi(rows as never, input.niche, {
+              // Adımın kalan bütçesi: sonraki `final` adımına da zaman bırakılır.
+              deadlineAt: Date.now() + 200_000,
+            });
+            console.log(
+              `[discovery] konsey: ${run.aiAgents} rol gerçek AI, ` +
+                `${run.fallbackAgents} rol deterministik yedek · ${run.ms}ms · ` +
+                `ai roller: ${run.aiRoles.join(", ") || "-"}`,
+            );
+            return run.consensus;
           },
         );
         if (!result.ok) return failStep(runId, job.userId, "deep_analysis başarısız.");

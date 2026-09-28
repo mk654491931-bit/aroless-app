@@ -1188,6 +1188,16 @@ export type Database = {
         Args: { _amount: number; _profile_id: string };
         Returns: undefined;
       };
+      // 20260929000000_credit_ledger.sql — tek seferlik iade (ikinci çağrı false).
+      refund_credit_once: {
+        Args: {
+          _amount: number;
+          _profile_id: string;
+          _reason?: string;
+          _ref_key?: string;
+        };
+        Returns: boolean;
+      };
       lock_signup_fingerprint: {
         Args: { lock_key: string };
         Returns: undefined;

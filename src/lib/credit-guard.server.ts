@@ -20,25 +20,60 @@ export function creditDeductError(message: string | null | undefined): Error {
 /**
  * Düşülen krediyi iade eder. İade başarısız olsa bile asıl hata kullanıcıya
  * döner; iade hatası loglanır (service_role gerekir).
+ *
+ * TEK SEFERLİK İADE (ölçülen hata): iade yolu `increment_profile_credits`i
+ * koşulsuz çağırıyordu, yani aynı iş iki kez iade edilirse (QStash retry'si,
+ * çift hata, iki farklı hata yolu) kredi İKİ KEZ artıyordu — kullanıcı
+ * "sistem kendi kendine kredi tanımlıyor" diye bildirdi. Artık
+ * `refund_credit_once` veritabanında `ref_key` ile TEK SEFER uygular.
+ *
+ * `refKey` verilmezse eski davranış korunur (çağıran sözleşmeyi bilmiyorsa
+ * iade kaybolmasın). Migration uygulanmamışsa fonksiyon bulunamaz ve eski RPC'ye
+ * düşülür — yani bu değişiklik migration'dan ÖNCE de uygulamayı bozmaz.
  */
 export async function refundCredit(
   userId: string,
   amount = 1,
   reason = "analysis_failed",
+  refKey?: string | null,
 ): Promise<boolean> {
+  const credits = Math.max(1, Math.round(amount));
   try {
     // Dinamik import: admin istemcisi yalnızca iade anında yüklenir, böylece
     // *.functions.ts dosyaları istemci paketine sunucu kodu çekmez.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (refKey) {
+      const { data, error } = await supabaseAdmin.rpc("refund_credit_once", {
+        _profile_id: userId,
+        _amount: credits,
+        _reason: reason,
+        _ref_key: refKey,
+      });
+      if (!error) {
+        // `false` = bu anahtar zaten kullanılmış, yani ikinci iade yapılmadı.
+        if (data !== true) {
+          console.warn(`[credits] duplicate refund ignored (${reason}, key=${refKey})`);
+          return false;
+        }
+        console.log(
+          `[credits] refunded ${credits} credit(s) to ${userId.slice(0, 8)}… (${reason})`,
+        );
+        return true;
+      }
+      // Migration henüz uygulanmamışsa eski yola düş; hat çalışmaya devam eder.
+      console.warn(
+        `[credits] refund_credit_once kullanılamıyor (${error.message}) — eski yola düşülüyor`,
+      );
+    }
     const { error } = await supabaseAdmin.rpc("increment_profile_credits", {
       _profile_id: userId,
-      _amount: Math.max(1, Math.round(amount)),
+      _amount: credits,
     });
     if (error) {
       console.error(`[credits] refund failed (${reason}): ${error.message}`);
       return false;
     }
-    console.log(`[credits] refunded ${amount} credit(s) to ${userId.slice(0, 8)}… (${reason})`);
+    console.log(`[credits] refunded ${credits} credit(s) to ${userId.slice(0, 8)}… (${reason})`);
     return true;
   } catch (error) {
     console.error(`[credits] refund threw (${reason})`, error);

@@ -29,13 +29,19 @@ export type ChargeOutcome =
   | { ok: true; charged: number; remaining: number | null; admin: boolean }
   | { ok: false; reason: "NO_CREDITS" | "UNAVAILABLE"; charged: number };
 
-/** Tahsil edilen jetonu iade eder (iş çöktüğünde). Hata fırlatmaz. */
+/**
+ * Tahsil edilen jetonu iade eder (iş çöktüğünde). Hata fırlatmaz.
+ *
+ * `refKey` verildiğinde iade TEK SEFER uygulanır: aynı iş için iki ayrı hata
+ * yolu çalışsa (kayıt açılamadı + kuyruğa alınamadı) kredi iki kez artmaz.
+ */
 export async function refundFeatureCredits(
   userId: string,
   amount: number,
   reason = "ai_failed",
+  refKey?: string | null,
 ): Promise<void> {
-  if (amount > 0) await refundCredit(userId, amount, reason);
+  if (amount > 0) await refundCredit(userId, amount, reason, refKey);
 }
 
 /** Kullanıcı-kapsamlı (RLS/JWT) istemci — `auth.uid()` bu jetonla dolar. */

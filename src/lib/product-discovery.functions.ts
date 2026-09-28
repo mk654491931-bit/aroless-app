@@ -170,7 +170,14 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
         chargedCredits: charge.charged,
       });
     } catch (error) {
-      await refundFeatureCredits(context.userId, charge.charged, "job_row_failed");
+      await refundFeatureCredits(
+        context.userId,
+        charge.charged,
+        "job_row_failed",
+        // Aynı koşu için iki ayrı hata yolu çalışsa (kayıt + kuyruk) kredi
+        // bir kez iade edilir: anahtar veritabanında tekilleştirilir.
+        `discovery:${runId}:job_row_failed`,
+      );
       return {
         ok: false,
         reason: "queue-failed",
