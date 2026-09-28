@@ -20,7 +20,8 @@ import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import { toWinningProducts } from "../utils/discovery-result";
+import { toWinningProducts, discoveryFallbackNotice } from "../utils/discovery-result";
+import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
 /**
@@ -127,6 +128,14 @@ export function useFinderSearch(opts: {
    * der — aksi halde olmayan bir işi varmış gibi göstermiş olurdu.
    */
   const [councilPending, setCouncilPending] = useState(false);
+  /**
+   * Hangi hat koşuyor? Arayüzün bekleme adımlarını HATTA GÖRE değiştirmesi
+   * için gerekir: yeni hatta "kazıma → 75 → Gemini 25 → 14 ajan → ilk 5",
+   * klasik hatta eski metin. Değer ayrı bir depoda tutulur çünkü tüketicisi
+   * başka bir bileşen (bekleme modalı); prop zinciri kurmak yerine tek
+   * satırlık yayın/abone bağı kurmak daha dayanıklı. Bkz.
+   * `discovery-progress-store.ts`.
+   */
   /** Ön sonuç teslim edildi mi? (hata anında sonuçları korumak için senkron ref) */
   const partialDeliveredRef = useRef(false);
   const searchSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -435,6 +444,9 @@ export function useFinderSearch(opts: {
       }
 
       armSafetyTimer(PIPELINE_MAX_WAIT_MS);
+      // Yeni hat GERÇEKTEN kuruldu (kredi düşüldü, iş kaydı açıldı, ilk adım
+      // kuyruğa alındı). Bundan sonra modal doğru adımları göstermeli.
+      setDiscoveryPipelineActive(true);
       const deadline = Date.now() + PIPELINE_MAX_WAIT_MS;
       while (Date.now() < deadline) {
         const state = await getDiscoveryRunFn({ data: { runId: started.runId } });
@@ -474,9 +486,11 @@ export function useFinderSearch(opts: {
         }
         // Kredi İADE EDİLMİŞ durumda (kuyruk/hata) → eski hatta düşmek bedava.
         console.warn(`[finder] yeni hat düştü (${outcome.reason}) — eski hatta geri dönülüyor`);
-        setFallbackNotice(
-          "Yeni arama hattı bu denemede kurulamadı; klasik motorla devam ediliyor.",
-        );
+        // DÜRÜST BİLDİRİM: eskiden tek satırlık genel bir mesaj vardı ve kullanıcı
+        // hatta ne olduğunu öğrenemiyordu. "5 ürün" gördüğü için hattın hiç
+        // çalışmadığını fark etmiyordu. Artık GERÇEK sebep yazılır
+        // (`describeDiscoveryFailure`), hatta da teşhis ucunun adresi verilir.
+        setFallbackNotice(discoveryFallbackNotice(outcome.reason));
         gen.mutate(vars);
         return;
       }
@@ -522,6 +536,7 @@ export function useFinderSearch(opts: {
     },
     onSettled: () => {
       setStalled(false);
+      setDiscoveryPipelineActive(false);
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     },
   });

@@ -113,3 +113,52 @@ export function toWinningProducts(
     } satisfies WinningProduct;
   });
 }
+
+/**
+ * Yeni hattın kurulamama SEBEBİNİ kullanıcıya anlatır.
+ *
+ * NEDEN VAR: arayüz hat kurulamazsa klasik motora düşüyordu ve yalnızca
+ * "klasik motorla devam ediliyor" diyordu. Bu, hatta ne olduğunu SÖYLEMEYEN
+ * bir geri düşüştü: kullanıcı 5 ürün görüyor, "yeni hat çalışmadı" nerede
+ * belli değil. Oysa ölçülen gerçek şuydu: hat çoğu kurulumda **kurulum
+ * eksiği** yüzünden açılmıyor (migration uygulanmamış, servis rolü anahtarı
+ * yok) ve bu üç saniyelik bir kontrolle giderilebilir.
+ *
+ * Bu fonksiyon SAF ve test edilebilirdir: ham sunucu hatasını okunur Türkçeye
+ * çevirir ve her zaman TEK çözüm yolu gösterir (`/api/product-discovery/preflight`).
+ * Tanımadığı hatayı da SAKLAMAZ — ham metin kısaltılarak sona eklenir.
+ */
+export function describeDiscoveryFailure(reason: string): string {
+  const raw = String(reason ?? "").trim();
+  const lower = raw.toLowerCase();
+
+  // 1) Supabase migration'ı uygulanmamış: yeni kolon yok.
+  if (/\bcolumn\b.*\bdoes not exist\b/.test(lower) || /column .* does not exist/.test(lower)) {
+    return "Supabase'da Product Discovery migration'ı uygulanmamış (searches tablosunda discovery_status kolonu yok).";
+  }
+  // 2) Migration'daki RPC'ler yok.
+  if (/function .* does not exist|schema cache|advance_discovery_status/.test(lower)) {
+    return "Supabase'da durum fonksiyonları yok (advance_discovery_status / finish_discovery_job).";
+  }
+  // 3) Servis rolü anahtarı yok — kalıcı iş kaydı açılamıyor.
+  if (/supabase_service_role_key|service_role|missing supabase environment/.test(lower)) {
+    return "SUPABASE_SERVICE_ROLE_KEY tanımlı değil; kalıcı iş kaydı açılamıyor.";
+  }
+  // 4) QStash yapılandırılmamış / erişilemiyor.
+  if (/no_origin|no_public_origin/.test(lower)) {
+    return "Kendi adresimiz çözümlenemedi; QStash'in geri çağırabileceği bir adres yok.";
+  }
+  if (/qstash|fetch failed|econnrefused|401|unauthorized|forbidden/.test(lower)) {
+    return "QStash'e ulaşılamadı veya imza doğrulanamadı (jeton/imza anahtarı sorunu).";
+  }
+  // 5) İş kuruldu ama sonuç üretmedi.
+  if (raw === "empty_result") return "Hat kuruldu ama bu nişte ölçülebilir ürün bulunamadı.";
+  if (raw === "run_not_visible") return "İş kaydı okunamadı; iş kaydı yazılamamış olabilir.";
+  if (raw === "timeout") return "İş zaman aşımına uğradı.";
+  return raw ? `Yeni hat kurulamadı: ${raw.slice(0, 160)}` : "Yeni hat kurulamadı.";
+}
+
+/** Geri düşüş bildiriminin tam metni (arayüzde tek yerden üretilir). */
+export function discoveryFallbackNotice(reason: string): string {
+  return `${describeDiscoveryFailure(reason)} Bu yüzden klasik motor kullanıldı. Teşhis: /api/product-discovery/preflight`;
+}

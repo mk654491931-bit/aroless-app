@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, Check, Loader2, Cpu, Users, X } from "lucide-react";
+
+import {
+  isDiscoveryPipelineActive,
+  subscribeDiscoveryPipeline,
+} from "@/features/finder/utils/discovery-progress-store";
 
 /**
  * AI Konsey rolleri — YALNIZCA GÖREV AÇIKLAMASI.
@@ -54,14 +59,38 @@ export function AnalysisPipelineModal({
   onDismiss?: () => void;
 }) {
   const { t } = useTranslation();
-  const steps = [
-    t("pipeline.s1"),
-    t("pipeline.s2"),
-    t("pipeline.s3"),
-    t("pipeline.s4"),
-    t("pipeline.s5"),
-    t("pipeline.s6"),
-  ];
+  /**
+   * Bu modal İKİ farklı hattın ortak bekleme ekranıdır. Yeni hat
+   * (kazıma → 75 → Gemini 25 → 14 ajan → ilk 5) koşarken ekranda klasik
+   * adımlar ("net kâr marjı hesaplanıyor") görünürse kullanıcı yanlış işin
+   * yapıldığını sanar. Bu yüzden adımlar HATTA GÖRE seçilir.
+   *
+   * Bilgi `useSyncExternalStore` ile okunur: arama kancası bayrağı yazar,
+   * modal abone olur. Sunucu tarafında da `false` (klasik) görünür, böylece
+   * ilk boyama ile istemci tarafı aynı adımları gösterir.
+   */
+  const discoveryActive = useSyncExternalStore(
+    subscribeDiscoveryPipeline,
+    isDiscoveryPipelineActive,
+    () => false,
+  );
+  const steps = discoveryActive
+    ? [
+        t("pipeline.d1"),
+        t("pipeline.d2"),
+        t("pipeline.d3"),
+        t("pipeline.d4"),
+        t("pipeline.d5"),
+        t("pipeline.d6"),
+      ]
+    : [
+        t("pipeline.s1"),
+        t("pipeline.s2"),
+        t("pipeline.s3"),
+        t("pipeline.s4"),
+        t("pipeline.s5"),
+        t("pipeline.s6"),
+      ];
   const [progress, setProgress] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);

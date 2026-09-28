@@ -67,6 +67,15 @@ const en = {
       s4: "Calculating net profit margins & platform fees...",
       s5: "Synthesizing AI ad angles & SEO hooks...",
       s6: "Finalizing opportunity scores...",
+      // The discovery pipeline's REAL steps. The `s1..s6` above describe work
+      // this pipeline does not do (supplier cost is never estimated), so
+      // showing them during a discovery run would misreport what happened.
+      d1: "Scraping real products in your niche...",
+      d2: "Hard filter narrowing candidates to 75...",
+      d3: "Gemini shortlisting the best 25 of 75...",
+      d4: "The 14-agent council is voting on 25 products...",
+      d5: "Ranking the top 5 by consensus...",
+      d6: "Preparing results with their evidence...",
     },
     ui: {
       live_research: "Live web-grounded research",
@@ -216,6 +225,16 @@ const tr = {
       s4: "Net kâr marjları ve platform ücretleri hesaplanıyor...",
       s5: "AI reklam açıları ve SEO kancaları sentezleniyor...",
       s6: "Fırsat skorları sonlandırılıyor...",
+      // Keşif hattının GERÇEK adımları. Eski `s1..s6` yukarıda "marj
+      // hesaplanıyor / reklam açısı sentezleniyor" diyor; bu hatta o işler
+      // YAPILMIYOR (kazımada tedarik maliyeti ölçülmez, uydurulmaz). Bu
+      // yüzden yeni hat koşarken ekranda bu adımlar gösterilir.
+      d1: "Nişte ürünler gerçek kaynaklardan kazınıyor...",
+      d2: "Sert filtre ile 75 adaya indiriliyor...",
+      d3: "Gemini 75 üründen en güçlü 25'i seçiyor...",
+      d4: "14 ajan 25 ürünü oyluyor...",
+      d5: "Uzlaşma ile ilk 5 ürün sıralanıyor...",
+      d6: "Sonuçlar kanıtlarıyla hazırlanıyor...",
     },
     ui: {
       live_research: "Canlı web tabanlı araştırma",
