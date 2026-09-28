@@ -436,15 +436,12 @@ function Dashboard() {
               <span className="morph-pill rounded-lg inline-flex">
                 <DataSourcesButton />
               </span>
+              {/* Tek motor kaldı: bu rozet artık sabit, koşullu stile gerek yok. */}
               <span
                 title={`Active engine: ${engineLabel(engine).model}`}
-                className={`hidden lg:inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                  engine === "default"
-                    ? "border-white/15 bg-white/5 text-muted-foreground"
-                    : "border-[oklch(0.62_0.17_255)]/50 bg-[oklch(0.62_0.17_255)]/15 text-[oklch(0.86_0.10_255)] glow"
-                }`}
+                className="hidden lg:inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${engine === "default" ? "bg-emerald-400" : "bg-[oklch(0.72_0.14_255)]"} animate-pulse-soft`} />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
                 <Cpu size={11} className="opacity-80" />
                 {engineLabel(engine).label}
               </span>
@@ -774,12 +771,6 @@ function Dashboard() {
                             })}
                           </div>
                           <span className="text-[11px] text-muted-foreground">{engineLabel(engine).hint}</span>
-                          {engine !== "default" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.62_0.17_255)]/45 bg-[oklch(0.62_0.17_255)]/12 px-2.5 py-1 text-[10px] font-semibold text-[oklch(0.86_0.10_255)] glow">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.72_0.14_255)] animate-pulse-soft" />
-                              {engine === "hybrid" ? t("ui.hybrid_pill") : t("ui.hf_free")}
-                            </span>
-                          )}
                           <EtaBadge running={searching} etaMs={etaMs} />
                         </div>
 

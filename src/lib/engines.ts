@@ -33,8 +33,8 @@ export type EngineId = "default" | "llama" | "qwen" | "hybrid";
 export const ACTIVE_ENGINE_IDS = ENGINES.map((e) => e.id);
 
 /** Kayıtlı/eskimiş bir seçimi bugünkü tek motora indirger. */
-export function normalizeEngineId(value: unknown): "default" {
-  return value === "default" ? "default" : "default";
+export function normalizeEngineId(_value: unknown): "default" {
+  return "default";
 }
 
 export const MARKETPLACES = [

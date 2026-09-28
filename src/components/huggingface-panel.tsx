@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Cpu, Loader2, PlugZap, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { huggingFaceStatus } from "@/lib/hf.functions";
-import { HF_TOKEN_STORAGE_KEY, ENGINES } from "@/lib/engines";
+import { HF_TOKEN_STORAGE_KEY } from "@/lib/engines";
 
 type Status = "idle" | "testing" | "connected" | "fallback";
 
@@ -64,18 +64,23 @@ export function HuggingFacePanel() {
   return (
     <section className="glass rounded-2xl p-5">
       <h2 className="font-semibold mb-1 flex items-center gap-2">
-        <Cpu size={16} /> Hugging Face Engines
+        <Cpu size={16} /> Hugging Face (AI pool)
         <span
           className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badge.cls}`}
         >
           {badge.icon} {badge.label}
         </span>
       </h2>
+      {/*
+        MOTOR SEÇİCİ DEĞİL: eskiden bu panel "arama motoru" listesini besliyordu
+        (Llama/Qwen). O seçenekler kaldırıldı; Hugging Face artık yedek AI
+        havuzunun bir üyesi. Panel yalnızca havuzun erişilebilir olup olmadığını
+        gösterir — kullanıcı bir motor seçmez, hat MÜSAİT OLANI kendisi seçer.
+      */}
       <p className="text-xs text-muted-foreground mb-3">
-        Powers the search engine switcher:{" "}
-        {ENGINES.filter((e) => e.id !== "default")
-          .map((e) => e.model)
-          .join(" · ")}
+        Yedek AI havuzunun bir üyesi. Token tanımlıysa havuz Gemini/Groq/
+        OpenRouter yoğun olduğunda Hugging Face'e düşer; tanımlı değilse hat
+        yalnız bu üyeyi atlar ve diğerleriyle devam eder.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input

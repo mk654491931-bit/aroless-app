@@ -159,18 +159,13 @@ export function describeDiscoveryFailure(reason: string): string {
 }
 
 /**
- * Seçili motor Product Discovery hattını kullanmıyorsa ekranda söylenir.
+ * NOT: "Seçili motor bu hattı kullanmıyor" uyarısı KALDIRILDI.
  *
- * NEDEN VAR (ölçülen davranış): `runSearch` yeni hattı YALNIZ
- * `engine === "default"` iken dener. `HF: Llama` / `HF: Qwen` / `Hybrid`
- * seçiliyse `hfGen` (klasik yol) çalışır ve **hiçbir uyarı üretilmez** —
- * kullanıcı "sistem hâlâ eski çalışıyor" sanır, oysa hata değil seçimdir.
- * Sessizliği kırmak, hat için yapılan teşhisin aynısıdır: olan biteni
- * söylemek.
+ * O uyarı, `HF: Llama` / `HF: Qwen` / `Hybrid` seçiliyken yeni hattın hiç
+ * denenmediği sessiz yolu açıklıyordu. Bu seçenekler artık yok ve
+ * `normalizeEngineId` hangi değer gelirse gelsin "default" döndürüyor; yani
+ * uyarının anlatacağı bir durum kalmadı (tek motor = tek yol).
  */
-export function nonDefaultEngineNotice(engineLabel: string): string {
-  return `Seçili motor "${engineLabel}" Product Discovery hattını kullanmıyor; bu hat (kazıma → 75 → Gemini 25 → 14 ajan → ilk 5) yalnız "Default AI" motorunda çalışır. Motoru "Default AI" yapıp tekrar ara.`;
-}
 
 /** Kurulum raporunun arayüze giden en küçük şekli. */
 export type SetupReport = {
