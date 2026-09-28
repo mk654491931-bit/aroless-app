@@ -18,6 +18,7 @@ import { Route as CompareRouteImport } from './routes/compare'
 import { Route as CompetitorAnalysisRouteImport } from './routes/competitor-analysis'
 import { Route as CouncilRouteImport } from './routes/council'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DiscoverRouteImport } from './routes/discover'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -99,6 +100,11 @@ const CouncilRoute = CouncilRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiscoverRoute = DiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NewsRoute = NewsRouteImport.update({
@@ -300,6 +306,7 @@ export interface FileRoutesByFullPath {
   '/competitor-analysis': typeof CompetitorAnalysisRoute
   '/council': typeof CouncilRoute
   '/dashboard': typeof DashboardRoute
+  '/discover': typeof DiscoverRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -348,6 +355,7 @@ export interface FileRoutesByTo {
   '/competitor-analysis': typeof CompetitorAnalysisRoute
   '/council': typeof CouncilRoute
   '/dashboard': typeof DashboardRoute
+  '/discover': typeof DiscoverRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/competitor-analysis': typeof CompetitorAnalysisRoute
   '/council': typeof CouncilRoute
   '/dashboard': typeof DashboardRoute
+  '/discover': typeof DiscoverRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -447,6 +456,7 @@ export interface FileRouteTypes {
     | '/competitor-analysis'
     | '/council'
     | '/dashboard'
+    | '/discover'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -495,6 +505,7 @@ export interface FileRouteTypes {
     | '/competitor-analysis'
     | '/council'
     | '/dashboard'
+    | '/discover'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -543,6 +554,7 @@ export interface FileRouteTypes {
     | '/competitor-analysis'
     | '/council'
     | '/dashboard'
+    | '/discover'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -592,6 +604,7 @@ export interface RootRouteChildren {
   CompetitorAnalysisRoute: typeof CompetitorAnalysisRoute
   CouncilRoute: typeof CouncilRoute
   DashboardRoute: typeof DashboardRoute
+  DiscoverRoute: typeof DiscoverRoute
   NewsRoute: typeof NewsRoute
   NotificationsRoute: typeof NotificationsRoute
   PricingRoute: typeof PricingRoute
@@ -693,6 +706,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/discover': {
+      id: '/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof DiscoverRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/news': {
@@ -977,6 +997,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompetitorAnalysisRoute: CompetitorAnalysisRoute,
   CouncilRoute: CouncilRoute,
   DashboardRoute: DashboardRoute,
+  DiscoverRoute: DiscoverRoute,
   NewsRoute: NewsRoute,
   NotificationsRoute: NotificationsRoute,
   PricingRoute: PricingRoute,
@@ -1017,3 +1038,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
