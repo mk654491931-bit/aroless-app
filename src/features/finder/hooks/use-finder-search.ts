@@ -9,27 +9,18 @@ import type { WinningProduct, Platform, Budget } from "@/lib/gemini.functions";
 import { generateProducts, getDiscoveryJob } from "@/lib/gemini.functions";
 import {
   getDiscoveryPreflight,
-  getDiscoveryRun,
+  advanceDiscoveryRun,
   startDiscoveryRun,
   type DiscoveryWinner,
 } from "@/lib/product-discovery.functions";
-import {
-  engineLabel,
-  normalizeEngineId,
-  type EngineId,
-  type MarketplaceId,
-} from "@/lib/engines";
+import type { EngineId, MarketplaceId } from "@/lib/engines";
 import type { DeepSearchOptions } from "@/components/deep-search-panel";
 import type { RejectedCandidate } from "@/components/winner-score-panel";
 import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import {
-  toWinningProducts,
-  discoverySetupNotice,
-  nonDefaultEngineNotice,
-} from "../utils/discovery-result";
+import { toWinningProducts, discoverySetupNotice } from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
@@ -114,7 +105,10 @@ export function useFinderSearch(opts: {
   const saveAnalysisFn = useServerFn(saveAnalysis);
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
   const startDiscoveryFn = useServerFn(startDiscoveryRun);
-  const getDiscoveryRunFn = useServerFn(getDiscoveryRun);
+  // SÜRÜCÜ: yoklama aynı zamanda zinciri ilerletir. Kuyruk yoksa iş bu şekilde
+  // ilerler; kuyruk/arka plan varsa çağrı atomik sahiplenme sayesinde hiçbir
+  // şeyi ikiye katlamaz, yalnız güncel durumu döner.
+  const getDiscoveryRunFn = useServerFn(advanceDiscoveryRun);
   const getPreflightFn = useServerFn(getDiscoveryPreflight);
 
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
@@ -549,16 +543,12 @@ export function useFinderSearch(opts: {
       // mutationFn içinde gerçek bütçeyle yeniden kurulur.
       armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
-      if (normalizeEngineId(opts.engine) !== "default") {
-        // normalizeEngineId bugün her şeyi "default"a indirdiği için buraya
-        // düşmek imkânsız; dallanma yalnız tip güvenliği için duruyor.
-        setFallbackNotice(nonDefaultEngineNotice(engineLabel(opts.engine).label));
-        return;
-      }
-      // SEÇİCİ ARTIK TEK MOTOR: `normalizeEngineId` sayesinde tarayıcıda
-      // kalmış eski bir seçim ("qwen") de "default"a iner. Yeni hat her zaman
-      // birincil yoldur; başlatma/sonuç başarısız olursa `pipeline` kendi
-      // içinde eski hatta (`gen`) düşer ve sebebi ekranda yazar.
+      // SEÇİCİ ARTIK TEK MOTOR: `llama`/`qwen`/`hybrid` seçenekleri kaldırıldı
+      // ve `normalizeEngineId` tarayıcıda kalmış eski bir seçimi de "default"a
+      // indirir (bkz. `src/lib/engines.ts`). Bu yüzden burada motor kontrolü
+      // YOK: yeni hat her zaman birincil yoldur; başlatma/sonuç başarısız
+      // olursa `pipeline` kendi içinde eski hatta (`gen`) düşer ve sebebi
+      // ekranda yazar.
       pipeline.mutate({
         niche: nicheValue,
         category: opts.category,

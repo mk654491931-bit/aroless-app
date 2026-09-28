@@ -30,6 +30,7 @@
 import { JOB_TABLE, jobStore } from "./discovery-jobs.server";
 import {
   canTransition,
+  ProductDiscoveryInputSchema,
   type Consensus,
   type FilterStats,
   type ProductDiscoveryInput,
@@ -49,21 +50,159 @@ export type DiscoveryJobRecord = {
   chargedCredits: number;
   stats: FilterStats | null;
   error: string | null;
+  /**
+   * Satırın son yazılma anı (ms) — `null` ise okunamadı.
+   *
+   * NEDEN GEREKLİ: yarıda öldürülen bir adımın (ör. istek platform tarafından
+   * kesildi) durumu "çalışıyor" işaretinde kalır. Sürücünün bunu geri alıp
+   * adımı yeniden koşabilmesi için yaşını bilmesi gerekir; taze bir satırı geri
+   * almak, aktif olarak çalışan başka bir sürücünün işini ikiye katlardı.
+   */
+  updatedAt: number | null;
 };
+
+/**
+ * Zincirin ara noktası (checkpoint).
+ *
+ * NEDEN GEREKLİ: hat 4 adımdan oluşur ve bir istek hepsine yetmeyebilir
+ * (sunucusuz süre tavanı). Hangi adımların BİTTİĞİ bilgisi kaybolursa sürücü
+ * yanlış adımı çalıştırır: ör. isteği kesilen `deep` adımından sonra `final`
+ * elinde hiç aday yokken koşar ve kullanıcıya boş sonuç gösterirdi.
+ *
+ * NEREDE SAKLANIR: `searches.result` (migration'dan ÖNCE de var olan kolon).
+ * Terminal durumda `finishDiscoveryJob` bu alanı nihai sonuçla EZER, yani ara
+ * veri kullanıcıya hiçbir zaman sonuç olarak görünmez (istemci `result` alanını
+ * yalnız `discovery_status = 'completed'` iken okur).
+ */
+export type DiscoveryCheckpoint = {
+  v: 1;
+  /** Tamamlanmış adımların adları (sırayla). */
+  done: string[];
+  /**
+   * `gemini` adımının ürettiği kısa liste.
+   *
+   * DİKKAT — ALAN ADLARI BİLEREK `products`/`consensus` DEĞİL: aynı JSONB
+   * kolonu (`searches.result`) terminal sonuç için de kullanılır ve istemci
+   * doğrulayıcısı (`parseDiscoveryResult`) `products`/`consensus` anahtarlarını
+   * arar. Ara nokta bu adları taşısaydı, terminal olmayan bir satır okunduğunda
+   * "hazır" sanılan kısa liste kullanıcıya kazanan ürün olarak gösterilebilirdi.
+   */
+  shortlist: unknown[];
+  /** `deep` adımının ürettiği oy satırları. */
+  votes: unknown[];
+};
+
+/** Ara nokta gövdesini klasik kısmi sonuçlardan ayıran işaret. */
+const CHECKPOINT_MARKER = "__product_discovery_checkpoint";
+
+/**
+ * `searches` tablosundaki keşif kolonları (migration sonrası).
+ *
+ * NEDEN AYRI: hat, `20260927000000_product_discovery_pipeline.sql`
+ * uygulanmadan da ÇALIŞMAYA DEVAM ETMELİDİR. Migration yoksa bu kolonlar ve
+ * üç RPC yoktur; eski kod bu durumda istisna fırlatıyordu, hattın TAMAMI
+ * düşüyordu ve kullanıcı sessizce klasik yola iniyordu — canlıda görülen
+ * "14 ajan çalışmıyor" belirtisinin en olası nedeni budur. Artık eksik
+ * kolon/RPC yalnızca ilgili yeteneği kapatır (ör. atomiklik), akışı düşürmez.
+ */
+const FULL_COLUMNS =
+  "id,user_id,status,discovery_status,discovery_progress,discovery_step,charged_credits,discovery_stats,error,updated_at";
+/** Migration öncesi şemada var olan kolonlar (klasik hat bunları kullanır). */
+const LEGACY_COLUMNS = "id,user_id,status,charged_credits,error,updated_at";
+
+/** Kolon eksikliği mi? (undefined_column / PostgREST şema önbelleği hatası) */
+function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return Boolean(
+    error.code === "42703" ||
+      error.code === "PGRST204" ||
+      /column .* does not exist|could not find the .* column|schema cache/i.test(
+        error.message ?? "",
+      ),
+  );
+}
+
+/** Fonksiyon (RPC) eksikliği mi? */
+function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return Boolean(
+    error.code === "42883" ||
+      error.code === "PGRST202" ||
+      /could not find the function|function .* does not exist|undefined function|schema cache/i.test(
+        error.message ?? "",
+      ),
+  );
+}
+
+/**
+ * Keşif durumunu okur; kolon yoksa klasik `status`ten TÜRETİR.
+ *
+ * Böylece migration uygulanmamış bir veritabanında bile istemci doğru
+ * "completed"/"failed" sinyalini alır ve sonucu gösterir.
+ */
+function normaliseStatus(stored: unknown, legacyStatus: string): ProductDiscoveryStatus {
+  const value = typeof stored === "string" ? stored.trim() : "";
+  if (value) return value as ProductDiscoveryStatus;
+  if (legacyStatus === "completed") return "completed";
+  if (legacyStatus === "failed") return "failed";
+  return "queued";
+}
 
 /** `searches` satırındaki ham kolonları bu kayda indirger. */
 function toRecord(row: Record<string, unknown>): DiscoveryJobRecord {
+  const status = String(row["status"] ?? "processing");
   return {
     id: String(row["id"] ?? ""),
     userId: String(row["user_id"] ?? ""),
-    status: String(row["status"] ?? "processing"),
-    discoveryStatus: String(row["discovery_status"] ?? "queued") as ProductDiscoveryStatus,
+    status,
+    discoveryStatus: normaliseStatus(row["discovery_status"], status),
     discoveryProgress: Number(row["discovery_progress"] ?? 0),
     discoveryStep: String(row["discovery_step"] ?? ""),
     chargedCredits: Number(row["charged_credits"] ?? 0),
     stats: (row["discovery_stats"] as FilterStats | null) ?? null,
     error: (row["error"] as string | null) ?? null,
+    updatedAt: parseTimestamp(row["updated_at"]),
   };
+}
+
+/** ISO/timestamptz → ms; okunamazsa `null` (çağıran "bilinmiyor" davranır). */
+function parseTimestamp(value: unknown): number | null {
+  if (typeof value !== "string" || !value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Zincirin ara noktasını okur. Yoksa/başka bir şemaysa `null`. */
+export async function readDiscoveryCheckpoint(runId: string): Promise<DiscoveryCheckpoint | null> {
+  const raw = await readDiscoveryResult(runId);
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  if (record[CHECKPOINT_MARKER] !== true) return null;
+  return {
+    v: 1,
+    done: Array.isArray(record["done"]) ? (record["done"] as string[]) : [],
+    shortlist: Array.isArray(record["shortlist"]) ? record["shortlist"] : [],
+    votes: Array.isArray(record["votes"]) ? record["votes"] : [],
+  };
+}
+
+/**
+ * Zincirin ara noktasını yazar. HATA FIRLATIR (bilerek).
+ *
+ * İlerleme yazımından farkı: kontrol noktası yazılamazsa sonraki yoklama
+ * yanlış adımı çalıştırır. Sessizce yutmak, kullanıcıya "boş ama başarılı"
+ * sonuç göstermek demektir; hata fırlatmak ise işi dürüstçe durdurur.
+ */
+export async function saveDiscoveryCheckpoint(
+  runId: string,
+  checkpoint: DiscoveryCheckpoint,
+): Promise<void> {
+  const { error } = await jobStore()
+    .from(JOB_TABLE)
+    .update({ result: { [CHECKPOINT_MARKER]: true, ...checkpoint } } as never)
+    .eq("id", runId)
+    .eq("status", "processing");
+  if (error) throw new Error(error.message);
 }
 
 /* ------------------------------------------------------------------ Oluştur */
@@ -91,16 +230,20 @@ export async function createDiscoveryJob(args: {
   input: ProductDiscoveryInput;
   chargedCredits: number;
 }): Promise<DiscoveryJobRecord> {
-  const { error } = await jobStore()
+  const store = jobStore();
+  // Arama girdisi params içinde korunur: adım URL'leri yeniden kurulurken
+  // (origin kaybolursa) hat kendi girdisini yeniden üretmez.
+  const legacyRow: Record<string, unknown> = {
+    id: args.runId,
+    user_id: args.userId,
+    query: args.input.niche,
+    params: args.input,
+    status: "processing",
+  };
+  const { error } = await store
     .from(JOB_TABLE)
     .insert({
-      id: args.runId,
-      user_id: args.userId,
-      query: args.input.niche,
-      // Arama girdisi params içinde korunur: adım URL'leri yeniden kurulurken
-      // (origin kaybolursa) hat kendi girdisini yeniden üretmez.
-      params: args.input,
-      status: "processing",
+      ...legacyRow,
       discovery_status: "queued",
       discovery_progress: 5,
       discovery_step: "scrape_filter",
@@ -109,7 +252,16 @@ export async function createDiscoveryJob(args: {
       // "alındı" bilgisini satırda tutar ve tek seferlik iadeyi mümkün kılar.
       credit_charged: true,
     } as never);
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    // Migration uygulanmamış olabilir (keşif kolonları yok). Hat bu yüzden
+    // DÜŞMEZ: kayıt klasik kolonlarla açılır ve akış devam eder. Aksi hâlde tek
+    // bir eksik kolon, kullanıcının parasını ödediği aramayı tamamen öldürürdü.
+    if (!isMissingColumn(error) && !isMissingRpc(error)) throw new Error(error.message);
+    const { error: fallbackError } = await store.from(JOB_TABLE).insert(legacyRow as never);
+    if (fallbackError) throw new Error(fallbackError.message);
+  }
+
   return {
     id: args.runId,
     userId: args.userId,
@@ -120,6 +272,7 @@ export async function createDiscoveryJob(args: {
     chargedCredits: args.chargedCredits,
     stats: null,
     error: null,
+    updatedAt: Date.now(),
   };
 }
 
@@ -127,15 +280,16 @@ export async function createDiscoveryJob(args: {
 
 /** Kalıcı kaydı okur. Bulunamazsa `null` döner (hata FIRLATMaz). */
 export async function readDiscoveryJob(runId: string): Promise<DiscoveryJobRecord | null> {
-  const { data, error } = await jobStore()
-    .from(JOB_TABLE)
-    .select(
-      "id,user_id,status,discovery_status,discovery_progress,discovery_step,charged_credits,discovery_stats,error",
-    )
-    .eq("id", runId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return toRecord(data as Record<string, unknown>);
+  const store = jobStore();
+  const full = await store.from(JOB_TABLE).select(FULL_COLUMNS).eq("id", runId).maybeSingle();
+  if (!full.error && full.data) return toRecord(full.data as Record<string, unknown>);
+  // Migration uygulanmamış (keşif kolonları yok) → klasik kolonlarla oku ve
+  // durumu `status`ten türet. `null` dönmek "iş yok" demek olurdu; oysa iş
+  // VAR, yalnızca yeni kolonlar yok.
+  if (full.error && !isMissingColumn(full.error)) return null;
+  const legacy = await store.from(JOB_TABLE).select(LEGACY_COLUMNS).eq("id", runId).maybeSingle();
+  if (legacy.error || !legacy.data) return null;
+  return toRecord(legacy.data as Record<string, unknown>);
 }
 
 /**
@@ -146,6 +300,32 @@ export async function readDiscoveryJob(runId: string): Promise<DiscoveryJobRecor
  * bellek demek. Bu yüzden akış ucu önce durumu okur, iş bitince SADECE
  * sonucu çeker.
  */
+/**
+ * Koşunun GİRDİSİNİ (`searches.params`) okur ve doğrular.
+ *
+ * NEDEN DB'DEN: hat, girdisini (`niche`, `country`, `platform`, `topN`)
+ * adımlar arasında taşımak zorundadır. Bunu istek gövdesinde taşımak, her
+ * yoklamada istemciye güvenmek anlamına gelirdi; oysa `/start` girdiyi bir kez
+ * kaydeder ve zincirin TAMAMI kendi deposundan okur.
+ *
+ * Bozuk/eski satırlarda `null` döner — çağıran "girdiyi bilmiyorum" diyip işi
+ * dürüstçe durdurur (yanlış varsayılanlarla koşturmaz).
+ */
+export async function readDiscoveryInput(
+  runId: string,
+): Promise<ProductDiscoveryInput | null> {
+  const { data, error } = await jobStore()
+    .from(JOB_TABLE)
+    .select("params")
+    .eq("id", runId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const parsed = ProductDiscoveryInputSchema.safeParse(
+    (data as { params?: unknown }).params ?? null,
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 export async function readDiscoveryResult(runId: string): Promise<unknown | null> {
   const { data, error } = await jobStore()
     .from(JOB_TABLE)
@@ -194,7 +374,21 @@ export async function advanceDiscoveryStatus(args: {
     _to: args.to,
     _progress: args.progress ?? null,
   });
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    // Migration uygulanmamış: RPC yok. Adımı DÜŞÜRMEYİZ — atomiklik garantisini
+    // kaybederiz ama hat çalışmaya devam eder (aksi hâlde tek eksik fonksiyon
+    // tüm özelliği öldürüyordu). Düz güncellemeyi dener, kolon da yoksa yalnız
+    // ilerleme bilgisini atlar.
+    if (!isMissingRpc(error)) throw new Error(error.message);
+    const { error: patchError } = await jobStore()
+      .from(JOB_TABLE)
+      .update(patch as never)
+      .eq("id", args.runId);
+    if (patchError && !isMissingColumn(patchError) && !isMissingRpc(patchError))
+      throw new Error(patchError.message);
+    return true;
+  }
 
   // RPC yalnız durum/yüzdeyi yazar; adım adı ve istatistikler aynı hata
   // toleransıyla burada eklenir. `false` döndüyse bu satır zaten başka bir
@@ -204,9 +398,39 @@ export async function advanceDiscoveryStatus(args: {
       .from(JOB_TABLE)
       .update(patch as never)
       .eq("id", args.runId);
-    if (patchError) throw new Error(patchError.message);
+    if (patchError && !isMissingColumn(patchError) && !isMissingRpc(patchError))
+      throw new Error(patchError.message);
   }
   return data === true;
+}
+
+/**
+ * İLERLEME YAZIMI (en iyi çaba, ASLA fırlatmaz).
+ *
+ * İstek içinde (inline) koşan hat adım adım ilerleme yazmalıdır ki kullanıcı
+ * "hangi aşamadayız" sorusunu canlı görebilsin. Ancak ilerleme bilgisi HİÇBİR
+ * ZAMAN işin kendisinden önemli değildir: yazılamazsa (migration yok, ağ
+ * hatası) hat devam eder. `advanceDiscoveryStatus`'tan farkı budur — o, durum
+ * makinesinin sözleşmesidir; bu, yalnız kullanıcı deneyimidir.
+ */
+export async function writeDiscoveryProgress(
+  runId: string,
+  patch: { status?: ProductDiscoveryStatus; progress?: number; step?: string; stats?: FilterStats },
+): Promise<void> {
+  try {
+    const row: Record<string, unknown> = {};
+    if (patch.status) row["discovery_status"] = patch.status;
+    if (typeof patch.progress === "number") row["discovery_progress"] = patch.progress;
+    if (patch.step) row["discovery_step"] = patch.step;
+    if (patch.stats) row["discovery_stats"] = patch.stats;
+    if (Object.keys(row).length === 0) return;
+    await jobStore()
+      .from(JOB_TABLE)
+      .update(row as never)
+      .eq("id", runId);
+  } catch {
+    /* ilerleme yazılamadı — hattın işini etkilemez */
+  }
 }
 
 /* -------------------------------------------------------------- Tamamlama */
@@ -233,26 +457,47 @@ export async function finishDiscoveryJob(
   runId: string,
   result: DiscoveryFinalResult,
 ): Promise<boolean> {
-  const { data, error } = await jobStore().rpc("finish_discovery_job", {
+  const store = jobStore();
+  const { data, error } = await store.rpc("finish_discovery_job", {
     _job_id: runId,
     _result: result as never,
     _failed: false,
     _error: null,
   });
-  if (error) throw new Error(error.message);
-  return data === true;
+  if (!error) return data === true;
+  // Migration yoksa düz güncellemeye düş. `status = 'processing'` filtresi
+  // idempotency sağlar: iki teslimat çift sonuç üretemez (düz `result` kolonu
+  // migration'dan ÖNCE de vardır — klasik hat onu kullanıyordu).
+  if (!isMissingRpc(error)) throw new Error(error.message);
+  const { data: rows, error: updateError } = await store
+    .from(JOB_TABLE)
+    .update({ status: "completed", result, error: null } as never)
+    .eq("id", runId)
+    .eq("status", "processing")
+    .select("id");
+  if (updateError) throw new Error(updateError.message);
+  return (rows?.length ?? 0) > 0;
 }
 
 /** İşi başarısız olarak kapatır (arayüz hata metnini gösterir). */
 export async function failDiscoveryJob(runId: string, message: string): Promise<boolean> {
-  const { data, error } = await jobStore().rpc("finish_discovery_job", {
+  const store = jobStore();
+  const { data, error } = await store.rpc("finish_discovery_job", {
     _job_id: runId,
     _result: null,
     _failed: true,
     _error: message.slice(0, 2000),
   });
-  if (error) throw new Error(error.message);
-  return data === true;
+  if (!error) return data === true;
+  if (!isMissingRpc(error)) throw new Error(error.message);
+  const { data: rows, error: updateError } = await store
+    .from(JOB_TABLE)
+    .update({ status: "failed", error: message.slice(0, 2000) } as never)
+    .eq("id", runId)
+    .eq("status", "processing")
+    .select("id");
+  if (updateError) throw new Error(updateError.message);
+  return (rows?.length ?? 0) > 0;
 }
 
 /* ----------------------------------------------------------------- Kredi */
@@ -269,8 +514,12 @@ export async function claimCreditRefund(runId: string): Promise<boolean> {
   const { data, error } = await jobStore().rpc("mark_discovery_credit_refunded", {
     _job_id: runId,
   });
-  if (error) return false; // RPC yoksa çağıran zaten iade etmemiş olur
-  return data === true;
+  if (!error) return data === true;
+  // Migration yoksa çift iade kilidi veritabanında kurulamaz. Bu durumda
+  // iadeyi ENGELLEMEK (kullanıcı hata için öder) yerine izin veriyoruz: bu
+  // yolun çift iade üretme riski, kullanıcının çalışmayan bir iş için
+  // kredisini kaybetmesinden daha küçüktür.
+  return true;
 }
 
 /* ------------------------------------------------------- Serbest bırakma */

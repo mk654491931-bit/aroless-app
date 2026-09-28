@@ -4,17 +4,24 @@
 // Uzaktaki (düzeltilmiş) hat iki sunucu fonksiyonu sunar; bu hook onların
 // üzerine kurulur ve BAŞKA BİR ŞEY BİLMEZ:
 //
-//   • `startDiscoveryRun`  → koşuyu başlatır, `{ ok, runId }` döner.
-//   • `getDiscoveryRun`    → durum + terminal ise sonuç.
+//   • `startDiscoveryRun`   → koşuyu başlatır, `{ ok, runId }` döner.
+//   • `advanceDiscoveryRun` → zinciri biraz ilerletir VE güncel durumu döner.
+//   • `getDiscoveryRun`     → yalnız durum (kuyruk/arka plan yolu için).
 //
 // NEDEN DOĞRUDAN HTTP DEĞİL: `requireUser` `Authorization: Bearer` başlığı
 // zorunlu kılar, `EventSource` ise tarayıcıda başlık gönderemez. Sunucu
 // fonksiyonları jetonu sunucu tarafında kullanır; kimlik doğrulama hem
 // doğru hem de hat üzerinde başka karışıklık bırakmaz.
 //
-// YOKLAMA: SSE olmadan `searches` satırı okunur. İlk 15 sn hızlı (2 sn),
-// sonrası seyrek (4 sn) — 4 adımlık hat ~20-40 sn sürer, sabit 2 sn yoklama
-// gereksiz istek demektir.
+// SÜRÜCÜ YOKLAMASI (en önemli değişiklik): yoklama artık YALNIZ okumuyor,
+// zinciri de ilerletiyor. Nedeni: QStash yapılandırılmamış bir kurulumda ağır
+// işi taşıyacak başka bir şey yoktur ve tüm zinciri tek istekte koşturmak
+// sunucusuz süre tavanına dayanır. Her yoklama bir parça ilerler; iş nerede
+// kaldıysa veritabanındaki ara noktadan devam eder. Kuyruk ya da süreç içi
+// arka plan varsa sunucu zaten onları kullanır ve bu çağrı zararsız biçimde
+// "hiçbir şey yapmadan" güncel durumu döner (atomik sahiplenme).
+//
+// YOKLAMA ARALIĞI: ilk 15 sn hızlı (2 sn), sonrası seyrek (4 sn).
 // ============================================================================
 
 import { useCallback, useEffect, useState } from "react";
@@ -22,7 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
-import { getDiscoveryRun, startDiscoveryRun } from "@/lib/product-discovery.functions";
+import { advanceDiscoveryRun, startDiscoveryRun } from "@/lib/product-discovery.functions";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 import type {
   Consensus,
@@ -68,7 +75,7 @@ export function useProductDiscovery(): {
 } {
   const qc = useQueryClient();
   const startFn = useServerFn(startDiscoveryRun);
-  const statusFn = useServerFn(getDiscoveryRun);
+  const statusFn = useServerFn(advanceDiscoveryRun);
 
   const [isStarting, setIsStarting] = useState(false);
   const [run, setRun] = useState<DiscoveryRun>(EMPTY);
