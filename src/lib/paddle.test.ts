@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mapPaddleEvent, type PaddleSettings } from "./paddle.server";
+import {
+  creditGrantDecision,
+  mapPaddleEvent,
+  planForAsset,
+  type PaddleSettings,
+} from "./paddle.server";
 
 /**
  * Contract tests for the Paddle webhook → database command mapping.
@@ -23,6 +28,12 @@ function settings(): PaddleSettings {
       Starter: "pri_starter",
       Pro: "pri_pro",
       Business: "pri_business",
+    },
+    // Ürün ID'leri AYRI sözlüktür (fiyat ID'si bulunamazsa plan yine çözülür).
+    productIds: {
+      Starter: "pro_starter",
+      Pro: "pro_pro",
+      Business: "pro_business",
     },
   };
 }
@@ -162,6 +173,83 @@ describe("mapPaddleEvent — lifecycle events (refunds, cancels, out-of-order)",
     expect(mapPaddleEvent(settings(), "customer.updated", {})).toBeNull();
     expect(mapPaddleEvent(settings(), "address.created", {})).toBeNull();
     expect(mapPaddleEvent(settings(), "transaction.updated", {})).toBeNull();
+  });
+});
+
+describe("planForAsset — ürün ID'siyle plan çözümü", () => {
+  it("fiyat ID'si eşleşmese bile ÜRÜN ID'siyle planı bulur", () => {
+    // ÖLÇÜLEN HATA: env'de ürün ID'si tanımlı bir kurulumda webhook yalnız fiyat
+    // ID'sine bakıyordu, eşleşme bulamıyordu ve paket hiç tanımlanmıyordu
+    // (kullanıcı ödeme yaptığı hâlde "Free" kalıyordu).
+    expect(planForAsset(settings(), "pri_bilinmeyen", "pro_business")).toBe("Business");
+  });
+
+  it("fiyat ID'si ürün ID'sinden önce gelir (daha özgül)", () => {
+    expect(planForAsset(settings(), "pri_pro", "pro_business")).toBe("Pro");
+  });
+
+  it("hiçbir kimlik eşleşmezse null döner (uydurma plan yok)", () => {
+    expect(planForAsset(settings(), "pri_yok", "pro_yok")).toBeNull();
+    expect(planForAsset(settings(), null, null)).toBeNull();
+  });
+
+  it("işlem olayında ürün ID'siyle çözülen plan kredi verir", () => {
+    const cmd = mapPaddleEvent(
+      settings(),
+      "transaction.completed",
+      completedPayment({
+        items: [{ price: { id: "pri_bilinmeyen", productId: "pro_pro" } }],
+        customData: { userId: "11111111-1111-1111-1111-111111111111" },
+      }).data,
+    );
+    expect(cmd!.tier).toBe("Pro");
+    expect(cmd!.searchCredits).toBe(20);
+    expect(cmd!.productId).toBe("pro_pro");
+  });
+});
+
+describe("creditGrantDecision — kredi işlem başına bir kez", () => {
+  it("tamamlanan ödemede krediyi geçirir", () => {
+    const d = creditGrantDecision({
+      eventType: "transaction.completed",
+      transactionStatus: "completed",
+      alreadyRecorded: false,
+      searchCredits: 20,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: true, search: 20, sim: 10 });
+  });
+
+  it("AYNI işlem için ikinci olayda kredi VERMEZ (kendi kendine kredi şikâyeti)", () => {
+    const d = creditGrantDecision({
+      eventType: "transaction.updated",
+      transactionStatus: "completed",
+      alreadyRecorded: true,
+      searchCredits: 20,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: false, search: 0, sim: 0, reason: "already-granted" });
+  });
+
+  it("ödenmemiş durum güncellemesi kredi doğurmaz", () => {
+    const d = creditGrantDecision({
+      eventType: "transaction.updated",
+      transactionStatus: "ready",
+      alreadyRecorded: false,
+      searchCredits: 20,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: false, reason: "not-paid" });
+  });
+
+  it("kredisiz olayda hiçbir şey yapmaz", () => {
+    const d = creditGrantDecision({
+      eventType: "transaction.completed",
+      alreadyRecorded: false,
+      searchCredits: 0,
+      simCredits: 0,
+    });
+    expect(d).toMatchObject({ granted: false, reason: "no-grant-mapped" });
   });
 });
 

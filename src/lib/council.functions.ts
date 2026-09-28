@@ -106,6 +106,10 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       };
     }
 
+    // NOT: `refKey` BİLEREK verilmez. Buradaki iade, tahsil edilen TEK krediyle
+    // bire bir eşleşir (her istek önce düşer, sonra koşar) ve sorguya bağlı
+    // kalıcı bir anahtar, aynı sorgu için GELECEKTEKİ meşru bir iadeyi de
+    // engellerdi (kullanıcı gerçek bir hata yüzünden kredisini kaybederdi).
     const work = () =>
       withCreditRefund(context.userId, () =>
         runCouncil(data.query, data.country, data.category, data.lang),

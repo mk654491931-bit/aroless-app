@@ -36,26 +36,35 @@ export type PaddleSettings = {
   environment: PaddleEnvironment;
   clientToken: string;
   webhookSecret: string;
-  priceIds: Record<PlanId, string>;
+  priceIds: Partial<Record<PlanId, string>>;
+  /**
+   * Plan → Paddle ÜRÜN ID'si.
+   *
+   * NEDEN AYRI TUTULUR (ölçülen hatanın kaynağı): eskiden ürün ID'leri, fiyat
+   * ID'si bulunamadığında AYNI sözlüğe yazılıyordu. Sonucu iki yönlü bir
+   * bozulmaydı:
+   *   • Checkout, ürün ID'sini “fiyat ID'si” sanıp Paddle'dan hata alıyor ve
+   *     tarayıcı ham (customData'sız, `discountCode`'suz) akışa düşüyordu.
+   *   • Webhook, olaydaki GERÇEK fiyat ID'siyle karşılaştırma yaptığı için
+   *     hiçbir zaman eşleşme bulamıyor, paket tanımlanmıyor ve kullanıcı satın
+   *     alma yapmasına rağmen "Free" görünüyordu (indirim koduyla alınan paket).
+   * Artık ikisi ayrı sözlüktür ve eşleştirme İKİSİNE birden bakar.
+   */
+  productIds: Partial<Record<PlanId, string>>;
 };
 
+/** Yalnız FİYAT ID'si sağlayan değişkenler. */
 const PLAN_PRICE_ENV: Record<PlanId, readonly string[]> = {
-  Starter: [
-    "PADDLE_STARTER_PRICE_ID",
-    "VITE_PADDLE_PRICE_STARTER_MONTHLY",
-    "PADDLE_STARTER_PRODUCT_ID",
-  ],
-  Pro: [
-    "PADDLE_PRO_PRICE_ID",
-    "VITE_PADDLE_PRICE_PRO_MONTHLY",
-    "PADDLE_PRO_PRODUCT_ID",
-    "PADDLE_PRODUCT_ID",
-  ],
-  Business: [
-    "PADDLE_BUSINESS_PRICE_ID",
-    "VITE_PADDLE_PRICE_BUSINESS_MONTHLY",
-    "PADDLE_BUSINESS_PRODUCT_ID",
-  ],
+  Starter: ["PADDLE_STARTER_PRICE_ID", "VITE_PADDLE_PRICE_STARTER_MONTHLY"],
+  Pro: ["PADDLE_PRO_PRICE_ID", "VITE_PADDLE_PRICE_PRO_MONTHLY"],
+  Business: ["PADDLE_BUSINESS_PRICE_ID", "VITE_PADDLE_PRICE_BUSINESS_MONTHLY"],
+};
+
+/** Yalnız ÜRÜN ID'si sağlayan değişkenler (eski/değişken şemaları). */
+const PLAN_PRODUCT_ENV: Record<PlanId, readonly string[]> = {
+  Starter: ["PADDLE_STARTER_PRODUCT_ID"],
+  Pro: ["PADDLE_PRO_PRODUCT_ID", "PADDLE_PRODUCT_ID"],
+  Business: ["PADDLE_BUSINESS_PRODUCT_ID"],
 };
 
 function firstDefined(...names: string[]): string | undefined {
@@ -110,12 +119,19 @@ export function paddleSettings(): PaddleSettings | null {
   const clientToken = firstDefined("PADDLE_CLIENT_TOKEN", "VITE_PADDLE_CLIENT_TOKEN");
 
   const priceIds: Partial<Record<PlanId, string>> = {};
+  const productIds: Partial<Record<PlanId, string>> = {};
   for (const plan of ["Starter", "Pro", "Business"] as const) {
-    const id = firstDefined(...PLAN_PRICE_ENV[plan]);
-    if (id) priceIds[plan] = id;
+    const price = firstDefined(...PLAN_PRICE_ENV[plan]);
+    if (price) priceIds[plan] = price;
+    const product = firstDefined(...PLAN_PRODUCT_ENV[plan]);
+    if (product) productIds[plan] = product;
   }
 
-  const missingPlans = (["Starter", "Pro", "Business"] as const).filter((plan) => !priceIds[plan]);
+  // Eksik sayılan plan: HİÇBİR kimliği olmayan plan. Yalnız ürün ID'si tanımlı
+  // bir plan satın alınabilir kalır (fiyatı API'den çözülür).
+  const missingPlans = (["Starter", "Pro", "Business"] as const).filter(
+    (plan) => !priceIds[plan] && !productIds[plan],
+  );
   if (missingPlans.length) {
     // Katalog eksik ama ödeme altyapısı ayakta: yalnız bu planlar satın
     // alınamaz. Webhook ÇALIŞMAYA DEVAM EDER — aksi hâlde tek bir eksik fiyat
@@ -140,7 +156,8 @@ export function paddleSettings(): PaddleSettings | null {
     environment: resolvePaddleEnvironment(),
     clientToken,
     webhookSecret,
-    priceIds: priceIds as Record<PlanId, string>,
+    priceIds,
+    productIds,
   };
 }
 
@@ -171,15 +188,40 @@ export function appliedDiscountId(data: unknown): string | null {
   return typeof direct === "string" && direct ? direct : null;
 }
 
-/** Paddle price ID configured for a plan, or the configured price that matches a given Paddle price ID. */
-export function priceIdForPlan(settings: PaddleSettings, plan: PlanId): string {
-  return settings.priceIds[plan];
+/** Bir planın tanımlı fiyat ID'si (yoksa `null`). */
+export function priceIdForPlan(settings: PaddleSettings, plan: PlanId): string | null {
+  return settings.priceIds[plan] ?? null;
 }
 
+/** Yalnız fiyat ID'siyle eşleştirir (geriye dönük uyum için korunur). */
 export function planForPriceId(settings: PaddleSettings, priceId?: string | null): PlanId | null {
   if (!priceId) return null;
   const entry = (Object.entries(settings.priceIds) as [PlanId, string][]).find(
     ([, id]) => id === priceId,
+  );
+  return entry?.[0] ?? null;
+}
+
+/**
+ * Paddle olayındaki KİMLİKLERDEN planı çözer — fiyat VE ürün ID'sine bakar.
+ *
+ * NEDEN İKİSİ: Paddle işlem satırı `price.id` (fiyat) ve `price.productId`
+ * (ürün) taşır. Kurulumda hangi tür kimliğin tanımlı olduğu dağıtıma göre
+ * değişir; tek türe bakmak, eşleşme bulunamadığı için paketin hiç
+ * tanımlanmamasına (kullanıcı ödeme yapmış ama "Free" görünüyor) yol açıyordu.
+ * Sıra ÖNEMLİ: fiyat ID'si daha özgüldür (aynı ürünün aylık/yıllık fiyatları
+ * farklı olabilir), bu yüzden önce o aranır.
+ */
+export function planForAsset(
+  settings: PaddleSettings,
+  priceId?: string | null,
+  productId?: string | null,
+): PlanId | null {
+  const byPrice = planForPriceId(settings, priceId);
+  if (byPrice) return byPrice;
+  if (!productId) return null;
+  const entry = (Object.entries(settings.productIds) as [PlanId, string][]).find(
+    ([, id]) => id === productId,
   );
   return entry?.[0] ?? null;
 }
@@ -237,15 +279,20 @@ export async function createPaddleCheckoutSession(opts: {
     );
   }
 
-  const priceId = priceIdForPlan(settings, plan);
-  // Katalog kısmi olabilir; bu planın fiyatı tanımlı değilse AÇIK hata ver.
-  // (Eskiden bu, tüm entegrasyonu düşürüyordu.)
+  const paddle = getPaddleClient();
+  // Fiyat öncelikli; yalnız ÜRÜN ID'si tanımlıysa ürünün aktif fiyatı Paddle'dan
+  // çözülür. Aksi hâlde ürün ID'sini fiyat yerine göndermek Paddle'dan hata
+  // alır ve checkout (ölçüldüğü gibi) customData'sız ham akışa düşerdi.
+  const configuredPrice = priceIdForPlan(settings, plan);
+  const productId = settings.productIds[plan] ?? null;
+  const priceId =
+    configuredPrice ?? (productId ? await resolveProductPriceId(paddle, productId) : null);
   if (!priceId) {
     throw new Error(
-      `"${plan}" planı için Paddle fiyat ID'si tanımlı değil (${PLAN_PRICE_ENV[plan][0]}).`,
+      `"${plan}" planı için Paddle fiyat/ürün ID'si tanımlı değil ` +
+        `(${PLAN_PRICE_ENV[plan][0]} veya ${PLAN_PRODUCT_ENV[plan][0]}).`,
     );
   }
-  const paddle = getPaddleClient();
 
   try {
     const transaction = await paddle.transactions.create({
@@ -270,6 +317,121 @@ export async function createPaddleCheckoutSession(opts: {
   } catch (error) {
     console.error("[Paddle] Checkout transaction creation failed:", error);
     throw error;
+  }
+}
+
+/**
+ * Bir ÜRÜN'ün aktif fiyat ID'sini Paddle'dan çözer.
+ *
+ * Neden gerekli: bazı kurulumlar yalnız `PADDLE_*_PRODUCT_ID` tanımlar (eski
+ * şema). `transactions.create` ise fiyat ID'si ister; ürün ID'sini fiyat yerine
+ * göndermek isteği reddettirir. Bu yüzden ürünün ilk AKTİF fiyatı sorulur.
+ */
+async function resolveProductPriceId(paddle: Paddle, productId: string): Promise<string | null> {
+  try {
+    const prices = await paddle.prices.list({
+      productId: [productId],
+      status: ["active" as never],
+      perPage: 1,
+    });
+    // `Collection` bir AsyncIterable'dır; ilk sayfa `next()` ile alınır.
+    const [first] = await prices.next();
+    return first?.id ?? null;
+  } catch (error) {
+    console.error("[Paddle] Ürünün fiyatı çözülemedi:", error);
+    return null;
+  }
+}
+
+/**
+ * ABONELİK/İŞLEM kimliklerinden Paddle'ın KENDİ kaydını okuyup planı çözer.
+ *
+ * NEDEN GEREKLİ (ölçülen hata): webhook yalnız olay gövdesindeki fiyat ID'sini
+ * çevre değişkenleriyle karşılaştırıyordu. Env tarafında ürün ID'si tanımlıysa
+ * eşleşme HİÇ bulunamıyor, paket tanımlanmıyor ve kullanıcı ödeme yapmasına
+ * rağmen "Free" kalıyordu — %100 indirim koduyla alınan pakette tam olarak bu
+ * yaşandı. Paddle'ın kendi kaydı TEK yetkili doğruluk kaynağıdır: oradan
+ * okunan `price.id`/`price.productId` ile plan kesin olarak çözülür.
+ *
+ * AĞ HATASI İŞİ BOZMAZ: erişilemezse `null` döner ve çağıran, elindeki olay
+ * verisiyle devam eder (kullanıcıyı hatalı plana yazmaktansa hiç yazmamak
+ * yeğdir).
+ */
+export async function resolvePaddleEntitlement(
+  settings: PaddleSettings,
+  ids: { transactionId?: string | null; subscriptionId?: string | null },
+): Promise<{
+  priceId: string | null;
+  productId: string | null;
+  customerId: string | null;
+  subscriptionId: string | null;
+  status: string | null;
+  plan: PlanId | null;
+} | null> {
+  let paddle: Paddle;
+  try {
+    paddle = getPaddleClient();
+  } catch {
+    return null;
+  }
+
+  try {
+    if (ids.transactionId) {
+      const txn = await paddle.transactions.get(ids.transactionId);
+      const priceId = txn.items?.[0]?.price?.id ?? null;
+      const productId = txn.items?.[0]?.price?.productId ?? null;
+      return {
+        priceId,
+        productId,
+        customerId: txn.customerId ?? null,
+        subscriptionId: txn.subscriptionId ?? null,
+        status: txn.status ?? null,
+        plan: planForAsset(settings, priceId, productId),
+      };
+    }
+    if (ids.subscriptionId) {
+      const sub = await paddle.subscriptions.get(ids.subscriptionId);
+      const priceId = sub.items?.[0]?.price?.id ?? null;
+      const productId = sub.items?.[0]?.price?.productId ?? null;
+      return {
+        priceId,
+        productId,
+        customerId: sub.customerId ?? null,
+        subscriptionId: sub.id ?? null,
+        status: sub.status ?? null,
+        plan: planForAsset(settings, priceId, productId),
+      };
+    }
+  } catch (error) {
+    console.warn(
+      "[Paddle] Yetki çözümlemesi API'den okunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  return null;
+}
+
+/**
+ * Bir müşteri ID'sinden e-posta adresini okur (sahiplik çözümlemesi için).
+ *
+ * NEDEN: `customData.userId` yalnız sunucu tarafında oluşturulan işlemlerde
+ * bulunur. Tarayıcı bir kez ham checkout'a düştüyse (ya da eski bir abonelik
+ * yenileniyorsa) olay gövdesinde kullanıcı kimliği yoktur ve ödeme SAHİPSİZ
+ * kalır. Paddle müşterisinin e-postası ile `profiles.email` eşleştirilerek
+ * ödeme doğru hesaba bağlanır.
+ */
+export async function resolvePaddleCustomerEmail(customerId: string): Promise<string | null> {
+  try {
+    const paddle = getPaddleClient();
+    const customer = await paddle.customers.get(customerId);
+    const email = customer?.email ?? null;
+    return email && email.includes("@") ? email : null;
+  } catch (error) {
+    console.warn(
+      "[Paddle] Müşteri e-postası okunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
   }
 }
 
@@ -335,6 +497,8 @@ export type PaddleEventCommand = {
   status: string | null;
   paddleSubscriptionId: string | null;
   priceId: string | null;
+  /** Olaydaki ürün ID'si — plan çözümlemesi fiyat ID'siyle birlikte bakar. */
+  productId: string | null;
   transactionId: string | null;
   currency: string | null;
   amountCents: number | null;
@@ -360,10 +524,13 @@ export function mapPaddleEvent(
     data && typeof data === "object" && data.customData && typeof data.customData === "object"
       ? data.customData
       : {};
-  const items: Array<{ price?: { id?: string } | null }> = Array.isArray(data?.items)
+  const items: Array<{ price?: { id?: string; productId?: string } | null }> = Array.isArray(
+    data?.items,
+  )
     ? data.items
     : [];
   const priceId: string | null = items[0]?.price?.id ?? null;
+  const productId: string | null = items[0]?.price?.productId ?? null;
   const customerId: string | null = typeof data?.customerId === "string" ? data.customerId : null;
   const requestedPlan: PlanId | null = isPlanId(customData.plan) ? customData.plan : null;
   const rawUserId: string | null =
@@ -379,6 +546,7 @@ export function mapPaddleEvent(
     status: null as string | null,
     paddleSubscriptionId: null as string | null,
     priceId,
+    productId,
     transactionId: null as string | null,
     currency: null as string | null,
     amountCents: null as number | null,
@@ -407,10 +575,13 @@ export function mapPaddleEvent(
     const active = status === "active" || status === "trialing";
     // Active (or paying) subscription → derive plan from the active price first,
     // then from customData. Revoking → downgrade (DB guards for other live subs).
+    // Plan: ÖNCE olaydaki fiyat/ürün kimliği (Paddle'ın gerçek kaydı), sonra
+    // `customData.plan`. Yalnız fiyat ID'sine bakmak, env'de ürün ID'si tanımlı
+    // kurulumlarda paketin hiç tanımlanmamasına yol açıyordu.
     const tier: PlanId | "Free" | null = revoking
       ? "Free"
       : active
-        ? (planForPriceId(settings, priceId) ?? requestedPlan ?? null)
+        ? (planForAsset(settings, priceId, productId) ?? requestedPlan ?? null)
         : null;
 
     return {
@@ -452,7 +623,8 @@ export function mapPaddleEvent(
 
     // Tier is taken from the active price, then customData (copied to renewals by
     // Paddle), then left null so the DB preserves the user's current plan.
-    const tier: PlanId | null = planForPriceId(settings, priceId) ?? requestedPlan ?? null;
+    const tier: PlanId | null =
+      planForAsset(settings, priceId, productId) ?? requestedPlan ?? null;
 
     // Out-of-order guard: a refund/reversal that arrives with a positive
     // grandTotal due to Paddle's eventual consistency still must not mint
@@ -490,6 +662,48 @@ export function mapPaddleEvent(
   }
 
   return null;
+}
+
+/**
+ * ÖDEME OLAYININ KREDİ DOĞURUP DOĞURMADIĞI — saf karar (ağ/DB yok).
+ *
+ * NEDEN VAR (ölçülen hata): Paddle AYNI ödeme için birden çok olay gönderir
+ * (`transaction.completed`, ardından her değişiklikte `transaction.updated`) ve
+ * her olayın KENDİ `event_id`si olur. RPC yalnız `event_id` bazında
+ * tekilleştirdiği için paket kredisi HER olayda yeniden ekleniyordu — kullanıcı
+ * "sistem kendi kendine sürekli kredi tanımlıyor" diye bildirdi.
+ *
+ * KURAL: kredi İŞLEM başına bir kez verilir. Aynı işlem için ikinci olay
+ * (`alreadyRecorded`) ve ödeme bildirmeyen durum güncellemeleri kredi üretmez.
+ */
+export function creditGrantDecision(args: {
+  eventType: string;
+  /** Olaydaki işlem durumu (`transaction.updated` için belirleyici). */
+  transactionStatus?: string | null;
+  /** Bu işlem için zaten bir `transactions` satırı var mı? */
+  alreadyRecorded: boolean;
+  searchCredits: number;
+  simCredits: number;
+}): { search: number; sim: number; granted: boolean; reason: string } {
+  const none = { search: 0, sim: 0, granted: false };
+  if (args.searchCredits <= 0 && args.simCredits <= 0) {
+    return { ...none, reason: "no-grant-mapped" };
+  }
+  const status = String(args.transactionStatus ?? "").toLowerCase();
+  const paid = args.eventType === "transaction.completed" || status === "completed";
+  if (!paid) {
+    // Durum bildirimi (ör. `ready` → `completed`), yeni bir satın alma değildir.
+    return { ...none, reason: "not-paid" };
+  }
+  if (args.alreadyRecorded) {
+    return { ...none, reason: "already-granted" };
+  }
+  return {
+    search: Math.max(0, args.searchCredits),
+    sim: Math.max(0, args.simCredits),
+    granted: true,
+    reason: "granted",
+  };
 }
 
 /**

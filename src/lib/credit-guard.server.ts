@@ -109,16 +109,23 @@ export async function chargeForAi(
 /**
  * `deduct_*` çağrısından sonra çalışan analiz gövdesi. Gövde hata fırlatırsa
  * kredi iade edilir ve hata yukarı taşınır.
+ *
+ * `refKey` VERİLMEYE DEĞER: iade, anahtar verilmediğinde koşulsuzdur; aynı iş
+ * için iki ayrı hata yolu (ör. hem sarmalayıcı hem çağıranın kendi iadesi, ya da
+ * istemci tekrarı) çalışırsa kredi İKİ KEZ artar — kullanıcının bildirdiği
+ * "sistem kendi kendine kredi tanımlıyor" durumunun bir kaynağı budur. İşin
+ * doğal kimliği (ör. konsey iş anahtarı) varsa geçilmelidir.
  */
 export async function withCreditRefund<T>(
   userId: string,
   run: () => Promise<T>,
   amount = 1,
+  refKey?: string | null,
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    await refundCredit(userId, amount, "analysis_failed");
+    await refundCredit(userId, amount, "analysis_failed", refKey ? `${refKey}:refund` : null);
     throw error;
   }
 }
