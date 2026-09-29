@@ -567,6 +567,43 @@ export function matchesNiche(title: string, niche: string): boolean {
 }
 
 /** En az bir ÖLÇÜLEBİLİR ticari alan var mı? */
+/**
+ * iTunes kapak görseli → 512'lik sürüm.
+ *
+ * API yalnız `.../100x100bb.jpg` döndürür. Vitrin kartı 100px'te bulanık
+ * göründüğü için boyut 512'ye çıkarılır — bu iTunes'un kendi belgelediği
+ * deterministik bir adres değişikliğidir, UYDURMA değildir. Desen tutmazsa
+ * (yeni URL şeması) gelen adres olduğu gibi döner.
+ */
+export function itunesArtwork(url: string): string {
+  const raw = String(url ?? "").trim();
+  if (!raw) return "";
+  // Yalnız `https://` adreslerde ve boyut token'ı URL'nin SON yol segmenti
+  // ise yükseltilir (gerçek biçim: /image/thumb/<...>/100x100bb.jpg).
+  // `http://` bir Apple adresi değildir; karıştırılıp yeniden yazılmaz.
+  return /^https:\/\//i.test(raw) ? raw.replace(/\/100x100bb(\.[a-z0-9]+)$/i, "/512x512bb$1") : raw;
+}
+
+/**
+ * Bing Shopping kartından GERÇEK ürün görseli.
+ *
+ * Öncelik schema.org `murl` alanıdır (Bing'in kendi ürün JSON-LD'si, en
+ * güvenilir). Yoksa kart içindeki `<img src>` denenir; logo, sprite, 1x1
+ * izleyici ve veri-URI'leri elenir — vitrinde yanlış görsel göstermek,
+ * görsel göstermemekten kötüdür.
+ */
+export function imageFromShoppingCard(card: string): string {
+  const murl = /"murl"\s*:\s*"(https:\/\/[^"]+)"/i.exec(card)?.[1];
+  if (murl) return decode(murl);
+  for (const m of card.matchAll(/<img[^>]+src="(https:\/\/[^"]+)"/gi)) {
+    const url = decode(m[1] ?? "");
+    if (!/^https:\/\//i.test(url)) continue;
+    if (/(sprite|logo|blank|1x1|pixel|spacer|placeholder|\/beacon)/i.test(url)) continue;
+    if (url.length > 25) return url;
+  }
+  return "";
+}
+
 export function hasMeasuredField(row: {
   priceUsd?: number | null;
   rating?: number | null;
@@ -662,6 +699,12 @@ export const itunesSource: ProductSource = {
         collectionViewUrl?: string | null;
         averageUserRating?: number | null;
         userRatingCount?: number | null;
+        /**
+         * Kapak görseli. iTunes Search API her sonuçta DÖNDÜRÜR; bu dosya
+         * yıllardır bu alanı hiç okumadığı için kısa listede her iTunes ürünü
+         * görselsiz çıkıyordu. Artık okunuyor.
+         */
+        artworkUrl100?: string | null;
       }[];
     }>(`https://itunes.apple.com/search?term=${q}&limit=25&country=US`, 3_500);
 
@@ -723,6 +766,7 @@ export const itunesSource: ProductSource = {
         inStock: null,
         source: "itunes",
         url: String(item.trackViewUrl ?? item.collectionViewUrl ?? ""),
+        imageUrl: itunesArtwork(String(item.artworkUrl100 ?? "")),
         notes: notesParts.join(" · ").slice(0, 200),
       };
       // Kapı 1: alakalılık. Kapı 2: en az bir ölçülebilir alan.
@@ -1342,6 +1386,7 @@ export const bingShoppingSource: ProductSource = {
         inStock: null,
         source: "bing-shopping",
         url: href ? bingRealUrl(decode(href)) : "",
+        imageUrl: imageFromShoppingCard(card),
         viewed90d: parseViewed90d(viewed),
         notes: [
           viewed ? `${viewed.trim()} görüntülenme / 90g` : "",
