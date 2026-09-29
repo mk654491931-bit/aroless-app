@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientDrivesChain,
+  discoveryChainHealth,
   discoveryRunnerMode,
   MIN_STEP_BUDGET_MS,
   STALE_STEP_TAKEOVER_MS,
@@ -96,5 +97,54 @@ describe("clientDrivesChain", () => {
   it("eşik tam olarak STALE_STEP_TAKEOVER_MS'de dönüşür", () => {
     expect(clientDrivesChain("qstash", now - STALE_STEP_TAKEOVER_MS, now)).toBe(true);
     expect(clientDrivesChain("qstash", now - STALE_STEP_TAKEOVER_MS + 1, now)).toBe(false);
+  });
+});
+
+/**
+ * TEŞHİS — /health artık hangi anahtarın eksik olduğunu SÖYLER.
+ *
+ * Ölçülen hata: `/health` iki ayrı hesaplayıcı kullanıyordu. Biri token + sır
+ * arayıp "qstash" diyor, diğeri (zincirin kendisi) üçüncü anahtarı da
+ * istiyordu. Panel "qstash" derken hat `inline` çalışıyor, kullanıcı ise
+ * zaman aşımı görüyordu. Sessiz çelişki teşhisi imkânsız kılıyordu.
+ */
+describe("discoveryChainHealth", () => {
+  it("üç anahtar da tam ise qstash ve eksik yok", () => {
+    const health = discoveryChainHealth({
+      QSTASH_TOKEN: "tok",
+      JOB_WORKER_SECRET: "secret",
+      QSTASH_CURRENT_SIGNING_KEY: "sig",
+    } as never);
+    expect(health.mode).toBe("qstash");
+    expect(health.missing).toEqual([]);
+  });
+
+  it("İMZA anahtarı eksikse hat inline'a düşer ve EKSİK ANAHTAR ADI döner", () => {
+    const health = discoveryChainHealth({
+      QSTASH_TOKEN: "tok",
+      JOB_WORKER_SECRET: "secret",
+    } as never);
+    // Bu, "kuyruk kurulu görünüyor ama hiçbir adım çalışmıyor" durumudur:
+    // teslimatlar imza doğrulanamadığı için 401 alır.
+    expect(health.mode).toBe("inline");
+    expect(health.missing).toEqual(["QSTASH_CURRENT_SIGNING_KEY"]);
+  });
+
+  it("hiçbir anahtar yoksa üçünü de listeler", () => {
+    const health = discoveryChainHealth({} as never);
+    expect(health.missing).toEqual([
+      "QSTASH_TOKEN",
+      "JOB_WORKER_SECRET",
+      "QSTASH_CURRENT_SIGNING_KEY",
+    ]);
+  });
+
+  it("eksik anahtar ADLARI döner, DEĞERLERİ asla", () => {
+    // Sır sızdıran bir teşhis kabul edilemez.
+    const health = discoveryChainHealth({
+      QSTASH_TOKEN: "tok-gizli",
+      JOB_WORKER_SECRET: "sir-gizli",
+    } as never);
+    expect(JSON.stringify(health)).not.toContain("gizli");
   });
 });

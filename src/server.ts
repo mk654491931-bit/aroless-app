@@ -19,6 +19,7 @@ import {
   discoverySignatureMode,
   remoteWorkerConfigured,
 } from "./lib/discovery-jobs.server";
+import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -152,6 +153,12 @@ export default {
               // "token" görünüyorsa teslimat imza anahtarı eksiktir (QStash
               // panelindeki Current/Next Signing Key): hat sessizce 401 alır.
               discoverySignature: discoverySignatureMode(),
+              // ⚠️ YUKARIDAKİ `dispatch` PRODUCT DISCOVERY ZİNCİRİNİ ANLATIYOR.
+              // Zincir ÜÇÜNCÜ bir anahtarı da ister; `mode` "qstash" DEĞİLSE
+              // ağır hat istek içinde koşuyor demektir ve `missing` HANGİ
+              // anahtarın eksik olduğunu söyler. Bu ikisi aynı şey olmadığı
+              // için ayrı raporlanır (eskiden sessizce çelişiyorlardı).
+              discoveryChain: discoveryChainHealth(),
             },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),

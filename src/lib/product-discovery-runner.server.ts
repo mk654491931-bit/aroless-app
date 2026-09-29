@@ -68,6 +68,32 @@ export function discoveryRunnerMode(env: EnvMap = process.env): DiscoveryRunnerM
 }
 
 /**
+ * Bu hatta zinciri hangi yolun taşıdığını ve EKSİK ANAHTARLARI söyler.
+ *
+ * NEDEN AYRI (ölçülen teşhis hatası): `/health` iki AYRI hesaplayıcı
+ * kullanıyordu. `discoveryDispatchPlan()` yalnız token + sır arar ve
+ * "qstash" der; Product Discovery zinciri ise ÜÇÜNCÜ anahtarı da ister
+ * (`QSTASH_CURRENT_SIGNING_KEY`). Sonuç: panel "qstash" gösterirken hat aslında
+ * `inline` çalışıyor, ağır iş tek HTTP isteğine giriyor ve kullanıcı zaman aşımı
+ * görüyordu — teşhisi koyan ile hat arasındaki sessiz anlaşmazlık.
+ *
+ * Bu fonksiyon ikisini TEK yerde birleştirir ve eksik anahtarları ADLARIYLA
+ * döner (değerleri asla). Sır içermez.
+ */
+export function discoveryChainHealth(env: EnvMap = process.env): {
+  mode: DiscoveryRunnerMode;
+  missing: string[];
+} {
+  const missing: string[] = [];
+  if (!readEnvValue(env, "QSTASH_TOKEN")) missing.push("QSTASH_TOKEN");
+  if (!readEnvValue(env, "JOB_WORKER_SECRET")) missing.push("JOB_WORKER_SECRET");
+  // İmza anahtarı olmadan teslimat adım ucunda 401 alır: kuyruk "kurulu"
+  // görünür ama hiçbir adım çalışmaz.
+  if (!readEnvValue(env, "QSTASH_CURRENT_SIGNING_KEY")) missing.push("QSTASH_CURRENT_SIGNING_KEY");
+  return { mode: discoveryRunnerMode(env), missing };
+}
+
+/**
  * Adımın \"BAŞLIYOR\" durumu — yarıda kalan bir adım buraya geri alınır.
  *
  * `final` adımı bilerek `deep_analysis`e yazılır: bu adımın kendi çıkış durumu
@@ -286,6 +312,8 @@ export async function runDiscoveryChain(args: {
 }): Promise<ChainOutcome> {
   const deadline = Date.now() + Math.max(MIN_STEP_BUDGET_MS, args.budgetMs);
   const ran: DiscoveryStep[] = [];
+  /** Bu çağrıda adımlara harcanan gerçek süre (ms) — teşhis için. */
+  let spentMs = 0;
 
   let checkpoint: DiscoveryCheckpoint =
     (await readDiscoveryCheckpoint(args.runId)) ?? { v: 1, done: [], shortlist: [], votes: [] };
@@ -313,6 +341,7 @@ export async function runDiscoveryChain(args: {
     if (claim.state === "in-progress") return { completed: false, ran, stop: "in-progress" };
 
     console.log(`[discovery] adım başladı: ${step} (run ${args.runId.slice(0, 8)})`);
+    const stepStartedAt = Date.now();
 
     const outcome = await executeProductDiscoveryStep({
       step,
@@ -328,8 +357,25 @@ export async function runDiscoveryChain(args: {
 
     if (!outcome.ok) {
       // Adım çöktü: iş `failed` ve kredi iade edildi (executor yaptı).
+      console.error(
+        `[discovery] adım çöktü: ${step} ${Date.now() - stepStartedAt}ms · ${outcome.error}`,
+      );
       return { completed: false, ran, stop: "terminal", error: outcome.error };
     }
+
+    // SÜRE ÖLÇÜMÜ — canlı teşhisinin tek satırı.
+    //
+    // Neden: "zaman aşımına uğradı" belirtisinin hangi adımdan geldiği
+    // tahminle değil, ÖLÇÜMLE anlaşılır. Kümelenmiş süreler hat bütçesinin
+    // nerede harcandığını doğrudan gösterir (canlıda: kazıma ~25 sn,
+    // Gemini ~20 sn, konsey ~40 sn, sıralama ~5 sn).
+    const stepMs = Date.now() - stepStartedAt;
+    spentMs += stepMs;
+    console.log(
+      `[discovery] adım bitti: ${step} ${stepMs}ms · durum=${outcome.status} ` +
+        `· ürün=${outcome.products.length} · oy=${outcome.consensus.length} ` +
+        `(kümelenmiş ${spentMs}ms)`,
+    );
 
     ran.push(step);
     checkpoint = {

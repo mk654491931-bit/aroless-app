@@ -166,7 +166,14 @@ yüzden ağır iş uygulamanın **kendi** `/api/worker` ucunda güvenle koşar:
 
 | Kurulum | Ne yapılır | `/health` çıktısı |
 | --- | --- | --- |
-| **Ücretsiz** (önerilen) | Yalnız Vercel Hobby. Vercel env'de `QSTASH_TOKEN` + `JOB_WORKER_SECRET` olsun; **`DISCOVERY_WORKER_URL`/`WORKER_URL` BOŞ kalsın** | `workflow.dispatch: "qstash"` |
+| **Ücretsiz** (önerilen) | Yalnız Vercel Hobby. Vercel env'de `QSTASH_TOKEN` + `JOB_WORKER_SECRET` + **`QSTASH_CURRENT_SIGNING_KEY`** olsun; **`DISCOVERY_WORKER_URL`/`WORKER_URL` BOŞ kalsın** | `workflow.discoveryChain.mode: "qstash"` |
+
+> ⚠️ **HANGİ ANAHTAR EKSİK?** `/health` → `workflow.discoveryChain.missing`
+> eksik anahtarları **adlarıyla** listeler. `workflow.dispatch` tek BAŞINA
+> yeterli bir gösterge DEĞİLDİR: o yalnız token + sır arar, Product Discovery
+> zinciri ise imza anahtarını da ister. İkisi çeliştiği için teşhis sessizce
+> yanlış yönlendirirdi (panel “qstash” der, hat `inline` çalışır, kullanıcı
+> zaman aşımı görür).
 
 Boş kalması şu demektir: iş, uygulamanın kendi origin'ine
 (`https://<domain>/api/worker`) QStash ile yayınlanır. Bu **ayrı bir fonksiyon
@@ -187,15 +194,20 @@ Yeni hat (`/api/product-discovery/*`) dört adımlık QStash zinciridir ve Verce
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | evet | İş kaydı, sahiplik ve kredi iadesi servis rolüyle yazılır (RLS bypass) |
 | `QSTASH_TOKEN` | evet | Adımları kuyruğa alan yayınlama isteği |
 | `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | evet | Adım uçlarının imza doğrulaması |
-| `JOB_WORKER_SECRET` | hayır* | `qstashFanOut` ikisinden biri yoksa `inline` moda düşer |
+| `JOB_WORKER_SECRET` | evet | Yayınlama için worker sırrı; eksikse zincir `inline` moda düşer |
 | `GEMINI_API_KEY` (veya `GEMINI_API_KEY_1..8`) | evet | Yalnız iki AI adımı: Top 75→15 kısa liste ve 14 ajan konseyi |
 | `APP_URL` | önerilir | Adım adresleri boş env'den istek origin'ine düşer; sabit adres daha güvenli |
-
-*Bir zamanlar `/api/worker` için zorunluydu; Product Discovery hattının kendi
-kuyruğu `QSTASH_TOKEN` yeterlidir.
+| `COUNCIL_CONCURRENCY` | hayır | 14 ajanın aynı anda koşan rol sayısı (1-8, varsayılan 4) |
 
 Eksik anahtar davranışı kontrollüdür: kredi düşülür, `503` döner ve kredi tam
 bir kez iade edilir — kullanıcı çalışmayan bir iş için ödeme yapmaz.
+
+#### Zincir süresi nerede harcanyor?
+
+`[discovery] adım bitti: <adım> <ms> · durum=… · ürün=… · oy=…` satırı
+platform loglarına düşer. Bu satır olmadan “zaman aşımına uğradı” belirtisinin
+**hangi adımdan** geldiği yalnız tahminle anlaşılır; oysa hat bütçesinin
+nerede harcandığını doğrudan gösterir.
 
 #### 504'ü yapısal olarak imkânsız kılan kesme noktası (`src/server.ts`)
 
