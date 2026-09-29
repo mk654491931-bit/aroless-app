@@ -19,6 +19,7 @@ import {
   runFinalRankStep,
   TopProductsPayloadSchema,
 } from "./product-discovery-pipeline.server";
+import { parseDiscoveryResult } from "./product-discovery.functions";
 import { COUNCIL_AGENT_KEYS } from "./council-chain.server";
 
 const read = (p: string) => import("node:fs").then((fs) => fs.readFileSync(p, "utf8"));
@@ -64,6 +65,77 @@ describe("nihai 5 — hat bağlantısı", () => {
   it("adım sonucu şeması topProducts'ı taşır", async () => {
     const src = await read("src/lib/product-discovery-pipeline.server.ts");
     expect(src).toContain("topProducts: z.array(z.any()).optional()");
+  });
+});
+
+/**
+ * KALICI YOL — canlıda asıl önemli olan bağlantı.
+ *
+ * Canlı hat üç taşıyıcıdan biriyle koşar (qstash / arka plan / yoklama) ve
+ * istemci sonucu `searches.result`ten okur. Sözleşme yalnız `final` adımının
+ * SENKRON yanıtında dursaydı canlıda hiçbir zaman istemciye ulaşmazdı.
+ */
+describe("nihai 5 — kalıcı sonuç ve istemci", () => {
+  it("sözleşme ham DB sonucundan gerçek ürünlerle okunur", () => {
+    const ranked = runFinalRankStep(
+      councilRows(25) as never,
+      DISCOVERY_FINAL_N,
+      new Map(winnerProducts(25).map((p) => [p.fingerprint, p])) as never,
+    );
+    const { top_products } = buildTopProducts((ranked.products ?? []) as never, DISCOVERY_FINAL_N);
+
+    const parsed = parseDiscoveryResult({
+      products: ranked.products,
+      consensus: ranked.consensus,
+      topProducts: top_products,
+    });
+    expect(parsed.topProducts).toHaveLength(DISCOVERY_FINAL_N);
+    expect(parsed.topProducts[0]!.id).toBe("fp-0");
+    expect(parsed.topProducts[0]!.selection_reason).toContain("Trend gücü");
+  });
+
+  it("sözleşme yoksa ya da bozuksa okuyucu PATLAMAZ, boş döner", () => {
+    expect(parseDiscoveryResult({ products: [{ name: "A" }] }).topProducts).toEqual([]);
+    expect(parseDiscoveryResult(null).topProducts).toEqual([]);
+    expect(parseDiscoveryResult({ topProducts: "çöp" }).topProducts).toEqual([]);
+    // Eksik alanlı satır elenir (yarım gerekçe gösterilmez).
+    expect(
+      parseDiscoveryResult({ topProducts: [{ id: "a", title: "b" }] }).topProducts,
+    ).toEqual([]);
+  });
+
+  it("`final` adımı sözleşmeyi kalıcı sonuca yazar", async () => {
+    const src = await read("src/lib/product-discovery-steps.server.ts");
+    expect(src).toContain("topProducts: top_products");
+    // Yazım `finishDiscoveryJob` gövdesinin İÇİNDE olmalı: yalnız dönüş
+    // değerine koymak sözleşmeyi yine ölü bırakırdı.
+    const finishCall = src.slice(src.indexOf("await finishDiscoveryJob("));
+    expect(finishCall.slice(0, 600)).toContain("topProducts: top_products");
+  });
+
+  it("kalıcı sonuç şekli sözleşme alanını taşır", async () => {
+    const src = await read("src/lib/product-discovery-jobs.server.ts");
+    expect(src).toMatch(/export type DiscoveryFinalResult[\s\S]*?topProducts\?: unknown\[\]/);
+  });
+
+  it("sunucu fonksiyonu sözleşmeyi istemciye döner", async () => {
+    const src = await read("src/lib/product-discovery.functions.ts");
+    expect(src).toContain('z.array(TopProductSchema).safeParse(record["topProducts"])');
+    expect(src).toContain("topProducts: TopProduct[]");
+  });
+
+  it("istemci hook'u sözleşmeyi koşu durumuna bağlar", async () => {
+    const src = await read("src/features/finder/hooks/use-product-discovery.ts");
+    expect(src).toContain("topProducts: TopProduct[]");
+    expect(src).toContain("res.result?.topProducts.length ? res.result.topProducts : prev.topProducts");
+  });
+
+  it("arayüz gerekçeyi kartlara geçirir", async () => {
+    const route = await read("src/routes/discover.tsx");
+    expect(route).toContain("topProducts={d.run.topProducts}");
+    expect(route).toContain("reason={reasonFor(w)}");
+    const card = await read("src/features/finder/components/discovery-winner-card.tsx");
+    expect(card).toContain("Neden seçildi:");
   });
 });
 

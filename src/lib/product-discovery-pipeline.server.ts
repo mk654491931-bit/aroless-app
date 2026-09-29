@@ -26,9 +26,11 @@ import { z } from "zod";
 
 import {
   canTransition,
+  TopProductSchema,
   type Consensus,
   type NormalizedProduct,
   type ProductDiscoveryStatus,
+  type TopProduct,
 } from "./product-discovery.types";
 
 /**
@@ -51,6 +53,15 @@ export const DISCOVERY_FINAL_N = 5;
 /* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
 
 /**
+ * `TopProductSchema` artık paylaşılan tipler katmanında tanımlıdır
+ * (`product-discovery.types`): aynı şemayı istemci hook'u da okur, sunucu
+ * modülünü tarayıcı paketine sokmak gerekmez. Buradan yeniden dışa aktarılır,
+ * böylece mevcut sunucu tarafı import'ları kırılmaz.
+ */
+export { TopProductSchema };
+export type { TopProduct };
+
+/**
  * BAŞ ÜRÜN KURATÖRÜ ÇIKTISI — dışarıya verilen sözleşme.
  *
  * ALAN ADLARI VE SIRASI DIŞARI SÖZLEŞMESİDİR; panel ve istemciler buna göre
@@ -60,17 +71,9 @@ export const DISCOVERY_FINAL_N = 5;
  * `selection_reason` ÜRETİLEN METİN DEĞİL, SINYALLARDAN TÜRETİLEN KISA
  * GEREKÇEDİR — aşağıda `buildTopProducts` nasıl kurduğu yazılıdır.
  */
-export const TopProductSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  final_score: z.number().min(0).max(100),
-  selection_reason: z.string().min(1),
-});
-
 export const TopProductsPayloadSchema = z.object({
   top_products: z.array(TopProductSchema).max(DISCOVERY_FINAL_N),
 });
-export type TopProduct = z.infer<typeof TopProductSchema>;
 export type TopProductsPayload = z.infer<typeof TopProductsPayloadSchema>;
 
 /**

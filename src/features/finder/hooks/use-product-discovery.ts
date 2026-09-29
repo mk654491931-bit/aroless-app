@@ -35,6 +35,7 @@ import type {
   Consensus,
   ProductDiscoveryInput,
   ProductDiscoveryStatus,
+  TopProduct,
 } from "@/lib/product-discovery.types";
 
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
@@ -53,6 +54,12 @@ export type DiscoveryRun = {
   step: string | null;
   products: DiscoveryWinner[];
   consensus: Consensus[];
+  /**
+   * Nihai 5 ürünün sözleşmesi (`top_products`). Sunucu tarafında kalıcı sonuca
+   * yazıldığı için TÜM taşıyıcılarda (qstash / arka plan / yoklama) dolar;
+   * eski koşularda boştur ve arayüz sessizce ürün kartlarına düşer.
+   */
+  topProducts: TopProduct[];
   error: string | null;
 };
 
@@ -63,6 +70,7 @@ const EMPTY: DiscoveryRun = {
   step: null,
   products: [],
   consensus: [],
+  topProducts: [],
   error: null,
 };
 
@@ -145,6 +153,10 @@ export function useProductDiscovery(): {
           step: res.step || null,
           products: res.result?.products ?? prev.products,
           consensus: res.result?.consensus ?? prev.consensus,
+          // Sözleşme yalnız terminal sonuçta gelir; ara yoklamada üstüne
+          // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
+          topProducts:
+            res.result?.topProducts.length ? res.result.topProducts : prev.topProducts,
           error: res.error ?? null,
         }));
 

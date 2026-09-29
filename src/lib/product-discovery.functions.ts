@@ -44,7 +44,7 @@ import {
   MIN_STEP_BUDGET_MS,
   runDiscoveryChain,
 } from "@/lib/product-discovery-runner.server";
-import { ConsensusSchema } from "@/lib/product-discovery.types";
+import { ConsensusSchema, TopProductSchema, type TopProduct } from "@/lib/product-discovery.types";
 
 /**
  * Sunucu fonksiyonu JSON'a çevrilmek ZORUNDA olduğu için sonuç `unknown`
@@ -94,13 +94,24 @@ export type DiscoveryWinner = z.infer<typeof DiscoveryWinnerSchema>;
 export function parseDiscoveryResult(raw: unknown): {
   products: DiscoveryWinner[];
   consensus: z.infer<typeof ConsensusSchema>[];
+  /**
+   * Nihai 5 ürünün sözleşmesi.
+   *
+   * ZORUNLU DEĞİL: `final` adımından ÖNCE yazılmış satırlarda ve eski
+   * koşularda bu alan yoktur. O durumda boş liste döner (arayüz gerekçeyi
+   * göstermek yerine ürün kartlarını olduğu gibi basar), hata fırlatmaz —
+   * bir sonuç okunamadığında kullanıcı hata görür, boş gerekçe görmez.
+   */
+  topProducts: TopProduct[];
 } {
   const record = (raw ?? {}) as Record<string, unknown>;
   const products = z.array(DiscoveryWinnerSchema).safeParse(record["products"]);
   const consensus = z.array(ConsensusSchema).safeParse(record["consensus"]);
+  const topProducts = z.array(TopProductSchema).safeParse(record["topProducts"]);
   return {
     products: products.success ? products.data : [],
     consensus: consensus.success ? consensus.data : [],
+    topProducts: topProducts.success ? topProducts.data : [],
   };
 }
 
@@ -157,8 +168,12 @@ export type DiscoveryRunStatus = {
   status: string;
   progress: number;
   step: string;
-  /** Yalnız terminal durumda dolar: kazanan ürünler + uzlaşma. */
-  result: { products: DiscoveryWinner[]; consensus: z.infer<typeof ConsensusSchema>[] } | null;
+  /** Yalnız terminal durumda dolar: kazanan ürünler + uzlaşma + nihai 5'in gerekçesi. */
+  result: {
+    products: DiscoveryWinner[];
+    consensus: z.infer<typeof ConsensusSchema>[];
+    topProducts: TopProduct[];
+  } | null;
   error: string | null;
 };
 

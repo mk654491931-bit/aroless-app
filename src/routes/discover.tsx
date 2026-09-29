@@ -36,7 +36,7 @@ import { DiscoveryProgress } from "@/features/finder/components/discovery-progre
 import { DiscoveryWinnerCard } from "@/features/finder/components/discovery-winner-card";
 import { useProductDiscovery } from "@/features/finder/hooks/use-product-discovery";
 import { TARGET_COUNTRIES } from "@/lib/countries";
-import type { Consensus } from "@/lib/product-discovery.types";
+import type { Consensus, TopProduct } from "@/lib/product-discovery.types";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 
 export const Route = createFileRoute("/discover")({
@@ -217,7 +217,11 @@ function DiscoverPage() {
       )}
 
       {d.run.products.length > 0 && !d.isRunning && (
-        <DiscoveryResults products={d.run.products} consensus={d.run.consensus} />
+        <DiscoveryResults
+          products={d.run.products}
+          consensus={d.run.consensus}
+          topProducts={d.run.topProducts}
+        />
       )}
     </div>
   );
@@ -228,9 +232,12 @@ function DiscoverPage() {
 function DiscoveryResults({
   products,
   consensus,
+  topProducts,
 }: {
   products: DiscoveryWinner[];
   consensus: Consensus[];
+  /** `top_products` sözleşmesi — gerekçe metni buradan gelir. */
+  topProducts: TopProduct[];
 }): React.JSX.Element {
   // Uzlaşma tablosu parmak izine göre eşlenir; kart yalnızca kazanana bakar
   // ama "güven skoru neden bu?" sorusunu yanıtlamak için konsensüs gerekir.
@@ -239,6 +246,27 @@ function DiscoveryResults({
     [consensus],
   );
   const withConsensus = useMemo(() => consensusById.size > 0, [consensusById]);
+
+  // `top_products` sözleşmesini kartlara bağlar. Sunucu `id` alanına önce
+  // ürün kimliğini, sonra parmak izini yazar; kartın elimizdeki en güvenilir
+  // eşleme anahtarı da `fingerprint`. Başlık eşlemesi yalnız BİR YEDEK yoldur.
+  const reasonByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of topProducts) {
+      if (t.id) map.set(t.id.trim().toLowerCase(), t.selection_reason);
+      if (t.title) map.set(t.title.trim().toLowerCase(), t.selection_reason);
+    }
+    return map;
+  }, [topProducts]);
+
+  const reasonFor = (w: DiscoveryWinner): string | undefined => {
+    const fingerprint = w.fingerprint.trim().toLowerCase();
+    if (fingerprint) {
+      const hit = reasonByKey.get(fingerprint);
+      if (hit) return hit;
+    }
+    return reasonByKey.get(w.name.trim().toLowerCase());
+  };
 
   return (
     <div className="space-y-4">
@@ -257,7 +285,12 @@ function DiscoveryResults({
       <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
         <div className="space-y-4">
           {products.map((w, i) => (
-            <DiscoveryWinnerCard key={w.fingerprint || w.name || i} winner={w} rank={i + 1} />
+            <DiscoveryWinnerCard
+              key={w.fingerprint || w.name || i}
+              winner={w}
+              rank={i + 1}
+              reason={reasonFor(w)}
+            />
           ))}
         </div>
         <aside className="space-y-4">

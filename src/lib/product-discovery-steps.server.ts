@@ -277,6 +277,9 @@ export async function executeProductDiscoveryStep(args: {
           stats: job?.stats ?? null,
           stepStats: {},
           sources: job?.stats?.perSource ?? [],
+          // Nihai 5 ürünün sözleşmesi de KALICI SONUCUN parçasıdır: istemci
+          // sonucu `searches.result`ten okur, adım yanıtından değil.
+          topProducts: top_products,
         });
 
         return {

@@ -404,3 +404,24 @@ export const DiscoveryStepPayloadSchema = z.object({
   status: ProductDiscoveryStatusSchema.default("queued"),
 });
 export type DiscoveryStepPayload = z.infer<typeof DiscoveryStepPayloadSchema>;
+
+/* ---------------------------------- Nihai 5 ürünün dış sözleşmesi */
+
+/**
+ * BAŞ ÜRÜN KURATÖRÜ ÇIKTISI — dışarıya verilen sözleşme.
+ *
+ * ALAN ADLARI VE SIRASI DIŞARI SÖZLEŞMESİDİR; panel ve istemciler buna göre
+ * okur, değiştirmek onları kırar.
+ *
+ * NEDEN BURADA (paylaşılan tipler katmanı) ve `product-discovery-pipeline`
+ * içinde değil: bu şema hem sunucu hattı hem de İSTEMCİ hook'ları tarafından
+ * okunur. Sunucu modülünü istemciye import etmek `.server.ts` bağımlılığını
+ * tarayıcı paketine sokardı.
+ */
+export const TopProductSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  final_score: z.number().min(0).max(100),
+  selection_reason: z.string().min(1),
+});
+export type TopProduct = z.infer<typeof TopProductSchema>;

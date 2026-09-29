@@ -444,6 +444,17 @@ export type DiscoveryFinalResult = {
   stats: FilterStats | null;
   stepStats: Record<string, string[]>;
   sources: { name: string; ok: boolean; items: number; ms: number; error: string }[];
+  /**
+   * Nihai 5 ürünün `top_products` sözleşmesi.
+   *
+   * NEDEN AYRI ALAN (ve neden burada saklanıyor): sözleşme yalnız kazanan
+   * ürünlerden üretilir ve hat boyunca TAŞINMASI gereken son çıktıdır. Üretim
+   * yolu üç taşıyıcıdan biridir (qstash / in-process / inline) ve üçünde de
+   * kalıcı olan yalnız bu kolondur; adımın senkron HTTP yanıtı yalnız `inline`
+   * yoklamasında görülür. Sözleşme burada yazılmazsa istemci (ve `/api/jobs`
+   * okuyucusu) canlıda hiçbir zaman göremez.
+   */
+  topProducts?: unknown[];
 };
 
 /**

@@ -55,9 +55,16 @@ function fmtPrice(value: number | null | undefined): string {
 export function DiscoveryWinnerCard({
   winner,
   rank,
+  reason,
 }: {
   winner: DiscoveryWinner;
   rank: number;
+  /**
+   * `top_products` sözleşmesindeki `selection_reason` — üç ölçütün (trend,
+   * kâr/fiyat, rekabet) kısa, ÖLÇÜLMÜŞ karşılığı. Boşsa kart gerekçesiz
+   * kalır: eski koşularda sözleşme yoktur ve kart eski hâliyle çalışır.
+   */
+  reason?: string;
 }): React.JSX.Element {
   // `dataCompleteness` sunucu tarafında zod ile sınırlanır ama sütun ham
   // JSON'dan geldiği için burada da kelepçelenir: negatif "3 alan ölçülemedi"
@@ -135,6 +142,16 @@ export function DiscoveryWinnerCard({
           </span>
         ))}
       </div>
+
+      {/* NİHAİ 5 SÖZLEŞMESİ — kazananın neden seçildiğinin tek satırlık,
+          ölçülmüş özeti (trend · marj/fiyat · rekabet). Ajan gerekçelerinden
+          ayrıdır: bunlar kurator ölçütlerinin insan dili karşılığıdır. */}
+      {reason && (
+        <p className="rounded-lg bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground/80">Neden seçildi: </span>
+          {reason}
+        </p>
+      )}
 
       {/* Ajan gerekçeleri — konsensüs tek başına "neden?" sorusunu yanıtlamaz. */}
       {winner.evidence.length > 0 && (
