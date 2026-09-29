@@ -259,7 +259,16 @@ az yük) hem de AI kotasını yakmaz ("tüm motorlar meşgul" hatası ↓).
 
 | Servis | Ücretsiz sınır | Bu projedeki rolü |
 | --- | --- | --- |
-| Vercel Hobby | fonksiyon başına 300 sn (varsayılan = üst sınır), 2 GB / 1 vCPU, 4.5 MB gövde | Uygulama + `/api/worker` |
+| Vercel Hobby | fonksiyon başına 300 sn (AÇIKÇA yazılı), 1 GB bellek, 4.5 MB gövde | Uygulama + `/api/worker` |
+
+Hobby için `vercel.json` bilerek şunları sabitler:
+
+| Ayar | Değer | Neden |
+| --- | --- | --- |
+| `functions.**.maxDuration` | `300` | Tavan platformun varsayılanına bırakılırsa farklı bir değere düşebilir ve ağır hat fonksiyon ortasında kesilir (504 → kullanıcı “zaman aşımı”) |
+| `functions.**.memory` | `1024` | Hobby tavanı budur; boş bırakılırsa platform azaltır |
+| `NODE_OPTIONS` | `--max-old-space-size=768` | 1 GB lambda içinde V8 yığını tavana dayanınca süreç OOM ile ölür ve 500 üretir; açık tavan yerine anlaşılır heap hatası verir |
+| `regions` | `["fra1"]` | Nitro çıktısı tek bölgede üretilir; çok bölge Hobby’de ek ücret ve tutarsızlık getirir |
 | Upstash QStash | günde 1.000 mesaj, mesaj başına 1 MB, yanıt süresi en fazla 15 dk (tekrar denemeler de mesaj sayılır) | Ağır işi `202` ile arka plana atar; kota dolarsa hat istek içinde koşar (`discoveryFallbackDecision`) |
 | Upstash Redis | günlük komut kotası | AI/ürün önbelleği (kalıcı SWR katmanı) |
 | Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu, `ai_cache` (araç sonuçları dahil) |
