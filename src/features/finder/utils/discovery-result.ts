@@ -155,6 +155,12 @@ export function describeDiscoveryFailure(reason: string): string {
   if (raw === "empty_result") return "Hat kuruldu ama bu nişte ölçülebilir ürün bulunamadı.";
   if (raw === "run_not_visible") return "İş kaydı okunamadı; iş kaydı yazılamamış olabilir.";
   if (raw === "timeout") return "İş zaman aşımına uğradı.";
+  // 6) Zincirin taşıyıcısı öldü: kuyruktaki hiçbir adım ilerleme kaydetmedi.
+  //    Ölçülen belirti: ekranda "çalışıyor" yazısı YARIM SAAT boyunca
+  //    değişmeden kaldı. Artık bu sessiz ölüm dürüst bir hataya dönüşür.
+  if (raw === "stalled_no_carrier" || raw === "pipeline_stalled") {
+    return "Analiz zinciri takıldı: kuyruğa yayınlanan adımlardan hiçbiri ilerleme kaydetmedi (QStash teslimatı reddedilmiş veya zaman aşımına uğramış olabilir). Kredin iade edildi.";
+  }
   return raw ? `Yeni hat kurulamadı: ${raw.slice(0, 160)}` : "Yeni hat kurulamadı.";
 }
 

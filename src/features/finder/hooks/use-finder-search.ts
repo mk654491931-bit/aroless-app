@@ -73,6 +73,63 @@ const PIPELINE_POLL_MS = 1_500;
 /** Güvenlik zamanlayıcısı yoklama bütçesinin hemen üstünde kalsın ki mesajı yoklama üretsin. */
 const SAFETY_GRACE_MS = 15_000;
 
+/**
+ * YOKLAMANIN GERÇEK TAVANI — ÖNCEKİ HATANIN ÖLDÜRDÜĞÜ YER.
+ *
+ * Ölçülen hata: döngü `PIPELINE_TOTAL_WAIT_MS` (280 + 240 = 520 sn ≈ 8,7 dk)
+ * dolunca `still-running` dönüyor ve yoklama **tamamen** bitiyordu. Sonuç:
+ *   • Kullanıcı ekranda "Analiz sunucuda çalışmaya devam ediyor" yazısını
+ *     YARIM SAATTİR görüyordu (ölçüldü) ama o döngü çoktan ölmüştü.
+ *   • `runId` hiçbir yerde saklanmadığı için sayfayı kapatıp geri dönmek de
+ *     işe yaramıyordu: koşu kimliği kayboluyor, sonuç ASLA ekrana dönemiyordu.
+ *   • QStash teslimatı bir kez takılsa (401, zaman aşımı, yeniden deneme
+ *     bitmesi) istemcinin 90 sn'lik "bayat satırı devral" mekanizması ÇALIŞMAZ
+ *     hale geliyordu — çünkü devralmayı yapan şey yoklamaydı ve o çoktan
+ *     kapanmıştı. Zincir ölü kalıyordu.
+ *
+ * DÜZELTME: yoklama terminal duruma kadar SÜRER. Tavan kaldırılmadı, yalnızca
+ * çok uzağa çekildi: sunucu tarafındaki watchdog (bkz. `advanceDiscoveryRun`)
+ * bu tavanın ötesinde işi dürüstçe `failed` yapıp gerçek sebebi yazar, yani
+ * istemci sonsuza kadar beklemez — ama SEBEP GÖRÜR.
+ */
+const PIPELINE_HARD_CAP_MS = 30 * 60_000;
+
+/**
+ * Sayfa yenilenince koşuyu kaldığı yerden sürdürmek için gereken bilgi.
+ *
+ * Neden `localStorage`: kullanıcı "sayfayı kapatıp birazdan geri dön" mesajını
+ * görüyor — bu davet ancak koşu kimliği kalıcıysa yerine getirilebilir.
+ * Kimlik kaybolursa davet boşa çıkar ve kullanıcı sonsuza kadar bekler.
+ */
+const ACTIVE_RUN_KEY = "aroless.activeDiscoveryRun";
+
+type StoredActiveRun = {
+  runId: string;
+  vars: GenVars;
+  startedAt: number;
+};
+
+function readStoredRun(): StoredActiveRun | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(ACTIVE_RUN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredActiveRun;
+    if (typeof parsed?.runId !== "string" || !parsed.vars) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredRun(entry: StoredActiveRun | null): void {
+  try {
+    if (entry) globalThis.localStorage?.setItem(ACTIVE_RUN_KEY, JSON.stringify(entry));
+    else globalThis.localStorage?.removeItem(ACTIVE_RUN_KEY);
+  } catch {
+    /* Gizli sekme / kota dolu: sessizce yok sayılır, akış yine çalışır. */
+  }
+}
+
 function positiveNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -432,8 +489,14 @@ export function useFinderSearch(opts: {
       // Yeni hat GERÇEKTEN kuruldu (kredi düşüldü, iş kaydı açıldı, ilk adım
       // kuyruğa alındı). Bundan sonra modal doğru adımları göstermeli.
       setDiscoveryPipelineActive(true);
+      // Koşu kimliği KALICI: kullanıcı sayfayı kapatıp geri dönerse de
+      // sonuç ekrana dönebilsin. Önceden runId yalnız bu döngünün yerel
+      // değişkeniydi; döngü bitince ya da sayfa kapanınca KALICI OLMAYAN
+      // tek şeydi ve "yarım saat" boyunca ekranda dönen mesajın tek
+      // güvencesiydi — ama o mesajın gösterdiği işe bir daha ulaşılamıyordu.
+      writeStoredRun({ runId: started.runId, vars, startedAt: Date.now() });
       const foregroundDeadline = Date.now() + PIPELINE_MAX_WAIT_MS;
-      const totalDeadline = foregroundDeadline + PIPELINE_BACKGROUND_WAIT_MS;
+      const hardDeadline = Date.now() + PIPELINE_HARD_CAP_MS;
       let background = false;
       for (;;) {
         const state = await getDiscoveryRunFn({ data: { runId: started.runId } });
@@ -468,12 +531,21 @@ export function useFinderSearch(opts: {
           }
           return { ok: true, rows };
         }
-        if (Date.now() >= totalDeadline) {
-          // İş hâlâ `processing`: bu bir hata değil, dürüst bir durum.
-          return { ok: false, fallback: true, reason: "still-running", paid: true };
+        if (Date.now() >= hardDeadline) {
+          // Tavan GERÇEKTEN doldu (sunucu watchdog'u devreye girmemişse).
+          // Dürüst davranış: sebebi oku ve kullanıcıya GERÇEK HATA olarak yaz.
+          // Eskiden bu dal yoktu ve döngü burada sessizce ölüyordu.
+          return {
+            ok: false,
+            fallback: false,
+            reason: state.error ?? "pipeline_stalled",
+            paid: true,
+          };
         }
         // Ön plan bitti → kullanıcıya "hâlâ çalışıyor" bilgisi ver, yoklamayı
-        // yavaşlatıp sürdür. Zaman aşımı HATA KARTI üretmez.
+        // yavaşlatıp SÜRDÜR. Zaman aşımı HATA KARTI üretmez ve döngü ÖLMEZ:
+        // QStash teslimatı takılırsa istemcinin "bayat satırı devral"
+        // mekanizması ancak bu devam eden yoklama sayesinde çalışır.
         if (!background && Date.now() >= foregroundDeadline) {
           background = true;
           setStillRunning(true);
@@ -521,6 +593,10 @@ export function useFinderSearch(opts: {
           // kalıcı yazıyor; ekranda kırmızı bir "zaman aşımı" kartı göstermek
           // hem yanlış hem de kullanıcıyı sonucu göremeyeceği bir ölü noktaya
           // iterdi. Sonuç hazır olduğunda sayfa yeniden okununca görünür.
+          //
+          // NOT: yoklama döngüsü artık terminal duruma kadar SÜRDÜĞÜ için bu
+          // dal yalnız zincirin istemci yoklamasından bağımsız ilerlediği
+          // güvenlik halinde devreye girer.
           setStillRunning(true);
           setStalled(false);
           setFallbackNotice(
@@ -556,6 +632,9 @@ export function useFinderSearch(opts: {
         return;
       }
       const products = attachWinnerScores(toWinningProducts(outcome.rows, outcome.rows));
+      // Koşu bitti: kalıcı kaydı temizle ki sayfa yenilendiğinde "bitmiş bir
+      // koşuyu bekleme" durumu oluşmasın.
+      writeStoredRun(null);
       partialDeliveredRef.current = false;
       setEnriching(false);
       setCouncilPending(false);
@@ -629,6 +708,9 @@ export function useFinderSearch(opts: {
       setSearchAttempt(nicheValue);
       setStalled(false);
       setStillRunning(false);
+      // Yeni arama başlatılıyor: önceki koşunun kalıcı kaydı temizlenir,
+      // yoksa sayfa yenilenince YANLIŞ koşu devam ettirilirdi.
+      writeStoredRun(null);
       setEnriching(false);
       setCouncilPending(false);
       partialDeliveredRef.current = false;
@@ -742,6 +824,89 @@ export function useFinderSearch(opts: {
     return () => {
       if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     };
+  }, []);
+
+  /**
+   * SAYFA YENİLENİNCE BEKLEYEN KOŞUYU SÜRDÜR.
+   *
+   * Ölçülen hata: kullanıcı ekranda "Analiz sunucuda çalışmaya devam ediyor…
+   * sayfayı kapatıp birazdan geri dönebilirsin" yazısını YARIM SAAT gördü.
+   * Bu davet işe yaramıyordu: `runId` yalnız yoklama döngüsünün yerel
+   * değişkeniydi, döngü bittiğinde kayboluyordu. Sayfa yenilendiğinde
+   * istemci yeni bir döngü açmıyor, terminal durumu hiç okunmuyor ve
+   * `stillRunning` bayrağı da kaybolduğu için kullanıcı ne ürün ne de hata
+   * görüyordu — yalnızca dönen bir yazı.
+   *
+   * DÜZELTME: koşu kimliği `localStorage`'da durur ve sayfa yüklendiğinde
+   * terminal duruma kadar yeniden yoklanır. Böylece mesaj verilen söz tutulur.
+   */
+  useEffect(() => {
+    const stored = readStoredRun();
+    if (!stored) return;
+    // Çok eski bir kayıt (sunucu watchdog'u çoktan devreye girmiş olmalı):
+    // istemci onu sürdürmez, doğrudan sunucunun dürüst hatasını okur.
+    if (Date.now() - stored.startedAt > PIPELINE_HARD_CAP_MS + SAFETY_GRACE_MS) {
+      writeStoredRun(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchAttempt(stored.vars.niche);
+    setStillRunning(true);
+    setDiscoveryPipelineActive(true);
+    // `pipeline` henüz tanımlı değil — yalnız YOKLAMA yapacağımız için
+    // `getDiscoveryRunFn`i doğrudan kullanırız (döngüyü çalıştırmadan).
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const state = await getDiscoveryRunFn({ data: { runId: stored.runId } });
+          if (cancelled) return;
+          if (!state.ok) break;
+          if (state.status === "failed") {
+            writeStoredRun(null);
+            setStillRunning(false);
+            setDiscoveryPipelineActive(false);
+            setSearchError({
+              kind: "server",
+              title: "Arama motoru çalışamadı",
+              body: describeDiscoveryFailure(state.error ?? "pipeline_failed"),
+              hint: "Sık görülen nedenler: Supabase servis rolü anahtarı eksik ya da migration uygulanmamış.",
+              niche: stored.vars.niche,
+            });
+            return;
+          }
+          if (state.status === "completed") {
+            const rows = state.result?.products ?? [];
+            writeStoredRun(null);
+            setStillRunning(false);
+            setDiscoveryPipelineActive(false);
+            if (rows.length > 0) {
+              const products = attachWinnerScores(toWinningProducts(rows, rows));
+              opts.onResults(products, [], null);
+              toast.success(`${products.length} ürün 14 ajan konsesiyle seçildi.`);
+            } else {
+              setSearchError({
+                kind: "unknown",
+                title: "Bu nişte ölçülebilir ürün bulunamadı",
+                body: describeDiscoveryFailure("empty_result"),
+                hint: "",
+                niche: stored.vars.niche,
+              });
+            }
+            return;
+          }
+        } catch {
+          // Ağ tekrarı: sessizce yeniden dene, koşu sunucuda yaşıyor.
+        }
+        await new Promise((resolve) => setTimeout(resolve, PIPELINE_BACKGROUND_POLL_MS));
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+    // Kasıtlı olarak yalnız bir kez: koşu kimliği mount'ta bir kez okunur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

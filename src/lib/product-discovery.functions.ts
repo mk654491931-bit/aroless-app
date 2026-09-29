@@ -131,6 +131,21 @@ const FEATURE = "agent-pipeline" as const;
 const DRIVER_BUDGET_MS = 150_000;
 
 /**
+ * HİÇBİR TAŞIYICI İLERLEME KAYDETMEDEN GEÇEBİLECEĞİ EN UZUN SÜRE.
+ *
+ * NEDEN VAR: zincirin sahibi QStash'tir ve bir adım teslimatı başarısız
+ * olduğunda (401, zaman aşımı, yeniden denemelerin bitmesi) SATIR HİÇBİR
+ * ZAMAN GÜNCELLENMEZ — `processing`e takılı kalır. Ölçülen belirti: kullanıcı
+ * "Analiz sunucuda çalışmaya devam ediyor" yazısını yarım saat gördü.
+ *
+ * Değer `STALE_STEP_TAKEOVER_MS`in (90 sn) birçok katıdır: 90 sn, yoklamanın
+ * "kuyruk ölmüş olabilir, devral" demesi için gereken süredir; bu eşik ise
+ * devralma da yetmezse işin GERÇEKTEN ölü sayılacağı noktadır. Aradaki
+ * fark dürüstlük payıdır: adımlar kuyrukta beklerken satır güncellenmez.
+ */
+const STALLED_RUN_ABANDON_MS = 20 * 60_000;
+
+/**
  * Sürücü bütçesi: platformun istek tavanından türetilir (yanıt için 20 sn pay).
  *
  * NEDEN `interactiveRequestBudgetMs` DEĞİL: o bütçe etkileşimli (hızlı) uçlar
@@ -405,6 +420,30 @@ export const advanceDiscoveryRun = createServerFn({ method: "POST" })
     // Arka plan işi (kalıcı süreç) bu koşuyu zaten sürüyorsa ikinci bir
     // sürücü başlatmayız: iş ikiye katlanır ve gereksiz AI maliyeti doğar.
     const backgroundOwned = isBackgroundJobRunning(data.runId);
+
+    // SUNUCU WATCHDOG'U — ÖLÜ NOKTANIN KAPANMASI.
+    //
+    // Ölçülen hata: bir koşu `processing` durumunda KALICI olarak takılabiliyor
+    // (QStash teslimatı 401 alır, yeniden denemeler biter, bir adım çöküp
+    // zincir sonraki adımı yayınlamaz). Ölçülen belirti: kullanıcı EKRANDA
+    // "Analiz sunucuda çalışmaya devam ediyor" yazısını YARIM SAAT gördü ve
+    // mesaj asla değişmedi — çünkü satır ne `completed` ne `failed` oluyordu.
+    // Yani bu bir "yavaşlık" değil, sessiz bir ÖLÜM'dü ve kullanıcıya
+    // ne sebep ne de sonuç gösteriliyordu.
+    //
+    // DÜZELTME: hiçbir taşıyıcı ilerleme kaydetmemişse iş dürüstçe `failed`
+    // yapılır ve kredi bir kez iade edilir. Böylece "yarım saat" yerine
+    // kullanıcı GERÇEK SEBEBİ görür.
+    if (!terminal && !backgroundOwned && job.updatedAt !== null) {
+      if (Date.now() - job.updatedAt > STALLED_RUN_ABANDON_MS) {
+        await failAndRefund(
+          data.runId,
+          "stalled_no_carrier",
+          (amount) => refundFeatureCredits(job.userId, amount, "stalled"),
+        );
+        return (await readRunSnapshot(data.runId, context.userId)) ?? { ok: false as const };
+      }
+    }
 
     // QSTASH SAHİPLERİNİ, YOKLAMA DEĞİL.
     //

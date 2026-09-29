@@ -38,12 +38,29 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     expect(handler).toContain("setStillRunning(true)");
   });
 
-  it("yoklama döngüleri ön planı aşınca arka planda devam eder", async () => {
+  it("yoklama döngüsü terminal duruma kadar SÜRER (sabit tavanla ölmez)", async () => {
     const src = await read(HOOK);
     // Ön plan bittiğinde iş "ölmez": yavaşlayan yoklama sürer, terminal durumda
     // sonuç teslim edilir. Kullanıcı yalnız bilgilendirilir.
     expect(src).toContain("PIPELINE_BACKGROUND_WAIT_MS");
-    expect(src).toContain('reason: "still-running"');
+    // ÖLÇÜLEN HATA: döngü 520 sn'de "still-running" dönüp KAPANIYORDU. Ekranda
+    // dönen "çalışıyor" yazısı yarım saat görünürken yoklama çoktan ölmüştü
+    // ve QStash teslimatı takılırsa "bayat satırı devral" mekanizması hiç
+    // çalışmıyordu. Döngü artık yalnız çok uzak bir tavana kadar sürer ve
+    // o tavanı aşınca da sessizce ölmek yerine GERÇEK SEBEP yazar.
+    expect(src).toContain("PIPELINE_HARD_CAP_MS");
+    expect(src).not.toContain('reason: "still-running", paid: true');
+    expect(src).toContain('state.error ?? "pipeline_stalled"');
+  });
+
+  it("koşu kimliği kalıcıdır: sayfa yenilenince sonuç ekrana döner", async () => {
+    const src = await read(HOOK);
+    // "Sayfayı kapatıp geri dön" mesajı ancak runId saklanıyorsa tutar.
+    // Önceden runId yalnız yerel değişkendi: döngü bitince ya da sayfa
+    // kapanınca kayboluyor, dönüşte ne ürün ne hata görünüyordu.
+    expect(src).toContain("ACTIVE_RUN_KEY");
+    expect(src).toContain("writeStoredRun");
+    expect(src).toContain("readStoredRun");
   });
 
   it("bu durum arayüzde hata kartı DEĞİL, bilgi şeridi olarak görünür", async () => {
@@ -82,6 +99,27 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
  * izliyordu; o da bittiğinde ekranda yalnız "zaman aşımına uğradı" yazıyordu.
  * Gerçek sebep — ne olursa olsun — ekrana hiç ulaşmıyordu.
  */
+describe("sessiz ölüm kapatılır: takılan koşu dürüstçe başarısız olur", () => {
+  it("sunucu watchdog'u ilerleme yoksa işi failed yapar", async () => {
+    const src = await read("src/lib/product-discovery.functions.ts");
+    // Ölçülen belirti: satır `processing`e KALICI takılıyordu (QStash
+    // teslimatı 401 alır, yeniden denemeler biter, adım sonrakini
+    // yayınlamaz). Ne completed ne failed olduğu için kullanıcı ekranda
+    // "çalışıyor" yazısını YARIM SAAT gördü ve mesaj hiç değişmedi.
+    expect(src).toContain("STALLED_RUN_ABANDON_MS");
+    expect(src).toContain("stalled_no_carrier");
+    // Kredi de bir kez iade edilmeli: kullanıcı ürün de alamadı.
+    expect(src).toContain("failAndRefund");
+  });
+
+  it("sessiz ölüm kullanıcıya anlaşılır sebep olarak yazılır", async () => {
+    const src = await read("src/features/finder/utils/discovery-result.ts");
+    expect(src).toContain("stalled_no_carrier");
+    expect(src).toContain("Kredin iade edildi");
+  });
+});
+
+
 describe("gerçek hat durumunda klasik hat devreye girmez", () => {
   it("başarısız iş `fallback: false` döner", async () => {
     const src = await read(HOOK);
