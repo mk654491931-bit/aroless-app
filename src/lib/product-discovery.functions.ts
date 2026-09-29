@@ -40,6 +40,7 @@ import {
 } from "@/lib/product-discovery-jobs.server";
 import { enqueueDiscoveryStep } from "@/lib/product-discovery-qstash.server";
 import {
+  clientDrivesChain,
   discoveryRunnerMode,
   MIN_STEP_BUDGET_MS,
   runDiscoveryChain,
@@ -404,7 +405,22 @@ export const advanceDiscoveryRun = createServerFn({ method: "POST" })
     // Arka plan işi (kalıcı süreç) bu koşuyu zaten sürüyorsa ikinci bir
     // sürücü başlatmayız: iş ikiye katlanır ve gereksiz AI maliyeti doğar.
     const backgroundOwned = isBackgroundJobRunning(data.runId);
-    if (!terminal && !backgroundOwned) {
+
+    // QSTASH SAHİPLERİNİ, YOKLAMA DEĞİL.
+    //
+    // Ölçülen hata: yoklama isteği zinciri KOŞUDUĞU için QStash'e yayınlanan
+    // adımlar kuyrukta beklerken aynı adım tarayıcının isteği içinde
+    // çalışıyordu. Yani kuyruk kurulu olmasına rağmen ağır iş yine tek bir
+    // HTTP isteğinde bitiyor, o istek platform tavanına dayanıyor ve kullanıcı
+    // "Arka plan analizi zaman aşımına uğradı" kartını görüyordu.
+    //
+    // DÜZELTME: kuyruk yapılandırılmışsa yoklama yalnız DURUMU okur
+    // (`clientDrivesChain`). Zinciri kuyruğun taşıması için istemci sekmesinin
+    // açık kalmasına gerek yok. Satır bayatladığında yoklama devralır, yani
+    // kuyruk sessizce ölürse iş yine bırakılmaz.
+    const queueDrives = !clientDrivesChain(discoveryRunnerMode(), job.updatedAt);
+
+    if (!terminal && !backgroundOwned && !queueDrives) {
       try {
         // Girdi (niş/ülke/platform/topN) `/start`ta `searches.params`e yazıldı:
         // istemciden yeniden almak, her yoklamada gövde taşımak ve gövdeye

@@ -104,6 +104,33 @@ export const STALE_STEP_TAKEOVER_MS = 90_000;
 /** Bir adımı başlatmak için gereken en küçük bütçe (ms). */
 export const MIN_STEP_BUDGET_MS = 25_000;
 
+/**
+ * Tarayıcının yoklaması zinciri KOŞMALI mı?
+ *
+ * ÖLÇÜLEN HATA: yoklama isteği her koşulda adımı sahiplenip çalıştırıyordu.
+ * QStash kurulu olsa bile kuyruğa yayınlanan adım, tarayıcının isteği içinde
+ * önce sahipleniliyordu; yani ağır iş yine tek HTTP isteğinde bitiyor, istek
+ * platform tavanına dayanıyor ve kullanıcı "Arka plan analizi zaman aşımına
+ * uğradı" kartını görüyordu. Kuyruk kurmanın sebebi tam olarak bunu taşımamaktı.
+ *
+ * KURAL:
+ *   • `qstash` değilse → yoklama sürücüdür (mevcut davranış; kuyruk yok).
+ *   • `qstash` ise      → kuyruk sahiplenir, yoklama YALNIZ okur.
+ *   • Ancak satır `STALE_STEP_TAKEOVER_MS` boyunca güncellenmediyse kuyruk
+ *     sessizce ölmüş demektir; yoklama devralır (kayıp olan taraf böyle korunur).
+ *
+ * @param updatedAt satırın son yazılma anı; `null` okunamadı → devral.
+ */
+export function clientDrivesChain(
+  mode: DiscoveryRunnerMode,
+  updatedAt: number | null,
+  now: number = Date.now(),
+): boolean {
+  if (mode !== "qstash") return true;
+  if (updatedAt === null) return true;
+  return now - updatedAt >= STALE_STEP_TAKEOVER_MS;
+}
+
 export type StepClaim =
   | { state: "claimed"; job: DiscoveryJobRecord }
   /** Başka bir sürücü adımı aldı ya da hâlâ koşuyor. */
@@ -197,6 +224,16 @@ export async function runOneDiscoveryStep(args: {
   const batch = args.batch?.length ? args.batch : (checkpoint?.shortlist ?? []);
   const consensus = args.consensus?.length ? args.consensus : (checkpoint?.votes ?? []);
 
+  // Adım bütçesi SABİT 200 sn DEĞİL, teslimatın GERÇEK penceresinden türetilir
+  // (`Upstash-Timeout`). Neden: teslimat penceresi işçinin barındığı host'a göre
+  // değişir (Vercel 298 sn, kalıcı süreç 890 sn) ve sabit bir değer ya gereksiz
+  // zaman yakar ya da teslimatı platform öldürür. 20 sn yanıt payı bırakılır ki
+  // adım platformdan ÖNCE kendi kendine durup ara sonuçla dönsün.
+  const deliveryWindowMs = Math.max(
+    MIN_STEP_BUDGET_MS,
+    (await import("./discovery-jobs.server")).qstashTimeoutSeconds() * 1000 - 20_000,
+  );
+
   const outcome = await executeProductDiscoveryStep({
     step: args.step,
     runId: args.runId,
@@ -204,8 +241,7 @@ export async function runOneDiscoveryStep(args: {
     input: args.input,
     batch,
     consensus,
-    // Kuyruk teslimatında alt sınır: adım kendi varsayılan bütçesini kullanır.
-    ...(args.deadlineAt !== undefined ? { deadlineAt: args.deadlineAt } : {}),
+    deadlineAt: args.deadlineAt ?? Date.now() + deliveryWindowMs,
   });
 
   if (!outcome.ok) return { ok: false, error: outcome.error };
