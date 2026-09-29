@@ -223,6 +223,27 @@ demesinin üç ayrı sebebi burada ADIYLA görünür:
 eksikliğidir: `jobStore()` servis rolü olmadan iş kaydı açamaz ve arayüz bunu
 göremeden eski hatta iner. Bu anahtar **anon değil, service-role** olmalıdır.
 
+#### Hat gerçek ağda doğrulandı
+
+Zincirin kendisi (kazıma → 75 → 25 → 14 ajan → 5) canlı ağda uçtan uca
+çalıştırılmış ve **çalıştığı kanıtlanmıştır** — üç gerçek nişte ölçülen süre:
+
+| Niş | Kazıma | → 75 | → 25 | 14 ajan | Toplam |
+| --- | --- | --- | --- | --- | --- |
+| air fryer | 4.2 sn | 41 aday | 25 | 5 ms | **4.2 sn** |
+| robot vacuum | 1.5 sn | 47 aday | 25 | 6 ms | **1.5 sn** |
+| standing desk | 1.8 sn | 56 aday | 25 | 2 ms | **1.8 sn** |
+
+Tekrarlamak için:
+
+```sh
+PRODUCT_DISCOVERY_E2E_LIVE=1 PRODUCT_DISCOVERY_E2E_NICHES="air fryer,robot vacuum" \
+  npx vitest run src/lib/product-discovery.e2e.live.test.ts
+```
+
+Bu, “zaman aşımına uğradı” belirtisinin **hattan değil, hatta ulaşan istekten /
+kuyruktan** kaynaklandığını gösterir: boru hattı saniyeler içinde bitiyor.
+
 #### Zincir süresi nerede harcanyor?
 
 `[discovery] adım bitti: <adım> <ms> · durum=… · ürün=… · oy=…` satırı
