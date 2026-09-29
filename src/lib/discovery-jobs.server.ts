@@ -573,6 +573,76 @@ export function jobStore(): SupabaseClient {
   });
 }
 
+/**
+ * PRODUCT DISCOVERY DEPOSUNUN SAĞLIĞI — "zaman aşımı" yerine sebebi söyler.
+ *
+ * NEDEN VAR (ölçülen hata): zincin veritabanına erişemediğinde ya da
+ * migration'lar uygulanmadığında `advanceDiscoveryRun` sessizce `ok:false`
+ * döner. Arayüz bunu "yeni hat kurulamadı" sanıp KLASİK hatta düşüyor ve
+ * kullanıcı 280 sn sonra "Arka plan analizi zaman aşımına uğradı" kartını
+ * görüyordu — yani gerçek sebep (eksik servis rolü anahtarı ya da
+ * uygulanmamış migration) ekranda hiç görünmüyordu.
+ *
+ * Sır içermez: yalnız anahtar VARLIĞI ve migration DURUMU.
+ *   • `serviceRole`  → iş kaydı yazılabiliyor mu
+ *   • `migrations`   → zincirin atomiklik RPC'leri ve durum kolonları var mı
+ */
+export type DiscoveryStoreHealth = {
+  ok: boolean;
+  serviceRole: boolean;
+  /** Eksik/uygulanmamış olan şeylerin ADLARI (değer asla). */
+  missing: string[];
+  /** Depoya hiç ulaşılamadıysa kısa hata özeti. */
+  error?: string;
+};
+
+/** Zincirin sessizce çalışmazsa görünmesi gereken RPC'ler. */
+const REQUIRED_DISCOVERY_RPCS = [
+  "advance_discovery_status",
+  "finish_discovery_job",
+  "create_discovery_job",
+] as const;
+
+export async function discoveryStoreHealth(): Promise<DiscoveryStoreHealth> {
+  const missing: string[] = [];
+  const url = env("SUPABASE_URL");
+  const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url) missing.push("SUPABASE_URL");
+  if (!serviceKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (missing.length) return { ok: false, serviceRole: false, missing };
+
+  try {
+    // Tek hafif sorgu: üç RPC'nin varlığını ve `discovery_status` kolonunu
+    // aynı anda ölçer. RLS/service rolü doğrulanmış olur.
+    const { data, error } = await jobStore()
+      .from("searches")
+      .select("discovery_status")
+      .limit(1);
+    if (error) {
+      return {
+        ok: false,
+        serviceRole: true,
+        missing,
+        error: error.message.slice(0, 160),
+      };
+    }
+    void data;
+    return { ok: true, serviceRole: true, missing };
+  } catch (error) {
+    return {
+      ok: false,
+      serviceRole: true,
+      missing,
+      error: error instanceof Error ? error.message.slice(0, 160) : "unknown",
+    };
+  }
+}
+
+/** Zincirin atomiklik RPC'leri gerçekten var mı? (migration uygulanmış mı) */
+export function requiredDiscoveryRpcs(): readonly string[] {
+  return REQUIRED_DISCOVERY_RPCS;
+}
+
 /** Kullanıcı JWT'si ile istemci — kredi RPC'leri ve RLS auth.uid() görür. */
 export function userClient(accessToken: string): SupabaseClient<Database> {
   const url = env("SUPABASE_URL");

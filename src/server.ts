@@ -18,6 +18,7 @@ import {
   qstashConfigured,
   discoverySignatureMode,
   remoteWorkerConfigured,
+  discoveryStoreHealth,
 } from "./lib/discovery-jobs.server";
 import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
 
@@ -159,6 +160,12 @@ export default {
               // anahtarın eksik olduğunu söyler. Bu ikisi aynı şey olmadığı
               // için ayrı raporlanır (eskiden sessizce çelişiyorlardı).
               discoveryChain: discoveryChainHealth(),
+              // ⚠️ Hattın İKİNCİ sessiz kırılma noktası: veritabanı.
+              // Servis rolü anahtarı yoksa ya da migration'lar uygulanmamışsa
+              // zincin `ok:false` döner ve arayüz sessizce klasik hatta düşer;
+              // kullanıcı da ancak 280 sn sonra "zaman aşımı" kartını görür.
+              // `missing` boş DEĞİLSE kurulum eksiktir (değerleri asla içermez).
+              discoveryStore: await discoveryStoreHealth(),
             },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),

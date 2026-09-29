@@ -202,6 +202,27 @@ Yeni hat (`/api/product-discovery/*`) dört adımlık QStash zinciridir ve Verce
 Eksik anahtar davranışı kontrollüdür: kredi düşülür, `503` döner ve kredi tam
 bir kez iade edilir — kullanıcı çalışmayan bir iş için ödeme yapmaz.
 
+#### Kurulumu 30 saniyede doğrulama: `/health`
+
+Zinciri çalıştırmadan önce **tek komut** yeterlidir:
+
+```sh
+curl -s https://<domain>/health | jq .workflow
+```
+
+Burada **üç** alana bak. Kullanıcının “Arka plan analizi zaman aşımına uğradı”
+demesinin üç ayrı sebebi burada ADIYLA görünür:
+
+| Alan | Sağlıklı değer | Semptom |
+| --- | --- | --- |
+| `discoveryChain.mode` | `"qstash"` | `inline` ise ağır hat tek istekte koşuyor, platform tavanına dayanır |
+| `discoveryChain.missing` | `[]` | Doluysa kuyruk kurulu **görünüyor** ama hiçbir adım çalışmıyor |
+| `discoveryStore.ok` | `true` | `false` ise iş kaydı yazılamıyor; zincin sessizce klasik hatta düşüyor ve 280 sn sonra zaman aşımı çıkıyor |
+
+`discoveryStore.missing` doluysa en sık sebep **`SUPABASE_SERVICE_ROLE_KEY`**
+eksikliğidir: `jobStore()` servis rolü olmadan iş kaydı açamaz ve arayüz bunu
+göremeden eski hatta iner. Bu anahtar **anon değil, service-role** olmalıdır.
+
 #### Zincir süresi nerede harcanyor?
 
 `[discovery] adım bitti: <adım> <ms> · durum=… · ürün=… · oy=…` satırı
