@@ -175,6 +175,31 @@ export type SetupReport = {
 };
 
 /**
+ * Aramayı BAŞLATMAYI engelleyen eksikler — yalnız veritabanı tarafı.
+ *
+ * NEDEN AYRI BİR LİSTE: `SetupReport.ok` QStash anahtarlarını da zorunlu
+ * sayar, ama QStash OLMAMAK hatı durdurmaz — zincin `inline` yolu (istemci
+ * yoklaması) çalışır, yalnız daha yavaştır. Bu yüzden `!ok` diye aramayı
+ * bloklamak SAĞLAM bir kurulumu kırardı.
+ *
+ * Buna karşılık veritabanı eksikleri HATTA ve KLASİK HATTA AYNI ANDA darbe
+ * vurur: iş kaydı açılamaz, arayüz sessizce klasik hatta düşer ve kullanıcı
+ * 280 sn sonra "zaman aşımına uğradı" kartını görür — gerçek sebep görünmez.
+ * İşte bu, engellenmesi gereken durum.
+ *
+ * Dönen değer: kullanıcıya gösterilecek düzeltme satırları (boşsa engel yok).
+ */
+const BLOCKING_SETUP_IDS = ["supabase_url", "supabase_service_role", "db_columns", "db_rpc"];
+
+export function blockingSetupIssues(report: SetupReport | null | undefined): string[] {
+  if (!report) return [];
+  const failed = new Map(
+    report.checks.filter((c) => !c.ok).map((c) => [c.id, c] as const),
+  );
+  return BLOCKING_SETUP_IDS.filter((id) => failed.has(id)).map((id) => failed.get(id)!.fix);
+}
+
+/**
  * Hat kurulamadığında ekranda gösterilecek TAM bildirim.
  *
  * NEDEN İKİ KAYNAK BİRLEŞTİRİLİYOR: (1) hat neden kurulamadı (ham hata metni

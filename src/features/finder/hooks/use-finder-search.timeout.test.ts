@@ -53,4 +53,23 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     expect(route).toContain("results.length === 0 && !stillRunning");
     expect(route).toContain("Analiz sunucuda çalışmaya devam ediyor");
   });
+
+  it("arama BAŞLATILMADAN önce kurulum denetimi yapılır", async () => {
+    const src = await read(HOOK);
+    // Sıralama kilitlidir: denetim, `pipeline.mutate` ÖNCESİ gelir.
+    const preflightAt = src.indexOf("blockingSetupIssues(report)");
+    const startAt = src.lastIndexOf("pipeline.mutate(vars)");
+    expect(preflightAt).toBeGreaterThan(-1);
+    expect(startAt).toBeGreaterThan(-1);
+    expect(preflightAt).toBeLessThan(startAt);
+    // Engellenirse kullanıcıya düzeltilebilir sebep yazılır ve iş BAŞLATILMAZ.
+    expect(src).toContain("kredi harcanmadı");
+    expect(src).toContain("Arama motoru kurulmamış");
+  });
+
+  it("denetim alınamazsa arama yine başlar (kontrol asla kilitlemez)", async () => {
+    const src = await read(HOOK);
+    // Rapor gelmezse klasik davranış: hat denenir.
+    expect(src).toContain("pipeline.mutate(vars);\n        });");
+  });
 });

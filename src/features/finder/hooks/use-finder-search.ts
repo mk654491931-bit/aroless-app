@@ -20,7 +20,7 @@ import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import { toWinningProducts, discoverySetupNotice } from "../utils/discovery-result";
+import { toWinningProducts, discoverySetupNotice, blockingSetupIssues } from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
@@ -611,13 +611,19 @@ export function useFinderSearch(opts: {
       // mutationFn içinde gerçek bütçeyle yeniden kurulur.
       armSafetyTimer(DEFAULT_POLL_MAX_MS + SAFETY_GRACE_MS);
 
-      // SEÇİCİ ARTIK TEK MOTOR: `llama`/`qwen`/`hybrid` seçenekleri kaldırıldı
-      // ve `normalizeEngineId` tarayıcıda kalmış eski bir seçimi de "default"a
-      // indirir (bkz. `src/lib/engines.ts`). Bu yüzden burada motor kontrolü
-      // YOK: yeni hat her zaman birincil yoldur; başlatma/sonuç başarısız
-      // olursa `pipeline` kendi içinde eski hatta (`gen`) düşer ve sebebi
-      // ekranda yazar.
-      pipeline.mutate({
+      // ── HAT ÖNCE DENETİMİ ────────────────────────────────────────────────
+      //
+      // Ölçülen hata: arama DÜZGÜN kurulmamış bir ortamda başlatılıyordu.
+      // İş kaydı açılamayınca zincin `ok:false` dönüyor, arayüz sessizce
+      // klasik hatta düşüyor ve kullanıcı 280 sn sonra "Arka plan analizi
+      // zaman aşımına uğradı" kartını görüyordu. Gerçek sebep (eksik servis
+      // rolü anahtarı / uygulanmamış migration) ekranda HİÇ görünmüyordu.
+      //
+      // Şimdi denetim ÖNCE yapılır: veritabanı tarafı eksikse iş hiç
+      // başlatılmaz — kredi yakılmaz, kullanıcı 280 sn beklemez, ekranda
+      // DÜZELTİLEBİLİR somut eksik yazar. QStash eksikliği engel DEĞİLDİR
+      // (`inline` yolu çalışır); yalnız veritabanı tarafı engeldir.
+      const vars: GenVars = {
         niche: nicheValue,
         category: opts.category,
         audience: opts.audience,
@@ -629,7 +635,30 @@ export function useFinderSearch(opts: {
         lang: opts.lang.slice(0, 2) ?? "en",
         use_github_trends: opts.useGithubTrends,
         ...opts.deepSearch,
-      });
+      };
+
+      void getPreflightFn({ data: {} })
+        .then((report) => {
+          const blocking = blockingSetupIssues(report);
+          if (blocking.length === 0) {
+            pipeline.mutate(vars);
+            return;
+          }
+          const body = blocking.join(" · ");
+          setSearchError({
+            kind: "server",
+            title: "Arama motoru kurulmamış",
+            body: `Kurulum eksik olduğu için arama başlatılmadı — kredi harcanmadı. Eksik: ${body}`,
+            hint: "Bu, geçici bir arıza değil: sunucu tarafında bir kurulum adımı eksik.",
+            niche: nicheValue,
+          });
+          setStalled(false);
+          if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+        })
+        .catch(() => {
+          // Denetim alınamazsa eski yolla devam: kontrol, aramayı ASLA engellemez.
+          pipeline.mutate(vars);
+        });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
