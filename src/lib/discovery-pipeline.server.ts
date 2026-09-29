@@ -1007,68 +1007,89 @@ JSON shape:
     const list = [...finalProducts];
     let enrichedCount = 0;
     let failures = 0;
-    for (let i = 0; i < councilLimit; i++) {
-      const carnetMs = councilEnrichCallMs(timeLeft(), plan.returnFloorMs);
-      const action = councilLoopDecision({ carnetMs, remaining: councilLimit - i, failures });
-      // Süre bitti ya da motorlar üst üste sustu: yarım karne üretmeden dururuz.
-      if (action !== "carnet") break;
-      const p = list[i];
-      try {
-        // Karne turu, bulucunun ZATEN topladığı canlı kanıtı (GitHub trendi +
-        // doğrulanmış pazar kanıtı) da görür: 14 ajan ile analiz hattı aynı
-        // veriye bakıp ORTAK karar verir, iki ayrı gerçeklik oluşmaz.
-        const extraEvidence = [githubBlock, liveBlock].filter(Boolean).join("\n\n");
-        const report = await runCouncil(
-          p.name,
-          country,
-          data.category,
-          "tr",
-          carnetMs,
-          "enrich",
-          extraEvidence,
-        );
-        const council: CouncilSummary = {
-          velora_score: report.velora_score,
-          verdict: report.verdict,
-          director_engine: report.director_engine,
-          executive_report: report.executive_report,
-          teams: report.teams.map((t: CouncilReport["teams"][number]) => ({
-            team: t.team,
-            title: t.title,
-            score: t.score,
-            engine: t.engine,
-            summary: t.summary,
-            review_score: t.review_score,
-            reviewer_engine: t.reviewer_engine,
-            review_note: t.review_note,
-            confidence: t.confidence,
-            weight: t.weight,
-          })),
-          action_plan: report.action_plan,
-          risks: report.risks,
-          cache_hit: report.cache_hit,
-          auditor_engine: report.auditor_engine,
-          auditor_score: report.auditor_score,
-          auditor_note: report.auditor_note,
-          confidence: report.confidence,
-          disagreement: report.disagreement,
-          data_coverage: report.data_coverage,
-          kill_criteria: report.kill_criteria,
-          depth: report.depth,
-          skipped_stages: report.skipped_stages,
-        };
-        // Karne gövdesi boşsa (tüm motorlar susmuş) ürünü karne ile etiketlemeyiz.
-        if (!council.executive_report && council.velora_score <= 0) {
+
+    // KARNELER PARALEL KOŞAR.
+    //
+    // Ölçülen hata: en iyi 3 ürünün karne turu SIRAYA koşuyordu ve her biri
+    // ~62 sn alabiliyordu → 186 sn, yani 280 sn'lik hat bütçesinin üçte ikisi
+    // yalnız karne için gidiyordu. Kullanıcı "zaman aşımına uğradı" kartını
+    // buradan görüyordu.
+    //
+    // Ürünler birbirinden BAĞIMSIZdır (her karne tek ürünü analiz eder), dolayısı
+    // ile paralel koşmak ürün/kalite değiştirmez; kazanç yalnız süredir. Bir
+    // karne çökerse O ÜRÜN deterministiğe düşer, diğerleri etkilenmez.
+    const carnetMs = councilEnrichCallMs(timeLeft(), plan.returnFloorMs);
+    const action = councilLoopDecision({
+      carnetMs,
+      remaining: councilLimit,
+      failures: 0,
+    });
+    // Süre tam bir karneye yetmiyorsa hiç karne başlatılmaz (yarım karne üretme).
+    const targets = action === "carnet" ? list.slice(0, councilLimit) : [];
+    if (targets.length === 0) {
+      skippedCouncil = true;
+      finalProducts = list;
+    } else {
+      const extraEvidence = [githubBlock, liveBlock].filter(Boolean).join("\n\n");
+      const settled = await Promise.allSettled(
+        targets.map((p) =>
+          runCouncil(p.name, country, data.category, "tr", carnetMs, "enrich", extraEvidence),
+        ),
+      );
+
+      settled.forEach((outcome, i) => {
+        const p = targets[i];
+        if (!p) return;
+        if (outcome.status === "rejected") {
           failures += 1;
-        } else {
-          list[i] = { ...p, council };
-          enrichedCount += 1;
-          failures = 0;
+          return;
         }
-      } catch {
-        failures += 1;
-      }
+        try {
+          const report = outcome.value;
+          const council: CouncilSummary = {
+            velora_score: report.velora_score,
+            verdict: report.verdict,
+            director_engine: report.director_engine,
+            executive_report: report.executive_report,
+            teams: report.teams.map((t: CouncilReport["teams"][number]) => ({
+              team: t.team,
+              title: t.title,
+              score: t.score,
+              engine: t.engine,
+              summary: t.summary,
+              review_score: t.review_score,
+              reviewer_engine: t.reviewer_engine,
+              review_note: t.review_note,
+              confidence: t.confidence,
+              weight: t.weight,
+            })),
+            action_plan: report.action_plan,
+            risks: report.risks,
+            cache_hit: report.cache_hit,
+            auditor_engine: report.auditor_engine,
+            auditor_score: report.auditor_score,
+            auditor_note: report.auditor_note,
+            confidence: report.confidence,
+            disagreement: report.disagreement,
+            data_coverage: report.data_coverage,
+            kill_criteria: report.kill_criteria,
+            depth: report.depth,
+            skipped_stages: report.skipped_stages,
+          };
+          // Karne gӧvdesi boşsa (tüm motorlar susmuş) ürünü karne ile
+          // etiketlemeyiz: karnesi olmayan ürün karnesi varmış gibi gösterilmez.
+          if (!council.executive_report && council.velora_score <= 0) {
+            failures += 1;
+          } else {
+            list[i] = { ...p, council };
+            enrichedCount += 1;
+          }
+        } catch {
+          failures += 1;
+        }
+      });
     }
+
     // Bayrak "karne HİÇ çıkmadı" demektir: bir ürün karne aldıysa kullanıcıya
     // "konsey atlandı" demek yanlış olurdu (kartta karne zaten görünüyor).
     skippedCouncil = enrichedCount === 0;

@@ -177,13 +177,18 @@ export function useFinderSearch(opts: {
   const armSafetyTimer = useCallback((maxWaitMs: number) => {
     if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
     searchSafetyTimerRef.current = setTimeout(() => {
-      setStalled(true);
-      // Artık 504 çerçevesi değil: bütçe platforma göre hesaplanıyor, bu yüzden
-      // kullanıcıya "arka plan analizi zaman aşımına uğradı" anlatılır.
-      setSearchError({
-        ...describeSearchFailure("DISCOVERY_JOB_TIMEOUT"),
-        niche: searchNicheRef.current,
-      });
+      // GÜVENLİK ZAMANLAYICISI HATA ÜRETMEZ — ARTık.
+      //
+      // Ölçülen hata: bu zamanlayıcı söndüğünde "Arka plan analizi zaman aşımına
+      // uğradı" KIRMIZI HATA KARTI gösteriyordu. Ama o an iş sunucuda çalışmaya
+      // devam ediyor ve sonucunu `searches.result`e yazıyordu; kullanıcı hem
+      // ürünü hem parasını kaybediyordu. Zamanlayıcı yalnız istemcinin UYGULAMA
+      // bütçesidir, sunucunun değil — bu yüzden hata üretemez.
+      //
+      // Yeni davranış: “hâlâ çalışıyor” durumu. Yoklama döngüleri kendi
+      // bütçelerinde çalışmaya devam eder, terminal durumda sonucu teslim eder.
+      setStalled(false);
+      setStillRunning(true);
     }, maxWaitMs);
   }, []);
 
@@ -533,6 +538,13 @@ export function useFinderSearch(opts: {
           hint: "",
           raw: err.message,
         });
+        return;
+      }
+      if (/DISCOVERY_JOB_(COUNCIL_TAIL_)?TIMEOUT/.test(err.message)) {
+        // Klasik hattın bekleme penceresi doldu. İş sunucuda çalışıyor olabilir:
+        // hata kartı yerine “hâlâ çalışıyor” durumu gösterilir.
+        setStillRunning(true);
+        setStalled(false);
         return;
       }
       opts.onClearResults();
