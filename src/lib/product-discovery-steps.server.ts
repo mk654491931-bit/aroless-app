@@ -29,10 +29,13 @@ import {
   writeDiscoveryProgress,
 } from "./product-discovery-jobs.server";
 import {
+  buildTopProducts,
+  DISCOVERY_FINAL_N,
   runDeepAnalysisStep,
   runFinalRankStep,
   runGeminiShortlistStep,
   runScrapeFilterStep,
+  type TopProduct,
 } from "./product-discovery-pipeline.server";
 import type { DiscoveryStep } from "./product-discovery-qstash.server";
 import type {
@@ -62,6 +65,11 @@ export type StepOutcome =
       progress: number;
       products: NormalizedProduct[];
       consensus: Consensus[];
+      /**
+       * Nihai 5 ürünün `top_products` sözleşmesi. Yalnız `final` adımı
+       * doldurur; diğer adımlarda kazanan henüz seçilmediği için `undefined`.
+       */
+      topProducts?: TopProduct[];
       stats?: FilterStats;
       notes: string[];
     }
@@ -239,6 +247,25 @@ export async function executeProductDiscoveryStep(args: {
           return { ok: false, error: "final sıralama başarısız." };
         }
 
+        // NİHAİ 5 — 14 ajanın oyununun TEK çıktısı, dış sözleşmeye çevrilir.
+        //
+        // Buradaki sıralama 14 ajanın uzlaşmış `councilScore`'udur; bu
+        // fonksiyon YENİDEN puanlama yapmaz, sadece kazanmış oyu dışarı
+        // verilen `top_products` şekline çevirir. `ranked.products` YALNIZCA
+        // kazananları içerir, bu yüzden `input.topN` (25) değil sonucun kendi
+        // uzunluğu (5) kullanılır: 25 oy satırından 5'ini yeniden seçmek,
+        // konseyin kararını ikinci bir kez sorgulamak olurdu.
+        //
+        // ÖNEMLİ: kaynak olarak `ranked.consensus` DEĞİL `ranked.products`
+        // verilir. O satırlarda yalnız `candidateId` ve skor vardır; ürün adı,
+        // parmak izi ve `signals` (talep/marj/rekabet) YOKTUR. Consensus
+        // satırlarını verseydik her ürün `id:"unknown"`, `title:"İsimsiz ürün"`
+        // ve "ölçülmedi" gerekçesiyle çıkardı — yani gerekçesiz bir liste.
+        const { top_products } = buildTopProducts(
+          (ranked.products ?? []) as never,
+          DISCOVERY_FINAL_N,
+        );
+
         const job = await readDiscoveryJob(runId);
         // Terminal yazma: `finish_discovery_job` yalnız `status='processing'`
         // iken yazar, bu yüzden iki teslimat çift sonuç üretemez.
@@ -259,6 +286,7 @@ export async function executeProductDiscoveryStep(args: {
           progress: 100,
           products: (ranked.products ?? []) as NormalizedProduct[],
           consensus: ranked.consensus as Consensus[],
+          topProducts: top_products,
           notes: ranked.notes,
         };
       }

@@ -70,6 +70,7 @@ export const TopProductSchema = z.object({
 export const TopProductsPayloadSchema = z.object({
   top_products: z.array(TopProductSchema).max(DISCOVERY_FINAL_N),
 });
+export type TopProduct = z.infer<typeof TopProductSchema>;
 export type TopProductsPayload = z.infer<typeof TopProductsPayloadSchema>;
 
 /**
@@ -96,6 +97,7 @@ export function buildTopProducts(
   ranked: readonly {
     fingerprint?: string;
     id?: string;
+    candidateId?: string;
     name?: string;
     title?: string;
     councilScore?: number;
@@ -137,7 +139,16 @@ export function buildTopProducts(
     );
 
     return {
-      id: (p.id ?? "").trim() || (p.fingerprint ?? "").trim() || "unknown",
+      // Sıra: kaynak kimliği → parmak izi → konsenyus `candidateId`.
+      // Sonuncusu ZORUNLU bir güvenlik ağıdır: `final` adımı normalde ürün
+      // satırlarını verir, ama ürün kaydı taşınmayan bir oy satırında
+      // (yalnız konsenyus döndü) kimlik boş kalırsa model cevabı kaynağına
+      // bağlayamaz.
+      id:
+        (p.id ?? "").trim() ||
+        (p.fingerprint ?? "").trim() ||
+        (p.candidateId ?? "").trim() ||
+        "unknown",
       title: (p.title ?? p.name ?? "").trim() || "İsimsiz ürün",
       final_score: score,
       selection_reason: parts.join(" · "),
@@ -163,6 +174,18 @@ export const DiscoveryStepResultSchema = z.object({
   products: z.array(z.any()).default([]),
   /** Uzlaşma sonuçları (yalnız deep_analysis sonrası). */
   consensus: z.array(z.any()).default([]),
+  /**
+   * NİHAİ 5 ÜRÜN — dış sözleşme (yalnız `final` adımında dolar).
+   *
+   * 14 ajanın oyu burada TEK bir çıktıya indirgenir. `products` ham normalize
+   * satırlar olduğu için istemcinin gördüğü "kazananlar" listesini üretmez;
+   * bu alan `top_products` sözleşmesini taşır.
+   *
+   * BİLEREK OPSİYONEL: yalnız `final` adımı doldurur. Zorunlu olsaydı
+   * `scrape_filter` / `gemini` / `deep` adımlarının dönüşleri de bu alanı
+   * uydurmak zorunda kalırdı; oysa o adımlarda kazanan henüz yok.
+   */
+  topProducts: z.array(z.any()).optional(),
   stats: z.any().optional(),
   /** Sonraki adımın tetiklenip tetiklenmediği. */
   next: z.string().default(""),

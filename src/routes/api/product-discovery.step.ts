@@ -97,7 +97,7 @@ export const Route = createFileRoute("/api/product-discovery/step")({
         }
 
         // 5) SONRAKİ ADIMI KUYRUĞA AL — yalnız bu adım bizde koştuktan sonra.
-        const { products, consensus, status } = result.outcome;
+        const { products, consensus, status, topProducts } = result.outcome;
         const nextStep =
           status === "filtering"
             ? "gemini"
@@ -109,7 +109,14 @@ export const Route = createFileRoute("/api/product-discovery/step")({
 
         if (!nextStep) {
           // `final` adımı sonucu zaten yazdı (`finishDiscoveryJob`).
-          return jsonResponse({ ok: true, completed: true, progress: 100 }, 200);
+          //
+          // Nihai 5 ürünün `top_products` sözleşmesi de burada dönüyor: 14 ajanın
+          // oyununun TEK çıktısı istemcinin okuyabilmesi için gerekliydi. Ürün
+          // satırları DB'de, bu sözleşme yanıtta — ikisi ayrı yerde durur.
+          return jsonResponse(
+            { ok: true, completed: true, progress: 100, top_products: topProducts ?? [] },
+            200,
+          );
         }
 
         const queued = await enqueueDiscoveryStep({
