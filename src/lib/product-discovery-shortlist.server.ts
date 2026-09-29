@@ -35,7 +35,12 @@ import {
   filterAndPreRank,
   type DemandContext,
 } from "./product-discovery-filter.server";
-import { RawProductSchema, type FilterStats, type RawProduct } from "./product-discovery.types";
+import {
+  RawProductSchema,
+  type FilterStats,
+  type NormalizedProduct,
+  type RawProduct,
+} from "./product-discovery.types";
 
 /* ------------------------------------------------------------- Sözleşme */
 
@@ -228,7 +233,7 @@ function cleanRawRows(
 export function buildShortlist(
   raw: readonly RawProduct[],
   options: ShortlistOptions = {},
-): { products: LlmShortlistProduct[]; stats: ShortlistStats } {
+): { products: LlmShortlistProduct[]; survivors: NormalizedProduct[]; stats: ShortlistStats } {
   const limit = Math.max(0, Math.min(options.limit ?? LLM_SHORTLIST_LIMIT, LLM_SHORTLIST_LIMIT));
   const minMargin = options.minMarginScore ?? DEFAULT_MIN_MARGIN_SCORE;
   const minPreScore = options.minPreScore ?? DEFAULT_MIN_PRE_SCORE;
@@ -275,7 +280,13 @@ export function buildShortlist(
   stats.perSource = filterStats.perSource;
 
   // 3) Marj + ön skor tabanları, sonra SADELESTİRME.
+  //    `survivors` paralel dizi olarak tutulur: hat bir sonraki aşamada
+  //    (Gemini → 14 ajan) SADELESTİRILMIŞ satırları değil, parmak izi ve
+  //    sinyal dosyası taşıyan TAM ürünleri gerektirir. İkisi aynı sırayı ve
+  //    aynı kapıları paylaşır, bu yüzden `products[i]` her zaman
+  //    `survivors[i]`nin sadeleştirilmiş hâlidir.
   const products: LlmShortlistProduct[] = [];
+  const kept: NormalizedProduct[] = [];
   for (const p of survivors) {
     if (p.signals.margin < minMargin) {
       stats.rejectedMargin++;
@@ -294,6 +305,7 @@ export function buildShortlist(
       reviews_count: p.ratingCount,
       sales_volume: p.salesVolume,
     });
+    kept.push(p);
   }
 
   // 4) Ham bayt bütçesi. Sondan kırpılır: `products` zaten puana göre
@@ -301,13 +313,14 @@ export function buildShortlist(
   let json = JSON.stringify(products);
   while (products.length > 0 && Buffer.byteLength(json, "utf8") > maxBytes) {
     products.pop();
+    kept.pop();
     stats.truncatedForBudget++;
     json = JSON.stringify(products);
   }
 
   stats.survivors = products.length;
   stats.bytes = Buffer.byteLength(json, "utf8");
-  return { products, stats };
+  return { products, survivors: kept, stats };
 }
 
 /** Kısa listeyi model istemine gömülecek tek satırlık JSON metnine çevirir. */

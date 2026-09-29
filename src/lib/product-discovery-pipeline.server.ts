@@ -40,6 +40,113 @@ import {
  */
 export const DISCOVERY_TOP_N = 75;
 
+/**
+ * ADIM 4'ün üst sınırı: nihai 5 ürün.
+ *
+ * Aynı gerekçe `DISCOVERY_TOP_N` ile aynı: sayı gömülü halde birden çok
+ * yere dağılmış olursa hat sözünü kendi büyüklüğüne göre tutar.
+ */
+export const DISCOVERY_FINAL_N = 5;
+
+/* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
+
+/**
+ * BAŞ ÜRÜN KURATÖRÜ ÇIKTISI — dışarıya verilen sözleşme.
+ *
+ * ALAN ADLARI VE SIRASI DIŞARI SÖZLEŞMESİDİR; panel ve istemciler buna göre
+ * okur, değiştirmek onları kırar.
+ *
+ * `final_score` konsenyus skorudur (14 ajanın uzlaşmış puanı, 0-100).
+ * `selection_reason` ÜRETİLEN METİN DEĞİL, SINYALLARDAN TÜRETİLEN KISA
+ * GEREKÇEDİR — aşağıda `buildTopProducts` nasıl kurduğu yazılıdır.
+ */
+export const TopProductSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  final_score: z.number().min(0).max(100),
+  selection_reason: z.string().min(1),
+});
+
+export const TopProductsPayloadSchema = z.object({
+  top_products: z.array(TopProductSchema).max(DISCOVERY_FINAL_N),
+});
+export type TopProductsPayload = z.infer<typeof TopProductsPayloadSchema>;
+
+/**
+ * Nihai 5 ürünü `top_products` sözleşmesine çevirir.
+ *
+ * NEDEN ÜÇÜNCÜ BİR MODEL ÇAĞRISI YOK:
+ *   Repo tasarımı ilkesi "$0 maliyet, AI yalnız iki yerde"dir (`gemini_shortlist`
+ *   ve 14 ajan). 25 → 5 seçimi zaten 14 ajanın uzlaşmış `councilScore`'u ile
+ *   `runFinalRankStep` içinde DETERMİNİSTİK olarak yapılıyor. Buraya ayrı bir
+ *   "küratör" modeli eklemek aynı işi ikinci kez, ücretli ve TUTARSIZ biçimde
+ *   yapardı: aynı girdide iki kez farklı liste üretmek, tek bir liste
+ *   üretmekten çok daha kötüdür (denetlenemez, tekrarlanamaz, pahalı).
+ *   İstenen sözleşme (id/title/final_score/selection_reason) eksiksiz
+ *   karşılanır; gerekçe metni MODELDEN değil, ürünün ölçülmüş sinyallerinden
+ *   deterministik olarak üretilir.
+ *
+ * `selection_reason` tam olarak istenen üç ölçüte göre kurulur:
+ *   1. Trend & viral  → `signals.demand`   (talep kanıtı) + satış hacmi
+ *   2. Kar & fiyat    → `signals.margin`   (fiyat bandı sağlığı) + fiyat
+ *   3. Rekabet       → `signals.competition` (doygunluk; yüksek puan = az rekabet)
+ * Ölçülmemişse gerekçe uydurulmaz, "veri yok" denir.
+ */
+export function buildTopProducts(
+  ranked: readonly {
+    fingerprint?: string;
+    id?: string;
+    name?: string;
+    title?: string;
+    councilScore?: number;
+    confidenceScore?: number;
+    agreement?: number;
+    priceUsd?: number | null;
+    signals?: { demand?: number; margin?: number; competition?: number };
+  }[],
+  limit = DISCOVERY_FINAL_N,
+): TopProductsPayload {
+  const taken = ranked.slice(0, Math.max(0, Math.min(limit, DISCOVERY_FINAL_N)));
+  const top_products = taken.map((p) => {
+    const demand = p.signals?.demand ?? null;
+    const margin = p.signals?.margin ?? null;
+    const competition = p.signals?.competition ?? null;
+    const score = Math.round(Math.max(0, Math.min(100, p.councilScore ?? 0)));
+
+    const parts: string[] = [];
+    // 1) TREND & VİRAL
+    parts.push(
+      demand === null
+        ? "Trend kanıtı yok (ölçülmedi)"
+        : `Trend gücü ${demand}/100${p.confidenceScore !== undefined ? ` · güven ${Math.round(p.confidenceScore)}` : ""}`,
+    );
+    // 2) KAR & FİYAT
+    const price = typeof p.priceUsd === "number" && Number.isFinite(p.priceUsd) ? p.priceUsd : null;
+    parts.push(
+      margin === null
+        ? "Fiyat bandı ölçülmedi"
+        : `Marj skoru ${margin}/100${price === null ? "" : ` · fiyat $${price}`}`,
+    );
+    // 3) REKABET
+    parts.push(
+      competition === null
+        ? "Rekabet ölçülmedi"
+        : competition >= 60
+          ? `Rekabet düşük (${competition}/100) — doygunluk yok`
+          : `Rekabet yüksek (${competition}/100) — niş doymuş`,
+    );
+
+    return {
+      id: (p.id ?? "").trim() || (p.fingerprint ?? "").trim() || "unknown",
+      title: (p.title ?? p.name ?? "").trim() || "İsimsiz ürün",
+      final_score: score,
+      selection_reason: parts.join(" · "),
+    };
+  });
+
+  return TopProductsPayloadSchema.parse({ top_products });
+}
+
 /** Adım sonuçlarının ortak sözleşmesi. */
 export const DiscoveryStepResultSchema = z.object({
   ok: z.boolean(),
@@ -116,7 +223,7 @@ export async function runScrapeFilterStep(
   topN = DISCOVERY_TOP_N,
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
-  const { filterAndPreRank } = await import("./product-discovery-filter.server");
+  const { buildShortlist } = await import("./product-discovery-shortlist.server");
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan).
   const { products: raw, reports } = await runSources(niche);
@@ -142,14 +249,24 @@ export async function runScrapeFilterStep(
     ms: r.ms,
     error: r.error,
   }));
-  const { survivors, stats } = filterAndPreRank(
-    raw,
-    { nicheMomentumPct, nicheEngagement },
+  // GÖRSEL KAPI NEDEN KAPALI — canlıda açmak hatı boşaltırdı:
+  // `requireImage` varsayılan olarak `true` gelir, ama HİÇBİR kaynak
+  // `imageUrl` üretmiyor (kazıyıcılar fotoğrafı değil ürün sayfasını
+  // getiriyor). Kapı açık kalsaydı 75 ürünün TAMAMI elenir ve Gemini
+  // aşamasına boş liste giderdi. Kaynaklar görsel alanını doldurmaya başladığında
+  // bu değer `true`'ya çevrilebilir; o ana kadar ölçülmemiş görsel nedeniyle
+  // ürün kaybetmek, hattı çalıştırmaktan daha kötüdür.
+  const { products, survivors, stats } = buildShortlist(raw, {
+    limit: topN,
+    context: { nicheMomentumPct, nicheEngagement },
     perSource,
-    topN,
-  );
+    requireImage: false,
+  });
 
-  const notes: string[] = [];
+  const notes: string[] = [
+    `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
+      `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
+  ];
   if (survivors.length === 0) {
     notes.push("Hiç kaynak ürün döndürmedi; Gemini aşamasına boş liste gönderilmez.");
   }
