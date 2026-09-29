@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientDrivesChain,
+  DISCOVERY_HEARTBEAT_MS,
   discoveryChainHealth,
   discoveryRunnerMode,
   MIN_STEP_BUDGET_MS,
@@ -73,6 +74,38 @@ describe("adım bütçesi eşiği", () => {
  * kullanıcı "Arka plan analizi zaman aşımına uğradı" kartını görüyordu.
  * Kuyruk kurmanın var oluş sebebi tam olarak bu işi taşımamaktı.
  */
+/**
+ * ÖLÜ ADIM KİLİTLENMESİN — KALP ATIŞI SÖZLEŞMESİ.
+ *
+ * Ölçülen hata (ikinci kaynak): `final` adımı çalışırken durumu DEĞİŞMEZ
+ * (`deep_analysis` → `deep_analysis`), dolayısıyla `updated_at` hiç yenilenmiyordu.
+ * Adım platform tarafından ortasında kesilirse satır "çalışıyor" görünür ama
+ * ölü kalıyordu: `clientDrivesChain` onu taze sayıp devralmıyor, watchdog
+ * tetiklenmiyor, iş `processing`e sonsuza kadar kilitleniyordu. Kullanıcı
+ * ekranda "Analiz sunucuda çalışmaya devam ediyor" yazısını yarım saat gördü.
+ */
+describe("calisan adım canlı görünür (sessiz kilitlenme kapatılır)", () => {
+  it("kalp atışı, devralma eşiğinden KISA aralıklarla gelir", () => {
+    // Çok sık olursa devralma hiç çalışmaz (ölü sürücü canlı sanılır).
+    // Çok seyrek olursa çalışan adım bayat sanılır (iş ikiye katlanır).
+    expect(DISCOVERY_HEARTBEAT_MS).toBeLessThan(STALE_STEP_TAKEOVER_MS);
+    // Ve eşiğin çok altında: iki atış arasında güvenli marj kalsın.
+    expect(DISCOVERY_HEARTBEAT_MS).toBeLessThanOrEqual(Math.floor(STALE_STEP_TAKEOVER_MS / 2));
+  });
+
+  it("devralma eşiği yine de mevcut sözleşmeyi korur", () => {
+    // Kalp atışı eşiği DEĞİŞTİRMEZ; yalnızca satırı taze tutar.
+    expect(STALE_STEP_TAKEOVER_MS).toBe(90_000);
+  });
+
+  it("ölü sürücü bıraktığı satır YİNE DE devralınabilir", () => {
+    // Kalp atışı durduğunda `updated_at` bayatlar → yoklama devralır.
+    // Ölçülen hata bu yolun `final`de hiç işlemediğiydi.
+    const now = 1_000_000;
+    expect(clientDrivesChain("qstash", now - STALE_STEP_TAKEOVER_MS - 1, now)).toBe(true);
+  });
+});
+
 describe("clientDrivesChain", () => {
   const now = 1_000_000;
 

@@ -464,6 +464,37 @@ export type DiscoveryFinalResult = {
  * aynı adımı iki kez teslim ederse ikinci çağrı `false` döner ve sonuç
  * üzerine yazılmaz. Kullanıcı iki farklı sonuç görmez.
  */
+/**
+ * Çalışan bir adımın "canlı" işaretini tazeler — yalnız `updated_at`.
+ *
+ * NEDEN VAR: `final` adımı çalışırken durumu değişmez (`deep_analysis` →
+ * `deep_analysis`), dolayısıyla hiçbir durum geçişi `updated_at`yi yenilemez.
+ * Adım platform tarafından ortasında kesilirse satır "çalışıyor" görünür ama
+ * ölüdür: yoklama onu taze sayıp devralmaz, watchdog tetiklenmez ve iş
+ * `processing`e sonsuza kadar kilitlenir. Bu, kullanıcının "yarım saat"
+ * yaşadığı sessiz ölümün ikinci kaynağıydı.
+ *
+ * GÜVENLİK:
+ *   • Yalnız `updated_at` yazılır — durum, sonuç, hata ve kredi alanlarına
+ *     dokunulmaz. Bu yüzden geçici bir ağ hatası işin sonucunu bozamaz.
+ *   • `status = 'processing'` filtresi terminal duruma geçmiş bir satıra
+ *     UYGULANMAZ: bitmiş bir iş kalp atışıyla diriltilemez.
+ *   • Kolon yoksa (migration uygulanmamış) sessizce yutulur: hat yine çalışır,
+ *     yalnız devralma desteği devre dışı kalır.
+ */
+export async function touchDiscoveryRun(runId: string): Promise<boolean> {
+  const { error } = await jobStore()
+    .from(JOB_TABLE)
+    .update({ updated_at: new Date().toISOString() } as never)
+    .eq("id", runId)
+    .eq("status", "processing");
+  if (error) {
+    if (isMissingColumn(error) || isMissingRpc(error)) return false;
+    throw new Error(error.message);
+  }
+  return true;
+}
+
 export async function finishDiscoveryJob(
   runId: string,
   result: DiscoveryFinalResult,

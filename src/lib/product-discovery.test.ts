@@ -536,6 +536,15 @@ describe("job status state machine", () => {
     expect(canTransition("deep_analysis", "queued")).toBe(false);
   });
 
+  it("`final` DEVRALMAYA katılır: çalışırken ölürse satır bayatlar", () => {
+    // ÖLÇÜLEN ÖLÜM (ikinci kaynak): `final`in çalışma durumu başlangıç durumuyla
+    // aynı olduğu için geri-al geçişi yoktu ve `final` çalışırken
+    // `updated_at` hiç tazelenmiyordu. Adım ortasında kesilirse satır "çalışıyor"
+    // görünür ama ölü kalır; yoklama devralmaz, iş `processing`e kilitlenir.
+    // `final`in durumu değişmediği için bu kilit yalnızca KALP ATIŞIYLA çözülür.
+    expect(canTransition("deep_analysis", "deep_analysis")).toBe(true);
+  });
+
   it("DÖRT ADIMIN HEPSİ sahiplenme kilidini alabilir (regresyon)", () => {
     // ÖLÇÜLEN ÖLÜM: `final` adımının hem başlangıç hem çalışma durumu
     // `deep_analysis` olduğu için `canTransition` kendine geçişi reddediyor,

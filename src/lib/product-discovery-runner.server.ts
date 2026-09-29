@@ -35,6 +35,7 @@ import {
   readDiscoveryCheckpoint,
   readDiscoveryJob,
   saveDiscoveryCheckpoint,
+  touchDiscoveryRun,
   type DiscoveryCheckpoint,
   type DiscoveryJobRecord,
 } from "./product-discovery-jobs.server";
@@ -129,6 +130,48 @@ export const STALE_STEP_TAKEOVER_MS = 90_000;
 /** Bir adımı başlatmak için gereken en küçük bütçe (ms). */
 export const MIN_STEP_BUDGET_MS = 25_000;
 
+/** Kalp atışı aralığı (ms) — `STALE_STEP_TAKEOVER_MS`in yarısından kısa. */
+export const DISCOVERY_HEARTBEAT_MS = Math.floor(STALE_STEP_TAKEOVER_MS / 3);
+
+/**
+ * Çalışan adımın satırını periyodik olarak tazeler.
+ *
+ * NEDEN VAR: `final` adımı çalışırken durumu değişmez (`deep_analysis` →
+ * `deep_analysis`), dolayısıyla `updated_at` kendiliğinden tazelenmez. Adım
+ * platform tarafından ortasında kesilirse satır "çalışıyor" görünür ama ÖLÜ
+ * kalır: `clientDrivesChain` onu taze sayar, yoklama devralmaz, watchdog
+ * tetiklenmez ve iş `processing`e sonsuza kadar kilitlenir.
+ *
+ * Bu, iki hatanın birden kaynağıdır:
+ *   • Kalp atışı YOKSA → devralma çalışmaz (ölü adım sonsuza kadar kilitli).
+ *   • Kalp atışı ÇOK SIKSA → devralma hiç çalışmaz (ölü sürücü yanlışlıkla
+ *     canlı sanılır, iş yine takılır).
+ * Aralık bu yüzden eşiğin belirgin altında tutulur: iki tazeleme arasında
+ * eşiği aşacak kadar uzun, ama ölü bir adımın "canlı" görünmesi için gereken
+ * süreden belirgin kısa.
+ *
+ * GÜVENLİK: yalnız `updated_at` yazılır; durum/sonuç/kredi alanlarına
+ * dokunulmaz. Terminal duruma geçmiş bir satır `status = 'processing'`
+ * filtresiyle eşleşmez, yani kalp atışı bitmiş bir işi diriltemez.
+ */
+export function startDiscoveryHeartbeat(runId: string): { stop: () => void } {
+  let stopped = false;
+  const timer = setInterval(() => {
+    if (stopped) return;
+    void touchDiscoveryRun(runId).catch(() => {
+      /* geçici veritabanı hatası: bir sonraki atışta yeniden denenir */
+    });
+  }, DISCOVERY_HEARTBEAT_MS);
+  // Vercel'de bekleyen timer'ler süreci ayakta tutmasın.
+  (timer as unknown as { unref?: () => void }).unref?.();
+  return {
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
 /**
  * Tarayıcının yoklaması zinciri KOŞMALI mı?
  *
@@ -194,18 +237,38 @@ export async function claimDiscoveryStep(
   // koşul olmadan `final`, hemen önce biten `deep` adımının taze `updated_at`
   // değerini görür, "başka biri koşuyor" sanır ve kullanıcı sonucu 90 sn
   // gecikmeli görürdü.
-  if (running !== start && claimFrom === running) {
+  //
+  // ANCAK `final` İÇİN BU, BAŞKA BİR TUZAK YARATIYORDU: `final` çalışırken
+  // durumu DEĞİŞMEZ (`deep_analysis` → `deep_analysis`), yani hiçbir yerde
+  // `updated_at` yenilenmez. Adım QStash teslimatı sırasında ölürse (platform
+  // isteği kesti, ağ koptu) satır SAHİPLENMİŞ AMA BOŞTA kalıyordu ve hiçbir
+  // sürücü onu geri alamıyordu — çünkü geri alma yolu `running !== start`
+  // koşuluna bağlıydı. İş yine `processing`e kilitlenir, kullanıcı yine sonsuza
+  // kadar bekler.
+  //
+  // ÇÖZÜM: `final` de devralmaya KATILIR, ama yaş ölçütü farklıdır. `deep`
+  // adımının taze bittiği anlaşılmak zorundaydı (aksi hâlde `final` hemen
+  // başlar). Bu yüzden `final` yalnızca satır GERÇEKTEN eskiyse devralır:
+  // ya `updated_at` okunamadıysa, ya da `deep` biteli en az
+  // `STALE_STEP_TAKEOVER_MS` geçtiyse.
+  if (claimFrom === running) {
     const age = job.updatedAt === null ? Number.POSITIVE_INFINITY : Date.now() - job.updatedAt;
+    // `final`de `running === start` olduğu için "geri al" geçişi YOKTUR:
+    // satır zaten doğru durumda, yalnızca KİLİDİN yaşı önemlidir.
+    // `deep` biteli yeni bir satır varsa `final` henüz başlamamıştır ve
+    // devralınmamalıdır; eskiyse önceki sahibi ölmüş demektir.
     if (age < STALE_STEP_TAKEOVER_MS) return { state: "in-progress", job };
-    const reclaimed = await advanceDiscoveryStatus({
-      runId,
-      from: running,
-      to: start,
-      progress: 10,
-      step,
-    });
-    if (!reclaimed) return { state: "in-progress", job };
-    claimFrom = start;
+    if (running !== start) {
+      const reclaimed = await advanceDiscoveryStatus({
+        runId,
+        from: running,
+        to: start,
+        progress: 10,
+        step,
+      });
+      if (!reclaimed) return { state: "in-progress", job };
+      claimFrom = start;
+    }
   }
 
   const claimed = await advanceDiscoveryStatus({
@@ -259,15 +322,34 @@ export async function runOneDiscoveryStep(args: {
     (await import("./discovery-jobs.server")).qstashTimeoutSeconds() * 1000 - 20_000,
   );
 
-  const outcome = await executeProductDiscoveryStep({
-    step: args.step,
-    runId: args.runId,
-    userId: args.userId,
-    input: args.input,
-    batch,
-    consensus,
-    deadlineAt: args.deadlineAt ?? Date.now() + deliveryWindowMs,
-  });
+  // KALP ATIŞI — SAHİPLENİLMİŞ ADIMIN "CANLI" GÖRÜNMESİ.
+  //
+  // Ölçülen hata: `final` adımı çalışırken durumu DEĞİŞMEZ (`deep_analysis`),
+  // dolayısıyla `updated_at` hiç yenilenmiyordu. Adım platform tarafından
+  // ortasında kesilirse (Vercel isteği kesti, ağ koptu) satır "çalışıyor"
+  // görünür ama ÖLÜ kalıyordu; `clientDrivesChain` satırı taze saydığı için
+  // yoklama devralmıyor, watchdog da tetiklenmiyordu. İş sonsuza kadar
+  // `processing`e kilitleniyor — kullanıcı yine yarım saat bekliyor.
+  //
+  // Çözüm: adım çalışırken periyodik olarak `updated_at` tazelenir. Böylece
+  // (a) canlı adım "taze" görünür ve başka sürücü onu çalmaz,
+  // (b) adım ölürse tazeleme de durur, satır bayatlar ve devralma devreye girer.
+  // Kalp atışı hafiftir (tek kolon güncellemesi) ve adım bitince hemen durur.
+  const heartbeat = startDiscoveryHeartbeat(args.runId);
+  let outcome: StepOutcome;
+  try {
+    outcome = await executeProductDiscoveryStep({
+      step: args.step,
+      runId: args.runId,
+      userId: args.userId,
+      input: args.input,
+      batch,
+      consensus,
+      deadlineAt: args.deadlineAt ?? Date.now() + deliveryWindowMs,
+    });
+  } finally {
+    heartbeat.stop();
+  }
 
   if (!outcome.ok) return { ok: false, error: outcome.error };
 
@@ -342,17 +424,25 @@ export async function runDiscoveryChain(args: {
     console.log(`[discovery] adım başladı: ${step} (run ${args.runId.slice(0, 8)})`);
     const stepStartedAt = Date.now();
 
-    const outcome = await executeProductDiscoveryStep({
-      step,
-      runId: args.runId,
-      userId: args.userId,
-      input: args.input,
-      batch: checkpoint.shortlist,
-      consensus: checkpoint.votes,
-      // Adıma isteğin bitişine kadar zaman tanınır: `deep` gibi uzun adımlar
-      // platform kesmeden ÖNCE kendi kendine durur, iş yarıda kalmaz.
-      deadlineAt: deadline,
-    });
+    // Aynı kalp atışı QStash yolunda da zorunluydu: yoklama sürücüsü de
+    // `final`i çalıştırabiliyor ve bu yolda da kesilme sessiz kilit bırakıyordu.
+    const heartbeat = startDiscoveryHeartbeat(args.runId);
+    let outcome: StepOutcome;
+    try {
+      outcome = await executeProductDiscoveryStep({
+        step,
+        runId: args.runId,
+        userId: args.userId,
+        input: args.input,
+        batch: checkpoint.shortlist,
+        consensus: checkpoint.votes,
+        // Adıma isteğin bitişine kadar zaman tanınır: `deep` gibi uzun adımlar
+        // platform kesmeden ÖNCE kendi kendine durur, iş yarıda kalmaz.
+        deadlineAt: deadline,
+      });
+    } finally {
+      heartbeat.stop();
+    }
 
     if (!outcome.ok) {
       // Adım çöktü: iş `failed` ve kredi iade edildi (executor yaptı).
