@@ -56,6 +56,7 @@ import { Route as ApiPublicToolRouteImport } from './routes/api/public/tool'
 import { Route as ApiPublicTrendAnalysisRouteImport } from './routes/api/public/trend-analysis'
 import { Route as ApiPublicTrendRadarRouteImport } from './routes/api/public/trend-radar'
 import { Route as ApiPublicViralFeedRouteImport } from './routes/api/public/viral-feed'
+import { Route as ApiWebhooksPaddleRouteImport } from './routes/api/webhooks/paddle'
 import { Route as ApiPublicWebhookPaddleRouteImport } from './routes/api/public/webhook/paddle'
 
 const IndexRoute = IndexRouteImport.update({
@@ -297,6 +298,11 @@ const ApiPublicViralFeedRoute = ApiPublicViralFeedRouteImport.update({
   path: '/api/public/viral-feed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhooksPaddleRoute = ApiWebhooksPaddleRouteImport.update({
+  id: '/api/webhooks/paddle',
+  path: '/api/webhooks/paddle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhookPaddleRoute = ApiPublicWebhookPaddleRouteImport.update({
   id: '/api/public/webhook/paddle',
   path: '/api/public/webhook/paddle',
@@ -351,6 +357,7 @@ export interface FileRoutesByFullPath {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/api/public/webhook/paddle': typeof ApiPublicWebhookPaddleRoute
 }
 export interface FileRoutesByTo {
@@ -401,6 +408,7 @@ export interface FileRoutesByTo {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/api/public/webhook/paddle': typeof ApiPublicWebhookPaddleRoute
 }
 export interface FileRoutesById {
@@ -452,6 +460,7 @@ export interface FileRoutesById {
   '/api/public/trend-analysis': typeof ApiPublicTrendAnalysisRoute
   '/api/public/trend-radar': typeof ApiPublicTrendRadarRoute
   '/api/public/viral-feed': typeof ApiPublicViralFeedRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/api/public/webhook/paddle': typeof ApiPublicWebhookPaddleRoute
 }
 export interface FileRouteTypes {
@@ -504,6 +513,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/webhooks/paddle'
     | '/api/public/webhook/paddle'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -554,6 +564,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/webhooks/paddle'
     | '/api/public/webhook/paddle'
   id:
     | '__root__'
@@ -604,6 +615,7 @@ export interface FileRouteTypes {
     | '/api/public/trend-analysis'
     | '/api/public/trend-radar'
     | '/api/public/viral-feed'
+    | '/api/webhooks/paddle'
     | '/api/public/webhook/paddle'
   fileRoutesById: FileRoutesById
 }
@@ -654,6 +666,7 @@ export interface RootRouteChildren {
   ApiPublicTrendAnalysisRoute: typeof ApiPublicTrendAnalysisRoute
   ApiPublicTrendRadarRoute: typeof ApiPublicTrendRadarRoute
   ApiPublicViralFeedRoute: typeof ApiPublicViralFeedRoute
+  ApiWebhooksPaddleRoute: typeof ApiWebhooksPaddleRoute
   ApiPublicWebhookPaddleRoute: typeof ApiPublicWebhookPaddleRoute
 }
 
@@ -988,6 +1001,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicViralFeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/paddle': {
+      id: '/api/webhooks/paddle'
+      path: '/api/webhooks/paddle'
+      fullPath: '/api/webhooks/paddle'
+      preLoaderRoute: typeof ApiWebhooksPaddleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhook/paddle': {
       id: '/api/public/webhook/paddle'
       path: '/api/public/webhook/paddle'
@@ -1055,6 +1075,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicTrendAnalysisRoute: ApiPublicTrendAnalysisRoute,
   ApiPublicTrendRadarRoute: ApiPublicTrendRadarRoute,
   ApiPublicViralFeedRoute: ApiPublicViralFeedRoute,
+  ApiWebhooksPaddleRoute: ApiWebhooksPaddleRoute,
   ApiPublicWebhookPaddleRoute: ApiPublicWebhookPaddleRoute,
 }
 export const routeTree = rootRouteImport
