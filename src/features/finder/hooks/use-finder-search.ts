@@ -45,6 +45,24 @@ const POLL_SLOW_INTERVAL_MS = 5_000;
  * yol arasında fark görmesin. Süre dolarsa eski hat devreye girer.
  */
 const PIPELINE_MAX_WAIT_MS = DEFAULT_POLL_MAX_MS;
+/**
+ * ÖN PLAN BITTIĞINDEKİ ARKA PLAN DEVAMI.
+ *
+ * NEDEN VAR: kullanıcı "Arka plan analizi zaman aşımına uğradı" kartını GÖRÜNCE
+ * iş bitmiş sayılıyordu. Oysa hat sunucuda kendi bütçesiyle çalışmaya devam
+ * ediyor ve sonucu `searches.result`e yazıyor — yani ürünler birkaç saniye
+ * sonra hazırdı ama istemci vazgeçmişti. Kullanıcı hem ürünü hem parasını
+ * kaybediyordu.
+ *
+ * ÇÖZÜM: ön plan bittiğinde hat SÜREKLİ (yavaşlayan) yoklamayla arka planda
+ * izlenir. İş terminal duruma geçtiği anda sonuç teslim edilir; yine de
+ * kapanmadıysa bu bir HATA değil, dürüst bir "hâlâ çalışıyor" durumudur.
+ */
+const PIPELINE_BACKGROUND_WAIT_MS = 240_000;
+/** Arka planda yoklama seyrek yapılır: iş zaten sunucuda ilerliyor. */
+const PIPELINE_BACKGROUND_POLL_MS = 5_000;
+/** Ön plan + arka plan pencerelerinin toplamı (güvenlik zamanlayıcısı için). */
+const PIPELINE_TOTAL_WAIT_MS = PIPELINE_MAX_WAIT_MS + PIPELINE_BACKGROUND_WAIT_MS;
 /** Adım adım ilerleme 1,5 sn'de bir görünür; yoklama bu sıklıkta yapılır. */
 const PIPELINE_POLL_MS = 1_500;
 /** Güvenlik zamanlayıcısı yoklama bütçesinin hemen üstünde kalsın ki mesajı yoklama üretsin. */
@@ -115,6 +133,13 @@ export function useFinderSearch(opts: {
   const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
   const [searchAttempt, setSearchAttempt] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
+  /**
+   * İstemci ön planı bitti ama hat sunucuda hâlâ çalışıyor.
+   *
+   * HATA DEĞİLDİR: ekranda kırmızı bir "zaman aşımı" kartı yerine bilgi
+   * şeridi gösterilir, çünkü iş gerçekten sürüyor ve sonucu yazılıyor.
+   */
+  const [stillRunning, setStillRunning] = useState(false);
   /**
    * Ön sonuç EKRANDA ve hat hâlâ sürüyor.
    *
@@ -386,12 +411,17 @@ export function useFinderSearch(opts: {
         return { ok: false, fallback: true, reason: started.detail ?? "queue_failed", paid: false };
       }
 
-      armSafetyTimer(PIPELINE_MAX_WAIT_MS);
+      // Güvenlik zamanlayıcısı ÖN PLAN + ARKA PLAN penceresini kapsasın: eskiden
+      // 280. saniyede kendiliğinden patlayıp aynı anda hem hata kartını hem
+      // zaman aşımı mesajını üretiyordu (yoklama döngüsü daha bitmemişti bile).
+      armSafetyTimer(PIPELINE_TOTAL_WAIT_MS + SAFETY_GRACE_MS);
       // Yeni hat GERÇEKTEN kuruldu (kredi düşüldü, iş kaydı açıldı, ilk adım
       // kuyruğa alındı). Bundan sonra modal doğru adımları göstermeli.
       setDiscoveryPipelineActive(true);
-      const deadline = Date.now() + PIPELINE_MAX_WAIT_MS;
-      while (Date.now() < deadline) {
+      const foregroundDeadline = Date.now() + PIPELINE_MAX_WAIT_MS;
+      const totalDeadline = foregroundDeadline + PIPELINE_BACKGROUND_WAIT_MS;
+      let background = false;
+      for (;;) {
         const state = await getDiscoveryRunFn({ data: { runId: started.runId } });
         // Sahiplik reddi (başkasının runId'si) veya satırın kaybolması.
         if (!state.ok) return { ok: false, fallback: true, reason: "run_not_visible", paid: false };
@@ -410,13 +440,37 @@ export function useFinderSearch(opts: {
           }
           return { ok: true, rows };
         }
-        await new Promise((resolve) => setTimeout(resolve, PIPELINE_POLL_MS));
+        if (Date.now() >= totalDeadline) {
+          // İş hâlâ `processing`: bu bir hata değil, dürüst bir durum.
+          return { ok: false, fallback: true, reason: "still-running", paid: true };
+        }
+        // Ön plan bitti → kullanıcıya "hâlâ çalışıyor" bilgisi ver, yoklamayı
+        // yavaşlatıp sürdür. Zaman aşımı HATA KARTI üretmez.
+        if (!background && Date.now() >= foregroundDeadline) {
+          background = true;
+          setStillRunning(true);
+          armSafetyTimer(PIPELINE_BACKGROUND_WAIT_MS + SAFETY_GRACE_MS);
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, background ? PIPELINE_BACKGROUND_POLL_MS : PIPELINE_POLL_MS),
+        );
       }
-      // Zaman aşımı: iş hâlâ koşuyor olabilir, kredi HARCANMIŞTIR.
-      return { ok: false, fallback: true, reason: "timeout", paid: true };
     },
     onSuccess: (outcome, vars) => {
       if (!outcome.ok) {
+        if (outcome.reason === "still-running") {
+          // HATA DEĞİL. Hat sunucuda çalışmaya devam ediyor ve sonucu
+          // kalıcı yazıyor; ekranda kırmızı bir "zaman aşımı" kartı göstermek
+          // hem yanlış hem de kullanıcıyı sonucu göremeyeceği bir ölü noktaya
+          // iterdi. Sonuç hazır olduğunda sayfa yeniden okununca görünür.
+          setStillRunning(true);
+          setStalled(false);
+          setFallbackNotice(
+            "Analiz hâlâ arka planda çalışıyor. Sonuç hazır olduğunda burada görünecek — sayfayı kapatıp birazdan geri dönebilirsin.",
+          );
+          toast.info("Analiz sunucuda çalışmaya devam ediyor. Sonuç birazdan hazır.");
+          return;
+        }
         if (outcome.paid) {
           // Kredi harcanmış durumda: eski hat KENDİ kredisini düşeceği için
           // düşmek, kullanıcıyı aynı arama için İKİ KEZ ücretlendirmek demek.
@@ -447,6 +501,7 @@ export function useFinderSearch(opts: {
       partialDeliveredRef.current = false;
       setEnriching(false);
       setCouncilPending(false);
+      setStillRunning(false);
       opts.onResults(products, [], null);
       setStalled(false);
       setSearchError(null);
@@ -508,6 +563,7 @@ export function useFinderSearch(opts: {
       setSearchError(null);
       setSearchAttempt(nicheValue);
       setStalled(false);
+      setStillRunning(false);
       setEnriching(false);
       setCouncilPending(false);
       partialDeliveredRef.current = false;
@@ -604,6 +660,8 @@ export function useFinderSearch(opts: {
     searchError,
     searchAttempt,
     stalled,
+    /** Hat sunucuda çalışmaya devam ediyor — hata değil, bilgi durumu. */
+    stillRunning,
     gen,
     runSearch,
     setSearchError,

@@ -36,6 +36,32 @@ const MIN_CALL_BUDGET_MS = 4_000;
 /** Kaç rol gerçekten konuşabilsin (süre bütçesinin anahtarı). */
 const MAX_AI_ROLES = 14;
 
+/**
+ * Aynı anda koşan rol sayısı.
+ *
+ * NEDEN VAR (ölçülen hata): roller SIRAYA koşuyordu. Rol başına ~10 sn × 14 rol
+ * ≈ 140 sn; üstüne kazıma (~25 sn) + Gemini (~20 sn) + sıralama (~5 sn) eklenince
+ * hat istemcinin 280 sn'lik penceresini aşıyor ve kullanıcı "Arka plan analizi
+ * zaman aşımına uğradı" kartını görüyordu. Vercel Hobby'ın 300 sn'lik fonksiyon
+ * tavanı da aynı sınıra dayandığı için iş sunucuda tamamlanıyor ama istemci
+ * sonucu bir daha göremiyordu.
+ *
+ * NEDEN GÜVENLİ: bir rolün oyu diğerlerinden BAĞIMSIZDIR (her rol kendi
+ * istemini alır, yalnız indeks+puan döner). Puanlar dalgalar bittikten sonra
+ * `COUNCIL_AGENTS` SIRASIYLA birleştirildiği için çalıştırma sırası sonucu
+ * değiştirmez — yani eşzamanlılık hız kazandırır, tekrarlanabilirliği değil.
+ *
+ * `COUNCIL_CONCURRENCY` env değişkeniyle 1-8 arası ayarlanabilir (havuz daralırsa
+ * düşürülür). Varsayılan 4: 14 rol 4 dalgada ~4 turda biter.
+ */
+export const COUNCIL_CONCURRENCY = 4;
+
+function councilConcurrency(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(env["COUNCIL_CONCURRENCY"]);
+  if (!Number.isFinite(raw) || raw <= 0) return COUNCIL_CONCURRENCY;
+  return Math.max(1, Math.min(8, Math.round(raw)));
+}
+
 export type CouncilRunResult = {
   consensus: Consensus[];
   /** Gerçekten modelden yanıt alan rol sayısı. */
@@ -158,27 +184,52 @@ export async function runCouncilWithAi(
   let aiAgents = 0;
   let fallbackAgents = 0;
 
+  // ------------------------------------------------ SINIRLI EŞZAMANLILIK
+  //
+  // Roller dalgalar hâlinde koşar. Bir rolün çağrısı çökerse YALNIZ o rol
+  // deterministiğe düşer; dalganın kalanı etkilenmez (sözleşme değişmez).
+  type Scored = Map<number, { score: number; note: string }>;
+  const scoresByAgent = new Map<CouncilAgentKey, Scored>();
+  const rolesToRun: CouncilAgentKey[] =
+    products.length === 0 ? [] : COUNCIL_AGENTS.slice(0, MAX_AI_ROLES).map((a) => a.key as CouncilAgentKey);
+
+  const concurrency = Math.max(1, Math.min(councilConcurrency(), rolesToRun.length));
+  const waves: CouncilAgentKey[][] = [];
+  for (let i = 0; i < rolesToRun.length; i += concurrency) {
+    waves.push(rolesToRun.slice(i, i + concurrency));
+  }
+
+  for (const wave of waves) {
+    // Süre bitti: başlayan DALGA yapılmaz, kalan roller deterministiğe düşer.
+    // Sunucusuz sınırı aşmayız.
+    if (deadlineAt - Date.now() < MIN_CALL_BUDGET_MS) break;
+
+    const settled = await Promise.allSettled(
+      wave.map(async (agentKey) => {
+        const agent = COUNCIL_AGENTS.find((a) => a.key === agentKey);
+        if (!agent) throw new Error(`bilinmeyen rol: ${agentKey}`);
+        const raw = await call(buildAgentPrompt(agent, products, niche), deadlineAt);
+        return [agentKey, parseAgentScores(raw, products.length)] as const;
+      }),
+    );
+
+    for (const outcome of settled) {
+      if (outcome.status === "rejected") {
+        console.warn(
+          `[council] rol yanıt veremedi, deterministiğe düşülüyor:`,
+          outcome.reason instanceof Error ? outcome.reason.message : "unknown",
+        );
+        continue;
+      }
+      const [agentKey, parsed] = outcome.value;
+      if (parsed.size) scoresByAgent.set(agentKey, parsed);
+    }
+  }
+
+  // Birleştirme COUNCIL_AGENTS sırasında ve TEK TEK yapılır: eşzamanlı dalgalar
+  // oy topluluğunu bozmaz, yalnız süreyi kısaltır.
   for (const agent of COUNCIL_AGENTS) {
-    if (aiRoles.length >= MAX_AI_ROLES || products.length === 0) {
-      fallbackAgents++;
-      continue;
-    }
-    if (deadlineAt - Date.now() < MIN_CALL_BUDGET_MS) {
-      // Süre bitti: bu rol deterministiğe düşer. Sunucusuz sınırı aşmayız.
-      fallbackAgents++;
-      continue;
-    }
-    let scores: Map<number, { score: number; note: string }> | null = null;
-    try {
-      const raw = await call(buildAgentPrompt(agent, products, niche), deadlineAt);
-      const parsed = parseAgentScores(raw, products.length);
-      if (parsed.size) scores = parsed;
-    } catch (error) {
-      console.warn(
-        `[council] ${agent.key} ajanı yanıt veremedi, deterministiğe düşülüyor:`,
-        error instanceof Error ? error.message : "unknown",
-      );
-    }
+    const scores = scoresByAgent.get(agent.key as CouncilAgentKey);
     if (!scores) {
       fallbackAgents++;
       continue;
@@ -190,7 +241,7 @@ export async function runCouncilWithAi(
       const key = product.fingerprint || `P${index + 1}`;
       const base = (baseline.get(key) ?? []) as AgentVote[];
       const fallbackVote = base.find((v) => v.agentKey === agent.key);
-      const ai = scores?.get(index + 1);
+      const ai = scores.get(index + 1);
       // Kanıtsız ürün, kanıtlıyla eşit puan alamaz: ölçülebilir alanı 2'nin
       // altındaysa deterministik oyun cezalı değeri korunur.
       const rawScore = ai?.score ?? fallbackVote?.score ?? 50;

@@ -311,6 +311,7 @@ function Dashboard() {
     searchError,
     searchAttempt,
     stalled,
+    stillRunning,
     runSearch,
   } = useFinderSearch({
     platforms,
@@ -1022,6 +1023,15 @@ function Dashboard() {
                         </span>
                       </div>
                     )}
+                    {stillRunning && (
+                      <div className="mb-4 flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-200">
+                        <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
+                        <span>
+                          Analiz sunucuda çalışmaya devam ediyor. Sonuç hazır olduğunda burada
+                          görünecek — sayfayı kapatıp birazdan geri dönebilirsin.
+                        </span>
+                      </div>
+                    )}
                     {(enriching || !searching) && fallbackNotice && results.length > 0 && (
                       <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -1034,10 +1044,10 @@ function Dashboard() {
                     {!searching && searchError && results.length === 0 && (
                       <SearchErrorCard error={searchError} onRetry={() => runSearch(searchError.niche ?? niche, setResultQuery)} onEdit={jumpToSearch} />
                     )}
-                    {!searching && !searchError && searchAttempt && results.length === 0 && (
+                    {!searching && !searchError && searchAttempt && results.length === 0 && !stillRunning && (
                       <NoResultsCard niche={searchAttempt} onRetry={() => runSearch(searchAttempt, setResultQuery)} onEdit={jumpToSearch} />
                     )}
-                    {!searching && !searchError && !searchAttempt && results.length === 0 && (
+                    {!searching && !searchError && !searchAttempt && results.length === 0 && !stillRunning && (
                       <FinderIntroCard
                         examples={FINDER_EXAMPLE_NICHES as unknown as string[]}
                         onExample={(ex) => {

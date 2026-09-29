@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAgentPrompt,
+  COUNCIL_CONCURRENCY,
   parseAgentScores,
   runCouncilWithAi,
 } from "./product-discovery-council-ai.server";
@@ -193,5 +194,89 @@ describe("runCouncilWithAi", () => {
     });
     expect(called).toBe(false);
     expect(run.consensus).toEqual([]);
+  });
+});
+
+/**
+ * SÜRE BÜTÇESİ — eşzamanlılık kaliteyi değil SÜRE kazandırır.
+ *
+ * Sorun bu: roller sırayla koşuyordu (14 × ~10 sn ≈ 140 sn) ve hat istemcinin
+ * 280 sn'lik penceresini aşıyordu. Aşağıdaki testler iki şeyi kilitler:
+ *   1. roller GERÇEKTEN eşzamanlı koşar (üstel ama sınırlı),
+ *   2. eşzamanlılık uzlaşma sonucunu DEĞİŞTİRMEZ (tekrarlanabilirlik korunur).
+ */
+describe("konsey eşzamanlılığı", () => {
+  const rows = [product({ fingerprint: "fp-1" }), product({ fingerprint: "fp-2" })];
+
+  /** Aynı isteme her zaman aynı puanı döndüren sahte model. */
+  const hashCall = (prompt: string) => {
+    let h = 0;
+    for (let i = 0; i < prompt.length; i++) h = (h * 31 + prompt.charCodeAt(i)) % 9973;
+    return JSON.stringify({
+      scores: rows.map((_, i) => ({ i: i + 1, score: (h + i * 7) % 101, note: "n" })),
+    });
+  };
+
+  const withConcurrency = async (value: string) => {
+    const previous = process.env["COUNCIL_CONCURRENCY"];
+    process.env["COUNCIL_CONCURRENCY"] = value;
+    try {
+      return await runCouncilWithAi(rows, "air fryer", { call: async (p) => hashCall(p) });
+    } finally {
+      if (previous === undefined) delete process.env["COUNCIL_CONCURRENCY"];
+      else process.env["COUNCIL_CONCURRENCY"] = previous;
+    }
+  };
+
+  it("roller paralel koşar ama eşzamanlılık sınırı aşılmaz", async () => {
+    let active = 0;
+    let peak = 0;
+    const run = await runCouncilWithAi(rows, "air fryer", {
+      call: async (prompt) => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active--;
+        return hashCall(prompt);
+      },
+    });
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(COUNCIL_CONCURRENCY);
+    // Hız kazanırken oy sayısı eksilmez.
+    expect(run.aiAgents).toBe(COUNCIL_AGENT_KEYS.length);
+    for (const c of run.consensus) expect(c.votes).toBe(COUNCIL_AGENT_KEYS.length);
+  });
+
+  it("eşzamanlılık uzlaşma sonucunu DEĞİŞTİRMEZ (1 ve 4 dalga birebir aynı)", async () => {
+    // Bu, "hızlandırdık ama sonucu değiştirdik" hatasının regresyon testidir:
+    // sıralı ve paralel koşum aynı konsensüsü vermek ZORUNDA.
+    const sequential = await withConcurrency("1");
+    const parallel = await withConcurrency("4");
+    expect(parallel.consensus.map((c) => [c.candidateId, c.councilScore, c.votes])).toEqual(
+      sequential.consensus.map((c) => [c.candidateId, c.councilScore, c.votes]),
+    );
+    expect(parallel.aiRoles).toEqual(sequential.aiRoles);
+  });
+
+  it("COUNCIL_CONCURRENCY=1 gerçekten sıralı koşar", async () => {
+    const previous = process.env["COUNCIL_CONCURRENCY"];
+    process.env["COUNCIL_CONCURRENCY"] = "1";
+    try {
+      let active = 0;
+      let peak = 0;
+      await runCouncilWithAi(rows, "air fryer", {
+        call: async (prompt) => {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 2));
+          active--;
+          return hashCall(prompt);
+        },
+      });
+      expect(peak).toBe(1);
+    } finally {
+      if (previous === undefined) delete process.env["COUNCIL_CONCURRENCY"];
+      else process.env["COUNCIL_CONCURRENCY"] = previous;
+    }
   });
 });

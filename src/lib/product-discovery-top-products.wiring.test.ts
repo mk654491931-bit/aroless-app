@@ -127,7 +127,10 @@ describe("nihai 5 — kalıcı sonuç ve istemci", () => {
   it("istemci hook'u sözleşmeyi koşu durumuna bağlar", async () => {
     const src = await read("src/features/finder/hooks/use-product-discovery.ts");
     expect(src).toContain("topProducts: TopProduct[]");
-    expect(src).toContain("res.result?.topProducts.length ? res.result.topProducts : prev.topProducts");
+    // Terminal olmayan yoklamada hazır olmayan liste üstüne yazılmamalı.
+    expect(src.replace(/\s+/g, " ")).toContain(
+      "topProducts: res.result?.topProducts.length ? res.result.topProducts : prev.topProducts",
+    );
   });
 
   it("arayüz gerekçeyi kartlara geçirir", async () => {

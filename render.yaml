@@ -158,6 +158,12 @@ services:
       - key: QSTASH_TIMEOUT_SECONDS
         sync: false
       # --- AI Gateway (opsiyonel, öncelikli) ---
+      # 14 ajan konsesinin aynı anda koşan rol sayısı (1-8, varsayılan 4).
+      # Sıralı koşum 14 rolü ~140 sn'ye çıkarıp istemcinin 280 sn'lik penceresini
+      # aşıyordu; eşzamanlılık süreyi ~3-4 kat kısaltır ve sonucu DEĞİŞTİRMEZ
+      # (her rolün oyu bağımsızdır). Anahtar havuzu darsa 2'ye düşür.
+      - key: COUNCIL_CONCURRENCY
+        sync: false
       - key: AI_GATEWAY_URL
         sync: false
       - key: AI_GATEWAY_API_KEY

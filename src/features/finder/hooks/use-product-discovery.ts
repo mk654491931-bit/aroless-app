@@ -42,8 +42,25 @@ const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const SLOW_POLL_INTERVAL_MS = 4_000;
 /** Hızlı yoklamadan seyrek yoklamaya geçiş eşiği. */
 const POLL_BACKOFF_AFTER_MS = 15_000;
-/** Bu süre içinde hiç ilerleme yoksa yoklama bırakılır (takılı iş). */
-const STALL_TIMEOUT_MS = 240_000;
+/**
+ * GERÇEK TAKILMA EŞİĞİ — ilerleme HİÇ değişmezse bu kadar beklenir.
+ *
+ * ÖNEMLİ DÜZELTME: eskiden bu deger "başlangıçtan geçen süre" olarak
+ * kullanılıyordu, yani 4. dakikadaki sağlıklı bir konsey turunu da "takıldı"
+ * sayıp işi `failed` işaretliyordu. Kullanıcı hat çalışırken "zaman aşımı"
+ * görüyor, job ise sunucuda tamamlanıyordu. Şimdi ölçüt "İLERLEME DEĞİŞMEDİ"
+ * süresidir.
+ */
+const STALL_TIMEOUT_MS = 180_000;
+/**
+ * MUTLAK TAVAN — yoklama en fazla bu kadar sürer.
+ *
+ * NEDEN 9 DAKİKA: hat kendi bütçesinde (Vercel Hobby 300 sn) bölünebilir ve
+ * her adımı kendi penceresinde bitirir; istemci yalnız izleyicidir. 14 ajan
+ * turu + kazıma normalde ~2 dk'da biter, bu tavan yalnız istisnai yavaş
+ * koşuları yakalar.
+ */
+const ABSOLUTE_TIMEOUT_MS = 540_000;
 
 const TERMINAL: readonly string[] = ["completed", "failed"];
 
@@ -133,6 +150,9 @@ export function useProductDiscovery(): {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const startedAt = Date.now();
+    // İlerleme en son ne zaman DEĞİŞTİ? Takılma ölçütü budur (toplam süre değil).
+    let lastProgressAt = Date.now();
+    let lastFingerprint = "";
 
     const poll = async () => {
       if (cancelled) return;
@@ -146,19 +166,29 @@ export function useProductDiscovery(): {
           return;
         }
 
-        setRun((prev) => ({
-          ...prev,
-          status: (res.status as ProductDiscoveryStatus) ?? prev.status,
-          progress: Math.max(0, Math.min(100, Number(res.progress ?? 0))),
-          step: res.step || null,
-          products: res.result?.products ?? prev.products,
-          consensus: res.result?.consensus ?? prev.consensus,
-          // Sözleşme yalnız terminal sonuçta gelir; ara yoklamada üstüne
-          // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
-          topProducts:
-            res.result?.topProducts.length ? res.result.topProducts : prev.topProducts,
-          error: res.error ?? null,
-        }));
+        setRun((prev) => {
+          const next = {
+            ...prev,
+            status: (res.status as ProductDiscoveryStatus) ?? prev.status,
+            progress: Math.max(0, Math.min(100, Number(res.progress ?? 0))),
+            step: res.step || null,
+            products: res.result?.products ?? prev.products,
+            consensus: res.result?.consensus ?? prev.consensus,
+            // Sözleşme yalnız terminal sonuçta gelir; ara yoklamada üstüne
+            // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
+            topProducts: res.result?.topProducts.length
+              ? res.result.topProducts
+              : prev.topProducts,
+            error: res.error ?? null,
+          };
+          // İlerleme parmak izi değiştiyse "takılma saati" sıfırlanır.
+          const fingerprint = `${next.status}|${next.progress}|${next.step}|${next.products.length}`;
+          if (fingerprint !== lastFingerprint) {
+            lastFingerprint = fingerprint;
+            lastProgressAt = Date.now();
+          }
+          return next;
+        });
 
         if (TERMINAL.includes(res.status)) {
           const found = res.result?.products.length ?? 0;
@@ -176,8 +206,19 @@ export function useProductDiscovery(): {
         }
 
         // Kademeli yoklama: ilk 15 sn hızlı, sonrası seyrek.
-        if (Date.now() - startedAt > STALL_TIMEOUT_MS) {
-          setRun((prev) => ({ ...prev, status: "failed", error: "Arama zaman aşımına uğradı." }));
+        // YARDIMCI: iki ayrı tavan — mutlak (9 dk) ve İLERLEMESİZLİK (3 dk).
+        // Eskiden yalnız "başlangıçtan geçen süre" ölçülüyordu ve sağlıklı
+        // uzun konsey turları sahte "zaman aşımı" üretiyordu.
+        if (Date.now() - startedAt > ABSOLUTE_TIMEOUT_MS) {
+          setRun((prev) => ({ ...prev, error: "Arama çok uzun sürdü; sonuç birazdan gelebilir." }));
+          return;
+        }
+        if (Date.now() - lastProgressAt > STALL_TIMEOUT_MS) {
+          setRun((prev) => ({
+            ...prev,
+            status: "failed",
+            error: "Arama ilerlemedi ve zaman aşımına uğradı.",
+          }));
           return;
         }
         const interval =
@@ -187,8 +228,9 @@ export function useProductDiscovery(): {
         timer = setTimeout(poll, interval);
       } catch {
         if (cancelled) return;
-        // Tek başarısız yoklama işi öldürmez; süre aşımına kadar sürülür.
-        if (Date.now() - startedAt > STALL_TIMEOUT_MS) {
+        // Tek başarısız yoklama işi öldürmez; sunucu YANIT VERMİYORSA da
+        // ilerleme sayacı işler ve gerçekten takılan iş bırakılır.
+        if (Date.now() - startedAt > ABSOLUTE_TIMEOUT_MS) {
           setRun((prev) => ({
             ...prev,
             status: "failed",

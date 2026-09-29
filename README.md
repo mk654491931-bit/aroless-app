@@ -43,6 +43,7 @@ Aşağıdakiler `.env`'de boş bırakılırsa özellik otomatik devre dışı ka
 | ------------------------------------------------------ | ----------------------------------------------------------------- |
 | `GEMINI_*`, `GROQ_*`, `OPENROUTER_*`, `HUGGING_FACE_*` | AI motorları (havuz hâlinde sırayla döner, rate-limit'e takılmaz) |
 | `AI_GATEWAY_URL` + `AI_GATEWAY_API_KEY`                | Ek OpenAI uyumlu ağ geçidi (yedek motor)                          |
+| `COUNCIL_CONCURRENCY`                                   | 14 ajanın aynı anda koşan rol sayısı (1-8, varsayılan 4)        |
 | `RESEND_API_KEY`                                       | E-posta gönderimi                                                 |
 | `VITE_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`     | Bot koruması                                                      |
 
