@@ -20,7 +20,12 @@ import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
 import { toProductList } from "../utils/response";
-import { toWinningProducts, discoverySetupNotice, blockingSetupIssues } from "../utils/discovery-result";
+import {
+  toWinningProducts,
+  describeDiscoveryFailure,
+  discoverySetupNotice,
+  blockingSetupIssues,
+} from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
 
 /** Sunucu plan göndermezse (eski build veya inline fallback) kullanılan varsayılanlar. */
@@ -394,7 +399,11 @@ export function useFinderSearch(opts: {
       vars: GenVars,
     ): Promise<
       | { ok: true; rows: DiscoveryWinner[] }
+      // YALNIZ ALTYAPI YOK: klasik hat denenir.
       | { ok: false; fallback: true; reason: string; paid: boolean }
+      // HAT GERÇEKTEN KOŞTU VE BAŞARISIZ OLDU: klasik hat DENEMEZ, sebep
+      // kullanıcıya gösterilir.
+      | { ok: false; fallback: false; reason: string; paid: boolean }
     > => {
       const country =
         vars.target_country === "GLOBAL"
@@ -431,9 +440,20 @@ export function useFinderSearch(opts: {
         // Sahiplik reddi (başkasının runId'si) veya satırın kaybolması.
         if (!state.ok) return { ok: false, fallback: true, reason: "run_not_visible", paid: false };
         if (state.status === "failed") {
+          // HAT KOŞTU VE GERÇEKTEN BAŞARISIZ OLDU.
+          //
+          // Ölçülen hata: burada `fallback: true` dönüyordu, yani kullanıcı
+          // HATIN GERÇEK HATASI yerine ikinci bir tam aramayı (klasik hat,
+          // 280 sn) izliyordu. Arama sonunda "zaman aşımına uğradı" kartı
+          // çıkıyor ve sunucudaki gerçek hata metni HİÇ görünmüyordu.
+          //
+          // Doğrusu: kuyruk/erişim gibi ALTYAPI sorunlarında klasik hat
+          // devreye girer; hat koşup başarısız olduğunda ise sebep
+          // söylenmelidir. İkinci bir tam arama hem 280 sn kaybettirir hem
+          // de gerçek hatayı maskeler.
           return {
             ok: false,
-            fallback: true,
+            fallback: false,
             reason: state.error ?? "pipeline_failed",
             paid: false,
           };
@@ -441,7 +461,10 @@ export function useFinderSearch(opts: {
         if (state.status === "completed") {
           const rows = state.result?.products ?? [];
           if (rows.length === 0) {
-            return { ok: false, fallback: true, reason: "empty_result", paid: true };
+            // Sonuç boş: bu bir HATA değil, dürüst bir "bulunamadı" cevabıdır.
+            // İkinci bir tam arama çalıştırmak aynı sonucu verir ve yalnız
+            // 280 sn daha yakar.
+            return { ok: false, fallback: false, reason: "empty_result", paid: true };
           }
           return { ok: true, rows };
         }
@@ -463,6 +486,36 @@ export function useFinderSearch(opts: {
     },
     onSuccess: (outcome, vars) => {
       if (!outcome.ok) {
+        if (!outcome.fallback) {
+          // HAT KOŞTU VE BAŞARISIZ OLDU — gerçek sebep gösterilir.
+          //
+          // Önceden bu dal yoktu: sunucudaki hata metni atılıp kullanıcı
+          // ikinci bir tam aramayı izliyor, o da bittiğinde ekranda yalnız
+          // "zaman aşımına uğradı" yazıyordu. Kullanıcı hatın neden çalışmadığını
+          // hiçbir zaman öğrenemiyordu.
+          setStalled(false);
+          setStillRunning(false);
+          const explained = describeDiscoveryFailure(outcome.reason);
+          setSearchError({
+            kind: outcome.reason === "empty_result" ? "unknown" : "server",
+            title:
+              outcome.reason === "empty_result"
+                ? "Bu nişte ölçülebilir ürün bulunamadı"
+                : "Arama motoru çalışamadı",
+            body: explained,
+            hint: "Sık görülen nedenler: Supabase servis rolü anahtarı eksik ya da migration uygulanmamış.",
+            niche: vars.niche,
+          });
+          void getPreflightFn({ data: {} })
+            .then((report) => {
+              const blocking = blockingSetupIssues(report);
+              if (blocking.length) setFallbackNotice(blocking.join(" · "));
+            })
+            .catch(() => {
+              /* teşhis alınamazsa yukarıdaki mesaj kalır */
+            });
+          return;
+        }
         if (outcome.reason === "still-running") {
           // HATA DEĞİL. Hat sunucuda çalışmaya devam ediyor ve sonucu
           // kalıcı yazıyor; ekranda kırmızı bir "zaman aşımı" kartı göstermek

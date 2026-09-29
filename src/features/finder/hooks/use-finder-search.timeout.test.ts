@@ -73,3 +73,50 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     expect(src).toContain("pipeline.mutate(vars);\n        });");
   });
 });
+
+/**
+ * HATIN GERÇEK HATASI SAKLANMAZ.
+ *
+ * Ölçülen hata: iş `failed` olduğunda `fallback: true` dönüyordu, yani kullanıcı
+ * sunucudaki hatayı hiç görmeden ikinci bir tam aramayı (klasik hat, 280 sn)
+ * izliyordu; o da bittiğinde ekranda yalnız "zaman aşımına uğradı" yazıyordu.
+ * Gerçek sebep — ne olursa olsun — ekrana hiç ulaşmıyordu.
+ */
+describe("gerçek hat durumunda klasik hat devreye girmez", () => {
+  it("başarısız iş `fallback: false` döner", async () => {
+    const src = await read(HOOK);
+    const failedAt = src.indexOf('state.status === "failed"');
+    expect(failedAt).toBeGreaterThan(-1);
+    const branch = src.slice(failedAt, failedAt + 1400);
+    expect(branch).toContain("fallback: false");
+    expect(branch).toContain("state.error ?? \"pipeline_failed\"");
+  });
+
+  it("boş sonuç da ikinci bir aramayı tetiklemez", async () => {
+    const src = await read(HOOK);
+    const emptyAt = src.indexOf('reason: "empty_result"');
+    expect(emptyAt).toBeGreaterThan(-1);
+    expect(src.slice(emptyAt - 120, emptyAt + 40)).toContain("fallback: false");
+  });
+
+  it("klasik hat YALNIZ altyapı hatasında devreye girer", async () => {
+    const src = await read(HOOK);
+    // Yapısal kontrol: `gen.mutate(vars)` çağrısı, `!outcome.fallback` ve
+    // `still-running` dallarının ALTINDA olmalı — yani gerçek hat hatası
+    // klasik hatta asla düşmez.
+    const genAt = src.indexOf("gen.mutate(vars)");
+    const failedGuardAt = src.indexOf("if (!outcome.fallback)");
+    const stillRunningAt = src.indexOf('outcome.reason === "still-running"');
+    expect(genAt).toBeGreaterThan(-1);
+    expect(failedGuardAt).toBeGreaterThan(-1);
+    expect(stillRunningAt).toBeGreaterThan(-1);
+    expect(failedGuardAt).toBeLessThan(stillRunningAt);
+    expect(stillRunningAt).toBeLessThan(genAt);
+  });
+
+  it("gerçek hata kullanıcıya Türkçe sebep olarak yazılır", async () => {
+    const src = await read(HOOK);
+    expect(src).toContain("describeDiscoveryFailure(outcome.reason)");
+    expect(src).toContain("Arama motoru çalışamadı");
+  });
+});
