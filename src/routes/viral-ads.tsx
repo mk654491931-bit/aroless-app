@@ -186,7 +186,7 @@ function ViralAdsPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-white/10 glass sticky top-0 z-40 backdrop-blur-xl">
+      <header className="border-b border-white/10 glass sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <BrandLogo subtitle="Viral Ads Library" />
           <div className="flex items-center gap-2">

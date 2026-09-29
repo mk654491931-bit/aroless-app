@@ -70,7 +70,7 @@ function HotProductPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/92">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
           <Link
             to="/"

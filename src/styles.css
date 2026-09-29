@@ -272,10 +272,52 @@ html.light [class*="text-white/"] {
   }
 }
 
+/* AKICILIK (1/3): `backdrop-filter` KALDIRILDI.
+   Ölçülen davranış: sayfanın arkasında `amb-*` katmanları sürekli hareket
+   ettiği için, blur'lu her yüzey kendi arkasını KARE BAŞINA yeniden
+   bulanıklaştırmak zorunda kalıyordu. `.glass` sayfada onlarca kez ve sabit
+   başlıkta kullanıldığı için bu tek başına kaydırmadaki kasmanın ana
+   kaynağıydı.
+   Görünüm korunur: zemin zaten neredeyse siyah ve arkasındaki sahne zaten
+   bulanık gradyanlardan oluşuyor; blur'un kalkması gözle ayırt edilmez,
+   o yüzden tonu biraz koyulaştırıp aynı "buzlu cam" hissi korundu. */
 @utility glass {
-  background: linear-gradient(180deg, oklch(1 0 0 / 0.04), oklch(1 0 0 / 0.02));
-  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, oklch(1 0 0 / 0.055), oklch(1 0 0 / 0.03));
   border: 1px solid oklch(1 0 0 / 0.08);
+}
+
+/* AKICILIK (3/3): dosyanın sonunda tanımlı iki ağır kural burada daha yüksek
+   özgüllükle (`html ...`) etkisiz bırakılır — sıraya bağlı kalmadan.
+   • `.matte-card` giriş kartı zaten %92 opak; 26px blur yalnızca maliyetti.
+   • `.cta-sweep::after` parıltısı `left` animasyonuyla her karede LAYOUT
+     tetikliyordu; aynı görüntü artık compositor'da çalışan `transform` ile
+     üretiliyor. Süre/eğri/`opacity` anahtar kareleri `cta-sheen` ile aynı
+     kalıyor (yalnız `animation-name` değişir), böylece hover hızlandırması
+     ve `prefers-reduced-motion` kapatması kendiliğinden çalışmaya devam eder.
+
+     GEOMETRİ NEDEN BU SAYILAR (doğrulanabilir çevrim):
+       `left` yüzdesi KAPSAYICI BLOĞUN genişliğine göredir; `translate3d`
+       yüzdesi ise ÖĞENİN KENDİ genişliğine göredir. `::after` `left:-35%`,
+       `width:46%` olduğundan 1% öge genişliği = 0.46% kaplayıcı genişlik.
+         başlangıç: istenen left −%45 − taban(−%35) = −%10 kaplayıcı
+                    = −10 / 46 = %−21.7 öge genişliği
+         bitiş   : istenen left %115 − taban(−%35) = %150 kaplayıcı
+                    = 150 / 46 = %326.1 öge genişliği
+       (Sadece mesafeyi %348 yazmak, başlangıcı %10 kaydırırdı: parlaklık
+       girişte kırpılırdı. skew de özgün animasyonda YOKTUR; görüntüyü
+       değiştirdiği için bilerek eklenmedi.) */
+html .matte-card {
+  backdrop-filter: none;
+}
+html .cta-sweep::after {
+  animation-name: cta-sheen-gpu;
+  will-change: transform;
+}
+@keyframes cta-sheen-gpu {
+  0% { transform: translate3d(-21.7%, 0, 0); opacity: 0; }
+  12% { opacity: 1; }
+  55% { transform: translate3d(326.1%, 0, 0); opacity: 0; }
+  100% { transform: translate3d(326.1%, 0, 0); opacity: 0; }
 }
 
 @utility glow {
@@ -428,9 +470,10 @@ html.light [class*="text-white/"] {
 @utility premium-card {
   position: relative;
   border-radius: var(--radius-xl);
+  /* AKICILIK (2/3): blur yerine koyu taban — liste ekranlarında onlarca
+     kartın aynı anda blur hesaplaması kaydırmayı sürüklüyordu. */
   background:
-    linear-gradient(180deg, oklch(1 0 0 / 0.05), oklch(1 0 0 / 0.015)), oklch(0.2 0.03 265 / 0.55);
-  backdrop-filter: blur(18px);
+    linear-gradient(180deg, oklch(1 0 0 / 0.055), oklch(1 0 0 / 0.02)), oklch(0.17 0.028 264 / 0.74);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.08),
     0 1px 2px oklch(0 0 0 / 0.4),
@@ -1476,8 +1519,9 @@ html.palette-aurora .amb-blob {
   background-size: 72px 72px;
   mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 5%, transparent 78%);
   opacity: 0.42;
-  animation: grid-pan 30s linear infinite;
-  will-change: transform;
+  /* AKICILIK: ızgaranın 30 sn'lik kayması `background-position` animasyonu,
+     yani TAM EKRAN boyutunda her karede yeniden çizim demekti. Izgara artık
+     sabit: fark gözle görülmez, ana iş parçacığı boş kalır. */
   translate: calc(var(--px) * -18px) calc(var(--py) * -14px + var(--sy) * 40px);
 }
 
@@ -1991,11 +2035,12 @@ html.palette-aurora .amb-swirl {
 .topbar {
   position: relative;
   z-index: 45;
-  backdrop-filter: blur(12px) saturate(135%);
+  /* AKICILIK: app üst çubuğu da blur'suz — geniş bir yüzeyin arkasını her
+     karede yeniden bulanıklaştırması, kazanç sağlamayan bir GPU harcaması. */
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--brand) 10%, oklch(0 0 0 / 0.28)),
-    oklch(0 0 0 / 0.14)
+    color-mix(in oklab, var(--brand) 10%, oklch(0 0 0 / 0.52)),
+    oklch(0 0 0 / 0.34)
   );
   border-bottom: 1px solid oklch(1 0 0 / 0.08);
 }
@@ -2067,7 +2112,6 @@ html.light .topbar {
     color-mix(in oklab, var(--brand-2) 12%, transparent)
   );
   padding: 1.1rem 1.25rem;
-  backdrop-filter: blur(10px);
 }
 @media (max-width: 639px) {
   .page-hero {
@@ -2117,8 +2161,7 @@ html.light .page-hero {
 
 /* Let the animated background read through the app chrome */
 [data-sidebar="sidebar"] {
-  background: color-mix(in oklab, var(--surface) 62%, transparent) !important;
-  backdrop-filter: blur(10px) saturate(125%);
+  background: color-mix(in oklab, var(--surface) 82%, transparent) !important;
 }
 
 /* Scroll reveal (auth showcase) */

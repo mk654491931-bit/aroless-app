@@ -83,7 +83,7 @@ function CompetitorAnalysisPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[oklch(0.16_0.03_255)]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[oklch(0.16_0.03_255)]/92">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <Link
             to="/"

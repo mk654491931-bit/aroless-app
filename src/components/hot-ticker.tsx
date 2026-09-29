@@ -83,7 +83,7 @@ export function HotTicker() {
       className="pointer-events-none fixed bottom-3 left-3 right-3 top-auto z-20 w-auto md:bottom-auto md:left-auto md:right-3 md:top-24 md:w-56"
       style={{ maxHeight: "calc(100dvh - 8rem)" }}
     >
-      <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/70 backdrop-blur-md">
+      <div className="pointer-events-auto flex max-h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-background/92">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/60 px-3 py-2">
           <span className="flex min-w-0 items-center gap-2">
             <Flame className="h-4 w-4 shrink-0 text-orange-400" />

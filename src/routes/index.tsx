@@ -426,7 +426,11 @@ function Dashboard() {
         <AmbientBackdrop />
         <GlobalRippleLayer />
         <HotTicker />
-        <header className="relative z-40 border-b border-white/10 glass top-light sticky top-0 backdrop-blur-xl">
+        {/* AKICILIK: sabit başlıkta `backdrop-blur-xl` YOK. Yapışkan bir
+            yüzeyin arkası kaydırma boyunca sürekli değiştiği için blur her
+            karede yeniden hesaplanıyordu; bu, kaydırma kasmasının en bilinen
+            sebebidir. `.glass` zemin tonu aynı görünümü bulanıklık olmadan korur. */}
+        <header className="relative z-40 border-b border-white/10 glass top-light sticky top-0">
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px divider-glow opacity-70" />
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
             <div className="shrink-0">

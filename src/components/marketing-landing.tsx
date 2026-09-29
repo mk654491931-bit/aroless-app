@@ -187,7 +187,7 @@ export function MarketingLanding() {
       </div>
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050608]/75 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050608]/92">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" className="shrink-0">
             <BrandLogo />
@@ -421,7 +421,7 @@ export function MarketingLanding() {
             {BENTO.map((card) => (
               <div
                 key={card.title}
-                className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/70 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-white/20 ${
+                className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/88 p-6 transition duration-300 hover:-translate-y-1 hover:border-white/20 ${
                   card.span ?? ""
                 }`}
               >
@@ -439,7 +439,7 @@ export function MarketingLanding() {
           </div>
 
           {/* Compliance banner */}
-          <div className="mt-4 flex flex-col items-start gap-5 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0F1117] via-[#0F1117]/80 to-[#0F1117] p-6 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col items-start gap-5 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0F1117] via-[#0F1117]/90 to-[#0F1117] p-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10">
                 <FileText size={18} className="text-emerald-300" />
@@ -462,7 +462,7 @@ export function MarketingLanding() {
 
         {/* ── Metrics ────────────────────────────────────────────── */}
         <section id="metrics" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/70 backdrop-blur-xl">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/88">
             <div className="border-b border-white/10 px-6 py-5 text-center">
               <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Engineered for throughput, built for trust
@@ -514,7 +514,7 @@ export function MarketingLanding() {
             {PLANS.map((p) => (
               <div
                 key={p.id}
-                className={`relative overflow-hidden rounded-2xl border p-6 backdrop-blur-xl ${p.highlight ? "border-indigo-400/40 bg-gradient-to-b from-indigo-500/10 via-[#0F1117]/70 to-[#0F1117]/70 shadow-[0_0_40px_-20px_rgba(99,102,241,0.6)]" : "border-white/10 bg-[#0F1117]/70"}`}
+                className={`relative overflow-hidden rounded-2xl border p-6 ${p.highlight ? "border-indigo-400/40 bg-gradient-to-b from-indigo-500/10 via-[#0F1117]/88 to-[#0F1117]/88 shadow-[0_0_40px_-20px_rgba(99,102,241,0.6)]" : "border-white/10 bg-[#0F1117]/88"}`}
               >
                 {p.highlight && (
                   <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">En popüler</span>
@@ -555,7 +555,7 @@ export function MarketingLanding() {
 
         {/* ── Final CTA ──────────────────────────────────────────── */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/80 px-6 py-14 text-center backdrop-blur-xl sm:px-12">
+          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/92 px-6 py-14 text-center sm:px-12">
             <div aria-hidden="true" className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl" />
             <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
             <div className="relative">
