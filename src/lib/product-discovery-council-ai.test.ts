@@ -279,4 +279,38 @@ describe("konsey eşzamanlılığı", () => {
       else process.env["COUNCIL_CONCURRENCY"] = previous;
     }
   });
+
+  it("DUVAR SAATİ KAZANIMI ÖLÇÜLÜR (sıralı → dalgalı)", async () => {
+    // Bu test, "neden yapıldı" sorusunun sayısal cevabıdır. Rol başına 20 ms
+    // gecikme taklit edilir: sıralı koşum 14 × 20 = ~280 ms, 4 dalgalı koşum
+    // ~4 × 20 = ~80 ms. Gerçek hayatta bu oran canlıda ölçülen ~10 sn × 14 rol
+    // (~140 sn) → ~40 sn ile aynıdır; hat 280 sn'lik istemci penceresine siğer.
+    const PER_CALL_MS = 20;
+    const slowCall = async (prompt: string) => {
+      await new Promise((resolve) => setTimeout(resolve, PER_CALL_MS));
+      return hashCall(prompt);
+    };
+
+    const measure = async (concurrency: string) => {
+      const previous = process.env["COUNCIL_CONCURRENCY"];
+      process.env["COUNCIL_CONCURRENCY"] = concurrency;
+      try {
+        const startedAt = Date.now();
+        const run = await runCouncilWithAi(rows, "air fryer", { call: slowCall });
+        return { ms: Date.now() - startedAt, roles: run.aiRoles.length };
+      } finally {
+        if (previous === undefined) delete process.env["COUNCIL_CONCURRENCY"];
+        else process.env["COUNCIL_CONCURRENCY"] = previous;
+      }
+    };
+
+    const sequential = await measure("1");
+    const parallel = await measure("4");
+
+    // Kazanç var mı?
+    expect(parallel.ms).toBeLessThan(sequential.ms);
+    // Ve bu kazanç ROLLERİ kaybettirmiyor: ikisi de 14 gerçek rol.
+    expect(sequential.roles).toBe(COUNCIL_AGENT_KEYS.length);
+    expect(parallel.roles).toBe(COUNCIL_AGENT_KEYS.length);
+  });
 });
