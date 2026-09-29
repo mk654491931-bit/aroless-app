@@ -69,13 +69,18 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     if (raw.length > MAX_BODY_BYTES) return text("Payload too large", 413);
 
     // 3. Signature verification — must come before ANY business logic.
+    //    401 (401 Unauthorized), 400 değil: istek kimliği doğrulanamadı ve
+    //    "401 Unauthorized" olarak raporlanması doğru HTTP anlamıdır. Paddle
+    //    2xx dışı HER yanıtta yeniden dener; sahte imzalı bir istek zaten
+    //    kalıcı olarak başarısızdır, ama yeniden deneme kuyruğunu kirletmemek
+    //    için gövde/yanıt bilgilendirici değildir.
     const signature = request.headers.get("paddle-signature") ?? "";
     let event: { eventId: string; eventType: string; occurredAt: string; data: unknown };
     try {
       event = await verifyPaddleWebhook(raw, signature);
     } catch (err) {
       console.warn("[Paddle Webhook] Signature verification failed:", err);
-      return text("Invalid signature", 400);
+      return text("Invalid signature", 401);
     }
 
     // 4. Parse raw JSON once for the audit log (kept small).

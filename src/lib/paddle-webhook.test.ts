@@ -52,11 +52,42 @@ describe("Paddle webhook — yapılandırma kapısı", () => {
 
   it("yapılandırma kapısı İMZA DOĞRULAMASINDAN ÖNCE çalışır", async () => {
     // Anahtarlar yokken doğrulama yapılamaz; kapı önce devreye girer ve 500
-    // döner. Aksi hâlde imza hatası 400 dönerdi ve "yapılandırma eksik"
+    // döner. Aksi hâlde imza hatası 401 dönerdi ve "yapılandırma eksik"
     // gizlenirdi.
     const { handlePaddleWebhook } = await import("./paddle-webhook.server");
     const res = await handlePaddleWebhook(post());
-    expect(res.status).not.toBe(400);
+    expect(res.status).not.toBe(401);
+  });
+});
+
+describe("Paddle webhook — imza doğrulama", () => {
+  beforeEach(() => {
+    process.env.PADDLE_API_KEY = "test-key";
+    process.env.PADDLE_WEBHOOK_SECRET_KEY = "test-secret";
+    process.env.PADDLE_CLIENT_TOKEN = "test-token";
+  });
+
+  it("geçersiz imza 401 döner ve HİÇBİR iş mantığı çalışmaz", async () => {
+    // Sahte imza, ağ çağrısı olmadan reddedilir: SDK doğrulamayı ham gövde
+    // üzerinde yapar. Supabase'e hiç gidilmez — bunu "kullanıcı bulunamadı"
+    // (200) ile karıştırmamak önemli: 401, isteğin kimliği doğrulanamadı
+    // demektir.
+    const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+    const res = await handlePaddleWebhook(post());
+    expect(res.status).toBe(401);
+    await expect(res.text()).resolves.toContain("Invalid signature");
+  });
+
+  it("paddle-signature başlığı hiç yoksa da 401 döner", async () => {
+    const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+    const res = await handlePaddleWebhook(
+      new Request("https://aroless.tech/api/webhooks/paddle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"event_id":"evt_1"}',
+      }),
+    );
+    expect(res.status).toBe(401);
   });
 
   it("çok büyük gövde 413 ile reddedilir (imzadan ÖNCE, iş yükü büyütülmez)", async () => {
