@@ -1,18 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "//functions": "VERCEL HOBBY AYARI. Hobby'de fonksiyon süresi 300 sn ile SINIRLIDIR ve bu süre platformda varsayilandan farkli olabilir (eski yapilandirmada 60 sn). Aradigimiz hat (kazima → Gemini → 14 ajan → 5 urun) tek bir istek icinde 150-260 sn yiyebildigi icin tavan ACIKCA yazilir; aksi halde platform istegi daha once keser ve kullanici 'zaman asimina ugradi' gorur.",
-  "functions": {
-    "**/*": {
-      "maxDuration": 300,
-      "//memory": "Hobby tavanı 1024 MB'dir. Nitro'nun SSR paketi + 14 ajanlik isleme birakiyorsa varsayilan 1024 MB'nin uzerine cikamaz; bu yuzden tavanin tamamini kirinca yerine gore degil, OOM yerine zaman asimi aliriz.",
-      "memory": 1024
-    }
-  },
-  "//env": "Hobby'da lambda 1024 MB ile sinirli oldugu icin V8'e acik bir tavan verilir. Varsayilan yigin (heap) bu limitin uzerine cikarsa V8 OOM killer ile surec oldurur ve kullanici sunucudan 500 alir; acik tavan yerine anlasilir bir heap hatasi verir.",
-  "env": {
-    "NODE_OPTIONS": "--max-old-space-size=768"
-  },
-  "//regions": "Kullanicinin yakinligindaki tek bolge. Nitro cikti dosyalarini tek bolgede uretir ve tum istekler oraya gider; cogul bolge tanimlamak Hobby'de ek ucret ve tutarsizlik getirir.",
-  "regions": ["fra1"]
+  "buildCommand": "npm run build"
 }
