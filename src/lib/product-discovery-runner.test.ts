@@ -26,17 +26,18 @@ describe("discoveryRunnerMode", () => {
     ).toBe("qstash");
   });
 
-  it("İMZA anahtarı yoksa QStash'i 'çalışıyor' SAYMAZ", () => {
-    // Ölçülen hata: token + worker sırrı varken adım ucu her teslimatı (doğru
-    // biçimde) 401 ile reddediyordu; yani kuyruk "kurulu" görünüyor ama iş
-    // hiçbir zaman koşmuyordu. İmza anahtarı olmadan QStash yolu SEÇİLMEZ.
+  it("İMZA anahtarı olmasa da token + işçi sırrı yeterlidir", () => {
+    // Ölçülen hata: üçüncü anahtar (QSTASH_CURRENT_SIGNING_KEY) şart koşulduğu
+    // için iki anahtarlı kurulumlarda kuyruk "kurulu" görünüyor ama her teslimat
+    // 401 alıyor ve iş hiç ilerlemiyordu. Artık adım ucu yayıncının ilettiği
+    // `x-job-secret` başlığını da kabul ettiği için iki anahtar YETERLİDİR.
     expect(
       discoveryRunnerMode({
         QSTASH_TOKEN: "tok",
         JOB_WORKER_SECRET: "secret",
         NITRO_PRESET: "vercel",
       }),
-    ).toBe("inline");
+    ).toBe("qstash");
   });
 
   it("kalıcı süreçte QStash olmadan süreç içi arka planı seçer", () => {
@@ -119,24 +120,20 @@ describe("discoveryChainHealth", () => {
     expect(health.missing).toEqual([]);
   });
 
-  it("İMZA anahtarı eksikse hat inline'a düşer ve EKSİK ANAHTAR ADI döner", () => {
+  it("İMZA anahtarı eksik olsa da hat qstash'a düşer (ikinci kabul yolu)", () => {
     const health = discoveryChainHealth({
       QSTASH_TOKEN: "tok",
       JOB_WORKER_SECRET: "secret",
     } as never);
-    // Bu, "kuyruk kurulu görünüyor ama hiçbir adım çalışmıyor" durumudur:
-    // teslimatlar imza doğrulanamadığı için 401 alır.
-    expect(health.mode).toBe("inline");
-    expect(health.missing).toEqual(["QSTASH_CURRENT_SIGNING_KEY"]);
+    // Yayıncı `x-job-secret` başlığını zaten iletiyor; teslimat imzasız da
+    // olsa doğrulanabilir. Eksik anahtar listelenmez.
+    expect(health.mode).toBe("qstash");
+    expect(health.missing).toEqual([]);
   });
 
-  it("hiçbir anahtar yoksa üçünü de listeler", () => {
+  it("hiçbir anahtar yoksa ZORUNLU ikisini de listeler", () => {
     const health = discoveryChainHealth({} as never);
-    expect(health.missing).toEqual([
-      "QSTASH_TOKEN",
-      "JOB_WORKER_SECRET",
-      "QSTASH_CURRENT_SIGNING_KEY",
-    ]);
+    expect(health.missing).toEqual(["QSTASH_TOKEN", "JOB_WORKER_SECRET"]);
   });
 
   it("eksik anahtar ADLARI döner, DEĞERLERİ asla", () => {

@@ -51,7 +51,14 @@ export const Route = createFileRoute("/api/product-discovery/step")({
         const signature =
           request.headers.get("upstash-signature") ??
           new URL(request.url).searchParams.get("upstash-signature");
-        const verified = await verifyQStashSignature(raw, signature);
+        const verified = await verifyQStashSignature(
+          raw,
+          signature,
+          undefined,
+          // İkinci kabul yolu: yayıncının ilettiği paylaşılan işçi sırrı.
+          request.headers.get("x-job-secret") ??
+            request.headers.get("upstash-forward-x-job-secret"),
+        );
         if (!verified.ok) {
           console.warn(`[discovery] imza reddi: ${verified.reason}`);
           return signatureRejection(verified);

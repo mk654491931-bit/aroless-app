@@ -133,11 +133,10 @@ services:
       # --- Kuyruk / işçi ---
       - key: QSTASH_TOKEN
         sync: false
-      # ⚠️ ZORUNLU: bunlar olmadan QStash'e yayınlanan Product Discovery adımı
-      # teslimatı 401 alır ve zincir sessizce hiç ilerlemez (kuyruk "kurulu"
-      # görünür ama hiçbir adım çalışmaz). Değerler QStash panelindeki
-      # Current/Next Signing Key ile AYNI olmalıdır. `/health` →
-      # `workflow.discoveryChain.missing` eksikleri adıyla listeler.
+      # ⚠️ OPSİYONEL: adım uçlarının JWS imza doğrulaması. Zorunlu DEĞİLDİR —
+      # adım ucu yayıncının ilettiği `x-job-secret` başlığını da kabul eder
+      # (fail-closed). Tanımlıysa ikinci bir doğrulama katmanı olur ve
+      # QStash panelindeki Current/Next Signing Key ile AYNI olmalıdır.
       - key: QSTASH_CURRENT_SIGNING_KEY
         sync: false
       - key: QSTASH_NEXT_SIGNING_KEY

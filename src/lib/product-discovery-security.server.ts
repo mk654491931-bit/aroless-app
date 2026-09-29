@@ -98,8 +98,39 @@ export async function verifyQStashSignature(
   raw: string,
   signature: string | null,
   envMap: NodeJS.ProcessEnv = process.env,
+  /** QStash'in yayın sırasında ilettiği `x-job-secret` başlığı (yoksa null). */
+  forwardedJobSecret?: string | null,
 ): Promise<SignatureResult> {
   const keys = qstashSigningKeys(envMap);
+
+  // ── İKİNCİ KABUL YOLU: PAYLAŞILAN İŞÇİ SIRRI ────────────────────────────
+  //
+  // Ölçülen hata: zincir QStash'in JWS imzasını doğrulamayı ŞART koşuyordu,
+  // yani `QSTASH_CURRENT_SIGNING_KEY` olmadan kuyruk "kurulu" görünüyor ama
+  // HER teslimat 401 alıyor ve hiçbir adım çalışmıyordu. Oysa `qstashPublish`
+  // zaten `Upstash-Forward-x-job-secret: JOB_WORKER_SECRET` başlığını
+  // iletiyor — yani ikinci bir kanıt zaten mevcut.
+  //
+  // Bu yol fail-closed'dır: sır ADIYLA eşleşmezse reddedilir ve gövde
+  // çözümlenmez. Sır yalnız sunucuda ve QStash'te bilinir; tarayıcıdan
+  // gönderilemez (adım ucu Bearer değil, sunucu-içi çağrıdır). Bu, kod tabanında
+  // zaten Paddle webhook'unda kullanılan aynı modeldir.
+  const jobSecret = (envMap["JOB_WORKER_SECRET"] ?? "").trim();
+  if (jobSecret) {
+    const provided = (forwardedJobSecret ?? "").trim();
+    if (provided && provided === jobSecret) {
+      try {
+        return { ok: true, body: JSON.parse(raw) as unknown };
+      } catch {
+        return {
+          ok: false,
+          reason: "MALFORMED_BODY",
+          status: 400,
+          message: "Geçersiz JSON gövdesi.",
+        };
+      }
+    }
+  }
 
   // QStash yapılandırılmamışsa: koruma kapalı, imza YOK sayılır (imza
   // üretilemediği için) — bu, imza üretmeyen yerel/önizleme ortamı içindir.

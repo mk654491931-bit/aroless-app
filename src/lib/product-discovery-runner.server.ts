@@ -61,8 +61,7 @@ export type DiscoveryRunnerMode = "qstash" | "in-process" | "inline";
 export function discoveryRunnerMode(env: EnvMap = process.env): DiscoveryRunnerMode {
   const token = readEnvValue(env, "QSTASH_TOKEN");
   const workerSecret = readEnvValue(env, "JOB_WORKER_SECRET");
-  const signingKey = readEnvValue(env, "QSTASH_CURRENT_SIGNING_KEY");
-  if (token && workerSecret && signingKey) return "qstash";
+  if (token && workerSecret) return "qstash";
   if (runsOnPersistentHost(env) && backgroundJobsEnabled(env)) return "in-process";
   return "inline";
 }
@@ -87,9 +86,9 @@ export function discoveryChainHealth(env: EnvMap = process.env): {
   const missing: string[] = [];
   if (!readEnvValue(env, "QSTASH_TOKEN")) missing.push("QSTASH_TOKEN");
   if (!readEnvValue(env, "JOB_WORKER_SECRET")) missing.push("JOB_WORKER_SECRET");
-  // İmza anahtarı olmadan teslimat adım ucunda 401 alır: kuyruk "kurulu"
-  // görünür ama hiçbir adım çalışmaz.
-  if (!readEnvValue(env, "QSTASH_CURRENT_SIGNING_KEY")) missing.push("QSTASH_CURRENT_SIGNING_KEY");
+  // `QSTASH_CURRENT_SIGNING_KEY` artık ZORUNLU DEĞİL: adım ucu yayıncının
+  // ilettiği `x-job-secret` başlığını da kabul eder. Yine de tanımlıysa
+  // ikinci bir doğrulama katmanıdır, o yüzden varlığı önerilir.
   return { mode: discoveryRunnerMode(env), missing };
 }
 

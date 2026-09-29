@@ -166,7 +166,7 @@ yüzden ağır iş uygulamanın **kendi** `/api/worker` ucunda güvenle koşar:
 
 | Kurulum | Ne yapılır | `/health` çıktısı |
 | --- | --- | --- |
-| **Ücretsiz** (önerilen) | Yalnız Vercel Hobby. Vercel env'de `QSTASH_TOKEN` + `JOB_WORKER_SECRET` + **`QSTASH_CURRENT_SIGNING_KEY`** olsun; **`DISCOVERY_WORKER_URL`/`WORKER_URL` BOŞ kalsın** | `workflow.discoveryChain.mode: "qstash"` |
+| **Ücretsiz** (önerilen) | Yalnız Vercel Hobby. Vercel env'de `QSTASH_TOKEN` + `JOB_WORKER_SECRET` olsun; **`DISCOVERY_WORKER_URL`/`WORKER_URL` BOŞ kalsın** | `workflow.discoveryChain.mode: "qstash"` |
 
 > ⚠️ **HANGİ ANAHTAR EKSİK?** `/health` → `workflow.discoveryChain.missing`
 > eksik anahtarları **adlarıyla** listeler. `workflow.dispatch` tek BAŞINA
@@ -193,9 +193,9 @@ Yeni hat (`/api/product-discovery/*`) dört adımlık QStash zinciridir ve Verce
 | --- | --- | --- |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | evet | İş kaydı, sahiplik ve kredi iadesi servis rolüyle yazılır (RLS bypass) |
 | `QSTASH_TOKEN` | evet | Adımları kuyruğa alan yayınlama isteği |
-| `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | evet | Adım uçlarının imza doğrulaması |
-| `JOB_WORKER_SECRET` | evet | Yayınlama için worker sırrı; eksikse zincir `inline` moda düşer |
+| `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | hayır** | Adım uçlarının JWS imza doğrulaması. **Zorunlu DEĞİLDİR:** adım ucu yayıncının ilettiği `x-job-secret` başlığını da kabul eder (fail-closed). Tanımlıysa ikinci bir katmandır |
 | `GEMINI_API_KEY` (veya `GEMINI_API_KEY_1..8`) | evet | Yalnız iki AI adımı: Top 75→15 kısa liste ve 14 ajan konseyi |
+| `JOB_WORKER_SECRET` | evet | Yayınlama için işçi sırrı; teslimatın doğrulanmasında da kullanılır |
 | `APP_URL` | önerilir | Adım adresleri boş env'den istek origin'ine düşer; sabit adres daha güvenli |
 | `COUNCIL_CONCURRENCY` | hayır | 14 ajanın aynı anda koşan rol sayısı (1-8, varsayılan 4) |
 

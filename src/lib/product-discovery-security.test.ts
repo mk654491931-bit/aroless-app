@@ -9,6 +9,16 @@ import { createHash } from "node:crypto";
 import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 
+/*
+ * YENİ KABUL YOLU — yayıncının ilettiği `x-job-secret`.
+ *
+ * Ölçülen hata: adım ucu yalnız QStash'in JWS imzasını kabul ediyordu. İki
+ * anahtarlı kurulumlarda (token + işçi sırrı, imza anahtarı olmadan) her
+ * teslimat 401 alıyor, kuyruk "kurulu" görünüyor ve hiçbir adım çalışmıyordu.
+ * `qstashPublish` zaten `Upstash-Forward-x-job-secret` ilettiği için ikinci
+ * bir kanıt mevcuttu; bu yol onu kabul eder ve fail-closed kalır.
+ */
+
 import {
   qstashSigningKeys,
   recallOwnership,
@@ -177,5 +187,36 @@ describe("iş sahipliği (ownership)", () => {
     const result = verifyOwnership(recallOwnership("yok-boyle-bir-run"), "u1");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("NOT_FOUND");
+  });
+});
+
+describe("verifyQStashSignature — paylaşılan işçi sırrı ikinci kabul yoludur", () => {
+  const env = { JOB_WORKER_SECRET: "gizli-sir" } as NodeJS.ProcessEnv;
+  const body = JSON.stringify({ runId: "r1", step: "deep" });
+
+  it("doğru x-job-secret gövdeyi çözer (imza anahtarı olmadan da)", async () => {
+    const result = await verifyQStashSignature(body, null, env, "gizli-sir");
+    expect(result.ok).toBe(true);
+  });
+
+  it("YANLIŞ sır fail-closed: gövde çözümlenmez", async () => {
+    const result = await verifyQStashSignature(body, null, env, "başka-sir");
+    expect(result.ok).toBe(false);
+  });
+
+  it("başlık hiç yoksa fail-closed", async () => {
+    const result = await verifyQStashSignature(body, null, env, null);
+    expect(result.ok).toBe(false);
+  });
+
+  it("JOB_WORKER_SECRET tanımlı değilse bu yol TOTAMEN devre dışıdır", async () => {
+    const result = await verifyQStashSignature(body, null, {} as NodeJS.ProcessEnv, "gizli-sir");
+    expect(result.ok).toBe(false);
+  });
+
+  it("sır doğru ama gövde bozuksa 400 (gövde hiç çözümlenmez)", async () => {
+    const result = await verifyQStashSignature("{bozuk", null, env, "gizli-sir");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
   });
 });
