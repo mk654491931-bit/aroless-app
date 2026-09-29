@@ -94,7 +94,20 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           consensus: payload.consensus,
         });
         if (!result.ok) {
-          return jsonResponse({ ok: false, status: "failed", error: result.error }, 200);
+          // ÖNEMLİ: 5xx DÖNDÜRÜLÜR, 200 DEĞİL.
+          //
+          // QStash bir teslimatı 2xx gördüğünde onu BAŞARILI sayar ve yeniden
+          // denemez. Adım çöktüğünde 200 dönmek, zincirin o adımda sessizce
+          // SON BULMASI demekti: satır `processing`e takılıyor, sonraki adım
+          // hiç yayınlanmıyor ve kullanıcı ekranda "çalışıyor" yazısını
+          // yarım saat görüyordu. 5xx ise QStash'ı YENİDEN DENEMEYE zorlar
+          // (`Upstash-Retries: 3`) — yani hat kendini kendine tamir eder.
+          //
+          // Yeniden denemenin pahalıya mal olmamasının garantisi: `claimDiscoveryStep`
+          // atomik CAS ile çalışır, iş zaten `failed` olduysa yeniden deneme
+          // adımı çalıştırmaz ve ucuzca `terminal` döner.
+          console.error(`[discovery] adım hatası: ${step} → ${result.error}`);
+          return jsonResponse({ ok: false, status: "failed", error: result.error }, 500);
         }
         if (result.deduped) {
           // Bu adım başka bir taşıyıcı tarafından alınmış (ya da iş bitmiş).

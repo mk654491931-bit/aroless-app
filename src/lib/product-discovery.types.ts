@@ -310,7 +310,23 @@ export const PRODUCT_DISCOVERY_TRANSITIONS: Record<
   scraping: ["filtering", "failed"],
   filtering: ["gemini_shortlist", "failed"],
   gemini_shortlist: ["deep_analysis", "completed", "failed"],
-  deep_analysis: ["completed", "failed"],
+  // `deep_analysis → deep_analysis` KENDİNE GEÇİŞTİR ve ZORUNLUDUR.
+  //
+  // Ölçülen hata: `final` adımının hem başlangıç hem çalışma durumu
+  // `deep_analysis`'tir (adım satırı `completed` yapmadan önce ayrı bir duruma
+  // geçmez). Sahiplenme CAS ile yapıldığı için `canTransition` bu geçişi
+  // reddediyor → `final` adımı HİÇ ÇALIŞMIYOR, hep "başka biri koşuyor"
+  // sanılıp atlanıyordu. Zincir üç adımda bitiyor, dördüncü adım hiç
+  // başlamıyor ve iş `processing`e KALICI takılıyordu. Kullanıcının ekranda
+  // "Analiz sunucuda çalışmaya devam ediyor" yazısını YARIM SAAT gördüğü
+  // durum tam olarak budur.
+  //
+  // Neden güvenli: veritabanı RPC'si `WHERE discovery_status = _from` ile
+  // çalıştığı için bu geçiş de atomiktir; satır zaten `completed`/`failed`
+  // olduysa CAS reddedilir. Sonucun bir kez yazılması ayrıca
+  // `finish_discovery_job` tarafından garanti edilir. Yani kendine geçiş
+  // zinciri BİTİRMEZ, yalnızca kilidin alınabilmesini sağlar.
+  deep_analysis: ["deep_analysis", "completed", "failed"],
   completed: [],
   failed: [],
 };

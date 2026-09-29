@@ -536,6 +536,27 @@ describe("job status state machine", () => {
     expect(canTransition("deep_analysis", "queued")).toBe(false);
   });
 
+  it("DÖRT ADIMIN HEPSİ sahiplenme kilidini alabilir (regresyon)", () => {
+    // ÖLÇÜLEN ÖLÜM: `final` adımının hem başlangıç hem çalışma durumu
+    // `deep_analysis` olduğu için `canTransition` kendine geçişi reddediyor,
+    // CAS kilidi alınamıyor ve `final` adımı HİÇ ÇALIŞMIYORDU. Zincir üç
+    // adımda bitiyor, iş `processing`e kalıcı takılıyor ve kullanıcı ekranda
+    // "Analiz sunucuda çalışmaya devam ediyor" yazısını yarım saat görüyordu.
+    //
+    // Buradaki tablo, `STEP_START_STATE`/`STEP_RUNNING_STATE` ile birebir aynı
+    // olmalıdır: bir adımın başlangıç→çalışma geçişi reddedilirse o adım
+    // zincirde hiç çalışmaz.
+    const CLAIM_TRANSITIONS: [string, string][] = [
+      ["queued", "scraping"], // scrape_filter
+      ["filtering", "gemini_shortlist"], // gemini
+      ["gemini_shortlist", "deep_analysis"], // deep
+      ["deep_analysis", "deep_analysis"], // final — kendine geçiş
+    ];
+    for (const [from, to] of CLAIM_TRANSITIONS) {
+      expect(canTransition(from as never, to as never)).toBe(true);
+    }
+  });
+
   it("herhangi bir adım `failed` olabilir", () => {
     for (const s of ["queued", "scraping", "filtering", "gemini_shortlist", "deep_analysis"]) {
       expect(canTransition(s as never, "failed")).toBe(true);
