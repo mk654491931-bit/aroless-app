@@ -95,7 +95,10 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     name: parsed.title.slice(0, 180),
     brand: parsed.brand.slice(0, 60),
     seller: parsed.seller.slice(0, 60),
-    category: "",
+    // Kategori artık daima ölçülen alandan gelir. Önceden bilerek `""` idi:
+    // hiçbir kaynak vermediği için ölü bir alandı ve kısa listede her ürün
+    // kategorisiz çıkıyordu. Boş gelirse yine boş kalır — UYDURMA YAPMAZ.
+    category: parsed.category.slice(0, 80),
     priceUsd: parsed.priceUsd,
     rating: parsed.rating,
     ratingCount: parsed.ratingCount,
@@ -104,6 +107,11 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     url: parsed.url,
     notes: parsed.notes.slice(0, 200),
     viewed90d: parsed.viewed90d,
+    id: parsed.id.slice(0, 120),
+    // Görsel URL'si uzunluk sınırı: sınır aşan URL kırpılır ama boşsa kapı
+    // onu eler (bkz. `product-discovery-shortlist.server.ts`).
+    imageUrl: parsed.imageUrl.trim().slice(0, 500),
+    salesVolume: parsed.salesVolume,
     fingerprint: productFingerprint({
       title: parsed.title,
       brand: parsed.brand,

@@ -54,6 +54,30 @@ export const RawProductSchema = z.object({
    * içi sıra anlamlıdır.
    */
   viewed90d: z.number().int().min(0).nullable().default(null),
+
+  /**
+   * KAYNAK SATIRININ KENDİ KİMLİĞİ. Boş olabilir — çoğu kaynak vermez.
+   * Verildiğinde `gemini_shortlist` yamasına geri izlenebilir adres olarak
+   * taşınır; verilmezse kısa liste üretirken parmak izinden türetilir.
+   */
+  id: z.string().default(""),
+  /**
+   * MAĞAZANIN VERDİĞİ KATEGORİ ("Elektronik > Küçük Ev Aletleri"). Boş olabilir.
+   * ÖNEMLİ: bu alan kanıt YUVASI DEĞİLDİR (bkz. `EVIDENCE_SLOTS`), çünkü
+   * kategorisi olmayan ama satan bir ürün de ölçülmüş bir üründür.
+   */
+  category: z.string().default(""),
+  /**
+   * ÜRÜN GÖRSELİ URL'Sİ. Boş olabilir (`default("")`), ama ilk aşama kalite
+   * kapısı (`product-discovery-shortlist.server.ts`) görselsiz satırı eler:
+   * görseli olmayan ürün vitrinde boş kutu olarak görünür.
+   */
+  imageUrl: z.string().default(""),
+  /**
+   * SATIŞ ADEDİ (dönemsel hacim). `null` = ölçülmedi.
+   * `viewed90d` "kaç kişi gördü"yse bu "kaçı aldı"dır; ikisi karıştırılmaz.
+   */
+  salesVolume: z.number().int().min(0).nullable().default(null),
 });
 /**
  * Kaynakların döndürdüğü HAM şekil.
@@ -97,6 +121,13 @@ export const NormalizedProductSchema = z.object({
   notes: z.string().default(""),
   /** 90 günlük görüntülenme (ölçüldüyse). `signals.demand` bunu kullanır. */
   viewed90d: z.number().int().min(0).nullable().default(null),
+
+  /** Kaynak satırının kimliği (yoksa kısa listede parmak izinden türetilir). */
+  id: z.string().default(""),
+  /** Ürün görseli URL'si — ilk aşama kalite kapısı bunu zorunlu tutar. */
+  imageUrl: z.string().default(""),
+  /** Satış adedi (ölçüldüyse). `null` = ölçülmedi. */
+  salesVolume: z.number().int().min(0).nullable().default(null),
 
   /**
    * Tekilleştirme anahtarı: normalize başlık + marka + satıcı.
