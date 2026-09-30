@@ -788,8 +788,19 @@ export async function qstashFanOut(args: {
   url: string;
   body: Record<string, unknown>;
   dedupeId: string;
+  /**
+   * Bu teslimat için `Upstash-Timeout` (sn). Verilmezse host'un tamamı için
+   * seçilen varsayılan kullanılır.
+   *
+   * NEDEN GEREKLİ: Product Discovery hattı artık her mesajda yalnız bir DİLİM
+   * (varsayılan 10 sn) koşar. Böyle bir teslimat için 298 sn beklemek, ölmüş bir
+   * fonksiyonu dört dakika boyunca arkasında tutmak demektir: kullanıcı sonucu
+   * geç görür ve QStash kotası boşa yanar. Dilim yolları kendi kısa
+   * penceresini geçer (`sliceDeliveryTimeoutSeconds`).
+   */
+  timeoutSeconds?: number;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
-  return qstashPublish(args.url, args.body, args.dedupeId);
+  return qstashPublish(args.url, args.body, args.dedupeId, args.timeoutSeconds);
 }
 
 /**
@@ -885,13 +896,20 @@ async function qstashPublish(
   destinationUrl: string,
   body: unknown,
   dedupeId: string,
+  /** Teslimat başına pencere (sn); verilmezse host varsayılanı. */
+  timeoutSeconds?: number,
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   const token = qstashToken();
   const secret = workerSecret();
   if (!token || !secret) return { ok: false, error: "QSTASH_NOT_CONFIGURED" };
   if (!destinationUrl) return { ok: false, error: "WORKER_URL_NOT_CONFIGURED" };
 
-  const qstashTimeout = `${qstashTimeoutSeconds()}s`;
+  // 15 sn alt sınırdır: bu değerin altında QStash soğuk başlangıcı bekleyemez ve
+  // sağlıklı bir dilim zaman aşımına uğrar gibi görünür.
+  const window = Number.isFinite(timeoutSeconds) && (timeoutSeconds as number) > 0
+    ? Math.min(LONG_LIVED_MAX_SECONDS, Math.max(15, Math.round(timeoutSeconds as number)))
+    : qstashTimeoutSeconds();
+  const qstashTimeout = `${window}s`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);

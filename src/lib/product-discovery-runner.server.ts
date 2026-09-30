@@ -23,9 +23,19 @@
 // zincir yine de doğru sırayla koşar. Bu ayrım kritik: ilerlemeyi yalnız durum
 // sütununa bağlamak, "kolon yok" durumunda yanlış adımı çalıştırırdı.
 //
+// DİLİMLER — HER TESLİMAT EN FAZLA BİR DİLİM (varsayılan 10 sn):
+//
+// Her taşıyıcı (QStash teslimatı, süreç içi arka plan işi, tarayıcı yoklaması)
+// AYNI kuralı uygular: bir adımı dilim dilim koşar, her dilimin ilerlemesini
+// ara noktaya yazar ve sıradaki dilime bırakır. Devam dilimlerinin sırası
+// `slices` defterinden okunur (`product-discovery-slices.server.ts`), satırın
+// yaşından DEĞİL — önceki dilim biteli saniyeler olduğu için satır taze
+// görünür. Böylece uzun adımlar hiçbir fonksiyonu dakikalarca meşgul etmez.
+//
 // UÇTAN UCA GARANTİLER: kredi `/start`ta bir kez düşülür (`discovery:<runId>`),
 // her adım en fazla bir kez çalışır (`advanceDiscoveryStatus` compare-and-swap),
-// hata hâlinde kredi TAM BİR KEZ iade edilir.
+// aynı dilim iki kez koşmaz (defter + QStash dedupe kimliği), hata hâlinde kredi
+// TAM BİR KEZ iade edilir.
 // ============================================================================
 
 import { readEnvValue, runsOnPersistentHost } from "./host-runtime.server";
@@ -40,6 +50,15 @@ import {
   type DiscoveryJobRecord,
 } from "./product-discovery-jobs.server";
 import { DISCOVERY_STEPS, type DiscoveryStep } from "./product-discovery-qstash.server";
+import {
+  decideSliceClaim,
+  lastStepSlice,
+  MAX_STEP_SLICES,
+  readSliceState,
+  sliceDeadlineAt,
+  sliceWorkMs,
+  writeSliceState,
+} from "./product-discovery-slices.server";
 import {
   executeProductDiscoveryStep,
   type StepOutcome,
@@ -134,8 +153,20 @@ const STEP_RUNNING_STATE: Record<DiscoveryStep, ProductDiscoveryStatus> = {
  */
 export const STALE_STEP_TAKEOVER_MS = 60_000;
 
-/** Bir adımı başlatmak için gereken en küçük bütçe (ms). */
-export const MIN_STEP_BUDGET_MS = 25_000;
+/**
+ * BİR DİLİMİ başlatmak için gereken en küçük bütçe (ms).
+ *
+ * NEDEN ARTIK "ADIM" DEĞİL "DİLİM" EŞİĞİ: eskiden her adım tek bir istekte
+ * koşuyordu ve ona en az 25 sn tanımak zorundaydık (`MIN_STEP_BUDGET_MS`). Artık
+ * her teslimat en fazla bir dilim (varsayılan 10 sn) koşar ve devam dilimleri
+ * birbirini hızla takip eder. Bu yüzden zincir kapısı küçüldü: kalan süre tek
+ * bir dilime yetiyorsa adım yine başlar, yetmiyorsa dürüstçe durur (iş zaten
+ * ara noktada saklıdır ve bir sonraki yoklama/dilim devam eder).
+ *
+ * Süre neredeyse bittiğinde adımlar `forceFinish` ile "kalan işi deterministiğe
+ * düşürüp bitir" der; yani kullanıcı hiçbir zaman yarım bir sonuç görmez.
+ */
+export const MIN_SLICE_BUDGET_MS = 4_000;
 
 /** Kalp atışı aralığı (ms) — `STALE_STEP_TAKEOVER_MS`in yarısından kısa. */
 export const DISCOVERY_HEARTBEAT_MS = Math.floor(STALE_STEP_TAKEOVER_MS / 3);
@@ -239,12 +270,27 @@ export type StepClaim =
  * gecikme üretir; `deep` bitmemişse ara nokta bunu söyler ve sıradaki adım
  * zaten `deep`tir). Bu ayrım, `final`ın sonucu YALNIZ BİR KEZ yazmasıyla
  * birlikte güvenlidir (`finish_discovery_job`: `WHERE status = 'processing'`).
+ *
+ * DEVAM DİLİMLERİ (`opts.slice > 0`) — İKİNCİ İSTİSNA:
+ *
+ * Bir adım artık tek istekte bitmek zorunda değildir; dilim dilim ilerler ve
+ * her dilim AYNI durum sütununda (`running`) bekler. Bu yüzden bir devam dilimi
+ * için satırın yaşına bakmak YANLIŞ olurdu: önceki dilim biteli saniyeler
+ * olmuştur, satır taze görünür ve devralma kuralı devam dilimini sonsuza kadar
+ * bloke ederdi.
+ *
+ * Doğru ölçüt DİLİM DEFTERİDİR (`decideSliceClaim`): yalnız `next === slice`
+ * olan dilim koşar. Gecikmiş bir tekrar teslimat hiçbir şey yapmaz, erken gelen
+ * teslimat bekler. Kilidin tazelenmesi kendine geçişle ("running → running")
+ * yapılır; durum İLERLEMEZ, terminal yazımı yine `finishDiscoveryJob`a kalır.
  */
 export async function claimDiscoveryStep(
   runId: string,
   step: DiscoveryStep,
   /** Çağıranın elinde varsa ara nokta; yoksa burada okunur (fazladan sorgu yok). */
   checkpoint?: DiscoveryCheckpoint | null,
+  /** `slice > 0` → bu teslimat bir devam dilimidir (bkz. yukarıdaki not). */
+  opts: { slice?: number } = {},
 ): Promise<StepClaim> {
   const job = await readDiscoveryJob(runId);
   if (!job) return { state: "missing", job: null };
@@ -252,6 +298,31 @@ export async function claimDiscoveryStep(
 
   const start = STEP_START_STATE[step];
   const running = STEP_RUNNING_STATE[step];
+  const slice = Number.isFinite(opts.slice) && (opts.slice as number) > 0
+    ? Math.floor(opts.slice as number)
+    : 0;
+
+  if (slice > 0) {
+    const cursor = readSliceState(checkpoint?.slices, step);
+    if (decideSliceClaim(cursor.next, slice) !== "run") return { state: "in-progress", job };
+    // `final` devam dilimi ancak `deep` GERÇEKTEN bittiyse koşar: sıra bozulursa
+    // elinde oy satırı olmayan son adım sahte bir "nihai liste" üretirdi.
+    if (step === "final") {
+      const done = (checkpoint ?? (await readDiscoveryCheckpoint(runId)))?.done ?? [];
+      if (!done.includes("deep")) return { state: "in-progress", job };
+    }
+    const refreshed = await advanceDiscoveryStatus({
+      runId,
+      from: running,
+      to: running,
+      progress: job.discoveryProgress,
+      step,
+    });
+    return refreshed
+      ? { state: "claimed", job: { ...job, discoveryStatus: running } }
+      : { state: "in-progress", job };
+  }
+
   let claimFrom = job.discoveryStatus;
 
   if (step === "final") {
@@ -320,45 +391,45 @@ export async function runOneDiscoveryStep(args: {
   batch?: unknown[];
   consensus?: unknown[];
   deadlineAt?: number;
+  /** Bu teslimatın dilim numarası (0 = adımın ilk dilimi). */
+  slice?: number;
 }): Promise<
   | { ok: true; deduped: false; outcome: Extract<StepOutcome, { ok: true }> }
   | { ok: true; deduped: true }
   | { ok: false; error: string }
 > {
   // ARA NOKTA, SAHİPLENMEDEN ÖNCE okunur: `final`ın kilit kararı buna bağlıdır
-  // (`deep` gerçekten bitti mi?) ve aynı okuma aşağıda aday/oy girdisi olarak
-  // da kullanılır — fazladan sorgu yapılmaz.
+  // (`deep` gerçekten bitti mi?), devam diliminin sırası DİLİM DEFTERİNDEN
+  // okunur ve aynı okuma aşağıda aday/oy girdisi olarak da kullanılır —
+  // fazladan sorgu yapılmaz.
   const checkpoint = await readDiscoveryCheckpoint(args.runId);
-  const claim = await claimDiscoveryStep(args.runId, args.step, checkpoint);
+  const slice =
+    Number.isFinite(args.slice) && (args.slice as number) > 0 ? Math.floor(args.slice as number) : 0;
+  const claim = await claimDiscoveryStep(args.runId, args.step, checkpoint, { slice });
   if (claim.state === "in-progress") return { ok: true, deduped: true };
   if (claim.state === "terminal") return { ok: true, deduped: true };
   if (claim.state === "missing") return { ok: false, error: "İş kaydı bulunamadı." };
 
   const batch = args.batch?.length ? args.batch : (checkpoint?.shortlist ?? []);
   const consensus = args.consensus?.length ? args.consensus : (checkpoint?.votes ?? []);
+  const cursor = readSliceState(checkpoint?.slices, args.step);
 
-  // Adım bütçesi SABİT 200 sn DEĞİL, teslimatın GERÇEK penceresinden türetilir
-  // (`Upstash-Timeout`). Neden: teslimat penceresi işçinin barındığı host'a göre
-  // değişir (Vercel 298 sn, kalıcı süreç 890 sn) ve sabit bir değer ya gereksiz
-  // zaman yakar ya da teslimatı platform öldürür. 20 sn yanıt payı bırakılır ki
-  // adım platformdan ÖNCE kendi kendine durup ara sonuçla dönsün.
-  const deliveryWindowMs = Math.max(
-    MIN_STEP_BUDGET_MS,
-    (await import("./discovery-jobs.server")).qstashTimeoutSeconds() * 1000 - 20_000,
-  );
-
-  // ZİNCİR SÖZÜ (280 sn) ADIMIN İÇİNDE DE KORUNUR.
+  // DİLİM BÜTÇESİ — ADIMIN TAMAMI DEĞİL, BU TESLİMAT İÇİN.
   //
-  // ÖLÇÜLEN HATA: adım yalnız TESLİMAT penceresini biliyordu (Vercel'de ~278
-  // sn). `deep`, zincirin üçüncü adımıdır ve önündeki kazıma + Gemini
-  // (~30-60 sn) ile birlikte bu pencereyi sonuna kadar kullandığında sonuç 300
-  // sn'yi aşıyordu. `/start`ta hesaplanan MUTLAK bitiş anı (`deadlineAtMs`) her
-  // QStash gövdesiyle taşınır; adım bu andan sonrasını kullanmaz ve konseyin
-  // yetişmeyen rolleri deterministiğe düşer (uydurma değil, dürüst yedek).
-  const stepDeadline = Math.min(
-    Date.now() + deliveryWindowMs,
-    args.deadlineAt ?? Number.POSITIVE_INFINITY,
-  );
+  // ÖLÇÜLEN HATA (dilimlemeden önce): adım bütçesi teslimat penceresinden
+  // türetiliyordu (Vercel'de ~278 sn). Yani `deep`, 14 rolü konuşturup tek bir
+  // fonksiyonu dakikalarca meşgul edebiliyor; `gemini` anahtar rotasyonuyla
+  // aynı pencereyi yiyebiliyordu. Kullanıcının isteği bunun tersidir: HER işlem
+  // 10 sn'ye bölünür. Artık dilim bitişi tek ölçüttür (`sliceDeadlineAt`),
+  // zincirin mutlak sözü (`deadlineAtMs`) yalnız ÜST SINIR olarak uygulanır.
+  const sliceDeadline = sliceDeadlineAt({ chainDeadlineAt: args.deadlineAt });
+  const chainLeft =
+    args.deadlineAt === undefined ? Number.POSITIVE_INFINITY : args.deadlineAt - Date.now();
+
+  // ZORLA BİTİRME İKİ DURUMDA: adım son dilimine geldiyse (sonsuz zincir
+  // olmaz) ya da zincirin kalan süresi bir dilime yetmiyorsa. İki durumda da
+  // adım kalan işi DETERMİNİSTEĞE düşürüp biter — uydurmaz, dürüstçe yedekler.
+  const forceFinish = lastStepSlice(slice) || chainLeft < sliceWorkMs();
 
   // KALP ATIŞI — SAHİPLENİLMİŞ ADIMIN "CANLI" GÖRÜNMESİ.
   //
@@ -383,7 +454,13 @@ export async function runOneDiscoveryStep(args: {
       input: args.input,
       batch,
       consensus,
-      deadlineAt: stepDeadline,
+      // Zincirin bitiş anı: adım "zorla bitir" kararını buna göre verir.
+      deadlineAt: args.deadlineAt ?? sliceDeadline,
+      // BU dilimin bitiş anı: tüm model çağrıları bunu aşamaz.
+      sliceDeadlineAt: sliceDeadline,
+      slice,
+      sliceState: cursor.partial,
+      forceFinish,
     });
   } finally {
     heartbeat.stop();
@@ -394,12 +471,33 @@ export async function runOneDiscoveryStep(args: {
   // Ara nokta yazımı: QStash yolunda da gerekir, çünkü aynı işin kalan adımları
   // kuyruk kaybolursa tarayıcı yoklaması tarafından sürdürülür.
   const previous = checkpoint ?? { v: 1 as const, done: [], shortlist: [], votes: [] };
+
+  if (outcome.partial) {
+    // ADIM BİTMEDİ — İLERLEME KAYBOLMAZ.
+    //
+    // `done`e EKLENMEZ (adım tamamlanmadı), ama dilim defteri ilerler ve
+    // adıma özel kısmi durum (ör. konseyde o ana kadar konuşan roller ve
+    // puanları) saklanır. Sıradaki dilim tam olarak buradan devam eder; bu
+    // yüzden uzun bir adım için hiçbir model çağrısı iki kez yapılmaz.
+    await saveDiscoveryCheckpoint(args.runId, {
+      ...previous,
+      slices: writeSliceState(previous.slices, args.step, {
+        next: slice + 1,
+        partial: outcome.sliceState,
+      }),
+    });
+    return { ok: true, deduped: false, outcome };
+  }
+
   if (!previous.done.includes(args.step)) {
     await saveDiscoveryCheckpoint(args.runId, {
       v: 1,
       done: [...previous.done, args.step],
       shortlist: outcome.products,
       votes: outcome.consensus,
+      // Adım bitti: defter "sonraki dilim yok" durumuna çekilir ki gecikmiş bir
+      // dilim teslimatı `already-done` görüp hiçbir şey yapmasın.
+      slices: writeSliceState(previous.slices, args.step, { next: slice + 1, partial: undefined }),
     });
   }
 
@@ -429,7 +527,7 @@ export async function runDiscoveryChain(args: {
   /** Bu istekte harcanabilecek süre (ms). */
   budgetMs: number;
 }): Promise<ChainOutcome> {
-  const deadline = Date.now() + Math.max(MIN_STEP_BUDGET_MS, args.budgetMs);
+  const deadline = Date.now() + Math.max(MIN_SLICE_BUDGET_MS, args.budgetMs);
   const ran: DiscoveryStep[] = [];
   /** Bu çağrıda adımlara harcanan gerçek süre (ms) — teşhis için. */
   let spentMs = 0;
@@ -443,76 +541,129 @@ export async function runDiscoveryChain(args: {
     // adım asla erken (elinde girdi yokken) koşmaz.
     if (checkpoint.done.includes(step)) continue;
 
-    if (Date.now() + MIN_STEP_BUDGET_MS > deadline) {
-      return { completed: false, ran, stop: "budget" };
-    }
-
-    // Adımı atomik sahiplen. `advanceDiscoveryStatus` migration'sız şemada
-    // (RPC yok) başarı sayılır: orada kilit yoktur ama zincir yine doğru
-    // sırayla ilerler ve ara nokta çift çalışmayı zaten engeller.
-    const claim = await claimDiscoveryStep(args.runId, step, checkpoint);
-    if (claim.state === "missing") {
-      return { completed: false, ran, stop: "terminal", error: "İş kaydı bulunamadı." };
-    }
-    if (claim.state === "terminal") {
-      return { completed: claim.job.status === "completed", ran, stop: "terminal" };
-    }
-    if (claim.state === "in-progress") return { completed: false, ran, stop: "in-progress" };
-
-    console.log(`[discovery] adım başladı: ${step} (run ${args.runId.slice(0, 8)})`);
     const stepStartedAt = Date.now();
+    let finished = false;
 
-    // Aynı kalp atışı QStash yolunda da zorunluydu: yoklama sürücüsü de
-    // `final`i çalıştırabiliyor ve bu yolda da kesilme sessiz kilit bırakıyordu.
-    const heartbeat = startDiscoveryHeartbeat(args.runId);
-    let outcome: StepOutcome;
-    try {
-      outcome = await executeProductDiscoveryStep({
-        step,
-        runId: args.runId,
-        userId: args.userId,
-        input: args.input,
-        batch: checkpoint.shortlist,
-        consensus: checkpoint.votes,
-        // Adıma isteğin bitişine kadar zaman tanınır: `deep` gibi uzun adımlar
-        // platform kesmeden ÖNCE kendi kendine durur, iş yarıda kalmaz.
-        deadlineAt: deadline,
-      });
-    } finally {
-      heartbeat.stop();
-    }
+    // ---------- ADIMIN DİLİMLERİ ----------
+    // İlk dilim tam bir adım bütçesi ister; devam dilimleri zaten ilerleme
+    // kaydettiği için çok daha küçük bir pencereye sığar. Bu ayrım, "bütçe
+    // bitti" kararının yarım kalmış bir adımı çöpe atmasını engeller.
+    for (let slice = readSliceState(checkpoint.slices, step).next; ; slice = slice + 1) {
+      // Kapı: kalan bütçe tek bir dilime yetmiyorsa yeni dilim başlatılmaz.
+      // Adımlar zaten dilim dilim ilerliyor; durmak ilerlemeyi KAYBETTİRMEZ
+      // (ara nokta saklıdır, sıradaki sürücü kaldığı yerden devam eder).
+      if (Date.now() + MIN_SLICE_BUDGET_MS > deadline) {
+        return { completed: false, ran, stop: "budget" };
+      }
 
-    if (!outcome.ok) {
-      // Adım çöktü: iş `failed` ve kredi iade edildi (executor yaptı).
-      console.error(
-        `[discovery] adım çöktü: ${step} ${Date.now() - stepStartedAt}ms · ${outcome.error}`,
+      // SONSUZ DİLİM SİGORTASI.
+      //
+      // Adımlar son dilimde zorla bitirilir (`forceFinish`) ama bir adım bunu
+      // yok sayarsa zincir kendi kendini besler ve kullanıcı hiç sonuç görmez.
+      // Bu tavan, hatalı bir adımın bile işi sonsuza kadar döndürememesini
+      // garanti eder; durum dürüstçe "bütçe bitti" olarak raporlanır.
+      if (slice >= MAX_STEP_SLICES) {
+        console.error(`[discovery] dilim tavanı aşıldı: ${step} (${slice} dilim)`);
+        return { completed: false, ran, stop: "budget" };
+      }
+
+      // Adımı (dilimi) atomik sahiplen. `advanceDiscoveryStatus` migration'sız
+      // şemada (RPC yok) başarı sayılır: orada kilit yoktur ama zincir yine
+      // doğru sırayla ilerler ve ara nokta çift çalışmayı zaten engeller.
+      const claim = await claimDiscoveryStep(args.runId, step, checkpoint, { slice });
+      if (claim.state === "missing") {
+        return { completed: false, ran, stop: "terminal", error: "İş kaydı bulunamadı." };
+      }
+      if (claim.state === "terminal") {
+        return { completed: claim.job.status === "completed", ran, stop: "terminal" };
+      }
+      if (claim.state === "in-progress") return { completed: false, ran, stop: "in-progress" };
+
+      const cursor = readSliceState(checkpoint.slices, step);
+      const sliceDeadline = sliceDeadlineAt({ chainDeadlineAt: deadline });
+
+      if (slice === 0) {
+        console.log(`[discovery] adım başladı: ${step} (run ${args.runId.slice(0, 8)})`);
+      }
+
+      // Aynı kalp atışı QStash yolunda da zorunluydu: yoklama sürücüsü de
+      // `final`i çalıştırabiliyor ve bu yolda da kesilme sessiz kilit bırakıyordu.
+      const heartbeat = startDiscoveryHeartbeat(args.runId);
+      let outcome: StepOutcome;
+      try {
+        outcome = await executeProductDiscoveryStep({
+          step,
+          runId: args.runId,
+          userId: args.userId,
+          input: args.input,
+          batch: checkpoint.shortlist,
+          consensus: checkpoint.votes,
+          // Zincirin bitişi ve BU dilimin bitişi ayrı ayrı verilir: model
+          // çağrıları dilimin penceresini aşamaz.
+          deadlineAt: deadline,
+          sliceDeadlineAt: sliceDeadline,
+          slice,
+          sliceState: cursor.partial,
+          forceFinish: lastStepSlice(slice) || deadline - Date.now() < sliceWorkMs(),
+        });
+      } finally {
+        heartbeat.stop();
+      }
+
+      if (!outcome.ok) {
+        // Adım çöktü: iş `failed` ve kredi iade edildi (executor yaptı).
+        console.error(
+          `[discovery] adım çöktü: ${step} ${Date.now() - stepStartedAt}ms · ${outcome.error}`,
+        );
+        return { completed: false, ran, stop: "terminal", error: outcome.error };
+      }
+
+      if (outcome.partial) {
+        // Dilim bitti, adım bitmedi: ilerleme yazılır ve döngü devam eder.
+        checkpoint = {
+          ...checkpoint,
+          slices: writeSliceState(checkpoint.slices, step, {
+            next: slice + 1,
+            partial: outcome.sliceState,
+          }),
+        };
+        console.log(
+          `[discovery] dilim bitti (devam ediyor): ${step}#${slice} ` +
+            `${Date.now() - stepStartedAt}ms · kalan=${outcome.sliceRemaining ?? "?"}`,
+        );
+        await saveDiscoveryCheckpoint(args.runId, checkpoint);
+        continue;
+      }
+
+      // SÜRE ÖLÇÜMÜ — canlı teşhisinin tek satırı.
+      //
+      // Neden: "zaman aşımına uğradı" belirtisinin hangi adımdan geldiği
+      // tahminle değil, ÖLÇÜMLE anlaşılır. Kümelenmiş süreler hat bütçesinin
+      // nerede harcandığını doğrudan gösterir (canlıda: kazıma ~25 sn,
+      // Gemini ~20 sn, konsey ~40 sn, sıralama ~5 sn).
+      spentMs += Date.now() - stepStartedAt;
+      console.log(
+        `[discovery] adım bitti: ${step} ${Date.now() - stepStartedAt}ms ` +
+          `· dilim=${slice + 1} · durum=${outcome.status} ` +
+          `· ürün=${outcome.products.length} · oy=${outcome.consensus.length} ` +
+          `(kümelenmiş ${spentMs}ms)`,
       );
-      return { completed: false, ran, stop: "terminal", error: outcome.error };
+
+      ran.push(step);
+      checkpoint = {
+        v: 1,
+        done: [...checkpoint.done, step],
+        shortlist: outcome.products,
+        votes: outcome.consensus,
+        slices: writeSliceState(checkpoint.slices, step, { next: slice + 1, partial: undefined }),
+      };
+      if (outcome.status === "completed") return { completed: true, ran, stop: "terminal" };
+      await saveDiscoveryCheckpoint(args.runId, checkpoint);
+      finished = true;
+      break;
     }
 
-    // SÜRE ÖLÇÜMÜ — canlı teşhisinin tek satırı.
-    //
-    // Neden: "zaman aşımına uğradı" belirtisinin hangi adımdan geldiği
-    // tahminle değil, ÖLÇÜMLE anlaşılır. Kümelenmiş süreler hat bütçesinin
-    // nerede harcandığını doğrudan gösterir (canlıda: kazıma ~25 sn,
-    // Gemini ~20 sn, konsey ~40 sn, sıralama ~5 sn).
-    const stepMs = Date.now() - stepStartedAt;
-    spentMs += stepMs;
-    console.log(
-      `[discovery] adım bitti: ${step} ${stepMs}ms · durum=${outcome.status} ` +
-        `· ürün=${outcome.products.length} · oy=${outcome.consensus.length} ` +
-        `(kümelenmiş ${spentMs}ms)`,
-    );
-
-    ran.push(step);
-    checkpoint = {
-      v: 1,
-      done: [...checkpoint.done, step],
-      shortlist: outcome.products,
-      votes: outcome.consensus,
-    };
-    if (outcome.status === "completed") return { completed: true, ran, stop: "terminal" };
-    await saveDiscoveryCheckpoint(args.runId, checkpoint);
+    if (!finished) return { completed: false, ran, stop: "budget" };
   }
 
   return { completed: true, ran, stop: "terminal" };

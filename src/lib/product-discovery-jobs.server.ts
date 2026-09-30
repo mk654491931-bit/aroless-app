@@ -28,6 +28,7 @@
 // ============================================================================
 
 import { JOB_TABLE, jobStore } from "./discovery-jobs.server";
+import { readSliceBook, type SliceBook } from "./product-discovery-slices.server";
 import {
   canTransition,
   ProductDiscoveryInputSchema,
@@ -90,6 +91,19 @@ export type DiscoveryCheckpoint = {
   shortlist: unknown[];
   /** `deep` adımının ürettiği oy satırları. */
   votes: unknown[];
+  /**
+   * ADIM BAŞINA DİLİM DEFTERİ.
+   *
+   * NEDEN GEREKLİ: her teslimat artık en fazla bir dilim (varsayılan 10 sn)
+   * koşar. Bir adım dilimde bitmediğinde nerede kaldığı YALNIZ burada tutulur:
+   * `deep` için hangi rollerin konuştuğu ve puanları, diğer adımlar için kaçıncı
+   * dilimde olduğumuz. Defter olmadan her dilim baştan başlar ve uzun adım
+   * hiçbir zaman ilerleme kaydedemez (aynı iş sonsuza kadar tekrarlanır).
+   *
+   * ALAN OPSİYONELDİR: bu sürümden önce yazılmış ara noktalarda yoktur; o
+   * durumda defter boş kabul edilir ve adım ilk dilimden devam eder.
+   */
+  slices?: SliceBook;
 };
 
 /** Ara nokta gövdesini klasik kısmi sonuçlardan ayıran işaret. */
@@ -183,6 +197,9 @@ export async function readDiscoveryCheckpoint(runId: string): Promise<DiscoveryC
     done: Array.isArray(record["done"]) ? (record["done"] as string[]) : [],
     shortlist: Array.isArray(record["shortlist"]) ? record["shortlist"] : [],
     votes: Array.isArray(record["votes"]) ? record["votes"] : [],
+    // Dilim defteri bozuksa `undefined` döner: adım baştan dener (ilerleme
+    // kaybı, sonsuz döngüden iyidir).
+    slices: readSliceBook(record["slices"]),
   };
 }
 

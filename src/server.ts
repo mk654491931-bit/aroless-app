@@ -21,6 +21,11 @@ import {
   discoveryStoreHealth,
 } from "./lib/discovery-jobs.server";
 import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
+import {
+  discoverySliceMs,
+  MAX_STEP_SLICES,
+  sliceDeliveryTimeoutSeconds,
+} from "./lib/product-discovery-slices.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -167,6 +172,17 @@ export default {
               // anahtarın eksik olduğunu söyler. Bu ikisi aynı şey olmadığı
               // için ayrı raporlanır (eskiden sessizce çelişiyorlardı).
               discoveryChain: discoveryChainHealth(),
+              // DİLİMLEME — "her işlem 10 saniye, sonra QStash" kuralının
+              // canlı kanıtı. Sır değildir; kaç ms'lik dilimlerle koştuğumuzu,
+              // QStash'e verilen teslimat penceresini ve bir adımın en fazla
+              // kaç dilim sürebileceğini gösterir. `sliceMs` beklenenden
+              // büyükse `DISCOVERY_SLICE_MS` ortam değişkeni yanlış
+              // ayarlanmıştır (sunucusuz tavan davranışı geri gelir).
+              discoverySlices: {
+                sliceMs: discoverySliceMs(),
+                deliveryTimeoutSeconds: sliceDeliveryTimeoutSeconds(),
+                maxSlicesPerStep: MAX_STEP_SLICES,
+              },
               // ⚠️ Hattın İKİNCİ sessiz kırılma noktası: veritabanı.
               // Servis rolü anahtarı yoksa ya da migration'lar uygulanmamışsa
               // zincin `ok:false` döner ve arayüz sessizce klasik hatta düşer;

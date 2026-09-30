@@ -216,6 +216,54 @@ describe("uzlaşma kaydının adımlar arasında taşınması", () => {
   });
 });
 
+/* ====================== 3b. DİLİM NUMARASI adım gövdesinde taşınır */
+
+/**
+ * Her QStash mesajı artık bir adımın TAMAMINI değil, en fazla bir DİLİMİNİ
+ * koşar. Dilim numarası gövdede taşınmazsa devam dilimi kendini "ilk dilim"
+ * sanar; kilit kuralı onu ya reddeder ya da işi baştan yaptırır.
+ */
+describe("dilim numarasının adım gövdesinde taşınması", () => {
+  const input = { niche: "air fryer", country: "US", platform: "General", topN: 5 } as const;
+
+  it("dilim numarası gövdeye yazılır (devam dilimi kendini bilir)", () => {
+    const body = buildStepBody({
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      step: "deep",
+      products: [],
+      progress: 85,
+      slice: 3,
+    });
+    expect(body.slice).toBe(3);
+  });
+
+  it("dilim verilmezse 0'dır ve ESKİ gövdeler geçerli kalır", () => {
+    const body = buildStepBody({
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      step: "scrape_filter",
+      products: [],
+      progress: 10,
+    });
+    expect(body.slice).toBe(0);
+
+    // Dilim alanını taşımayan eski gövde de kabul edilir (geriye dönük uyum).
+    const legacy = DiscoveryStepPayloadSchema.safeParse({
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      batch: [],
+      consensus: [],
+      progress: 10,
+    });
+    expect(legacy.success).toBe(true);
+    expect(legacy.success && legacy.data.slice).toBe(0);
+  });
+});
+
 /* ============================ 4. Veri bütünlüğü penaltısı gerçekten işliyor */
 
 describe("veri bütünlüğü penaltısı", () => {

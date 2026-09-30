@@ -33,7 +33,6 @@ import {
   DISCOVERY_FINAL_N,
   GEMINI_SHORTLIST_SIZE,
   geminiShortlistSelector,
-  runDeepAnalysisStep,
   runFinalRankStep,
   runGeminiShortlistStep,
   runScrapeFilterStep,
@@ -59,6 +58,16 @@ export const STEP_TRANSITIONS: Record<
   final: { from: "deep_analysis", to: "completed", progress: 100 },
 };
 
+/**
+ * `gemini` adımı için en fazla kaç DİLİM harcanır.
+ *
+ * NEDEN 3: tek bir dilim yetmezse (soğuk anahtar havuzu, geçici 429) adım
+ * hemen deterministik yedeğe düşerdi; bunun yerine 2 kez daha denenir. Üçüncü
+ * denemeden sonra adım YİNE deterministik sıralamayla BİTER, yani hat modele
+ * asla takılı kalmaz. 3 dilim ≈ 30 sn üst sınır demektir.
+ */
+export const GEMINI_MAX_SLICES = 3;
+
 export type StepOutcome =
   | {
       ok: true;
@@ -74,6 +83,19 @@ export type StepOutcome =
       topProducts?: TopProduct[];
       stats?: FilterStats;
       notes: string[];
+      /**
+       * `true` → ADIM BU DİLİMDE BİTMEDİ.
+       *
+       * Çağıran (runner/route) bu durumda `done`e yazmaz, ilerlemeyi dilim
+       * defterine kaydeder ve AYNI adımın sıradaki dilimini koşar. Uzun adımlar
+       * (`gemini`, `deep`) böylece tek bir sunucusuz fonksiyonu dakikalarca
+       * meşgul etmez; her teslimat en fazla bir dilim sürer.
+       */
+      partial?: boolean;
+      /** Sıradaki dilime taşınacak kısmi durum (ör. konseyde konuşan roller). */
+      sliceState?: unknown;
+      /** Adım bitmediyse kalan iş birimi sayısı (teşhis/log). */
+      sliceRemaining?: number;
     }
   | { ok: false; error: string };
 
@@ -115,15 +137,43 @@ export async function executeProductDiscoveryStep(args: {
    * kalmaz, sonraki yoklama kaldığı yerden devam eder.
    */
   deadlineAt?: number;
+  /** BU dilimin bitmesi gereken an (ms) — tüm model çağrıları bunu aşamaz. */
+  sliceDeadlineAt?: number;
+  /** Bu teslimatın dilim numarası (0 tabanlı). */
+  slice?: number;
+  /** Önceki dilimlerden taşınan kısmi durum (adıma özel). */
+  sliceState?: unknown;
+  /** Zincir süresi bitti: adım kalan işi deterministiğe düşürüp BİTMELİ. */
+  forceFinish?: boolean;
 }): Promise<StepOutcome> {
   const { step, runId, userId, input } = args;
+  // DİLİM BAĞLAMI — tek yerde çözülür ki tüm adımlar aynı pencereyi görsün.
+  const slice = Number.isFinite(args.slice) && (args.slice as number) > 0 ? Math.floor(args.slice as number) : 0;
+  const sliceDeadline = args.sliceDeadlineAt ?? args.deadlineAt ?? Date.now() + 8_000;
+  const forceFinish = args.forceFinish === true;
 
   try {
     switch (step) {
       /* ---------------------------------------------------------- 1. adım */
       case "scrape_filter": {
-        // AI YOK — saf kod. Kaynaklar fail-soft, her biri kendi tavanında.
-        const result = await runScrapeFilterStep(input.niche, input.country, input.platform);
+        // AI YOK — saf kod. Kaynaklar fail-soft, PARALEL ve her biri kendi
+        // tavanında koşar; ayrıca DİLİM tavanına kırpılır.
+        //
+        // NEDEN KIRPMA: kaynak zaman aşımları 3-8 sn arasındadır ve 10 sn'lik
+        // dilime normalde sığar. Ama yavaş bir kaynak (ağ, yavaş DNS) adımı
+        // dilimin ötesine taşırsa istek platform tarafından kesilir ve o anda
+        // ne ürün ne ara nokta yazılmış olur — kullanıcı için "hiç olmamış"
+        // gibi görünür. Kırpma, dilimin HER ZAMAN kendi sınırında dönmesini
+        // sağlar; geç kalan kaynak "çalışmadı" olarak raporlanır (kaynak
+        // raporu dürüst kalır, uydurma veri üretilmez).
+        const sourceCapMs = Math.max(2_000, sliceDeadline - Date.now() - 1_000);
+        const result = await runScrapeFilterStep(
+          input.niche,
+          input.country,
+          input.platform,
+          undefined,
+          { sourceCapMs },
+        );
         if (!result.ok) {
           await failStep(runId, userId, "scrape_filter başarısız.");
           return { ok: false, error: "scrape_filter başarısız." };
@@ -160,16 +210,50 @@ export async function executeProductDiscoveryStep(args: {
 
       /* ---------------------------------------------------------- 2. adım */
       case "gemini": {
-        // AI #1 — kısa liste (Top 75 → 25). Tek çağrı.
+        // AI #1 — kısa liste (Top 75 → 25).
         //
-        // SÜRE SINIRI ZİNCİRDEN GELİR: aksi hâlde `callGemini`nin anahtar/model
-        // rotasyonu (teorik ~240 sn) tek başına hem `deep`e hem `final`e yer
-        // bırakmaz ve istek platform tavanına dayanır.
+        // DİLİM PLANI: her dilim modeli EN FAZLA BİR KEZ dener.
+        //
+        // ÖLÇÜLEN HATA (dilimlemeden önce): `callGemini` 5 anahtar × 4 model
+        // deniyor ve teorik olarak ~240 sn sürebiliyordu. Tek başına zincirin
+        // kalanına yer bırakmadığı için sonuç ya gelmiyor ya da 300 sn sonra
+        // geliyordu. Artık deneme penceresi DİLİMDİR: pencere dolarsa çağrı
+        // kesilir, ilerleme kaydedilir ve sıradaki dilim yeniden dener. Birkaç
+        // denemede de model konuşmazsa adım deterministik sıralamayla biter —
+        // yani hat modele TAKILI KALMAZ, yalnız gerçekten cevap verirse onu
+        // kullanır (uydurma değil, dürüst yedek).
+        const candidates = args.batch as NormalizedProduct[];
+        const picks = await geminiShortlistSelector(candidates, input.niche, sliceDeadline);
+
+        if (!picks.length && !forceFinish && slice + 1 < GEMINI_MAX_SLICES) {
+          console.log(
+            `[discovery] gemini dilimi ${slice + 1}/${GEMINI_MAX_SLICES}: yanıt yok, ` +
+              `${GEMINI_MAX_SLICES - (slice + 1)} deneme kaldı`,
+          );
+          return {
+            ok: true,
+            step,
+            // Durum İLERLEMEZ: adım bitmedi, yalnız bir dilim harcandı.
+            status: "gemini_shortlist",
+            progress: 55,
+            products: candidates,
+            consensus: [],
+            partial: true,
+            sliceRemaining: GEMINI_MAX_SLICES - (slice + 1),
+            notes: [
+              `Gemini bu dilimde yanıt vermedi (deneme ${slice + 1}/${GEMINI_MAX_SLICES}); ` +
+                `sıradaki dilim yeniden denenecek.`,
+            ],
+          };
+        }
+
+        // Model konuştuysa ONUN seçimi kullanılır; konuşmadıysa boş liste
+        // verilir ve `selectWithGemini` deterministik sırayla tamamlar.
         const result = await runGeminiShortlistStep(
-          args.batch as NormalizedProduct[],
+          candidates,
           input.niche,
           GEMINI_SHORTLIST_SIZE,
-          (candidates, niche) => geminiShortlistSelector(candidates, niche, args.deadlineAt),
+          async () => picks,
         );
         if (!result.ok) {
           await failStep(runId, userId, "gemini_shortlist başarısız.");
@@ -200,32 +284,58 @@ export async function executeProductDiscoveryStep(args: {
         // verilmediği için `deterministicVotes`a düşüyordu; ekranda "14 ajan"
         // yazarken modele hiçbir şey sorulmuyordu. Artık ROL BAŞINA tek çağrı
         // yapılır ve kaç rolün gerçekten konuştuğu loglanır.
-        const result = await runDeepAnalysisStep(
-          args.batch as NormalizedProduct[],
-          input.niche,
-          async (rows) => {
-            const { runCouncilWithAi } = await import("./product-discovery-council-ai.server");
-            const run = await runCouncilWithAi(rows as never, input.niche, {
-              // Adımın kalan bütçesi: sonraki `final` adımına da zaman bırakılır.
-              // Sürücü bir bitiş anı verdiyse o kullanılır (istek kesilmesin).
-              deadlineAt: args.deadlineAt ?? Date.now() + 200_000,
-            });
-            console.log(
-              `[discovery] konsey: ${run.aiAgents} rol gerçek AI, ` +
-                `${run.fallbackAgents} rol deterministik yedek · ${run.ms}ms · ` +
-                `ai roller: ${run.aiRoles.join(", ") || "-"}`,
-            );
-            return run.consensus;
-          },
-        );
-        if (!result.ok) {
-          await failStep(runId, userId, "deep_analysis başarısız.");
-          return { ok: false, error: "deep_analysis başarısız." };
+        //
+        // DİLİM PLANI: her dilim EN FAZLA BİR DALGA (varsayılan 4 rol) koşar.
+        // Konuşan roller ve puanları ara noktaya yazılır; sıradaki dilim tam
+        // olarak kaldığı yerden devam eder. Böylece 14 ajanlı konsey tek bir
+        // fonksiyonu dakikalarca meşgul etmez (kullanıcının istediği 10 sn'lik
+        // dilim kuralı) ve hiçbir model çağrısı İKİ KEZ yapılmaz (`done` defteri).
+        const candidates = args.batch as NormalizedProduct[];
+        const { runCouncilSlice } = await import("./product-discovery-council-ai.server");
+        const council = await runCouncilSlice(candidates as never, input.niche, {
+          state: (args.sliceState ?? undefined) as never,
+          sliceDeadlineAt: sliceDeadline,
+          // Dilimin YARISI kadar süre kaldıysa yeni dalga başlatılır: sabit 4 sn
+          // eşiği, kısaltılmış dilimlerde (ör. 5 sn) konseyi hiç konuşturmazdı.
+          minCallMs: Math.min(4_000, Math.max(1_500, Math.floor((sliceDeadline - Date.now()) / 2))),
+          // Zincir süresi bittiyse adım kalan rolleri deterministiğe düşürüp
+          // BİTİR: yeni dilim yayınlamak 280 sn sözünü aşardı.
+          force: forceFinish,
+        });
+
+        if (council.partial) {
+          const tried = council.state.done.length;
+          console.log(
+            `[discovery] konsey dilimi ${slice + 1}: ${tried} rol denendi, ` +
+              `${council.remaining} rol kaldı · ${council.ms}ms`,
+          );
+          return {
+            ok: true,
+            step,
+            // Durum İLERLEMEZ: adım bitmedi, yalnız bir dilim harcandı.
+            status: "deep_analysis",
+            progress: 85,
+            products: candidates,
+            consensus: [],
+            partial: true,
+            sliceState: council.state,
+            sliceRemaining: council.remaining,
+            notes: [
+              `Konsey dilimi ${slice + 1}: ${tried} rol denendi, ` +
+                `${council.remaining} rol sıradaki dilimde konuşacak.`,
+            ],
+          };
         }
+
+        console.log(
+          `[discovery] konsey: ${council.aiAgents} rol gerçek AI, ` +
+            `${council.fallbackAgents} rol deterministik yedek · ${council.ms}ms · ` +
+            `ai roller: ${council.aiRoles.join(", ") || "-"}`,
+        );
 
         // Uzlaşma kayıtları `consensus` alanında taşınır (ürün şemasına
         // sığmaz), böylece `final` adımı gerçek oylarla sıralar.
-        const consensus = (result.consensus ?? []) as Consensus[];
+        const consensus = council.consensus as Consensus[];
         if (consensus.length === 0) {
           const message = "Uzlaşma sonucu üretilemedi.";
           await failStep(runId, userId, message);
@@ -237,9 +347,12 @@ export async function executeProductDiscoveryStep(args: {
           step,
           status: "deep_analysis",
           progress: 90,
-          products: (result.products ?? []) as NormalizedProduct[],
+          products: candidates,
           consensus,
-          notes: result.notes,
+          notes: [
+            `14 ajan ${candidates.length} adayı değerlendirdi ` +
+              `(${council.aiAgents} rol gerçek AI, ${council.fallbackAgents} rol deterministik yedek).`,
+          ],
         };
       }
 

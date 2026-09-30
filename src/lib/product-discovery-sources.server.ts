@@ -1451,19 +1451,35 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
 export async function runSources(
   niche: string,
   sources: readonly ProductSource[] = PRODUCT_SOURCES,
+  /**
+   * TÜM kaynaklar için üst sınır (ms). Verilirse her kaynağın KENDİ tavanı
+   * bununla kırpılır.
+   *
+   * NEDEN GEREKLİ: hat dilim dilim koşar (varsayılan dilim 10 sn). Kaynak
+   * tavanları 3-8 sn arasındadır ve normalde dilime sığar; ama yavaş bir kaynak
+   * (ağ, yavaş DNS) adımı dilimin ötesine taşırsa istek platform tarafından
+   * kesilir ve o ana kadar yazılan hiçbir şey kullanıcıya ulaşmaz. Kırpma, bu
+   * adımın HER ZAMAN kendi sınırında dönmesini garanti eder. Geç kalan kaynak
+   * rapora "timeout" olarak yazılır — veri uydurulmaz, yalnız o kaynak kaybolur.
+   */
+  opts: { capMs?: number } = {},
 ): Promise<{ products: RawProduct[]; reports: SourceReport[] }> {
   const products: RawProduct[] = [];
+  const cap = Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
+    ? Math.round(opts.capMs as number)
+    : Number.POSITIVE_INFINITY;
   const reports: SourceReport[] = await Promise.all(
     sources.map(async (source): Promise<SourceReport> => {
       const startedAt = Date.now();
+      const budgetMs = Math.max(1_000, Math.min(source.timeoutMs, cap));
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         const rows = await Promise.race([
           source.scrape(niche),
           new Promise<never>((_, reject) => {
             timer = setTimeout(
-              () => reject(new Error(`timeout>${source.timeoutMs}ms`)),
-              source.timeoutMs,
+              () => reject(new Error(`timeout>${budgetMs}ms`)),
+              budgetMs,
             );
           }),
         ]);

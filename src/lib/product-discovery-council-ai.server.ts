@@ -56,7 +56,8 @@ const MAX_AI_ROLES = 14;
  */
 export const COUNCIL_CONCURRENCY = 4;
 
-function councilConcurrency(env: NodeJS.ProcessEnv = process.env): number {
+/** Aynı anda koşan rol sayısı (env ile 1-8). Dilim mantığı da bunu okur. */
+export function councilConcurrency(env: NodeJS.ProcessEnv = process.env): number {
   const raw = Number(env["COUNCIL_CONCURRENCY"]);
   if (!Number.isFinite(raw) || raw <= 0) return COUNCIL_CONCURRENCY;
   return Math.max(1, Math.min(8, Math.round(raw)));
@@ -169,10 +170,153 @@ export async function runCouncilWithAi(
   opts: { call?: CouncilAiCall; deadlineAt?: number } = {},
 ): Promise<CouncilRunResult> {
   const startedAt = Date.now();
-  const call = opts.call ?? defaultCall;
   // Bütçe yoksa varsayılan: Vercel Hobby adımı ~5 dk; konsey bunun içinde.
   const deadlineAt = opts.deadlineAt ?? Date.now() + 240_000;
 
+  // DİLİM DÖNGÜSÜ — SİGNATÜR DEĞİŞMEDİ, DAVRANIŞ DEĞİŞMEDİ.
+  //
+  // Bu fonksiyon "hepsini tek istekte koştur" çağrısıdır (kalıcı süreç, test,
+  // E2E) ve öyle kalır. İçeride artık DİLİM dilimi koşar: her tur bir dalga
+  // dener, ara durum döner ve sıradaki tur oradan devam eder. Böylece aynı
+  // kod yolu hem "tek istekte konsey"yi hem de "dilim dilim konsey"yi taşır ve
+  // iki davranış birbirinden ayrışamaz.
+  let state: CouncilSliceState | undefined;
+  for (let guard = 0; guard < MAX_COUNCIL_LOOP; guard++) {
+    const slice = await runCouncilSlice(products, niche, {
+      call: opts.call,
+      state,
+      sliceDeadlineAt: deadlineAt,
+    });
+    if (!slice.partial) {
+      return {
+        consensus: slice.consensus,
+        aiAgents: slice.aiAgents,
+        fallbackAgents: slice.fallbackAgents,
+        aiRoles: slice.aiRoles,
+        ms: Date.now() - startedAt,
+      };
+    }
+    state = slice.state;
+    // Süre bitti: yeni DALGA başlatılmaz. Kalan roller deterministiğe düşer
+    // (aşağıdaki zorunlu bitirme), yani sunucusuz sınır aşılmaz.
+    if (deadlineAt - Date.now() < MIN_CALL_BUDGET_MS) break;
+  }
+  // Güvenlik ağı: teorik bir hatada sonsuz döngü yerine deterministik sonuç.
+  const forced = await runCouncilSlice(products, niche, {
+    call: opts.call,
+    state,
+    sliceDeadlineAt: deadlineAt,
+    force: true,
+  });
+  return {
+    consensus: forced.consensus,
+    aiAgents: forced.aiAgents,
+    fallbackAgents: forced.fallbackAgents,
+    aiRoles: forced.aiRoles,
+    ms: Date.now() - startedAt,
+  };
+}
+
+/* ============================================================================
+ * DİLİMLİ KONSEY — 14 ROL, DİLİM BAŞINA BİR DALGA.
+ *
+ * NEDEN: konsey tek istekte 4 dalga (~40 sn, yavaş havuzda daha fazla) koşar.
+ * Sunucusuz ortamda bu, tek bir fonksiyonun dilim sınırını kat kat aşması
+ * demektir. Dilimli sürüm aynı işi yapar ama HER teslimat tek dalga ile sınırlı
+ * kalır ve ilerleme ara noktaya yazılır.
+ *
+ * SÖZLEŞME DEĞİŞMEZ: roller `COUNCIL_AGENTS` SIRASIYLA birleştirilir, her ürün
+ * TAM 14 oy alır, konuşamayan rol deterministiğe düşer. Dilimleme yalnız
+ * ÇALIŞMA SIRASINI değiştirir, sonucu değil — bu yüzden eşzamanlılık (1 veya 4)
+ * konsensüsü değiştirmez.
+ * ========================================================================= */
+
+/** Bir rolün modele verdiği puanlar: `index → { score, note }`. */
+type Scored = Map<number, { score: number; note: string }>;
+
+/** Dilimler arasında taşınan puan satırı (JSON'a çevrilebilir). */
+export type CouncilScoreRow = { i: number; score: number; note: string };
+export type CouncilScores = Record<string, CouncilScoreRow[]>;
+
+/** Ara noktaya yazılan konsey durumu. */
+export type CouncilSliceState = {
+  scores: CouncilScores;
+  /**
+   * Daha önce DENENEN roller (başarısız olsalar bile tekrar denenmezler).
+   *
+   * NEDEN AYRI: yalnız "puan üreten" rolleri işaretlemek, bozuk yanıt veren
+   * rolü her dilimde yeniden çağırırdı; 14 bozuk rol + 16 dilim = 224 çağrı. Bu
+   * liste sayesinde her rol TAM BİR KEZ denenir (eski davranışla aynı) ve
+   * dilim döngüsü en fazla 14 tur sürer.
+   */
+  done: string[];
+};
+
+/** Test edilebilir üst sınır: 14 rol, eşzamanlılık 1 → 14 tur. */
+export const MAX_COUNCIL_LOOP = 32;
+
+/** Map tabanlı puanları ara noktaya yazılabilir hâle getirir. */
+export function serializeCouncilState(
+  scoresByAgent: ReadonlyMap<CouncilAgentKey, Scored>,
+  done: ReadonlySet<string> | readonly string[],
+): CouncilSliceState {
+  const scores: CouncilScores = {};
+  for (const [role, rows] of scoresByAgent) {
+    scores[role] = [...rows.entries()].map(([i, value]) => ({
+      i,
+      score: value.score,
+      note: value.note,
+    }));
+  }
+  return { scores, done: [...(done as Iterable<string>)] };
+}
+
+/** Ara noktadan okunan puanları Map'e çevirir; bozuk satırlar ELENİR. */
+export function deserializeCouncilScores(raw: unknown): Map<CouncilAgentKey, Scored> {
+  const out = new Map<CouncilAgentKey, Scored>();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [role, rows] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(rows)) continue;
+    const scored: Scored = new Map();
+    for (const row of rows) {
+      const record = (row ?? {}) as Record<string, unknown>;
+      const index = Number(record["i"]);
+      const score = Number(record["score"]);
+      if (!Number.isInteger(index) || index < 1 || !Number.isFinite(score)) continue;
+      scored.set(index, {
+        score: Math.max(0, Math.min(100, Math.round(score))),
+        note: String(record["note"] ?? "").slice(0, 120),
+      });
+    }
+    if (scored.size) out.set(role as CouncilAgentKey, scored);
+  }
+  return out;
+}
+
+/** Bu koşuda konuşacak roller (ürün yoksa hiçbiri). */
+export function councilRoleQueue(productCount: number, maxRoles = MAX_AI_ROLES): CouncilAgentKey[] {
+  if (productCount <= 0) return [];
+  return COUNCIL_AGENTS.slice(0, maxRoles).map((a) => a.key as CouncilAgentKey);
+}
+
+export type CouncilMerge = {
+  consensus: Consensus[];
+  aiAgents: number;
+  fallbackAgents: number;
+  aiRoles: CouncilAgentKey[];
+};
+
+/**
+ * Puanları nihai uzlaşmaya çevirir — TEK yer.
+ *
+ * Birleştirme `COUNCIL_AGENTS` SIRASINDA ve TEK TEK yapılır: hangi dilimde
+ * hangi rolün konuştuğu sonucu DEĞİŞTİRMEZ. Bu, "dilimledik ama sonucu
+ * değiştirdik" hatasının yapısal engelidir.
+ */
+export function mergeCouncilVotes(
+  products: readonly NormalizedProduct[],
+  scoresByAgent: ReadonlyMap<CouncilAgentKey, Scored>,
+): CouncilMerge {
   // Deterministik oylar BİR KEZ üretilir: hem yedek hem zemin (AI boş dönerse).
   const baseline = new Map<string, AgentVote[]>();
   products.forEach((p, i) => baseline.set(p.fingerprint || `P${i + 1}`, deterministicVotes(p)));
@@ -184,50 +328,6 @@ export async function runCouncilWithAi(
   let aiAgents = 0;
   let fallbackAgents = 0;
 
-  // ------------------------------------------------ SINIRLI EŞZAMANLILIK
-  //
-  // Roller dalgalar hâlinde koşar. Bir rolün çağrısı çökerse YALNIZ o rol
-  // deterministiğe düşer; dalganın kalanı etkilenmez (sözleşme değişmez).
-  type Scored = Map<number, { score: number; note: string }>;
-  const scoresByAgent = new Map<CouncilAgentKey, Scored>();
-  const rolesToRun: CouncilAgentKey[] =
-    products.length === 0 ? [] : COUNCIL_AGENTS.slice(0, MAX_AI_ROLES).map((a) => a.key as CouncilAgentKey);
-
-  const concurrency = Math.max(1, Math.min(councilConcurrency(), rolesToRun.length));
-  const waves: CouncilAgentKey[][] = [];
-  for (let i = 0; i < rolesToRun.length; i += concurrency) {
-    waves.push(rolesToRun.slice(i, i + concurrency));
-  }
-
-  for (const wave of waves) {
-    // Süre bitti: başlayan DALGA yapılmaz, kalan roller deterministiğe düşer.
-    // Sunucusuz sınırı aşmayız.
-    if (deadlineAt - Date.now() < MIN_CALL_BUDGET_MS) break;
-
-    const settled = await Promise.allSettled(
-      wave.map(async (agentKey) => {
-        const agent = COUNCIL_AGENTS.find((a) => a.key === agentKey);
-        if (!agent) throw new Error(`bilinmeyen rol: ${agentKey}`);
-        const raw = await call(buildAgentPrompt(agent, products, niche), deadlineAt);
-        return [agentKey, parseAgentScores(raw, products.length)] as const;
-      }),
-    );
-
-    for (const outcome of settled) {
-      if (outcome.status === "rejected") {
-        console.warn(
-          `[council] rol yanıt veremedi, deterministiğe düşülüyor:`,
-          outcome.reason instanceof Error ? outcome.reason.message : "unknown",
-        );
-        continue;
-      }
-      const [agentKey, parsed] = outcome.value;
-      if (parsed.size) scoresByAgent.set(agentKey, parsed);
-    }
-  }
-
-  // Birleştirme COUNCIL_AGENTS sırasında ve TEK TEK yapılır: eşzamanlı dalgalar
-  // oy topluluğunu bozmaz, yalnız süreyi kısaltır.
   for (const agent of COUNCIL_AGENTS) {
     const scores = scoresByAgent.get(agent.key as CouncilAgentKey);
     if (!scores) {
@@ -283,11 +383,148 @@ export async function runCouncilWithAi(
     });
   });
 
+  return { consensus, aiAgents, fallbackAgents, aiRoles };
+}
+
+/** Bir DALGA rolü koşturur; hata veren rolü sessizce atlar (deterministik yedek). */
+async function runCouncilWave(args: {
+  products: readonly NormalizedProduct[];
+  niche: string;
+  roles: readonly CouncilAgentKey[];
+  call: CouncilAiCall;
+  deadlineAt: number;
+}): Promise<Map<CouncilAgentKey, Scored>> {
+  const settled = await Promise.allSettled(
+    args.roles.map(async (agentKey) => {
+      const agent = COUNCIL_AGENTS.find((a) => a.key === agentKey);
+      if (!agent) throw new Error(`bilinmeyen rol: ${agentKey}`);
+      const raw = await args.call(
+        buildAgentPrompt(agent, args.products, args.niche),
+        args.deadlineAt,
+      );
+      return [agentKey, parseAgentScores(raw, args.products.length)] as const;
+    }),
+  );
+
+  const out = new Map<CouncilAgentKey, Scored>();
+  for (const outcome of settled) {
+    if (outcome.status === "rejected") {
+      console.warn(
+        `[council] rol yanıt veremedi, deterministiğe düşülüyor:`,
+        outcome.reason instanceof Error ? outcome.reason.message : "unknown",
+      );
+      continue;
+    }
+    const [agentKey, parsed] = outcome.value;
+    if (parsed.size) out.set(agentKey, parsed);
+  }
+  return out;
+}
+
+export type CouncilSliceResult = {
+  /** Yalnız adım BİTTİYSE dolar (`partial === false`). */
+  consensus: Consensus[];
+  aiAgents: number;
+  fallbackAgents: number;
+  aiRoles: CouncilAgentKey[];
+  /** Ara noktaya yazılacak durum (her zaman dolu). */
+  state: CouncilSliceState;
+  /** `true` → adım bitmedi, kalan roller sıradaki dilimde denenir. */
+  partial: boolean;
+  /** Kaç rol kaldı (günlük/teşhis). */
+  remaining: number;
+  ms: number;
+};
+
+/**
+ * KONSEYİN BİR DİLİMİ — en fazla bir dalga.
+ *
+ * @param opts.state     önceki dilimlerden gelen durum (roller + puanlar)
+ * @param opts.sliceDeadlineAt bu dilimin bitmesi gereken an
+ * @param opts.force     zincir süresi bitti → kalan roller deterministik, adım BİTİR
+ */
+export async function runCouncilSlice(
+  products: readonly NormalizedProduct[],
+  niche: string,
+  opts: {
+    call?: CouncilAiCall;
+    state?: CouncilSliceState;
+    sliceDeadlineAt?: number;
+    force?: boolean;
+    concurrency?: number;
+    /** Bu süreden az kaldıysa yeni dalga BAŞLATILMAZ (varsayılan 4 sn). */
+    minCallMs?: number;
+  } = {},
+): Promise<CouncilSliceResult> {
+  const startedAt = Date.now();
+  const call = opts.call ?? defaultCall;
+  const scoresByAgent = deserializeCouncilScores(opts.state?.scores);
+  const done = new Set<string>(Array.isArray(opts.state?.done) ? opts.state!.done : []);
+  // Puan üreten bir rol her hâlükârda "denendi" sayılır (eski ara noktalar
+  // `done` taşımıyor olabilir).
+  for (const role of scoresByAgent.keys()) done.add(role);
+
+  const queue = councilRoleQueue(products.length);
+  const remaining = queue.filter((role) => !done.has(role));
+  const minCallMs = opts.minCallMs ?? MIN_CALL_BUDGET_MS;
+
+  const finish = (): CouncilSliceResult => {
+    const merged = mergeCouncilVotes(products, scoresByAgent);
+    return {
+      consensus: merged.consensus,
+      aiAgents: merged.aiAgents,
+      fallbackAgents: merged.fallbackAgents,
+      aiRoles: merged.aiRoles,
+      state: serializeCouncilState(scoresByAgent, done),
+      partial: false,
+      remaining: 0,
+      ms: Date.now() - startedAt,
+    };
+  };
+
+  // Hiç aday yok ya da tüm roller denendi → adım biter (uydurma yok).
+  if (products.length === 0 || remaining.length === 0) return finish();
+
+  // ZORLA BİTİRME: kalan roller deterministik oyla girer (konsey hep 14 oy
+  // üretir). Zincirin süresi bittiğinde sürücü bunu ister.
+  if (opts.force) return finish();
+
+  const deadline = opts.sliceDeadlineAt ?? Date.now() + 1_000;
+  // BU DİLİMDE yeni dalga başlatılamıyor (süre yetmiyor): adım BİTMİŞ
+  // SAYILMAZ, kısmi döneriz. Sıradaki dilim taze bir pencereyle devam eder;
+  // ilerleme (`state`) korunduğu için hiçbir rol baştan konuşmaz.
+  if (deadline - Date.now() < minCallMs) {
+    return {
+      consensus: [],
+      aiAgents: 0,
+      fallbackAgents: 0,
+      aiRoles: [],
+      state: serializeCouncilState(scoresByAgent, done),
+      partial: true,
+      remaining: remaining.length,
+      ms: Date.now() - startedAt,
+    };
+  }
+
+  const concurrency = Math.max(
+    1,
+    Math.min(opts.concurrency ?? councilConcurrency(), remaining.length),
+  );
+  const wave = remaining.slice(0, concurrency);
+  const scored = await runCouncilWave({ products, niche, roles: wave, call, deadlineAt: deadline });
+  for (const [role, rows] of scored) scoresByAgent.set(role, rows);
+  for (const role of wave) done.add(role);
+
+  const left = queue.filter((role) => !done.has(role));
+  if (left.length === 0) return finish();
   return {
-    consensus,
-    aiAgents,
-    fallbackAgents,
-    aiRoles,
+    consensus: [],
+    aiAgents: 0,
+    fallbackAgents: 0,
+    aiRoles: [],
+    state: serializeCouncilState(scoresByAgent, done),
+    partial: true,
+    remaining: left.length,
     ms: Date.now() - startedAt,
   };
 }

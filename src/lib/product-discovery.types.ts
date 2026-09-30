@@ -437,6 +437,20 @@ export const DiscoveryStepPayloadSchema = z.object({
    * koşar.
    */
   deadlineAtMs: z.number().int().positive().optional(),
+  /**
+   * BU TESLİMATIN DİLİM NUMARASI (0 tabanlı).
+   *
+   * Her QStash mesajı artık bir adımın TAMAMINI değil, en fazla bir DİLİMİNİ
+   * koşar (`DISCOVERY_SLICE_MS`, varsayılan 10 sn). Adım dilim içinde bitmezse
+   * o ana kadarki ilerleme ara noktaya yazılır ve AYNI adımın sıradaki dilimi
+   * yayınlanır. Kimlik alanı olduğu için gövdede taşınır; QStash dedupe
+   * anahtarı da `runId:step:slice` olur, böylece devam dilimi engellenmez ama
+   * aynı dilim iki kez koşmaz.
+   *
+   * ALAN OPSİYONELDİR: eski/elde üretilmiş gövdelerde yoktur; default 0 =
+   * adımın ilk dilimi (eski davranışla birebir aynı).
+   */
+  slice: z.number().int().min(0).default(0),
   /** Önceki adımın istatistikleri (şeffaflık). */
   stats: FilterStatsSchema.optional(),
   /** Adım sonundaki durum. */

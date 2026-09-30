@@ -4,8 +4,24 @@
  * ZINCIR:
  *   /start ──► step(scrape_filter) ──► step(gemini) ──► step(deep) ──► step(final)
  *
- * Her adım kendi isteğinde BİTER ve bir sonrakini QStash'e yayınlar. Sunucusuz
- * ortamda tek bir istek tüm zinciri taşıyamaz; bölme bu yüzden zorunlu.
+ * DİLİMLER (10 sn kuralı) — BİR İSTEK = BİR DİLİM:
+ *
+ * Bu uç artık bir adımın TAMAMINI değil, en fazla bir DİLİMİNİ koşar
+ * (`DISCOVERY_SLICE_MS`, varsayılan 10 sn; uzun adımlar için bkz.
+ * `product-discovery-slices.server.ts`). Adım dilim içinde bitmezse:
+ *   1. o ana kadarki ilerleme ARA NOKTAYA yazılır (ör. konseyde hangi roller
+ *      konuştu ve puanları),
+ *   2. AYNI adımın sıradaki dilimi QStash'e yayınlanır (`slice: n + 1`),
+ *   3. zincir böylece dilim dilim ilerler ve HİÇBİR fonksiyon uzun koşmaz.
+ *
+ * Neden: Vercel Hobby'de bir isteği dakikalarca açık tutmak, platform işi
+ * öldürdüğünde ne sonuç ne ara nokta bırakır. Adım tamamlandığında ise yine
+ * eskisi gibi SONRAKİ adım (slice 0) yayınlanır.
+ *
+ * KUYRUK TAMİRİ: bir dilim ara noktayı yazdıktan SONRA, sıradakini yayınlamadan
+ * ÖNCE ölebilir (istek kesildi, ağ koptu). Bu yüzden devam dilimlerinde
+ * tekrar teslimat alındığında sıradaki dilim YENİDEN yayınlanır; QStash kimliği
+ * dilim başına sabit olduğu için bu idempotenttir (çift iş üretmez).
  *
  * ARTIK ZORUNLU DEĞİL: QStash anahtarları eksikse (üç anahtardan biri: token,
  * worker sırrı, imza anahtarı) zincir bu uçtan hiç geçmez; aynı işi
@@ -71,6 +87,8 @@ export const Route = createFileRoute("/api/product-discovery/step")({
         }
         const payload = parsed.data;
         const { runId, userId, input } = payload;
+        // Bu teslimatın dilim numarası: 0 = adımın ilk dilimi.
+        const slice = payload.slice ?? 0;
 
         // 3) SAHİPLİK — KALICI kayıttan okunur. Gövde tek başına kanıt DEĞİLDİR.
         const job = await readDiscoveryJob(runId);
@@ -92,9 +110,11 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           step: step as DiscoveryStep,
           batch: payload.batch,
           consensus: payload.consensus,
-          // Zincirin mutlak bitiş anı (varsa): adım teslimat penceresini sonuna
-          // kadar kullanmaz, `deep` sonrasına da yer bırakır.
+          // Zincirin mutlak bitiş anı (varsa): adım yalnız bu ana kadar koşar ve
+          // kalan işi deterministiğe düşürerek BİTİRİR.
           deadlineAt: payload.deadlineAtMs,
+          // DİLİM: adımın tamamı değil, bu dilimi koşar (en fazla ~10 sn).
+          slice,
         });
         if (!result.ok) {
           // ÖNEMLİ: 5xx DÖNDÜRÜLÜR, 200 DEĞİL.
@@ -113,10 +133,82 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           return jsonResponse({ ok: false, status: "failed", error: result.error }, 500);
         }
         if (result.deduped) {
-          // Bu adım başka bir taşıyıcı tarafından alınmış (ya da iş bitmiş).
-          // Yeni bir kuyruk mesajı ÜRETMEYİZ: aksi hâlde aynı adım iki kez
-          // yayınlanır ve gereksiz teslimat trafiği oluşur.
+          // Bu adım/dilim başka bir taşıyıcı tarafından alınmış (ya da iş bitmiş).
+          //
+          // DEVAM DİLİMLERİNDE BİR İSTİSNA VAR — KUYRUĞUN KENDİNİ TAMİRİ.
+          //
+          // Bir dilim ilerlemeyi ara noktaya yazdıktan SONRA, sıradakini
+          // yayınlamadan önce ölmüş olabilir (istek kesildi, ağ koptu, platform
+          // 504 döndü). O anda dilim defteri ileridedir (`next = slice + 1`) ama
+          // zincirde o halka YOKTUR; yoklama devralmadan zincir dakikalarca
+          // durur. Bu yüzden devam dilimlerinde sıradaki dilimi yeniden
+          // yayınlarız. Güvenli, çünkü QStash kimliği dilim başına sabittir
+          // (`runId:step:slice`): zaten kuyrukta olan bir mesaj tekrar
+          // üretilmez. Yani onarım turu bedava ve idempotenttir.
+          if (slice > 0) {
+            const repaired = await enqueueDiscoveryStep({
+              runId,
+              userId: job.userId,
+              input,
+              step: step as DiscoveryStep,
+              products: payload.batch,
+              consensus: payload.consensus,
+              progress: payload.progress,
+              origin: appOrigin(request),
+              deadlineAtMs: payload.deadlineAtMs,
+              slice: slice + 1,
+            });
+            return jsonResponse(
+              {
+                ok: true,
+                deduped: true,
+                repair: repaired.ok ? `queued:${step}#${slice + 1}` : repaired.error,
+              },
+              200,
+            );
+          }
+          // İlk dilimlerde yeni bir kuyruk mesajı ÜRETMEYİZ: aksi hâlde aynı adım
+          // iki kez yayınlanır ve gereksiz teslimat trafiği oluşur.
           return jsonResponse({ ok: true, deduped: true, progress: job.discoveryProgress }, 200);
+        }
+
+        // 4b) DİLİM BİTTİ, ADIM BİTMEDİ → AYNI adımın sıradaki dilimi yayınlanır.
+        //
+        // Kullanıcının istediği kuralın kalbi burasıdır: hiçbir fonksiyon uzun
+        // koşmaz, iş dilim dilim ilerler ve her dilim kendi kısa mesajını alır.
+        // İlerleme (hangi roller konuştu, hangi kaynaklar okundu) ara noktada
+        // olduğu için sıradaki dilim tam kaldığı yerden devam eder.
+        if (result.outcome.partial) {
+          const carried = result.outcome.products.length
+            ? result.outcome.products
+            : payload.batch;
+          const queued = await enqueueDiscoveryStep({
+            runId,
+            userId: job.userId,
+            input,
+            step: step as DiscoveryStep,
+            products: carried,
+            // Oy satırları yalnız `deep`→`final` aktarımında anlamlıdır; burada
+            // varsa da aynen taşınır (adım kendi girdisini korur).
+            consensus: payload.consensus,
+            progress: result.outcome.progress,
+            origin: appOrigin(request),
+            deadlineAtMs: payload.deadlineAtMs,
+            slice: slice + 1,
+          });
+          if (!queued.ok) {
+            // Kuyruk yoksa iş ÖLMEZ: aynı adımı tarayıcı yoklamasının sürdürdüğü
+            // zincir devralır (ilerleme ara noktada duruyor).
+            console.warn(`[discovery] devam dilimi kuyruğa alınamadı: ${queued.error}`);
+            return jsonResponse(
+              { ok: true, next: `inline:${step}`, queueError: queued.error },
+              200,
+            );
+          }
+          return jsonResponse(
+            { ok: true, partial: true, next: `queued:${step}#${slice + 1}` },
+            200,
+          );
         }
 
         // 5) SONRAKİ ADIMI KUYRUĞA AL — yalnız bu adım bizde koştuktan sonra.
@@ -155,6 +247,8 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           origin: appOrigin(request),
           // Zincir sözü adım adım TAŞINIR: her adım aynı bitiş anını görür.
           deadlineAtMs: payload.deadlineAtMs,
+          // Yeni adım her zaman İLK dilimden başlar.
+          slice: 0,
         });
         if (!queued.ok) {
           // Kuyruk yoksa iş ÖLMEZ: aynı adımı tarayıcı yoklamasının sürdürdüğü

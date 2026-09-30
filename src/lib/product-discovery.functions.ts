@@ -42,9 +42,10 @@ import { enqueueDiscoveryStep } from "@/lib/product-discovery-qstash.server";
 import {
   clientDrivesChain,
   discoveryRunnerMode,
-  MIN_STEP_BUDGET_MS,
+  MIN_SLICE_BUDGET_MS,
   runDiscoveryChain,
 } from "@/lib/product-discovery-runner.server";
+import { discoverySliceMs } from "@/lib/product-discovery-slices.server";
 import { ConsensusSchema, TopProductSchema, type TopProduct } from "@/lib/product-discovery.types";
 
 /**
@@ -120,15 +121,16 @@ export function parseDiscoveryResult(raw: unknown): {
 const FEATURE = "agent-pipeline" as const;
 
 /**
- * Bir yoklamanın sürücüye verebileceği en uzun süre (ms).
+ * Bir yoklamanın sürücüye verebileceği en uzun süre — KAÇ DİLİM.
  *
- * NEDEN 150 SN: işin en pahalı adımı 14 ajanın konuştuğu `deep` adımıdır ve
- * konsey, süre bitince kalan rolleri deterministiğe düşürerek HER ZAMAN
- * tamamlanır. 150 sn, 14 rolün tamamına (rol başına ~6 sn) yetecek kadar geniş,
- * ama arayüzün "tıkla → sonuç" penceresini (280 sn) tek bir yoklamada yakmaya
- * yetmeyecek kadar dardır. Böylece zincir en kötü durumda bile sözünü tutar.
+ * NEDEN ARTIK SABİT 150 SN DEĞİL: eskiden adım başına TEK bir uzun koşu vardı ve
+ * `deep`in 14 rolüne yer açmak için yoklamaya 150 sn veriliyordu. Artık iş
+ * dilimlidir (varsayılan 10 sn): aynı ilerleme birkaç dilimde elde edilir ve
+ * devralma yapan yoklama isteği de kısa kalır. Kullanıcının kuralı burada da
+ * geçerlidir — platformu zorlamayız; sekme açık kaldığı sürece yoklamalar
+ * zinciri dilim dilim ilerletir.
  */
-const DRIVER_BUDGET_MS = 150_000;
+const DRIVER_SLICE_COUNT = 3;
 
 /**
  * HİÇBİR TAŞIYICI İLERLEME KAYDETMEDEN GEÇEBİLECEĞİ EN UZUN SÜRE.
@@ -156,7 +158,10 @@ const STALLED_RUN_ABANDON_MS = 20 * 60_000;
  */
 function driverBudgetMs(): number {
   const usable = platformDurationSeconds() * 1000 - 20_000;
-  return Math.min(DRIVER_BUDGET_MS, Math.max(MIN_STEP_BUDGET_MS, usable));
+  return Math.min(
+    discoverySliceMs() * DRIVER_SLICE_COUNT,
+    Math.max(MIN_SLICE_BUDGET_MS, usable),
+  );
 }
 
 const StartSchema = z.object({

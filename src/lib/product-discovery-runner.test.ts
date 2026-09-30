@@ -6,7 +6,7 @@ import {
   DISCOVERY_HEARTBEAT_MS,
   discoveryChainHealth,
   discoveryRunnerMode,
-  MIN_STEP_BUDGET_MS,
+  MIN_SLICE_BUDGET_MS,
   STALE_STEP_TAKEOVER_MS,
 } from "./product-discovery-runner.server";
 
@@ -98,12 +98,13 @@ describe("discoveryRunnerMode", () => {
   });
 });
 
-describe("adım bütçesi eşiği", () => {
-  it("bir adımı başlatmak için anlamlı bir alt sınır vardır", () => {
-    // Bu eşiğin altında adım başlatılmaz: yarıda kesilen bir adım, adımın
-    // "çalışıyor" işaretinde kalmasına ve sürücünün onu devralmak zorunda
-    // kalmasına yol açardı.
-    expect(MIN_STEP_BUDGET_MS).toBeGreaterThanOrEqual(10_000);
+describe("dilim bütçesi eşiği", () => {
+  it("bir DİLİMİ başlatmak için anlamlı bir alt sınır vardır", () => {
+    // Eskiden 25 sn'lik ADIM eşiği vardı çünkü bir adım tek istekte koşuyordu.
+    // İş artık dilimlere bölündüğü için kapı küçüldü: bir dilim kadar süre
+    // kaldıysa adım başlar, yetmiyorsa dürüstçe durur (ilerleme ara noktada).
+    expect(MIN_SLICE_BUDGET_MS).toBeGreaterThanOrEqual(3_000);
+    expect(MIN_SLICE_BUDGET_MS).toBeLessThan(10_000);
   });
 });
 

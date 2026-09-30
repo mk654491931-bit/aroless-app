@@ -247,12 +247,20 @@ export async function runScrapeFilterStep(
   _country: string,
   _platform: string,
   topN = DISCOVERY_TOP_N,
+  /**
+   * Kaynak tavanı (ms): adımın dilim bütçesine sığması için verilir. Kaynaklar
+   * PARALEL koştuğu için toplam süre en yavaşınki kadardır, toplamı değil; bu
+   * yüzden tek bir tavan yeterlidir.
+   */
+  opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
   const { buildShortlist } = await import("./product-discovery-shortlist.server");
 
-  // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan).
-  const { products: raw, reports } = await runSources(niche);
+  // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
+  const { products: raw, reports } = await runSources(niche, undefined, {
+    capMs: opts.sourceCapMs,
+  });
 
   // 2) Niş bağlamı (talep sinyalleri) — kaynaklardan türetilir, AI DEĞİL.
   //    Wikipedia momentum satırın `notes`inde taşınır; burada parse edilir.

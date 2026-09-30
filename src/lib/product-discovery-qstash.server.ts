@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 
+import { sliceDeliveryTimeoutSeconds } from "./product-discovery-slices.server";
 import {
   ConsensusSchema,
   DiscoveryStepPayloadSchema,
@@ -41,6 +42,8 @@ const StepPublishSchema = z.object({
   progress: z.number().min(0).max(100).default(0),
   /** Zincirin mutlak bitiş anı (ms) — `deep` bu anı aşmaz. Ayrıntı: types. */
   deadlineAtMs: z.number().int().positive().optional(),
+  /** Bu teslimatın dilim numarası (0 = adımın ilk dilimi). Ayrıntı: types. */
+  slice: z.number().int().min(0).default(0),
 });
 
 /** `enqueueDiscoveryStep` argümanı — `consensus` isteğe bağlıdır. */
@@ -91,6 +94,7 @@ export function buildStepBody(args: StepPublishArgs): DiscoveryStepPayload {
     consensus: args.consensus,
     progress: args.progress,
     deadlineAtMs: args.deadlineAtMs,
+    slice: args.slice ?? 0,
     status: "queued",
   });
 }
@@ -114,6 +118,8 @@ export async function enqueueDiscoveryStep(args: {
   origin?: string;
   /** Zincirin mutlak bitiş anı (ms) — adımla birlikte taşınır. */
   deadlineAtMs?: number;
+  /** Bu teslimatın dilim numarası (0 = adımın ilk dilimi). */
+  slice?: number;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   const parsed = StepPublishSchema.safeParse({
     runId: args.runId,
@@ -124,6 +130,7 @@ export async function enqueueDiscoveryStep(args: {
     consensus: args.consensus ?? [],
     progress: args.progress,
     deadlineAtMs: args.deadlineAtMs,
+    slice: args.slice ?? 0,
   });
   if (!parsed.success) {
     return { ok: false, error: `INVALID_STEP_PAYLOAD:${parsed.error.issues[0]?.code ?? "?"}` };
@@ -137,7 +144,16 @@ export async function enqueueDiscoveryStep(args: {
   return qstashFanOut({
     url: stepEndpoint(origin, parsed.data.step),
     body: buildStepBody(parsed.data) as unknown as Record<string, unknown>,
-    // AYNI İŞ İKİ KEZ ÇALIŞMAZ: runId+adım kimliği.
-    dedupeId: `${parsed.data.runId}:${parsed.data.step}`,
+    // AYNI İŞ İKİ KEZ ÇALIŞMAZ — VE DEVAM DİLİMLERİ ENGELLENMEZ.
+    //
+    // Kimlik artık dilim numarasını da taşır. Eski kimlik (`runId:step`) ile
+    // dilimleme ÇALIŞAMAZDI: QStash aynı kimliği 5 dakika boyunca tekrar
+    // etmediği için "aynı adımın devamı" sessizce yutulur ve uzun adım hiçbir
+    // zaman bitmezdi. Yeni kimlikte aynı dilim (ör. bir yeniden denemede yahut
+    // iki sürücünün çakışmasında) yine yalnız bir kez koşar.
+    dedupeId: `${parsed.data.runId}:${parsed.data.step}:${parsed.data.slice}`,
+    // DİLİM BAŞINA KISA PENCERE: uzun bekleyen teslimat, ölmüş bir fonksiyonun
+    // arkasında durmak demektir ("Vercel'i zorlama").
+    timeoutSeconds: sliceDeliveryTimeoutSeconds(),
   });
 }
