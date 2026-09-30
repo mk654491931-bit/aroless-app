@@ -83,8 +83,8 @@ const SAFETY_GRACE_MS = 15_000;
  *   • `runId` hiçbir yerde saklanmadığı için sayfayı kapatıp geri dönmek de
  *     işe yaramıyordu: koşu kimliği kayboluyor, sonuç ASLA ekrana dönemiyordu.
  *   • QStash teslimatı bir kez takılsa (401, zaman aşımı, yeniden deneme
- *     bitmesi) istemcinin 90 sn'lik "bayat satırı devral" mekanizması ÇALIŞMAZ
- *     hale geliyordu — çünkü devralmayı yapan şey yoklamaydı ve o çoktan
+ *     bitmesi) istemcinin "bayat satırı devral" mekanizması ÇALIŞMAZ hale
+ *     geliyordu — çünkü devralmayı yapan şey yoklamaydı ve o çoktan
  *     kapanmıştı. Zincir ölü kalıyordu.
  *
  * DÜZELTME: yoklama terminal duruma kadar SÜRER. Tavan kaldırılmadı, yalnızca

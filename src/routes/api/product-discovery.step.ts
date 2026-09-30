@@ -92,6 +92,9 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           step: step as DiscoveryStep,
           batch: payload.batch,
           consensus: payload.consensus,
+          // Zincirin mutlak bitiş anı (varsa): adım teslimat penceresini sonuna
+          // kadar kullanmaz, `deep` sonrasına da yer bırakır.
+          deadlineAt: payload.deadlineAtMs,
         });
         if (!result.ok) {
           // ÖNEMLİ: 5xx DÖNDÜRÜLÜR, 200 DEĞİL.
@@ -150,6 +153,8 @@ export const Route = createFileRoute("/api/product-discovery/step")({
           consensus: nextStep === "final" ? consensus : undefined,
           progress: nextStep === "gemini" ? 45 : nextStep === "deep" ? 70 : 90,
           origin: appOrigin(request),
+          // Zincir sözü adım adım TAŞINIR: her adım aynı bitiş anını görür.
+          deadlineAtMs: payload.deadlineAtMs,
         });
         if (!queued.ok) {
           // Kuyruk yoksa iş ÖLMEZ: aynı adımı tarayıcı yoklamasının sürdürdüğü

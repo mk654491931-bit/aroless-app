@@ -307,9 +307,20 @@ export const PRODUCT_DISCOVERY_TRANSITIONS: Record<
   readonly ProductDiscoveryStatus[]
 > = {
   queued: ["scraping", "failed"],
-  scraping: ["filtering", "failed"],
+  // KENDİNE GEÇİŞLER (`scraping → scraping`, `gemini_shortlist →
+  // gemini_shortlist`, `deep_analysis → deep_analysis`) YALNIZ KİLİT TAZELEME
+  // İÇİNDİR ve ZORUNLUDUR.
+  //
+  // Ölçülen hata: yarıda ölen bir adım geri alınıp yeniden başlatılıyordu
+  // (`running → start`), ama bu geri geçişler durum makinesinde TANIMLI
+  // DEĞİLDİ. Sonuç: `canTransition` geri almayı reddediyor, kilit
+  // tazelenemiyor ve ölü adım 20 dakikalık watchdog kapanana kadar
+  // KURTARILAMIYORDU — kullanıcı "dönüyor ama sonuç yok" görüyordu. Kendine
+  // geçiş, kilidi atomik olarak tazeler (`WHERE discovery_status = _from`),
+  // durumu İLERLETMEZ ve terminal yazımı yine `finishDiscoveryJob`a bırakır.
+  scraping: ["scraping", "filtering", "failed"],
   filtering: ["gemini_shortlist", "failed"],
-  gemini_shortlist: ["deep_analysis", "completed", "failed"],
+  gemini_shortlist: ["gemini_shortlist", "deep_analysis", "completed", "failed"],
   // `deep_analysis → deep_analysis` KENDİNE GEÇİŞTİR ve ZORUNLUDUR.
   //
   // Ölçülen hata: `final` adımının hem başlangıç hem çalışma durumu
@@ -414,6 +425,18 @@ export const DiscoveryStepPayloadSchema = z.object({
   consensus: z.array(ConsensusSchema).default([]),
   /** İlerleme yüzdesi (panel/SSE). */
   progress: z.number().min(0).max(100).default(0),
+  /**
+   * ZİNCİRİN MUTLAK BİTİŞ ANI (epoch ms).
+   *
+   * `/start`ta BİR KEZ hesaplanır ve her adım gövdesiyle taşınır; `deep` adımı
+   * 14 ajanı bu ana kadar konuşturur, yetişmeyen roller deterministiğe düşer.
+   * Ölçülen hata: adım yalnız kendi teslimat penceresini bildiği için `deep`
+   * zincirin geri kalanına yer bırakmadan ~278 sn kullanabiliyor ve sonuç 300
+   * sn'yi aşabiliyordu. ALAN OPSİYONELDİR: eski/elde üretilmiş gövdelerde
+   * yoktur ve o durumda adım eski davranışıyla (teslimat penceresi)
+   * koşar.
+   */
+  deadlineAtMs: z.number().int().positive().optional(),
   /** Önceki adımın istatistikleri (şeffaflık). */
   stats: FilterStatsSchema.optional(),
   /** Adım sonundaki durum. */

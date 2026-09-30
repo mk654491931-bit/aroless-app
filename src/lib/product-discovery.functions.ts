@@ -28,7 +28,7 @@ import {
   creditUnavailableResponse,
   refundFeatureCredits,
 } from "@/lib/credit-charge.server";
-import { appOrigin } from "@/lib/discovery-jobs.server";
+import { appOrigin, DISCOVERY_MAX_BUDGET_MS } from "@/lib/discovery-jobs.server";
 import { backgroundJobTimeoutMs, platformDurationSeconds } from "@/lib/host-runtime.server";
 import { isBackgroundJobRunning, runInBackground } from "@/lib/job-runner.server";
 import {
@@ -138,7 +138,7 @@ const DRIVER_BUDGET_MS = 150_000;
  * ZAMAN GÜNCELLENMEZ — `processing`e takılı kalır. Ölçülen belirti: kullanıcı
  * "Analiz sunucuda çalışmaya devam ediyor" yazısını yarım saat gördü.
  *
- * Değer `STALE_STEP_TAKEOVER_MS`in (90 sn) birçok katıdır: 90 sn, yoklamanın
+ * Değer `STALE_STEP_TAKEOVER_MS`in birçok katıdır: o eşik, yoklamanın
  * "kuyruk ölmüş olabilir, devral" demesi için gereken süredir; bu eşik ise
  * devralma da yetmezse işin GERÇEKTEN ölü sayılacağı noktadır. Aradaki
  * fark dürüstlük payıdır: adımlar kuyrukta beklerken satır güncellenmez.
@@ -298,6 +298,13 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
         products: [],
         progress: 10,
         origin,
+        // BÜTÜN ZİNCİRİN BİTİŞ ANI — SÖZ BURADA VERİLİR.
+        //
+        // Tek bir yerde hesaplanır (`DISCOVERY_MAX_BUDGET_MS` = 280 sn söz −
+        // 20 sn dönüş payı) ve her adımın gövdesiyle taşınır. Aksi hâlde her
+        // adım yalnız kendi teslimat penceresini bilir ve zincir toplamda sözü
+        // aşar: ölçülen belirti "300 saniyeden fazla dönüyor".
+        deadlineAtMs: Date.now() + DISCOVERY_MAX_BUDGET_MS,
       });
       if (queued.ok) return { ok: true, runId, charged: charge.charged, mode };
 

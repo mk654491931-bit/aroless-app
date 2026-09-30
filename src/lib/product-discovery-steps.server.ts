@@ -31,6 +31,8 @@ import {
 import {
   buildTopProducts,
   DISCOVERY_FINAL_N,
+  GEMINI_SHORTLIST_SIZE,
+  geminiShortlistSelector,
   runDeepAnalysisStep,
   runFinalRankStep,
   runGeminiShortlistStep,
@@ -159,9 +161,15 @@ export async function executeProductDiscoveryStep(args: {
       /* ---------------------------------------------------------- 2. adım */
       case "gemini": {
         // AI #1 — kısa liste (Top 75 → 25). Tek çağrı.
+        //
+        // SÜRE SINIRI ZİNCİRDEN GELİR: aksi hâlde `callGemini`nin anahtar/model
+        // rotasyonu (teorik ~240 sn) tek başına hem `deep`e hem `final`e yer
+        // bırakmaz ve istek platform tavanına dayanır.
         const result = await runGeminiShortlistStep(
           args.batch as NormalizedProduct[],
           input.niche,
+          GEMINI_SHORTLIST_SIZE,
+          (candidates, niche) => geminiShortlistSelector(candidates, niche, args.deadlineAt),
         );
         if (!result.ok) {
           await failStep(runId, userId, "gemini_shortlist başarısız.");

@@ -390,9 +390,20 @@ export async function runGeminiShortlistStep(
  * adaylardan birini SEÇEBİLİR. Ayrıca yanıt zod ile doğrulanır ve geçersizse
  * deterministik sıralamaya düşülür; model hattı asla bozamaz.
  */
-async function geminiShortlistSelector(
+export async function geminiShortlistSelector(
   products: readonly NormalizedProduct[],
   niche: string,
+  /**
+   * Bu çağrının bitmesi gereken an (ms). Verilmezse model zinciri kendi
+   * varsayılan penceresini kullanır.
+   *
+   * NEDEN ZORUNLU HALE GELDİ: `callGemini` sırayla 5 anahtar × 4 model dener;
+   * süre verilmediğinde TEK bir çağrı teorik olarak ~240 sn sürebilir. Bu adım
+   * zincirin ikincisidir ve arkasında `deep` + `final` vardır: pencereyi tek
+   * başına yiyip isteği platform tavanına dayayabiliyordu (kullanıcının
+   * "300 saniyeden fazla dönüyor, sonuç yok" belirtisi).
+   */
+  deadlineAt?: number,
 ): Promise<NormalizedProduct[]> {
   const { callGemini } = await import("./ai.server");
   const { z } = await import("zod");
@@ -407,7 +418,10 @@ async function geminiShortlistSelector(
   // `grounded=false`: aday listesi SABİT ve elimizde. Google Search grounding
   // yalnız gecikmeyi artırır ve modelin JSON dışında arama metni sarmalamasına
   // yol açar. Bu adım sorgulamaz, yalnız sıralar.
-  const raw = await callGemini(prompt, undefined, 0.2, false);
+  //
+  // SÜRE SINIRI: zincirin mutlak bitiş anı verilir; anahtar/model rotasyonu bu
+  // anı geçemez, süre bitince deterministik seçime düşülür.
+  const raw = await callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
   const Parsed = z.object({
     picks: z.array(z.number().int().min(1).max(Math.min(products.length, DISCOVERY_TOP_N))).min(1),
   });

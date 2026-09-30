@@ -566,6 +566,20 @@ describe("job status state machine", () => {
     }
   });
 
+  it("YARIDA ÖLEN adımın kilidi tazelenir — geri dönüş değil, kendine geçiş", () => {
+    // Ölçülen hata: eski devralma yolu `running → start` GERİ geçişini
+    // deniyordu (ör. `deep_analysis → gemini_shortlist`). Bu geçişler durum
+    // makinesinde tanımlı olmadığı için `canTransition` reddediyor, kilit hiç
+    // tazelenemiyor ve yarıda ölen adım 20 dakikalık watchdog kapanana kadar
+    // kurtarılamıyordu (kullanıcı: "dönüyor ama sonuç yok"). Artık durum
+    // KENDİNE tazelenir; geri dönüş hâlâ yasaktır.
+    for (const s of ["scraping", "gemini_shortlist", "deep_analysis"] as const) {
+      expect(canTransition(s, s)).toBe(true);
+    }
+    expect(canTransition("deep_analysis", "gemini_shortlist")).toBe(false);
+    expect(canTransition("scraping", "queued")).toBe(false);
+  });
+
   it("herhangi bir adım `failed` olabilir", () => {
     for (const s of ["queued", "scraping", "filtering", "gemini_shortlist", "deep_analysis"]) {
       expect(canTransition(s as never, "failed")).toBe(true);
@@ -641,6 +655,38 @@ describe("QStash step payload", () => {
     expect(() =>
       buildStepBody({ runId: "", userId: "u", input, step: "gemini", products: [], progress: 0 }),
     ).toThrow();
+  });
+
+  /**
+   * ZİNCİR SÖZÜ GÖVDEDE TAŞINIR — "300 sn'den fazla" belirtisinin ikinci
+   * kökü: her adım yalnız KENDİ teslimat penceresini biliyordu. `/start`ta
+   * hesaplanan bitiş anı taşınmazsa `deep` (üçüncü adım) pencereyi sonuna
+   * kadar kullanıp sonucu 300 sn'nin ötesine taşıyabiliyordu.
+   */
+  it("zincirin mutlak bitiş anı gövdeyle taşınır", () => {
+    const deadlineAtMs = Date.now() + 260_000;
+    const body = buildStepBody({
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      step: "deep",
+      products: [],
+      progress: 70,
+      deadlineAtMs,
+    });
+    expect(body.deadlineAtMs).toBe(deadlineAtMs);
+  });
+
+  it("bitiş anı verilmeyen eski gövde yine geçerlidir", () => {
+    const body = buildStepBody({
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      step: "gemini",
+      products: [],
+      progress: 45,
+    });
+    expect(body.deadlineAtMs).toBeUndefined();
   });
 });
 

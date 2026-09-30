@@ -124,8 +124,15 @@ const STEP_RUNNING_STATE: Record<DiscoveryStep, ProductDiscoveryStatus> = {
  * adımı ŞU AN koşuyor olabilir. Canlı bir isteğin durumunu geri almak işi
  * ikiye katlar. Taze satıra dokunmayıp yalnız \"yaşlı\" satırı devralmak bu
  * yarışı pratikte ortadan kaldırır.
+ *
+ * NEDEN 60 SN (eskiden 90): bu eşik aynı zamanda KURTARMA GECİKMESİDİR.
+ * QStash teslimatı düşerse zinciri tarayıcı devralır; her devralma bu süre
+ * kadar bekler ve zincir 2-3 kesinti yaşadığında 300 sn sözü aşılırdı. 60 sn,
+ * kalp atışı aralığının (20 sn) üç katıdır: canlı bir adımın satırı en fazla
+ * ~20 sn eskir, yani 60 sn'ye ulaşması için üç kalp atışının ÜST ÜSTE
+ * düşmesi gerekir — yarışı hâlâ pratikte imkânsız kılar.
  */
-export const STALE_STEP_TAKEOVER_MS = 90_000;
+export const STALE_STEP_TAKEOVER_MS = 60_000;
 
 /** Bir adımı başlatmak için gereken en küçük bütçe (ms). */
 export const MIN_STEP_BUDGET_MS = 25_000;
@@ -216,12 +223,28 @@ export type StepClaim =
  * aynı anda isterse yalnız biri `claimed` görür — iş iki kez koşmaz.
  *
  * Yarıda kalan adım: durum "çalışıyor" işaretinde kalmışsa ve satır yeterince
- * eskimişse (STALE_STEP_TAKEOVER_MS) geri alınır ve yeniden sahiplenilir. Taze
+ * eskimişse (STALE_STEP_TAKEOVER_MS) kilit KENDİNE GEÇİŞLE tazelenir. Taze
  * satır dokunulmaz, çünkü onu şu an başka bir sürücü koşuyor olabilir.
+ *
+ * `final` İSTİSNASI — ÖLÇÜLEN HATA: `final`ın hem başlangıç hem çalışma durumu
+ * `deep_analysis`tir (`running === start`). `deep` bittiği anda satır taze
+ * olduğu için `final`ın QStash teslimatı "başka biri koşuyor" sanılıp
+ * `deduped` olarak YUTULUYOR ve adım ucu 200 döndüğü için QStash onu bir daha
+ * DENEMİYORDU. Son adım hiç koşmuyor; iş yalnız satır bayatlayınca
+ * (STALE_STEP_TAKEOVER_MS) tarayıcı devraldığında bitiyordu — kullanıcının
+ * ölçtüğü "300 saniyeden fazla dönüyor, sonuç yok" tam olarak bu gecikmedir.
+ *
+ * DOĞRU ÖLÇÜT SATIRIN YAŞI DEĞİL, ARA NOKTADIR: ara nokta `deep`i bitmiş
+ * gösteriyorsa `final` hemen alınabilir (kilidi yaşla bekletmek yalnızca
+ * gecikme üretir; `deep` bitmemişse ara nokta bunu söyler ve sıradaki adım
+ * zaten `deep`tir). Bu ayrım, `final`ın sonucu YALNIZ BİR KEZ yazmasıyla
+ * birlikte güvenlidir (`finish_discovery_job`: `WHERE status = 'processing'`).
  */
 export async function claimDiscoveryStep(
   runId: string,
   step: DiscoveryStep,
+  /** Çağıranın elinde varsa ara nokta; yoksa burada okunur (fazladan sorgu yok). */
+  checkpoint?: DiscoveryCheckpoint | null,
 ): Promise<StepClaim> {
   const job = await readDiscoveryJob(runId);
   if (!job) return { state: "missing", job: null };
@@ -231,44 +254,43 @@ export async function claimDiscoveryStep(
   const running = STEP_RUNNING_STATE[step];
   let claimFrom = job.discoveryStatus;
 
-  // DİKKAT — `running !== start` KOŞULU ZORUNLU: `final` adımının "çalışıyor"
-  // durumu, kendi başlangıç durumuyla AYNIdır ('deep_analysis' — çünkü bu adım
-  // satırı `completed` yapmamalıdır, bkz. STEP_START_STATE açıklaması). Bu
-  // koşul olmadan `final`, hemen önce biten `deep` adımının taze `updated_at`
-  // değerini görür, "başka biri koşuyor" sanır ve kullanıcı sonucu 90 sn
-  // gecikmeli görürdü.
-  //
-  // ANCAK `final` İÇİN BU, BAŞKA BİR TUZAK YARATIYORDU: `final` çalışırken
-  // durumu DEĞİŞMEZ (`deep_analysis` → `deep_analysis`), yani hiçbir yerde
-  // `updated_at` yenilenmez. Adım QStash teslimatı sırasında ölürse (platform
-  // isteği kesti, ağ koptu) satır SAHİPLENMİŞ AMA BOŞTA kalıyordu ve hiçbir
-  // sürücü onu geri alamıyordu — çünkü geri alma yolu `running !== start`
-  // koşuluna bağlıydı. İş yine `processing`e kilitlenir, kullanıcı yine sonsuza
-  // kadar bekler.
-  //
-  // ÇÖZÜM: `final` de devralmaya KATILIR, ama yaş ölçütü farklıdır. `deep`
-  // adımının taze bittiği anlaşılmak zorundaydı (aksi hâlde `final` hemen
-  // başlar). Bu yüzden `final` yalnızca satır GERÇEKTEN eskiyse devralır:
-  // ya `updated_at` okunamadıysa, ya da `deep` biteli en az
-  // `STALE_STEP_TAKEOVER_MS` geçtiyse.
-  if (claimFrom === running) {
-    const age = job.updatedAt === null ? Number.POSITIVE_INFINITY : Date.now() - job.updatedAt;
-    // `final`de `running === start` olduğu için "geri al" geçişi YOKTUR:
-    // satır zaten doğru durumda, yalnızca KİLİDİN yaşı önemlidir.
-    // `deep` biteli yeni bir satır varsa `final` henüz başlamamıştır ve
-    // devralınmamalıdır; eskiyse önceki sahibi ölmüş demektir.
-    if (age < STALE_STEP_TAKEOVER_MS) return { state: "in-progress", job };
-    if (running !== start) {
-      const reclaimed = await advanceDiscoveryStatus({
-        runId,
-        from: running,
-        to: start,
-        progress: 10,
-        step,
-      });
-      if (!reclaimed) return { state: "in-progress", job };
-      claimFrom = start;
+  if (step === "final") {
+    const done = (checkpoint ?? (await readDiscoveryCheckpoint(runId)))?.done ?? [];
+    if (!done.includes("deep")) return { state: "in-progress", job };
+    // Aşağıdaki CAS `deep_analysis → deep_analysis` kendine geçişidir ve
+    // bilerek serbesttir (bkz. `PRODUCT_DISCOVERY_TRANSITIONS`): kilit alınır,
+    // terminal durum (`completed`) yine yalnız `finishDiscoveryJob` ile yazılır.
+    if (claimFrom !== start) {
+      // Beklenmeyen satır (migration öncesi şema ya da bozulmuş kayıt): yine de
+      // denenir — CAS `WHERE discovery_status = _from` ile eşleşmezse hiçbir
+      // şey yazılmaz. Log, canlıda bu sınıf sorunun görünmesini sağlar.
+      console.warn(`[discovery] final: beklenen durum ${start}, görülen ${claimFrom}`);
     }
+  } else if (claimFrom === running) {
+    // YARIDA ÖLEN ADIMI DEVRAL — GERİ ALMA YOK.
+    //
+    // Ölçülen hata: bu dal önce `running → start` geri geçişini deniyordu
+    // (ör. ölü `deep` için `deep_analysis → gemini_shortlist`) ama bu geçişler
+    // durum makinesinde TANIMLI DEĞİLDİ; `canTransition` reddediyor ve kilit
+    // hiç tazelenemiyordu. Yani ölü adım 20 dakikalık watchdog kapanana kadar
+    // kurtarılamıyordu — kullanıcının "dönüyor ama sonuç yok" hâli.
+    //
+    // DOĞRUSU: durum ZATEN "çalışıyor" işaretindedir ve doğrudur; tazelenmesi
+    // gereken şey KİLİDİN sahibidir. Kendine geçiş (`running → running`) bunu
+    // atomik olarak yapar: `WHERE discovery_status = _from` eşleşmezse başka
+    // bir taşıyıcı önce davranmıştır ve biz hiçbir şey yapmayız.
+    const age = job.updatedAt === null ? Number.POSITIVE_INFINITY : Date.now() - job.updatedAt;
+    if (age < STALE_STEP_TAKEOVER_MS) return { state: "in-progress", job };
+    const reclaimed = await advanceDiscoveryStatus({
+      runId,
+      from: running,
+      to: running,
+      progress: 10,
+      step,
+    });
+    return reclaimed
+      ? { state: "claimed", job: { ...job, discoveryStatus: running } }
+      : { state: "in-progress", job };
   }
 
   const claimed = await advanceDiscoveryStatus({
@@ -303,12 +325,15 @@ export async function runOneDiscoveryStep(args: {
   | { ok: true; deduped: true }
   | { ok: false; error: string }
 > {
-  const claim = await claimDiscoveryStep(args.runId, args.step);
+  // ARA NOKTA, SAHİPLENMEDEN ÖNCE okunur: `final`ın kilit kararı buna bağlıdır
+  // (`deep` gerçekten bitti mi?) ve aynı okuma aşağıda aday/oy girdisi olarak
+  // da kullanılır — fazladan sorgu yapılmaz.
+  const checkpoint = await readDiscoveryCheckpoint(args.runId);
+  const claim = await claimDiscoveryStep(args.runId, args.step, checkpoint);
   if (claim.state === "in-progress") return { ok: true, deduped: true };
   if (claim.state === "terminal") return { ok: true, deduped: true };
   if (claim.state === "missing") return { ok: false, error: "İş kaydı bulunamadı." };
 
-  const checkpoint = await readDiscoveryCheckpoint(args.runId);
   const batch = args.batch?.length ? args.batch : (checkpoint?.shortlist ?? []);
   const consensus = args.consensus?.length ? args.consensus : (checkpoint?.votes ?? []);
 
@@ -320,6 +345,19 @@ export async function runOneDiscoveryStep(args: {
   const deliveryWindowMs = Math.max(
     MIN_STEP_BUDGET_MS,
     (await import("./discovery-jobs.server")).qstashTimeoutSeconds() * 1000 - 20_000,
+  );
+
+  // ZİNCİR SÖZÜ (280 sn) ADIMIN İÇİNDE DE KORUNUR.
+  //
+  // ÖLÇÜLEN HATA: adım yalnız TESLİMAT penceresini biliyordu (Vercel'de ~278
+  // sn). `deep`, zincirin üçüncü adımıdır ve önündeki kazıma + Gemini
+  // (~30-60 sn) ile birlikte bu pencereyi sonuna kadar kullandığında sonuç 300
+  // sn'yi aşıyordu. `/start`ta hesaplanan MUTLAK bitiş anı (`deadlineAtMs`) her
+  // QStash gövdesiyle taşınır; adım bu andan sonrasını kullanmaz ve konseyin
+  // yetişmeyen rolleri deterministiğe düşer (uydurma değil, dürüst yedek).
+  const stepDeadline = Math.min(
+    Date.now() + deliveryWindowMs,
+    args.deadlineAt ?? Number.POSITIVE_INFINITY,
   );
 
   // KALP ATIŞI — SAHİPLENİLMİŞ ADIMIN "CANLI" GÖRÜNMESİ.
@@ -345,7 +383,7 @@ export async function runOneDiscoveryStep(args: {
       input: args.input,
       batch,
       consensus,
-      deadlineAt: args.deadlineAt ?? Date.now() + deliveryWindowMs,
+      deadlineAt: stepDeadline,
     });
   } finally {
     heartbeat.stop();
@@ -412,7 +450,7 @@ export async function runDiscoveryChain(args: {
     // Adımı atomik sahiplen. `advanceDiscoveryStatus` migration'sız şemada
     // (RPC yok) başarı sayılır: orada kilit yoktur ama zincir yine doğru
     // sırayla ilerler ve ara nokta çift çalışmayı zaten engeller.
-    const claim = await claimDiscoveryStep(args.runId, step);
+    const claim = await claimDiscoveryStep(args.runId, step, checkpoint);
     if (claim.state === "missing") {
       return { completed: false, ran, stop: "terminal", error: "İş kaydı bulunamadı." };
     }

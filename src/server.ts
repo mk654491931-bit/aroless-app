@@ -132,6 +132,13 @@ export default {
         Response.json(
           {
             status: "ok",
+            // DAĞITIM DOĞRULAMASI: canlı build'in hangi commit olduğunu gösterir.
+            // Neden gerekli (ölçülen karışıklık): "düzelttim ama hâlâ bozuk"
+            // geri bildirimi iki kez yalnızca deploy edilmemiş bir commit'ten
+            // kaynaklandı (şema hatası build'i durduruyordu). Commit damgası
+            // olmadan düzeltmenin canlıda olup olmadığı kanıtlanamıyordu.
+            // Sır değildir; platform vermezse `null` döner.
+            commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
             ...hostRuntimeSummary(),
             // Sunucusuz ortamda platform işi kesmeden önce yanıt ürettiğimiz
             // an (ms). `null` → kalıcı süreç, global kesme yok.

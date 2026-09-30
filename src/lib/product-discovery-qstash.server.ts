@@ -39,6 +39,8 @@ const StepPublishSchema = z.object({
   products: z.array(z.any()).default([]),
   consensus: z.array(ConsensusSchema).default([]),
   progress: z.number().min(0).max(100).default(0),
+  /** Zincirin mutlak bitiş anı (ms) — `deep` bu anı aşmaz. Ayrıntı: types. */
+  deadlineAtMs: z.number().int().positive().optional(),
 });
 
 /** `enqueueDiscoveryStep` argümanı — `consensus` isteğe bağlıdır. */
@@ -88,6 +90,7 @@ export function buildStepBody(args: StepPublishArgs): DiscoveryStepPayload {
     batch: args.products,
     consensus: args.consensus,
     progress: args.progress,
+    deadlineAtMs: args.deadlineAtMs,
     status: "queued",
   });
 }
@@ -109,6 +112,8 @@ export async function enqueueDiscoveryStep(args: {
   consensus?: Consensus[];
   progress: number;
   origin?: string;
+  /** Zincirin mutlak bitiş anı (ms) — adımla birlikte taşınır. */
+  deadlineAtMs?: number;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   const parsed = StepPublishSchema.safeParse({
     runId: args.runId,
@@ -118,6 +123,7 @@ export async function enqueueDiscoveryStep(args: {
     products: args.products,
     consensus: args.consensus ?? [],
     progress: args.progress,
+    deadlineAtMs: args.deadlineAtMs,
   });
   if (!parsed.success) {
     return { ok: false, error: `INVALID_STEP_PAYLOAD:${parsed.error.issues[0]?.code ?? "?"}` };

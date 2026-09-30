@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  claimDiscoveryStep,
   clientDrivesChain,
   DISCOVERY_HEARTBEAT_MS,
   discoveryChainHealth,
@@ -8,6 +9,47 @@ import {
   MIN_STEP_BUDGET_MS,
   STALE_STEP_TAKEOVER_MS,
 } from "./product-discovery-runner.server";
+
+/**
+ * SAHİPLENME TESTİ İÇİN SAHTE DEPO.
+ *
+ * `claimDiscoveryStep` tek gerçek karar noktasıdır: hangi adımın koşacağını
+ * o belirler. Bu yüzden veritabanı katmanı taklit edilip KARARIN kendisi
+ * sınanır; ağ çağrısı yapılmaz.
+ */
+const jobsMock = vi.hoisted(() => ({
+  readDiscoveryJob: vi.fn(),
+  readDiscoveryCheckpoint: vi.fn(),
+  advanceDiscoveryStatus: vi.fn(),
+  saveDiscoveryCheckpoint: vi.fn(),
+  touchDiscoveryRun: vi.fn(),
+  failAndRefund: vi.fn(),
+  finishDiscoveryJob: vi.fn(),
+  writeDiscoveryProgress: vi.fn(),
+}));
+
+vi.mock("./product-discovery-jobs.server", () => jobsMock);
+
+/** Ölçülen iş satırının varsayılanı: `deep` koşuyor, satır TAZE. */
+function jobRecord(over: Record<string, unknown> = {}) {
+  return {
+    id: "run-1",
+    userId: "user-1",
+    status: "processing",
+    discoveryStatus: "deep_analysis",
+    discoveryProgress: 90,
+    discoveryStep: "deep",
+    chargedCredits: 1,
+    stats: null,
+    error: null,
+    updatedAt: Date.now(),
+    ...over,
+  };
+}
+
+function checkpoint(done: string[]) {
+  return { v: 1 as const, done, shortlist: [], votes: [] };
+}
 
 /**
  * SÜRÜCÜ SEÇİMİ SÖZLEŞMESİ.
@@ -93,9 +135,12 @@ describe("calisan adım canlı görünür (sessiz kilitlenme kapatılır)", () =
     expect(DISCOVERY_HEARTBEAT_MS).toBeLessThanOrEqual(Math.floor(STALE_STEP_TAKEOVER_MS / 2));
   });
 
-  it("devralma eşiği yine de mevcut sözleşmeyi korur", () => {
-    // Kalp atışı eşiği DEĞİŞTİRMEZ; yalnızca satırı taze tutar.
-    expect(STALE_STEP_TAKEOVER_MS).toBe(90_000);
+  it("devralma eşiği kurtarma gecikmesini 300 sn sözünün altında tutar", () => {
+    // Eşik aynı zamanda kurtarma gecikmesidir: QStash teslimatı düşerse zinciri
+    // tarayıcı bu süre sonra devralır. 90 sn idi; 2-3 kesintide toplam süre
+    // 300 sn'yi aşıyordu. Kalp atışı aralığının (20 sn) üç katı yarışı hâlâ
+    // imkânsız kılar ama kurtarmayı hızlandırır.
+    expect(STALE_STEP_TAKEOVER_MS).toBe(60_000);
   });
 
   it("ölü sürücü bıraktığı satır YİNE DE devralınabilir", () => {
@@ -142,6 +187,137 @@ describe("clientDrivesChain", () => {
  * istiyordu. Panel "qstash" derken hat `inline` çalışıyor, kullanıcı ise
  * zaman aşımı görüyordu. Sessiz çelişki teşhisi imkânsız kılıyordu.
  */
+/**
+ * `final` KİLİDİ — "300 saniyeden fazla dönüyor" BELİRTİSİNİN KÖKÜ.
+ *
+ * Ölçülen hata: `final`ın durumu `deep` ile AYNI (`deep_analysis`) olduğu ve
+ * `deep` bittiğinde satır taze kaldığı için QStash teslimatı "başka biri
+ * koşuyor" sanılıp yutuluyordu. Adım ucu 200 döndüğü için QStash yeniden
+ * denemiyor; son adım ancak satır 90 sn sonra bayatlayınca istemci devralınca
+ * koşuyordu. Bu testler kilidin artık SATIRIN YAŞINA değil ARA NOKTAYA
+ * baktığını kilitler.
+ */
+describe("final adımının kilidi (sıradaki adım bekletilmez)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    jobsMock.readDiscoveryCheckpoint.mockResolvedValue(null);
+  });
+
+  it("deep BİTER BİTMEZ final HEMEN sahiplenilir (taze satır engel değildir)", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(jobRecord({ updatedAt: Date.now() }));
+    jobsMock.advanceDiscoveryStatus.mockResolvedValue(true);
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "final",
+      checkpoint(["scrape_filter", "gemini", "deep"]),
+    );
+
+    expect(claim.state).toBe("claimed");
+    // Kilit `deep_analysis → deep_analysis` KENDİNE geçişiyle alınır.
+    expect(jobsMock.advanceDiscoveryStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "deep_analysis", to: "deep_analysis", step: "final" }),
+    );
+  });
+
+  it("deep HENÜZ BİTMEDİYSE final beklemede kalır (sıra bozulmaz)", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(jobRecord());
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "final",
+      checkpoint(["scrape_filter", "gemini"]),
+    );
+
+    expect(claim.state).toBe("in-progress");
+    expect(jobsMock.advanceDiscoveryStatus).not.toHaveBeenCalled();
+  });
+
+  it("ara nokta çağırandan gelmediyse burada okunur", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(jobRecord());
+    jobsMock.readDiscoveryCheckpoint.mockResolvedValue(
+      checkpoint(["scrape_filter", "gemini", "deep"]),
+    );
+    jobsMock.advanceDiscoveryStatus.mockResolvedValue(true);
+
+    const claim = await claimDiscoveryStep("run-1", "final");
+
+    expect(jobsMock.readDiscoveryCheckpoint).toHaveBeenCalledWith("run-1");
+    expect(claim.state).toBe("claimed");
+  });
+
+  it("çalışan `deep` taze satırda ÇALINMAZ (pahalı adım ikiye katlanmaz)", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(jobRecord({ updatedAt: Date.now() }));
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "deep",
+      checkpoint(["scrape_filter", "gemini"]),
+    );
+
+    expect(claim.state).toBe("in-progress");
+    expect(jobsMock.advanceDiscoveryStatus).not.toHaveBeenCalled();
+  });
+
+  it("ÖLÜ `deep` bayat satırda KENDİNE GEÇİŞLE devralınır (geri alma yok)", async () => {
+    // Ölçülen hata: eski kod `deep_analysis → gemini_shortlist` geri geçişini
+    // deniyordu; bu geçiş durum makinesinde TANIMLI OLMADIĞI için
+    // `canTransition` reddediyor ve ölü adım 20 dakikalık watchdog'a kadar
+    // kurtarılamıyordu. Kilit artık TEK bir kendine geçişle tazelenir.
+    jobsMock.readDiscoveryJob.mockResolvedValue(
+      jobRecord({ updatedAt: Date.now() - STALE_STEP_TAKEOVER_MS - 1 }),
+    );
+    jobsMock.advanceDiscoveryStatus.mockResolvedValue(true);
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "deep",
+      checkpoint(["scrape_filter", "gemini"]),
+    );
+
+    expect(claim.state).toBe("claimed");
+    expect(jobsMock.advanceDiscoveryStatus).toHaveBeenCalledTimes(1);
+    expect(jobsMock.advanceDiscoveryStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "deep_analysis", to: "deep_analysis", step: "deep" }),
+    );
+  });
+
+  it("ÖLÜ `gemini` de aynı yol ile devralınır", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(
+      jobRecord({
+        discoveryStatus: "gemini_shortlist",
+        discoveryStep: "gemini",
+        updatedAt: Date.now() - STALE_STEP_TAKEOVER_MS - 1,
+      }),
+    );
+    jobsMock.advanceDiscoveryStatus.mockResolvedValue(true);
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "gemini",
+      checkpoint(["scrape_filter"]),
+    );
+
+    expect(claim.state).toBe("claimed");
+    expect(jobsMock.advanceDiscoveryStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "gemini_shortlist", to: "gemini_shortlist" }),
+    );
+  });
+
+  it("iş terminal ise adım hiç sahiplenilmez", async () => {
+    jobsMock.readDiscoveryJob.mockResolvedValue(jobRecord({ status: "completed" }));
+
+    const claim = await claimDiscoveryStep(
+      "run-1",
+      "final",
+      checkpoint(["scrape_filter", "gemini", "deep"]),
+    );
+
+    expect(claim.state).toBe("terminal");
+    expect(jobsMock.advanceDiscoveryStatus).not.toHaveBeenCalled();
+  });
+});
+
 describe("discoveryChainHealth", () => {
   it("üç anahtar da tam ise qstash ve eksik yok", () => {
     const health = discoveryChainHealth({

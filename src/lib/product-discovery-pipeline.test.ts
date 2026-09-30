@@ -11,7 +11,7 @@
  * Tüm testler $0 çalışır: ağ çağrısı ve veritabanı YOK, saf fonksiyonlar
  * üzerinden doğrulanır. Supabase erişimi olmayan bir ortamda da yeşil kalır.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   canTransition,
@@ -31,9 +31,18 @@ import {
 import { parseLooseJson } from "./product-discovery-pipeline.server";
 import {
   buildShortlistPrompt,
+  geminiShortlistSelector,
   selectWithGemini,
   GEMINI_SHORTLIST_SIZE,
 } from "./product-discovery-pipeline.server";
+
+/**
+ * Gemini çağrısı taklit edilir: bu test AĞA ÇIKMAZ, yalnız süre sınırının
+ * modele gerçekten iletildiğini kanıtlar. `ai.server` bu dosyada başka bir
+ * yerde statik olarak içe aktarılmaz (çağrı dinamiktir).
+ */
+const aiMock = vi.hoisted(() => ({ callGemini: vi.fn() }));
+vi.mock("./ai.server", () => aiMock);
 
 /** Tam ölçülmüş bir ürün (bütünlük 5/5 → penaltı sıfır). */
 const fullProduct = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => {
@@ -419,5 +428,52 @@ describe("selectWithGemini", () => {
     const small = pool.slice(0, 7);
     const res = await selectWithGemini(small, "air fryer", 25);
     expect(res.products).toHaveLength(7);
+  });
+});
+
+/**
+ * GEMINI ADIMI SÜRE SINIRI — "300 sn'den fazla" belirtisinin dördüncü kaynağı.
+ *
+ * `callGemini` anahtar/model rotasyonunda süre verilmediğinde TEK çağrı için
+ * teorik ~240 sn harcayabilir (5 anahtar × 4 model × 12 sn). Bu adım zincirin
+ * İKİNCİSİDİR; pencereyi tek başına yediğinde `deep`e ve `final`e yer kalmaz ve
+ * istek platform tavanına dayanır. Sınır artık zincirin bitiş anından gelir ve
+ * yetmeyen rotasyon deterministik seçime düşer.
+ */
+describe("gemini kısa liste süre sınırı", () => {
+  it("zincirin bitiş anını modele İLETİR", async () => {
+    aiMock.callGemini.mockResolvedValue(JSON.stringify({ picks: [2, 1] }));
+    const deadlineAt = Date.now() + 120_000;
+
+    const picked = await geminiShortlistSelector(
+      [fullProduct({ id: "p-1" }), fullProduct({ id: "p-2", name: "Air Fryer Pro 8L" })],
+      "air fryer",
+      deadlineAt,
+    );
+
+    expect(aiMock.callGemini).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      0.2,
+      false,
+      undefined,
+      deadlineAt,
+    );
+    expect(picked.length).toBe(2);
+  });
+
+  it("sınır verilmezse eski davranış korunur (undefined geçilir)", async () => {
+    aiMock.callGemini.mockResolvedValue(JSON.stringify({ picks: [1] }));
+
+    await geminiShortlistSelector([fullProduct({ id: "p-1" })], "air fryer");
+
+    expect(aiMock.callGemini).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      0.2,
+      false,
+      undefined,
+      undefined,
+    );
   });
 });
