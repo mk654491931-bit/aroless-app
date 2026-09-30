@@ -184,6 +184,17 @@ export type DiscoveryRunStatus = {
   status: string;
   progress: number;
   step: string;
+  /**
+   * Satırın son yazılma anı (ms) — ÇALIŞAN ADIMIN KALP ATIŞI.
+   *
+   * NEDEN İSTEMCİYE VERİLİR: uzun bir adım (14 ajanın konseyi dakikalar sürer)
+   * boyunca `progress`/`step` DEĞİŞMEZ. İstemci yalnız durum değişimini
+   * saydığı için sağlıklı bir turu "ilerlemedi" sanıp vazgeçiyordu — ürünler
+   * sunucuda hazırlanırken ekranda hata kalıyordu. Kalp atışı (20 sn) bu
+   * alanda görünür; istemci işi bırakmadan önce sunucunun NEFES ALDIĞINI
+   * ölçebilir.
+   */
+  updatedAt: number | null;
   /** Yalnız terminal durumda dolar: kazanan ürünler + uzlaşma + nihai 5'in gerekçesi. */
   result: {
     products: DiscoveryWinner[];
@@ -396,6 +407,7 @@ async function readRunSnapshot(
     status: job.discoveryStatus,
     progress: job.discoveryProgress,
     step: job.discoveryStep,
+    updatedAt: job.updatedAt,
     result,
     error: job.error,
   };

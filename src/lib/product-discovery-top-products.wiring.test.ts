@@ -133,6 +133,19 @@ describe("nihai 5 — kalıcı sonuç ve istemci", () => {
     );
   });
 
+  it("uzun adımda istemci VAZGEÇMEZ: sunucunun kalp atışı takılma saatini sıfırlar", async () => {
+    // Ölçülen hata: 14 ajanın konseyi dakikalarca sürerken `progress`/`step`
+    // DEĞİŞMEDİĞİ için istemci işi "ilerlemedi" sayıp koşuyu bırakıyordu —
+    // ürünler sunucuda hazırlanırken ekranda hata kalıyordu. Karar artık
+    // sunucunun kalp atışına (`updatedAt`) da bakıyor.
+    const hook = await read("src/features/finder/hooks/use-product-discovery.ts");
+    expect(hook).toContain("const heartbeatAt = Number(res.updatedAt ?? 0)");
+    expect(hook).toContain("lastHeartbeatAt = heartbeatAt");
+    const fn = await read("src/lib/product-discovery.functions.ts");
+    expect(fn).toContain("updatedAt: job.updatedAt");
+    expect(fn).toContain("updatedAt: number | null");
+  });
+
   it("arayüz gerekçeyi kartlara geçirir", async () => {
     const route = await read("src/routes/discover.tsx");
     expect(route).toContain("topProducts={d.run.topProducts}");

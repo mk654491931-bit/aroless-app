@@ -245,10 +245,21 @@ export async function executeProductDiscoveryStep(args: {
 
       /* ---------------------------------------------------------- 4. adım */
       case "final": {
-        // Uzlaşma (oy) satırları fingerprint ile aday ürünlere eşleşir.
-        const byId = new Map(
-          (args.batch as { fingerprint?: string }[]).map((p) => [String(p.fingerprint ?? ""), p]),
-        );
+        // Uzlaşma (oy) satırları adaylara İKİ ANAHTARLA eşleşir: ürünün parmak
+        // izi VE konseyin sıra anahtarı (`P7`).
+        //
+        // Ölçülen hata: eski eşleme YALNIZ parmak izine bakıyordu; konsey bir
+        // ürünün parmak izini boş görüp `candidateId: "P7"` yazdığında o
+        // kazanan ürün eşleşemiyor ve **listeden düşüyordu**. Kullanıcı 14
+        // ajanın seçtiği ürünler yerine eksik ya da boş bir liste
+        // görebiliyordu. İki anahtar da yazılır: 14 ajanın seçtiği ürün HER
+        // ZAMAN teslim edilir.
+        const byId = new Map<string, NormalizedProduct>();
+        (args.batch as NormalizedProduct[]).forEach((product, index) => {
+          const fingerprint = String(product.fingerprint ?? "");
+          if (fingerprint) byId.set(fingerprint, product);
+          byId.set(`P${index + 1}`, product);
+        });
         const ranked = runFinalRankStep(args.consensus as never, input.topN, byId as never);
         if (!ranked.ok) {
           await failStep(runId, userId, "final sıralama başarısız.");

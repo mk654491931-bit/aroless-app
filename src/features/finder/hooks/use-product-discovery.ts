@@ -153,6 +153,8 @@ export function useProductDiscovery(): {
     // İlerleme en son ne zaman DEĞİŞTİ? Takılma ölçütü budur (toplam süre değil).
     let lastProgressAt = Date.now();
     let lastFingerprint = "";
+    /** Sunucunun son kalp atışı (ms) — çalışan adımın canlılık kanıtı. */
+    let lastHeartbeatAt = 0;
 
     const poll = async () => {
       if (cancelled) return;
@@ -164,6 +166,21 @@ export function useProductDiscovery(): {
           // 403/404 kalıcı: kayıt yok ya da başkasının. Döngü biter.
           setRun((prev) => ({ ...prev, status: "failed", error: "Bu işe erişim yok." }));
           return;
+        }
+
+        // SUNUCU CANLILIĞI — UZUN ADIM İŞİ BIRAKTIRMAZ.
+        //
+        // `progress`/`step` yalnız adım sınırlarında değişir; 14 ajanın konseyi
+        // dakikalarca sürebilir. Eskiden takılma ölçütü yalnız bu alanların
+        // değişimine bakıyordu, yani sağlıklı bir `deep` turu ortasında
+        // "ilerlemedi" damgası yiyor ve ÜRÜNLER SUNUCUDA HAZIRLANIRKEN ekranda
+        // hata kalıyordu. Çalışan adım `updated_at`i 20 sn'de bir tazeler;
+        // burada o kalp atışı takılma saatini SIFIRLAR. Ölçüt artık "sunucu
+        // nefes almıyor"dur, "yüzde değişmedi" değil.
+        const heartbeatAt = Number(res.updatedAt ?? 0);
+        if (heartbeatAt && heartbeatAt !== lastHeartbeatAt) {
+          lastHeartbeatAt = heartbeatAt;
+          lastProgressAt = Date.now();
         }
 
         setRun((prev) => {
