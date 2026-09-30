@@ -21,6 +21,7 @@ import { filterAndPreRank, normalizeRaw } from "./product-discovery-filter.serve
 import {
   buildTopProducts,
   isWinnerWorthy,
+  MIN_DELIVERED_WINNERS,
   runFinalRankStep,
   winnerQualityScore,
 } from "./product-discovery-pipeline.server";
@@ -247,8 +248,11 @@ describe("nihai kalite sıralaması ve kapısı", () => {
       5,
       byId,
     );
-    // Kapı hepsini elerdi ama taban gereği en az 3 kazanan teslim edilir.
-    expect(result.consensus).toHaveLength(3);
+    // Kapı hepsini elerdi ama taban gereği boş olmayan bir liste teslim edilir.
+    // Taban 3'ten 1'e düşürüldü: kırılgan nişlerde 5 ürün gelmeyebiliyor ve
+    // 3'lü taban listeyi yine eliyordu, yani kullanıcı boş sonuçla kalıyordu.
+    expect(result.consensus.length).toBeGreaterThanOrEqual(1);
+    expect(result.consensus.length).toBe(MIN_DELIVERED_WINNERS);
     expect(result.notes.join(" ")).toContain("geri alındı");
   });
 });

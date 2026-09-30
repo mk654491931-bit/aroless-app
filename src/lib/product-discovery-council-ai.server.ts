@@ -24,7 +24,7 @@
 //     saklamak olurdu.
 // ============================================================================
 
-import { callGemini } from "./ai.server";
+import { callGemini, withDeadline as withAiDeadline } from "./ai.server";
 import { COUNCIL_AGENTS, COUNCIL_AGENT_KEYS, type CouncilAgentKey } from "./council-chain.server";
 import { buildConsensus, type AgentVote } from "./product-discovery-consensus";
 import { deterministicVotes } from "./product-discovery-council.server";
@@ -412,9 +412,17 @@ async function runCouncilWave(args: {
     args.roles.map(async (agentKey) => {
       const agent = COUNCIL_AGENTS.find((a) => a.key === agentKey);
       if (!agent) throw new Error(`bilinmeyen rol: ${agentKey}`);
-      const raw = await args.call(
-        buildAgentPrompt(agent, args.products, args.niche),
-        args.deadlineAt,
+      // DİLİM DUVARI: `Promise.allSettled` TÜM rollerin bitmesini bekler.
+      // Bir rol çağıranın bütçesini aşarsa (örn. sağlayıcı yavaş), diğerleri
+      // bitse bile dalga süreyi aşar ve 10 sn'lik dilim sözü bozulur.
+      // Bu yüzden her rolün sözü dilim penceresine ayrıca bağlanır: süre
+      // dolunca o rol deterministiğe düşer, dalga zamanında döner.
+      const left = args.deadlineAt - Date.now();
+      if (left <= 0) throw new Error("timeout: council-wave");
+      const raw = await withAiDeadline(
+        args.call(buildAgentPrompt(agent, args.products, args.niche), args.deadlineAt),
+        left,
+        `council:${agentKey}`,
       );
       return [agentKey, parseAgentScores(raw, args.products.length)] as const;
     }),

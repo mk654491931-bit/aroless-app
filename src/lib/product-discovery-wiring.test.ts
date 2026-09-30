@@ -79,8 +79,12 @@ describe("metinden puan okuma (uydurmadan)", () => {
 /* ------------------------------------------ 2. Gemini kısa liste hedefi */
 
 describe("Gemini kısa listesi", () => {
-  it("25 aday seçiyor (14 ajan oy çeşitliliği için)", () => {
-    expect(GEMINI_SHORTLIST_SIZE).toBe(25);
+  // Kısa liste 25'ten 12'ye düşürüldü: konsey 12 adayda 14 ajanın oyunu
+  // 25 adaya göre daha ayrışık çıkarıyordu (çok geniş listede her ajan aynı
+  // birkaç ürüne yoğunlaşıyor, oy dağılımı yapay olarak daralıyordu).
+  // Test eski değeri beklediği için hat ile uyumsuzdu.
+  it("12 aday seçiyor (14 ajan oy çeşitliliği için)", () => {
+    expect(GEMINI_SHORTLIST_SIZE).toBe(12);
   });
 });
 

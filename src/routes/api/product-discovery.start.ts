@@ -26,7 +26,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { requireUser } from "@/lib/api-guard.server";
-import { appOrigin } from "@/lib/discovery-jobs.server";
+import { appOrigin, DISCOVERY_MAX_BUDGET_MS } from "@/lib/discovery-jobs.server";
 import {
   chargeOnce,
   noCreditsResponse,
@@ -113,6 +113,14 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           // Adres kendi isteğimizden türetilir; QStash geri çağrısı internete
           // açık olmak zorundadır, localhost olamaz.
           origin: appOrigin(request),
+          // BÜTÜN ZİNCİRİN BİTİŞ ANI — SÖZ BURADA VERİLİR.
+          //
+          // Ölçülen hata: bu uç `deadlineAtMs` taşımıyordu. Zincir sözünü
+          // yalnız `startDiscoveryRun` sunucu fonksiyonu veriyordu; bu HTTP
+          // ucundan başlatılan koşularda sınır YOKTU, yani "280 saniyede
+          // bitmeli" sözü tutulmuyor ve hat kendi hızında uzayabiliyordu.
+          // Tek kaynak: `DISCOVERY_MAX_BUDGET_MS` (280 sn söz − dönüş payı).
+          deadlineAtMs: Date.now() + DISCOVERY_MAX_BUDGET_MS,
         });
 
         if (!queued.ok) {

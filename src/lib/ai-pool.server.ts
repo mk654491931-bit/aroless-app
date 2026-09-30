@@ -347,11 +347,42 @@ export function poolHealthSummary(): {
 
 // ------------------------------------------------------------------ one-shot call
 
+/** Bir düğüm denemesi için ayrılan en az süre (ms) — daha kısası anlamsız. */
+const MIN_POOL_ATTEMPT_MS = 1_000;
+
+/**
+ * TEK düğüm denemesine ayrılabilecek süre (ms).
+ *
+ * Sınır verilmemişse varsayılan 45 sn (davranış değişmez). Sınır verilmişse
+ * kalan süreye kırpılır: 10 sn'lik bir dilimde bir düğüm 45 sn beklemez.
+ * Test edilebilir saf fonksiyon (zaman kaynağı dışarıdan verilir).
+ */
+export function poolAttemptMs(opts: PoolCallOptions, now = Date.now()): number {
+  if (opts.deadlineAt === undefined) return opts.timeoutMs ?? 45_000;
+  const left = opts.deadlineAt - now;
+  if (left <= 0) return 0;
+  return Math.max(MIN_POOL_ATTEMPT_MS, Math.min(opts.timeoutMs ?? 45_000, left));
+}
+
 export type PoolCallOptions = {
   prompt: string;
   temperature?: number;
   jsonMode?: boolean;
   timeoutMs?: number;
+  /**
+   * Çağıranın duvar saati sınırı (epoch ms).
+   *
+   * NEDEN VAR: `runPoolWithFailover` düğümleri SIRAYA dener ve her düğümün
+   * kendi zaman aşıtı vardır (varsayılan 45 sn). Sınır verilmediğinde havuz
+   * turu teorik olarak DÜĞÜM SAYISI × 45 sn sürebilir. Ürün bulucu hattı her
+   * işi 10 sn'lik dilimlere böldüğü için bu, "10 saniyelik dilim" sözünü
+   * fiilen dakikalara çeviriyordu: tek bir dalga bütçeyi yiyip zinciri
+   * Vercel'in 300 sn duvarına dayıyordu.
+   *
+   * Sınır verildiğinde düğüm denemeleri kalan süreyle kırpılır ve süre
+   * dolduğunda tur DURUR — çağıran elindeki bütçeyi aşmadan boş döner.
+   */
+  deadlineAt?: number;
 };
 
 export class PoolNodeError extends Error {
@@ -435,8 +466,16 @@ export async function runPoolWithFailover(
   if (!nodes.length) return { text: "", node: null };
   let lastErr: unknown = null;
   for (const node of nodes) {
+    // SÜRE BİTTİ — yeni düğüm denemek bütçeyi uzatmaktan başka işe yaramaz.
+    // Çağıranın penceresi dolduğunda dürüstçe boş döner; yukarıdaki
+    // zincirler bunu "model konuşmadı" sayıp deterministiğe düşer.
+    if (opts.deadlineAt !== undefined && opts.deadlineAt - Date.now() <= 0) break;
+    // Her düğüm kendi zaman aşıtını KALAN SÜREYLE sınırlar: 45 sn'lik
+    // varsayılan, 3 sn'lik bir dilimde kullanılırsa 45 sn'yi beklememelidir.
+    const budget = poolAttemptMs(opts);
+    if (budget <= 0) break;
     try {
-      const text = await callPoolNode(node, opts);
+      const text = await callPoolNode(node, { ...opts, timeoutMs: budget });
       markPoolGroupOutcome(node.group, node.slot, "ok");
       return { text, node };
     } catch (e) {

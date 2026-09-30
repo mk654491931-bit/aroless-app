@@ -34,15 +34,24 @@ export const OPENROUTER_MODELS_LATEST = [
   "google/gemini-2.0-flash-001",
   "meta-llama/llama-3.3-70b-instruct",
 ];
-export async function callLovableAI(prompt: string, temperature = 0.4): Promise<string> {
+export async function callLovableAI(
+  prompt: string,
+  temperature = 0.4,
+  deadlineAt?: number,
+): Promise<string> {
   // Ağ geçidi yapılandırılmışsa önce o (kota derdi yok); yoksa doğrudan
   // projenin kendi anahtar havuzları. Lokalde gereksiz bekleme olmaz.
-  if (!hasGateway()) return directFallback(prompt, temperature);
+  //
+  // `deadlineAt` verildiğinde HER iki yol da pencereye bağlanır: hem ağ geçidi
+  // hem de anahtar taraması sınırsızdı, yani sınırlı bütçeli bir hatta
+  // (10 sn'lik dilimler) süre aşımı gerçekleşmiyordu.
+  if (!hasGateway()) return directFallback(prompt, temperature, deadlineAt);
   try {
-    return await callGatewayResponses(prompt);
+    return await callGatewayResponses(prompt, undefined, deadlineAt);
   } catch (e) {
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) throw e;
     try {
-      return await directFallback(prompt, temperature);
+      return await directFallback(prompt, temperature, deadlineAt);
     } catch {
       throw e;
     }
@@ -129,6 +138,45 @@ export function hasGateway(): boolean {
 }
 
 /** Herhangi bir AI sağlayıcısı yapılandırıldı mı? */
+/** Bir OpenAI uyumlu denemenin en az süresi (ms) — daha kısası anlamsız. */
+const MIN_OPENAI_ATTEMPT_MS = 1_000;
+/** OpenAI uyumlu denemenin varsayılan zaman aşıtı (ms) — eski davranış. */
+const OPENAI_ATTEMPT_MS = 12_000;
+
+/**
+ * OpenAI uyumlu TEK denemenin kullanabileceği süre (ms).
+ *
+ * Sınır verilmemişse 12 sn (davranış değişmez). Verilmişse kalan süreye
+ * kırpılır: dilim bütçesi 7 sn ise deneme 7 sn'de kapanır, 12 sn beklemez.
+ * Test edilebilir saf fonksiyon.
+ */
+export function openAiAttemptMs(deadlineAt?: number, now = Date.now()): number {
+  if (deadlineAt === undefined) return OPENAI_ATTEMPT_MS;
+  const left = deadlineAt - now;
+  if (left <= 0) return MIN_OPENAI_ATTEMPT_MS;
+  return Math.max(MIN_OPENAI_ATTEMPT_MS, Math.min(OPENAI_ATTEMPT_MS, left));
+}
+
+/** Bir ağ geçidi denemesi için en az süre (ms). */
+const MIN_GATEWAY_ATTEMPT_MS = 1_000;
+/** Ağ geçidi denemesinin varsayılan zaman aşıtı (ms). */
+const GATEWAY_ATTEMPT_MS = 45_000;
+
+/**
+ * Ağ geçidi TEK denemesinin kullanabileceği süre (ms).
+ *
+ * NEDEN VAR: `callGatewayResponses` önce `fetch`'i zaman aşıtı OLMADAN
+ * çalıştırıyordu. Yavaş/yetişmez bir ağ geçidi isteği platformun duvarına
+ * kadar asılı kalıyor ve 10 sn'lik dilim sözü fiilen bozuluyordu.
+ * Sınır verilmezse 45 sn (davranış değişmez); verilirse kalan süreye kırpılır.
+ */
+export function gatewayAttemptMs(deadlineAt?: number, now = Date.now()): number {
+  if (deadlineAt === undefined) return GATEWAY_ATTEMPT_MS;
+  const left = deadlineAt - now;
+  if (left <= 0) return MIN_GATEWAY_ATTEMPT_MS;
+  return Math.max(MIN_GATEWAY_ATTEMPT_MS, Math.min(GATEWAY_ATTEMPT_MS, left));
+}
+
 export function hasAnyAiProvider(): boolean {
   return (
     hasGateway() ||
@@ -162,7 +210,11 @@ function gatewayConfig() {
   return { key, url, models };
 }
 
-async function callGatewayResponses(prompt: string, modelPreference?: string[]): Promise<string> {
+async function callGatewayResponses(
+  prompt: string,
+  modelPreference?: string[],
+  deadlineAt?: number,
+): Promise<string> {
   prompt = withEstimationRules(prompt);
   const { key, url, models: envModels } = gatewayConfig();
   if (!key || !url) throw new Error("AI gateway not configured");
@@ -179,6 +231,14 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
 
   let lastErr: unknown = null;
   for (const model of models) {
+    // SÜRE BİTTİ: sıradaki modeli denemek bütçeyi uzatır, işe yaramaz.
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) break;
+    // Ağ geçidinin fetch'i ZAMAN AŞIMI OLMADAN çalışıyordu: yavaş bir ağ geçidi
+    // isteği platformun duvarına kadar asılı kalabiliyordu. Artık her deneme
+    // kalan süreyle sınırlanır (sınır yoksa 45 sn'lik varsayılan korunur).
+    const controller = new AbortController();
+    const budget = gatewayAttemptMs(deadlineAt);
+    const timer = setTimeout(() => controller.abort(), budget);
     try {
       const body: Record<string, unknown> = {
         model,
@@ -195,6 +255,7 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
           "Lovable-API-Key": key,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       if (!resp.ok) {
@@ -206,6 +267,10 @@ async function callGatewayResponses(prompt: string, modelPreference?: string[]):
       if (text) return text;
     } catch (e) {
       lastErr = e;
+    } finally {
+      // Zaman aşıtı her yolda temizlenir: sızıntı olmaz ve sonraki model
+      // denemesi yanlışlıkla iptal edilmez.
+      clearTimeout(timer);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("Gateway request failed");
@@ -302,7 +367,11 @@ export async function callSweepProvider(
  * keeps going, so whichever key/provider is actually working at that moment
  * answers instead of the feature failing with an empty result.
  */
-async function directFallback(prompt: string, temperature: number): Promise<string> {
+async function directFallback(
+  prompt: string,
+  temperature: number,
+  deadlineAt?: number,
+): Promise<string> {
   const pools = [
     geminiKeyPool().length,
     groqKeyPool().length,
@@ -320,8 +389,10 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
 
   // 1) Gemini — en güçlü doğruluk (native REST, strict JSON).
   for (const k of scheduleKeys(geminiKeyPool(), geminiCursor++)) {
+    // Süre dolduysa sıradaki anahtarı denemek bütçeyi yakar.
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) break;
     try {
-      return await geminiOnce(prompt, k, temperature, false, GEMINI_MODELS_LATEST);
+      return await geminiOnce(prompt, k, temperature, false, GEMINI_MODELS_LATEST, deadlineAt);
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("QUOTA:")) parkKey(k);
     }
@@ -332,6 +403,7 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
   // bütün anahtarlarını dener, kota dolan anahtar park edilir ve sıradakine
   // geçilir — yani o an hangi sağlayıcı/anahtar müsaitse cevabı o verir.
   for (const name of ["groq", "cerebras", "sambanova", "hf", "openrouter"] as const) {
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) break;
     const cfg = sweepConfig(name);
     const text = await tryOpenAIPool(
       name,
@@ -341,12 +413,14 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
       prompt,
       temperature,
       cfg.opts,
+      deadlineAt,
     );
     if (text) return text;
   }
 
   // 7) PROVIDER_A..D — kullanıcı tanımlı OpenAI uyumlu havuzlar (BASE_URL + MODEL).
   for (const group of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const) {
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) break;
     const { keys, url, model } = customPoolConfig(group);
     if (!keys.length || !url) continue;
     const text = await tryOpenAIPool(
@@ -357,6 +431,7 @@ async function directFallback(prompt: string, temperature: number): Promise<stri
       prompt,
       temperature,
       { json: false },
+      deadlineAt,
     );
     if (text) return text;
   }
@@ -386,11 +461,18 @@ async function tryOpenAIPool(
   prompt: string,
   temperature: number,
   opts: OpenAIPoolOptions,
+  deadlineAt?: number,
 ): Promise<string> {
   if (!keys.length || !models.length) return "";
   const ordered = scheduleKeys(keys, openAICursor(group));
   for (const key of ordered) {
+    // ANAHTAR DÖNGÜSÜ: süre bittiyse sıradaki anahtarı denemek bütçeyi yakar.
+    // Ölçülen hata: bu tur sınırsızdı, yani havuz düştüğünde bir çağrı
+    // ANAHTAR × MODEL kadar deneme yapabiliyor ve 10 sn'lik dilimi aşıyordu.
+    if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) return "";
     for (let attempt = 0; attempt < models.length; attempt++) {
+      // MODEL DÖNGÜSÜ: aynı sınır. Kalan süre bittiyse tur kesilir.
+      if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) return "";
       const model = models[attempt];
       try {
         const text = await postOpenAICompat({
@@ -401,6 +483,7 @@ async function tryOpenAIPool(
           temperature,
           json: opts.json ?? false,
           extraHeaders: opts.extraHeaders,
+          deadlineAt,
         });
         if (text) return text;
         throw new Error("empty payload");
@@ -422,6 +505,7 @@ async function tryOpenAIPool(
               temperature,
               json: false,
               extraHeaders: opts.extraHeaders,
+              deadlineAt,
             });
             if (retry) return retry;
           } catch {
@@ -443,9 +527,12 @@ async function postOpenAICompat(opts: {
   temperature: number;
   json: boolean;
   extraHeaders?: Record<string, string>;
+  deadlineAt?: number;
 }): Promise<string> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
+  // SABİT 12 SN YERİNE KALAN SÜRE: 10 sn'lik bir dilimde tek bir OpenAI
+  // uyumlu denemesinin 12 sn beklemesi bütçeyi tek başına aşıyordu.
+  const timer = setTimeout(() => controller.abort(), openAiAttemptMs(opts.deadlineAt));
   try {
     const resp = await fetch(opts.url, {
       method: "POST",
@@ -793,6 +880,10 @@ export async function callGemini(
         prompt,
         temperature,
         jsonMode: !grounded,
+        // HAYATİ: bu turun da çağıranın penceresine bağlanması gerekir.
+        // Sınır verilmezse havuz turu DÜĞÜM × 45 sn sürebilir ve 10 sn'lik
+        // bir dilimi fiilen dakikalara uzatırdı (bütçe aşımı → 504 zinciri).
+        deadlineAt,
       });
       if (text) {
         console.log(`[ai] gemini exhausted → pool node ${node?.id ?? "?"}`);
@@ -803,8 +894,23 @@ export async function callGemini(
     }
   }
   // Pool empty or all nodes cooling down — keep the app working on the gateway.
+  //
+  // Sınır verildiyse ağ geçidi de pencereye bağlanır: `callGatewayResponses`
+  // hiçbir zaman aşmıyor (fetch zaman aşıtı YOK), bu yüzden sınırsız bir
+  // ağ geçidi denemesi dilimi platform duvarına dayandırıyordu.
   try {
-    return await callLovableAI(prompt, temperature);
+    if (deadlineAt === undefined) return await callLovableAI(prompt, temperature);
+    const left = deadlineAt - Date.now();
+    // Kalan süre yoksa ağ geçidini hiç denemek anlamsız: çağıran zaten
+    // "model cevap vermedi" dediğinde aynı sonuca varacak.
+    if (left <= 0) {
+      throw lastErr instanceof Error ? lastErr : new Error("timeout: gemini-chain");
+    }
+    return await withDeadline(
+      callLovableAI(prompt, temperature),
+      left,
+      "gemini-gateway",
+    );
   } catch {
     throw lastErr instanceof Error ? lastErr : new Error("Gemini request failed");
   }
