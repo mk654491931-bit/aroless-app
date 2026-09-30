@@ -81,14 +81,26 @@ export type CouncilAiCall = (prompt: string, deadlineAt: number) => Promise<stri
 const defaultCall: CouncilAiCall = async (prompt, deadlineAt) =>
   callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
 
-/** Ürünü ajana anlatan tek satırlık ÖLÇÜLMÜŞ özet. */
+/**
+ * Ürünü ajana anlatan tek satırlık ÖLÇÜLMÜŞ özet.
+ *
+ * NEDEN GENİŞLETİLDİ: eski satır fiyat, puan, satıcı ve ön skordan ibaretti.
+ * Ölçülmüş satış hacmi, 90 günlük görüntülenme ve kaç kaynağın aynı ürünü
+ * doğruladığı GİZLİ kalıyordu; yani ajan "bu ürün gerçekten satıyor mu?"
+ * sorusunu cevaplayacak kanıtı görmeden puan veriyordu ve puanlar ürünler
+ * arasında yeterince ayrışmıyordu. Artık yalnız ÖLÇÜLEN sayılar eklenir;
+ * ölçülmemiş alan "ölçülmedi" olarak açıkça yazılır (uydurma yok).
+ */
 function candidateLine(p: NormalizedProduct, index: number): string {
   const price = p.priceUsd === null ? "fiyat yok" : `$${p.priceUsd}`;
   const rating = p.rating === null ? "puan yok" : `${p.rating.toFixed(1)}★ (${p.ratingCount ?? 0})`;
   const seller = p.seller || "satıcı yok";
+  const views = p.viewed90d !== null ? `görüntülenme ${p.viewed90d}/90g` : "görüntülenme ölçülmedi";
+  const sales = p.salesVolume !== null ? `satış ${p.salesVolume}` : "satış ölçülmedi";
+  const sources = p.sources.length ? `${p.sources.length} kaynak` : "tek kaynak";
   return (
     `${index}. ${p.name.slice(0, 70)} | marka: ${p.brand || "?"} | ${price} | ${rating} | ` +
-    `${seller} | ön skor ${p.preScore} | kanıt ${p.dataCompleteness}/5`
+    `${seller} | ${views} | ${sales} | ${sources} | ön skor ${p.preScore} | kanıt ${p.dataCompleteness}/5`
   );
 }
 
@@ -109,6 +121,8 @@ export function buildAgentPrompt(
     `Sen "${agent.name}" adlı bir e-ticaret analistisin. Görevin: ${agent.task}`,
     `Niş: "${niche}". Aşağıdaki ${Math.min(products.length, 40)} aday ürünü KENDİ KRİTERİNE GÖRE puanla.`,
     "Puan 0-100 olsun (50 = nötr, kanıt yoksa 50 ver; uydurma).",
+    "ÖLÇÜLEN sayıları kullan: satış hacmi, görüntülenme ve kaç kaynağın ürünü doğruladığı ayrım yaratır.",
+    "Ölçülmüş satışı/görüntülenmesi yüksek ürünü ödüllendir; 'ölçülmedi' yazan alanı tahmin etme.",
     "Her satırda tek bir cümle gerekçe yaz (en fazla 12 kelime).",
     "Sadece listedeki indeksleri kullan; yeni ürün ekleme.",
     "",

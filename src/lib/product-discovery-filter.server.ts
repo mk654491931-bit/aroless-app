@@ -40,6 +40,16 @@ export const MIN_RATING_COUNT = 3;
 export const MIN_COMPLETENESS = 1;
 
 /**
+ * Kanıt yuvalarının okuduğu alanlar. `ParsedRawProduct` de `NormalizedProduct`
+ * de bu şekle uyar; böylece bütünlük puanı HEM ham satırda HEM normalize
+ * edilmiş satırda AYNI fonksiyonla hesaplanır (iki formül → iki farklı puan).
+ */
+export type EvidenceShape = Pick<
+  ParsedRawProduct,
+  "priceUsd" | "brand" | "seller" | "url" | "notes" | "rating" | "ratingCount" | "inStock"
+>;
+
+/**
  * ÇEKİRDEK KANIT YUVALARI (5).
  *
  * Eski model (`MEASURABLE = 4` + `__demand_bonus__`) iki yönde bozuktu:
@@ -56,14 +66,14 @@ export const MIN_COMPLETENESS = 1;
  * eksikliği sayılmaz, çünkü kaynakların çoğu onları hiç vermez.
  */
 const EVIDENCE_SLOTS = [
-  ["price", (p: ParsedRawProduct) => p.priceUsd !== null],
-  ["brand", (p: ParsedRawProduct) => p.brand.trim() !== ""],
-  ["seller", (p: ParsedRawProduct) => p.seller.trim() !== ""],
-  ["url", (p: ParsedRawProduct) => p.url.trim() !== ""],
+  ["price", (p: EvidenceShape) => p.priceUsd !== null],
+  ["brand", (p: EvidenceShape) => p.brand.trim() !== ""],
+  ["seller", (p: EvidenceShape) => p.seller.trim() !== ""],
+  ["url", (p: EvidenceShape) => p.url.trim() !== ""],
   // ÖLÇÜLMÜŞ talep: `notes` içinde sayısal bir sinyal (puan, yorum, yıldız,
   // momentum, fiyat aralığı) var mı? Söylem değil, ölçüm arıyoruz.
-  ["demand", (p: ParsedRawProduct) => /\d/.test(p.notes)],
-] as const satisfies readonly (readonly [string, (p: ParsedRawProduct) => boolean])[];
+  ["demand", (p: EvidenceShape) => /\d/.test(p.notes)],
+] as const satisfies readonly (readonly [string, (p: EvidenceShape) => boolean])[];
 
 /**
  * BONUS YUVALARI — doluysa `dataCompleteness` artar, boşsa `missingFields`'e
@@ -71,25 +81,61 @@ const EVIDENCE_SLOTS = [
  * doğru bir ürünü haksız cezalandırırdı.
  */
 const BONUS_SLOTS = [
-  ["rating", (p: ParsedRawProduct) => p.rating !== null],
-  ["ratingCount", (p: ParsedRawProduct) => p.ratingCount !== null],
-  ["stock", (p: ParsedRawProduct) => p.inStock !== null],
-] as const satisfies readonly (readonly [string, (p: ParsedRawProduct) => boolean])[];
+  ["rating", (p: EvidenceShape) => p.rating !== null],
+  ["ratingCount", (p: EvidenceShape) => p.ratingCount !== null],
+  ["stock", (p: EvidenceShape) => p.inStock !== null],
+] as const satisfies readonly (readonly [string, (p: EvidenceShape) => boolean])[];
+
+/**
+ * Veri bütünlüğü (0-5) ve eksik alan adları — TEK kaynak.
+ *
+ * Çekirdek yuvalar hem puana hem `missingFields` listesine yazılır; bonus
+ * yuvalar (puan/stok) yalnızca puana. Bu ayrım sayesinde "ölçülmedi" ile
+ * "ölçtük ve sıfır" karışmaz.
+ */
+export function evidenceCompleteness(p: EvidenceShape): {
+  dataCompleteness: number;
+  missingFields: string[];
+} {
+  const missingFields: string[] = [];
+  let filled = 0;
+  for (const [field, hasEvidence] of EVIDENCE_SLOTS) {
+    if (hasEvidence(p)) filled++;
+    else missingFields.push(field);
+  }
+  for (const [, hasEvidence] of BONUS_SLOTS) {
+    if (hasEvidence(p)) filled++;
+  }
+  return { dataCompleteness: Math.max(0, Math.min(5, filled)), missingFields };
+}
+
+/**
+ * Ağırlıklı sinyal toplamı (0-100 taban).
+ *
+ * TEK kaynak olması kritiktir: tekilleştirmede birleşen ürünün puanı da bu
+ * formülden geçer. Kopyalansaydı aynı kanıt iki farklı puan üretebilirdi.
+ */
+export function signalWeightedScore(signals: NormalizedProduct["signals"]): number {
+  return (
+    signals.demand * 0.28 +
+    signals.margin * 0.26 +
+    signals.rating * 0.22 +
+    signals.availability * 0.12 +
+    signals.competition * 0.12
+  );
+}
+
+/** Eksik kanıt cezası: 5/5 → 0 puan, 0/5 → 20 puan. */
+export function evidencePenalty(dataCompleteness: number): number {
+  const filled = Math.max(0, Math.min(5, dataCompleteness));
+  return (5 - filled) * 4;
+}
 
 /** Kaynak satırlarını normalize eder ve parmak izi üretir. */
 export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   const parsed = RawProductSchema.parse(raw);
-  const missing: string[] = [];
-  // Dolu yuva sayısı = veri bütünlüğü puanı (0-5). Çekirdek yuvalar hem
-  // puana hem `missingFields` listesine yazılır; bonus yuvalar yalnızca puana.
-  let filled = 0;
-  for (const [field, hasEvidence] of EVIDENCE_SLOTS) {
-    if (hasEvidence(parsed)) filled++;
-    else missing.push(field);
-  }
-  for (const [, hasEvidence] of BONUS_SLOTS) {
-    if (hasEvidence(parsed)) filled++;
-  }
+  // Dolu yuva sayısı = veri bütünlüğü puanı (0-5).
+  const { dataCompleteness, missingFields: missing } = evidenceCompleteness(parsed);
 
   return {
     name: parsed.title.slice(0, 180),
@@ -120,7 +166,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     preScore: 0,
     // Skorlanmadan önce nötr sinyaller: puanlama sonrası hepsi dolar.
     signals: { demand: 50, competition: 50, margin: 50, rating: 50, availability: 50 },
-    dataCompleteness: Math.max(0, Math.min(5, filled)),
+    dataCompleteness,
     missingFields: missing,
     source: "scraped",
   };
@@ -241,18 +287,14 @@ export function scoreDeterministically(
       rating: ratingScore(product.rating, product.ratingCount),
       availability: availabilityScore(product.inStock),
     };
-    // Ağırlıklar: talep ve marj belirleyici; puan güçlü düzeltici.
-    // (Rekabet ters yönde: yüksek puan = düşük rekabet = iyi.)
-    const weighted =
-      signals.demand * 0.28 +
-      signals.margin * 0.26 +
-      signals.rating * 0.22 +
-      signals.availability * 0.12 +
-      signals.competition * 0.12;
+    // Ağırlıklar TEK yerde tanımlıdır (`signalWeightedScore`): tekilleştirmede
+    // birleşen ürün de aynı formülden geçer, yoksa aynı kanıt iki farklı puan
+    // üretirdi. (Rekabet ters yönde: yüksek puan = düşük rekabet = iyi.)
+    const weighted = signalWeightedScore(signals);
     // VERİ BÜTÜNLÜĞÜ CEZASI: eksik alan sayısı arttıkça puan aşağı çekilir.
     // Bu, "kanıtsız üst puan" üretmeyi engeller ve 14 ajanın confidence
     // hesabına da gerçek bir girdi sağlar.
-    const penalty = (5 - product.dataCompleteness) * 4;
+    const penalty = evidencePenalty(product.dataCompleteness);
     return {
       ...product,
       signals,
@@ -378,20 +420,11 @@ export function applyHardFilter(
     }
     stats.rejectedByDuplicate++;
     const incumbent = best.get(hit) as NormalizedProduct;
-    // En yüksek puanlı temsilci temel alınır, ama ALAN EN DOLU olan seçilir:
-    // fiyatı bilinen ama puanı bilinmeyen bir satır, tam tersini göremedir.
-    const base = p.preScore > incumbent.preScore ? p : incumbent;
-    const richest = p.dataCompleteness > incumbent.dataCompleteness ? p : incumbent;
-    // ÖNEMLİ: birleşik alanlar (`sources`, `notes`) spread SONRASINA yazılır.
-    // Ters sırada olsaydı `richest` onları ezerdi ve "iki kaynakta görüldü"
-    // kanıtı kaybolurdu — güven hesabını sessizce yanlış yapar.
-    const merged: NormalizedProduct = {
-      ...richest,
-      preScore: base.preScore,
-      signals: base.signals,
-      sources: Array.from(new Set([...incumbent.sources, ...p.sources])),
-      notes: [incumbent.notes, p.notes].filter(Boolean).join(" · ").slice(0, 200),
-    };
+    // En yüksek puanlı temsilci TEMEL alınır (sinyalleri ondan gelir), ama
+    // alanlar düzeyinde birleştirme yapılır: aşağıdaki `mergeDuplicates`
+    // satırlardan BİRİNDE ölçülmüş her alanı kurtarır. Kanıt artışı ürünü
+    // 14 ajana daha güçlü tanıtır ve `dataCompleteness` cezasını düşürür.
+    const merged = mergeDuplicates(incumbent, p);
     // Birleşen ürünün TÜM anahtarları yeni temsilciye yönelmelidir; aksi
     // hâlde diğer anahtarı eski nesneyi gösterir ve kopya listede kalır.
     for (const [k, v] of best) if (v === incumbent) best.set(k, merged);
@@ -401,6 +434,71 @@ export function applyHardFilter(
   const survivors = [...new Set(best.values())].sort((a, b) => b.preScore - a.preScore);
   stats.survivors = survivors.length;
   return { survivors, stats };
+}
+
+/** Boş/`null` bir alanı karşı satırdan doldurur (ölçülmüş kanıt kaybolmaz). */
+function fillString(primary: string, fallback: string): string {
+  return primary.trim() !== "" ? primary : fallback;
+}
+
+/** `null` bir ölçümü karşı satırdan doldurur. Sıfır "ölçülmüş" sayılır. */
+function fillNullable<T>(primary: T | null, fallback: T | null): T | null {
+  return primary === null || primary === undefined ? (fallback ?? null) : primary;
+}
+
+/**
+ * Aynı ürünün iki satırını TEK kanıt satırında birleştirir.
+ *
+ * NEDEN ALAN DÜZEYİNDE: eski birleştirme "en dolu satırı seç, gerisini at"
+ * diyordu. Bir mağaza fiyatı, diğeri puanı verdiğinde temsilci YALNIZ birini
+ * taşıyor, diğer ölçüm sessizce kayboluyordu. Kayıp kanıt doğrudan kaliteye
+ * yazıyor: `dataCompleteness` düşük kalıyor, 14 ajan daha az ölçüyle
+ * konuşuyor ve nihai 5'lik liste daha zayıf ürünlerle doluyordu.
+ *
+ * KURAL: ölçülmüş bir alan ASLA ezilmez; yalnız boş/`null` olan doldurulur.
+ * `sources` ve `notes` birleşir (kanıt gücü artar). Puan, birleşmiş kanıtın
+ * tamamı üzerinden YENİDEN hesaplanır — böylece kazanan temsilcinin skoru
+ * gerçekten taşıdığı kanıtı yansıtır.
+ */
+export function mergeDuplicates(
+  a: NormalizedProduct,
+  b: NormalizedProduct,
+): NormalizedProduct {
+  // Sinyaller daha yüksek ön skorlu satırdan gelir: sinyaller KOHT içinde
+  // hesaplandığı için ikisinin karışımı anlamsız olurdu.
+  const base = b.preScore > a.preScore ? b : a;
+  const richest = b.dataCompleteness > a.dataCompleteness ? b : a;
+  // Karşı satır: eksik alanlar YALNIZ buradan doldurulur.
+  const other = richest === b ? a : b;
+
+  const merged: NormalizedProduct = {
+    ...richest,
+    brand: fillString(richest.brand, other.brand),
+    seller: fillString(richest.seller, other.seller),
+    category: fillString(richest.category, other.category),
+    url: fillString(richest.url, other.url),
+    imageUrl: fillString(richest.imageUrl, other.imageUrl),
+    id: fillString(richest.id, other.id),
+    priceUsd: fillNullable(richest.priceUsd, other.priceUsd),
+    rating: fillNullable(richest.rating, other.rating),
+    ratingCount: fillNullable(richest.ratingCount, other.ratingCount),
+    inStock: fillNullable(richest.inStock, other.inStock),
+    salesVolume: fillNullable(richest.salesVolume, other.salesVolume),
+    viewed90d: fillNullable(richest.viewed90d, other.viewed90d),
+    signals: base.signals,
+    // Birleşik alanlar spread SONRASINA yazılır; ters sırada `richest` onları
+    // ezerdi ve "iki kaynakta görüldü" kanıtı kaybolurdu.
+    sources: Array.from(new Set([...a.sources, ...b.sources])),
+    notes: Array.from(new Set([a.notes, b.notes].filter(Boolean))).join(" · ").slice(0, 200),
+  };
+
+  // Bütünlük ve puan, BİRLEŞMİŞ kanıt üzerinden yeniden hesaplanır.
+  const { dataCompleteness, missingFields } = evidenceCompleteness(merged);
+  const preScore = Math.max(
+    0,
+    Math.min(100, Math.round(signalWeightedScore(base.signals) - evidencePenalty(dataCompleteness))),
+  );
+  return { ...merged, dataCompleteness, missingFields, preScore };
 }
 
 /**

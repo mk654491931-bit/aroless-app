@@ -50,6 +50,33 @@ export const DISCOVERY_TOP_N = 75;
  */
 export const DISCOVERY_FINAL_N = 5;
 
+/* ------------------------------------------- Nihai kalite ölçütleri (kapı) */
+
+/**
+ * Nihai SIRALAMA ağırlıkları: konsey oyu, güven ve kanıt derinliği.
+ *
+ * `final_score` olarak gösterilen sayı yine konsey oyudur (`councilScore`);
+ * burada değişen şey SIRALAMADIR. Eşit konsey oyunda daha güvenilir ve daha
+ * çok ölçülmüş kanıt taşıyan ürün öne geçer. Kanıt ağırlığı bilerek küçüktür:
+ * "çok alanı dolu" tek başına iyi ürün demek değildir, ama eşitlikte kazananı
+ * belirleyebilmelidir.
+ */
+export const WINNER_SCORE_WEIGHTS = { council: 0.72, confidence: 0.18, evidence: 0.1 } as const;
+
+/** Bu oyun altındaki aday, kanıtı da zayıfsa "kazanan" olarak sunulmaz. */
+export const WINNER_MIN_COUNCIL_SCORE = 35;
+/** Kanıtı zayıf (<= 2/5) adayın geçmesi için gereken daha yüksek oy tabanı. */
+export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 45;
+/**
+ * Kapı ne kadar elerse elesin, en az bu kadar kazanan teslim edilir.
+ *
+ * NEDEN TABAN VAR: kullanıcının geçmiş şikâyeti "dönüyor ama sonuç yok"tu.
+ * Kapıyı sert uygulamak zayıf bir havuzda listeyi 1 ürüne (ya da boşa)
+ * indirirdi. Taban, kaliteyi yükseltirken sonucun HER ZAMAN gelmesini
+ * garanti eder.
+ */
+export const MIN_DELIVERED_WINNERS = 3;
+
 /* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
 
 /**
@@ -108,6 +135,10 @@ export function buildTopProducts(
     agreement?: number;
     priceUsd?: number | null;
     signals?: { demand?: number; margin?: number; competition?: number };
+    /** Ölçülmüş kanıt derinliği (0-5) — gerekçeye sayı olarak girer. */
+    dataCompleteness?: number;
+    /** Ürünü doğrulayan kaynak adları — 1'den fazlaysa gerekçede görünür. */
+    sources?: string[];
   }[],
   limit = DISCOVERY_FINAL_N,
 ): TopProductsPayload {
@@ -116,6 +147,8 @@ export function buildTopProducts(
     const demand = p.signals?.demand ?? null;
     const margin = p.signals?.margin ?? null;
     const competition = p.signals?.competition ?? null;
+    const completeness = typeof p.dataCompleteness === "number" ? p.dataCompleteness : null;
+    const sourceCount = Array.isArray(p.sources) ? p.sources.length : 0;
     const score = Math.round(Math.max(0, Math.min(100, p.councilScore ?? 0)));
 
     const parts: string[] = [];
@@ -140,6 +173,10 @@ export function buildTopProducts(
           ? `Rekabet düşük (${competition}/100) — doygunluk yok`
           : `Rekabet yüksek (${competition}/100) — niş doymuş`,
     );
+    // 4) KANIT DERİNLİĞİ — gerekçeyi "iyi görünüyor"dan "şu kadar ölçüldü"ye
+    //    çevirir. Yalnız ÖLÇÜLMÜŞ sayılar yazılır; alan yoksa eklenmez.
+    if (completeness !== null) parts.push(`Kanıt ${Math.round(completeness)}/5 dolu`);
+    if (sourceCount > 1) parts.push(`${sourceCount} kaynak doğruladı`);
 
     return {
       // Sıra: kaynak kimliği → parmak izi → konsenyus `candidateId`.
@@ -589,6 +626,46 @@ export async function runDeepAnalysisStep(
 /* -------------------------------------------------- Adım 4: final rank (Top5) */
 
 /**
+ * Nihai kalite puanı — SIRALAMA anahtarı.
+ *
+ * Konsey oyu ağırlıklıdır; güven ve ölçülmüş kanıt derinliği düzelticidir.
+ * Ürün kaydı yoksa (eski gövde) kanıt payı 0 sayılır ve sıra konsey oyuna
+ * göre kalır — yani "bakamadığımız için" sıralama bozulmaz.
+ */
+export function winnerQualityScore(
+  row: { councilScore: number; confidenceScore?: number },
+  product?: { dataCompleteness?: number } | null,
+): number {
+  const council = Math.max(0, Math.min(100, row.councilScore ?? 0));
+  const confidence = Math.max(0, Math.min(100, row.confidenceScore ?? 0));
+  const completeness = Math.max(0, Math.min(5, Number(product?.dataCompleteness ?? 0)));
+  const evidence = (completeness / 5) * 100;
+  return (
+    council * WINNER_SCORE_WEIGHTS.council +
+    confidence * WINNER_SCORE_WEIGHTS.confidence +
+    evidence * WINNER_SCORE_WEIGHTS.evidence
+  );
+}
+
+/**
+ * Kalite kapısı — "bu satır kazanan olarak sunulabilir mi?".
+ *
+ * İki eşik birlikte çalışır: çok düşük konsey oyu (kanıt ne olursa olsun)
+ * elenir; vasat konsey oyu ise YALNIZ kanıt zayıfsa elenir. Ürün kaydı hiç
+ * yoksa eleme yapılmaz (kanıt yokluğu değil, kaydın taşınmaması söz konusu).
+ */
+export function isWinnerWorthy(
+  row: { councilScore: number },
+  product?: { dataCompleteness?: number } | null,
+): boolean {
+  if (!product) return true;
+  if (row.councilScore < WINNER_MIN_COUNCIL_SCORE) return false;
+  const completeness = Number(product.dataCompleteness ?? 0);
+  if (row.councilScore < WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE && completeness <= 2) return false;
+  return true;
+}
+
+/**
  * Uzlaşmaya göre nihai en iyi 5 ürünü seçer ve 'completed' durumunu verir.
  *
  * KRİTİK (arayüzun gördüğü veri): `consensus` kaydı ürünün KENDİSİ değildir;
@@ -603,11 +680,34 @@ export function runFinalRankStep(
   topN = 5,
   productsById?: ReadonlyMap<string, NormalizedProduct>,
 ): DiscoveryStepResult {
-  // Sıralama: councilScore DESC, eşitlikte confidenceScore DESC.
+  const productOf = (row: Consensus): NormalizedProduct | undefined =>
+    productsById?.get(row.candidateId);
+  const qualityOf = (row: Consensus): number => winnerQualityScore(row, productOf(row));
+
+  // Sıralama: kalite puanı DESC, eşitlikte councilScore, sonra confidenceScore.
   const ranked = [...consensus].sort(
-    (a, b) => b.councilScore - a.councilScore || b.confidenceScore - a.confidenceScore,
+    (a, b) =>
+      qualityOf(b) - qualityOf(a) ||
+      b.councilScore - a.councilScore ||
+      b.confidenceScore - a.confidenceScore,
   );
-  const winners = ranked.slice(0, topN);
+  const candidates = ranked.slice(0, topN);
+
+  // KALİTE KAPISI: kanıtı olmayan + ajanların düşük puanladığı satır kazanan
+  // diye sunulmaz. Kapı listeyi BOŞALTMAZ: en az `MIN_DELIVERED_WINNERS`
+  // kazanan (varsa) geri alınır — kullanıcıyı boş ekranla bırakmak, aday
+  // havuzu zayıfken dördüncü sıraya zayıf bir ürün koymaktan kötüdür.
+  const worthy = candidates.filter((row) => isWinnerWorthy(row, productOf(row)));
+  const floor = Math.min(MIN_DELIVERED_WINNERS, candidates.length);
+  let winners = worthy;
+  if (winners.length < floor) {
+    const rescued = candidates.filter((row) => !worthy.includes(row));
+    winners = [...worthy, ...rescued.slice(0, floor - worthy.length)].sort(
+      (a, b) => qualityOf(b) - qualityOf(a),
+    );
+  }
+  const gatedOut = candidates.length - worthy.length;
+  const rescuedCount = winners.length - worthy.length;
   const products = productsById
     ? winners
         .map((row) => {
@@ -634,7 +734,19 @@ export function runFinalRankStep(
     consensus: winners,
     next: "",
     notes: [
-      `${winners.length} ürün nihai listeye girdi.`,
+      `${winners.length} ürün nihai listeye girdi (ortalama kalite puanı ${Math.round(
+        winners.length
+          ? winners.reduce((sum, row) => sum + qualityOf(row), 0) / winners.length
+          : 0,
+      )}).`,
+      ...(gatedOut > 0
+        ? [
+            `${gatedOut} aday kalite kapısına takıldı (kanıtsız/düşük oy)` +
+              (rescuedCount > 0
+                ? `; ${rescuedCount} tanesi liste boş kalmasın diye geri alındı.`
+                : "."),
+          ]
+        : []),
       ...(missing > 0
         ? [`${missing} kazananın ürün kaydı taşınmadı (sadece oy satırı geldi).`]
         : []),
