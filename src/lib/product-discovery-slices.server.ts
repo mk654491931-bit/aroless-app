@@ -55,6 +55,8 @@ const SLICE_ENV = "DISCOVERY_SLICE_MS";
 export function discoverySliceMs(env: EnvMap = process.env): number {
   const raw = Number(readEnvValue(env, SLICE_ENV) ?? "");
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SLICE_MS;
+  // Kısıtlama tek yerde: 3 sn'den kısa dilime model çağrısı sığmaz, 30 sn'den
+  // uzunu sunucusuz fonksiyon tavanına takılır.
   return Math.min(MAX_SLICE_MS, Math.max(MIN_SLICE_MS, Math.round(raw)));
 }
 
@@ -68,6 +70,7 @@ export function discoverySliceMs(env: EnvMap = process.env): number {
  */
 export const SLICE_RETURN_MARGIN_MS = 3_000;
 
+/** Dilimden işe kalan süre: dilim − geri dönüş payı (ara nokta yazımı + QStash yayını). */
 export function sliceWorkMs(env: EnvMap = process.env): number {
   return Math.max(1_000, discoverySliceMs(env) - SLICE_RETURN_MARGIN_MS);
 }
@@ -85,6 +88,7 @@ export function sliceDeadlineAt(args: {
   env?: EnvMap;
 } = {}): number {
   const now = args.now ?? Date.now();
+  // Dilim kendi süresi kadar sürer; zincir bitiş anı daha yakınsa o an biter.
   return Math.min(now + sliceWorkMs(args.env), args.chainDeadlineAt ?? Number.POSITIVE_INFINITY);
 }
 
@@ -100,6 +104,7 @@ export const SLICE_DELIVERY_GRACE_SECONDS = 20;
  * (`Upstash-Retries: 3`). "Vercel'i zorlama" kuralının altyapı tarafı budur.
  */
 export function sliceDeliveryTimeoutSeconds(env: EnvMap = process.env): number {
+  // QStash'e dilim süresi + soğuk başlangıç payı kadar süre verilir (üst sınır 120 sn).
   return Math.min(120, Math.ceil(discoverySliceMs(env) / 1000) + SLICE_DELIVERY_GRACE_SECONDS);
 }
 
@@ -116,6 +121,8 @@ export const MAX_STEP_SLICES = 16;
 
 /** Bu, adımın son dilimi mi? (Evet → adım kalan işi deterministiğe düşürüp biter.) */
 export function lastStepSlice(slice: number, max = MAX_STEP_SLICES): boolean {
+  // Bu, son dilim midir? Evet → adım bitir.
+  // max - 1: çünkü dilimler 0'dan başlar, 0, 1, 2 ... max-1'dir.
   return Math.floor(slice) >= max - 1;
 }
 
@@ -133,6 +140,7 @@ export type SliceBook = Record<string, DiscoverySliceState>;
 export function readSliceState(book: SliceBook | undefined, step: string): DiscoverySliceState {
   const raw = book?.[step];
   const next = Number(raw?.next);
+  // Bir sonraki dilim numarası: eğer yoksa 0 (başlangıç), varsa aşağıdaki sayı.
   return {
     next: Number.isFinite(next) && next > 0 ? Math.floor(next) : 0,
     partial: raw?.partial,
@@ -146,6 +154,7 @@ export function writeSliceState(
   patch: Partial<DiscoverySliceState>,
 ): SliceBook {
   const current = readSliceState(book, step);
+  // Yeni defter: eski kitapları koru, bu adıma yeni sayı/resmi ekle.
   return { ...(book ?? {}), [step]: { ...current, ...patch, next: patch.next ?? current.next } };
 }
 
@@ -172,9 +181,13 @@ export type SliceClaimDecision =
  */
 export function decideSliceClaim(next: number, slice: number): SliceClaimDecision {
   const index = Number.isFinite(slice) && slice > 0 ? Math.floor(slice) : 0;
+  // İlk dilim (0) her zaman koşabilir.
   if (index === 0) return "run";
+  // Eğer bir sonraki beklenen dilim, gelen dilimden büyükse → zaten yapıldı (tekrar gelme).
   if (next > index) return "already-done";
+  // Eğer bir sonraki beklenen dilim, gelen dilimden küçükse → henüz yerinde değil, bekle.
   if (next < index) return "not-yet";
+  // Eşitse → kendi sırası bu, run et.
   return "run";
 }
 
@@ -186,16 +199,19 @@ export function decideSliceClaim(next: number, slice: number): SliceClaimDecisio
  * öldürmez, yalnız ilerlemeyi geri alır — dürüst davranış budur.
  */
 export function readSliceBook(raw: unknown): SliceBook | undefined {
+  // Eğer boş, nesne değil veya dizi ise → yok.
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const out: SliceBook = {};
   for (const [step, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!value || typeof value !== "object") continue;
     const record = value as Record<string, unknown>;
     const next = Number(record["next"]);
+    // Bir sonraki dilim: 0 veya pozitif tam sayı.
     out[step] = {
       next: Number.isFinite(next) && next > 0 ? Math.floor(next) : 0,
       partial: record["partial"],
     };
   }
+  // Eğer kitap boş değilse döndür, yoksa tanımsız.
   return Object.keys(out).length ? out : undefined;
 }

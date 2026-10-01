@@ -66,6 +66,24 @@ describe("describeDiscoveryFailure", () => {
     expect(text).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
 
+  // İlk aşama hata mesajı artık SAYAÇ taşır (kaynak kaç tanesi çalıştı, kaç
+  // ham satır geldi). İki durum ayrı okunmalı: satır HİÇ gelmediyse sorun
+  // kaynak/ağ tarafındadır, satır geldiyse eleme kapılarındadır.
+  it("kaynaklardan hiç satır gelmediyse kaynak/ağ tarafını işaret eder", () => {
+    const text = describeDiscoveryFailure(
+      "Hiç kaynak doğrulanabilir ürün döndürmedi (0/13 kaynak çalıştı, 0 ham satır; eleme: şema 0, stok 0, fiyat 0, puan 0, bütünlük 0, tekrar 0).",
+    );
+    expect(text).toContain("Kaynaklardan hiç ölçülmüş ürün satırı gelmedi");
+    expect(text).not.toContain("elemesi hepsini eledi");
+  });
+
+  it("satır geldiyse eleme kapılarını işaret eder", () => {
+    const text = describeDiscoveryFailure(
+      "Hiç kaynak doğrulanabilir ürün döndürmedi (13/13 kaynak çalıştı, 15 ham satır; eleme: şema 0, stok 0, fiyat 0, puan 0, bütünlük 15, tekrar 0).",
+    );
+    expect(text).toContain("ilk aşama elemesi hepsini eledi");
+  });
+
   it("ipucu yalnız GERÇEKTEN kurulum hatasıysa anahtar/migration önerir", () => {
     // Supabase hatası → kurulum ipucu gösterilir.
     expect(hintsForFailure("column discovery_status does not exist")).toContain(

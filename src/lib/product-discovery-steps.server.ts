@@ -39,6 +39,7 @@ import {
   type TopProduct,
 } from "./product-discovery-pipeline.server";
 import type { DiscoveryStep } from "./product-discovery-qstash.server";
+import type { ShortlistStats } from "./product-discovery-shortlist.server";
 import type {
   Consensus,
   FilterStats,
@@ -192,7 +193,23 @@ export async function executeProductDiscoveryStep(args: {
         const products = result.products as NormalizedProduct[];
         if (products.length === 0) {
           // Aday yoksa iş dürüstçe biter: sahte sonuç üretilmez, kredi iade edilir.
-          const message = "Hiç kaynak doğrulanabilir ürün döndürmedi.";
+          //
+          // MESAJ ARTIK ÖLÇÜLEBİLİR: "kaynaklar mı hiç satır döndürmedi, yoksa
+          // kapılar mı eledi?" ayrımı sayaçlarla birlikte yazılır. Eskiden tek
+          // cümle vardı ve kullanıcı (haklı olarak) kurulum arızası sanıyordu;
+          // canlı olayda ise ağ, anahtarlar ve migration'ların ÜÇÜ de
+          // çalışıyordu, yalnız ilk aşama elemesi boştu. Kurtarma devredeyse
+          // buraya düşülmez — bu yol "gerçekten ölçülmüş satır yok" demektir.
+          const s = result.stats as ShortlistStats | undefined;
+          const report = s?.perSource ?? [];
+          const okSources = report.filter((r) => r.ok).length;
+          const items = report.reduce((sum, r) => sum + r.items, 0);
+          const message =
+            `Hiç kaynak doğrulanabilir ürün döndürmedi (${okSources}/${report.length} kaynak ` +
+            `çalıştı, ${items} ham satır; eleme: şema ${s?.rejectedInvalid ?? 0}, stok ` +
+            `${s?.rejectedNotInStock ?? 0}, fiyat ${s?.rejectedPrice ?? 0}, puan ` +
+            `${s?.rejectedByRating ?? 0}, bütünlük ${s?.rejectedByCompleteness ?? 0}, ` +
+            `tekrar ${s?.rejectedByDuplicate ?? 0}).`;
           await failStep(runId, userId, message);
           return { ok: false, error: message };
         }

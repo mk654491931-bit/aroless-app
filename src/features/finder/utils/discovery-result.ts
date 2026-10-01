@@ -163,6 +163,14 @@ export function describeDiscoveryFailure(reason: string): string {
   // eksik / migration uygulanmamış" sanılıyordu ve kullanıcı yanlış yere
   // bakıyordu — oysa ikisi de doğruydu.
   if (raw.includes("doğrulanabilir ürün döndürmedi")) {
+    // MESAJ ARTIK SAYAÇ TAŞIR: "(0/13 kaynak çalıştı, 0 ham satır; …)".
+    // Bu ayrım kullanıcının NEREYE bakacağını değiştirir: hiç satır
+    // gelmediyse sorun kaynak/ağ tarafındadır; satır geldiyse eleme
+    // kapılarındadır. Tek cümle ikisini de aynı gösteriyordu ve canlı olayda
+    // kullanıcıyı olmayan bir kurulum arızasına yönlendirdi.
+    if (/\(0\/\d+ kaynak/.test(raw) || /\b0 ham satır/.test(raw)) {
+      return "Kaynaklardan hiç ölçülmüş ürün satırı gelmedi (ağa çıkamadılar ya da bu niş için sonuç bulamadılar). Farklı bir niş ifadesi deneyin; kaynakların tamamı hata verdiyse Sıcak Ürünler panosundan hazır bir niş seçin.";
+    }
     return "Kaynaklar ürün döndürdü ama ilk aşama elemesi hepsini eledi; bu nişte kanıtı yeterli aday kalmadı. Farklı bir niş ifadesi deneyin (örn. ürünün kullanımı veya hedef kitlesi).";
   }
   if (raw === "run_not_visible") return "İş kaydı okunamadı; iş kaydı yazılamamış olabilir.";
@@ -199,7 +207,12 @@ export function hintsForFailure(reason: string): string {
     return "Kurulum eksikliği: Supabase servis rolü anahtarı veya migration uygulanmamış olabilir.";
   }
   if (String(reason ?? "").includes("doğrulanabilir ürün döndürmedi")) {
-    return "Bu bir kurulum hatası DEĞİL: kaynaklar çalıştı, sonuç ilk aşama elemesinde elendi.";
+    // İki durum ayrı ipucu hak eder: satır HİÇ gelmediyse "kaynaklar çalıştı"
+    // demek yalan olurdu (canlı olayda satır gelmişti, o yüzden eski ipucu
+    // doğruydu; ama artık ayrımı mesajın kendisi taşıyor).
+    return /\(0\/\d+ kaynak/.test(String(reason ?? "")) || /\b0 ham satır/.test(String(reason ?? ""))
+      ? "Bu bir kurulum hatası DEĞİL: kaynaklardan hiç satır gelmedi (ağ engeli veya çok dar niş olabilir)."
+      : "Bu bir kurulum hatası DEĞİL: kaynaklar çalıştı, sonuç ilk aşama elemesinde elendi.";
   }
   return "Ayrıntı için /health ve /api/product-discovery/preflight uçlarını kontrol edin.";
 }

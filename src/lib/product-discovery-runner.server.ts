@@ -169,7 +169,11 @@ export const STALE_STEP_TAKEOVER_MS = 60_000;
 export const MIN_SLICE_BUDGET_MS = 4_000;
 
 /** Kalp atışı aralığı (ms) — `STALE_STEP_TAKEOVER_MS`in yarısından kısa. */
-export const DISCOVERY_HEARTBEAT_MS = Math.floor(STALE_STEP_TAKEOVER_MS / 3);
+/**
+ * Kalp atışı artık 10 sn (eskiden 20 sn): adımın canlı olduğu daha sık
+ * tazelenir, böylece yavaş bir dilim "ölü" sanılıp devralınmaz.
+ */
+export const DISCOVERY_HEARTBEAT_MS = Math.floor(STALE_STEP_TAKEOVER_MS / 6);
 
 /**
  * Çalışan adımın satırını periyodik olarak tazeler.

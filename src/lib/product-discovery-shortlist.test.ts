@@ -19,6 +19,7 @@ import {
   LLM_SHORTLIST_LIMIT,
   LLM_SHORTLIST_MAX_BYTES,
   LlmShortlistSchema,
+  salvageShortlist,
   SHORTLIST_FIELDS,
 } from "./product-discovery-shortlist.server";
 import type { RawProduct } from "./product-discovery.types";
@@ -230,6 +231,54 @@ describe("buildShortlist — ilk aşama filtreleme", () => {
       requireImage: false,
     });
     expect(products.length).toBe(LLM_SHORTLIST_LIMIT);
+  });
+});
+
+/* ---------------------------------------------------- Kurtarma (son çare) */
+
+describe("salvageShortlist — ilk aşama boş kalırsa hat ürünle devam eder", () => {
+  it("kapıların elediği havuzdan ÖLÇÜLMÜŞ satırı kurtarır", () => {
+    // Canlı olay (2026-10-01): kaynaklar satır döndürdü, hard-filter hepsini
+    // düşürdü ve kullanıcı parasını ödeyip "ürün yok" hatası aldı. Aşağıdaki
+    // satır puan kapısına takılır (2.0 puan + 40 değerlendirme).
+    const rated = { ...cleanRow(1), id: "low-rated", rating: 2, ratingCount: 40 };
+    expect(buildShortlist([rated], { context: CONTEXT }).products).toHaveLength(0);
+
+    const rescued = salvageShortlist([rated], { context: CONTEXT });
+    expect(rescued.rescued).toBe(1);
+    // Sözleşme aynı: 7 alan, aynı sıra, ölçülmüş fiyat korunur.
+    expect(Object.keys(rescued.products[0]!)).toEqual([...SHORTLIST_FIELDS]);
+    expect(rescued.products[0]!.price).toBe(rated.priceUsd);
+  });
+
+  it("kuralları GEVŞETMEZ: kanıtsız satırı yine eler", () => {
+    // Hiçbir ölçüm yoksa (fiyat/marka/satıcı/url/notta sayı) kurtarma da
+    // sunmaz — kanıtsız satırı "ürün" diye göstermek uydurmak olurdu.
+    const empty = { title: "LED masa lambası", source: "github" };
+    expect(salvageShortlist([empty], { context: CONTEXT }).survivors).toHaveLength(0);
+  });
+
+  it("stokta olmayanı ve GEÇERSİZ fiyatı yine eler", () => {
+    const outOfStock = { ...cleanRow(2), id: "oos", inStock: false };
+    const brokenPrice = { ...cleanRow(3), id: "bad-price", priceUsd: 0 };
+    expect(salvageShortlist([outOfStock], { context: CONTEXT }).survivors).toHaveLength(0);
+    expect(salvageShortlist([brokenPrice], { context: CONTEXT }).survivors).toHaveLength(0);
+  });
+
+  it("tekilleştirir ve en güçlü adayı başa alır", () => {
+    const strong = cleanRow(10);
+    const weak = { title: "Air Fryer Model 10 5.5L", brand: "Acme", seller: "shop" };
+    const other = cleanRow(11);
+
+    const rescued = salvageShortlist([weak, strong, other], { context: CONTEXT });
+    // `strong` ve `weak` aynı üründür (parmak izi) → tek satır kalır.
+    expect(rescued.survivors).toHaveLength(2);
+    expect(rescued.survivors[0]!.preScore).toBeGreaterThanOrEqual(
+      rescued.survivors[1]!.preScore,
+    );
+    // Ölçülmüş alan birleşmede kaybolmaz: fiyat/zengin satırdan gelir.
+    const merged = rescued.survivors.find((p) => p.name.includes("Model 10"))!;
+    expect(merged.priceUsd).toBe(strong.priceUsd);
   });
 });
 

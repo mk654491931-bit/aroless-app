@@ -37,6 +37,9 @@ import { z } from "zod";
 
 import {
   filterAndPreRank,
+  mergeDuplicates,
+  normalizeRaw,
+  scoreDeterministically,
   type DemandContext,
 } from "./product-discovery-filter.server";
 import {
@@ -330,17 +333,8 @@ export function buildShortlist(
       stats.rejectedScore++;
       continue;
     }
-    products.push({
-      id: shortlistId(p),
-      title: p.name,
-      // Fiyat kapısı GEÇERSİZ olanı eledi; ölçülmemiş olan `null` olarak
-      // korunur (DÜRÜSTLÜK KURALI) ve alt katmanla aynı sözleşmedir.
-      price: p.priceUsd,
-      category: p.category,
-      rating: p.rating,
-      reviews_count: p.ratingCount,
-      sales_volume: p.salesVolume,
-    });
+    // Sözleşme dönüşümü tek yardımcıda: kurtarma yolu da AYNI 7 alanı üretir.
+    products.push(toLlmProduct(p));
     kept.push(p);
   }
 
@@ -357,6 +351,97 @@ export function buildShortlist(
   stats.survivors = products.length;
   stats.bytes = Buffer.byteLength(json, "utf8");
   return { products, survivors: kept, stats };
+}
+
+/* ------------------------------------------------ Kurtarma (son çare) */
+
+/**
+ * Normalize ürünü LLM sözleşmesine (7 alan) indirger.
+ *
+ * KAPI YOKTUR, yalnız dönüşüm: hangi satırın geçeceğine karar veren yer
+ * `buildShortlist`/`salvageShortlist`tir. Bu ayrım sayesinde iki yol da
+ * AYNI alan adlarını ve sırasını üretir — model istemi bozulmaz.
+ */
+function toLlmProduct(p: NormalizedProduct): LlmShortlistProduct {
+  return {
+    id: shortlistId(p),
+    title: p.name,
+    // Fiyat kapısı GEÇERSİZ olanı eledi; ölçülmemiş olan `null` olarak
+    // korunur (DÜRÜSTLÜK KURALI) ve alt katmanla aynı sözleşmedir.
+    price: p.priceUsd,
+    category: p.category,
+    rating: p.rating,
+    reviews_count: p.ratingCount,
+    sales_volume: p.salesVolume,
+  };
+}
+
+/**
+ * İLK AŞAMA HER ŞEYİ ELEDİĞİNDE HATTI BOŞ BIRAKMAYAN KURTARMA.
+ *
+ * NEDEN VAR (ölçülen olgu, 2026-10-01): kaynaklar satır döndürdü (13 kaynak,
+ * 15 ham satır) ama kapıların tamamı eledi ve kullanıcı 5 ürün yerine
+ * "Hiç kaynak doğrulanabilir ürün döndürmedi" hatası aldı — hem de parasını
+ * ödeyerek. Hat "ürün yok" demek yerine ÖLÇÜLMÜŞ satırı sunmak zorundadır:
+ * eksik alanlar zaten `null` kalır (dürüstlük kuralı) ve 14 ajan karneyi yine
+ * verir. Kalite kapıları sağlıklı havuzlarda aynen çalışmaya devam eder.
+ *
+ * NELER KORUNUR (kurtarma "kapıları kapatmak" DEĞİLDİR):
+ *   • şema: başlığı boş, puanı/sayısı aralık dışı satır yine elenir;
+ *   • `inStock === false` yine elenir (gerçekten satışta değil);
+ *   • GEÇERSİZ fiyat (0/negatif/NaN) yine elenir;
+ *   • hiçbir ölçümü olmayan satır (fiyat, marka, satıcı, url, notta sayı:
+ *     hiçbiri) elenir — kanıtsız satırı "ürün" diye sunmak uydurmak olurdu.
+ *
+ * Geriye kalan adaylar AYNI deterministik formülle puanlanır, tekilleştirilir
+ * ve en güçlü `limit` tanesi döner.
+ */
+export function salvageShortlist(
+  raw: readonly RawProduct[],
+  options: { limit?: number; context?: DemandContext } = {},
+): { products: LlmShortlistProduct[]; survivors: NormalizedProduct[]; rescued: number } {
+  const limit = Math.max(0, Math.min(options.limit ?? LLM_SHORTLIST_LIMIT, LLM_SHORTLIST_LIMIT));
+  const context = options.context ?? { nicheMomentumPct: null, nicheEngagement: 0 };
+
+  const rows: RawProduct[] = [];
+  for (const row of raw) {
+    const parsed = RawProductSchema.safeParse(row);
+    if (!parsed.success) continue;
+    if (parsed.data.title.trim() === "") continue;
+    if (parsed.data.inStock === false) continue;
+    if (
+      parsed.data.priceUsd !== null &&
+      (!Number.isFinite(parsed.data.priceUsd) || parsed.data.priceUsd <= 0)
+    ) {
+      continue;
+    }
+    // KANIT KURALI: hiçbir yuva dolu değilse bu satır "ölçülmüş ürün" değildir.
+    const hasEvidence =
+      parsed.data.priceUsd !== null ||
+      parsed.data.brand.trim() !== "" ||
+      parsed.data.seller.trim() !== "" ||
+      parsed.data.url.trim() !== "" ||
+      /\d/.test(parsed.data.notes);
+    if (!hasEvidence) continue;
+    rows.push(parsed.data);
+  }
+
+  const scored = scoreDeterministically(
+    rows.map((row) => normalizeRaw(row)),
+    context,
+  );
+  // Tekilleştirme normal yolla AYNI kuraldır (parmak izi); en dolu temsilci
+  // kalır ve ölçülmüş alanlar kaybolmaz (`mergeDuplicates`).
+  const best = new Map<string, NormalizedProduct>();
+  for (const p of scored) {
+    const key = p.fingerprint || p.name.toLocaleLowerCase("tr-TR");
+    const incumbent = best.get(key);
+    best.set(key, incumbent ? mergeDuplicates(incumbent, p) : p);
+  }
+  const survivors = [...best.values()]
+    .sort((a, b) => b.preScore - a.preScore)
+    .slice(0, limit);
+  return { products: survivors.map(toLlmProduct), survivors, rescued: survivors.length };
 }
 
 /** Kısa listeyi model istemine gömülecek tek satırlık JSON metnine çevirir. */

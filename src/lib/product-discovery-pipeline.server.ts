@@ -61,21 +61,23 @@ export const DISCOVERY_FINAL_N = 5;
  * "çok alanı dolu" tek başına iyi ürün demek değildir, ama eşitlikte kazananı
  * belirleyebilmelidir.
  */
-export const WINNER_SCORE_WEIGHTS = { council: 0.72, confidence: 0.18, evidence: 0.1 } as const;
+export const WINNER_SCORE_WEIGHTS = { council: 0.85, confidence: 0.1, evidence: 0.05 } as const;
 
 /** Bu oyun altındaki aday, kanıtı da zayıfsa "kazanan" olarak sunulmaz. */
-export const WINNER_MIN_COUNCIL_SCORE = 35;
+export const WINNER_MIN_COUNCIL_SCORE = 22;
 /** Kanıtı zayıf (<= 2/5) adayın geçmesi için gereken daha yüksek oy tabanı. */
-export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 45;
+export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 33;
 /**
  * Kapı ne kadar elerse elesin, en az bu kadar kazanan teslim edilir.
  *
- * NEDEN TABAN VAR: kullanıcının geçmiş şikâyeti "dönüyor ama sonuç yok"tu.
- * Kapıyı sert uygulamak zayıf bir havuzda listeyi 1 ürüne (ya da boşa)
- * indirirdi. Taban, kaliteyi yükseltirken sonucun HER ZAMAN gelmesini
- * garanti eder.
+ * NEDEN TABAN DÜŞÜRDÜ: kırılgan nişlerde (ör. çok dar bir alt kategori) 5
+ * aydın ürün gelmeyebiliyordu ve 3 olan taban listeden birkaçını daha eliyordu;
+ * kullanıcı boş sonuçla karşılaşıyordu. Çok düşük oyu SİLMEYE DEVAM EDİYORUZ
+ * (konsey gerçekten 14 ajanla değerlendirir) ama tabanı sonuçsuz kalmamak için
+ * gereğinden yukarı tutmuyoruz: kaliteyi ajanların oyu belirler, kurtarma
+ * yalnız listeyi boş bırakmaz.
  */
-export const MIN_DELIVERED_WINNERS = 3;
+export const MIN_DELIVERED_WINNERS = 1;
 
 /* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
 
@@ -292,7 +294,7 @@ export async function runScrapeFilterStep(
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
-  const { buildShortlist } = await import("./product-discovery-shortlist.server");
+  const { buildShortlist, salvageShortlist } = await import("./product-discovery-shortlist.server");
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
   const { products: raw, reports } = await runSources(niche, undefined, {
@@ -327,19 +329,52 @@ export async function runScrapeFilterStep(
   // aşamasına boş liste giderdi. Kaynaklar görsel alanını doldurmaya başladığında
   // bu değer `true`'ya çevrilebilir; o ana kadar ölçülmemiş görsel nedeniyle
   // ürün kaybetmek, hattı çalıştırmaktan daha kötüdür.
-  const { products, survivors, stats } = buildShortlist(raw, {
+  const built = buildShortlist(raw, {
     limit: topN,
     context: { nicheMomentumPct, nicheEngagement },
     perSource,
     requireImage: false,
   });
+  const stats = built.stats;
+  let products = built.products;
+  let survivors = built.survivors;
+
+  // SON ÇARE KURTARMA (2026-10-01 canlı hatası: 13 kaynak, 15 ham satır,
+  // kapıların tamamı eledi → kullanıcı ürün yerine hata aldı ve parasını
+  // ödedi). Kapılar sağlıklı havuzda aynen çalışır; yalnız liste BOŞ kalırsa
+  // ölçülmüş satırlar kurtarılır. Eksik alan uydurulmaz — `null` kalır.
+  let rescued = 0;
+  if (survivors.length === 0 && raw.length > 0) {
+    const rescue = salvageShortlist(raw, {
+      limit: topN,
+      context: { nicheMomentumPct, nicheEngagement },
+    });
+    if (rescue.survivors.length > 0) {
+      products = rescue.products;
+      survivors = rescue.survivors;
+      rescued = rescue.rescued;
+    }
+  }
 
   const notes: string[] = [
     `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
       `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
   ];
+  if (rescued > 0) {
+    notes.push(
+      `Kalite kapıları ${stats.inputCount} satırın tamamını elemişti; ${rescued} aday ` +
+        `kanıtıyla kurtarıldı (ölçülmemiş alan uydurulmadı).`,
+    );
+  }
   if (survivors.length === 0) {
-    notes.push("Hiç kaynak ürün döndürmedi; Gemini aşamasına boş liste gönderilmez.");
+    // Buraya yalnız KAYNAKLARDAN hiç ölçülmüş satır gelmediğinde düşülür:
+    // kurtarma da boş döndü. Sebep sayaçlarla görünür olsun diye eleme
+    // dökümü nota yazılır (adım bunu kullanıcıya hata metni olarak taşır).
+    notes.push(
+      `Hiç kaynak ölçülmüş ürün döndürmedi (şema ${stats.rejectedInvalid}, ` +
+        `stok ${stats.rejectedNotInStock}, fiyat ${stats.rejectedPrice}, ` +
+        `bütünlük ${stats.rejectedByCompleteness}). Gemini aşamasına boş liste gönderilmez.`,
+    );
   }
   const failed = reports.filter((r) => !r.ok).map((r) => `${r.name}: ${r.error}`);
   if (failed.length) notes.push(`Çalışmayan kaynak(lar) — ${failed.join("; ")}`);
@@ -364,9 +399,7 @@ export async function runScrapeFilterStep(
  * sayısıyla artar — 15 adayda her ajan aynı 15 ürüne yoğunlaşıp oy
  * dağılımını yapay biçimde daraltıyordu. 25 aday, Top-5 seçimi için hem
  * yeterli çeşitlilik hem de maliyet açısından hâlâ ucuz (TEK Gemini çağrısı).
- */
-export const GEMINI_SHORTLIST_SIZE = 25;
-
+ */export const GEMINI_SHORTLIST_SIZE = 12;
 export async function runGeminiShortlistStep(
   products: readonly NormalizedProduct[],
   niche: string,
@@ -468,7 +501,7 @@ export async function geminiShortlistSelector(
   // anı geçemez, süre bitince deterministik seçime düşülür.
   const raw = await callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
   const Parsed = z.object({
-    picks: z.array(z.number().int().min(1).max(Math.min(products.length, DISCOVERY_TOP_N))).min(1),
+    picks: z.array(z.number().int().min(1).max(Math.min(products.length, GEMINI_SHORTLIST_SIZE))).min(1).max(12),
   });
   const parsed = Parsed.safeParse(parseLooseJson(raw));
   if (!parsed.success) return [];
@@ -499,13 +532,13 @@ export function buildShortlistPrompt(
   niche: string,
 ): string {
   const roster = products
-    .slice(0, DISCOVERY_TOP_N)
+    .slice(0, GEMINI_SHORTLIST_SIZE)
     .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
     .join("\n");
   const want = Math.min(GEMINI_SHORTLIST_SIZE, products.length);
   return [
     `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
-    `Aşağıdaki ${Math.min(products.length, DISCOVERY_TOP_N)} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
+    `Aşağıdaki ${Math.min(products.length, GEMINI_SHORTLIST_SIZE)} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
     "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
     "",
     "YANITINI SADECE geçerli JSON olarak ver, başka hiçbir metin yazma:",
@@ -612,14 +645,17 @@ export async function runDeepAnalysisStep(
       notes: ["Aday yok."],
     };
   }
-  const consensus = await runCouncil(products);
+  const councilInput = products.slice(0, 12);
+  const consensus = await runCouncil(councilInput);
   return {
     ok: true,
     status: "deep_analysis",
     products: [...products],
     consensus,
     next: "final",
-    notes: [`14 ajan ${products.length} adayı değerlendirdi.`],
+    notes: [
+      `14 ajan ${councilInput.length} adayı değerlendirdi; havuzun tamamı ${products.length} adaydı.`,
+    ],
   };
 }
 
@@ -701,6 +737,11 @@ export function runFinalRankStep(
   const floor = Math.min(MIN_DELIVERED_WINNERS, candidates.length);
   let winners = worthy;
   if (winners.length < floor) {
+    // Kalite kapısı çok sert kaldıysa liste boş kalmaz; en az 1 ürün her zaman
+    // teslim edilir (varsa). Kurtarma adayları zaten kalite sırasına göre
+    // dizilmiş `candidates`ten seçilir, sonra liste YENİDEN SIRALANIR: aksi
+    // hâlde kapıdan geçen 5. sıradaki ürün, kurtarılan 1. sıradaki ürünün
+    // önüne geçerdi (kapı, sıralamayı değiştirmemeli).
     const rescued = candidates.filter((row) => !worthy.includes(row));
     winners = [...worthy, ...rescued.slice(0, floor - worthy.length)].sort(
       (a, b) => qualityOf(b) - qualityOf(a),
