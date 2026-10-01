@@ -1,5 +1,18 @@
 -- Harden admin access, add user ID numbers, and strengthen RLS policies
 -- This migration implements the security hardening plan
+--
+-- ⚠️ BU DOSYAYI YENİDEN ADLANDIRMA. Adı `20260827_100000_...` biçimde bozuktur
+-- (CLI version'ı adın ilk `_`'inden öncesi olarak alır ve 14 haneli timestamp
+-- bekler). Doğru ad `20260827100000_harden_admin_and_security.sql` olurdu —
+-- AMA adı düzeltirsen `version` anahtarı değişir, `db push` bu dosyayı yeniden
+-- uygular ve aşağıdaki bölüm 5 SERT ŞEKİLDE VERİ BOZAR: sabit e-posta listesinde
+-- olmayan her admin hesabının `user_roles` kaydını SİLER. Bu migration tek
+-- seferliktir; uzaktaki `schema_migrations.version` neyse anahtar aynı kalmalı.
+--
+-- Aşağıdaki korumalar (IF NOT EXISTS / DROP TRIGGER IF EXISTS) dosyanın
+-- şemada zaten uygulanmış olduğu bir veritabanında yeniden çalıştırılmasını
+-- güvenli kılar. Bölüm 5'in kendisi tekrarlanabilir DEĞİLDİR — o yüzden
+-- dosyanın yeniden uygulanması gereken hiçbir durum yoktur.
 
 -- 1. Add user ID number column to profiles (8-digit random)
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS user_id_number TEXT UNIQUE;
@@ -11,7 +24,7 @@ WHERE user_id_number IS NULL;
 
 -- Make user_id_number non-nullable after population
 ALTER TABLE public.profiles ALTER COLUMN user_id_number SET NOT NULL;
-CREATE UNIQUE INDEX idx_user_id_number ON public.profiles (user_id_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_id_number ON public.profiles (user_id_number);
 
 -- 3. Create function to check if user is designated admin (fixed list + @aroless.com limit)
 CREATE OR REPLACE FUNCTION public.is_designated_admin(_email text)
@@ -67,6 +80,9 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_grant_admin_v2 ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_confirmed_grant_admin_v2 ON auth.users;
 
 CREATE TRIGGER on_auth_user_created_grant_admin_v2
 AFTER INSERT ON auth.users
