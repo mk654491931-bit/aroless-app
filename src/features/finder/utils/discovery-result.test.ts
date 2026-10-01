@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeDiscoveryFailure,
   discoverySetupNotice,
+  hintsForFailure,
   type SetupReport,
 } from "./discovery-result";
 import {
@@ -53,6 +54,35 @@ describe("describeDiscoveryFailure", () => {
 
   it("boş ürün sonucunu kurulum hatası DEĞİL diye ayırır", () => {
     expect(describeDiscoveryFailure("empty_result")).toContain("ürün");
+  });
+
+  // Canlı hattan çıkan düzeltme (2026-10-01, "LED masa lambası"):
+  // 13 kaynak koştu, 15 satır döndü, hepsi ilk aşama elemesinde düştü.
+  // Bu hata "hiç kaynak ürün döndürmedi" diye okununca kurulum hatası
+  // SANILIYOR — ama ağ/anahtar/migration'ların üçü de çalışıyordu.
+  it("kaynakların döndürdüğü ama elemenin düşürdüğü boş listeyi kurulum hatası SANMAZ", () => {
+    const text = describeDiscoveryFailure("Hiç kaynak doğrulanabilir ürün döndürmedi.");
+    expect(text).toContain("eleme");
+    expect(text).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+  });
+
+  it("ipucu yalnız GERÇEKTEN kurulum hatasıysa anahtar/migration önerir", () => {
+    // Supabase hatası → kurulum ipucu gösterilir.
+    expect(hintsForFailure("column discovery_status does not exist")).toContain(
+      "Kurulum eksikliği",
+    );
+    expect(
+      hintsForFailure("Missing Supabase environment variable(s): SUPABASE_SERVICE_ROLE_KEY"),
+    ).toContain("Kurulum eksikliği");
+
+    // Filtre/boş liste hatası → kurulum ipucu GÖSTERİLMEZ. Bu, canlı hatta
+    // yanlış yere bakmaya yol açan asıl sebepti.
+    expect(hintsForFailure("Hiç kaynak doğrulanabilir ürün döndürmedi.")).not.toContain(
+      "servis rolü",
+    );
+    expect(hintsForFailure("Hiç kaynak doğrulanabilir ürün döndürmedi.")).toContain(
+      "kurulum hatası DEĞİL",
+    );
   });
 
   it("tanımadığı hatayı SAKLAMAZ — kısaltıp sonuna ekler", () => {

@@ -23,6 +23,7 @@ import { toProductList } from "../utils/response";
 import {
   toWinningProducts,
   describeDiscoveryFailure,
+  hintsForFailure,
   discoverySetupNotice,
   blockingSetupIssues,
 } from "../utils/discovery-result";
@@ -575,7 +576,14 @@ export function useFinderSearch(opts: {
                 ? "Bu nişte ölçülebilir ürün bulunamadı"
                 : "Arama motoru çalışamadı",
             body: explained,
-            hint: "Sık görülen nedenler: Supabase servis rolü anahtarı eksik ya da migration uygulanmamış.",
+            // İPUCU ARTIK KOŞULU: anahtar/migration eksikliği yalnız HATA
+            // metni gerçekten onu söylüyorsa gösterilir. Ölçülen canlı hat
+            // (2026-10-01, "LED masa lambası") bu ipucunu YANLIŞ çıkarıyordu:
+            // 13 kaynak koşmuş, 15 satır dönmüş, yani ağ/anahtar/migration
+            // TÜMÜ sağlıklıydı; yalnız ilk aşama elemesi hepsini düşürmüştü.
+            // Sabit metin, gerçek sebebi gizleyip kullanıcıyı saatlerce yanlış
+            // yere (Supabase ayarları) bakmaya itiyordu.
+            hint: hintsForFailure(outcome.reason),
             niche: vars.niche,
           });
           void getPreflightFn({ data: {} })
@@ -870,7 +878,7 @@ export function useFinderSearch(opts: {
               kind: "server",
               title: "Arama motoru çalışamadı",
               body: describeDiscoveryFailure(state.error ?? "pipeline_failed"),
-              hint: "Sık görülen nedenler: Supabase servis rolü anahtarı eksik ya da migration uygulanmamış.",
+              hint: hintsForFailure(state.error ?? "pipeline_failed"),
               niche: stored.vars.niche,
             });
             return;

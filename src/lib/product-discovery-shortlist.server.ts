@@ -22,11 +22,15 @@
 //     adlarla eşleştirir. Kırpmak/eklemek model prompt'unu sessizce bozar.
 //
 // DÜRÜSTLÜK KURALI (dosyanın en önemli kısmı):
-//   Ölçülmemiş alan UYDURULMAZ — `rating`, `reviews_count` ve `sales_volume`
-//   ölçülmediyse `null` döner. Sıfır yazmak "ölçtük ve sıfır bulduk" anlamına
-//   gelirdi; bu da modele "bu ürün satmıyor" diye YANLIŞ bilgi verir.
-//   Sıralama yine de çalışır: eksik alan `signals` içinde nötr (50) karşılığına
-//   düşer ve `dataCompleteness` cezasıyla aşağı çekilir.
+//   Ölçülmemiş alan UYDURULMAZ — `price`, `rating`, `reviews_count` ve
+//   `sales_volume` ölçülmediyse `null` döner. Sıfır yazmak "ölçtük ve sıfır
+//   bulduk" anlamına gelirdi; bu da modele "bu ürün satmıyor" diye YANLIŞ
+//   bilgi verir. Sıralama yine de çalışır: eksik alan `signals` içinde nötr
+//   (50) karşılığına düşer ve `dataCompleteness` cezasıyla aşağı çekilir.
+//
+//   Bu kural bir KAPI değildir. Ölçülmemiş fiyat, talep kanıtı taşıyan bir
+//   adayı elemek için gerekçe DEĞİLDİR — yalnız bozuk fiyatı (0/negatif/
+//   NaN) eleriz. Bkz. `cleanRawRows` içindeki FİYAT KAPI.
 // ============================================================================
 
 import { z } from "zod";
@@ -68,7 +72,16 @@ export const DEFAULT_MIN_PRE_SCORE = 0;
 export const LlmShortlistProductSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  price: z.number().finite().positive(),
+  /**
+   * Fiyat ÖLÇÜLMEDİYSE `null` — asla 0 yazılmaz.
+   *
+   * `rating`/`reviews_count`/`sales_volume` ile aynı sözleşme: 0 "ölçtük ve
+   * sıfır bulduk" demektir, `null` "hiç ölçemedik" demektir. Kaynakların
+   * çoğu fiyat vermez (`github` satmaz, `web-reviews` yalnız snippet'te `$`
+   * görürse çıkarır) ve bu satırlar alt katman `filterAndPreRank` ile
+   * bilinçli olarak geçirilir — bkz. `cleanRawRows` içindeki FİYAT KAPI.
+   */
+  price: z.number().finite().positive().nullable(),
   category: z.string(),
   rating: z.number().min(0).max(5).nullable(),
   reviews_count: z.number().int().min(0).nullable(),
@@ -202,9 +215,30 @@ function cleanRawRows(
       stats.rejectedNotInStock++;
       continue;
     }
-    // FİYAT KAPI: fiyat bu aşamada zorunludur — marj, ROI ve "bu satmaz mı"
-    // sorularının tamamı fiyattan türer. Eksik fiyat ölçülemez.
-    if (parsed.data.priceUsd === null || !Number.isFinite(parsed.data.priceUsd) || parsed.data.priceUsd <= 0) {
+    // FİYAT KAPI — YALNIZ GEÇERSİZ FİYATI eler, `null`'ı DEĞİL.
+    //
+    // Bu kapı bir süre `priceUsd === null` satırlarını da eliyordu ve hattı
+    // canlıda boşaltıyordu (2026-10-01, "LED masa lambası": 13 kaynak 15 satır
+    // döndürdü, 15'i de burada öldü, kullanıcı ürün alamadan iş "başarısız"
+    // oldu). İki ayrı sebeple yanlıştı:
+    //
+    //   1. SÖZLEŞME ÇELİŞİSİ: alt katman `filterAndPreRank` `null` fiyatı
+    //      bilinçli olarak GEÇİRİR — "fiyatı olmayan aday talep sinyaliyse
+    //      Gemini aşamasında fiyat araştırılabilir" (bkz. …-filter.server.ts
+    //      adım 4). Kısa liste bu kararı eziyordu.
+    //   2. KAYNAKLAR BİLEREK FİYAT VERMİYOR: `github` satmaz (nişin ekosistem
+    //      büyüklüğünü ölçer), `web-reviews` yalnız snippet'te `$` görürse fiyat
+    //      çıkarır — arama sonucu metninde fiyat OLMAMAK normaldir. Bu
+    //      kaynakların satırları kanıt (url + talep sinyali) taşımasına rağmen
+    //      eleniyordu; yani "doğrulanabilir ürün yok" deniyordu.
+    //
+    // Bu, dosyanın DÜRÜSTLÜK KURALI ile de çelişiyordu: ölçülmemiş alan 0
+    // yazılmaz, `null` döner. 0 yazmak "ölçtük ve sıfır bulduk" anlamına
+    // gelirdi.
+    //
+    // Kalan koruma: fiyat VARSA geçerli olmalı. 0/negatif/NaN ölçüm değil,
+    // bozuk veridir (parse kaynağında patlamış olabilir) → elenir.
+    if (parsed.data.priceUsd !== null && (!Number.isFinite(parsed.data.priceUsd) || parsed.data.priceUsd <= 0)) {
       stats.rejectedPrice++;
       continue;
     }
@@ -299,7 +333,9 @@ export function buildShortlist(
     products.push({
       id: shortlistId(p),
       title: p.name,
-      price: p.priceUsd as number, // fiyat kapısı `null`ı eledi
+      // Fiyat kapısı GEÇERSİZ olanı eledi; ölçülmemiş olan `null` olarak
+      // korunur (DÜRÜSTLÜK KURALI) ve alt katmanla aynı sözleşmedir.
+      price: p.priceUsd,
       category: p.category,
       rating: p.rating,
       reviews_count: p.ratingCount,

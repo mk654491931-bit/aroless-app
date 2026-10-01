@@ -51,8 +51,13 @@ const mockRawScraperOutput = (): RawProduct[] => {
   // K1) `in_stock: false` → elenmeli (en az 6 satır, hepsi listeye girmemeli).
   rows.push(...[0, 1, 2, 3, 4, 5].map((i) => ({ ...cleanRow(200 + i), inStock: false })));
 
-  // K2) Fiyat eksik/geçersiz → elenmeli. `NaN` JSON'da temsil edilemez;
+  // K2) Fiyat GEÇERSİZ → elenmeli. `NaN` JSON'da temsil edilemez;
   //     kazıma bunu string olarak taşır ve `safeParse` eler — ikisini de test et.
+  //     DİKKAT: `priceUsd: null` (sku-300) artık ELEMEZ — fiyat ÖLÇÜLMEMİŞTİR,
+  //     bozuk değildir. Ölçülmemiş fiyat `null` olarak hayatta kalır ve kısa
+  //     listede `price: null` döner (dürüstlük kuralı; alt katman
+  //     `filterAndPreRank` da `null` fiyatı geçirir). Bkz. canlı hata:
+  //     2026-10-01 "LED masa lambası" — 15 satırın 15'i de burada öldü.
   rows.push(
     { ...cleanRow(300), priceUsd: null },
     { ...cleanRow(301), priceUsd: 0 },
@@ -102,8 +107,13 @@ describe("buildShortlist — ilk aşama filtreleme", () => {
     for (const p of products) {
       expect(p.id).toBeTruthy();
       expect(p.title.trim()).not.toBe("");
-      expect(Number.isFinite(p.price)).toBe(true);
-      expect(p.price).toBeGreaterThan(0);
+      // Fiyat ya ölçülmüş ve GEÇERLİ olmalı, ya da hiç ölçülmemiş olmalı
+      // (`null`). Asla 0/negatif/NaN ve asla `undefined` olamaz — 0 yazmak
+      // "ölçtük ve sıfır bulduk" anlamına gelirdi (dürüstlük kuralı).
+      if (p.price !== null) {
+        expect(Number.isFinite(p.price)).toBe(true);
+        expect(p.price).toBeGreaterThan(0);
+      }
       if (p.rating !== null) expect(p.rating).toBeGreaterThanOrEqual(0);
       if (p.reviews_count !== null) expect(Number.isInteger(p.reviews_count)).toBe(true);
       if (p.sales_volume !== null) expect(Number.isInteger(p.sales_volume)).toBe(true);
@@ -121,8 +131,13 @@ describe("buildShortlist — ilk aşama filtreleme", () => {
 
     // `in_stock: false` satırlarının KİMLİKLERİ listede olmamalı.
     for (let i = 0; i < 6; i++) expect(ids.has(`sku-${200 + i}`)).toBe(false);
-    // Fiyatı olmayan/geçersiz satırlar.
-    for (const i of [300, 301, 302, 303]) expect(ids.has(`sku-${i}`)).toBe(false);
+    // GEÇERSİZ fiyatlı satırlar (0 / -19 / NaN) elenmeli.
+    for (const i of [301, 302, 303]) expect(ids.has(`sku-${i}`)).toBe(false);
+    // ÖLÇÜLMEMİŞ fiyat (null) KAPI tarafından elenmemeli. DİKKAT: bu büyük
+    // taklitte 95 temiz satır + kirleticiler var ve 75'lik tavan devrede;
+    // ölçülmemiş fiyat satırı daha düşük ön skor alıp sondan KIRPILIR. Bu
+    // sıralama, eleme değildir — aşağıdaki ayrı test kapının kendisini
+    // tavan olmadan ölçer.
     // Görseli olmayan satırlar.
     for (const i of [500, 501]) expect(ids.has(`sku-${i}`)).toBe(false);
     // Puanı 9.2 olan satır (şema dışı).
@@ -134,11 +149,24 @@ describe("buildShortlist — ilk aşama filtreleme", () => {
     expect(stats.rejectedNotInStock).toBeGreaterThanOrEqual(6);
     expect(stats.rejectedByStock).toBe(0);
     // `NaN` fiyat ŞEMADA elenir (`z.number()` NaN'ı kabul etmez), fiyat
-    // kapısına ULAŞMAZ; bu yüzden 3 (null/0/-19) + 1 şema elemesi beklenir.
-    expect(stats.rejectedPrice).toBeGreaterThanOrEqual(3);
+    // kapısına ULAŞMAZ; bu yüzden 2 (0/-19) + 1 şema elemesi beklenir.
+    // `null` fiyat artık kapıdan GEÇER (ölçülmemiş ≠ geçersiz).
+    expect(stats.rejectedPrice).toBeGreaterThanOrEqual(2);
     expect(stats.rejectedMissingImage).toBeGreaterThanOrEqual(2);
     // 2 boş başlık + 1 NaN fiyat + 1 şema dışı puan (9.2).
     expect(stats.rejectedInvalid).toBeGreaterThanOrEqual(4);
+  });
+
+  it("ölçülmemiş fiyatı KAPIdan geçirir (ölçülmemiş ≠ geçersiz)", () => {
+    // 75'lik tavan YOK — tek satır, kapının kendisi ölçülüyor.
+    // Ölçülmemiş fiyat kanıtı olan bir adayı elemek için gerekçe değildir;
+    // 0 yazmak da dürüst değildir ("ölçtük ve sıfır bulduk" anlamına gelir).
+    const { products, stats } = buildShortlist([{ ...cleanRow(300), priceUsd: null }], {
+      context: CONTEXT,
+    });
+    expect(products).toHaveLength(1);
+    expect(products[0]?.price).toBeNull();
+    expect(stats.rejectedPrice).toBe(0);
   });
 
   it("ölçülmemiş alanları 0 değil null döndürür (dürüstlük kuralı)", () => {

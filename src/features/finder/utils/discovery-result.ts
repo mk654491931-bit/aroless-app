@@ -153,6 +153,18 @@ export function describeDiscoveryFailure(reason: string): string {
   }
   // 5) İş kuruldu ama sonuç üretmedi.
   if (raw === "empty_result") return "Hat kuruldu ama bu nişte ölçülebilir ürün bulunamadı.";
+  // 5a) Kaynaklar çalıştı, satır döndü, ama HAT elemesi hepsini düşürdü.
+  //
+  // Bu AYRI bir durumdur ve "kaynak çalışmadı" DEĞİLDİR. Ölçülen örnek
+  // (2026-10-01, "LED masa lambası"): 13 kaynak koştu, web-reviews 10 + github
+  // 5 = 15 ham satır döndü, `discovery_stats.inputCount` = 15 idi ve
+  // `survivors` 0'a düştü. Yani ağ, anahtarlar ve migration'lar TÜMÜ çalışıyor
+  //du; kırılan yer ilk aşama elemesiydi. Eskiden bu hata "servis rolü anahtarı
+  // eksik / migration uygulanmamış" sanılıyordu ve kullanıcı yanlış yere
+  // bakıyordu — oysa ikisi de doğruydu.
+  if (raw.includes("doğrulanabilir ürün döndürmedi")) {
+    return "Kaynaklar ürün döndürdü ama ilk aşama elemesi hepsini eledi; bu nişte kanıtı yeterli aday kalmadı. Farklı bir niş ifadesi deneyin (örn. ürünün kullanımı veya hedef kitlesi).";
+  }
   if (raw === "run_not_visible") return "İş kaydı okunamadı; iş kaydı yazılamamış olabilir.";
   if (raw === "timeout") return "İş zaman aşımına uğradı.";
   // 6) Zincirin taşıyıcısı öldü: kuyruktaki hiçbir adım ilerleme kaydetmedi.
@@ -162,6 +174,34 @@ export function describeDiscoveryFailure(reason: string): string {
     return "Analiz zinciri takıldı: kuyruğa yayınlanan adımlardan hiçbiri ilerleme kaydetmedi (QStash teslimatı reddedilmiş veya zaman aşımına uğramış olabilir). Kredin iade edildi.";
   }
   return raw ? `Yeni hat kurulamadı: ${raw.slice(0, 160)}` : "Yeni hat kurulamadı.";
+}
+
+/**
+ * Hata İPUCU satırı — yalnız hata metni gerçekten onu söylüyorsa.
+ *
+ * NEDEN KOŞULLU: eskiden bu metin HER hatada sabit gösteriliyordu
+ * ("Sık görülen nedenler: Supabase servis rolü anahtarı eksik ya da migration
+ * uygulanmamış"). Bu, hat boş döndüğünde kullanıcıyı yanlış yere götürdü:
+ * canlı ölçümde 13 kaynak koşmuş, 15 satır dönmüş, `searches` kaydı yazılmış
+ * yani ağ, anahtarlar ve migration'lar TÜMÜ çalışıyordu; yalnız ilk aşama
+ * elemesi hepsini düşürmüştü. Sabit ipucu gerçek sebebi saklıyordu.
+ *
+ * Artık ipucu hatanın kendisinden türetilir: Supabase hatası görünüyorsa
+ * kurulum ipucu, kaynak/filtre hatası görünüyorsa onun ipucu gösterilir.
+ */
+export function hintsForFailure(reason: string): string {
+  const lower = String(reason ?? "").toLowerCase();
+  const isSetupIssue =
+    /supabase_service_role_key|service_role|does not exist|schema cache|advance_discovery_status|missing supabase environment/.test(
+      lower,
+    );
+  if (isSetupIssue) {
+    return "Kurulum eksikliği: Supabase servis rolü anahtarı veya migration uygulanmamış olabilir.";
+  }
+  if (String(reason ?? "").includes("doğrulanabilir ürün döndürmedi")) {
+    return "Bu bir kurulum hatası DEĞİL: kaynaklar çalıştı, sonuç ilk aşama elemesinde elendi.";
+  }
+  return "Ayrıntı için /health ve /api/product-discovery/preflight uçlarını kontrol edin.";
 }
 
 /**
