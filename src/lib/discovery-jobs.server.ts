@@ -960,11 +960,7 @@ export async function markJobCompleted(
   });
   if (!error) return;
   if (!isMissingRpc(error)) throw new Error(error.message);
-  const { error: updateError } = await jobStore()
-    .from(JOB_TABLE)
-    .update({ status: "completed", result, error: null, locked_until: null } as never)
-    .eq("id", jobId);
-  if (updateError) throw new Error(updateError.message);
+  await applyLegacyStatusPatch(jobId, { status: "completed", result, error: null });
 }
 
 /**
@@ -1000,11 +996,10 @@ export async function markJobFailed(
   });
   if (!error) return;
   if (!isMissingRpc(error)) throw new Error(error.message);
-  const { error: updateError } = await jobStore()
-    .from(JOB_TABLE)
-    .update({ status: "failed", error: message.slice(0, 2000), locked_until: null } as never)
-    .eq("id", jobId);
-  if (updateError) throw new Error(updateError.message);
+  await applyLegacyStatusPatch(jobId, {
+    status: "failed",
+    error: message.slice(0, 2000),
+  });
 }
 
 // ---------- Upstash Redis (REST) önbellek ----------
@@ -1070,20 +1065,61 @@ export async function createJobRow(args: {
 
 export async function setJobMessageId(jobId: string, messageId: string): Promise<void> {
   if (!messageId) return;
-  await jobStore()
+  // `qstash_message_id` de güvenilir kuyruk migration'ından gelir. Kolon yoksa
+  // mesaj kimliği yalnız tekrar-tekrar teslimat korumasıdır; hattı düşürmemek
+  // için en iyi çaba (best-effort) olarak yutulur.
+  const { error } = await jobStore()
     .from(JOB_TABLE)
     .update({ qstash_message_id: messageId } as never)
     .eq("id", jobId);
-}
-
-function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+  if (error && !isMissingColumn(error) && !isMissingRpc(error)) throw new Error(error.message);
+}function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
   return Boolean(
     error &&
-    (error.code === "42883" ||
-      /could not find the function|function .* does not exist|undefined function/i.test(
-        error.message ?? "",
-      )),
+      (error.code === "42883" ||
+        /could not find the function|function .* does not exist|undefined function/i.test(
+          error.message ?? "",
+        )),
   );
+}
+
+/** Kolon eksikliği mi? (42703 / PGRST204 şema önbelleği hatası) */
+function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(
+    error &&
+      (error.code === "42703" ||
+        error.code === "PGRST204" ||
+        /column .* does not exist|could not find the .* column|schema cache/i.test(
+          error.message ?? "",
+        )),
+  );
+}
+
+/**
+ * Lease kolonu (`locked_until`) `searches` tablosunun TEMEL şemasında değil,
+ * güvenilir iş kuyruğu migration'ında ekleniyor — yani `complete_search_job`
+ * RPC'si ile **aynı** migration'dan geliyor.
+ *
+ * Bu yüzden "RPC yok" demek "kolon da yok" demektir. Fallback yalnız RPC
+ * yokluğuna bakıp kolonu yazmayı denerse, migration uygulanmamış bir veritabanında
+ * `column "locked_until" of relation "searches" does not exist` ile ÖLÜR.
+ * Aşağıdaki `applyLegacyStatusPatch` önce lease'siz dener, kolon gerçekten
+ * yoksa lease'siz yola düşer.
+ */
+async function applyLegacyStatusPatch(
+  jobId: string,
+  patch: { status: string; result?: unknown; error: string | null },
+): Promise<void> {
+  const withLease = { ...patch, locked_until: null };
+  const { error } = await jobStore().from(JOB_TABLE).update(withLease as never).eq("id", jobId);
+  if (!error) return;
+  // Kolon yoksa (migration uygulanmamış) lease'siz tekrar dene.
+  if (!isMissingColumn(error)) throw new Error(error.message);
+  const { error: retryError } = await jobStore()
+    .from(JOB_TABLE)
+    .update(patch as never)
+    .eq("id", jobId);
+  if (retryError) throw new Error(retryError.message);
 }
 
 export type SearchJobClaim = {

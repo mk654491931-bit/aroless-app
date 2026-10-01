@@ -527,7 +527,12 @@ export async function finishDiscoveryJob(
   // Migration yoksa düz güncellemeye düş. `status = 'processing'` filtresi
   // idempotency sağlar: iki teslimat çift sonuç üretemez (düz `result` kolonu
   // migration'dan ÖNCE de vardır — klasik hat onu kullanıyordu).
-  if (!isMissingRpc(error)) throw new Error(error.message);
+  //
+  // ⚠️ `finish_discovery_job` GÖVDESİ `locked_until = NULL` yazıyor ve bu kolon
+  // güvenilir kuyruk migration'ında geliyor. O migration uygulanmamışsa RPC
+  // çağrısı "fonksiyon yok" değil "kolon yok" (42703) hatası döner — bu yüzden
+  // kolon hatası da fallback'e düşer, aksi hâlde iş sonlandırılamaz.
+  if (!isMissingRpc(error) && !isMissingColumn(error)) throw new Error(error.message);
   const { data: rows, error: updateError } = await store
     .from(JOB_TABLE)
     .update({ status: "completed", result, error: null } as never)
@@ -548,7 +553,9 @@ export async function failDiscoveryJob(runId: string, message: string): Promise<
     _error: message.slice(0, 2000),
   });
   if (!error) return data === true;
-  if (!isMissingRpc(error)) throw new Error(error.message);
+  // `finish_discovery_job` gövdesindeki `locked_until` kolonu yoksa da aynı
+  // fallback'e düş (bkz. `finishDiscoveryJob`).
+  if (!isMissingRpc(error) && !isMissingColumn(error)) throw new Error(error.message);
   const { data: rows, error: updateError } = await store
     .from(JOB_TABLE)
     .update({ status: "failed", error: message.slice(0, 2000) } as never)
