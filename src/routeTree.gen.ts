@@ -47,6 +47,7 @@ import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/produ
 import { Route as ApiProductDiscoveryStepRouteImport } from './routes/api/product-discovery.step'
 import { Route as ApiProductDiscoveryStreamRouteImport } from './routes/api/product-discovery.stream'
 import { Route as ApiPublicAgentRouteImport } from './routes/api/public/agent'
+import { Route as ApiPublicBuildInfoRouteImport } from './routes/api/public/build-info'
 import { Route as ApiPublicCountryRouteImport } from './routes/api/public/country'
 import { Route as ApiPublicFxRouteImport } from './routes/api/public/fx'
 import { Route as ApiPublicHotProductsRouteImport } from './routes/api/public/hot-products'
@@ -252,6 +253,11 @@ const ApiPublicAgentRoute = ApiPublicAgentRouteImport.update({
   path: '/api/public/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBuildInfoRoute = ApiPublicBuildInfoRouteImport.update({
+  id: '/api/public/build-info',
+  path: '/api/public/build-info',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCountryRoute = ApiPublicCountryRouteImport.update({
   id: '/api/public/country',
   path: '/api/public/country',
@@ -348,6 +354,7 @@ export interface FileRoutesByFullPath {
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/build-info': typeof ApiPublicBuildInfoRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -399,6 +406,7 @@ export interface FileRoutesByTo {
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/build-info': typeof ApiPublicBuildInfoRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -451,6 +459,7 @@ export interface FileRoutesById {
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
   '/api/product-discovery/stream': typeof ApiProductDiscoveryStreamRoute
   '/api/public/agent': typeof ApiPublicAgentRoute
+  '/api/public/build-info': typeof ApiPublicBuildInfoRoute
   '/api/public/country': typeof ApiPublicCountryRoute
   '/api/public/fx': typeof ApiPublicFxRoute
   '/api/public/hot-products': typeof ApiPublicHotProductsRoute
@@ -504,6 +513,7 @@ export interface FileRouteTypes {
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
     | '/api/public/agent'
+    | '/api/public/build-info'
     | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -555,6 +565,7 @@ export interface FileRouteTypes {
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
     | '/api/public/agent'
+    | '/api/public/build-info'
     | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -606,6 +617,7 @@ export interface FileRouteTypes {
     | '/api/product-discovery/step'
     | '/api/product-discovery/stream'
     | '/api/public/agent'
+    | '/api/public/build-info'
     | '/api/public/country'
     | '/api/public/fx'
     | '/api/public/hot-products'
@@ -657,6 +669,7 @@ export interface RootRouteChildren {
   ApiProductDiscoveryStepRoute: typeof ApiProductDiscoveryStepRoute
   ApiProductDiscoveryStreamRoute: typeof ApiProductDiscoveryStreamRoute
   ApiPublicAgentRoute: typeof ApiPublicAgentRoute
+  ApiPublicBuildInfoRoute: typeof ApiPublicBuildInfoRoute
   ApiPublicCountryRoute: typeof ApiPublicCountryRoute
   ApiPublicFxRoute: typeof ApiPublicFxRoute
   ApiPublicHotProductsRoute: typeof ApiPublicHotProductsRoute
@@ -938,6 +951,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/build-info': {
+      id: '/api/public/build-info'
+      path: '/api/public/build-info'
+      fullPath: '/api/public/build-info'
+      preLoaderRoute: typeof ApiPublicBuildInfoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/country': {
       id: '/api/public/country'
       path: '/api/public/country'
@@ -1066,6 +1086,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProductDiscoveryStepRoute: ApiProductDiscoveryStepRoute,
   ApiProductDiscoveryStreamRoute: ApiProductDiscoveryStreamRoute,
   ApiPublicAgentRoute: ApiPublicAgentRoute,
+  ApiPublicBuildInfoRoute: ApiPublicBuildInfoRoute,
   ApiPublicCountryRoute: ApiPublicCountryRoute,
   ApiPublicFxRoute: ApiPublicFxRoute,
   ApiPublicHotProductsRoute: ApiPublicHotProductsRoute,
