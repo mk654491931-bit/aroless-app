@@ -120,8 +120,8 @@ export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
   gemini: {
     id: 'gemini',
     endpoint:
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
-    model: 'gemini-1.5-flash',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+    model: 'gemini-2.0-flash',
     buildHeaders: (k) => ({ 'Content-Type': 'application/json', 'x-goog-api-key': k }),
     buildBody: (p, mt, t) => ({
       contents: [{ role: 'user', parts: [{ text: p }] }],

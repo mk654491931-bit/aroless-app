@@ -183,7 +183,7 @@ export const MODEL_SELECTION: Record<ProviderType, Record<ModelTier, string[]>> 
   gemini: {
     strongest: ["gemini-flash-latest", "gemini-2.5-pro", "gemini-2.0-pro"],
     balanced: ["gemini-2.5-flash", "gemini-2.0-flash"],
-    fastest: ["gemini-1.5-flash"],
+    fastest: ["gemini-flash-latest", "gemini-2.0-flash"],
   },
   groq: {
     strongest: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"],

@@ -544,7 +544,6 @@ const ENGINES: { name: string; run: (p: string) => Promise<string> }[] = [
       callGemini(p, undefined, 0.45, false, [
         "gemini-flash-latest",
         "gemini-2.0-flash",
-        "gemini-1.5-flash",
       ]),
   },
   { name: "groq", run: (p) => callGroq(p, 0.4) },

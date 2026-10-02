@@ -56,6 +56,29 @@ describe("describeDiscoveryFailure", () => {
     expect(describeDiscoveryFailure("empty_result")).toContain("ürün");
   });
 
+  // Canlı hata (2026-10-02): "gemini: Gemini error: 404 { "error": { "code":
+  // 404, "message": "models/gemini-1.5-flash is not found for API version
+  // v1beta…" } }". Google 1.5 ailesini emekliye ayırmıştı; ağ, veritabanı ve
+  // kurulumun üçü de sağlıklıydı. Ham JSON duvarı ve "migration eksik"
+  // ipucu kullanıcıyı yanlış yere götürüyordu.
+  it("emekliye ayrılmış Gemini modelini kurulum hatası SANMAZ", () => {
+    const raw =
+      'gemini: Gemini error: 404 { "error": { "code": 404, "message": "models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent" } }';
+    const text = describeDiscoveryFailure(raw);
+    expect(text).toContain("Gemini");
+    expect(text).not.toContain("migration");
+    expect(text).not.toContain("SUPABASE");
+    expect(text).not.toContain("404"); // ham JSON duvarı gösterilmez
+  });
+
+  it("sağlayıcı hatasında ipucu migration'a değil AI motoruna gösterir", () => {
+    const raw = 'gemini: Gemini error: 404 models/gemini-1.5-flash is not found';
+    const hint = hintsForFailure(raw);
+    expect(hint).toContain("AI sağlayıcısı");
+    expect(hint).toContain("DEĞİL");
+    expect(hint).not.toContain("migration");
+  });
+
   // Canlı hattan çıkan düzeltme (2026-10-01, "LED masa lambası"):
   // 13 kaynak koştu, 15 satır döndü, hepsi ilk aşama elemesinde düştü.
   // Bu hata "hiç kaynak ürün döndürmedi" diye okununca kurulum hatası

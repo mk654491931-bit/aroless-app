@@ -497,7 +497,7 @@ Return ONLY JSON:
       engine: "Gemini Pro (free)",
       run: () =>
         callGemini(prompt, undefined, 0.5, false, [
-          "gemini-1.5-pro",
+          "gemini-2.5-pro",
           "gemini-flash-latest",
           "gemini-2.0-flash",
         ]),
@@ -545,7 +545,7 @@ Return ONLY JSON: {"score": number 1-100, "note": string (max 160 karakter, nede
     {
       engine: "Gemini Pro (auditor)",
       run: () =>
-        callGemini(prompt, undefined, 0.4, false, ["gemini-1.5-pro", "gemini-flash-latest"]),
+        callGemini(prompt, undefined, 0.4, false, ["gemini-2.5-pro", "gemini-flash-latest"]),
     },
     { engine: "Groq llama-3.3-70b", run: () => callGroq(prompt, 0.4) },
     { engine: "OpenRouter DeepSeek", run: () => callOpenRouter(prompt, 0.4) },

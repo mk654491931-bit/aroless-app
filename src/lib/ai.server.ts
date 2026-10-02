@@ -14,12 +14,17 @@ import {
  * Newest-first Gemini model ladder used everywhere. "latest" aliases always
  * resolve to Google's current Flash generation, so answers stay up to date
  * without code changes; older ids stay as availability fallbacks.
+ *
+ * `gemini-1.5-flash` / `gemini-1.5-pro` KALDIRILDI: Google 1.5 ailesini
+ * emekliye ayırdı ve v1beta üzerinden çağrılar artık
+ * "404 … models/gemini-1.5-flash is not found for API version v1beta" ile
+ * dönüyor. Kullanıcıya "yeni hat kurulamadı" diye yansıyordu. Emeklileri
+ * merdivene geri sokmayalım; desteklenen 2.x/2.5x ailesi yeterli.
  */
 export const GEMINI_MODELS_LATEST = [
   "gemini-flash-latest",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
 ];
 
 /** Groq ladder: strongest open model first, fastest one last. */

@@ -173,6 +173,22 @@ export function describeDiscoveryFailure(reason: string): string {
     }
     return "Kaynaklar ürün döndürdü ama ilk aşama elemesi hepsini eledi; bu nişte kanıtı yeterli aday kalmadı. Farklı bir niş ifadesi deneyin (örn. ürünün kullanımı veya hedef kitlesi).";
   }
+  // 5b) AI sağlayıcısı hatası — kurulumla İLGİSİZ.
+  //
+  // Ölçülen canlı olay: "gemini: Gemini error: 404 { "error": { "code": 404,
+  // "message": "models/gemini-1.5-flash is not found for API version v1beta" } }".
+  // Ham hata metni kullanıcıya JSON duvarı olarak dökülüyordu ve altında
+  // "Supabase servis rolü anahtarı eksik / migration uygulanmamış" ipucu
+  // göründüğü için insan yanlış yere bakıyordu. Oysa ağ, veritabanı ve
+  // kurulumun tamamı sağlıklıydı: Google 1.5 model ailesini emekliye
+  // ayırmıştı. Bu dal, sağlayıcı hatasını kurulum hatasından kesin ayırır.
+  if (
+    /generativelanguage|models\/gemini|is not found for api version|gemini error|model .* is not supported/.test(
+      lower,
+    )
+  ) {
+    return "Gemini modeli çağrılamadı: kullanılan model kimliği Google tarafından desteklenmiyor ya da emekliye ayrılmış. AI sağlayıcıları havuzu denendiği için diğer motorlara geçildi.";
+  }
   if (raw === "run_not_visible") return "İş kaydı okunamadı; iş kaydı yazılamamış olabilir.";
   if (raw === "timeout") return "İş zaman aşımına uğradı.";
   // 6) Zincirin taşıyıcısı öldü: kuyruktaki hiçbir adım ilerleme kaydetmedi.
@@ -205,6 +221,13 @@ export function hintsForFailure(reason: string): string {
     );
   if (isSetupIssue) {
     return "Kurulum eksikliği: Supabase servis rolü anahtarı veya migration uygulanmamış olabilir.";
+  }
+  if (
+    /generativelanguage|models\/gemini|is not found for api version|gemini error|rate.?limit|429|quota|insufficient_quota|overloaded/.test(
+      lower,
+    )
+  ) {
+    return "Bu bir kurulum hatası DEĞİL: sorun AI sağlayıcısında. API anahtarı havuzu tükendiğinde ya da model emekliye ayrıldığında oluşur; diğer motorlar denendiği için kalıcı bir arıza değildir.";
   }
   if (String(reason ?? "").includes("doğrulanabilir ürün döndürmedi")) {
     // İki durum ayrı ipucu hak eder: satır HİÇ gelmediyse "kaynaklar çalıştı"
