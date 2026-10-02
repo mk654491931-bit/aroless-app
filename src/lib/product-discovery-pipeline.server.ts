@@ -499,7 +499,26 @@ export async function geminiShortlistSelector(
   //
   // SÜRE SINIRI: zincirin mutlak bitiş anı verilir; anahtar/model rotasyonu bu
   // anı geçemez, süre bitince deterministik seçime düşülür.
-  const raw = await callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
+  //
+  // FAIL-SOFT (ölçülen canlı hata, 2026-10-02):
+  //   Gemini `503 "high demand"` döndüğünde `callGemini` istisna FIRLATIYORDU.
+  //   Bu fonksiyonun sözleşmesi ise "model konuşmazsa `[]` dön, deterministik
+  //   sıralama işi bitirsin" idi — aşağıdaki `if (!parsed.success) return []`
+  //   tam olarak bunu yapıyordu. Fırlayan istisna o yedeği ATLAYIP tüm hattı
+  //   düşürüyordu ve kullanıcı şu mesajı görüyordu:
+  //     "Yeni hat kurulamadı: gemini: Gemini error: 503 …"
+  //   Model hizmeti geçici olarak yoğun olduğunda HAT BOZULMAZ; yalnız model
+  //   katkısı olmaz. Bu yüzden ağ/sağlayıcı hatası da aynı yedeğe gider.
+  let raw: string;
+  try {
+    raw = await callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
+  } catch (e) {
+    console.log(
+      `[discovery] gemini kısa liste çağrısı başarısız (${(e as Error).message.slice(0, 120)}); ` +
+        `deterministik sıralamaya düşülüyor`,
+    );
+    return [];
+  }
   const Parsed = z.object({
     picks: z.array(z.number().int().min(1).max(Math.min(products.length, GEMINI_SHORTLIST_SIZE))).min(1).max(12),
   });

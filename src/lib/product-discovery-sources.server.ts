@@ -1486,6 +1486,101 @@ export const steamSource: ProductSource = {
   },
 };
 
+/* ------------------------------- 8c. Türk pazaryerleri (ScraperAPI, isteğe bağlı) */
+
+/**
+ * Türk pazaryeri kazıması — GERÇEK fiyat + GERÇEK puan, anahtarla.
+ *
+ * NEDEN VAR (ölçüm, 2026-10-02): anahtarsız denenen her yol kapalı çıktı —
+ * eBay 403, Hepsiburada 403, Trendyol fiyatı HTML'de vermiyor, Bing Shopping
+ * JS ile çiziliyor. Bu kaynak o boşluğu ScraperAPI ile kapatır ve oyun dışı
+ * (gerçek fiziksel) ürünlerde puan getiren İKİNCİ kaynak olur.
+ *
+ * TASARIM — "ZORLAMA" YOK (kullanıcı talebi):
+ *   1. Anahtar yoksa kaynak 0 ms'de boş döner; hiçbir ağ isteği yapılmaz.
+ *      Kalan anahtarsız kaynaklar normal çalışmaya devam eder.
+ *   2. Anahtar olsa bile bu kaynak YALNIZ kendi dilimini harcar ve hata
+ *      yutmaz; pazar sayfası boş dönerse diğer kaynaklar zaten ürün vermiş
+ *      olur. Yani bu kaynak hiçbir koşulda hattı düşüremez.
+ *   3. Ücretsiz kotalar korunur: en fazla 2 pazar, en fazla 12 satır.
+ */
+const TR_MARKETPLACES: readonly { name: string; search: (q: string) => string }[] = [
+  { name: "Trendyol", search: (q) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}` },
+  { name: "Hepsiburada", search: (q) => `https://www.hepsiburada.com/search?q=${encodeURIComponent(q)}` },
+  { name: "N11", search: (q) => `https://www.n11.com/arama?q=${encodeURIComponent(q)}` },
+  { name: "Amazon.com.tr", search: (q) => `https://www.amazon.com.tr/s?k=${encodeURIComponent(q)}` },
+];
+
+export const trMarketplaceSource: ProductSource = {
+  name: "tr-marketplace",
+  timeoutMs: 9_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { scraperApiConfigured, fetchThroughScraperApi } = await import("./product-image.server");
+    const { parseMarketplaceHtml } = await import("./marketplace-jsonld");
+    const { toUsd } = await import("./fx-rates.server");
+    // Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ: ölçülen maliyet sıfır.
+    if (!scraperApiConfigured()) return [];
+
+    return scrapeWithQueryVariants(niche, 9_000, async (query) => {
+      const out: RawProduct[] = [];
+      for (const site of TR_MARKETPLACES) {
+        let html: string | null = null;
+        try {
+          html = await fetchThroughScraperApi(site.search(query), {
+            countryCode: "tr",
+            timeoutMs: 4_000,
+          });
+        } catch (e) {
+          // Servis düştü / kota doldu / 403 → SONRAKİ PAZARA GEÇ.
+          console.log(
+            `[discovery] tr-marketplace ${site.name} okunamadı: ${(e as Error).message.slice(0, 80)}`,
+          );
+          continue;
+        }
+        if (!html) continue;
+
+        const rows = parseMarketplaceHtml(html, 12);
+        for (const row of rows) {
+          const title = row.title;
+          if (!matchesNiche(title, query)) continue;
+          // Fiyat TL'dir. Kur GERÇEK bir servisten çekilir (anahtarsız); kur
+          // gelmezse fiyat ölçülmedi sayılır — TAHMİN EDİLMEZ.
+          const usd = row.priceLocal !== null && row.currency ? await toUsd(row.priceLocal, row.currency) : null;
+          const product: RawProduct = {
+            title,
+            brand: row.brand,
+            seller: row.seller || site.name,
+            priceUsd: usd,
+            rating: row.rating,
+            ratingCount: row.ratingCount,
+            inStock: row.inStock,
+            source: "tr-marketplace",
+            url: row.url,
+            imageUrl: row.imageUrl,
+            notes: [
+              site.name,
+              row.priceLocal !== null && row.currency
+                ? `${row.priceLocal.toLocaleString("tr-TR")} ${row.currency}` +
+                  (usd !== null ? ` ≈ $${usd}` : " (kur alınamadı)")
+                : "",
+              row.rating !== null ? `puan ${row.rating}/5` : "",
+              row.ratingCount !== null ? `${row.ratingCount} değerlendirme` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+              .slice(0, 200),
+          };
+          if (!hasMeasuredField(product)) continue;
+          out.push(product);
+        }
+        // İlk pazar gerçek ürün döndürürse diğerlerine harcanmaz.
+        if (out.length) break;
+      }
+      return out;
+    });
+  },
+};
+
 /* ------------------------------------------ Sorgu varyantlarıyla ürün kazıma */
 
 /**
@@ -1622,6 +1717,9 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   webReviewSource,
   // Oyun nişi: gerçek fiyat + gerçek topluluk puanı (Steam, anahtarsız).
   steamSource,
+  // Fiziksel ürün: gerçek fiyat + gerçek puan (Türk pazaryeri, anahtarla).
+  // Anahtar yoksa hiç ağ çağrısı yapmaz.
+  trMarketplaceSource,
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.

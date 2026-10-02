@@ -11,7 +11,7 @@
  * Tüm testler $0 çalışır: ağ çağrısı ve veritabanı YOK, saf fonksiyonlar
  * üzerinden doğrulanır. Supabase erişimi olmayan bir ortamda da yeşil kalır.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   canTransition,
@@ -28,7 +28,7 @@ import {
   runCouncilOnProducts,
   TOTAL_AGENTS,
 } from "./product-discovery-council.server";
-import { parseLooseJson } from "./product-discovery-pipeline.server";
+import { parseLooseJson, runGeminiShortlistStep } from "./product-discovery-pipeline.server";
 import {
   buildShortlistPrompt,
   geminiShortlistSelector,
@@ -523,5 +523,66 @@ describe("gemini kısa liste süre sınırı", () => {
       undefined,
       undefined,
     );
+  });
+});
+
+/**
+ * GEMINI 503 "HIGH DEMAND" — kullanıcının gördüğü hatanın kaynağı.
+ *
+ * ÖLÇÜLEN CANLI HATA (2026-10-02):
+ *   "Yeni hat kurulamadı: gemini: Gemini error: 503 { … high demand … }"
+ *
+ * KÖK NEDEN: `geminiShortlistSelector` kendi sözleşmesinde "model konuşmazsa
+ * `[]` dön, deterministik sıralama işi bitirsin" diyordu (parse başarısız
+ * olunca `return []`). Ama `callGemini` bir 503 fırlatınca bu YEDEK KOD
+ * ÇALIŞMIYORDU: istisna adımı düşürüyor, hat `gemini: …` diye
+ * `failStep` ile kapanıyordu. Google'un GEÇİCİ yoğunluğu kullanıcının
+ * ürün aramasını komple çökertiyordu.
+ */
+describe("gemini kısa liste — sağlayıcı hatasında hat düşmez", () => {
+  beforeEach(() => {
+    aiMock.callGemini.mockReset();
+  });
+
+  it("503 fırlatırsa boş seçim döner, İSTİSNA ATMAZ", async () => {
+    aiMock.callGemini.mockRejectedValue(
+      new Error(
+        'Gemini error: 503 {"error":{"code":503,"message":"This model is currently experiencing high demand."}}',
+      ),
+    );
+
+    await expect(
+      geminiShortlistSelector([fullProduct({ id: "p-1" })], "air fryer"),
+    ).resolves.toEqual([]);
+  });
+
+  it("ağ hatası / zaman aşımı da aynı şekilde yutulur", async () => {
+    aiMock.callGemini.mockRejectedValue(new Error("fetch failed"));
+
+    await expect(
+      geminiShortlistSelector([fullProduct({ id: "p-1" })], "air fryer"),
+    ).resolves.toEqual([]);
+  });
+
+  it("model yanıt vermezse (boş string) da yedek devreye girer", async () => {
+    aiMock.callGemini.mockResolvedValue("");
+
+    await expect(
+      geminiShortlistSelector([fullProduct({ id: "p-1" })], "air fryer"),
+    ).resolves.toEqual([]);
+  });
+
+  it("hatta DÜŞMEZ: adım sağlayıcı hatasında deterministik listeyi bitirir", async () => {
+    // En dıştaki sözleşme: `gemini` adımı model olmadan da ürün döndürmeli.
+    aiMock.callGemini.mockRejectedValue(new Error("Gemini error: 503 high demand"));
+    const products = [
+      fullProduct({ id: "p-1", name: "Air Fryer 5.5L", preScore: 90 }),
+      fullProduct({ id: "p-2", name: "Air Fryer Pro 8L", preScore: 80 }),
+    ];
+
+    const result = await runGeminiShortlistStep(products, "air fryer", 25);
+
+    expect(result.ok).toBe(true);
+    expect(result.products.length).toBeGreaterThan(0);
   });
 });

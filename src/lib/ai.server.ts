@@ -687,6 +687,35 @@ function isQuotaError(status: number, body: string): boolean {
   );
 }
 
+/**
+ * GEÇİCİ KAPASİTE HATASI (yüksek talep / aşırı yük) — anahtardan değil,
+ * GOOGLE'ın kapasitesinden kaynaklanır.
+ *
+ * NEDEN AYRI SINIF (ölçülen canlı hata, 2026-10-02):
+ *   `503 "This model is currently experiencing high demand"` geldiğinde kod bunu
+ *   genel bir hataymış görüyordu. Sonucu iki yanlış davranış oluyordu:
+ *     1. 503 bir KOTA hatası olmadığı için doğru davranılsa bile `QUOTA:`
+ *      ile işaretlenmiyor, dolayısıyla GEÇİCİ olduğu da bilinmiyordu.
+ *     2. `callGemini` her 503'te 5 anahtarın HEPSİNİ denerdi. Oysa yüksek
+ *      talep anahtara özgü değildir: beşinci anahtarda da aynı 503 gelir.
+ *      Böylece bütçe 5 × model sayısı isteklik ölü denemeye harcandı ve
+ *      havuza (Groq/OpenRouter) geçiş çok gecikti.
+ *
+ * Doğrusu: kısa bir bekle, modeli değiştir, tükenince havuza GEÇ.
+ * `TRANSIENT:` etiketi `callGemini`'ye bunu söyler.
+ */
+function isTransientError(status: number, body: string): boolean {
+  return (
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    /high demand|overloaded|UNAVAILABLE|capacity|temporarily unavailable|try again later/i.test(
+      body,
+    )
+  );
+}
+
 /** Tek denemenin tavan süresi (ms). */
 const GEMINI_ATTEMPT_MS = 12_000;
 /** Bu süreden kısa bir pencere kalmışsa yeni deneme hiç başlatılmaz. */
@@ -719,6 +748,10 @@ async function geminiOnce(
 ): Promise<string> {
   prompt = withEstimationRules(prompt);
   let lastErr: unknown = null;
+  // Bu anahtarda en az bir GEÇİCİ kapasite hatası görüldü mü? Görüldüyse
+  // `callGemini` anahtar rotasyonunu kesip havuza geçer (aşırı yük anahtara
+  // özgü değildir).
+  let sawTransient = false;
   for (let attempt = 0; attempt < models.length; attempt++) {
     // Süre bitti: yeni deneme başlatmak yerine elimizdeki hatayla dön.
     if (deadlineAt !== undefined && deadlineAt - Date.now() < MIN_GEMINI_ATTEMPT_MS) break;
@@ -751,6 +784,17 @@ async function geminiOnce(
       if (!resp.ok) {
         const t = await resp.text();
         if (isQuotaError(resp.status, t)) throw new Error(`QUOTA: ${resp.status}`);
+        if (isTransientError(resp.status, t)) {
+          // Talep çıkıntısı: kısa bir bekle ve SIRADAKİ MODELE geç.
+          // Bekleme, genel hata yolundan uzun: 300 ms bir çıkıntıda yetmiyor.
+          sawTransient = true;
+          lastErr = new Error(`TRANSIENT: ${resp.status} ${t.slice(0, 160)}`);
+          // Bekleme KISA ve SABİT: burada amaç çıkıntıyı bir nefes almak, onu
+          // beklemek değil. Artan bekleme (700·n) yalnız bütçe yakıyordu ve
+          // gerçekten çalışan sağlayıcılara geçişi geciktiriyordu.
+          await new Promise((r) => setTimeout(r, attempt === 0 ? 900 : 400));
+          continue;
+        }
         lastErr = new Error(`Gemini error: ${resp.status} ${t.slice(0, 160)}`);
         await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
         continue;
@@ -771,6 +815,11 @@ async function geminiOnce(
     } finally {
       clearTimeout(timeout);
     }
+  }
+  // Tüm modeller tükendi. Hepsi geçici kapasite hatasıysa bunu `TRANSIENT:`
+  // etiketiyle İLETA: çağıran bunu "anahtarı park etme, havuza geç" diye okur.
+  if (sawTransient && lastErr instanceof Error) {
+    throw lastErr;
   }
   throw lastErr instanceof Error ? lastErr : new Error("Gemini request failed");
 }
@@ -865,6 +914,14 @@ export async function callGemini(
     } catch (e) {
       lastErr = e;
       if (e instanceof Error && e.message.startsWith("QUOTA:")) parkKey(key);
+      // AŞRI YÜK (503 high demand) ANAHTARA ÖZGÜ DEĞİLDİR: beşinci anahtarda
+      // da aynı 503 gelir. Kalan anahtarları denemek bütçeyi boşa harcar ve
+      // havuza (gerçekten çalışan diğer sağlayıcılar) geçişi geciktirir.
+      // Bu yüzden burada kırılır ve havuza düşülür.
+      if (e instanceof Error && e.message.startsWith("TRANSIENT:")) {
+        console.log("[ai] gemini aşırı yük → anahtar rotasyonu kesildi, havuza geçiliyor");
+        break;
+      }
       // quota or hard failure on this key — rotate to the next one
     }
   }

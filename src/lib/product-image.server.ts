@@ -28,6 +28,35 @@ export function scraperApiConfigured(): boolean {
 }
 
 /**
+ * Bir URL'nin metnini, yapılandırılabilir ülke koduyla getirir.
+ *
+ * NEDEN AYRI BİR FONKSİYON (ölçüm, 2026-10-02): ürün VERİSİ kazırken
+ * `country_code=us` yanlıştır — ABD yerelinde fiyat ve puan başka olur, yani
+ * "gerçek veri" olmaktan çıkar. Türk pazarı için `tr` gerekir. Fotoğraf
+ * yolundaki sabit `us` değerini değiştirmek diğer çağrıları bozacağından
+ * ülke parametreleştirildi.
+ *
+ * Süre sınırı ZORUNLUDUR: kendisinde zaman aşıtı olmayan bir fetch, Vercel
+ * fonksiyonunun 300 sn'lik duvarına dayanırdı. Servis yavaşsa istisna fırlatır;
+ * çağıranlar bunu yakalar.
+ */
+export async function fetchThroughScraperApi(
+  target: string,
+  options: { countryCode?: string; timeoutMs?: number } = {},
+): Promise<string | null> {
+  const key = scraperKey();
+  if (!key) return null;
+  const { countryCode = "tr", timeoutMs = 12_000 } = options;
+  const proxied =
+    `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}` +
+    `&country_code=${encodeURIComponent(countryCode)}&url=${encodeURIComponent(target)}`;
+  const res = await fetch(proxied, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`scraperapi HTTP ${res.status}`);
+  const text = await res.text();
+  return text.trim() ? text : null;
+}
+
+/**
  * Bir URL'nin metnini döner. ScrapAPI/ScraperAPI anahtarı varsa istek onun
  * üzerinden (ülke: US) yapılır; aksi halde ya da servis hata verirse doğrudan
  * `fetch` kullanılır. Hiçbir koşulda fırlatmaz.
