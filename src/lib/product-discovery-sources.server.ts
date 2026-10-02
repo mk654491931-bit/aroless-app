@@ -16,6 +16,7 @@
 import type { RawProduct } from "./product-discovery.types";
 import {
   isTurkishQuery,
+  isGameNiche,
   productQueryVariants,
 } from "./product-discovery-query";
 import {
@@ -1351,6 +1352,140 @@ async function bingShoppingCards(niche: string): Promise<string[]> {
   return cards;
 }
 
+/* --------------------------------------- 8b. Steam Store (oyun: fiyat + gerçek puan) */
+
+/**
+ * Steam Store — oyun nişi için GERÇEK fiyat ve GERÇEK kullanıcı puanı.
+ *
+ * NEDEN VAR (ölçüm, 2026-10-02): "gerçek ürün + gerçek sayı" isteğinde
+ * fiziksel ürünler için anahtarsız kaynak yok — eBay 403, Hepsiburada 403,
+ * Trendyol fiyatı HTML'de vermiyor, Bing Shopping sayfası JS ile çiziliyor.
+ * Oyun nişinde Steam **anahtarsız** çalışıyor ve İKİ gerçek sayı veriyor:
+ * `storesearch` fiyat, `appreviews` topluluk puanı + yorum sayısı.
+ *
+ * ÖLÇÜLEN GERÇEK — hangi sayı NEREDE:
+ *   `storesearch`  → ad, app id, FİYAT (para birimi dahil), küçük görsel
+ *   `appdetails`   → indirimli/ilk fiyat ayrımı, büyük görsel
+ *   `appreviews`   → GERÇEK kullanıcı puanı (1-10) + kaç yorum
+ *
+ * `metascore` Steam tarafından **hiçbir uçta yayımlanmıyor** (ölçüldü:
+ * hem `storesearch` hem `appdetails` alan listesinde yok). Yani yüzde puan
+ * uydurulabilirdi; onun yerine `appreviews` kullanılıyor.
+ *
+ * DÜNSTÜRMEDİĞİMİZ TEK SAYI:
+ *   - `review_score` 1-10 ölçeğindedir; 5'lik ölçeğe **bölerek** yazılır ve
+ *     notlarda ham hali de korunur.
+ *   - Puanı olmayan oyunda `rating` `null` kalır, `ratingCount` da `null`
+ *     kalır (kimse oy vermemiştir).
+ *   - Fiyat para birimi USD değilse `priceUsd` `null` bırakılır; fiyat kendi
+ *     para biriminde nota yazılır. KUR ÇEVRİMİ UYDURULMAZ.
+ */
+export const steamSource: ProductSource = {
+  name: "steam",
+  timeoutMs: 7_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    // Steam bir OYUN mağazasıdır. Niş oyun değilse HİÇ ÇAĞRILMAZ: aksi halde
+    // "LED masa lambası" → "led desk lamp" çevirisi, Steam'deki "Desk Lamp
+    // Deluxe" adlı bir oyunu gerçek fiziksel ürün sanar (ölçülen hata).
+    if (!isGameNiche(niche)) return [];
+    return scrapeWithQueryVariants(niche, 7_000, async (query) => {
+      const json = await grabJson<{
+        total?: number;
+        items?: {
+          name?: string;
+          id?: number;
+          price?: { currency?: string; final?: number };
+          tiny_image?: string;
+        }[];
+      }>(
+        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(
+          query.slice(0, 60),
+        )}&cc=us&l=english`,
+        3_500,
+      );
+      if (!json.items?.length) return [];
+
+      // Adayları önce nişe göre süzeriz: Steam araması GEVŞEKTİR, "lamp"
+      // için alakasız oyunlar da döner. Kapı burada, ağ çağrısından ÖNCE
+      // çalışır — puan isteyeceğimiz oyun sayısını da böyle kısar.
+      const candidates: { id: number; title: string; price: number; currency: string; image: string }[] = [];
+      const seen = new Set<string>();
+      for (const item of json.items) {
+        const title = String(item.name ?? "").trim();
+        if (!title || !item.id || seen.has(title.toLowerCase())) continue;
+        if (!matchesNiche(title, query)) continue;
+        seen.add(title.toLowerCase());
+        candidates.push({
+          id: item.id,
+          title: title.slice(0, 180),
+          price: Number(item.price?.final ?? 0),
+          currency: String(item.price?.currency ?? ""),
+          image: String(item.tiny_image ?? ""),
+        });
+        if (candidates.length >= 8) break;
+      }
+      if (!candidates.length) return [];
+
+      // Puanlar paralel çekilir: 8 oyun sıraya beklenirse 8 × ~200 ms
+      // dilim bütçesini yer; `Promise.all` toplamı en yavaşınki yapar.
+      const summaries = await Promise.all(
+        candidates.map((c) =>
+          grabJson<{
+            query_summary?: {
+              review_score?: number;
+              total_reviews?: number;
+              total_positive?: number;
+              total_negative?: number;
+            };
+          }>(
+            `https://store.steampowered.com/appreviews/${c.id}?json=1&language=all&purchase_type=all&num_per_page=0`,
+            2_500,
+          ).catch(() => ({}) as { query_summary?: Record<string, number> }),
+        ),
+      );
+
+      const out: RawProduct[] = [];
+      for (const [i, c] of candidates.entries()) {
+        const s = summaries[i]?.query_summary ?? {};
+        // review_score 1-10 → 5'lik ölçek. 0/NaN = kimse oy vermemiş → null.
+        const score = Number(s.review_score ?? 0);
+        const reviews = Number(s.total_reviews ?? 0);
+        const positive = Number(s.total_positive ?? 0);
+        const negative = Number(s.total_negative ?? 0);
+
+        const row: RawProduct = {
+          title: c.title,
+          // Steam mağaza adıdır, ürünün markası DEĞİLDİR. Marka uydurmuyoruz.
+          brand: "",
+          seller: "Steam Store",
+          priceUsd: c.currency === "USD" && c.price > 0 ? c.price / 100 : null,
+          rating: score > 0 ? Math.round((score / 2) * 10) / 10 : null,
+          ratingCount: reviews > 0 ? reviews : null,
+          inStock: null,
+          source: "steam",
+          url: `https://store.steampowered.com/app/${c.id}/`,
+          imageUrl: c.image,
+          notes: [
+            c.price > 0 ? `fiyat ${c.currency} ${(c.price / 100).toFixed(2)}` : "",
+            score > 0 ? `oy ${score}/10` : "",
+            reviews > 0 ? `${reviews.toLocaleString("tr-TR")} değerlendirme` : "",
+            positive + negative > 0
+              ? `%${Math.round((positive / (positive + negative)) * 100)} olumlu`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 200),
+        };
+        // Gürültü kapısı: ne fiyatı ne puanı olan oyun kanıt değildir.
+        if (!hasMeasuredField(row)) continue;
+        out.push(row);
+      }
+      return out;
+    });
+  },
+};
+
 /* ------------------------------------------ Sorgu varyantlarıyla ürün kazıma */
 
 /**
@@ -1485,6 +1620,8 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   openLibrarySource,
   marketplacePriceSource,
   webReviewSource,
+  // Oyun nişi: gerçek fiyat + gerçek topluluk puanı (Steam, anahtarsız).
+  steamSource,
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   asciiFold,
   englishProductQuery,
+  isGameNiche,
   isTurkishQuery,
   looksLikeProductRow,
   normalizeNiche,
@@ -146,5 +147,34 @@ describe("looksLikeProductRow", () => {
 
   it("boş başlığı eler", () => {
     expect(looksLikeProductRow("", "marketplace-price")).toBe(false);
+  });
+});
+
+describe("isGameNiche", () => {
+  it("Türkçe oyun nişini tanır", () => {
+    expect(isGameNiche("coşku oyunu")).toBe(true);
+    expect(isGameNiche("steam oyunları")).toBe(true);
+  });
+
+  it("Türkçe ekleri soyup köke iner", () => {
+    expect(isGameNiche("oyunu")).toBe(true);
+    expect(isGameNiche("oyunların")).toBe(true);
+  });
+
+  it("İngilizce oyun nişini tanır", () => {
+    // REGRESYON: ek soyucu İngilizce kelimeye uygulanırsa "game" → "gam"
+    // olur ve bu niş eşleşmezdi. Token iki biçimde de denenir.
+    expect(isGameNiche("strategy game")).toBe(true);
+    expect(isGameNiche("indie games")).toBe(true);
+  });
+
+  it("fiziksel üründe Steam'i tetikleMEZ", () => {
+    expect(isGameNiche("LED masa lambası")).toBe(false);
+    expect(isGameNiche("air fryer")).toBe(false);
+  });
+
+  it("oyun sözcüğü geçmeyen İngilizce nişleri eler", () => {
+    expect(isGameNiche("strategy")).toBe(false);
+    expect(isGameNiche("desk lamp")).toBe(false);
   });
 });

@@ -261,6 +261,62 @@ export function isTurkishQuery(niche: string): boolean {
   return /[çğıöşüİ]/.test(String(niche ?? ""));
 }
 
+/* ------------------------------------------------------- "Bu bir oyun mu?" */
+
+/**
+ * Niş OYUN mu? Yalnız Steam kaynağı için gerekir.
+ *
+ * NEDEN VAR (ölçüm, 2026-10-02): Steam bir OYUN mağazasıdır. Sorgu varyantı
+ * makinesi "LED masa lambası" → "led desk lamp" çevirdiği için, Steam'de
+ * bulunan "Desk Lamp Deluxe" adlı bir OYUN nişle eşleşiyor ve gerçek bir
+ * fiziksel ürün aramasına oyun kartı sızıyordu.
+ *
+ * KURAL — BİLEREK DAR: yalnız nişin kendisinde oyun sözcüğü varsa true.
+ * "oyun" kelimesi geçmeyen bir nişte Steam HİÇ ÇAĞRILMAZ. Bu, oyun
+ * olmayan nişlerde yanlış-negatifi (oyun ürünü kaçırılır) kabul eder;
+ * tersi — fiziksel ürüne oyun sokmak — vitrini bozan ve daha kötü bir
+ * hatadır. Bu yüzden güvenli yön seçilmiştir.
+ *
+ * Kapsam TR + EN: niş Türkçe ("coşku oyunu") ya da İngilizce
+ * ("strategy game") olabilir; ikisi de ASCII'ye indirilerek bakılır.
+ */
+const GAME_WORDS = new Set([
+  "oyun",
+  "oyunlar",
+  "game",
+  "games",
+  "gaming",
+  "steam",
+  "rpg",
+  "fps",
+]);
+
+/**
+ * Niş OYUN mu? Yalnız Steam kaynağı için gerekir.
+ *
+ * KURAL — BİLEREK DAR: nişin KÖKünde oyun sözcüğü yoksa false. Böylece
+ * "LED masa lambası" Steam'i hiç çağırmaz. Bu, oyun ürünü kaçırma riskini
+ * kabul eder; tersi — fiziksel ürün aramasına oyun sokmak — vitrini bozan
+ * ve daha kötü bir hatadır.
+ *
+ * Türkçe ekler `stripTurkishAffixes` ile soyulur: "oyunu", "oyunları",
+ * "oyunların" hepsi "oyun" köküne iner, hepsi eşleşir.
+ *
+ * DİKKAT (ölçülen hata): Türkçe ek soyma İngilizce kelimelere UYGULANMAZ.
+ * `stripTurkishAffixes("game")` → `"gam"` döner, yani "strategy game" hiç
+ * eşleşmezdi. Bu yüzden her token İKİ biçimde denenir: olduğu gibi (İngilizce)
+ * ve ekleri soyulmuş olarak (Türkçe).
+ */
+export function isGameNiche(niche: string): boolean {
+  const tokens = String(niche ?? "")
+    .split(/[^a-zA-ZçğıöşüÇĞİÖŞÜ0-9]+/)
+    .map((w) => asciiFold(w))
+    .filter(Boolean);
+  return tokens.some(
+    (token) => GAME_WORDS.has(token) || GAME_WORDS.has(stripTurkishAffixes(token)),
+  );
+}
+
 /* ------------------------------------------------------- "Bu bir ürün mü?" */
 
 /** Bir kaynağın ürün OLMAYAN satır üretip üretmediği — bilinen liste. */
