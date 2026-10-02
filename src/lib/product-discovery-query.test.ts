@@ -41,6 +41,13 @@ describe("englishProductQuery", () => {
     expect(englishProductQuery("LED masa lambası")).toBe("led desk lamp");
   });
 
+  it("çekimli halleri de çevirir (kitap → kitabı)", () => {
+    // ÖLÇÜLEN HATA: "matematik kitabı" → "matematik kitab" çıkıyordu; Türkçede
+    // ünsüz değişimi (kitap → kitab-ı) ek soyma ile geri alınamaz, bu yüzden
+    // çekimli biçimler sözlükte açıkça durmalı.
+    expect(englishProductQuery("matematik kitabı")).toBe("matematik book");
+  });
+
   it("İngilizce sorguyu BOZMAZ (olduğu gibi bırakır)", () => {
     expect(englishProductQuery("air fryer")).toBe("air fryer");
     expect(englishProductQuery("robot vacuum")).toBe("robot vacuum");

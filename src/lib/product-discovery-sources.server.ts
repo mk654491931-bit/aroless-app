@@ -15,6 +15,7 @@
 
 import type { RawProduct } from "./product-discovery.types";
 import {
+  isTurkishQuery,
   productQueryVariants,
 } from "./product-discovery-query";
 import {
@@ -691,7 +692,14 @@ export const itunesSource: ProductSource = {
   name: "itunes",
   timeoutMs: 4_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const q = encodeURIComponent(niche.slice(0, 60));
+    // ÖLÇÜM (2026-10-02): bu kaynak `country=US` sabit olduğu için Türkçe
+    // sorgularda 0 satır dönüyordu. iTunes Search API `country` parametresiyle
+    // mağazayı seçiyor: Türkçe bir nişte `country=TR` hem Türkçe ürünleri hem
+    // TÜRKÇE KULLANICI PUANLARINI getiriyor. `averageUserRating` zaten
+    // okunuyordu; sadece doğru mağazaya sorulmuyordu.
+    const country = isTurkishQuery(niche) ? "TR" : "US";
+    return scrapeWithQueryVariants(niche, 4_000, async (query) => {
+    const q = encodeURIComponent(query.slice(0, 60));
     const json = await grabJson<{
       resultCount?: number;
       results?: {
@@ -714,7 +722,7 @@ export const itunesSource: ProductSource = {
          */
         artworkUrl100?: string | null;
       }[];
-    }>(`https://itunes.apple.com/search?term=${q}&limit=25&country=US`, 3_500);
+    }>(`https://itunes.apple.com/search?term=${q}&limit=25&country=${country}`, 3_500);
 
     const out: RawProduct[] = [];
     const seen = new Set<string>();
@@ -740,7 +748,7 @@ export const itunesSource: ProductSource = {
       const isMedia =
         MEDIA_KIND.test(String(item.kind ?? "")) ||
         /books\.apple\.com|\/audiobook\//i.test(viewUrl);
-      if (isMedia && !isMediaNiche(niche)) continue;
+      if (isMedia && !isMediaNiche(query)) continue;
       const key = title.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -778,11 +786,12 @@ export const itunesSource: ProductSource = {
         notes: notesParts.join(" · ").slice(0, 200),
       };
       // Kapı 1: alakalılık. Kapı 2: en az bir ölçülebilir alan.
-      if (!matchesNiche(row.title, niche)) continue;
+      if (!matchesNiche(row.title, query)) continue;
       if (!hasMeasuredField(row)) continue;
       out.push(row);
     }
     return out.slice(0, 20);
+    });
   },
 };
 

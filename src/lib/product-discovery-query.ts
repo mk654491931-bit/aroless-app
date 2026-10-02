@@ -159,6 +159,12 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   kalem: "pen",
   defter: "notebook",
   kitap: "book",
+  // Çekimli HALLER de yazılıdır: "kitabı" → "kitap" dönüşümü ek soyma ile
+  // YAPILAMAZ (Türkçede ünsüz değişimi var: kitap → kitab-ı). Ölçülen hata:
+  // "matematik kitabı" → "matematik kitab" (sözlükteki "kitap" kaçırılıyor).
+  kitab: "book",
+  kitablar: "book",
+  tel: "phone",
   // gıda
   vitamin: "vitamin",
   protein: "protein",
@@ -166,7 +172,12 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   kahveMakinesi: "coffee maker",
 };
 
-/** Sözlükteki İngilizce karşılık; yoksa ASCII'ye inmiş kök. */
+/**
+ * Sözlükteki İngilizce karşılık; yoksa ASCII'ye inmiş kök.
+ *
+ * SIRA ÖNEMLİ: önce DÜZGÜN kelime, sonra kök. Aksi hâlde "kitabı" → "kitab"
+ * çıkar ve `kitap` sözlük girdisi kaçırılır (ölçülen hata).
+ */
 function toProductWord(root: string): string {
   const direct = PRODUCT_WORD_EN[root];
   if (direct) return direct;
