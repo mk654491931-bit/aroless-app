@@ -42,6 +42,44 @@ describe("vercel.json", () => {
   });
 });
 
+describe("TanStack Start yama sürümü", () => {
+  // ÖLÇÜLEN CANLI RED (Vercel build logu):
+  //   Vulnerable TanStack Start package detected
+  //   (@tanstack/react-start@1.168.32). Please update to a patched version.
+  //   To deploy at your own risk, set DANGEROUSLY_DEPLOY_VULNERABLE_TANSTACK_START_XSS=1
+  //
+  // Bu bir build hatası DEĞİL: Vercel güvenlik kapısında deployment'ı
+  // reddediyor. `package.json` `^1.168.32` dese bile kurulumu LOCK dosyasındaki
+  // sürüm belirler; 1.168.32 kilitliydi. Taban sürüm yükseltilip lock
+  // güncellendi — test, bunun geri düşmesini engeller.
+  const PATCHED_FLOOR = 16860; // 1.168.60
+  const lock = JSON.parse(repoFile("package-lock.json")) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const resolved = lock.packages?.["node_modules/@tanstack/react-start"]?.version ?? "";
+
+  /** `1.168.60` → 16860 (patch parçası iki haneye tamamlanır). */
+  function patchNumber(version: string): number {
+    const [major = "0", minor = "0", patch = "0"] = version.split(".");
+    return Number(major) * 10000 + Number(minor) * 100 + Number(patch.padEnd(2, "0"));
+  }
+
+  it("lock dosyasındaki sürüm Vercel'in yama eşiğinin üstünde", () => {
+    expect(resolved).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(patchNumber(resolved)).toBeGreaterThanOrEqual(PATCHED_FLOOR);
+  });
+
+  it("package.json'daki taban da yama eşiğinin üstünde (taze kurulumda da güvenli)", () => {
+    const pkg = JSON.parse(repoFile("package.json")) as {
+      dependencies?: Record<string, string>;
+    };
+    const range = pkg.dependencies?.["@tanstack/react-start"] ?? "";
+    const floor = range.replace(/^[^0-9]*/, "");
+    expect(range).toMatch(/\^/);
+    expect(patchNumber(floor)).toBeGreaterThanOrEqual(PATCHED_FLOOR);
+  });
+});
+
 describe("package-lock.json senkron", () => {
   // ÖLÇÜLEN İKİNCİ HATA: `npm ci` paket.json ile lock dosyası uyumsuzsa
   // KURULUM BAŞLAMADAN reddeder:
