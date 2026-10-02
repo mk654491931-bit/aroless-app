@@ -21,6 +21,7 @@ import {
   discoveryStoreHealth,
 } from "./lib/discovery-jobs.server";
 import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
+import { rateLimitBackendStatus } from "./lib/api-guard.server";
 import {
   discoverySliceMs,
   MAX_STEP_SLICES,
@@ -192,6 +193,10 @@ export default {
             },
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),
+            // İstek sınırının nerede tutulduğu. "memory" görünüyorsa
+            // `public.bump_rate_limit` migration'ı canlıya uygulanmamıştır:
+            // sınır çalışır ama yalnızca bu instance içinde tutulur.
+            rateLimit: rateLimitBackendStatus(),
           },
           { headers: { "cache-control": "no-store" } },
         ),

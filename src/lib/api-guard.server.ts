@@ -40,6 +40,91 @@ export async function hashValue(value: string): Promise<string> {
     .slice(0, 32);
 }
 
+// ---------------------------------------------------------------------------
+// İstek sınırı arka uç durumu
+//
+// `bump_rate_limit` migration'ı uygulanmamışsa RPC bulunamaz. Bu durumda
+// sınırı süreç içinde tutmaya devam ederiz ve teşhisi `/health` üzerinden
+// görünür kılarız: kullanıcı "çok fazla istek" hatası yaşamaz, log bir kez
+// uyarı basar, teşhis tek adreste görülür.
+// ---------------------------------------------------------------------------
+
+/** Sınırın şu an hangi arka uçta tutulduğu. */
+export type RateLimitBackend = "database" | "memory" | "unknown";
+
+let rateLimitBackend: RateLimitBackend = "unknown";
+let rateLimitFallbackReason: string | null = null;
+let rateLimitFallbackWarned = false;
+
+/** Süreç içi sabit pencere sayaçları (bucket → pencere başlangıcı + sayım). */
+const memoryBuckets = new Map<string, { windowStart: number; count: number }>();
+
+/** Bellek sızıntısını önlemek için tutulan en fazla kova sayısı. */
+const MEMORY_BUCKET_CAP = 5_000;
+
+/** `/health` ve teşhis için: sınır arka ucunun anlık durumu (sır içermez). */
+export function rateLimitBackendStatus(): {
+  backend: RateLimitBackend;
+  fallbackReason: string | null;
+} {
+  return { backend: rateLimitBackend, fallbackReason: rateLimitFallbackReason };
+}
+
+/**
+ * RPC yoksa süreç içi sınırı devreye alır ve uyarıyı **bir kez** basar.
+ * Aynı sebeple tekrar tekrar log yazmak, hatta hatanın kendisinden daha fazla
+ * gürültü üretir.
+ */
+function noteDatabaseFallback(reason: string): void {
+  const changed = rateLimitFallbackReason !== reason;
+  rateLimitBackend = "memory";
+  rateLimitFallbackReason = reason.slice(0, 200);
+  if (!rateLimitFallbackWarned) {
+    rateLimitFallbackWarned = true;
+    console.warn(
+      "[rate-limit] public.bump_rate_limit çağrılamadı; istek sınırı bu instance içinde tutuluyor." +
+        ` Sebep: ${rateLimitFallbackReason}` +
+        " Düzeltme: supabase/migrations/20260824013156_*.sql dosyasını canlı projeye uygula.",
+    );
+  } else if (changed) {
+    console.warn(`[rate-limit] arka uç değişti: ${rateLimitFallbackReason}`);
+  }
+}
+
+/**
+ * Sabit pencereli süreç içi sayaç. SQL sürümüyle aynı hizayı kullanır
+ * (`floor(now / window) * window`), böylece pencere sınırları tutarlıdır.
+ */
+function allowInMemory(key: string, limit: number, windowSeconds: number): boolean {
+  const size = Math.max(1, Math.floor(windowSeconds));
+  const now = Date.now();
+  const windowStart = Math.floor(now / (size * 1000)) * size * 1000;
+  const existing = memoryBuckets.get(key);
+  const count = existing && existing.windowStart === windowStart ? existing.count + 1 : 1;
+  memoryBuckets.set(key, { windowStart, count });
+  if (memoryBuckets.size > MEMORY_BUCKET_CAP) {
+    for (const [bucket, entry] of memoryBuckets) {
+      if (entry.windowStart < windowStart) memoryBuckets.delete(bucket);
+    }
+  }
+  return count <= limit;
+}
+
+/** Standart 429 gövdesi. */
+function tooManyRequests(windowSeconds: number): Response {
+  return new Response(
+    JSON.stringify({ error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin." }),
+    {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        "Retry-After": String(windowSeconds),
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
 /**
  * Oturum zorunlu uçlar için: geçerli bir Supabase erişim jetonu ister.
  * Başarılıysa kullanıcı kimliğini, değilse hazır 401 yanıtını döndürür.
@@ -75,7 +160,19 @@ export async function requireUser(request: Request): Promise<GuardResult> {
 
 /**
  * Kalıcı istek sınırı. Sınır aşıldıysa 429 yanıtı döner, aksi halde null.
- * Veritabanına ulaşılamazsa isteği engellemez (kullanılabilirlik önceliği).
+ *
+ * Dayanak birincil olarak veritabanı RPC'sidir (`public.bump_rate_limit`).
+ * Bu RPC migration'ı canlıya uygulanmamışsa PostgREST şema önbelleğinde
+ * bulunamaz ve her çağrı "Could not find the function …" hatası verir.
+ *
+ * O hâlde eskiden sınır **hiç uygulanmadan** istekler geçiyordu (fail-open) ve
+ * her istek log'a hata yazıyordu: hem kullanıcı kotasız kalıyor hem de platform
+ * logları bu satırla doluyordu. Artık:
+ *   1. sınır **süreç içi** bir pencere sayacıyla devam eder (aynı limit, aynı
+ *      pencere hizası — yalnızca instance kapsamlı), ve
+ *   2. uyarı **bir kez** basılır, sebebiyle birlikte ("migration uygulanmamış").
+ *
+ * Böylece eksik migration ne ürün aramasını bozar ne de gürültüye döner.
  */
 export async function rateLimit(
   key: string,
@@ -90,27 +187,16 @@ export async function rateLimit(
       _window_seconds: windowSeconds,
     });
     if (error) {
-      console.error("[rate-limit] rpc failed", error.message);
+      noteDatabaseFallback(error.message);
+      if (!allowInMemory(key, limit, windowSeconds)) return tooManyRequests(windowSeconds);
       return null;
     }
-    if (data === false) {
-      return new Response(
-        JSON.stringify({
-          error: "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.",
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(windowSeconds),
-            "Cache-Control": "no-store",
-          },
-        },
-      );
-    }
+    rateLimitBackend = "database";
+    if (data === false) return tooManyRequests(windowSeconds);
     return null;
   } catch (e) {
-    console.error("[rate-limit] failed", e);
+    noteDatabaseFallback(e instanceof Error ? e.message : String(e));
+    if (!allowInMemory(key, limit, windowSeconds)) return tooManyRequests(windowSeconds);
     return null;
   }
 }

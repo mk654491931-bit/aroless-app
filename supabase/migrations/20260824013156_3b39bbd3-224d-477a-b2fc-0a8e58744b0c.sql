@@ -10,6 +10,12 @@ CREATE TABLE IF NOT EXISTS public.api_rate_limits (
 GRANT ALL ON public.api_rate_limits TO service_role;
 ALTER TABLE public.api_rate_limits ENABLE ROW LEVEL SECURITY;
 
+-- YENİDEN ÇALIŞTIRILABİLİRLİK: `CREATE POLICY` korumasızsa ikinci çalıştırma
+-- "policy already exists" ile DURUR ve dosyanın geri kalanı — asıl kritik olan
+-- `bump_rate_limit` fonksiyonunun tanımı — hiç uygulanmaz. Canlıda tam olarak
+-- bu oldu: tablo vardı, fonksiyon yoktu ve her istek "Could not find the
+-- function public.bump_rate_limit …" hatası veriyordu.
+DROP POLICY IF EXISTS "admins_read_rate_limits" ON public.api_rate_limits;
 CREATE POLICY "admins_read_rate_limits" ON public.api_rate_limits
 FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
 GRANT SELECT ON public.api_rate_limits TO authenticated;
