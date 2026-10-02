@@ -42,6 +42,46 @@ describe("vercel.json", () => {
   });
 });
 
+describe("package-lock.json senkron", () => {
+  // ÖLÇÜLEN İKİNCİ HATA: `npm ci` paket.json ile lock dosyası uyumsuzsa
+  // KURULUM BAŞLAMADAN reddeder:
+  //   npm error `npm ci` can only install packages when your package.json and
+  //   package-lock.json … are in sync.
+  //   Missing: @upstash/qstash@2.12.0 from lock file
+  //   Missing: jose@6.2.12 / jose@5.10.0 / neverthrow@7.2.0 / uncrypto@0.1.3
+  // Bu, Vercel'de 12 saniyede düşen hataydı: bir bağımlılık package.json'a
+  // eklenmiş ama lock dosyası güncellenmemişti.
+  const pkg = JSON.parse(repoFile("package.json")) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  const lock = JSON.parse(repoFile("package-lock.json")) as {
+    lockfileVersion?: number;
+    packages?: Record<string, { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>;
+  };
+  const root = lock.packages?.[""] ?? {};
+
+  it("lockfileVersion 3'tür", () => {
+    expect(lock.lockfileVersion).toBe(3);
+  });
+
+  it("package.json'daki HER doğrudan bağımlılık lock kökünde tanımlı", () => {
+    const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+    const locked = { ...root.dependencies, ...root.devDependencies };
+    const missing = Object.keys(declared).filter((name) => !locked[name]);
+    expect(missing).toEqual([]);
+  });
+
+  it("kilitli sürümler package.json ile birebir aynı", () => {
+    const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+    const locked = { ...root.dependencies, ...root.devDependencies };
+    const mismatched = Object.entries(declared).filter(
+      ([name, range]) => locked[name] && locked[name] !== range,
+    );
+    expect(mismatched).toEqual([]);
+  });
+});
+
 describe("lockfile'ler", () => {
   it("package-lock.json yalnızca npm registry'sini kullanır", () => {
     const lock = repoFile("package-lock.json");
