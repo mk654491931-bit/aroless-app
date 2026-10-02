@@ -1,8 +1,8 @@
 export default {
   compatibilityDate: "2025-07-13",
-  // Keep Vercel as the default while allowing Render's Blueprint to select the
-  // persistent Node-compatible preset at build time.
-  preset: process.env["NITRO_PRESET"] ?? "vercel",
+  // Tek dağıtım hedefi Vercel Hobby'dir: ağır işler QStash kuyruğuna verilir,
+  // kalıcı bir servis (kendi Node sunucumuz) preset'i değiştirmez.
+  preset: "vercel",
   vercel: {
     functions: {
       // Vercel'in güncel süre limitleri (fluid compute varsayılan):

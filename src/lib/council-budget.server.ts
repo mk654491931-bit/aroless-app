@@ -68,7 +68,7 @@ export const COUNCIL_FAST_PROFILE: Profile = {
 };
 
 /**
- * Tam profil — kalıcı süreçte (Render/VPS) arka plan işi olarak koşar.
+ * Tam profil — kalıcı süreçte (kendi Node sunucumuz / VPS) arka plan işi olarak koşar.
  * Rezervler toplamı 750 sn; arka plan işi üst sınırı 900 sn.
  */
 export const COUNCIL_FULL_PROFILE: Profile = {
@@ -187,7 +187,7 @@ export class CouncilBudgetError extends Error {
     super(
       `Konsey için ayrılan süre yetersiz (${Math.round(budgetMs / 1000)} sn; en az ` +
         `${Math.round(MIN_INLINE_COUNCIL_MS / 1000)} sn gerekir). "${stage}" aşaması başlatılamadı — ` +
-        `iş arka planda koşmalıdır (Render servisi veya WORKER_URL tanımlı olsun).`,
+        `iş arka planda koşmalıdır (WORKER_URL tanımlı olsun).`,
     );
     this.name = "CouncilBudgetError";
     this.budgetMs = budgetMs;
@@ -201,7 +201,7 @@ export class CouncilBudgetError extends Error {
  * Kritik: bütçeyi platformun limiti belirler, sabit bir sayı değil.
  *  - Sunucusuz (Vercel): fonksiyon limiti (Hobby'de 300 sn) → `fast` profil,
  *    yani istek kendi kendine biter ve 504 yerine rapor döner.
- *  - Kalıcı süreç (Render / VPS / yerel dev): arka plan işi sınırı (900 sn) →
+ *  - Kalıcı süreç (kendi Node sunucumuz / VPS / yerel dev): arka plan işi sınırı (900 sn) →
  *    `full` profil, 14 ajanın tamamı koşar.
  */
 export function defaultCouncilBudgetMs(

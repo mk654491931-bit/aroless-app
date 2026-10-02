@@ -39,7 +39,7 @@ export function councilJobKey(input: NormalizedInput): string {
  *  - `ready`      → rapor (önbellekten ya da istek içinde tamamlandı)
  *  - `processing` → konsey ARKA PLANDA çalışıyor; `pollCouncilAnalysis` ile sor
  *
- * Render'da konsey 5-10 dakika sürebilir. Bunu istek içinde beklemek 504'ün
+ * Konsey 5-10 dakika sürebilir. Bunu istek içinde beklemek 504'ün
  * ta kendisidir; bu yüzden kalıcı süreçte iş arka plana atılır ve tarayıcı
  * kısa yoklamalarla sonucu alır.
  */
@@ -73,8 +73,8 @@ function creditError(message: string | null | undefined): Error {
  * 14'lü AI Konsey çalıştırıcısı.
  * - Aynı sorgu son 24 saatte yapıldıysa önbellekten döner ve KREDİ HARCAMAZ.
  * - Yeni sorguda 1 arama kredisi düşer, ardından konsey çalışır.
- * - Kalıcı süreçte (Render) konsey süreç içi arka plan kuyruğunda koşar.
- * - Sunucusuz ortamda (Vercel) iş, QStash ile **uzak Render worker'ına**
+ * - Kalıcı süreçte (kendi Node sunucumuz) konsey süreç içi arka plan kuyruğunda koşar.
+ * - Sunucusuz ortamda (Vercel) iş, QStash ile **uzak işçiye**
  *   (`WORKER_URL` → `/api/jobs`) gönderilir; tetikleyici anında döner.
  * - Uzak worker yoksa istek içinde koşturmak yerine açık hata döneriz: 504
  *   yerine anlaşılır bir mesaj ve **kredi iadesi**.
@@ -102,7 +102,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       return {
         status: "unavailable",
         error:
-          "Konsey bu ortamda başlatılamıyor: fonksiyon süresi limiti ağır analize yetmiyor (en az 300 sn gerekir). Süreyi 300 sn'ye çıkar ya da WORKER_URL (Render servis adresi) tanımla.",
+          "Konsey bu ortamda başlatılamıyor: fonksiyon süresi limiti ağır analize yetmiyor (en az 300 sn gerekir). Süreyi 300 sn'ye çıkar ya da WORKER_URL (uzak işçi adresi) tanımla.",
       };
     }
 
@@ -135,7 +135,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const { error } = await context.supabase.rpc("deduct_product_finder_credit");
     if (error) throw creditError(error.message);
 
-    // Hibrit kurulum: işi Render'daki kalıcı worker'a QStash ile yolla.
+    // Hibrit kurulum: işi uzak işçiye QStash ile yolla.
     if (plan === "qstash-worker") {
       const enqueued = await jobs.enqueueRemoteJob({
         kind: "council",

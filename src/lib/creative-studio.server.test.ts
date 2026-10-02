@@ -283,7 +283,7 @@ describe("prompt'lar", () => {
 describe("studioBudgetMs", () => {
   it("platform limitinden türer ve 150 sn'de kırpılır", () => {
     expect(studioBudgetMs(300)).toBe(STUDIO_MAX_BUDGET_MS); // Vercel 300 sn
-    expect(studioBudgetMs(900)).toBe(STUDIO_MAX_BUDGET_MS); // Render
+    expect(studioBudgetMs(900)).toBe(STUDIO_MAX_BUDGET_MS); // kalıcı süreç
     expect(studioBudgetMs(60)).toBe(40_000); // eski 60 sn'lik kısıt
   });
 

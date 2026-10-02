@@ -1,14 +1,15 @@
 /**
- * In-process arka plan iş kuyruğu — Render'daki 504'lerin kök çözümü.
+ * In-process arka plan iş kuyruğu — kalıcı bir Node servisindeki 504'lerin kök
+ * çözümü.
  *
- * Render bir **kalıcı** Node servisi çalıştırır: istek yanıtlandıktan sonra da
- * süreç yaşamaya devam eder. Bu yüzden uzun süren bir işi (ürün bulucu hattı,
+ * Kalıcı bir Node servisi istek yanıtlandıktan sonra da yaşamaya devam eder.
+ * Bu yüzden uzun süren bir işi (ürün bulucu hattı,
  * konsey analizi, saatlik taramalar) istek içinde beklemek yerine burada
  * kuyruğa alıp istemciye anında dönebiliriz. İstek 504 olmaz, iş arka planda
  * tamamlanır ve sonuç Supabase/Redis'e yazıldığı için istemci yoklamayla alır.
  *
  * Neden QStash'e alternatif: QStash opsiyonel bir bağımlılıktır (anahtarları
- * girilmemiş olabilir). Render'da QStash olmadan da asenkron davranış doğru
+ * girilmemiş olabilir). Kalıcı süreçte QStash olmadan da asenkron davranış doğru
  * sonuçtur; QStash varsa yine o kullanılır (bkz. `discoveryDispatchPlan`).
  *
  * Kurallar:

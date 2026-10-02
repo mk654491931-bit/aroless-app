@@ -1,7 +1,7 @@
 // Unit tests for the platform-aware discovery job budgets (pure logic — no network).
 //
 // Bu bütçeler 504 sınıfı hataların tek kaynağıdır: yanlış hesaplanırsa uzun
-// Render işi ya çok erken kesilir (istemci zaman aşımı) ya da Vercel'in 60 sn
+// uzun iş ya çok erken kesilir (istemci zaman aşımı) ya da Vercel'in 60 sn
 // limiti aşılır. Bu yüzden her platform varyantı ayrı ayrı sabitlenir.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -36,7 +36,6 @@ import { COUNCIL_ENRICH_BUDGET_MS, COUNCIL_ENRICH_MIN_MS } from "./council-budge
 
 const MANAGED_KEYS = [
   "NITRO_PRESET",
-  "RENDER_SERVICE_ID",
   "DISCOVERY_WORKER_URL",
   "WORKER_URL",
   "QSTASH_TIMEOUT_SECONDS",
@@ -65,14 +64,8 @@ describe("functionMaxDurationSeconds", () => {
     expect(functionMaxDurationSeconds()).toBe(300);
   });
 
-  it("uses the Render persistent-service budget via NITRO_PRESET", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
-    expect(runsOnLongLivedHost()).toBe(true);
-    expect(functionMaxDurationSeconds()).toBe(900);
-  });
-
-  it("also detects Render from RENDER_SERVICE_ID", () => {
-    vi.stubEnv("RENDER_SERVICE_ID", "srv-abc123");
+  it("uses the self-hosted Node budget via NITRO_PRESET", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     expect(runsOnLongLivedHost()).toBe(true);
     expect(functionMaxDurationSeconds()).toBe(900);
   });
@@ -82,8 +75,8 @@ describe("functionMaxDurationSeconds", () => {
     expect(functionMaxDurationSeconds()).toBe(300);
   });
 
-  it("ignores a stale VERCEL_FUNCTION_MAX_DURATION on Render", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
+  it("ignores a stale VERCEL_FUNCTION_MAX_DURATION on a persistent host", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     vi.stubEnv("VERCEL_FUNCTION_MAX_DURATION", "60");
     expect(functionMaxDurationSeconds()).toBe(900);
   });
@@ -117,8 +110,8 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(clientWaitMs()).toBe(52_000);
   });
 
-  it("Render'ın 900 sn limiti olsa bile hat sözünü aşmaz", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
+  it("kalıcı sürecin 900 sn limiti olsa bile hat sözünü aşmaz", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     expect(functionMaxDurationSeconds()).toBe(900);
     // Hat bütçesi = uçtan uca söz (280 sn) − dönüş payı (20 sn) = 260 sn.
     expect(workerBudgetMs()).toBe(DISCOVERY_MAX_BUDGET_MS);
@@ -186,7 +179,7 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(clientWaitMs()).toBe(20_000);
   });
 
-  it("hibritte (Vercel tetikler, Render çalıştırır) yoklama penceresini worker'a göre açar", () => {
+  it("hibritte (Vercel tetikler, uzak worker çalıştırır) yoklama penceresini worker'a göre açar", () => {
     // 14'lü konsey 350-400 sn sürer: tetikleyicinin 300 sn'lik limiti geçerli
     // olsaydı istemci 292. saniyede pes eder, kullanıcı sonucu hiç görmezdi.
     vi.stubEnv("WORKER_URL", "https://aroless.onrender.com");
@@ -268,8 +261,8 @@ describe("jobPollingPlan", () => {
     expect(DISCOVERY_MAX_BUDGET_MS).toBe(DISCOVERY_END_TO_END_MS - DISCOVERY_RETURN_MARGIN_MS);
   });
 
-  it("Render'da eski 892 sn bekleme kalktı: pencere uçtan uca 280 sn", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
+  it("kalıcı süreçte eski 892 sn bekleme kalktı: pencere uçtan uca 280 sn", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     const plan = jobPollingPlan();
     expect(plan.pollMaxMs).toBe(280_000);
     // İş 260 sn'de bittiği için kullanıcı 14 dakika boşuna beklemez...
@@ -289,8 +282,8 @@ describe("qstashTimeoutSeconds", () => {
     expect(qstashTimeoutSeconds()).toBe(298);
   });
 
-  it("uses 890s on Render", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
+  it("uses 890s on a persistent Node host", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     expect(qstashTimeoutSeconds()).toBe(890);
   });
 
@@ -317,29 +310,29 @@ describe("qstashTimeoutSeconds", () => {
 });
 
 // 504'ün kaldırıldığı yer: işin hangi yolla çalışacağı tek karar noktasından
-// (dispatch plan) belirlenir. Render'da QStash anahtarı girilmemiş olsa bile iş
-// arka plana gider; anahtar girilmemiş bir Vercel kurulumunda ise tek yol vardır.
+// (dispatch plan) belirlenir. Kalıcı bir süreçte QStash anahtarı girilmemiş olsa
+// bile iş arka plana gider; anahtar girilmemiş bir Vercel kurulumunda ise tek
+// yol vardır.
 describe("discoveryDispatchPlan", () => {
   const qstashEnv = { QSTASH_TOKEN: "qs-token", JOB_WORKER_SECRET: "shared-secret" };
 
   it("QStash anahtarları varsa QStash kullanır", () => {
     expect(discoveryDispatchPlan(qstashEnv)).toBe("qstash");
-    expect(discoveryDispatchPlan({ ...qstashEnv, RENDER_SERVICE_ID: "srv-1" })).toBe("qstash");
+    expect(discoveryDispatchPlan({ ...qstashEnv, NITRO_PRESET: "node-server" })).toBe("qstash");
   });
 
-  it("Render'da QStash yoksa süreç içi arka plan kullanır (504 yok)", () => {
-    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1" })).toBe("in-process");
-    expect(discoveryDispatchPlan({ NITRO_PRESET: "render_com" })).toBe("in-process");
+  it("kalıcı süreçte QStash yoksa süreç içi arka plan kullanır (504 yok)", () => {
+    expect(discoveryDispatchPlan({ NITRO_PRESET: "node-server" })).toBe("in-process");
   });
 
   it("yalnızca anahtarlardan biri varsa QStash seçilmez", () => {
-    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1", QSTASH_TOKEN: "qs" })).toBe(
+    expect(discoveryDispatchPlan({ NITRO_PRESET: "node-server", QSTASH_TOKEN: "qs" })).toBe(
       "in-process",
     );
   });
 
-  it("Render'da arka plan işi elle kapatılırsa inline'a düşer", () => {
-    expect(discoveryDispatchPlan({ RENDER_SERVICE_ID: "srv-1", BACKGROUND_JOBS: "false" })).toBe(
+  it("arka plan işi elle kapatılırsa inline'a düşer", () => {
+    expect(discoveryDispatchPlan({ NITRO_PRESET: "node-server", BACKGROUND_JOBS: "false" })).toBe(
       "inline",
     );
   });
@@ -349,8 +342,8 @@ describe("discoveryDispatchPlan", () => {
     expect(discoveryDispatchPlan({})).toBe("inline");
   });
 
-  it("RENDER_SERVICE_ID'yi kalıcı servis olarak algılar", () => {
-    expect(runsOnLongLivedHost({ RENDER_SERVICE_ID: "srv-1" })).toBe(true);
+  it("kalıcı Node preset'ini kalıcı servis olarak algılar", () => {
+    expect(runsOnLongLivedHost({ NITRO_PRESET: "node-server" })).toBe(true);
     expect(runsOnLongLivedHost({ VERCEL: "1" })).toBe(false);
     expect(workerTargetIsLongLived({ DISCOVERY_WORKER_URL: "https://x/api/worker" })).toBe(true);
   });
@@ -362,10 +355,8 @@ describe("discoveryDispatchPlan", () => {
 describe("longJobPlan (504 garantisi)", () => {
   const qstashEnv = { QSTASH_TOKEN: "qs-token", JOB_WORKER_SECRET: "shared-secret" };
 
-  it("Render'da süreç içi arka plan kuyruğunu seçer", () => {
-    expect(longJobPlan({ RENDER_SERVICE_ID: "srv-1", ...qstashEnv })).toBe("in-process");
-    expect(longJobPlan({ NITRO_PRESET: "render_com" })).toBe("in-process");
-    expect(longJobPlan({ NITRO_PRESET: "node-server" })).toBe("in-process");
+  it("kalıcı süreçte süreç içi arka plan kuyruğunu seçer", () => {
+    expect(longJobPlan({ NITRO_PRESET: "node-server", ...qstashEnv })).toBe("in-process");
   });
 
   it("Vercel'de QStash + uzak worker varsa işi worker'a yollar", () => {
@@ -386,7 +377,7 @@ describe("longJobPlan (504 garantisi)", () => {
     // 10 sn dönüş payı) aynı istekte tamamlanır. Worker yok diye özelliği
     // kapatmak yerine çalıştırıp zamanında bitirmek doğru davranıştır.
     expect(longJobPlan({ VERCEL: "1" })).toBe("inline");
-    // QStash var ama worker adresi yok → işi Render'a gönderemeyiz: yine inline.
+    // QStash var ama worker adresi yok → işi kuyruğa gönderemeyiz: yine inline.
     expect(longJobPlan({ VERCEL: "1", ...qstashEnv })).toBe("inline");
     // Worker var ama QStash yok → tetikleyici işi yayınlayamaz: yine inline.
     expect(longJobPlan({ VERCEL: "1", WORKER_URL: "https://aroless.onrender.com" })).toBe("inline");

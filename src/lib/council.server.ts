@@ -844,13 +844,13 @@ async function build(
 /**
  * Cache-first council run (24h).
  *
- * `budgetMs` varsayılanı platformdan gelir (`defaultCouncilBudgetMs`): Render/
- * yerelde tam hat (14 ajan), Vercel Hobby'de 300 sn'ye sığan hızlı hat. Çağıran
+ * `budgetMs` varsayılanı platformdan gelir (`defaultCouncilBudgetMs`): kalıcı
+ * süreçte tam hat (14 ajan), Vercel Hobby'de 300 sn'ye sığan hızlı hat. Çağıran
  * taraf bu bütçeyi bilerek küçültmediği sürece hiçbir istek 504 olmaz — hat
  * kendi kendine, platform kesmeden önce biter.
  *
- * Önbellek anahtarı DERİNLİK İÇERMEZ: tetikleyici (Vercel) ile worker (Render)
- * aynı anahtarı üretmeli ki istemci worker'ın yazdığı sonucu görebilsin.
+ * Önbellek anahtarı DERİNLİK İÇERMEZ: tetikleyici (Vercel) ile uzak işçi
+ * aynı anahtarı üretmeli ki istemci işçinin yazdığı sonucu görebilsin.
  */
 /** Kısa karnenin önbellek alanı — tam raporun (`council`) yerine geçmez. */
 export const COUNCIL_ENRICH_SCOPE = "council-enrich";

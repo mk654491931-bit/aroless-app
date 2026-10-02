@@ -7,25 +7,26 @@
  * | Platform            | İsteği kim keser?             | Kalıcı süreç |
  * | ------------------- | ----------------------------- | ------------ |
  * | Vercel (Hobby)      | fonksiyon limiti (300 sn)     | hayır        |
- * | Render Web Service  | proxy'de sert sınır           | **evet**     |
  * | Kalıcı Node / VPS   | yok (biz `REQUEST_BUDGET_MS`  | **evet**     |
  * |                     | ile sınırlarız)               |              |
  *
- * Kalıcı bir süreçte (Render) uzun işi istek içinde beklemek yerine **arka
- * plana** atıp istemciye hızlı yanıt dönmek tek doğru çözümdür. Bu modül arka
- * plan işinin mümkün olup olmadığını, ne kadar sürebileceğini ve tek bir
- * isteğin ne zaman "hazır değil" (warming) demesi gerektiğini bildirir.
- * Hiçbir yerde sabit "60" veya "900" yazılmaz.
+ * Hedef kurulum Vercel Hobby + QStash'tir: uygulama sunucusuz çalışır, ağır
+ * işler QStash ile kuyruğa girer. Kalıcı süreç (kendi Node sunucusu / VPS)
+ * yalnızca isteğe bağlı bir kaçış yoludur; orada uzun işi istek içinde
+ * beklemek yerine **arka plana** atıp istemciye hızlı yanıt dönmek gerekir.
+ * Bu modül arka plan işinin mümkün olup olmadığını, ne kadar sürebileceğini ve
+ * tek bir isteğin ne zaman "hazır değil" (warming) demesi gerektiğini
+ * bildirir. Hiçbir yerde sabit "60" veya "900" yazılmaz.
  */
 
-export type HostRuntimeName = "render" | "vercel" | "node" | "local";
+export type HostRuntimeName = "vercel" | "node" | "local";
 
 export type HostRuntime = {
   /** Platform etiketi — log ve /health çıktısında görünür. */
   name: HostRuntimeName;
   /** Platform isteği kendisi kesiyor mu (kısa ömürlü fonksiyon)? */
   serverless: boolean;
-  /** Bu süreç istekler arasında yaşıyor mu (Render / VPS / dev sunucusu)? */
+  /** Bu süreç istekler arasında yaşıyor mu (VPS / dev sunucusu)? */
   persistent: boolean;
   /** Arka plan işi bu süreçte anlamlı mı? */
   backgroundJobs: boolean;
@@ -35,13 +36,11 @@ type Env = Record<string, string | undefined>;
 
 /** Kalıcı Node sunucusu üreten Nitro preset'leri. */
 const PERSISTENT_PRESETS = new Set([
-  "render-com",
   "node-server",
   "node",
   "platform-sh",
   "bun",
   "deno",
-  "render-com-node",
 ]);
 
 /** Sunucusuz (serverless) olduğu bilinen preset'ler. */
@@ -56,12 +55,6 @@ const SERVERLESS_PRESETS = new Set([
 ]);
 
 const VERCEL_MARKERS = ["VERCEL", "VERCEL_URL", "VERCEL_ENV", "VERCEL_PROJECT_PRODUCTION_URL"];
-const RENDER_MARKERS = [
-  "RENDER_SERVICE_ID",
-  "RENDER_SERVICE_NAME",
-  "RENDER_EXTERNAL_URL",
-  "RENDER_EXTERNAL_HOSTNAME",
-];
 
 /**
  * Vercel'in güncel varsayılan fonksiyon süresi.
@@ -76,8 +69,9 @@ export const VERCEL_DEFAULT_FUNCTION_SECONDS = 300;
 export const MAX_LONG_LIVED_SECONDS = 900;
 
 /**
- * Render'da proxy'nin isteği kesmesini beklemeden kendi koyduğumuz üst sınır.
- * Herhangi bir isteğin bu süreden uzun açık kalması 504 davetiyesidir.
+ * Kalıcı süreçte (kendi Node sunucumuz) proxy'nin isteği kesmesini beklemeden
+ * kendi koyduğumuz üst sınır. Herhangi bir isteğin bu süreden uzun açık kalması
+ * 504 davetiyesidir.
  */
 export const DEFAULT_INTERACTIVE_BUDGET_MS = 45_000;
 
@@ -146,25 +140,22 @@ export function detectHostRuntime(env: Env = process.env): HostRuntime {
   const preset = read(env, "NITRO_PRESET");
   const normalized = preset ? normalizePreset(preset) : "";
 
-  const isRender = anySet(env, RENDER_MARKERS) || normalized.startsWith("render-");
+  // Sıralama önemli: sunucusuz bir ortam Vercel'e aittir. Göçten kalmış bir
+  // `NITRO_PRESET` ya da yerel `VERCEL_*` değişkeni asla kalıcı Node'u
+  // sunurusuz sanmamıza yol açmamalıdır — aksi halde 504 korumasının tamamı
+  // (arka plan işleri, kesme noktaları) sessizce kapanır.
   const isVercel = anySet(env, VERCEL_MARKERS) || normalized.startsWith("vercel");
-  const isPersistentPreset = PERSISTENT_PRESETS.has(normalized);
   const isServerlessPreset = SERVERLESS_PRESETS.has(normalized);
+  const isPersistentPreset = PERSISTENT_PRESETS.has(normalized);
 
-  // Render marker'ı, göç sonrası kalmış bir VERCEL_URL'den önce gelir: aksi
-  // halde kalıcı servis yanlışlıkla sunucusuz sanılır ve tüm arka plan işleri
-  // (504 korumasının tamamı) kapanırdı. Yalnızca build hedefi açıkça Vercel
-  // seçilmişse (NITRO_PRESET=vercel*) Vercel kazanır.
-  const presetIsVercel = normalized.startsWith("vercel");
   let name: HostRuntimeName;
-  if (isRender && !presetIsVercel) name = "render";
-  else if (isVercel || isServerlessPreset) name = "vercel";
+  if (isVercel || isServerlessPreset) name = "vercel";
   else if (isPersistentPreset) name = "node";
   else name = "local";
 
   const serverless = name === "vercel";
   // Dev sunucusu da istekler arasında yaşar; onu "local" etiketiyle ayırıyoruz.
-  const persistent = name === "render" || name === "node" || name === "local";
+  const persistent = name === "node" || name === "local";
 
   let backgroundJobs = persistent;
   if (falsy(env, FORCE_JOBS_ENV)) backgroundJobs = false;
@@ -177,7 +168,8 @@ export function detectHostRuntime(env: Env = process.env): HostRuntime {
 
 /**
  * İstek yerine arka plan işi kullanabileceğimiz kalıcı bir servis miyiz?
- * (Render Web Service veya kendi Node sunucun.) Vercel ve dev'de `false`.
+ * (Kendi Node sunucumuz.) Vercel'de ve dev'de `false` — orada ağır iş
+ * QStash kuyruğuna verilir.
  */
 export function runsOnPersistentHost(env: Env = process.env): boolean {
   const runtime = detectHostRuntime(env);
@@ -190,8 +182,8 @@ export function runsOnPersistentHost(env: Env = process.env): boolean {
  * Kalıcı serviste platform limiti yoktur; üst sınırı biz koyarız. Sunucusuz
  * ortamda `VERCEL_FUNCTION_MAX_DURATION` (varsayılan 300,
  * `VERCEL_DEFAULT_FUNCTION_SECONDS`) geçerlidir ve kalıcı serviste bu
- * değişken **bilinçli olarak yok sayılır** — göç sonrası kalan eski bir
- * değişken 60 sn'lik zaman aşımını geri getirmemelidir.
+ * değişken **bilinçli olarak yok sayılır** — eski bir 60 sn'lik zaman aşımı
+ * geri gelmemelidir.
  */
 export function platformDurationSeconds(env: Env = process.env): number {
   const longLived = runsOnPersistentHost(env);

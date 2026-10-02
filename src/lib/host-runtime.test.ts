@@ -1,6 +1,6 @@
 // Platform algılama ve istek bütçeleri — 504 sınıfı hataların tek kaynağı.
 //
-// Bu testler her platform varyantını (Render / Vercel / kalıcı Node / dev)
+// Bu testler her platform varyantını (Vercel / kalıcı Node / dev)
 // ayrı ayrı sabitler: yanlış algılama ya ağır işi istek içine geri taşır
 // (504) ya da kalıcı süreçte gereksiz kısıtlar (kullanıcı beklemesi).
 import { describe, expect, it, vi } from "vitest";
@@ -35,23 +35,13 @@ describe("detectHostRuntime", () => {
     expect(platformDurationSeconds({})).toBe(300);
   });
 
-  it("Render'ı RENDER_SERVICE_ID ile tanır", () => {
-    const env = { RENDER_SERVICE_ID: "srv-123" };
-    const runtime = detectHostRuntime(env);
-    expect(runtime.name).toBe("render");
-    expect(runtime.serverless).toBe(false);
-    expect(runtime.backgroundJobs).toBe(true);
-    expect(runsOnPersistentHost(env)).toBe(true);
-  });
-
-  it("Render'ı NITRO_PRESET=render_com ile tanır", () => {
-    expect(detectHostRuntime({ NITRO_PRESET: "render_com" }).name).toBe("render");
-    expect(detectHostRuntime({ NITRO_PRESET: "render-com" }).name).toBe("render");
-  });
-
   it("kendi Node sunucusunu (VPS) kalıcı kabul eder", () => {
     const env = { NITRO_PRESET: "node-server" };
-    expect(detectHostRuntime(env).name).toBe("node");
+    const runtime = detectHostRuntime(env);
+    expect(runtime.name).toBe("node");
+    expect(runtime.serverless).toBe(false);
+    expect(runtime.persistent).toBe(true);
+    expect(runtime.backgroundJobs).toBe(true);
     expect(runsOnPersistentHost(env)).toBe(true);
     expect(platformDurationSeconds(env)).toBe(MAX_LONG_LIVED_SECONDS);
   });
@@ -65,9 +55,11 @@ describe("detectHostRuntime", () => {
     expect(runsOnPersistentHost(env)).toBe(false);
   });
 
-  it("Render marker'ı Vercel değişkenlerinden önce gelir", () => {
-    const env = { RENDER_SERVICE_ID: "srv-1", VERCEL_URL: "x.vercel.app" };
-    expect(detectHostRuntime(env).name).toBe("render");
+  it("sunucusuz ortam, kalıcı Node preset'inden önce gelir", () => {
+    // Göçten kalmış bir preset, ortamı asla sunucusuzdan çeviremez: aksi halde
+    // 504 korumasının tamamı sessizce kapanırdı.
+    const env = { NITRO_PRESET: "node-server", VERCEL_URL: "x.vercel.app" };
+    expect(detectHostRuntime(env).name).toBe("vercel");
   });
 
   it("BACKGROUND_JOBS ile arka plan işi zorla açılıp kapatılabilir", () => {
@@ -77,8 +69,8 @@ describe("detectHostRuntime", () => {
 });
 
 describe("platformDurationSeconds", () => {
-  it("Render'da 900 sn verir ve eski Vercel değişkenini yok sayar", () => {
-    const env = { RENDER_SERVICE_ID: "srv-1", VERCEL_FUNCTION_MAX_DURATION: "60" };
+  it("kalıcı süreçte 900 sn verir ve eski Vercel değişkenini yok sayar", () => {
+    const env = { NITRO_PRESET: "node-server", VERCEL_FUNCTION_MAX_DURATION: "60" };
     expect(platformDurationSeconds(env)).toBe(900);
   });
 
@@ -95,14 +87,14 @@ describe("platformDurationSeconds", () => {
 });
 
 describe("interactiveRequestBudgetMs (504 üst sınırı)", () => {
-  it("Render'da varsayılan 45 sn", () => {
-    expect(interactiveRequestBudgetMs({ RENDER_SERVICE_ID: "srv-1" })).toBe(
+  it("kalıcı süreçte varsayılan 45 sn", () => {
+    expect(interactiveRequestBudgetMs({ NITRO_PRESET: "node-server" })).toBe(
       DEFAULT_INTERACTIVE_BUDGET_MS,
     );
   });
 
   it("REQUEST_BUDGET_MS ile ayarlanır ve güvenli aralığa kırpılır", () => {
-    const base = { RENDER_SERVICE_ID: "srv-1" };
+    const base = { NITRO_PRESET: "node-server" };
     expect(interactiveRequestBudgetMs({ ...base, REQUEST_BUDGET_MS: "30000" })).toBe(30_000);
     expect(interactiveRequestBudgetMs({ ...base, REQUEST_BUDGET_MS: "1000" })).toBe(5_000);
     expect(interactiveRequestBudgetMs({ ...base, REQUEST_BUDGET_MS: "999999" })).toBe(120_000);
@@ -190,10 +182,8 @@ describe("requestDeadlineMs (504'ü imkânsız kılan kesme noktası)", () => {
   });
 
   it("kalıcı süreçte global kesme YOK (uç nokta bütçeleri yeterli)", () => {
-    // Render ve kendi Node sunucusunda iş isteği platform kesmez; burada
-    // 45 sn'lik bir global tavan uzun analizleri haksız yere keserdi.
-    expect(requestDeadlineMs({ RENDER_SERVICE_ID: "srv-1" })).toBeUndefined();
-    expect(requestDeadlineMs({ NITRO_PRESET: "render_com" })).toBeUndefined();
+    // Kendi Node sunucumuzda iş isteği platform kesmez; burada 45 sn'lik bir
+    // global tavan uzun analizleri haksız yere keserdi.
     expect(requestDeadlineMs({ NITRO_PRESET: "node-server" })).toBeUndefined();
     // Dev sunucusu da kalıcıdır.
     expect(requestDeadlineMs({})).toBeUndefined();
@@ -211,9 +201,9 @@ describe("requestDeadlineMs (504'ü imkânsız kılan kesme noktası)", () => {
 
 describe("hostRuntimeSummary", () => {
   it("/health için sır içermeyen özet üretir", () => {
-    const summary = hostRuntimeSummary({ RENDER_SERVICE_ID: "srv-1" });
+    const summary = hostRuntimeSummary({ NITRO_PRESET: "node-server" });
     expect(summary).toEqual({
-      runtime: "render",
+      runtime: "node",
       serverless: false,
       persistent: true,
       backgroundJobs: true,
@@ -221,6 +211,6 @@ describe("hostRuntimeSummary", () => {
       platformSeconds: MAX_LONG_LIVED_SECONDS,
       warmingWaitMs: DEFAULT_WARM_WAIT_MS,
     });
-    expect(JSON.stringify(summary)).not.toContain("srv-1");
+    expect(JSON.stringify(summary)).not.toContain("node-server");
   });
 });

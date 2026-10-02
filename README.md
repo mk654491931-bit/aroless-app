@@ -77,31 +77,33 @@ hiçbir yer yoktur — OAuth ve paylaşım linkleri `window.location.origin` üz
 | Hedef              | Adımlar                                                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
 | Cloudflare Workers | `npm run build` → `npx wrangler deploy` (Nitro `cloudflare-module` preset'i ile `dist/` üretilir)           |
-| Render             | Render Blueprint (`render.yaml`) → **Web Service** → `npm install && npm run build` / `npm start`           |
+| **Vercel Hobby**   | **Önerilen.** `npm run build` (Nitro `vercel` preset'i) + QStash kuyruğu; ücretsiz, kalıcı servis yok            |
 | Node sunucu / VPS  | `npm run build` → `npm run start` (`.output/server/index.mjs`)                                             |
 | Vercel             | `npm run build` → Vercel'in Nitro/Vercel preset'i; fonksiyon süresi plan limitlerine tabidir                |
 | Lovable            | Publish butonu; env değerleri proje secret'larından okunur                                                  |
 
-### Render'a taşıma (önerilen backend deployment)
+### Vercel Hobby + QStash'e taşıma (önerilen deployment)
 
-Bu repo Render için **Static Site değil, Web Service** olarak yapılandırıldı. `render.yaml` şu ayarları kullanır:
+Bu repo **Vercel'e** bağlıdır; ikinci bir platform (kalıcı Node servisi) yoktur.
+Ağır işler uygulamanın **kendi** `/api/worker` ucuna QStash ile yayınlanır, yani
+ayrı servis açmanız gerekmez.
 
-- Nitro `render_com` preset'i ile persistent Node server
-- Build: `npm install && npm run build`
-- Start: `npm start` → `.output/server/index.mjs`
+- Build: `npm install && npm run build` (Nitro `vercel` preset'i)
 - Health check: `/health`
-Render'ın **ücretli `1c-2g` planı** ile başlamak, ağır AI işlerinde cold start ve bellek baskısını azaltır; bütçe kısıtlıysa Blueprint'te planı `free` veya `0.5c-512mb` olarak değiştirebilirsin, ancak ücretsiz servis uykuya geçebilir.
+- Fonksiyon tavanı: 300 sn (`nitro.config.ts`), `VERCEL_FUNCTION_MAX_DURATION` ile ezilebilir
 
 Kurulum:
 
-1. GitHub'da repo erişimi olan Render hesabında **New → Blueprint** seç ve `render.yaml` dosyasını göster.
-2. Servis tipinin **Web Service** olduğunu kontrol et; Static Site seçme.
-3. İlk deploy'dan önce aşağıdaki secret'ları Render Dashboard → **Service → Environment** bölümüne ekle.
-4. Deploy tamamlanınca `https://<servis-adı>.onrender.com/health` adresinin `{"status":"ok"}` döndürdüğünü kontrol et.
-5. Custom domain olarak `aroless.tech` ekle ve DNS kayıtlarını Render'ın verdiği hedefe yönlendir.
+1. Vercel'de projeyi `aroless-repo` dalına bağla (Settings → Git → Production Branch).
+2. Aşağıdaki secret'ları **Project → Settings → Environment Variables** ekranına ekle
+   (üretim + önizleme için ayrı ayrı işaretlenebilir).
+3. Deploy bitince `https://www.aroless.tech/health` adresinin `{"status":"ok"}` ve
+   `commit` alanının yeni commit'i döndürdüğünü kontrol et.
+4. `/health` → `workflow.dispatch` = `qstash` ve `discoveryChain.missing` = `[]` olmalı.
+5. Custom domain olarak `aroless.tech` ekle ve DNS kayıtlarını Vercel'in verdiği hedefe yönlendir.
 6. Supabase Dashboard → **Authentication → URL Configuration** içinde Site URL ve Redirect URLs'e canlı domaini ekle; Google OAuth redirect ayarlarını da güncelle.
 
-#### Render Environment değişkenleri
+#### Vercel Environment değişkenleri
 
 **Zorunlu çekirdek değişkenler:**
 
@@ -127,22 +129,22 @@ UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
 ```
 
-QStash'in callback adresi `https://aroless.tech/api/worker` olacağı için `APP_URL` kesinlikle Render servisinin geçici adresi değil, DNS geçişinden sonra gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
+QStash'in callback adresi `https://aroless.tech/api/worker` olduğu için `APP_URL` gerçek canlı domain olmalıdır. `JOB_WORKER_SECRET`, QStash forward secret ile aynı değer olmalıdır.
 
 > `QSTASH_TOKEN` (yayınlama) ile `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY`
 > (imza doğrulama) **farklı iki şeydir**; ikisi de QStash panelinde ayrı yerlerde
 > görünür. İmza anahtarları tanımlı değilse Product Discovery hattının her adımı
 > 401 ile reddedilir.
 
-#### 504 koruması (Render'ın en kritik ayarı)
+#### 504 koruması (Vercel Hobby'de en kritik ayar)
 
-Render kalıcı bir Node servisi çalıştırır: istek yanıtlandıktan sonra süreç yaşamaya devam eder. Bu yüzden ağır işler **istek içinde beklenmez**:
+Vercel fonksiyonu 300 sn'de öldürür (`504 FUNCTION_INVOCATION_TIMEOUT`). Bu yüzden ağır işler **istek içinde beklenmez**:
 
 | Katman | Dosya | Davranış |
 | --- | --- | --- |
 | Arka plan kuyruğu | `src/lib/job-runner.server.ts` | Ürün bulucu ve AI Konsey işleri süreç içinde arka planda koşar, istek anında `jobId`/`processing` döner. **QStash anahtarı girilmemiş olsa bile çalışır.** |
 | Önbellek | `src/lib/swr-cache.server.ts` | `ready` / `stale` / `warming`: bayat veri anında döner, tazesi arka planda üretilir; istek asla platform kesme süresine dayanmaz. |
-| Bütçeler | `src/lib/host-runtime.server.ts` | Platform algılama (Render / Vercel / kalıcı Node) ve istek süresi üst sınırları tek kaynaktan. |
+| Bütçeler | `src/lib/host-runtime.server.ts` | Platform algılama (Vercel / kendi Node sunucumuz) ve istek süresi üst sınırları tek kaynaktan. |
 | Teşhis | `GET /health` | Platform, istek bütçesi, arka plan kuyruğu ve önbellek sayaçları (sır içermez). |
 
 İsteğe bağlı ayarlar — boş bırakılırsa akıllı varsayılanlar kullanılır:
@@ -266,7 +268,7 @@ girişi tek bir noktada korur:
 - `/health` → `requestDeadlineMs` alanı bu değeri gösterir; `null` = kalıcı süreç,
   global kesme yok.
 
-Kalıcı süreçte (Render / kendi Node sunucusu) koruma devre dışıdır: orada platform
+Kendi kalıcı Node sunucumuzda koruma devre dışıdır: orada platform
 işi kesmez ve uç nokta bazlı bütçeler (`REQUEST_BUDGET_MS`) yeterlidir. Araç ucu da
 zaman aşımında artık `504` değil `503 + Retry-After` + `code: "TOOL_WARMING"` döner —
 böylece hiçbir araç "504" göstermez.
@@ -328,20 +330,15 @@ taşarsa süreç `JavaScript heap out of memory` ile açıkça ölür.
 > fonksiyonunun içinde bekler. Kalıcı worker için ek servis açmak yerine mevcut
 > QStash + Vercel yolu kullanılır.
 
-> **Render ücretsiz planı bu iş için uygun değil:** 15 dk hareketsizlikte uyur ve
-> geri açılması ~1 dk sürer (bu süre hat bütçesinden düşülür, yani kaliteden
-yer), "harici API/veritabanı trafiği" nedeniyle askıya alınabilir ve aylık 750
-> instance saat sınırı vardır. Worker için ücretli instance açmıyorsanız Render'ı
-> hiç kullanmayın.
+> **Ek servis gerekmez:** hat GPU'ya değil dış AI API'lerine bağlıdır (I/O-bound).
+> 300 sn'lik duvar hesaplamadan değil platformun fonksiyon süresinden gelir.
 
-#### Hibrit kurulum: tetikleyici Vercel + worker Render (ücretli instance)
-
-Ağır işi kalıcı bir sürece devretmek isterseniz (Render **ücretli** instance):
+#### Kurulum seçenekleri
 
 | Kurulum | Ne yapılır | `/health` çıktısı |
 | --- | --- | --- |
-| **Domain Render'da** | `render.yaml` ile Web Service aç, `APP_URL=https://aroless.tech` | `workflow.dispatch: "in-process"`, `longJob: "in-process"` |
-| **Domain Vercel'de, worker Render'da** | `WORKER_URL=https://<servis>.onrender.com` (+ `DISCOVERY_WORKER_URL=.../api/worker`), `QSTASH_TOKEN`, `JOB_WORKER_SECRET` | `workflow.dispatch: "qstash"`, `longJob: "qstash-worker"` |
+| **Yalnız Vercel Hobby (önerilen)** | `QSTASH_TOKEN` + `JOB_WORKER_SECRET` tanımlı, `DISCOVERY_WORKER_URL`/`WORKER_URL` **boş** | `workflow.dispatch: "qstash"`, `discoveryChain.mode: "qstash"` |
+| **Kendi Node sunucun** | `WORKER_URL=https://<sunucu>/api/jobs` (+ `DISCOVERY_WORKER_URL=.../api/worker`) | `workflow.dispatch: "qstash"`, `longJob: "qstash-worker"` |
 
 Sunucusuz ortamda ne QStash ne de uzak worker tanımlıysa ağır iş istek içinde
 koşar; fonksiyon limiti daraltılmışsa (ör. eski `VERCEL_FUNCTION_MAX_DURATION=60`)
@@ -419,28 +416,29 @@ AWS_REGION
 AWS_SES_FROM_EMAIL
 ```
 
-Render'a **değer değil, yalnızca anahtar adı** `render.yaml` içinde yazılır; gerçek değerleri Dashboard → Environment'e gir. Secret'ları Git'e, `render.yaml`'a veya `.env.example`'a yazma.
+Gerçek değerler **yalnızca** Vercel'in Environment Variables ekranına girilir (veya
+yerelde `.env`'e); `.env.example` sadece anahtar adlarını içerir. Secret'ları
+Git'e yazma.
 
-#### Hibrit kurulum (frontend Vercel + worker Render)
+#### Uzak işçi kullanırsanız (isteğe bağlı)
 
-Vercel'deki fonksiyon limiti (güncel Hobby'de 300 sn) yalnızca tetikleyici isteğini
-etkiler; ağır iş QStash üzerinden Render'a devredilebilir. Bunun için **Vercel**
-tarafına şunu ekle:
+Vercel'deki fonksiyon limiti (Hobby'de 300 sn) yalnızca tetikleyici isteğini
+etkiler; ağır iş QStash üzerinden başka bir kalıcı Node sürecine devredilebilir:
 
 ```text
-DISCOVERY_WORKER_URL=https://aroless.tech/api/worker
-JOB_WORKER_SECRET=<Render'dakiyle aynı değer>
+WORKER_URL=https://<sunucu>/api/jobs
+DISCOVERY_WORKER_URL=https://<sunucu>/api/worker
+JOB_WORKER_SECRET=<aynı değer>
 QSTASH_TOKEN=<aynı QStash token'ı>
 ```
 
-`DISCOVERY_WORKER_URL` tanımlı olduğu anda `qstashTimeoutSeconds()` hem Render'ı
-hem de bu değişkeni gördüğü için QStash bekleme süresi 60 sn yerine 890 sn'ye
-çıkar; istemci yoklama bütçesi de tetikleyicinin barındığı host'a göre hesaplanır.
-Bu değişken olmadan hibrit kurulumda uzun iş yine 60 sn'de 504 olarak kesilir.
+`DISCOVERY_WORKER_URL` tanımlı olduğu anda `qstashTimeoutSeconds()` uzak işçiyi
+gördüğü için QStash bekleme süresi 298 sn yerine 890 sn'ye çıkar; istemci yoklama
+bütçesi de tetikleyicinin barındığı host'a göre hesaplanır.
 
 #### Paket yöneticisi / lockfile
 
-Render ve Vercel `npm install` kullanır, yani dağıtımda **`package-lock.json`**
+Vercel `npm install` kullanır, yani dağıtımda **`package-lock.json`**
 geçerlidir. `bun.lock` yerel geliştirme içindir; bağımlılık değiştirdikten sonra
 iki dosyanın da güncel kaldığından emin ol (aksi halde CI ile yerel ortam farklı
 ağaç kurar).

@@ -29,14 +29,8 @@ export default defineConfig(async ({ command, mode }) => {
   if (command === "build") {
     try {
       const { nitro } = await import("nitro/vite");
-      plugins.push(
-        nitro({
-          // Render runs a persistent Node web service. Vercel keeps its own
-          // preset through nitro.config.ts; this override is selected by the
-          // Render Blueprint's NITRO_PRESET environment variable.
-          preset: process.env["NITRO_PRESET"] ?? "vercel",
-        }) as PluginOption,
-      );
+      // Preset `nitro.config.ts` içinde sabit: Vercel Hobby.
+      plugins.push(nitro() as PluginOption);
     } catch {
       // nitro not installed → plain Vite SSR build, still fine for local dev/preview.
     }

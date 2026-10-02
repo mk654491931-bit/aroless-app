@@ -1,7 +1,7 @@
 /**
  * Sunucu loglarında kişisel veri maskeleme.
  *
- * Loglar Logflare/Cloudflare/Render gibi aracılara gidebilir; e-posta, IP ve
+ * Loglar Logflare/Cloudflare gibi aracılara gidebilir; e-posta, IP ve
  * kullanıcı kimliği gibi alanlar ham hâlde yazılmaz (plan §5).
  */
 

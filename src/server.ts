@@ -129,7 +129,7 @@ export default {
 
     const pathname = new URL(request.url).pathname;
     if (pathname === "/health" || pathname === "/healthz") {
-      // Health check HIZLI ve yan etkisiz kalmalı (Render bu uçtan 2xx bekler);
+      // Health check HIZLI ve yan etkisiz kalmalı (Vercel bu uçtan 2xx bekler);
       // yalnızca ucuz, sır içermeyen teşhis bilgisi ekliyoruz: hangi platformda
       // koştuğumuz, istek bütçemiz, arka plan kuyruğunun durumu. Böylece
       // "sürekli 504" gibi bir şikâyette tek adres burasıdır.

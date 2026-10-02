@@ -1,4 +1,4 @@
-// Arka plan iş kuyruğu — Render'da isteği uzatmadan ağır işi koşturan katman.
+// Arka plan iş kuyruğu — kalıcı bir Node servisinde isteği uzatmadan ağır işi koşturan katman.
 //
 // Kritik davranışlar: sunucusuz ortamda iş BAŞLATILMAZ (çağıran bunu görüp
 // kendi bütçesine döner), aynı iş iki kez kuyruğa girmez, zaman aşımı kuyruk
@@ -14,7 +14,7 @@ import {
   runInBackground,
 } from "./job-runner.server";
 
-/** Kalıcı servis (Render) benzeri ortam. */
+/** Kalıcı servis benzeri ortam. */
 const PERSISTENT = { BACKGROUND_JOBS: "1" };
 /** Sunucusuz (Vercel) benzeri ortam. */
 const SERVERLESS = { BACKGROUND_JOBS: "false" };

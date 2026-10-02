@@ -84,7 +84,7 @@ describe("discoveryRunnerMode", () => {
   });
 
   it("kalıcı süreçte QStash olmadan süreç içi arka planı seçer", () => {
-    expect(discoveryRunnerMode({ NITRO_PRESET: "render_com" })).toBe("in-process");
+    expect(discoveryRunnerMode({ NITRO_PRESET: "node-server" })).toBe("in-process");
   });
 
   it("hiçbiri yoksa istek içi (istemci yoklamalı) yola düşer", () => {
@@ -92,7 +92,7 @@ describe("discoveryRunnerMode", () => {
   });
 
   it("arka plan işleri kapatılmışsa süreç içi yolu seçmez", () => {
-    expect(discoveryRunnerMode({ NITRO_PRESET: "render_com", BACKGROUND_JOBS: "false" })).toBe(
+    expect(discoveryRunnerMode({ NITRO_PRESET: "node-server", BACKGROUND_JOBS: "false" })).toBe(
       "inline",
     );
   });

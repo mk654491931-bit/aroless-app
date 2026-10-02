@@ -11,7 +11,7 @@
 // ÇÖZÜM — üç taşıyıcı, TEK iş mantığı (`product-discovery-steps.server.ts`):
 //
 //   1. `qstash`     → üç anahtar da varsa adımlar kuyruğa yayınlanır (mevcut yol).
-//   2. `in-process` → kalıcı süreçte (Render/VPS/self-hosted Node) zincir arka
+//   2. `in-process` → kalıcı süreçte (kendi Node sunucumuz / VPS) zincir arka
 //                     planda koşar; istek anında döner, sekme kapansa da iş biter.
 //   3. `inline`     → kuyruk yok: zinciri İSTEMCİNİN yoklaması sürer. Her
 //                     yoklama biraz ilerler; iş nerede kaldıysa DB'deki ara

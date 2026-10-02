@@ -38,7 +38,7 @@ import {
 
 /** Vercel Hobby'nin güncel fonksiyon üst sınırı. */
 const HOBBY_LIMIT_MS = 300_000;
-/** Kalıcı süreçteki arka plan işi üst sınırı (Render). */
+/** Kalıcı süreçteki arka plan işi üst sınırı (kendi Node sunucumuz). */
 const BACKGROUND_JOB_LIMIT_MS = 900_000;
 
 const MANAGED_KEYS = [
@@ -210,8 +210,8 @@ describe("çağrı bütçesi sonraki aşamaları korur", () => {
 });
 
 describe("defaultCouncilBudgetMs (platforma göre profil)", () => {
-  it("Render'da tam hattı açar (14 ajan, 900 sn iş bütçesi)", () => {
-    vi.stubEnv("NITRO_PRESET", "render_com");
+  it("kalıcı süreçte tam hattı açar (14 ajan, 900 sn iş bütçesi)", () => {
+    vi.stubEnv("NITRO_PRESET", "node-server");
     const budget = planCouncilBudget({ budgetMs: defaultCouncilBudgetMs(), now: 0 });
     expect(defaultCouncilBudgetMs()).toBe(BACKGROUND_JOB_LIMIT_MS);
     expect(budget.depth).toBe("full");

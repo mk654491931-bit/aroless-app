@@ -280,8 +280,8 @@ export function productDebateContext(p: WinningProduct): string {
  * arka plan işçisinin uzun süre limiti (maxDuration) geçerli olur.
  *
  * QStash yapılandırılmamışsa davranış platforma göre değişir
- * (`discoveryDispatchPlan`): **kalıcı süreçte** (Render) iş aynı süreçte arka
- * planda koşar ve kullanıcı yine anında `jobId` alır — bu yüzden Render'da
+ * (`discoveryDispatchPlan`): **kalıcı süreçte** (kendi Node sunucumuz) iş aynı süreçte arka
+ * planda koşar ve kullanıcı yine anında `jobId` alır — bu yüzden orada
  * QStash olmadan da 504 oluşmaz. Yalnızca sunucusuz ortamda ve QStash yokken
  * eski inline davranış korunur. QStash yapılandırılmış fakat iş kuyruğa
  * alınamazsa inline fallback yapılmaz; gerçek hata kullanıcıya aktarılır ve ağır

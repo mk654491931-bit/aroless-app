@@ -22,7 +22,7 @@
  *
  * DAĞITIM PLANI üç yoldan biridir (`discoveryDispatchPlan`):
  *  - `qstash`     → QStash anahtarları var; iş QStash'e yayınlanır (mevcut yol).
- *  - `in-process` → Kalıcı süreç (Render / VPS) ve QStash yok: iş AYNI süreçte
+ *  - `in-process` → Kalıcı süreç (kendi Node sunucumuz / VPS) ve QStash yok: iş AYNI süreçte
  *                   arka planda koşar (`job-runner.server.ts`). İstek anında
  *                   döner; bu yüzden QStash olmadan da tek bir 504 üretilmez.
  *  - `inline`     → Sunucusuz ortam ve QStash yok: ağır hattı istek içinde
@@ -98,7 +98,7 @@ export function qstashBaseUrl(): string {
   return QSTASH_REGIONAL_ENDPOINTS[region] ?? QSTASH_REGIONAL_ENDPOINTS.global;
 }
 
-/** QStash'in çağıracağı worker URL'si. Render URL'si base olarak da verilebilir. */
+/** QStash'in çağıracağı worker URL'si. Tam bir origin de base olarak verilebilir. */
 function discoveryWorkerUrl(origin: string): string {
   const configured = env("DISCOVERY_WORKER_URL");
   if (!configured) return origin.replace(/\/+$/g, "") + "/api/worker";
@@ -117,10 +117,10 @@ function discoveryWorkerUrl(origin: string): string {
 
 const QSTASH_TIMEOUT_ENV = "QSTASH_TIMEOUT_SECONDS";
 
-/** Hosting'in tek bir istek için izin verdiği en yüksek süre (Render). */
+/** Kalıcı hosting'in tek bir istek için izin verdiği en yüksek süre. */
 const LONG_LIVED_MAX_SECONDS = 900;
 
-/** QStash'in Render işçisini beklerken kullandığı süre (900'ün altında pay bırakır). */
+/** QStash'in kalıcı işçiyi beklerken kullandığı süre (900'ün altında pay bırakır). */
 const LONG_LIVED_QSTASH_TIMEOUT_SECONDS = 890;
 
 /** İstemcinin iş durumunu kaç ms aralıkla yoklayacağı. */
@@ -150,7 +150,7 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e ?? "unknown error");
 }
 
-// ---------- Süre bütçesi (platforma göre: Vercel 60 sn, Render 900 sn) ----------
+// ---------- Süre bütçesi (platforma göre: Vercel 300 sn, kalıcı süreç 900 sn) ----------
 
 /**
  * True when this process runs on a host without a serverless request limit
