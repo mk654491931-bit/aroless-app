@@ -48,6 +48,7 @@ import {
   type NormalizedProduct,
   type RawProduct,
 } from "./product-discovery.types";
+import { looksLikeProductRow } from "./product-discovery-query";
 
 /* ------------------------------------------------------------- Sözleşme */
 
@@ -267,6 +268,26 @@ function cleanRawRows(
  * DÖNEN SIRA: `preScore` azalan. Bütçe kırpma SONUNDAN yapılır, böylece
  * listenin başındaki en güçlü ürünler her zaman korunur.
  */
+/**
+ * Gerçek ÜRÜN satırlarını öne alır.
+ *
+ * ÖLÇÜLEN GERÇEK (canlı, 2026-10-02, "LED masa lambası"): satır üreten kaynaklar
+ * yalnızca `web-reviews` (10) ve `github` (5) idi ve bunlar ürün DEĞİL — haber
+ * metinleri ve ansiklopedi maddeleri. Kullanıcı kartlarda "fiyat yok · puan
+ * yok" görüyordu çünkü listeye başka bir şey konmamıştı.
+ *
+ * KURAL: satır listesinde EN AZ BİR gerçek ürün varsa (pazaryeri, fiyatlı
+ * haber, uygulama, gıda) yalnız onlar tutulur; talep sinyalleri kanıt olarak
+ * zaten `signals.demand` içinde yaşamaya devam eder. Hiç gerçek ürün yoksa
+ * liste DÜŞÜRÜLMEZ — talep sinyalleri hatta boş dönerdi.
+ */
+export function preferProductRows(rows: readonly RawProduct[]): RawProduct[] {
+  const products = rows.filter((row) =>
+    looksLikeProductRow(row.title, row.source ?? "", { priceUsd: row.priceUsd, rating: row.rating }),
+  );
+  return products.length ? products : [...rows];
+}
+
 export function buildShortlist(
   raw: readonly RawProduct[],
   options: ShortlistOptions = {},
@@ -298,7 +319,7 @@ export function buildShortlist(
   };
 
   // 1) Temizle.
-  const clean = cleanRawRows(raw, requireImage, stats);
+  const clean = preferProductRows(cleanRawRows(raw, requireImage, stats));
 
   // 2) Puanla + süz + sırala. Üst sınırı `limit` verilir: 75'ten fazlası
   //    hiçbir zaman üretilmez, token bütçesi zaten burada kesiliyor.

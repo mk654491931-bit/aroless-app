@@ -15,6 +15,9 @@
 
 import type { RawProduct } from "./product-discovery.types";
 import {
+  productQueryVariants,
+} from "./product-discovery-query";
+import {
   arcticPostUrl,
   fetchArcticPosts,
   fetchHackerNewsStories,
@@ -515,9 +518,13 @@ export const marketplacePriceSource: ProductSource = {
   timeoutMs: 4_000,
   async scrape(niche: string): Promise<RawProduct[]> {
     const { scrapeMarketplaceSellers } = await import("./market-data.server");
-    const sellers = await scrapeMarketplaceSellers(niche, "US");
-    if (!sellers.length) throw new Error("no marketplace listings");
-    return sellers.slice(0, 12).map((s) => ({
+    // Türkçe sorguda bu kaynak "no marketplace listings" hatası veriyordu
+    // (ölçüm, 2026-10-02). Sorgu dili denendi: önce İngilizce karşılık, sonra
+    // ASCII'ye inmiş özgün metin.
+    return scrapeWithQueryVariants(niche, 4_000, async (query) => {
+      const sellers = await scrapeMarketplaceSellers(query, "US");
+      if (!sellers.length) throw new Error("no marketplace listings");
+      return sellers.slice(0, 12).map((s) => ({
       title: s.title?.trim() || `${niche} — ${s.platform} ilanı`,
       brand: "",
       seller: s.platform,
@@ -530,7 +537,8 @@ export const marketplacePriceSource: ProductSource = {
       source: "marketplace-price",
       url: s.url,
       notes: `${s.platform}${s.domain ? ` (${s.domain})` : ""}${s.price_usd ? ` · $${s.price_usd}` : ""}`,
-    }));
+      }));
+    });
   },
 };
 
@@ -1334,11 +1342,54 @@ async function bingShoppingCards(niche: string): Promise<string[]> {
   return cards;
 }
 
+/* ------------------------------------------ Sorgu varyantlarıyla ürün kazıma */
+
+/**
+ * Ürün kaynakları için sorgu DİLİ çözümü.
+ *
+ * ÖLÇÜLEN GERÇEK (canlı ağ, 2026-10-02, niş = "LED masa lambası"): 14 kaynağın
+ * 13'ü 0 satır döndürdü; `bing-shopping` 0, `marketplace-price` hata verdi.
+ * Aynı kaynaklar İngilizce "led desk lamp" ile GERÇEK fiyat ve yıldız puanı
+ * getiriyordu. Yani kaynaklar çalışıyordu, sorgu dili yanlıştı.
+ *
+ * Çözüm, kaynağı değiştirmeden **sorguyu** düzeltmek: önce İngilizce karşılık,
+ * sonuç yoksa ASCII'ye inmiş özgün sorgu, o da yoksa özgün metin denenir.
+ *
+ * BÜTÇE KURALI: varyantlar kendi zaman tavanını PAYLAŞIR. İlk varyant
+ * satır döndürürse diğerleri hiç denenmez — 10 sn'lik dilim bütçesi aşılmasın.
+ */
+async function scrapeWithQueryVariants(
+  niche: string,
+  budgetMs: number,
+  scrapeWith: (query: string) => Promise<RawProduct[]>,
+): Promise<RawProduct[]> {
+  const startedAt = Date.now();
+  const variants = productQueryVariants(niche);
+  for (let i = 0; i < variants.length; i += 1) {
+    const query = variants[i];
+    // Son varyant için zaman kalmadıysa atlanır: hat dilimini aşmamak, bir
+    // satır elde etmekten önce gelir.
+    if (i > 0 && Date.now() - startedAt > budgetMs / 2) break;
+    const rows = await scrapeWith(query);
+    if (rows.length) {
+      // Kullanılan sorgu notlara yazılır: hangi dilin veri getirdiği
+      // üretimde görülebilir olsun (sessizce "başka bir şey denedim" demeyelim).
+      if (i > 0) {
+        const suffix = ` · sorgu: "${query}"`;
+        return rows.map((row) => ({ ...row, notes: `${row.notes ?? ""}${suffix}` }));
+      }
+      return rows;
+    }
+  }
+  return [];
+}
+
 export const bingShoppingSource: ProductSource = {
   name: "bing-shopping",
   timeoutMs: 6_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const cards = await bingShoppingCards(niche);
+    return scrapeWithQueryVariants(niche, 6_000, async (query) => {
+      const cards = await bingShoppingCards(query);
 
     const out: RawProduct[] = [];
     const seen = new Set<string>();
@@ -1349,7 +1400,7 @@ export const bingShoppingSource: ProductSource = {
           "",
       );
       if (!title || title.length < 8) continue;
-      if (!matchesNiche(title, niche)) continue;
+      if (!matchesNiche(title, query)) continue;
 
       const key = title.toLowerCase();
       if (seen.has(key)) continue;
@@ -1405,6 +1456,7 @@ export const bingShoppingSource: ProductSource = {
     // döner (dosyanın gürültü kapısı sözleşmesi). Hata yalnız SAYFA yapısı
     // değişmiş / engellenmişse atılır.
     return out.slice(0, BING_SHOPPING_LIMIT);
+    });
   },
 };
 
