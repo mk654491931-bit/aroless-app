@@ -120,7 +120,7 @@ Return ONLY JSON (all text in Turkish):
     const text = await callAiMesh(synthPrompt, {
       temperature: 0.6,
       grounded: true,
-      models: ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"],
+      models: ["gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash"],
     });
     synth = extractJson<Record<string, unknown>>(text, {});
   } catch {
