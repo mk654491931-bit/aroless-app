@@ -17,6 +17,7 @@ import type { RawProduct } from "./product-discovery.types";
 import {
   isTurkishQuery,
   isGameNiche,
+  normalizeNiche,
   productQueryVariants,
 } from "./product-discovery-query";
 import {
@@ -1502,14 +1503,48 @@ export const steamSource: ProductSource = {
  *   2. Anahtar olsa bile bu kaynak YALNIZ kendi dilimini harcar ve hata
  *      yutmaz; pazar sayfası boş dönerse diğer kaynaklar zaten ürün vermiş
  *      olur. Yani bu kaynak hiçbir koşulda hattı düşüremez.
- *   3. Ücretsiz kotalar korunur: en fazla 2 pazar, en fazla 12 satır.
+ *   3. Ücretsiz kredi KORUNUR (kullanıcı talebi: "1 ay kadar bitmesin"):
+ *      - aynı niş 24 saat içinde tekrar aranırsa HİÇ kredi harcanmaz,
+ *      - ayda en çok `SCRAPER_MONTHLY_LIMIT` (varsayılan 1200) kredi,
+ *      - TEK aramada en çok `TR_MARKETPLACE_PROBES` kredi. Sorgu varyantı ile
+ *        pazar denemeleri ÇARPILMAZ (ölçülen hata: 2 varyant × 2 pazar = 4
+ *        kredi; bütçe ikisini birden sayarak tek sayıda tutulur).
+ *      Ayrıntı ve sayaç mantığı: `scraper-quota.server.ts`.
  */
 const TR_MARKETPLACES: readonly { name: string; search: (q: string) => string }[] = [
   { name: "Trendyol", search: (q) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}` },
   { name: "Hepsiburada", search: (q) => `https://www.hepsiburada.com/search?q=${encodeURIComponent(q)}` },
-  { name: "N11", search: (q) => `https://www.n11.com/arama?q=${encodeURIComponent(q)}` },
-  { name: "Amazon.com.tr", search: (q) => `https://www.amazon.com.tr/s?k=${encodeURIComponent(q)}` },
 ];
+
+/**
+ * TEK aramada harcancak AZAMAN kredi sayısı — her kazım isteği 1 kredidir.
+ *
+ * Bu bütçe sorgu varyantları arasında PAYLAŞILIR. Paylaşılmazsa nişe uymayan
+ * ilk varyant tüm pazarları deneyip krediyi bitirir, ikinci varyant hiçbir
+ * şeye kalamaz. Yerel sayaç bu yüzden varyant döngüsünün DIŞINDA durur.
+ */
+const TR_MARKETPLACE_PROBES = 2;
+
+/** Aynı niş için kazınmış sonuç bu süre boyunca bedava döner. */
+const TR_MARKETPLACE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Bu kaynağın sorgu sırası.
+ *
+ * DİKKAT — genel `productQueryVariants` BURADA KULLANILMAZ: o sıra önce
+ * İngilizce karşılığı dener ("LED masa lambası" → "led desk lamp"). Türk
+ * pazaryerlerinde yerel sorgu çok daha isabetli ("led masa lambasi" araması
+ * gerçek masa lambası döner), dolayısıyla burada YEREL sorgu önce gelir —
+ * hem daha çok ürün hem daha az kredi demektir.
+ */
+function trMarketplaceQueries(niche: string): string[] {
+  const out: string[] = [];
+  for (const candidate of [normalizeNiche(niche), String(niche ?? "").trim()]) {
+    const value = candidate.trim();
+    if (value && !out.includes(value)) out.push(value);
+  }
+  return out;
+}
 
 export const trMarketplaceSource: ProductSource = {
   name: "tr-marketplace",
@@ -1521,9 +1556,33 @@ export const trMarketplaceSource: ProductSource = {
     // Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ: ölçülen maliyet sıfır.
     if (!scraperApiConfigured()) return [];
 
-    return scrapeWithQueryVariants(niche, 9_000, async (query) => {
+    // KORUMA 1 — KALICI ÖNBELLEK: aynı niş 24 saat içinde tekrar aranırsa
+    // kredi HARCANMAZ. Kullanıcının "tekrar dene" davranışı bedava olmalıdır.
+    const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+    const key = await cacheKey("tr-marketplace", [niche]);
+    const hit = await cacheGet<RawProduct[]>(key);
+    if (hit) return hit;
+
+    // KORUMA 2 — AYLIK BÜTÇE: kredi harcamadan önce sayaca bak.
+    // Sayaç okunamazsa `null` döner ve fail-open davranılır.
+    const { allowScraperCredit } = await import("./scraper-quota.server");
+    if ((await allowScraperCredit()) === false) {
+      console.log(
+        `[discovery] tr-marketplace: aylık scraper kotası doldu, bu arama anahtarsız kaynaklardan yapılıyor`,
+      );
+      return [];
+    }
+
+    // Kredi bütçesi bu çağrı boyunca ORTAK: varyantlar çarpmaz.
+    let probesLeft = TR_MARKETPLACE_PROBES;
+
+    for (const query of trMarketplaceQueries(niche)) {
       const out: RawProduct[] = [];
       for (const site of TR_MARKETPLACES) {
+        // Kredi bitti: başka pazar/varyant DENEMEZ.
+        if (probesLeft <= 0) break;
+        probesLeft -= 1;
+
         let html: string | null = null;
         try {
           html = await fetchThroughScraperApi(site.search(query), {
@@ -1576,8 +1635,16 @@ export const trMarketplaceSource: ProductSource = {
         // İlk pazar gerçek ürün döndürürse diğerlerine harcanmaz.
         if (out.length) break;
       }
-      return out;
-    });
+      // YALNIZ BOŞ DÖNMEYEN SONUÇ ÖNBELLEĞE YAZILIR. Geçici bir pazar
+      // engeli (403, kısa süreli hata) nişi bir gün boyunca boş
+      // göstermesin; boş sonuç yeniden denenebilsin.
+      if (out.length) {
+        await cacheSet(key, "tr-marketplace", out, TR_MARKETPLACE_TTL_MS);
+        return out;
+      }
+      if (probesLeft <= 0) break;
+    }
+    return [];
   },
 };
 
