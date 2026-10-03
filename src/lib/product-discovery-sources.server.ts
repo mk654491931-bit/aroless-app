@@ -15,7 +15,6 @@
 
 import type { RawProduct } from "./product-discovery.types";
 import {
-  isTurkishQuery,
   isGameNiche,
   normalizeNiche,
   productQueryVariants,
@@ -527,20 +526,38 @@ export const marketplacePriceSource: ProductSource = {
     return scrapeWithQueryVariants(niche, 4_000, async (query) => {
       const sellers = await scrapeMarketplaceSellers(query, "US");
       if (!sellers.length) throw new Error("no marketplace listings");
-      return sellers.slice(0, 12).map((s) => ({
-      title: s.title?.trim() || `${niche} — ${s.platform} ilanı`,
-      brand: "",
-      seller: s.platform,
-      priceUsd: Number.isFinite(s.price_usd) && s.price_usd > 0 ? s.price_usd : null,
-      rating: null,
-      ratingCount: null,
-      // Pazaryeri listesi canlı bir ilandır ama STOK bilgisi verilmez →
-      // `null` (bilinmiyor) yazılır, UYDURULMAZ.
-      inStock: null,
-      source: "marketplace-price",
-      url: s.url,
-      notes: `${s.platform}${s.domain ? ` (${s.domain})` : ""}${s.price_usd ? ` · $${s.price_usd}` : ""}`,
-      }));
+      const out: RawProduct[] = [];
+      for (const s of sellers) {
+        // ÖLÇÜLEN HATA (2026-10-03): başlığı boş gelen ilanlarda eski kod
+        // `${niche} — ${platform} ilanı` YAZIYORDU. Yani kullanıcının kendi
+        // sorgusu ürün kartı olarak ekrana çıkıyordu — canlı ölçüm, niş
+        // "analog film" iken 6 adet "analog film — Bağımsız mağaza ilanı"
+        // satırı üretildi. Ürün adı olmayan satır ÜRÜN DEĞİLDİR; başlık
+        // ASLA uydurulmaz.
+        const title = String(s.title ?? "").trim();
+        if (!title) continue;
+        const row: RawProduct = {
+          title: title.slice(0, 180),
+          brand: "",
+          seller: s.platform,
+          priceUsd: Number.isFinite(s.price_usd) && s.price_usd > 0 ? s.price_usd : null,
+          rating: null,
+          ratingCount: null,
+          // Pazaryeri listesi canlı bir ilandır ama STOK bilgisi verilmez →
+          // `null` (bilinmiyor) yazılır, UYDURULMAZ.
+          inStock: null,
+          source: "marketplace-price",
+          url: s.url,
+          notes: `${s.platform}${s.domain ? ` (${s.domain})` : ""}${s.price_usd ? ` · $${s.price_usd}` : ""}`,
+        };
+        // Aynı gürültü kapısı her ürün kaynağında uygulanır: bu kaynak
+        // previously HİÇ `matchesNiche`/`hasMeasuredField` çağırmıyordu.
+        if (!matchesNiche(row.title, query)) continue;
+        if (!hasMeasuredField(row)) continue;
+        out.push(row);
+        if (out.length >= 12) break;
+      }
+      return out;
     });
   },
 };
@@ -647,155 +664,37 @@ export function hasMeasuredField(row: {
  * alınmaz. Medya/kitap nişlerinde gerçek fiyat+puan sağlar, "air fryer"
  * gibi nişlerde dürüstçe 0 döner.
  */
-/**
- * Apple'ın medya türleri — bunlar fiziksel ürün nişinde ürün DEĞİLDİR.
+/*
+ * ---------------------------------------------------------------------------
+ * iTunes KAYNAĞI KALDIRILDI — dijital lisans kataloğu satılabilir ürün DEĞİLDİR.
  *
- * ÖNEMLİ: tam liste DEĞİL, ÖN EK deseni. iTunes Search API varlık adlarını
- * döndürüyor: `feature-movie`, `tv-episode`, `tv-season`, `music-song`,
- * `podcast`, `audiobook`… İlk denemede sabit bir `Set` ile eşleştirdim ve
- * canlı koşuda filmler yine sızdı (tesadüf değil, VEYA çünkü listede
- * `movie` vardı ama API `feature-movie` döndürüyor). Yeni bir medya türü
- * çıksa bile yakalanır.
+ * ÖLÇÜLEN HATA (2026-10-03, kullanıcı raporu: "film önerdi resmen"): bu kaynak
+ * `kind` alanı `feature-movie`/`tv-episode`/`music-song` olan kayıtları ürün
+ * olarak kabul ediyordu. Nişte "film" kelimesi geçtiği için medya satırları
+ * SERBEST BIRAKILIYORDU (eski `isMediaNiche` kaçışı) ve kullanıcı film/dizi/
+ * müzik kaydı gördü. İkinci hata: "film" kelimesi geçen her niş medya nişi
+ * değildir — "analog film", "film endüstriyel kamera", "35mm film" FİZİKSEL
+ * ürün nişleridir ve kelime bakılarak o yol kapatıldığında onlar da kapanıyor.
+ *
+ * NEDEN SİLİNDİ, YENİ ÜRÜN EKLENEREK DEĞİL: Apple iTunes Store TEK ÇEŞİT mal
+ * satar — dijital lisans. Film, şarkı, sesli kitap, uygulama ve e-kitap
+ * yeniden SATILAMAZ, tedarik EDİLEMEZ, kargo bedeli yoktur ve marjı yoktur.
+ * Apple satıcı hesabı lisans yeniden satımına izin vermez. Dolayısıyla bu
+ * katalogdaki hiçbir satır "kazandıran ürün" adayı olamaz; doğru davranış
+ * bu satırları hiç üretmemektir.
+ *
+ * Bu kaynak daha önce iki sorunu çözüyormuş gibi görünüyordu — (a) fiziksel
+ * nişlerde iTunes 0 satır dönüyordu, (b) gerçek kullanıcı puanı getiriyordu.
+ * (a) zaten ölçülmüş bir HATA DIŞI durumdu, (b) ise dijital ürünlerin puanıdır.
+ * Gerçek ürün kanıtı bugün TR pazaryeri (ScraperAPI), Steam ve Bing Shopping
+ * kanallarından geliyor.
+ *
+ * Sınıf düzeltmesi kalıcıdır ve testlidir: `DIGITAL_ONLY_SOURCES` +
+ * `looksLikeMediaRelease` (`product-discovery-query.ts`). Aynı hatanın başka
+ * bir dijital katalogdan tekrarlanması bu iki kapıyla engellenir.
+ * ---------------------------------------------------------------------------
  */
-const MEDIA_KIND = /^(feature-movie|short-film|movie|tv-|music-|song|podcast|audiobook)/;
 
-/** Nişin kendisi medya mı? (o zaman medya kayıtları üründür) */
-const MEDIA_NICHE_WORDS = [
-  "film",
-  "movie",
-  "dizi",
-  "series",
-  "music",
-  "müzik",
-  "şarkı",
-  "sarki",
-  "song",
-  "album",
-  "albüm",
-  "kitap",
-  "book",
-  "novel",
-  "roman",
-  "oyun",
-  "game",
-  "app",
-  "uygulama",
-  "podcast",
-  " audiobook",
-  "sesli",
-];
-
-function isMediaNiche(niche: string): boolean {
-  const lower = String(niche ?? "").toLowerCase();
-  return MEDIA_NICHE_WORDS.some((w) => w.trim() !== "" && lower.includes(w.trim()));
-}
-
-export const itunesSource: ProductSource = {
-  name: "itunes",
-  timeoutMs: 4_000,
-  async scrape(niche: string): Promise<RawProduct[]> {
-    // ÖLÇÜM (2026-10-02): bu kaynak `country=US` sabit olduğu için Türkçe
-    // sorgularda 0 satır dönüyordu. iTunes Search API `country` parametresiyle
-    // mağazayı seçiyor: Türkçe bir nişte `country=TR` hem Türkçe ürünleri hem
-    // TÜRKÇE KULLANICI PUANLARINI getiriyor. `averageUserRating` zaten
-    // okunuyordu; sadece doğru mağazaya sorulmuyordu.
-    const country = isTurkishQuery(niche) ? "TR" : "US";
-    return scrapeWithQueryVariants(niche, 4_000, async (query) => {
-    const q = encodeURIComponent(query.slice(0, 60));
-    const json = await grabJson<{
-      resultCount?: number;
-      results?: {
-        kind?: string;
-        trackName?: string | null;
-        collectionName?: string | null;
-        artistName?: string | null;
-        trackPrice?: number | null;
-        collectionPrice?: number | null;
-        currency?: string | null;
-        primaryGenreName?: string | null;
-        trackViewUrl?: string | null;
-        collectionViewUrl?: string | null;
-        averageUserRating?: number | null;
-        userRatingCount?: number | null;
-        /**
-         * Kapak görseli. iTunes Search API her sonuçta DÖNDÜRÜR; bu dosya
-         * yıllardır bu alanı hiç okumadığı için kısa listede her iTunes ürünü
-         * görselsiz çıkıyordu. Artık okunuyor.
-         */
-        artworkUrl100?: string | null;
-      }[];
-    }>(`https://itunes.apple.com/search?term=${q}&limit=25&country=${country}`, 3_500);
-
-    const out: RawProduct[] = [];
-    const seen = new Set<string>();
-    for (const item of json.results ?? []) {
-      const title = String(item.trackName ?? item.collectionName ?? "").trim();
-      if (!title) continue;
-      // MEDYA KAPISI — canlı ölçümle bulundu (2026-09-27, "espresso machine"):
-      // iTunes "Terminator: Rise of the Espresso Machines" ($9.99) ve
-      // "Politics @ Coffee Machine" ($9.99) döndürdü. İkisi de SESLİ KİTAP;
-      // nişte "espresso" kelimesi geçtiği için `matchesNiche` geçiriyordu ve
-      // 5'li nihai listeye girdiler — kullanıcıya ürün olmayan kayıt gitti.
-      //
-      // AYIRT EDİCİ İKİ ALAN VAR, ikisi de gerekiyor (ölçümle öğrenildi):
-      //   • `kind` — filmler için `feature-movie`, diziler için `tv-episode`.
-      //   • URL   — SESLİ KİTAPLARDA `kind` YOKTUR; ayrım yalnız
-      //     `books.apple.com/.../audiobook/...` adresinden anlaşılıyor.
-      // İlk denemede yalnız `kind`'a bakıldı ve sesli kitaplar sızdı.
-      //
-      // Medya türleri YALNIZ niş kendisi medya ise kabul edilir ("müzik albümü"
-      // arayan şarkı görmek ister, "espresso machine" arayan görmez). Böylece
-      // dijital nişler kaynağı kaybetmez, fiziksel nişler kirlenmez.
-      const viewUrl = String(item.trackViewUrl ?? item.collectionViewUrl ?? "");
-      const isMedia =
-        MEDIA_KIND.test(String(item.kind ?? "")) ||
-        /books\.apple\.com|\/audiobook\//i.test(viewUrl);
-      if (isMedia && !isMediaNiche(query)) continue;
-      const key = title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      const currency = String(item.currency ?? "USD").toUpperCase();
-      const raw = Number(item.trackPrice ?? item.collectionPrice);
-      const priceUsd = Number.isFinite(raw) && raw > 0 && currency === "USD" ? raw : null;
-      const rating =
-        Number.isFinite(Number(item.averageUserRating)) &&
-        Number(item.averageUserRating) > 0 &&
-        Number(item.userRatingCount) >= 3
-          ? Number(item.averageUserRating)
-          : null;
-      const ratingCount =
-        Number.isFinite(Number(item.userRatingCount)) && Number(item.userRatingCount) > 0
-          ? Number(item.userRatingCount)
-          : null;
-
-      const notesParts: string[] = [];
-      if (item.primaryGenreName) notesParts.push(String(item.primaryGenreName));
-      if (priceUsd === null && raw > 0) notesParts.push(`fiyat ${currency} ${raw}`);
-      if (ratingCount) notesParts.push(`${ratingCount} kullanıcı puanı`);
-
-      const row: RawProduct = {
-        title: title.slice(0, 180),
-        brand: String(item.artistName ?? "").slice(0, 60),
-        seller: "Apple",
-        priceUsd,
-        rating,
-        ratingCount,
-        inStock: null,
-        source: "itunes",
-        url: String(item.trackViewUrl ?? item.collectionViewUrl ?? ""),
-        imageUrl: itunesArtwork(String(item.artworkUrl100 ?? "")),
-        notes: notesParts.join(" · ").slice(0, 200),
-      };
-      // Kapı 1: alakalılık. Kapı 2: en az bir ölçülebilir alan.
-      if (!matchesNiche(row.title, query)) continue;
-      if (!hasMeasuredField(row)) continue;
-      out.push(row);
-    }
-    return out.slice(0, 20);
-    });
-  },
-};
 
 /* ------------------------------------- 8. Open Library (GERÇEK kitap + puan) */
 
@@ -1778,7 +1677,7 @@ export const bingShoppingSource: ProductSource = {
  */
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
-  itunesSource,
+  // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,
   marketplacePriceSource,
   webReviewSource,

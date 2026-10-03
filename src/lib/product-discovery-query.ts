@@ -332,6 +332,68 @@ export const NON_PRODUCT_SOURCES = new Set([
 ]);
 
 /**
+ * KATALOĞU TAMAMEN DİJİTAL LİSANS olan kaynaklar — hiçbir zaman satılabilir
+ * ürün üretemezler.
+ *
+ * ÖLÇÜLEN HATA (2026-10-03, kullanıcı: "film önerdi resmen"): `itunes`
+ * kaynağı, nişte "film" kelimesi geçtiği için (`isMediaNiche`) film/dizi/müzik
+ * kayıtlarını ÜRÜN olarak kabul ediyordu. Kullanıcı bir niş aradı, kartlarda
+ * film çıktı. Sebep iki katmanlıydı ve ikisi de burada kapatılıyor:
+ *
+ *   1. iTunes Store TEK ÇEŞİT mal satar: dijital lisans (film, dizi, şarkı,
+ *      sesli kitap, uygulama, e-kitap). Bunların hiçbiri yeniden satılamaz,
+ *      tedarik edilemez ve marjı yoktur — "kazandıran ürün" olamazlar.
+ *      Apple satıcı hesabı zaten lisans yeniden satımına izin vermez.
+ *   2. "Film" kelimesi geçen HER niş medya nişi değildir: "analog film",
+ *      "film endüstriyel kamera", "35mm film" fiziksel ürün nişleridir.
+ *      Kelimeye bakarak medya serbest bırakmak bu hatayı üretti.
+ *
+ * Bu yüzden kural "niş medya mı?" değil, "satır yeniden satılabilir fiziksel
+ * ürün mü?" olmalıdır.
+ */
+export const DIGITAL_ONLY_SOURCES = new Set(["itunes"]);
+
+/**
+ * Başlığın kendisi bir medya çıkışı gibi mi görünüyor? (film, sezon, albüm…)
+ *
+ * BİLEREK ÇOK DAR: yalnız yapısal kalıplar yakalanır (sezon/bölüm numarası,
+ * Blu-Ray/DVD, soundtrack, collector's edition). Belirsiz işaretler KAPSAM
+ * DIŞIDIR ve gerekçesi ölçülmüştür:
+ *
+ *   • "4K" / "UHD" → "Sony 4K UHD TV (2019)" da yakalar, oysa o bir TELEVİZYON.
+ *   • "(2010)" → "Canon EOS (2010)" da yakalar, oysa o bir FOTOĞRAF MAKİNESİ.
+ *   • "film" kelimesi → "Kodak Portra 400 Film 36mm" de yakalar, oysa o bir
+ *     GERÇEK ÜRÜN (ve tam olarak aranan şey).
+ *
+ * Bu yüzden belirsiz başlıklar KAYNAK kapısına bırakılır (`DIGITAL_ONLY_SOURCES`):
+ * iTunes'tan gelen "Inception (2010)" kaynağı sayesinde elenir, başlığına
+ * bakılarak değil.
+ */
+export function looksLikeMediaRelease(title: string): boolean {
+  const text = String(title ?? "").toLowerCase();
+  return /\b(season\s*\d|episode\s*\d|blu[\s-]?ray|dvd|soundtrack|vol\.?\s*\d|collector'?s edition)\b/.test(
+    text,
+  );
+}
+
+/**
+ * Bu satır YENİDEN SATILABİLİR bir ürün mü?
+ *
+ * İki kapı birlikte: dijital lisans kataloğu elenir, medya çıkışı başlığı elenir.
+ * Kaynak bazlı kapı (dijital katalog) her zaman güçlüdür; başlık kapısı ise
+ * YALNIZ yapısal medya kalıplarında çalışır (bkz. `looksLikeMediaRelease`).
+ */
+export function isSellableProductRow(
+  title: string,
+  source: string,
+  fields: { priceUsd?: number | null; rating?: number | null } = {},
+): boolean {
+  if (DIGITAL_ONLY_SOURCES.has(source)) return false;
+  if (looksLikeMediaRelease(title)) return false;
+  return looksLikeProductRow(title, source, fields);
+}
+
+/**
  * Satır gerçek bir ÜRÜN İLANI gibi mi?
  *
  * ÖLÇÜM: "LED masa lambası" aramasında kazanan 5 ürünün 5'i de ansiklopedi
@@ -356,7 +418,11 @@ export function looksLikeProductRow(
 
   const hasPrice = typeof fields.priceUsd === "number" && fields.priceUsd > 0;
   const hasRating = typeof fields.rating === "number" && fields.rating > 0;
+  // Dijital lisans kataloğu: fiyatı ve puanı olsa bile ÜRÜN DEĞİLDİR
+  // (yeniden satılamaz, tedarik edilemez). Ölçülen hata: "film önerdi".
+  if (DIGITAL_ONLY_SOURCES.has(source)) return false;
   if (NON_PRODUCT_SOURCES.has(source) && !hasPrice && !hasRating) return false;
+  if (looksLikeMediaRelease(text)) return false;
 
   // Ansiklopedi/dizin başlık kalıpları: kaynak zaten ürün olmayan listede
   // değilse bile (ör. web-reviews bir Wikipedia bağlantısını dönmüş olabilir)

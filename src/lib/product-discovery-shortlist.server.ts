@@ -48,7 +48,11 @@ import {
   type NormalizedProduct,
   type RawProduct,
 } from "./product-discovery.types";
-import { looksLikeProductRow } from "./product-discovery-query";
+import {
+  DIGITAL_ONLY_SOURCES,
+  isSellableProductRow,
+  looksLikeMediaRelease,
+} from "./product-discovery-query";
 
 /* ------------------------------------------------------------- Sözleşme */
 
@@ -280,12 +284,22 @@ function cleanRawRows(
  * haber, uygulama, gıda) yalnız onlar tutulur; talep sinyalleri kanıt olarak
  * zaten `signals.demand` içinde yaşamaya devam eder. Hiç gerçek ürün yoksa
  * liste DÜŞÜRÜLMEZ — talep sinyalleri hatta boş dönerdi.
+ *
+ * İKİ BASAMAKLI GERİ DÖNÜŞ (ölçülen hata, 2026-10-03: "film önerdi"):
+ *   Gerçek ürün satırı yokken liste boşalmaz; ama o zaman medya çıkışları
+ *   (film, sezon, albüm) ASLA tercih edilmez — onlar satılabilir ürün
+ *   değildir ve kullanıcıya ürün diye sunulamaz. Sıra:
+ *     1) gerçek ürün satırları → 2) medya olmayan satırlar → 3) hepsi.
  */
 export function preferProductRows(rows: readonly RawProduct[]): RawProduct[] {
   const products = rows.filter((row) =>
-    looksLikeProductRow(row.title, row.source ?? "", { priceUsd: row.priceUsd, rating: row.rating }),
+    isSellableProductRow(row.title, row.source ?? "", { priceUsd: row.priceUsd, rating: row.rating }),
   );
-  return products.length ? products : [...rows];
+  if (products.length) return products;
+  const rest = rows.filter(
+    (row) => !DIGITAL_ONLY_SOURCES.has(row.source ?? "") && !looksLikeMediaRelease(row.title),
+  );
+  return rest.length ? rest : [...rows];
 }
 
 export function buildShortlist(
