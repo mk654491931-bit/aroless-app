@@ -14,7 +14,8 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { enrichProduct, recommendationStyle, formatCurrency } from "@/lib/recommendation";
+import { enrichProduct, recommendationStyle, formatMeasuredCurrency, NOT_MEASURED } from "@/lib/recommendation";
+import { measuredMarginPct } from "@/lib/economics-evidence";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
@@ -45,8 +46,8 @@ export function ReportModal({
       ...(product.ad_angles || []).map((a) => `• ${a}`),
       "",
       `${t("report.profitability")}:`,
-      `Supplier: ${product.supplier_price_usd}  |  Sell: ${product.selling_price_usd}  |  Margin: ${product.profit_margin_pct}%`,
-      `Est. Monthly Revenue: ${formatCurrency(enriched.est_monthly_revenue_usd)}  |  Net Profit: ${formatCurrency(enriched.est_monthly_net_profit_usd)}`,
+      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}  |  Sell: ${product.selling_price_usd || NOT_MEASURED}  |  Margin: ${measuredMarginPct(product) ?? NOT_MEASURED}%`,
+      `Est. Monthly Revenue: ${formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}  |  Net Profit: ${formatMeasuredCurrency(enriched.est_monthly_net_profit_usd)}`,
       `Competition: ${product.competition_level}   |   Recommendation: ${enriched.recommendation}`,
       "",
       `${t("report.marketing")}:`,
@@ -109,11 +110,11 @@ export function ReportModal({
     y += 6;
     line(t("report.profitability"), 14, true);
     line(
-      `Supplier: ${product.supplier_price_usd}   Sell: ${product.selling_price_usd}   Margin: ${product.profit_margin_pct}%`,
+      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}   Sell: ${product.selling_price_usd || NOT_MEASURED}   Margin: ${measuredMarginPct(product) ?? NOT_MEASURED}%`,
     );
-    line(`Est. Monthly Sales: ${enriched.est_monthly_sales.toLocaleString()}`);
-    line(`Est. Monthly Revenue: ${formatCurrency(enriched.est_monthly_revenue_usd)}`);
-    line(`Est. Monthly Net Profit: ${formatCurrency(enriched.est_monthly_net_profit_usd)}`);
+    line(`Est. Monthly Sales: ${enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}`);
+    line(`Est. Monthly Revenue: ${formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}`);
+    line(`Est. Monthly Net Profit: ${formatMeasuredCurrency(enriched.est_monthly_net_profit_usd)}`);
     line(`Competition: ${product.competition_level}`);
     y += 6;
     line(t("report.marketing"), 14, true);
@@ -181,15 +182,15 @@ export function ReportModal({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
               <Stat
                 label={t("est_monthly_sales")}
-                value={enriched.est_monthly_sales.toLocaleString()}
+                value={enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}
               />
               <Stat
                 label={t("est_revenue")}
-                value={formatCurrency(enriched.est_monthly_revenue_usd)}
+                value={formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}
               />
               <Stat
                 label={t("net_profit")}
-                value={formatCurrency(enriched.est_monthly_net_profit_usd)}
+                value={formatMeasuredCurrency(enriched.est_monthly_net_profit_usd)}
               />
               <Stat label={t("competition")} value={product.competition_level} />
             </div>

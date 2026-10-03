@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, SlidersHorizontal, X } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct } from "@/lib/recommendation";
+import { measuredMarginPct } from "@/lib/economics-evidence";
 import { buyersPer1000, parseMoneyNum } from "@/lib/consistency";
 
 export type FinderFilters = {
@@ -33,8 +34,9 @@ export function applyFilters(list: WinningProduct[], f: FinderFilters): WinningP
     const price = parseMoneyNum(p.selling_price_usd);
     // price 0 = unparsed / no live price → never hide the product for it
     if (price > 0 && (price < f.priceMin || price > f.priceMax)) return false;
-    const margin = p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0;
-    if (f.marginMin > 0 && margin < f.marginMin) return false;
+    // Marj ölçülmemişse ürün marj filtresinden DÜŞÜRÜLMEZ (bilinmiyor ≠ düşük).
+    const margin = measuredMarginPct(p);
+    if (f.marginMin > 0 && margin !== null && margin < f.marginMin) return false;
     const e = enrichProduct(p);
     if (f.aiMin > 0 && e.ai_score < f.aiMin) return false;
     if (f.healthMin > 0 && (p.health_score ?? 0) < f.healthMin) return false;

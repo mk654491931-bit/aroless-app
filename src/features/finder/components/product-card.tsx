@@ -34,19 +34,33 @@ import { BuyerSimulation } from "@/components/buyer-simulation";
 import { UnlockedBadge } from "@/components/upgrade-gate";
 import { DecisionStrip, WinnerBadge, WinnerScorePanel } from "@/components/winner-score-panel";
 import { countryName } from "@/lib/countries";
+import { hasMeasuredEconomics, measuredMarginPct, measuredMoney } from "@/lib/economics-evidence";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { enrichProduct, recommendationStyle, reliabilityStyle } from "@/lib/recommendation";
+import { enrichProduct, recommendationStyle, reliabilityStyle, NOT_MEASURED } from "@/lib/recommendation";
 import { useMoney } from "@/lib/currency";
 import { netMarginView } from "../utils/export";
 import { resolveProductImage, useRealProductImage } from "../utils/product-image";
+
+/** Ölçülmemiş sayıyı "0,00" gibi gösterilemez — "—" yazılır. */
+function moneyOrDash(
+  value: string | number | null | undefined,
+  money: (n: number | string | undefined, o?: { compact?: boolean; showUsd?: boolean }) => string,
+): string {
+  return measuredMoney(value) === null
+    ? NOT_MEASURED
+    : money(value as string | number, { showUsd: false });
+}
 
 function DollarGap({ p }: { p: WinningProduct }) {
   const { money } = useMoney();
   const re = p.real_economics;
   const cb = p.cost_breakdown;
+  // Maliyet kanıtı yoksa bu blok tamamen uydurma olur (ölçülen hata: her
+  // üründe "Koyarsın $0, Kazanırsın $0/adet"). Gösterilmez.
+  if (!hasMeasuredEconomics(p)) return null;
   const supplier = re ? re.supplier : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const shipping = re ? re.shipping : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const ad = re ? re.cac : Number(String(cb?.ad_spend ?? "0").replace(/[^0-9.]/g, "")) || 0;
@@ -433,7 +447,7 @@ export function ProductCard({
           winner_score={p.winner_score}
           evidence_level={p.evidence_level}
           verdict={p.score_breakdown?.verdict}
-          net_margin_pct={p.cost_breakdown?.net_margin_pct ?? p.real_economics?.net_margin_pct ?? p.profit_margin_pct}
+          net_margin_pct={measuredMarginPct(p) ?? p.real_economics?.net_margin_pct ?? undefined}
           ad_budget_usd={p.real_economics?.monthly.ad_budget_usd}
         />
       </div>
@@ -566,21 +580,23 @@ export function ProductCard({
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-        <MetricPill label="Sales/mo" value={enriched.est_monthly_sales.toLocaleString()} />
-        <MetricPill label="Revenue" value={money(enriched.est_monthly_revenue_usd, { compact: true, showUsd: false })} />
-        <MetricPill label="Net/mo" value={money(enriched.est_monthly_net_profit_usd, { compact: true, showUsd: false })} highlight />
+        {/* Bu üç sayı hacim modelinden gelir; maliyet kanıtı yoksa
+            `enrichProduct` null döner ve burada "—" yazılır. */}
+        <MetricPill label="Sales/mo" value={enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()} />
+        <MetricPill label="Revenue" value={enriched.est_monthly_revenue_usd === null ? NOT_MEASURED : money(enriched.est_monthly_revenue_usd, { compact: true, showUsd: false })} />
+        <MetricPill label="Net/mo" value={enriched.est_monthly_net_profit_usd === null ? NOT_MEASURED : money(enriched.est_monthly_net_profit_usd, { compact: true, showUsd: false })} highlight />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">Supplier</div>
-          <div className="text-xs font-semibold mt-0.5">{money(p.supplier_price_usd, { showUsd: false })}</div>
-          {currency !== "USD" && <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>}
+          <div className="text-xs font-semibold mt-0.5">{moneyOrDash(p.supplier_price_usd, money)}</div>
+          {currency !== "USD" && measuredMoney(p.supplier_price_usd) !== null && <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>}
         </div>
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">Sell</div>
-          <div className="text-xs font-semibold mt-0.5">{money(p.selling_price_usd, { showUsd: false })}</div>
-          {currency !== "USD" && <div className="text-[9px] text-muted-foreground">{p.selling_price_usd}</div>}
+          <div className="text-xs font-semibold mt-0.5">{moneyOrDash(p.selling_price_usd, money)}</div>
+          {currency !== "USD" && measuredMoney(p.selling_price_usd) !== null && <div className="text-[9px] text-muted-foreground">{p.selling_price_usd}</div>}
         </div>
         {(() => {
           const nm = netMarginView(p);
@@ -612,7 +628,7 @@ export function ProductCard({
         )}
       </div>
 
-      {cb && (
+      {cb && hasMeasuredEconomics(p) && (
         <div className="mt-3 rounded-lg bg-white/[0.03] border border-white/10 p-3">
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
             <Receipt size={11} /> Net profit calculator
@@ -645,11 +661,12 @@ export function ProductCard({
           {p.real_economics && (
             <div className="mt-2 space-y-1 border-t border-white/10 pt-2 text-[10px] text-muted-foreground">
               <div className="text-foreground/90">
-                Gerçekçi aylık net kâr:{" "}
-                <b className="text-emerald-300">
-                  {money(enriched.monthly_net_low_usd, { compact: true, showUsd: false })} –{" "}
-                  {money(enriched.monthly_net_high_usd, { compact: true, showUsd: false })}
-                </b>{" "}
+              Gerçekçi aylık net kâr:{" "}
+              <b className="text-emerald-300">
+                {enriched.monthly_net_low_usd === null || enriched.monthly_net_high_usd === null
+                  ? NOT_MEASURED
+                  : `${money(enriched.monthly_net_low_usd, { compact: true, showUsd: false })} – ${money(enriched.monthly_net_high_usd, { compact: true, showUsd: false })}`}
+              </b>{" "}
                 ({p.real_economics.monthly.units} adet/ay · ${p.real_economics.monthly.ad_budget_usd} reklam)
               </div>
               <div className="flex flex-wrap gap-1">

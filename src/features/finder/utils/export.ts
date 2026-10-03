@@ -1,6 +1,7 @@
 import { buyersPer1000 } from "@/lib/consistency";
+import { hasMeasuredEconomics, measuredMarginPct } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { enrichProduct } from "@/lib/recommendation";
+import { enrichProduct, NOT_MEASURED } from "@/lib/recommendation";
 import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
 
 export function toCsv(list: WinningProduct[]): string {
@@ -23,13 +24,14 @@ export function toCsv(list: WinningProduct[]): string {
       p.name,
       p.supplier_price_usd,
       p.selling_price_usd,
-      p.profit_margin_pct,
+      // Ölçülmemiş alan CSV'ye de SAYI OLARAK GİRMEZ — boş hücre yazılır.
+      measuredMarginPct(p) ?? "",
       e.ai_score,
       e.trend_score,
       b,
       (b / 10).toFixed(1),
       e.recommendation,
-      e.est_monthly_net_profit_usd,
+      e.est_monthly_net_profit_usd ?? "",
     ];
   });
   return [head, ...rows]
@@ -148,6 +150,10 @@ export function buildShopifyCsv(products: WinningProduct[]): string {
  * Falls back to the derived cost stack when the AI omitted a cost breakdown.
  */
 export function netMarginView(p: WinningProduct): { text: string; bad: boolean } {
+  // ÖLÇÜM YOKSA MARJ DA YOKTUR. Ölçülen hata: keşif hattının maliyet alanları
+  // boş olduğu halde `cost_breakdown` nesnesi DOLU göründüğü için hesap
+  // "net = 0" buluyor ve kart HER ÜRÜNDE "0% (UNPROFITABLE)" yazıyordu.
+  if (!hasMeasuredEconomics(p)) return { text: NOT_MEASURED, bad: false };
   const cb = p.cost_breakdown;
   const sell = parseMoney(p.selling_price_usd);
   let net: number;
@@ -166,7 +172,10 @@ export function netMarginView(p: WinningProduct): { text: string; bad: boolean }
       supplier_cost: p.supplier_price_usd,
     }).net_profit;
   }
-  const pct = sell > 0 ? (net / sell) * 100 : 0;
+  // Satış fiyatı da yoksa yüzde hesaplanamaz — bu da "ölçtük ve sıfır
+  // bulduk" DEĞİLDİR.
+  if (!(sell > 0)) return { text: NOT_MEASURED, bad: false };
+  const pct = (net / sell) * 100;
   if (net <= 0 || pct <= 0) return { text: "0% (UNPROFITABLE)", bad: true };
   if (pct < MIN_NET_MARGIN_PCT) return { text: `${pct.toFixed(0)}% (BELOW ${MIN_NET_MARGIN_PCT}%)`, bad: true };
   return { text: `${pct.toFixed(0)}%`, bad: false };

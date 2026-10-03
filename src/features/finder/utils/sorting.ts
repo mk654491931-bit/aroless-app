@@ -1,4 +1,5 @@
 import { buyersPer1000 } from "@/lib/consistency";
+import { measuredMarginPct } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct } from "@/lib/recommendation";
 
@@ -19,9 +20,10 @@ export function sortValue(p: WinningProduct, key: SortKey): number {
   const e = enrichProduct(p);
   if (key === "winner") return p.winner_score ?? e.ai_score;
   if (key === "buyers") return buyersPer1000(p).value;
-  if (key === "margin") return p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0;
+  if (key === "margin") return measuredMarginPct(p) ?? 0;
   if (key === "trend") return e.trend_score;
-  if (key === "profit") return e.est_monthly_net_profit_usd;
+  // Kâr ölçülmediyse en sona düşer: `null` bir sayıya çevrilmez.
+  if (key === "profit") return e.est_monthly_net_profit_usd ?? Number.NEGATIVE_INFINITY;
   if (key === "realism") return p.realism_score ?? 0;
   if (key === "momentum") return p.market_evidence?.trend_momentum_pct ?? 0;
   return e.ai_score;
