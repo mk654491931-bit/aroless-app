@@ -465,6 +465,62 @@ export const wikipediaPageviewsSource: ProductSource = {
   },
 };
 
+/**
+ * SERPAPI GOOGLE SHOPPING — anahtar varsa GERÇEK fiyat + puan + görsel.
+ *
+ * NEDEN VAR (ölçüm, 2026-10-03): anahtarsız ürün-fiyatı kanallarının hepsi
+ * bu IP'den tıkandı (MercadoLibre 403, Google Books 429, Bing Shopping 0
+ * kart, DuckDuckGo bot-guard). SerpAPI aynı veriyi JSON olarak veriyor ve
+ * `gl`/`hl` ile ÜLKEYE göre çalışıyor — global SaaS için tam olarak gereken.
+ *
+ * KOTALAR: SerpAPI ücretsiz planı ayda ~100 aramadır ve ScraperAPI'den ÇOK
+ * küçüktür. Bu yüzden (a) 24 saat kalıcı önbellek, (b) kendi aylık kovası,
+ * (c) hedef ülkenin yerel sorgusu önce. Anahtar yoksa 0 ms'de boş döner.
+ */
+export const serpApiShoppingSource: ProductSource = {
+  name: "serpapi-shopping",
+  timeoutMs: 9_000,
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    const { serpApiConfigured, serpShoppingSearch, toRawProducts } = await import(
+      "./serpapi-shopping.server"
+    );
+    if (!serpApiConfigured()) return [];
+
+    const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+    const key = await cacheKey("serpapi-shopping", [niche, country]);
+    const hit = await cacheGet<RawProduct[]>(key);
+    if (hit) return hit;
+
+    const { allowSerpApiCredit } = await import("./scraper-quota.server");
+    if ((await allowSerpApiCredit()) === false) {
+      console.log(`[discovery] serpapi-shopping: aylık kota doldu (${country})`);
+      return [];
+    }
+
+    // Sorgu sırası: hedef ülkenin YEREL dili önce, sonra İngilizce karşılık.
+    const code = String(country ?? "").trim().toUpperCase() || "US";
+    const queries = [
+      ...trMarketplaceQueries(niche),
+      String(niche ?? "").trim(),
+    ].filter(Boolean);
+    for (const query of queries) {
+      const results = await serpShoppingSearch(query, code);
+      if (!results.length) continue;
+      const rows = toRawProducts(results, niche);
+      if (rows.length) {
+        // YALNIZ BOŞ OLMAYAN SONUÇ önbelleğe yazılır (geçici hata nişi bir
+        // gün boyunca boş göstermesin).
+        await cacheSet(key, "serpapi-shopping", rows, TR_MARKETPLACE_TTL_MS);
+        return rows;
+      }
+    }
+    return [];
+  },
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return serpApiShoppingSource.scrapeForCountry!(niche, "US");
+  },
+};
+
 /** Son 60 günün tarih aralığı (pageviews API gün bazlı ister). */
 function wmStartDate(): string {
   return new Date(Date.now() - 59 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "") ?? "";
@@ -1883,6 +1939,9 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // Fiziksel ürün: gerçek fiyat + gerçek puan (Türk pazaryeri, anahtarla).
   // Anahtar yoksa hiç ağ çağrısı yapmaz.
   trMarketplaceSource,
+  // Gerçek fiyat + puan + görsel, ÜLKEYE göre (SerpAPI Google Shopping).
+  // Anahtar yoksa hiç ağ çağrısı yapmaz; anahtarsız hat aynen çalışır.
+  serpApiShoppingSource,
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.

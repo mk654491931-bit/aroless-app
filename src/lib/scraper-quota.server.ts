@@ -73,3 +73,41 @@ export function scraperQuotaMessage(): string {
   return `Scraper kotası ayda ${monthlyLimit().toLocaleString("tr-TR")} istekle sınırlı ve bu ay doldu; ` +
     `bu arama anahtarsız kaynaklardan yapıldı.`;
 }
+
+/* ------------------------------------------------------------- SerpAPI kotası */
+
+/**
+ * SerpAPI ÜCRETSİZ PLANI: ayda ~100 arama. ScraperAPI'den ÇOK daha küçük bir
+ * bütçedir, o yüzden KENDİ kovası vardır — ikisi aynı sayacı paylaşırsa
+ * SerpAPI birkaç günde ScraperAPI'nin bütün ayını tüketirdi.
+ *
+ * Aynı fail-open ilkesi geçerli: sayaç okunamazsa arama yapılır.
+ */
+function serpMonthlyLimit(): number {
+  const raw = Number(process.env.SERPAPI_MONTHLY_LIMIT ?? "");
+  // 100 = ücretsiz planın tamamı; varsayılan olarak ona dokunmadan 80'e
+  // çekiliyor ki bir hat hatası ayı bitirmesin.
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 80;
+}
+
+/** SerpAPI araması yapmadan önce bütçede yer var mı? */
+export async function allowSerpApiCredit(): Promise<boolean | null> {
+  const bucket = `serpapi-searches-${new Date().toISOString().slice(0, 7)}`;
+  const windowSeconds = 400 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: serpMonthlyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[serpapi] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(`[serpapi] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`);
+    return null;
+  }
+}
