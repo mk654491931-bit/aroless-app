@@ -130,32 +130,11 @@ function SevenDayPlan({ p }: { p: WinningProduct }) {
       if (days.length >= 4 || d > 7) break;
     }
   }
-  if (!days.length) {
-    const avgBudget = p.real_economics?.monthly.ad_budget_usd ? "$" + Math.round(p.real_economics.monthly.ad_budget_usd / 4) : "$20";
-    days.push(
-      {
-        day: "Gün 1–2",
-        title: "Kreatif hazırlık",
-        actions: ["3 UGC varyasyonu çek (hook A/B/C)", "Ürün sayfasını kur + Trust badge ekle"],
-        kpi: "3 kreatif hazır",
-        budget: avgBudget,
-      },
-      {
-        day: "Gün 3–4",
-        title: "Test yayını",
-        actions: ["Meta Advantage+ — 3 ad set x " + avgBudget, "Öldürme kuralı: CTR <%1 ise kapat"],
-        kpi: "CTR ≥%1, CPC < $1.2",
-        budget: avgBudget,
-      },
-      {
-        day: "Gün 5–7",
-        title: "Ölçek sinyali",
-        actions: ["Kazanan kreatif %20 bütçe artışı", "Yeni açı: yorum şikayetini çözen bundle"],
-        kpi: "ROAS ≥2.2",
-        budget: avgBudget,
-      },
-    );
-  }
+  // FABRİKASYON YOK: eski kod, AI roadmap üretmemişse kendi kendine 7 günlük
+  // plan UYDURUYORDU ("$20 bütçe", "CTR ≥%1", "ROAS ≥2.2"). Ölçümlü
+  // keşif hattında bu blok uydurma sayılarla dolu bir ekran demekti. Artık
+  // yalnız model gerçekten yol haritası ürettiyse basılır.
+  if (!days.length) return null;
   return (
     <div className="mt-3 rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.07] to-indigo-500/[0.06] p-3">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300 font-semibold mb-2">
@@ -260,8 +239,7 @@ function ConversionBlock({ p }: { p: WinningProduct }) {
             </div>
           ))}
         </div>
-      )}
-      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
+      )}      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
         {estimated ? "Estimated from category conversion benchmarks (price, trend and competition adjusted)." : p.conversion?.reasoning}
       </p>
       {!estimated && p.conversion?.benchmark && (
@@ -334,8 +312,13 @@ export function ProductCard({
   const enriched = enrichProduct(p);
   const { money, currency } = useMoney();
   const rec = recommendationStyle(enriched.recommendation);
-  const realImg = useRealProductImage(p.name);
+  // GÖRSEL ÖNCELİĞİ: kaynaktan ölçülen görsel her zaman önce gelir.
+  // Ölçülen hata: `realImg || modelImg` sırası, ürün adına yapılan web
+  // görsel aramasını (alakasız fotoğraf) gerçek kaynak görselinin ÖNÜNE
+  // koyuyordu. Ölçülen görsel varsa web araması hiç yapılmaz.
   const modelImg = resolveProductImage(p);
+  const realImg = useRealProductImage(modelImg ? "" : p.name);
+  const cardImage = modelImg ?? realImg;
   const isTopWinner = (p.winner_score ?? 0) >= 75;
   const isElite = (p.winner_score ?? 0) >= 85;
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -377,9 +360,9 @@ export function ProductCard({
         }}
         className="mb-3 -mx-3 -mt-3 sm:-mx-5 sm:-mt-5 aspect-[16/10] sm:aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer"
       >
-        {realImg || modelImg ? (
+        {cardImage ? (
           <img
-            src={realImg || modelImg!}
+            src={cardImage}
             alt={p.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-700"
@@ -579,13 +562,16 @@ export function ProductCard({
         <ScorePill label="Conf" value={enriched.confidence_score} />
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-        {/* Bu üç sayı hacim modelinden gelir; maliyet kanıtı yoksa
-            `enrichProduct` null döner ve burada "—" yazılır. */}
-        <MetricPill label="Sales/mo" value={enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()} />
-        <MetricPill label="Revenue" value={enriched.est_monthly_revenue_usd === null ? NOT_MEASURED : money(enriched.est_monthly_revenue_usd, { compact: true, showUsd: false })} />
-        <MetricPill label="Net/mo" value={enriched.est_monthly_net_profit_usd === null ? NOT_MEASURED : money(enriched.est_monthly_net_profit_usd, { compact: true, showUsd: false })} highlight />
-      </div>
+      {/* Aylık satış/ciro/net: hacim MODELİNDEN gelir. Maliyet kanıtı yoksa
+          `enrichProduct` null döner ve o durumda satır yerine "—" TİZİNLERİ
+          gösterilmez — üç tane tire, ölçülebilir bir bilgi değildir. */}
+      {enriched.est_monthly_sales !== null && (
+        <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+          <MetricPill label="Sales/mo" value={enriched.est_monthly_sales.toLocaleString()} />
+          <MetricPill label="Revenue" value={money(enriched.est_monthly_revenue_usd ?? 0, { compact: true, showUsd: false })} />
+          <MetricPill label="Net/mo" value={money(enriched.est_monthly_net_profit_usd ?? 0, { compact: true, showUsd: false })} highlight />
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
@@ -600,6 +586,17 @@ export function ProductCard({
         </div>
         {(() => {
           const nm = netMarginView(p);
+          if (nm.text === NOT_MEASURED) {
+            // Marj ölçülmedi: "—" yazmak yerine hücreyi hiç basmıyoruz.
+            return (
+              <div className="rounded-lg bg-white/05 border border-white/10 p-2">
+                <div className="text-[10px] uppercase text-muted-foreground">Margin</div>
+                <div className="text-xs font-semibold mt-0.5 text-muted-foreground">
+                  {NOT_MEASURED}
+                </div>
+              </div>
+            );
+          }
           return (
             <div
               className={`rounded-lg border p-2 ${nm.bad ? "bg-destructive/15 border-destructive/40" : "bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/20"}`}
@@ -732,14 +729,18 @@ export function ProductCard({
 
       <div className={`card-detail-fold ${detailsOpen ? "is-open" : ""}`}>
         <div className="mt-3 space-y-2 text-xs">
-          <div className="flex gap-2">
-            <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
-            <span className="text-muted-foreground">{p.why_winning}</span>
-          </div>
+        <div className="flex gap-2">
+          <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
+          <span className="text-muted-foreground">{p.why_winning}</span>
+        </div>
+        {/* BOŞ SATIR YOK: ölçümlü hatta hedef kitle ölçülmediği için bu alan
+            boş gelir ve ikonun yanında boş bir çizgi çiziyordu. */}
+        {p.target_audience && (
           <div className="flex gap-2">
             <Users size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
             <span className="text-muted-foreground">{p.target_audience}</span>
           </div>
+        )}
           <div className="flex gap-2">
             <DollarSign size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
             <span className={compColor}>{p.competition_level} competition</span>

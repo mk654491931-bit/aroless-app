@@ -78,6 +78,9 @@ export const DiscoveryWinnerSchema = z.object({
   inStock: z.boolean().nullable().catch(null),
   sources: z.array(z.string()).catch([]),
   url: z.string().catch(""),
+  // Ölçülen ürün görseli (kaynak JSON-LD/Steam/Bing kartı). Eksik olabilir;
+  // bu yüzden çıktı tipi opsiyonel — mevcut kayıtların sözleşmesi bozulmaz.
+  imageUrl: z.string().optional().catch(undefined),
   notes: z.string().catch(""),
   preScore: z.number().catch(0),
   dataCompleteness: z.number().catch(0),

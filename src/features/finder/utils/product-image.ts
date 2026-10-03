@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 
+/**
+ * Görsel aramasına verilecek SADE ÜRÜN ADI.
+ *
+ * ÖLÇÜLEN HATA: pazaryeri kartlarının başlığı fiyat ve mağaza kuyruğuyla
+ * geliyor ("Brightech Libra LED desk lamp ... for $97.99 at Walmart"). Bu
+ * metin olduğu gibi görsel aramasına gidince arama motoru o ürünün fotoğrafını
+ * değil, o cümleyi içeren bir sayfanın kapağını döndürüyor — yani alakasız
+ * fotoğraf. Kuyruk temizleniyor; ürünün kendi adı kalıyor.
+ */
+export function cleanImageQuery(name: string): string {
+  return String(name ?? "")
+    .replace(/\s+at\s+[A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)?\s*$/u, "")
+    .replace(/\s+for\s+\$[\d.,]+\s*$/i, "")
+    .replace(/\s*[$€£]\s?[\d.,]+\s*$/u, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
 /** Only accepts a real, verifiable product image URL returned by the model. */
 export function resolveProductImage(p: WinningProduct): string | null {
   const u = p.image_url?.trim();
@@ -23,7 +42,9 @@ export function useRealProductImage(name: string): string | null {
       return;
     }
     let cancelled = false;
-    fetch(`/api/public/product-image?q=${encodeURIComponent(name)}`)
+    const query = cleanImageQuery(name);
+    if (!query) return;
+    fetch(`/api/public/product-image?q=${encodeURIComponent(query)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { url?: string } | null) => {
         if (cancelled || !d?.url) return;

@@ -65,6 +65,13 @@ export function toWinningProducts(
         row.notes ||
         `${row.sources.join(", ") || "kaynak"} üzerinden kazındı · ${row.dataCompleteness}/5 alan doğrulandı`,
       why_winning: whyWinning,
+      // GERÇEK ÜRÜN GÖRSELİ. Kazıma JSON-LD/Steam/Bing kartından görseli
+      // ölçüyor ve kayıtta taşıyordu; bu şema onu DÜŞÜRÜYORDU, kart da
+      // görselin yerine ürün adına yapılan web görsel aramasını kullanıyordu
+      // — ölçülen sonuç: ürünle alakasız fotoğraflar. Artık ölçülen görsel
+      // önceliklidir; alakasız web araması yalnız gerçek görsel yoksa devreye
+      // girer (bkz. `product-card.tsx`).
+      image_url: row.imageUrl || undefined,
       // Ölçülmedi: kazımada hedef kitle verisi yok.
       target_audience: "",
       // AI bu koşuda reklam açısı üretmedi ($0 kuralı: AI yalnız iki adımda).
