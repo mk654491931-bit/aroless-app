@@ -283,7 +283,7 @@ export function failResult(
  */
 export async function runScrapeFilterStep(
   niche: string,
-  _country: string,
+  country: string,
   _platform: string,
   topN = DISCOVERY_TOP_N,
   /**
@@ -299,6 +299,10 @@ export async function runScrapeFilterStep(
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
   const { products: raw, reports } = await runSources(niche, undefined, {
     capMs: opts.sourceCapMs,
+    // GLOBAL SaaS: kaynaklar hedef ülkenin YEREL pazaryerine bakar
+    // (bkz. `MARKETPLACES_BY_COUNTRY`). Ülke boşsa kaynaklar kendi
+    // varsayılanına döner — eski davranış korunur.
+    country,
   });
 
   // 2) Niş bağlamı (talep sinyalleri) — kaynaklardan türetilir, AI DEĞİL.

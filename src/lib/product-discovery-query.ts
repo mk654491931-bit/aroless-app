@@ -170,19 +170,59 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   protein: "protein",
   sakiz: "gum",
   kahveMakinesi: "coffee maker",
+  // evde yaşam / hayvan
+  kedi: "cat",
+  kopek: "dog",
+  tavsan: "rabbit",
+  balik: "fish",
+  akvaryum: "aquarium",
+  yuva: "bed",
+  tasma: "leash",
+  tas: "bowl",
+  mama: "food",
+  kum: "litter",
+  tirmalama: "scratcher",
+  tirmalamaTahtasi: "scratching board",
+  tasmalik: "harness",
+  yemlik: "feeder",
+  // ev / yaşam
+  tahta: "board",
+  kutu: "box",
+  kapı: "door",
+  pencere: "window",
+  sandalye: "chair",
+  sehpa: "coffee table",
+  dolap: "wardrobe",
+  raf: "shelf",
+  battaniye: "blanket",
+  hali: "rug",
+  perde: "curtain",
+  kilit: "lock",
+  cobanpincere: "tongs",
+  bardak: "glass",
+  kase: "plate",
 };
 
 /**
- * Sözlükteki İngilizce karşılık; yoksa ASCII'ye inmiş kök.
+ * Sözlükteki İngilizce karşılık; yoksa ASCII'ye inmiş ÖZGÜN KELİME.
  *
  * SIRA ÖNEMLİ: önce DÜZGÜN kelime, sonra kök. Aksi hâlde "kitabı" → "kitab"
  * çıkar ve `kitap` sözlük girdisi kaçırılır (ölçülen hata).
+ *
+ * ÖLÇÜLEN HATA (2026-10-03, düzeltildi): eski sürüm son çare olarak KÖKÜ
+ * döndürüyordu. Sözlükte olmayan her kelime bu yüzden bozuluyordu:
+ *   "kedi tırmalama tahtası" → "ked tirmalam tahta"
+ * Pazaryerlerinde aranan da tam olarak budur; yani Türkçe sorgu global
+ * pazaryerlerine ÇÖPE gidiyordu ve o nişte 0 ürün dönüyordu.
+ * Artık ek soyma YALNIZ sözlükte karşılığı bulunduğunda işe yarar; bulunamazsa
+ * kelime ASCII'ye indirilmiş hâliyle olduğu gibi kalır ("kedi tirmalama
+ * tahtasi") — yerel pazaryerlerinde hâlâ işe yarayan, bozulmamış biçim.
  */
 function toProductWord(root: string): string {
   const direct = PRODUCT_WORD_EN[root];
   if (direct) return direct;
   const stripped = stripTurkishAffixes(root);
-  return PRODUCT_WORD_EN[stripped] ?? stripped;
+  return PRODUCT_WORD_EN[stripped] ?? asciiFold(root);
 }
 
 /* ------------------------------------------------------------ Sorgu üretimi */

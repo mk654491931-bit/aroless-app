@@ -35,6 +35,15 @@ export interface ProductSource {
    * Hata fırlatabilir — `runSources` bunu yakalar ve `error` olarak raporlar.
    */
   scrape(niche: string): Promise<RawProduct[]>;
+  /**
+   * HEDEF ÜLKEYE duyarlı kazıma (global SaaS için).
+   *
+   * Varsa `runSources` bunu tercih eder; yoksa `scrape` çağrılır. Yani yeni
+   * bir kaynak eklemek için ülke desteği zorunlu değildir — ama pazaryeri
+   * gibi kaynaklar için ülkeye göre farklı pazar aramak zorunludur
+   * (bkz. `MARKETPLACES_BY_COUNTRY`).
+   */
+  scrapeForCountry?(niche: string, country: string): Promise<RawProduct[]>;
   /** Bu kaynağın tek başına harcadığı üst zaman tavanı (ms). */
   timeoutMs: number;
 }
@@ -1416,6 +1425,89 @@ const TR_MARKETPLACES: readonly { name: string; search: (q: string) => string }[
 ];
 
 /**
+ * ÜLKEYE GÖRE YEREL PAZARYERLERİ — global SaaS'ın asıl eksik parçası.
+ *
+ * ÖLÇÜLEN HATA (2026-10-03): kaynak "Türk pazaryeri" olarak yazılmıştı ve
+ * YALNIZ Trendyol + Hepsiburada'yı deniyordu. Kullanıcı "kedi tırmalama
+ * tahtası" aradı, film önerisi gördü ve "her ülkede doğru çalışsın"
+ * istediğini söyledi. Türkiye dışındaki bir kullanıcı için bu kaynak hiç
+ * alakalı pazar sayfasına bakmıyordu demektir.
+ *
+ * KURAL: her ülke kendi YEREL pazaryerini arar. Neden yerel? Çünkü fiyat
+ * para birimi, vergi ve stok yerel pazarınkiyle farklıdır; ABD fiyatıyla
+ * bir Alman pazarına bakmak ölçülen bir gerçek vermez. Kur çevrimi zaten
+ * `fx-rates.server.ts` ile anahtarsız ve gerçek.
+ *
+ * Kapsam bilinçli olarak genişletilebilir: `JSON-LD` ayrıştırıcısı
+ * (`marketplace-jsonld.ts`) markadan bağımsızdır, yeni bir ülke eklemek
+ * yalnızca buraya iki satır eklemektir.
+ */
+const MARKETPLACES_BY_COUNTRY: Record<string, readonly { name: string; search: (q: string) => string }[]> = {
+  TR: TR_MARKETPLACES,
+  US: [
+    { name: "Walmart", search: (q) => `https://www.walmart.com/search?q=${encodeURIComponent(q)}` },
+    { name: "eBay", search: (q) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  ],
+  GB: [
+    { name: "Amazon UK", search: (q) => `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}` },
+    { name: "eBay UK", search: (q) => `https://www.ebay.co.uk/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  ],
+  DE: [
+    { name: "Amazon DE", search: (q) => `https://www.amazon.de/s?k=${encodeURIComponent(q)}` },
+    { name: "Otto", search: (q) => `https://www.otto.de/suche/${encodeURIComponent(q)}/` },
+  ],
+  FR: [
+    { name: "Amazon FR", search: (q) => `https://www.amazon.fr/s?k=${encodeURIComponent(q)}` },
+    { name: "Cdiscount", search: (q) => `https://www.cdiscount.com/search/${encodeURIComponent(q)}/` },
+  ],
+  IT: [
+    { name: "Amazon IT", search: (q) => `https://www.amazon.it/s?k=${encodeURIComponent(q)}` },
+    { name: "eBay IT", search: (q) => `https://www.ebay.it/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  ],
+  ES: [
+    { name: "Amazon ES", search: (q) => `https://www.amazon.es/s?k=${encodeURIComponent(q)}` },
+    { name: "eBay ES", search: (q) => `https://www.ebay.es/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  ],
+  NL: [{ name: "Amazon NL", search: (q) => `https://www.amazon.nl/s?k=${encodeURIComponent(q)}` }],
+  CA: [
+    { name: "Amazon CA", search: (q) => `https://www.amazon.ca/s?k=${encodeURIComponent(q)}` },
+    { name: "Walmart CA", search: (q) => `https://www.walmart.ca/search?q=${encodeURIComponent(q)}` },
+  ],
+  AU: [
+    { name: "Amazon AU", search: (q) => `https://www.amazon.com.au/s?k=${encodeURIComponent(q)}` },
+    { name: "eBay AU", search: (q) => `https://www.ebay.com.au/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  ],
+  PL: [{ name: "Amazon PL", search: (q) => `https://www.amazon.pl/s?k=${encodeURIComponent(q)}` }],
+  SE: [{ name: "Amazon SE", search: (q) => `https://www.amazon.se/s?k=${encodeURIComponent(q)}` }],
+  BR: [
+    { name: "Mercado Livre", search: (q) => `https://lista.mercadolivre.com.br/${encodeURIComponent(q)}` },
+  ],
+  MX: [
+    { name: "Mercado Libre MX", search: (q) => `https://listado.mercadolibre.com.mx/${encodeURIComponent(q)}` },
+  ],
+  IN: [{ name: "Amazon IN", search: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}` }],
+  JP: [{ name: "Amazon JP", search: (q) => `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}` }],
+};
+
+/**
+ * Hedef ülke için pazaryeri listesi.
+ *
+ * BİLEREK TAHMİN YOK: listede olmayan bir ülke için TR listesine düşülür
+ * çünkü TR listesinin arama URL'i uluslararasıdır ve `url` sonucu yine
+ * alakalı ürün verir. Yanlış ülkenin fiyatını göstermektense alakalı bir
+ * pazarı denemek daha dürüsttür (ve `notes` hangi pazarın denendiğini yazar).
+ */
+export function marketplacesForCountry(country: string | undefined | null): {
+  code: string;
+  sites: readonly { name: string; search: (q: string) => string }[];
+} {
+  const code = String(country ?? "").trim().toUpperCase();
+  if (code && MARKETPLACES_BY_COUNTRY[code]) return { code, sites: MARKETPLACES_BY_COUNTRY[code] };
+  // GLOBAL / boş → en geniş yerel liste (ABD) ve TR sorgusu da denenir.
+  return { code: code || "GLOBAL", sites: MARKETPLACES_BY_COUNTRY.US };
+}
+
+/**
  * TEK aramada harcancak AZAMAN kredi sayısı — her kazım isteği 1 kredidir.
  *
  * Bu bütçe sorgu varyantları arasında PAYLAŞILIR. Paylaşılmazsa nişe uymayan
@@ -1448,36 +1540,59 @@ function trMarketplaceQueries(niche: string): string[] {
 export const trMarketplaceSource: ProductSource = {
   name: "tr-marketplace",
   timeoutMs: 9_000,
+  /**
+   * GLOBAL: hedef ülkeye göre yerel pazaryerlerini arar.
+   *
+   * `runSources` ülkeyi buraya geçirir; ülke verilmezse eski davranış (Türk
+   * pazaryerleri) korunur, yani hiçbir mevcut çağırma bozulmaz.
+   */
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    return scrapeMarketplaceCountry(niche, country);
+  },
   async scrape(niche: string): Promise<RawProduct[]> {
-    const { scraperApiConfigured, fetchThroughScraperApi } = await import("./product-image.server");
-    const { parseMarketplaceHtml } = await import("./marketplace-jsonld");
-    const { toUsd } = await import("./fx-rates.server");
-    // Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ: ölçülen maliyet sıfır.
-    if (!scraperApiConfigured()) return [];
+    return scrapeMarketplaceCountry(niche, "TR");
+  },
+};
 
-    // KORUMA 1 — KALICI ÖNBELLEK: aynı niş 24 saat içinde tekrar aranırsa
-    // kredi HARCANMAZ. Kullanıcının "tekrar dene" davranışı bedava olmalıdır.
-    const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
-    const key = await cacheKey("tr-marketplace", [niche]);
-    const hit = await cacheGet<RawProduct[]>(key);
-    if (hit) return hit;
+/**
+ * Hedef ÜLKENİN yerel pazaryerlerinden gerçek ürün satırı çeker.
+ *
+ * Tasarım kasıtlı olarak aynı krediyi, aynı önbelleği ve aynı gürültü kapılarını
+ * kullanır; tek farkı pazar listesidir. Bkz. `MARKETPLACES_BY_COUNTRY`.
+ */
+async function scrapeMarketplaceCountry(niche: string, country: string): Promise<RawProduct[]> {
+  const { code, sites } = marketplacesForCountry(country);
+  const sourceLabel = code === "TR" ? "tr-marketplace" : "marketplace";
+  const { scraperApiConfigured, fetchThroughScraperApi } = await import("./product-image.server");
+  const { parseMarketplaceHtml } = await import("./marketplace-jsonld");
+  const { toUsd } = await import("./fx-rates.server");
+  // Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ: ölçülen maliyet sıfır.
+  if (!scraperApiConfigured()) return [];
 
-    // KORUMA 2 — AYLIK BÜTÇE: kredi harcamadan önce sayaca bak.
-    // Sayaç okunamazsa `null` döner ve fail-open davranılır.
-    const { allowScraperCredit } = await import("./scraper-quota.server");
-    if ((await allowScraperCredit()) === false) {
-      console.log(
-        `[discovery] tr-marketplace: aylık scraper kotası doldu, bu arama anahtarsız kaynaklardan yapılıyor`,
-      );
-      return [];
-    }
+  // KORUMA 1 — KALICI ÖNBELLEK: aynı niş + ülke 24 saat içinde tekrar
+  // aranırsa kredi HARCANMAZ. Ülke anahtara GİRER: ABD pazarında bulunan
+  // ürünü Alman pazarında göstermek yanlış olur.
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const key = await cacheKey(`marketplace:${code}`, [niche]);
+  const hit = await cacheGet<RawProduct[]>(key);
+  if (hit) return hit;
+
+  // KORUMA 2 — AYLIK BÜTÇE: kredi harcamadan önce sayaca bak.
+  // Sayaç okunamazsa `null` döner ve fail-open davranılır.
+  const { allowScraperCredit } = await import("./scraper-quota.server");
+  if ((await allowScraperCredit()) === false) {
+    console.log(
+      `[discovery] ${sourceLabel}: aylık scraper kotası doldu, bu arama anahtarsız kaynaklardan yapılıyor`,
+    );
+    return [];
+  }
 
     // Kredi bütçesi bu çağrı boyunca ORTAK: varyantlar çarpmaz.
     let probesLeft = TR_MARKETPLACE_PROBES;
 
     for (const query of trMarketplaceQueries(niche)) {
       const out: RawProduct[] = [];
-      for (const site of TR_MARKETPLACES) {
+      for (const site of sites) {
         // Kredi bitti: başka pazar/varyant DENEMEZ.
         if (probesLeft <= 0) break;
         probesLeft -= 1;
@@ -1485,13 +1600,13 @@ export const trMarketplaceSource: ProductSource = {
         let html: string | null = null;
         try {
           html = await fetchThroughScraperApi(site.search(query), {
-            countryCode: "tr",
+            countryCode: code === "GLOBAL" ? "us" : code.toLowerCase(),
             timeoutMs: 4_000,
           });
         } catch (e) {
           // Servis düştü / kota doldu / 403 → SONRAKİ PAZARA GEÇ.
           console.log(
-            `[discovery] tr-marketplace ${site.name} okunamadı: ${(e as Error).message.slice(0, 80)}`,
+            `[discovery] ${sourceLabel} ${site.name} okunamadı: ${(e as Error).message.slice(0, 80)}`,
           );
           continue;
         }
@@ -1512,7 +1627,7 @@ export const trMarketplaceSource: ProductSource = {
             rating: row.rating,
             ratingCount: row.ratingCount,
             inStock: row.inStock,
-            source: "tr-marketplace",
+            source: sourceLabel,
             url: row.url,
             imageUrl: row.imageUrl,
             notes: [
@@ -1538,14 +1653,13 @@ export const trMarketplaceSource: ProductSource = {
       // engeli (403, kısa süreli hata) nişi bir gün boyunca boş
       // göstermesin; boş sonuç yeniden denenebilsin.
       if (out.length) {
-        await cacheSet(key, "tr-marketplace", out, TR_MARKETPLACE_TTL_MS);
+        await cacheSet(key, `marketplace:${code}`, out, TR_MARKETPLACE_TTL_MS);
         return out;
       }
       if (probesLeft <= 0) break;
     }
     return [];
-  },
-};
+}
 
 /* ------------------------------------------ Sorgu varyantlarıyla ürün kazıma */
 
@@ -1724,9 +1838,10 @@ export async function runSources(
    * adımın HER ZAMAN kendi sınırında dönmesini garanti eder. Geç kalan kaynak
    * rapora "timeout" olarak yazılır — veri uydurulmaz, yalnız o kaynak kaybolur.
    */
-  opts: { capMs?: number } = {},
+  opts: { capMs?: number; country?: string } = {},
 ): Promise<{ products: RawProduct[]; reports: SourceReport[] }> {
   const products: RawProduct[] = [];
+  const country = String(opts.country ?? "").trim();
   const cap = Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
     ? Math.round(opts.capMs as number)
     : Number.POSITIVE_INFINITY;
@@ -1737,7 +1852,10 @@ export async function runSources(
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         const rows = await Promise.race([
-          source.scrape(niche),
+          // Ülke duyarlı kaynak varsa hedef pazarıyla çalışır.
+          country && source.scrapeForCountry
+            ? source.scrapeForCountry(niche, country)
+            : source.scrape(niche),
           new Promise<never>((_, reject) => {
             timer = setTimeout(
               () => reject(new Error(`timeout>${budgetMs}ms`)),
