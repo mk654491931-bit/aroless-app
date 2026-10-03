@@ -106,6 +106,26 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         : "Yok: 75→25 seçimi deterministik ön skorlamayla yapılır, hat yine de çalışır.",
       fix: "İsteğe bağlı — GEMINI_API_KEY eklenirse seçimi Gemini yapar.",
     },
+    {
+      id: "serpapi",
+      label: "SerpAPI ürün kaynağı (isteğe bağlı)",
+      ok: set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY"),
+      optional: true,
+      detail: set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY")
+        ? "tanımlı — Google Shopping üzerinden gerçek mağaza fiyatı, puan ve ürün görseli aranır"
+        : "Yok: gerçek fiyatlı ürün araması bu kaynağı atlar, kalan kaynaklarla hat yine çalışır.",
+      fix: "İsteğe bağlı — serapapi.com'da ücretsiz hesap açıp SERPAPI_KEY ekle.",
+    },
+    {
+      id: "scraperapi",
+      label: "ScraperAPI pazaryeri kaynağı (isteğe bağlı)",
+      ok: set(env, "SCRAPERAPI_KEY") || set(env, "SCRAPI_KEY") || set(env, "SCRAP_API_KEY"),
+      optional: true,
+      detail: set(env, "SCRAPERAPI_KEY") || set(env, "SCRAPI_KEY") || set(env, "SCRAP_API_KEY")
+        ? "tanımlı — hedef ülkenin yerel pazaryerleri kazınır"
+        : "Yok: yerel pazaryeri kazıması atlanır, kalan kaynaklarla hat yine çalışır.",
+      fix: "İsteğe bağlı — scraperapi.com'da ücretsiz hesap açıp SCRAPERAPI_KEY ekle.",
+    },
   ];
 }
 

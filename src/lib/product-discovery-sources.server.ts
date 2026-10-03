@@ -497,12 +497,28 @@ export const serpApiShoppingSource: ProductSource = {
       return [];
     }
 
-    // Sorgu sırası: hedef ülkenin YEREL dili önce, sonra İngilizce karşılık.
+    // SORGU DİLİ ÜLKEYE GÖRE — ölçülmüş hata (2026-10-03): eski sıra her
+    // zaman Türkçe/yerel sorguyu öne koyuyordu. `gl=DE` ile Alman pazarına
+    // "kedi tırmalama tahtası" göndermek boş sonuç demekti. Artık:
+    //   • TR → yerel Türkçe önce, sonra İngilizce
+    //   • diğer ülkeler → İngilizce karşılık önce, sonra özgün metin
     const code = String(country ?? "").trim().toUpperCase() || "US";
-    const queries = [
-      ...trMarketplaceQueries(niche),
-      String(niche ?? "").trim(),
-    ].filter(Boolean);
+    const local = trMarketplaceQueries(niche);
+    const { englishProductQuery, productQueryVariants } = await import(
+      "./product-discovery-query"
+    );
+    const english = [englishProductQuery(niche), ...productQueryVariants(niche), niche]
+      .map((q) => q.trim())
+      .filter(Boolean);
+    const seenQ = new Set<string>();
+    const queries = (code === "TR" ? [...local, ...english] : [...english, ...local]).filter(
+      (q) => {
+        const k = q.toLowerCase();
+        if (seenQ.has(k)) return false;
+        seenQ.add(k);
+        return true;
+      },
+    );
     for (const query of queries) {
       const results = await serpShoppingSearch(query, code);
       if (!results.length) continue;

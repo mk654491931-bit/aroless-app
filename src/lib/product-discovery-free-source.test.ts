@@ -39,3 +39,22 @@ describe("wikipediaPageviewsSource", () => {
     await expect(wikipediaPageviewsSource.scrape("   ")).resolves.toEqual([]);
   });
 });
+
+describe("ön kontrol — ürün kaynak anahtarları görünür", () => {
+  it("SerpAPI ve ScraperAPI ön kontrolde İSTEĞE BAĞLI olarak raporlanır", async () => {
+    const { envChecks } = await import("./product-discovery-preflight.server");
+    const checks = envChecks({
+      SUPABASE_URL: "https://x.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "sr",
+    });
+    const serp = checks.find((c) => c.id === "serpapi");
+    const scraper = checks.find((c) => c.id === "scraperapi");
+    expect(serp).toBeDefined();
+    expect(scraper).toBeDefined();
+    // Anahtar yoksa hata DEĞİL, isteğe bağlı: hat çalışmaya devam eder.
+    expect(serp?.optional).toBe(true);
+    expect(scraper?.optional).toBe(true);
+    expect(serp?.fix).toContain("SERPAPI_KEY");
+    expect(scraper?.fix).toContain("SCRAPERAPI_KEY");
+  });
+});

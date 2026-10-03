@@ -16,13 +16,15 @@ import {
   type PreflightEnv,
 } from "./product-discovery-preflight.server";
 
-/** Tam kurulum: tüm zorunlu anahtarlar tanımlı. */
+/** Tam kurulum: zorunlu anahtarlar + isteğe bağlı tüm kaynak anahtarları tanımlı. */
 const READY: PreflightEnv = {
   QSTASH_TOKEN: "t",
   QSTASH_CURRENT_SIGNING_KEY: "k",
   SUPABASE_URL: "https://x.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "r",
   GEMINI_API_KEY: "g",
+  SERPAPI_KEY: "s",
+  SCRAPERAPI_KEY: "sc",
 };
 
 const byId = (checks: { id: string }[], id: string) =>
@@ -66,6 +68,8 @@ describe("preflight env kontrolleri", () => {
     expect(check?.ok).toBe(false);
     expect(check?.optional).toBe(true);
     // Hat hazır sayılır: Gemini yoksa yalnız seçim deterministik olur.
+    // SerpAPI/ScraperAPI anahtarları fixture'da tanımlı olduğu için tek eksik
+    // budur; o ikisi de isteğe bağlıdır ve yoklukları hattı düşürmez.
     expect(summarize(checks)).toBe("Hat çalışmaya hazır (1 isteğe bağlı eksik).");
   });
 
