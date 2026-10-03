@@ -281,6 +281,74 @@ export function failResult(
  * Bu adım saf kod olduğu için EN UZUN adımdır ve bütçeyi zorlamaz. Kaynaklar
  * paralel, fail-soft çalışır; her biri kendi tavanına sahiptir.
  */
+/* ------------------------------------------------- Tedarik (supplier) kanıtı */
+
+/**
+ * Ölçülmüş toptan teklifleri perakende adaylara bağlar ve `supplier` alanını
+ * doldurur. FAIL-SOFT: kazım ya da eşleştirme çalışmazsa adaylar DEĞİŞMEZ
+ * (alan `null` kalır) ve hat boşalmaz.
+ *
+ * Neden ayrı adım ve neden `PRODUCT_SOURCES`'a girmiyor: toptan teklifler
+ * perakende ürün DEĞİLDİR; aynı listede görünürse hat "ucuz kedi tırmalama
+ * tahtası $1,09" diye kendi kazandığı ürünü yanlış fiyatla gösterirdi.
+ */
+async function attachSupplierEconomics(
+  survivors: readonly NormalizedProduct[],
+  niche: string,
+  country: string,
+): Promise<{
+  offers: number;
+  matched: number;
+  withMargin: number;
+  medianUsd: number | null;
+}> {
+  const empty = { offers: 0, matched: 0, withMargin: 0, medianUsd: null };
+  if (!survivors.length) return empty;
+  const { fetchSupplierOffers } = await import("./aliexpress-supplier.server");
+  const { buildEconomics } = await import("./supplier-economics");
+
+  let offers;
+  try {
+    offers = await fetchSupplierOffers(niche, { country });
+  } catch (error) {
+    console.log(
+      `[discovery] tedarik kaynağı başarısız: ${
+        error instanceof Error ? error.message.slice(0, 80) : "bilinmeyen"
+      }`,
+    );
+    return empty;
+  }
+  if (!offers.length) return empty;
+
+  let matched = 0;
+  let withMargin = 0;
+  const prices: number[] = [];
+  for (let i = 0; i < survivors.length; i++) {
+    const row = survivors[i];
+    const { supplier, margin } = buildEconomics(
+      { name: row.name, priceUsd: row.priceUsd },
+      offers,
+    );
+    if (supplier.samples === 0) continue;
+    matched++;
+    if (supplier.supplierPriceUsd !== null) prices.push(supplier.supplierPriceUsd);
+    if (margin.grossMarginPct !== null) withMargin++;
+    (survivors[i] as NormalizedProduct) = {
+      ...row,
+      supplier,
+      grossMarginPct: margin.grossMarginPct,
+      feeBudgetUsd: margin.feeBudgetUsd,
+    };
+  }
+  prices.sort((a, b) => a - b);
+  return {
+    offers: offers.length,
+    matched,
+    withMargin,
+    medianUsd: prices.length ? prices[Math.floor(prices.length / 2)] : null,
+  };
+}
+
 export async function runScrapeFilterStep(
   niche: string,
   country: string,
@@ -363,10 +431,28 @@ export async function runScrapeFilterStep(
     }
   }
 
+  // 4) TEDARİK KANITI — ölçülmüş toptan fiyat bandı, satış adedi ve bundan
+  //    türeyen brüt marj. Ayrı bir adım çünkü kaynak ürün LİSTESİ değil,
+  //    teklif ÜRETİR; retail satırlarıyla eşleştirilmesi gerekir.
+  const supplierStats = await attachSupplierEconomics(survivors, niche, country);
+
   const notes: string[] = [
     `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
       `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
   ];
+  if (supplierStats.matched > 0) {
+    notes.push(
+      `Tedarik kanıtı: ${supplierStats.matched}/${survivors.length} ürüne alakalı toptan ` +
+        `teklif eşleşti (${supplierStats.offers} teklif tarandı, medyan birim fiyat ` +
+        `${supplierStats.medianUsd === null ? "ölçülmedi" : `$${supplierStats.medianUsd}`}); ` +
+        `brüt marj ${supplierStats.withMargin} üründe hesaplandı.`,
+    );
+  } else if (survivors.length > 0) {
+    notes.push(
+      `Tedarik kanıtı: ${supplierStats.offers} toptan teklif tarandı ama HİÇBİRİ ` +
+        `ürünlerle alakalı eşleşmedi — Supplier/Marj alanları boş kalıyor (uydurulmadı).`,
+    );
+  }
   if (rescued > 0) {
     notes.push(
       `Kalite kapıları ${stats.inputCount} satırın tamamını elemişti; ${rescued} aday ` +

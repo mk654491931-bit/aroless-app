@@ -12,6 +12,7 @@ import {
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { MarketEvidence } from "@/lib/market-evidence";
 import type { WinnerBreakdown } from "@/lib/winner-score";
+import type { SupplierEvidence } from "@/lib/supplier-economics";
 
 export const PLATFORMS = [
   "Amazon",
@@ -102,6 +103,23 @@ export type WinningProduct = {
   trend_score: number;
   emoji: string;
   image_url?: string;
+  /**
+   * ÖLÇÜLMÜŞ TEDARİK KANITI (Anahtarsız toptan kaynaktan gelir).
+   *
+   * `supplier_price_usd` BOŞSA bu alan da `null`dur. Yani kartın Supplier
+   * hücresi ölçülen toptan fiyatı gösterdiğinde burası da doludur; ikisi
+   * birbirinin tutarsız kopyası değil, kanıt sayacıdır.
+   */
+  supplier_evidence?: SupplierEvidence | null;
+  /**
+   * ÖLÇÜLMÜŞ brüt marj (%), kargo + komisyon ÖNCESİ.
+   *
+   * "Net marj" DEĞİLDİR ve net marj olarak sunulmaz: kargo, gümrük ve
+   * komisyon ölçülmediği için net marj hesaplanamaz. `null` = ölçülmedi.
+   */
+  gross_margin_pct?: number | null;
+  /** Kargo + komisyon için kalan pay (USD). `null` = ölçülmedi. */
+  fee_budget_usd?: number | null;
   /** Ülke + platform karar gerekçesi (Winner Gate üretir). */
   market_verdict?: import("@/lib/market-verdict").MarketVerdict;
   sales_tactic?: string;

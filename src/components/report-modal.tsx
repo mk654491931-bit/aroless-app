@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, recommendationStyle, formatMeasuredCurrency, NOT_MEASURED } from "@/lib/recommendation";
-import { measuredMarginPct } from "@/lib/economics-evidence";
+import { marginLabel } from "@/lib/economics-evidence";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
@@ -46,7 +46,7 @@ export function ReportModal({
       ...(product.ad_angles || []).map((a) => `• ${a}`),
       "",
       `${t("report.profitability")}:`,
-      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}  |  Sell: ${product.selling_price_usd || NOT_MEASURED}  |  Margin: ${measuredMarginPct(product) ?? NOT_MEASURED}%`,
+      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}  |  Sell: ${product.selling_price_usd || NOT_MEASURED}  |  Margin: ${marginLabel(product, NOT_MEASURED)}`,
       `Est. Monthly Revenue: ${formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}  |  Net Profit: ${formatMeasuredCurrency(enriched.est_monthly_net_profit_usd)}`,
       `Competition: ${product.competition_level}   |   Recommendation: ${enriched.recommendation}`,
       "",
@@ -110,7 +110,7 @@ export function ReportModal({
     y += 6;
     line(t("report.profitability"), 14, true);
     line(
-      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}   Sell: ${product.selling_price_usd || NOT_MEASURED}   Margin: ${measuredMarginPct(product) ?? NOT_MEASURED}%`,
+      `Supplier: ${product.supplier_price_usd || NOT_MEASURED}   Sell: ${product.selling_price_usd || NOT_MEASURED}   Margin: ${marginLabel(product, NOT_MEASURED)}`,
     );
     line(`Est. Monthly Sales: ${enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}`);
     line(`Est. Monthly Revenue: ${formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}`);

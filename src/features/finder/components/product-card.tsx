@@ -34,7 +34,7 @@ import { BuyerSimulation } from "@/components/buyer-simulation";
 import { UnlockedBadge } from "@/components/upgrade-gate";
 import { DecisionStrip, WinnerBadge, WinnerScorePanel } from "@/components/winner-score-panel";
 import { countryName } from "@/lib/countries";
-import { hasMeasuredEconomics, measuredMarginPct, measuredMoney } from "@/lib/economics-evidence";
+import { hasMeasuredNetProfit, measuredGrossMarginPct, measuredMarginPct, measuredMoney } from "@/lib/economics-evidence";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
@@ -54,13 +54,142 @@ function moneyOrDash(
     : money(value as string | number, { showUsd: false });
 }
 
+/**
+ * TEDARİK KANITI PANELİ — kartın Supplier/Marj hücrelerinin arkasındaki ölçüm.
+ *
+ * ÖLÇÜLEN BOŞLUK (2026-10-03): bu iki hücre kalıcı `—` idi, çünkü hat yalnız
+ * perakende fiyat kazıyordu. Artık alakalı toptan teklifler ölçülüyor ve burada
+ * SADECE ÖLÇÜLENler yazılıyor:
+ *   • birim fiyat medyanı + p25/p75 bandı + kaç teklifin desteklediği,
+ *   • indirimli/etiket fiyat farkı (ölçülen indirim %),
+ *   • ölçülen toplam satış adedi, tedarik mağazası, kargo çıkış ülkesi,
+ *   • BRÜT marj (iki ölçümün aritmetiği) ve kargoya kalan pay.
+ *
+ * NET MARJ GÖSTERİLMEZ: kargo, gümrük ve komisyon kaynakta ölçülmediği için
+ * net marj hesaplanamaz. Bunun yerine satış ile toptan arasındaki fark
+ * “kargoya kalan pay” olarak sunulur — kullanıcının elinde GERÇEK bir sayı,
+ * üstüne de neyin ölçülmediğini bilen bir not.
+ */
+function SupplierEconomics({ p }: { p: WinningProduct }) {
+  const { money } = useMoney();
+  const s = p.supplier_evidence;
+  const gross = p.gross_margin_pct ?? null;
+  const feeBudget = p.fee_budget_usd ?? null;
+  const supplierPrice = measuredMoney(p.supplier_price_usd);
+  if (!s || (supplierPrice === null && gross === null)) return null;
+
+  const band =
+    s.supplierLowUsd !== null && s.supplierHighUsd !== null && s.supplierHighUsd > s.supplierLowUsd
+      ? `${money(s.supplierLowUsd, { showUsd: false })} – ${money(s.supplierHighUsd, { showUsd: false })}`
+      : null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.08] to-violet-500/[0.05] px-3 py-2.5 text-[11px]">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300 font-semibold mb-2">
+        <Package size={11} /> Tedarik kanıtı — ölçülen toptan fiyat
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <span className="text-muted-foreground flex items-center gap-1">
+          <Package size={10} /> Toptan birim
+        </span>
+        <span className="text-right font-semibold text-sky-200">
+          {supplierPrice === null ? NOT_MEASURED : money(supplierPrice ?? 0, { showUsd: false })}
+          {band && <span className="ml-1 font-normal text-muted-foreground">({band})</span>}
+        </span>
+
+        {s.listPriceUsd !== null && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Store size={10} /> Etiket fiyatı
+            </span>
+            <span className="text-right">
+              <span className="line-through text-muted-foreground">
+                {money(s.listPriceUsd, { showUsd: false })}
+              </span>
+              {s.discountPct !== null && (
+                <span className="ml-1 text-emerald-300">−%{s.discountPct} ölçüldü</span>
+              )}
+            </span>
+          </>
+        )}
+
+        {s.soldTotal !== null && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Radar size={10} /> Tedarik satışı
+            </span>
+            <span className="text-right font-semibold">{s.soldTotal.toLocaleString("tr-TR")} adet</span>
+          </>
+        )}
+
+        {s.store && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Store size={10} /> Mağaza
+            </span>
+            <span className="text-right">{s.store}</span>
+          </>
+        )}
+
+        {s.shipFrom && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Truck size={10} /> Kargo çıkışı
+            </span>
+            <span className="text-right">{s.shipFrom}</span>
+          </>
+        )}
+
+        {gross !== null && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Percent size={10} /> Brüt marj
+            </span>
+            <span className="text-right font-semibold text-emerald-300">
+              %{gross} <span className="font-normal text-muted-foreground">(kargo öncesi)</span>
+            </span>
+          </>
+        )}
+
+        {feeBudget !== null && (
+          <>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <DollarSign size={10} /> Kargoya kalan pay
+            </span>
+            <span className="text-right font-semibold">{money(feeBudget, { showUsd: false })}</span>
+          </>
+        )}
+      </div>
+
+      <div className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground leading-relaxed">
+        {gross !== null
+          ? "Satış − toptan = brüt marj. Net marj ölçülmedi: kargo, gümrük ve platform komisyonu bu kaynakta YOK, tahmin edilmedi."
+          : "Perakende fiyat ölçülmediği için marj hesaplanamadı."}
+        {s.samples > 0 && ` ${s.samples} toptan teklifle desteklendi.`}
+      </div>
+
+      {s.url && (
+        <a
+          href={s.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-sky-300 hover:text-sky-200"
+        >
+          <ExternalLink size={10} /> Toptan teklifi aç
+        </a>
+      )}
+    </div>
+  );
+}
+
 function DollarGap({ p }: { p: WinningProduct }) {
   const { money } = useMoney();
   const re = p.real_economics;
   const cb = p.cost_breakdown;
   // Maliyet kanıtı yoksa bu blok tamamen uydurma olur (ölçülen hata: her
   // üründe "Koyarsın $0, Kazanırsın $0/adet"). Gösterilmez.
-  if (!hasMeasuredEconomics(p)) return null;
+  if (!hasMeasuredNetProfit(p)) return null;
   const supplier = re ? re.supplier : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const shipping = re ? re.shipping : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const ad = re ? re.cac : Number(String(cb?.ad_spend ?? "0").replace(/[^0-9.]/g, "")) || 0;
@@ -587,12 +716,25 @@ export function ProductCard({
         {(() => {
           const nm = netMarginView(p);
           if (nm.text === NOT_MEASURED) {
-            // Marj ölçülmedi: "—" yazmak yerine hücreyi hiç basmıyoruz.
+            // Net marj ölçülmedi. Ama satış VE toptan fiyat İKİSİ DE ölçüldüyse
+            // kargo/komisyon ÖNCESİ brüt marj kesin bilinir — onu “brüt”
+            // etiketiyle gösteriyoruz. İkisi de yoksa hücreyi boş bırakıyoruz.
+            const gross = measuredGrossMarginPct(p);
+            if (gross === null) {
+              return (
+                <div className="rounded-lg bg-white/05 border border-white/10 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Margin</div>
+                  <div className="text-xs font-semibold mt-0.5 text-muted-foreground">
+                    {NOT_MEASURED}
+                  </div>
+                </div>
+              );
+            }
             return (
-              <div className="rounded-lg bg-white/05 border border-white/10 p-2">
-                <div className="text-[10px] uppercase text-muted-foreground">Margin</div>
-                <div className="text-xs font-semibold mt-0.5 text-muted-foreground">
-                  {NOT_MEASURED}
+              <div className="rounded-lg border p-2 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/20">
+                <div className="text-[10px] uppercase text-emerald-300/80">Margin (brüt)</div>
+                <div className="text-xs font-semibold mt-0.5 flex items-center justify-center gap-0.5 text-emerald-300">
+                  <Percent size={10} />%{gross}
                 </div>
               </div>
             );
@@ -611,6 +753,8 @@ export function ProductCard({
         })()}
       </div>
 
+      <SupplierEconomics p={p} />
+
       <DollarGap p={p} />
       <div className="mt-3 flex items-center justify-center">
         {locked ? (
@@ -625,7 +769,7 @@ export function ProductCard({
         )}
       </div>
 
-      {cb && hasMeasuredEconomics(p) && (
+      {cb && hasMeasuredNetProfit(p) && (
         <div className="mt-3 rounded-lg bg-white/[0.03] border border-white/10 p-3">
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
             <Receipt size={11} /> Net profit calculator

@@ -76,18 +76,32 @@ export function toWinningProducts(
       target_audience: "",
       // AI bu koşuda reklam açısı üretmedi ($0 kuralı: AI yalnız iki adımda).
       ad_angles: [],
-      // Tedarik maliyeti BİLİNMİYOR (kazınmadı, uydurulmaz).
-      supplier_price_usd: "",
+      // ÖLÇÜLMÜŞ TEDARİK FİYATI (Anahtarsız toptan kaynaktan gelir). Teklif
+      // eşleşmediyse BOŞ kalır — eskiden de boştu ama sebebi "kaynak yok"du;
+      // şimdi fiyat gerçekten ölçülüyor (bkz. `supplier-economics.ts`).
+      supplier_price_usd: row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
+        ? ""
+        : String(row.supplier.supplierPriceUsd),
+      // "Net marj" ölçülmedi: kargo/gümrük/komisyon kaynakta YOK. 0 yazmak
+      // uydurmadır; aşağıdaki `gross_margin_pct` ise İKİ ÖLÇÜMÜN aritmetiği
+      // olduğu için gerçektir ve brüt marj olarak ETİKETLENİR.
+      gross_margin_pct: row.grossMarginPct ?? null,
+      fee_budget_usd: row.feeBudgetUsd ?? null,
+      supplier_evidence: row.supplier ?? null,
       selling_price_usd: price,
       profit_margin_pct: 0,
       startup_cost_usd: "",
       platform_fit: row.seller ? [row.seller] : [],
       platform_strategy: "",
       competitor_examples: rivals,
-      supplier_links: [],
+      supplier_links: row.supplier?.url ? [row.supplier.url] : [],
       alibaba_links: [],
       cost_breakdown: {
-        supplier_cost: "",
+        supplier_cost: row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
+          ? ""
+          : String(row.supplier.supplierPriceUsd),
+        // Kargo/komisyon/reklam ölçülmedi → boş. Boş yazmak "0 $ demiyor":
+        // bu alanların hiçbiri `0` değil, hiç ölçülmedi.
         shipping_cost: "",
         platform_fee: "",
         ad_spend: "",

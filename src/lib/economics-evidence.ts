@@ -114,3 +114,82 @@ export function hasMeasuredEconomics(p: EconomicsEvidenceInput): boolean {
     measuredMoney(cb.net_profit) !== null
   );
 }
+
+/**
+ * NET KÂR gerçekten ölçüldü mü?
+ *
+ * Neden `hasMeasuredEconomics` yetmiyor (ölçülen hata, 2026-10-03): o fonksiyon
+ * “bir maliyet kalemi ölçüldü” der. Toptan fiyat ölçüldüğünde `true` döner; ama
+ * kargo, platform komisyonu ve reklam maliyeti ÖLÇÜLMEDİĞİ için net kâr hâlâ
+ * bilinmiyordur. `true` kabul edilirse:
+ *   • `netMarginView` “net = satış − toptan” hesaplayıp BRÜT marjı NET diye
+ *     yazıyordu,
+ *   • “Net profit calculator” kargo/komisyon/reklamı `$0,00` basıyordu.
+ * İkisi de uydurmadır. Net marj yalnız TAM maliyet dökümü ya da doğrudan
+ * ölçülmüş `net_profit` varsa hesaplanır.
+ */
+export function hasMeasuredNetProfit(p: EconomicsEvidenceInput): boolean {
+  if (p.real_economics && typeof p.real_economics === "object") return true;
+  const cb = p.cost_breakdown;
+  if (!cb) return false;
+  if (measuredMoney(cb.net_profit) !== null) return true;
+  return (
+    measuredMoney(cb.supplier_cost) !== null &&
+    measuredMoney(cb.shipping_cost) !== null &&
+    measuredMoney(cb.platform_fee) !== null &&
+    measuredMoney(cb.ad_spend) !== null
+  );
+}
+
+/**
+ * ÖLÇÜLMÜŞ BRÜT MARJ (%) — kargo + komisyon ÖNCESİ.
+ *
+ * Neden ayrı: kargo, gümrük ve platform komisyonu anahtarsız kaynaklarda
+ * ÖLÇÜLEMEZ, dolayısıyla net marj çoğu üründe hâlâ bilinmiyordur. Ama satış
+ * fiyatı ile toptan fiyat İKİSİ DE ölçüldüğünde aralık kesin bilinir.
+ *
+ * Bu sayı `measuredMarginPct`nin yerine GEÇMEZ — sıralama ve filtrelerde
+ * yedek olarak kullanılır ve arayüzde “brüt” diye ETİKETLENİR.
+ */
+export function measuredGrossMarginPct(p: { gross_margin_pct?: number | null }): number | null {
+  const value = Number(p.gross_margin_pct);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Sıralama/filtre için marj: net marj ölçüldüyse o, yoksa ölçülen brüt marj.
+ *
+ * DÖNEN SAYI “en iyi marj” anlamına gelir; hangisinin kullanıldığı
+ * `marginKind` ile birlikte döner ki arayüz yanlış etiketi basmasın.
+ */
+export function marginForRanking(p: {
+  cost_breakdown?: CostEvidence;
+  profit_margin_pct?: number | null;
+  gross_margin_pct?: number | null;
+}): { pct: number | null; kind: "net" | "gross" | "none" } {
+  const net = measuredMarginPct(p);
+  if (net !== null) return { pct: net, kind: "net" };
+  const gross = measuredGrossMarginPct(p);
+  if (gross !== null) return { pct: gross, kind: "gross" };
+  return { pct: null, kind: "none" };
+}
+
+/**
+ * Rapor/özet satırları için MARJ ETİKETİ.
+ *
+ * “%42” yazıp brüt olduğunu söylememek yanıltıcı olurdu: brüt marj kargo ve
+ * komisyon payını içermez. Bu yüzden brütse etiket açıkça yazılır; hiçbiri
+ * ölçülmediyse `—` döner (0 değil).
+ */
+export function marginLabel(
+  p: {
+    cost_breakdown?: CostEvidence;
+    profit_margin_pct?: number | null;
+    gross_margin_pct?: number | null;
+  },
+  notMeasured = "—",
+): string {
+  const { pct, kind } = marginForRanking(p);
+  if (pct === null) return notMeasured;
+  return kind === "gross" ? `%${pct} brüt (kargo öncesi)` : `%${pct}`;
+}

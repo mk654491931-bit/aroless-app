@@ -111,10 +111,19 @@ export function DiscoveryWinnerCard({
       </div>
 
       {/* Ölçülen ticari veri — yoksa "—". */}
-      <dl className="grid grid-cols-3 gap-2 text-center">
+      <dl className="grid grid-cols-4 gap-2 text-center">
         <div className="rounded-lg bg-muted/30 py-2">
           <dt className="text-[10px] text-muted-foreground">Fiyat</dt>
           <dd className="text-sm font-semibold tabular-nums">{fmtPrice(winner.priceUsd)}</dd>
+        </div>
+        {/* Tedarik fiyatı ÖLÇÜLDÜYSE gösterilir. Boş kalmasının sebebi artık
+            "kaynak yok" değil, bu ürüne alakalı toptan teklif bulunamaması —
+            o durumda 0 yazmak yerine "—" yazılır. */}
+        <div className="rounded-lg bg-muted/30 py-2">
+          <dt className="text-[10px] text-muted-foreground">Tedarik</dt>
+          <dd className="text-sm font-semibold tabular-nums">
+            {winner.supplier?.supplierPriceUsd != null ? fmtPrice(winner.supplier.supplierPriceUsd) : "—"}
+          </dd>
         </div>
         <div className="rounded-lg bg-muted/30 py-2">
           <dt className="text-[10px] text-muted-foreground">Puan</dt>

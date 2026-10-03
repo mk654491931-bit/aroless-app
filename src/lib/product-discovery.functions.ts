@@ -47,6 +47,7 @@ import {
 } from "@/lib/product-discovery-runner.server";
 import { discoverySliceMs } from "@/lib/product-discovery-slices.server";
 import { ConsensusSchema, TopProductSchema, type TopProduct } from "@/lib/product-discovery.types";
+import { SupplierEvidenceSchema } from "@/lib/supplier-economics";
 
 /**
  * Sunucu fonksiyonu JSON'a çevrilmek ZORUNDA olduğu için sonuç `unknown`
@@ -81,6 +82,14 @@ export const DiscoveryWinnerSchema = z.object({
   // Ölçülen ürün görseli (kaynak JSON-LD/Steam/Bing kartı). Eksik olabilir;
   // bu yüzden çıktı tipi opsiyonel — mevcut kayıtların sözleşmesi bozulmaz.
   imageUrl: z.string().optional().catch(undefined),
+  // ÖLÇÜLMÜŞ TEDARİK KANITI. Zod tanınmayan alanı DÜŞÜRÜDÜĞÜ için şemada
+  // tanımlanmadığı sürece arayüze ulaşamaz (ölçülen hata: `imageUrl` de aynı
+  // sebeple düşüyordu ve kart ürünle alakasız fotoğraf arıyordu).
+  supplier: SupplierEvidenceSchema.nullish().catch(null),
+  // ÖLÇÜLMÜŞ brüt marj (%) — kargo + komisyon ÖNCESİ. "Net marj" değildir.
+  grossMarginPct: z.number().nullish().catch(null),
+  // Kargo + komisyon için kalan pay (USD).
+  feeBudgetUsd: z.number().nullish().catch(null),
   notes: z.string().catch(""),
   preScore: z.number().catch(0),
   dataCompleteness: z.number().catch(0),

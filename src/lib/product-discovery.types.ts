@@ -18,6 +18,8 @@
 
 import { z } from "zod";
 
+import { SupplierEvidenceSchema } from "./supplier-economics";
+
 /* ------------------------------------------------------------- Raw product */
 
 /** Bir kaynaktan GELEN, henüz normalize edilmemiş ham satır. */
@@ -165,7 +167,25 @@ export const NormalizedProductSchema = z.object({
   missingFields: z.array(z.string()).default([]),
 
   source: z.enum(["scraped", "ai"]).default("scraped"),
+
+  /**
+   * ÖLÇÜLMÜŞ TEDARİK KANITI (birim fiyat bandı, satış adedi, mağaza, kargo
+   * çıkışı) + bundan türeyen brüt marj ve kargoya kalan pay.
+   *
+   * `null` = tedarik kazımı yapılmadı ya da bu ürünle alakalı teklif yok.
+   * Ölçülmediği için `0` DEĞİLDİR — kartın Supplier/Marj hücrelerindeki
+   * boşluk bu alanın yokluğundan geliyordu (bkz. `supplier-economics.ts`).
+   */
+  supplier: SupplierEvidenceSchema.nullish(),
+  /**
+   * ÖLÇÜLMÜŞ brüt marj (%), kargo + komisyon ÖNCESİ. `null` = iki ölçümden
+   * biri yok. "Net marj" DEĞİLDİR ve net marj olarak gösterilmez.
+   */
+  grossMarginPct: z.number().nullish(),
+  /** Kargo + komisyon için kalan pay (USD). `null` = ölçülmedi. */
+  feeBudgetUsd: z.number().nullish(),
 });
+
 export type NormalizedProduct = z.infer<typeof NormalizedProductSchema>;
 
 /* ------------------------------------------------------------ Fingerprint */

@@ -90,6 +90,45 @@ function serpMonthlyLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 80;
 }
 
+/* ------------------------------------------------- Anahtarsız tedarik kotası */
+
+/**
+ * ALIEXPRESS TEDARİK KAZIMASI — anahtarsız olduğu için kredi HARCANMAZ, ama
+ * yine de sınırsız kazım yapmak dürüst değildir (servis kapatır, ürün hattını
+ * kırar). Bu yüzden kendi aylık kovası var ve ScraperAPI/SerpAPI ile PAYLAŞMAZ
+ * — toptan fiyat, diğer kaynaklardan bağımsız bir kanıttır.
+ *
+ * Aynı fail-open ilkesi: sayaç okunamazsa kazım yapılır.
+ */
+function supplierMonthlyLimit(): number {
+  const raw = Number(process.env.SUPPLIER_MONTHLY_LIMIT ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 400;
+}
+
+/** Toptan teklif kazımı yapmadan önce bütçede yer var mı? */
+export async function allowSupplierCredit(): Promise<boolean | null> {
+  const bucket = `supplier-scrapes-${new Date().toISOString().slice(0, 7)}`;
+  const windowSeconds = 400 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: supplierMonthlyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[supplier] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[supplier] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
 /** SerpAPI araması yapmadan önce bütçede yer var mı? */
 export async function allowSerpApiCredit(): Promise<boolean | null> {
   const bucket = `serpapi-searches-${new Date().toISOString().slice(0, 7)}`;

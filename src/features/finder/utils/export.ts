@@ -1,5 +1,5 @@
 import { buyersPer1000 } from "@/lib/consistency";
-import { hasMeasuredEconomics, measuredMarginPct } from "@/lib/economics-evidence";
+import { hasMeasuredNetProfit, measuredMarginPct } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, NOT_MEASURED } from "@/lib/recommendation";
 import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
@@ -10,6 +10,10 @@ export function toCsv(list: WinningProduct[]): string {
     "Supplier price",
     "Selling price",
     "Margin %",
+    // Net marj ölçülmediği için ayrı sütunlar: brüt marj (kargo öncesi) ve
+    // kargoya kalan pay. Karıştırılırsa kullanıcı brütü ağırlık alır.
+    "Gross margin % (pre-fee)",
+    "Fee budget USD",
     "AI score",
     "Trend",
     "Buyers per 1000",
@@ -25,7 +29,11 @@ export function toCsv(list: WinningProduct[]): string {
       p.supplier_price_usd,
       p.selling_price_usd,
       // Ölçülmemiş alan CSV'ye de SAYI OLARAK GİRMEZ — boş hücre yazılır.
+      // Net marj ölçülmediyse ÖLÇÜLEN brüt marj ayrı sütuna yazılır; ikisi
+      // karıştırılmaz (brüt ≠ net).
       measuredMarginPct(p) ?? "",
+      p.gross_margin_pct ?? "",
+      p.fee_budget_usd ?? "",
       e.ai_score,
       e.trend_score,
       b,
@@ -153,7 +161,7 @@ export function netMarginView(p: WinningProduct): { text: string; bad: boolean }
   // ÖLÇÜM YOKSA MARJ DA YOKTUR. Ölçülen hata: keşif hattının maliyet alanları
   // boş olduğu halde `cost_breakdown` nesnesi DOLU göründüğü için hesap
   // "net = 0" buluyor ve kart HER ÜRÜNDE "0% (UNPROFITABLE)" yazıyordu.
-  if (!hasMeasuredEconomics(p)) return { text: NOT_MEASURED, bad: false };
+  if (!hasMeasuredNetProfit(p)) return { text: NOT_MEASURED, bad: false };
   const cb = p.cost_breakdown;
   const sell = parseMoney(p.selling_price_usd);
   let net: number;

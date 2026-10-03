@@ -3,7 +3,7 @@ import { Search, Copy, Download, ArrowDownWideNarrow, ArrowUpWideNarrow, FileJso
 import { buyersPer1000 } from "@/lib/consistency";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, formatCurrency, NOT_MEASURED } from "@/lib/recommendation";
-import { measuredMarginPct } from "@/lib/economics-evidence";
+import { marginForRanking } from "@/lib/economics-evidence";
 import { SORTS, type SortKey, sortProducts } from "../utils/sorting";
 import { toCsv } from "../utils/export";
 
@@ -51,7 +51,7 @@ export function ResultsToolbar({
   const totalProfit = measuredProfit.length ? measuredProfit.reduce((a, b) => a + b, 0) : null;
   const launches = products.filter((p) => enrichProduct(p).recommendation === "Launch").length;
   const avgScore = shown.length ? Math.round(shown.reduce((a, p) => a + enrichProduct(p).ai_score, 0) / shown.length) : 0;
-  const measuredMargins = shown.map((p) => measuredMarginPct(p)).filter((n): n is number => n !== null);
+  const measuredMargins = shown.map((p) => marginForRanking(p).pct).filter((n): n is number => n !== null);
   const avgMargin = measuredMargins.length
     ? Math.round(measuredMargins.reduce((a, b) => a + b, 0) / measuredMargins.length)
     : null;
@@ -82,7 +82,7 @@ export function ResultsToolbar({
   const copySummary = async () => {
     const lines = shown.slice(0, 20).map((p, i) => {
       const e = enrichProduct(p);
-      return `${i + 1}. ${p.name} — AI ${e.ai_score} · ${p.selling_price_usd ?? "?"} · marj ${measuredMarginPct(p) ?? NOT_MEASURED}% · ${e.recommendation}`;
+      return `${i + 1}. ${p.name} — AI ${e.ai_score} · ${p.selling_price_usd ?? "?"} · marj ${marginForRanking(p).pct === null ? NOT_MEASURED : `${marginForRanking(p).pct}%${marginForRanking(p).kind === "gross" ? " brüt" : ""}`} · ${e.recommendation}`;
     });
     await navigator.clipboard.writeText([`Aroless — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"));
     toast.success("Özet panoya kopyalandı");
