@@ -3,8 +3,10 @@ import { describe, it, expect } from "vitest";
 import {
   DIGITAL_ONLY_SOURCES,
   isSellableProductRow,
+  isStrongProductMatch,
   looksLikeMediaRelease,
   looksLikeProductRow,
+  relevanceScore,
 } from "./product-discovery-query";
 import { preferProductRows } from "./product-discovery-shortlist.server";
 
@@ -83,6 +85,51 @@ describe("looksLikeProductRow — dijital lisans kataloğu", () => {
     expect(
       looksLikeProductRow("Interstellar (2014) 4K Blu-ray", "tr-marketplace", { priceUsd: 9.99 }),
     ).toBe(false);
+  });
+});
+
+describe("relevanceScore — dil bağımsız alakalılık", () => {
+  it("İngilizce başlığı Türkçe nişle de tam puan alır", () => {
+    // ÖLÇÜLEN HATA: bu başlık Türkçe tokenlarla 0/2 idi ve katı bir kapı
+    // en iyi ürünleri düşürürdü.
+    expect(relevanceScore("Brightech Libra LED desk lamp with USB-C port", "LED masa lambası")).toBe(1);
+  });
+
+  it("Türkçe başlığı da tam puan alır", () => {
+    expect(relevanceScore("LED masa lambası beyaz", "LED masa lambası")).toBe(1);
+  });
+
+  it("tek kelime tutan alakasız satır güçlü DEĞİLDİR", () => {
+    // ÖLÇÜLEN HATA: "analog film" aramasında "The revenge of analog" (kitap)
+    // 1/2 tokenla geçiyordu.
+    expect(relevanceScore("The revenge of analog", "analog film")).toBeLessThan(1);
+    expect(isStrongProductMatch("The revenge of analog", "analog film")).toBe(false);
+  });
+
+  it("gerçek ürün güçlü eşleşmedir", () => {
+    expect(isStrongProductMatch("Cat Scratching Board Sisal", "kedi tırmalama tahtası")).toBe(true);
+  });
+
+  it("niş verilmezse kapı kapalı kalır (yanlış eleme olmaz)", () => {
+    expect(isStrongProductMatch("herhangi bir ürün", "")).toBe(false);
+  });
+});
+
+describe("preferProductRows — güçlü eşleşmeler öne alınır", () => {
+  it("zayıf eşleşen kitap, gerçek ürün varken listeden çıkar", () => {
+    const weak = { title: "The revenge of analog", source: "openlibrary", rating: 4.2 } as never;
+    const strong = {
+      title: "Analog Film Developing Kit",
+      source: "marketplace",
+      priceUsd: 42,
+    } as never;
+    const out = preferProductRows([weak, strong], "analog film");
+    expect(out).toEqual([strong]);
+  });
+
+  it("güçlü eşleşme yoksa liste boşalmaz", () => {
+    const weak = { title: "The revenge of analog", source: "openlibrary", rating: 4.2 } as never;
+    expect(preferProductRows([weak], "analog film")).toEqual([weak]);
   });
 });
 

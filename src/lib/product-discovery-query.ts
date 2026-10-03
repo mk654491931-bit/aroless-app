@@ -181,7 +181,7 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   tas: "bowl",
   mama: "food",
   kum: "litter",
-  tirmalama: "scratcher",
+  tirmalama: "scratching",
   tirmalamaTahtasi: "scratching board",
   tasmalik: "harness",
   yemlik: "feeder",
@@ -414,6 +414,71 @@ export function looksLikeMediaRelease(title: string): boolean {
   return /\b(season\s*\d|episode\s*\d|blu[\s-]?ray|dvd|soundtrack|vol\.?\s*\d|collector'?s edition)\b/.test(
     text,
   );
+}
+
+/**
+ * NİŞ ALAKALILIK PUANI (0-1) — DİL BAĞIMSIZ.
+ *
+ * ÖLÇÜLEN HATA (2026-10-03, "kedi tırmalama tahtası" / "LED masa lambası"):
+ *   • "analog film" → "The revenge of analog" (bir KİTAP, ürün değil) 1/2 eşleşti
+ *     ve nişin ürünü sanıldı.
+ *   • "LED masa lambası" → "Brightech Libra LED desk lamp" (GERÇEK ve EN İYİ
+ *     ürün) TÜRKÇE tokenlarla 0/2 eşleşti; çünkü başlık İngilizce.
+ *
+ * Yani tek dille puanlamak iki yönde de yanlış: alakasızı geçiriyor,
+ * en iyiyi düşürüyor. Bu yüzden puan, nişin ÖZGÜN tokenları ile İngilizce ürün
+ * karşılığının tokenları arasında **DAN YÜKSEĞİ** alınır.
+ *
+ * @returns 0 (hiç eşleşme) … 1 (tüm tokenlar eşleşti)
+ */
+export function relevanceScore(title: string, niche: string): number {
+  const text = String(title ?? "").toLowerCase();
+  if (!text) return 0;
+  const original = nicheTokensOf(niche);
+  const translated = nicheTokensOf(englishProductQuery(niche));
+  let best = 0;
+  for (const tokens of [original, translated]) {
+    if (!tokens.length) continue;
+    const hit = tokens.filter((t) => matchesToken(text, t)).length;
+    best = Math.max(best, hit / tokens.length);
+  }
+  return Math.round(best * 100) / 100;
+}
+
+/**
+ * Token eşleşmesi — KÖK TOLERANSLI.
+ *
+ * ÖLÇÜLEN HATA: sözlük `tırmalama` → "scratcher" çeviriyordu ama gerçek ürün
+ * başlığı "cat SCRATCHING board" diyor; kelime biçim farkı yüzünden güçlü
+ * eşleşme sayılmıyordu. Aynı sorun İngilizcede de var ("lamp" ↔ "lamps").
+ *
+ * Güvenli kural: yalnız 6+ harfli tokenlarda ilk 6 harf (kök) aranır. Kısa
+ * tokenlarda kök aramak yanlış eşleşme üretirdi ("board" → "bo" her yerde).
+ */
+function matchesToken(text: string, token: string): boolean {
+  if (text.includes(token)) return true;
+  return token.length >= 6 && text.includes(token.slice(0, 6));
+}
+
+/**
+ * "GÜÇLÜ" eşleşme eşiği: tokenların TAMAMI eşleşmeli.
+ *
+ * NEDEN 0,5 DEĞİL: iki tokenlı bir nişte 1/2 eşleşme "analog film" →
+ * "The revenge of analog" hatasını bırakır. Tam eşleşme hem o hatayı
+ * kesiyor hem de riskli değil: kaynak zaten en az bir eşleşme arıyor, bu
+ * ek kapı YALNIZ zayıf eşleşmeleri düşürüyor.
+ */
+export function isStrongProductMatch(title: string, niche: string): boolean {
+  return relevanceScore(title, niche) >= 1;
+}
+
+/** NİŞten alakalılık için kullanılan tokenlar (4+ harf). */
+function nicheTokensOf(niche: string): string[] {
+  return String(niche ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 4)
+    .slice(0, 4);
 }
 
 /**

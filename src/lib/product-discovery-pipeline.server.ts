@@ -334,6 +334,9 @@ export async function runScrapeFilterStep(
   // bu değer `true`'ya çevrilebilir; o ana kadar ölçülmemiş görsel nedeniyle
   // ürün kaybetmek, hattı çalıştırmaktan daha kötüdür.
   const built = buildShortlist(raw, {
+    // Alakalılık kapısı nişi bilmeli: kaynakların dilinden bağımsız
+    // (TR ya da EN) güçlü eşleşmeleri ayırır.
+    niche,
     limit: topN,
     context: { nicheMomentumPct, nicheEngagement },
     perSource,

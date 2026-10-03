@@ -16,7 +16,10 @@ import { englishProductQuery } from "./product-discovery-query";
  */
 describe("englishProductQuery — sözlükte olmayan kelimeler bozulmaz", () => {
   it("Türkçe ek soyma yalnız sözlükte karşılığı varsa uygulanır", () => {
-    expect(englishProductQuery("kedi tırmalama tahtası")).toBe("cat scratcher board");
+    // "scratching" seçildi: gerçek ürün başlıkları "cat scratching board"
+    // diyor; "scratcher" kelime biçimi yüzden güçlü eşleşme sayılmıyordu
+    // (ölçülen hata, 2026-10-03).
+    expect(englishProductQuery("kedi tırmalama tahtası")).toBe("cat scratching board");
     expect(englishProductQuery("kedi tırmalama tahtası")).not.toContain("ked ");
     expect(englishProductQuery("kedi tırmalama tahtası")).not.toContain("tirmalam");
   });

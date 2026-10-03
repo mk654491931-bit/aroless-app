@@ -51,6 +51,7 @@ import {
 import {
   DIGITAL_ONLY_SOURCES,
   isSellableProductRow,
+  isStrongProductMatch,
   looksLikeMediaRelease,
 } from "./product-discovery-query";
 
@@ -156,6 +157,11 @@ export type ShortlistOptions = {
   context?: DemandContext;
   /** Kaynak bazlı eleme dökümü — hat paneline aynen iletilir. */
   perSource?: FilterStats["perSource"];
+  /**
+   * Aranan niş. Alakalılık kapısı bununla çalışır; verilmezse kapı kapalı
+   * kalır (mevcut davranış) — yani hat yanlışlıkla boşalmaz.
+   */
+  niche?: string;
 };
 
 /* ---------------------------------------------------------------- Yardım */
@@ -291,15 +297,25 @@ function cleanRawRows(
  *   değildir ve kullanıcıya ürün diye sunulamaz. Sıra:
  *     1) gerçek ürün satırları → 2) medya olmayan satırlar → 3) hepsi.
  */
-export function preferProductRows(rows: readonly RawProduct[]): RawProduct[] {
+export function preferProductRows(rows: readonly RawProduct[], niche = ""): RawProduct[] {
   const products = rows.filter((row) =>
     isSellableProductRow(row.title, row.source ?? "", { priceUsd: row.priceUsd, rating: row.rating }),
   );
-  if (products.length) return products;
-  const rest = rows.filter(
-    (row) => !DIGITAL_ONLY_SOURCES.has(row.source ?? "") && !looksLikeMediaRelease(row.title),
-  );
-  return rest.length ? rest : [...rows];
+  if (!products.length) {
+    const rest = rows.filter(
+      (row) => !DIGITAL_ONLY_SOURCES.has(row.source ?? "") && !looksLikeMediaRelease(row.title),
+    );
+    return rest.length ? rest : [...rows];
+  }
+  // İKİNCİ BASAMAK — GÜÇLÜ EŞLEŞME. Ölçülen hata: "analog film" aramasında
+  // "The revenge of analog" (bir kitap) 1/2 tokenla geçerken, asıl nişin
+  // ürünü geldiğinde o satır listeden çıkmıyordu. Güçlü eşleşme varsa yalnız
+  // onlar tutulur.
+  //
+  // GÜVENLİ YÖN: güçlü eşleşme YOKSA liste boşalmaz — zayıf eşleşmeler
+  // korunur. Boş liste, hattın tamamını bozmaktan daha kötüdür.
+  const strong = products.filter((row) => isStrongProductMatch(row.title, niche));
+  return strong.length ? strong : products;
 }
 
 export function buildShortlist(
@@ -333,7 +349,7 @@ export function buildShortlist(
   };
 
   // 1) Temizle.
-  const clean = preferProductRows(cleanRawRows(raw, requireImage, stats));
+  const clean = preferProductRows(cleanRawRows(raw, requireImage, stats), options.niche ?? "");
 
   // 2) Puanla + süz + sırala. Üst sınırı `limit` verilir: 75'ten fazlası
   //    hiçbir zaman üretilmez, token bütçesi zaten burada kesiliyor.
