@@ -390,6 +390,89 @@ async function wikiViews(title: string, from: string, to: string): Promise<numbe
   return (json.items ?? []).map((i) => Number(i.views)).filter((n) => Number.isFinite(n));
 }
 
+/**
+ * Wikipedia GÖRÜNTÜLENME sayıları — ANAHTARSIZ, GERÇEK talep ölçümü.
+ *
+ * ÖLÇÜM (2026-10-03, canlı): `wikimedia.org/api/rest_v1/metrics/pageviews`
+ * anahtarsız çalışıyor ve GÜN GÜN gerçek görüntülenme sayısı veriyor
+ * (ölçülen örnek: "Cat tree" maddesi için 61 günlük seri, ilk yarı 869,
+ * son yarı 866 görüntülenme). Bu, `google-trends` kazımasının kırılgan
+ * yoluna güvenilir bir YEDEK ölçümdür ve kullanıcıya “0” yerine gerçek
+ * bir momentum sayısı verir.
+ *
+ * NEDEN AYRI BİR KAYNAK: Google Trends HTML kazıması sayfa yapısı
+ * değişince sessizce bozulur; bu iki uç JSON döndürdüğü için öyle değildir.
+ *
+ * KURAL: momentum yalnız İKI UZUN YARI karşılaştırmasından gelir ve
+ * `±100%` ile sınırlıdır (pipeline zaten bu bandı bekliyor). Makale bulunamaz
+ * veya veri yoksa kaynak DÜRÜSTÇE 0 satır döner — momentum UYDURULMAZ.
+ */
+export const wikipediaPageviewsSource: ProductSource = {
+  name: "wikipedia-pageviews",
+  timeoutMs: 5_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { englishProductQuery } = await import("./product-discovery-query");
+    const query = englishProductQuery(niche) || niche;
+    if (!query.trim()) return [];
+
+    // 1) Nişe karşılık gelen makalenin gerçek adını bul.
+    const search = await grabJson<{ query?: { search?: { title?: string }[] } }>(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+        query.slice(0, 80),
+      )}&srlimit=3&format=json`,
+      3_000,
+    ).catch(() => null);
+    const title = search?.query?.search?.[0]?.title;
+    if (!title) return [];
+
+    // 2) O maddenin günlük görüntülenme serisi (iki ay).
+    const series = await grabJson<{ items?: { views?: number }[] }>(
+      `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user/${encodeURIComponent(
+        title,
+      )}/daily/${wmStartDate()}/${wmEndDate()}`,
+      3_500,
+    ).catch(() => null);
+    const values = (series?.items ?? [])
+      .map((i) => Number(i.views))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (values.length < 14) return [];
+
+    const half = Math.floor(values.length / 2);
+    const older = values.slice(0, half).reduce((a, b) => a + b, 0);
+    const newer = values.slice(half).reduce((a, b) => a + b, 0);
+    // Taban sıfırsa momentum hesaplanamaz → ölçülmedi sayılır.
+    if (older <= 0) return [];
+    const momentum = Math.round(((newer - older) / older) * 1000) / 10;
+    const dailyAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+
+    return [
+      {
+        title: `${title} — Wikipedia görüntülenme talebi`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "wikipedia-pageviews",
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+        // `momentum ±N%` deseni pipeline'da okunur (bkz. `nicheMomentumPct`).
+        notes: `momentum ${momentum >= 0 ? "+" : ""}${momentum}% · günlük ${dailyAvg.toLocaleString(
+          "en-US",
+        )} görüntülenme · ${values.length} gün`,
+      },
+    ];
+  },
+};
+
+/** Son 60 günün tarih aralığı (pageviews API gün bazlı ister). */
+function wmStartDate(): string {
+  return new Date(Date.now() - 59 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "") ?? "";
+}
+function wmEndDate(): string {
+  return new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "") ?? "";
+}
+
 export const wikipediaSource: ProductSource = {
   name: "wikipedia-demand",
   timeoutMs: 5_000,
@@ -1807,7 +1890,11 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // birden kanıta girmez (bkz. `googleTrendsSource` çift sayım notu).
   googleTrendsSource,
   googleNewsSource,
+  // İKİ AYRI WİKİPEDİA ÖLÇÜMÜ: `wikipedia` talep satırı, `wikipedia-pageviews`
+  // gerçek görüntülenme momentumu. İkisi farklı sinyaldir (kanıt varlığı ve
+  // ivme); momentum yalnız görüntülenmeden okunur.
   wikipediaSource,
+  wikipediaPageviewsSource,
   hackerNewsSource,
   redditArchiveSource,
   githubSource,
