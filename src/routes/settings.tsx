@@ -8,6 +8,7 @@ import { ArrowLeft, Sparkles, Loader2, BellRing, Coins } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
+import { useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
 import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
@@ -20,6 +21,12 @@ const CURRENCIES = ["USD", "EUR", "TRY", "SAR", "GBP"] as const;
 
 export const Route = createFileRoute("/settings")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>): { paid?: string } => ({
+    // `successUrl` her ödemede `/settings?paid=1` ile buraya yönlendirir.
+    // Ölçülen hata: bu parametre HİÇ OKUNMUYORDU; kullanıcı ödemesini yapıyor,
+    // ayarlara dönüyor ve “abonelik başlatıldı” geri bildirimi hiç görünmüyordu.
+    paid: typeof search["paid"] === "string" ? search["paid"] : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Settings — Aroless" },
@@ -40,6 +47,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const profileFn = useServerFn(getFullProfile);
   const updateFn = useServerFn(updateProfilePrefs);
+  const search = Route.useSearch();
 
   useEffect(() => {
     if (!loading && !user)
@@ -60,6 +68,34 @@ function SettingsPage() {
   });
   const [notifications, setNotifications] = useState<boolean>(true);
   const [currency, setCurrency] = useState("USD");
+
+  /**
+   * `?paid=1` geldiyse Paddle ödeme sonrası buraya yönlendirdi demektir.
+   *
+   * Ölçülen hata: bu bilgi hiç kullanılmadığı için kullanıcı ödemesini yapar,
+   * bu sayfaya döner ve “abonelik başlatıldı” geri bildirimi hiç görmez —
+   * paket de webhook'un yazması gerektiği için saniyeler içinde “Free” görünür.
+   * Artık ödeme sonrası akış burada doğrulanır ve kullanıcıya gerçek durum
+   * söylenir (doğrulanamadıysa “başladı” YOK, dürüstçe uyarı var).
+   */
+  const justPaid = search.paid === "1";
+  const confirmation = useSubscriptionConfirmation({
+    enabled: justPaid && !loading && !!user,
+    tier: profQ.data?.subscription_tier,
+    refetch: profileFn,
+    onConfirmed: () => {
+      void qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Aboneliğin başlatıldı!");
+      // `paid=1` temizlenir: sayfa yenilenirse doğrulama tekrar tetiklenmez.
+      nav({ to: "/settings", search: {} as never, replace: true });
+    },
+    onTimeout: () => {
+      void qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.warning(
+        "Ödemen kaydedildi ama paket henüz doğrulanamadı. Birkaç saniye içinde görünmezse sayfayı yenile.",
+      );
+    },
+  });
 
   useEffect(() => {
     if (profQ.data) {
@@ -204,6 +240,20 @@ function SettingsPage() {
           <h2 className="font-semibold mb-3 flex items-center gap-2">
             <Coins size={16} /> {t("subscription")}
           </h2>
+          {/* Ödeme sonrası dönüş: doğrulama sürerken gerçek durum gösterilir.
+              Ölçülen hata: kullanıcı buraya boş bir sayfaya düşüyor ve “abonelik
+              başlatıldı” geri bildirimini hiç görmiyordu. */}
+          {confirmation.status === "pending" && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
+              <Loader2 className="size-4 animate-spin" />
+              Ödemen alındı — aboneliğin aktifleşmesi doğrulanıyor…
+            </div>
+          )}
+          {confirmation.status === "confirmed" && (
+            <div className="mb-3 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm">
+              Aboneliğin başlatıldı. Kredilerin tanımlandı.
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <Info label="Email" value={profQ.data?.email ?? "—"} />
             <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />

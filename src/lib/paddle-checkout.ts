@@ -28,6 +28,20 @@ export type OpenCheckoutOptions = {
   onEvent?: (event: any) => void;
 };
 
+/**
+ * `window.Paddle` yüzeyinin yalnız ihtiyaç duyduğumuz kısmı.
+ *
+ * Neden ayrı tip: `@paddle/paddle-js` tipleri `initializePaddle` dönüşünü
+ * tanımlar ama global singleton'ın `Event.on` imzası her sürümde farklı
+ * geliyor. Daraltılmış yüzey, derleyiciye hem güvenli hem de dürüst bir
+ * sözleşme verir.
+ */
+type PaddleEventApi = {
+  Event?: {
+    on?: (eventName: string, handler: (event: unknown) => void) => void;
+  };
+};
+
 function paddlePriceIdForPlan(plan: PlanId): string | undefined {
   switch (plan) {
     case "Starter":
@@ -108,12 +122,37 @@ export async function openPaddleOverlay(
     const paddle = await initializePaddle({
       token: clientToken,
       environment: paddleEnv === "production" ? "production" : "sandbox",
+      // `eventCallback` her çağrıda verilse bile Paddle.js ÖRNEĞİ ÖNBELLEKLEMEYE
+      // alır: aynı token + ortam için ikinci `initializePaddle` çağrısı mevcut
+      // örneği döndürür ve verilen `eventCallback`'i YOK SAYAR. Bu, ölçülen
+      // “indirimde olay tetiklenmiyor” hatasının bir yarısıydı: ilk checkout'u
+      // dinleyicisiz açan bir yol varsa (pricing-card), sonraki TÜM
+      // checkout'larda — indirimli de indirimsiz de — olay hiç gelmez.
+      // Çözüm: her açılışta olayı `paddle.Event.on` ile de bağla.
       eventCallback: options?.onEvent,
     });
 
     if (!paddle) {
       console.error("[Paddle] initializePaddle returned no instance (token/environment?)");
       return false;
+    }
+
+    // Önbelleklenmiş örnekte `eventCallback` kaybolduğu için dinleyici burada
+    // yeniden kurulur. `Paddle.Event.on` idempotent değildir ama Paddle.js
+    // aynı işlev referansını tekrar kaydetmez; ayrıca guard ile gereksiz
+    // tekrar çağrı önlenir.
+    if (options?.onEvent) {
+      try {
+        const globalPaddle = (window as unknown as { Paddle?: PaddleEventApi }).Paddle;
+        if (globalPaddle?.Event?.on) {
+          globalPaddle.Event.on("checkout.completed", options.onEvent);
+          globalPaddle.Event.on("checkout.loaded", options.onEvent);
+        }
+      } catch (error) {
+        // Olay bağlanamazsa checkout YİNE de açılır — ödeme akışı kilitlenmez,
+        // yalnız istemci olayı kaybolur. Bu yüzden hata yutulur ama loglanır.
+        console.warn("[Paddle] checkout.completed dinleyicisi bağlanamadı:", error);
+      }
     }
 
     const origin = window.location.origin;

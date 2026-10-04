@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
+import { isCheckoutCompleted } from "@/lib/subscription-confirmation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,25 @@ const TIERS: Tier[] = [
 /** Minimalist FREE / PRO fiyatlandırma kartları. */
 export function PricingCard({ className }: { className?: string }) {
   const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
+
+  /**
+   * Ödeme bitti olayı — indirim durumundan BAĞIMSIZ.
+   *
+   * Ölçülen hata: bu bileşen `openPaddleOverlay`'a `onEvent` VERMİYORDU.
+   * Paddle.js örnek önbelleklemesi sayesinde daha önce `onEvent`'li bir
+   * checkout açılmışsa bu yol çalışıyor gibi görünüyor, ama ilk açılış bu
+   * ise hiçbir olay dinleyicisi kurulmuyor ve “Ödeme başarılı” mesajı hiç
+   * görünmüyordu. İndirimli alışverişte kullanıcının bildirdiği “abonelik
+   * başlaması tetiklenmiyor” belirtisinin bir kaynağı da buydu.
+   */
+  const onCheckoutEvent = (event: unknown) => {
+    if (!isCheckoutCompleted(event)) return;
+    void qc.invalidateQueries({ queryKey: ["profile"] });
+    toast.success("Ödeme alındı — aboneliğin aktifleşmesini doğruluyoruz…", {
+      description: "Paket, ödeme kaydı tamamlandığında otomatik yükselir.",
+    });
+  };
 
   async function upgrade() {
     setLoading(true);
@@ -65,20 +86,23 @@ export function PricingCard({ className }: { className?: string }) {
         error?: string;
       };
       if (resp.ok && json.transactionId) {
-        opened = await openPaddleOverlay({
-          transactionId: json.transactionId,
-          clientToken: json.clientToken,
-          environment: json.environment,
-          priceId: json.priceId,
-          email: json.email ?? null,
-        });
+        opened = await openPaddleOverlay(
+          {
+            transactionId: json.transactionId,
+            clientToken: json.clientToken,
+            environment: json.environment,
+            priceId: json.priceId,
+            email: json.email ?? null,
+          },
+          { plan: "Pro", onEvent: onCheckoutEvent },
+        );
       }
     } catch (error) {
       console.warn("[Paddle] Server checkout unavailable; using Vite price checkout.", error);
     }
 
     if (!opened) {
-      opened = await openPaddlePlanCheckout("Pro");
+      opened = await openPaddlePlanCheckout("Pro", { onEvent: onCheckoutEvent });
     }
     if (!opened) toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
     setLoading(false);

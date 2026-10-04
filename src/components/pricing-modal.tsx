@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/paddle.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
+import {
+  isCheckoutCompleted,
+  useSubscriptionConfirmation,
+} from "@/lib/subscription-confirmation";
+import { getFullProfile } from "@/lib/analysis.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown } from "lucide-react";
 import { PLANS, type PlanId } from "@/lib/plans";
@@ -12,8 +18,52 @@ const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
 export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const checkout = useServerFn(createCheckout);
+  const profileFn = useServerFn(getFullProfile);
   const { currency, rate, fmt, isLive } = useMoney();
   const [loading, setLoading] = useState<PlanId | null>(null);
+  const [paid, setPaid] = useState(false);
+  const qc = useQueryClient();
+
+  /**
+   * Ödeme bitti olayı — indirimli de indirimsiz de aynı olayla gelir.
+   *
+   * Ölçülen hata: burada yalnız `event.name === "checkout.completed"` bakılıyordu.
+   * Doğru olan bu, ama TETİKLENMESİ garanti değildi: Paddle.js örneği
+   * önbelleklediğinden sonraki açılışlarda verilen `eventCallback` yok
+   * sayılıyordu. `isCheckoutCompleted` tek doğruluk kaynağı olarak
+   * `paddle-checkout.ts` içinde `paddle.Event.on` ile de bağlanır.
+   */
+  const onCheckoutEvent = (event: unknown) => {
+    if (!isCheckoutCompleted(event)) return;
+    setPaid(true);
+  };
+
+  /**
+   * Ödeme bittikten sonra aboneliğin GERÇEKTEN başladığını doğrular.
+   *
+   * Önceden burada yalnız "Ödeme başarılı" toast'u vardı ve bu, webhook henüz
+   * çalışmadan başarı iddia ediyordu. Kullanıcı “abonelik başlatıldı”
+   * mesajını göremiyordu; ayrıca indirimli alışverişte hiçbir geri bildirim
+   * gelmediği için akış ölü görünüyordu. Artık webhook'un veritabanına
+   * yazması beklenir ve yalnızca GERÇEKTEN yazıldığında başarı söylenir.
+   */
+  const confirmation = useSubscriptionConfirmation({
+    enabled: paid,
+    refetch: profileFn,
+    onConfirmed: () => {
+      void qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Aboneliğin başlatıldı!", {
+        description: "Paketin aktif ve kredilerin tanımlandı.",
+      });
+      onClose();
+    },
+    onTimeout: () => {
+      toast.warning("Ödeme alındı, ancak paket henüz doğrulanamadı.", {
+        description:
+          "Aboneliğin birkaç saniye içinde görünmesi gerekir. Hâlâ “Free” görünüyorsa bir kez sayfayı yenile.",
+      });
+    },
+  });
 
   // İndirim kodunun tek kaynağı Paddle'dır: kullanıcı ödeme ekranında
   // kodu kendisi girer, uygulama checkout'a kod dayatmaz.
@@ -28,6 +78,11 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      // Modal kapanınca doğrulama durumu SIFIRLANIR. Aksi hâlde sonraki açılışta
+      // `paid` hâlâ true kalır, hook anında yeniden tetiklenir ve kullanıcı
+      // hiç ödeme yapmadan “abonelik başlatıldı” akışı başlardı — bu, olmayan
+      // bir abonelik iddiası olurdu.
+      setPaid(false);
     };
   }, [open, onClose]);
 
@@ -53,16 +108,8 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
         },
         {
           email: session.email,
-          onEvent: (event: unknown) => {
-            if (
-              event &&
-              typeof event === "object" &&
-              "name" in event &&
-              event.name === "checkout.completed"
-            ) {
-              toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
-            }
-          },
+          plan,
+          onEvent: onCheckoutEvent,
         },
       );
     } catch (error) {
@@ -72,19 +119,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
     // doğrudan ilgili planın public price ID'siyle açılır.
     if (!opened) {
-      opened = await openPaddlePlanCheckout(plan, {
-        email,
-        onEvent: (event: unknown) => {
-          if (
-            event &&
-            typeof event === "object" &&
-            "name" in event &&
-            event.name === "checkout.completed"
-          ) {
-            toast.success("Ödeme başarılı — kredileriniz tanımlandı!");
-          }
-        },
-      });
+      opened = await openPaddlePlanCheckout(plan, { email, onEvent: onCheckoutEvent });
     }
 
     if (!opened) {
@@ -174,13 +209,15 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
                 </ul>
                 <button
                   onClick={() => subscribe(p.id)}
-                  disabled={loading !== null}
+                  disabled={loading !== null || confirmation.status === "pending"}
 
                   className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
                 >
-                  {loading === p.id
-                    ? "Ödeme sayfası açılıyor…"
-                    : `Satın al — ${currency === "USD" ? `$${p.usd.toFixed(2)}` : fmt(p.usd * rate, currency)}/ay`}
+                  {confirmation.status === "pending"
+                    ? "Abonelik doğrulanıyor…"
+                    : loading === p.id
+                      ? "Ödeme sayfası açılıyor…"
+                      : `Satın al — ${currency === "USD" ? `$${p.usd.toFixed(2)}` : fmt(p.usd * rate, currency)}/ay`}
                 </button>
               </div>
             );
