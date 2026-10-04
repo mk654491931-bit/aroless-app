@@ -620,8 +620,12 @@ async function runOneAgent(
   try {
     // SAĞLAYICI DAĞITIMI: her ajan kendi birincil sağlayıcısından başlar
     // (`councilChainFor`). 14 ajanın hepsi gemini ile başlardı ve ücretsiz
-    // 15 RPM sınırı anında 429 üretirdi; şimdi yük 5 Groq + 5 Gemini +
-    // Cerebras + SambaNova + 5 OpenRouter + 5 HF arasında paylaşılır.
+    // 15 RPM sınırı anında 429 üretirdi. Artık iki kademe var:
+    //   1. ANA MOTOR: EVREN veya Groq (14 ajan 7/7 bölünür) — biri çöktüğünde
+    //      diğeri İLK yedeğe, o da çökerse 5 ücretsiz sağlayıcıya düşülür.
+    //   2. YEDEK: Gemini → Cerebras → SambaNova → OpenRouter → HuggingFace.
+    // Tanımlı olmayan havuzlar (örn. EVREN anahtarı yoksa) deneme harcanmadan
+    // atlanır — `POOL_PROVIDER_GROUP` kontrolü bunu zincir girişinde yapar.
     const chain = deps.runAgent ? DEEP_CHAIN : councilChainFor(councilIndex);
     const result = await withCeiling(
       run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), chain, {

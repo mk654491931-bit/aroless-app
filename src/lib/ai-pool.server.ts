@@ -19,6 +19,9 @@
 //   CEREBRAS      keys CEREBRAS_API_KEY (+ _1.._5)              (fast · 1)
 //   SAMBANOVA     keys SAMBANOVA_API_KEY (+ _1.._5)             (deep · 1)
 //   PROVIDER_A..D keys PROVIDER_<X>_1.._5 + PROVIDER_<X>_BASE_URL (optional)
+//   PROVIDER_E    keys PROVIDER_E_1.._5 / EVREN_API_KEY*  (yalnız anahtar yeterli:
+//                 uç ve model doğrulanmış varsayılanlardan gelir)
+//                 SSB EVREN — 1 Kasım 2026'ya kadar kredisiz sınırsız çağrı
 //
 // Base env names are also accepted everywhere (e.g. GROQ_API_KEY, CEREBRAS_API_KEY).
 // All naming conventions come from the shared ai-keys scanner, so whatever
@@ -38,7 +41,8 @@ export type PoolGroup =
   | "pool_a"
   | "pool_b"
   | "pool_c"
-  | "pool_d";
+  | "pool_d"
+  | "pool_e";
 
 export type PoolPriority = "fast" | "deep";
 
@@ -63,6 +67,9 @@ export type PoolNodeOutcome =
 
 import {
   cerebrasEnvKeys,
+  evrenBaseUrl,
+  evrenEnvKeys,
+  evrenModels,
   geminiEnvKeys,
   groqEnvKeys,
   hfEnvKeys,
@@ -70,14 +77,21 @@ import {
   sambanovaEnvKeys,
 } from "./ai-keys.server";
 
-/** PROVIDER_<X> env prefix for the pool_a..pool_d groups. */
+/** PROVIDER_<X> env prefix for the pool_a..pool_e groups. */
 function poolEnvPrefix(group: PoolGroup): string {
   if (group === "pool_a") return "PROVIDER_A";
   if (group === "pool_b") return "PROVIDER_B";
   if (group === "pool_c") return "PROVIDER_C";
   if (group === "pool_d") return "PROVIDER_D";
+  if (group === "pool_e") return "PROVIDER_E";
   return group.toUpperCase();
 }
+
+/**
+ * Kullanıcı tanımlı OpenAI uyumlu yuvalar — hepsi uç + model gerektirir.
+ * pool_a..d dahil. Anahtar tek başına bir düğüm YAPMAZ.
+ */
+const CUSTOM_POOL_GROUPS: PoolGroup[] = ["pool_a", "pool_b", "pool_c", "pool_d", "pool_e"];
 
 const GROUP_PRIORITY: Record<PoolGroup, PoolPriority> = {
   groq: "fast",
@@ -88,6 +102,10 @@ const GROUP_PRIORITY: Record<PoolGroup, PoolPriority> = {
   pool_b: "fast",
   pool_c: "fast",
   pool_d: "fast",
+  // EVREN: kredisiz + sınırsız (1 Kasım 2026'ya kadar) → hızlı sweep'in birinci
+  // yedek adayı. Aynı zamanda GLM-5.3 / DeepSeek-V4.1 gibi güçlü aileleri
+  // barındırdığı için DEEP zincirinde de yedek.
+  pool_e: "fast",
   gemini: "deep",
   sambanova: "deep",
 };
@@ -104,6 +122,7 @@ const ALL_ORDER: PoolGroup[] = [
   "pool_b",
   "pool_c",
   "pool_d",
+  "pool_e",
 ];
 
 /** "fast" sweep order (f/p): Groq 5 anahtar ilk, Cerebras/OpenRouter/HF, tek anahtarlı SambaNova en son. */
@@ -118,6 +137,9 @@ const FAST_ORDER: PoolGroup[] = [
   "pool_c",
   "pool_d",
   "sambanova",
+  // EVREN en son: kredisiz olduğu için diğer ücretsiz katmanlar tükenene dek
+  // hiç açılmaz; bir kez açıldığında darboğazı çözmek için en değerli düğümdür.
+  "pool_e",
 ];
 
 /** "deep" reasoning order: Gemini + SambaNova yüksek bağlam önce. */
@@ -132,6 +154,7 @@ const DEEP_ORDER: PoolGroup[] = [
   "pool_b",
   "pool_c",
   "pool_d",
+  "pool_e",
 ];
 
 // ------------------------------------------------------------------ cooldown
@@ -161,6 +184,7 @@ function poolGroupKeys(group: PoolGroup): string[] {
   if (group === "gemini") return geminiEnvKeys();
   if (group === "openrouter") return openRouterEnvKeys();
   if (group === "hf") return hfEnvKeys();
+  if (group === "pool_e") return evrenEnvKeys();
   const prefix = poolEnvPrefix(group); // pool_a..pool_d
   const keys: string[] = [];
   for (let i = 1; i <= 5; i++) {
@@ -190,6 +214,12 @@ export function poolGroupConfig(group: PoolGroup): {
         model: readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct",
       };
     }
+    case "pool_e": {
+      // EVREN: yalnız ANAHTAR yeterli. Uç (`evren-llmapi.ssyz.org.tr/v1`) ve
+      // model (`auto`) doğrulanmış varsayılanlardan gelir; kullanıcı isterse
+      // `EVREN_BASE_URL` / `EVREN_MODEL` ile override eder.
+      return { baseUrl: evrenBaseUrl(), model: evrenModels()[0] ?? "" };
+    }
     case "cerebras":
       return { baseUrl: "https://api.cerebras.ai/v1/chat/completions", model: "" };
     case "sambanova":
@@ -215,7 +245,7 @@ export function buildPoolNodes(
   for (const group of groups) {
     const keys = poolGroupKeys(group);
     if (!keys.length) continue;
-    if (group !== "pool_a" && group !== "pool_b" && group !== "pool_c" && group !== "pool_d") {
+    if (!CUSTOM_POOL_GROUPS.includes(group)) {
       // Built-in providers (Groq/Gemini/OpenRouter/HF/Cerebras/SambaNova) have
       // known endpoints — every configured key is a usable node.
       keys.forEach((_, i) => {
@@ -231,8 +261,11 @@ export function buildPoolNodes(
       });
       continue;
     }
-    const { baseUrl } = poolGroupConfig(group);
+    const { baseUrl, model } = poolGroupConfig(group);
     if (!baseUrl) continue; // no endpoint → never guess one
+    // EVREN gibi slug'ı kullanıcıdan gelen havuzlarda model de zorunludur:
+    // varsayılan bir model adı uydurmak her çağrıda 404 demektir.
+    if (group === "pool_e" && !model) continue;
     keys.forEach((_, i) => {
       const slot = i + 1;
       if (!isNodeCool(group, slot)) return;
@@ -282,9 +315,10 @@ export function poolGroupConfigured(group: PoolGroup): boolean {
 export function poolGroupAvailable(group: PoolGroup): boolean {
   if (!poolGroupConfigured(group)) return false;
   if ((groupCooldownUntil.get(group) ?? 0) > Date.now()) return false;
-  const { baseUrl } = poolGroupConfig(group);
+  const { baseUrl, model } = poolGroupConfig(group);
   if (group === "cerebras" || group === "sambanova") return true;
-  return Boolean(baseUrl);
+  if (!baseUrl) return false;
+  return group === "pool_e" ? Boolean(model) : true;
 }
 
 /**
@@ -334,8 +368,13 @@ export function poolHealthSummary(): {
   for (const group of ALL_ORDER) {
     const keys = poolGroupKeys(group);
     if (!keys.length) continue;
-    const { baseUrl } = poolGroupConfig(group);
-    const usable = group === "cerebras" || group === "sambanova" ? true : Boolean(baseUrl);
+    const { baseUrl, model } = poolGroupConfig(group);
+    const usable =
+      group === "cerebras" || group === "sambanova"
+        ? true
+        : baseUrl
+          ? group !== "pool_e" || Boolean(model)
+          : false;
     const configured = keys.length;
     const available = usable ? buildPoolNodes().filter((n) => n.group === group).length : 0;
     byGroup[group] = { configured, available };

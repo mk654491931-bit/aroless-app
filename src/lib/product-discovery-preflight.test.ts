@@ -25,6 +25,13 @@ const READY: PreflightEnv = {
   GEMINI_API_KEY: "g",
   SERPAPI_KEY: "s",
   SCRAPERAPI_KEY: "sc",
+  // Gelişmiş model havuzu (DeepSeek V4.1 Flash / GLM-5.3 / Qwen3.8 / MiMo /
+  // Gemma 4 tek anahtarla açılır). SerpAPI/ScraperAPI gibi isteğe bağlıdır.
+  OPENROUTER_API_KEY: "or",
+  // EVREN (SSB ulusal YZ platformu): anahtar + uç + model. Üçü birden gerekir.
+  EVREN_API_KEY: "ev",
+  EVREN_BASE_URL: "https://evren.example.test/v1/chat/completions",
+  EVREN_MODEL: "deepseek-v4.1-flash",
 };
 
 const byId = (checks: { id: string }[], id: string) =>
@@ -34,6 +41,37 @@ describe("preflight env kontrolleri", () => {
   it("tam kurulumda tüm kontroller geçer", () => {
     const checks = envChecks(READY);
     expect(checks.every((c) => c.ok)).toBe(true);
+  });
+
+  it("gelişmiş model havuzu yoksa hat yine çalışır (isteğe bağlı)", () => {
+    const checks = envChecks({
+      ...READY,
+      OPENROUTER_API_KEY: undefined,
+      EVREN_API_KEY: undefined,
+      EVREN_BASE_URL: undefined,
+      EVREN_MODEL: undefined,
+    });
+    const check = byId(checks, "ai_models");
+    expect(check?.ok).toBe(false);
+    expect(check?.optional).toBe(true);
+    // Yokluk hatı düşürmez; yalnız gelişmiş modeller kullanılmaz.
+    expect(check?.fix).toContain("OpenRouter");
+  });
+
+  it("EVREN tek başına gelişmiş model havuzunu açar (OpenRouter gerekmez)", () => {
+    const checks = envChecks({ ...READY, OPENROUTER_API_KEY: undefined });
+    expect(byId(checks, "ai_models")?.ok).toBe(true);
+    expect(byId(checks, "evren")?.ok).toBe(true);
+  });
+
+  it("doğrudan sağlayıcı anahtarı varsa model havuzu tanımlı sayılır", () => {
+    const checks = envChecks({
+      ...READY,
+      OPENROUTER_API_KEY: undefined,
+      PROVIDER_A_1: "ds",
+      PROVIDER_A_BASE_URL: "https://api.deepseek.com/v1",
+    });
+    expect(byId(checks, "ai_models")?.ok).toBe(true);
   });
 
   it("QSTASH_TOKEN yoksa hat kuyruğa ALINAMAZ — bu zorunlu eksiktir", () => {
@@ -68,8 +106,8 @@ describe("preflight env kontrolleri", () => {
     expect(check?.ok).toBe(false);
     expect(check?.optional).toBe(true);
     // Hat hazır sayılır: Gemini yoksa yalnız seçim deterministik olur.
-    // SerpAPI/ScraperAPI anahtarları fixture'da tanımlı olduğu için tek eksik
-    // budur; o ikisi de isteğe bağlıdır ve yoklukları hattı düşürmez.
+    // SerpAPI/ScraperAPI/OpenRouter/EVREN tanımlı olduğu için tek eksik budur;
+    // hepsi isteğe bağlıdır ve yoklukları hattı düşürmez.
     expect(summarize(checks)).toBe("Hat çalışmaya hazır (1 isteğe bağlı eksik).");
   });
 

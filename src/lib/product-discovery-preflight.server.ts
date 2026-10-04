@@ -1,3 +1,4 @@
+import { configuredDirectModelProviders, evrenStatus } from "./ai-keys.server";
 // ============================================================================
 // PRODUCT DISCOVERY — HAT ÖNCE KONTROLÜ (PREFLIGHT).
 //
@@ -63,6 +64,9 @@ const set = (env: PreflightEnv, key: string): boolean => Boolean((env[key] ?? ""
  * yalan söylemek olurdu.
  */
 export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
+  // Yalnız sağlayıcı İSMİ döner; anahtar değeri ASLA okunmaz.
+  const directProviders = configuredDirectModelProviders(env);
+  const evren = evrenStatus(env);
   return [
     {
       id: "qstash_token",
@@ -125,6 +129,36 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         ? "tanımlı — hedef ülkenin yerel pazaryerleri kazınır"
         : "Yok: yerel pazaryeri kazıması atlanır, kalan kaynaklarla hat yine çalışır.",
       fix: "İsteğe bağlı — scraperapi.com'da ücretsiz hesap açıp SCRAPERAPI_KEY ekle.",
+    },
+    {
+      id: "evren",
+      label: "EVREN ulusal YZ platformu (isteğe bağlı)",
+      ok: evren.ready,
+      optional: true,
+      detail: evren.ready
+        ? `tanımlı — ${evren.keys} anahtar, model: ${evren.models.join(", ")}. ` +
+          "1 Kasım 2026'ya kadar kredisiz; kotanın tükendiği anda yüksek kapasite sağlar."
+        : "Yok: hat yine de Gemini/Groq/Cerebras/HF ile çalışır, yalnızca EVREN'in yüksek kapasitesi kullanılmaz.",
+      fix:
+        "İsteğe bağlı — evren.ssyz.org.tr (e-Devlet) → API anahtarı üret, EVREN_API_KEY olarak ekle. " +
+        "Uç ve model otomatik gelir; sabit model istersen EVREN_MODEL (örn. glm-5.3) yaz.",
+    },
+    {
+      id: "ai_models",
+      label: "Gelişmiş model havuzu (isteğe bağlı)",
+      ok: set(env, "OPENROUTER_API_KEY") || directProviders.length > 0 || evren.ready,
+      optional: true,
+      detail: directProviders.length
+        ? `tanımlı — doğrudan sağlayıcı: ${directProviders
+            .map((p) => `${p.label} → ${p.model}`)
+            .join(", ")}` +
+        (set(env, "OPENROUTER_API_KEY") ? " · OpenRouter da tanımlı" : "")
+        : set(env, "OPENROUTER_API_KEY")
+          ? "OpenRouter tanımlı — DeepSeek V4.1 Flash / GLM-5.3 / Qwen3.8 / MiMo-V2.6 / Gemma 4 tek anahtarla açılır"
+          : "Yok: hat yalnız Gemini/Groq/Cerebras/HF ile çalışır — gelişmiş modeller kullanılmaz.",
+      fix: "İsteğe bağlı — OpenRouter anahtarı ekle VEYA doğrudan sağlayıcı anahtarı " +
+        "(örn. PROVIDER_A_1 + PROVIDER_A_BASE_URL) VEYA EVREN (EVREN_API_KEY + EVREN_BASE_URL + EVREN_MODEL). " +
+        "Hazır uçlar `ai-keys.server.ts` içinde.",
     },
   ];
 }

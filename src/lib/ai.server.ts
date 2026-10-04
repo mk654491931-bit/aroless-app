@@ -1,6 +1,9 @@
 import { withEstimationRules } from "./ai-guidance";
 import {
   cerebrasEnvKeys,
+  evrenBaseUrl,
+  evrenEnvKeys,
+  evrenModels,
   geminiEnvKeys,
   groqEnvKeys,
   hfEnvKeys,
@@ -34,11 +37,78 @@ export const GROQ_MODELS_LATEST = [
   "llama-3.1-8b-instant",
 ];
 
-/** OpenRouter ladder used when both Gemini and Groq pools are spent. */
+/**
+ * OpenRouter merdiveni — kullanıcının sağladığı model ailesi.
+ *
+ * NEDEN BU MODELLER (2026-10-03, kullanıcı listesi + canlı doğrulama):
+ *   Kullanıcı altı model verdi; hepsi OpenRouter kataloğunda DOĞRULANDI
+ *   (canlı arama sonuçları): `z-ai/glm-5.3`, `xiaomi/mimo-v2.6-pro`,
+ *   `deepseek/deepseek-v4.1-flash`, `deepseek/deepseek-v4-flash`,
+ *   `qwen/qwen3.8-flash`, `google/gemma-4-31b-it:free`.
+ *
+ *   ÖLÇÜLEN/ÖLÇÜLMEYEN AYRIMI — bu sıralama KALİTE ÖLÇÜMÜ DEĞİLDİR:
+ *   • ÖLÇÜLDÜ: altı slug'ın da OpenRouter'da var olduğu (canlı arama).
+ *   • ÖLÇÜLMEDİ: bu uygulamanın görevlerinde (kısa liste seçimi, 14 ajan
+ *     konseyi, Türkçe kart metni) hangisinin daha iyi olduğu. O ölçüm için
+ *     ayrı bir A/B koşusu gerekir; iddia etmeden sıralamıyoruz.
+ *   Sıralama, dokümante edilmiş ÖZELLİKLERE göre yapıldı: görev başına
+ *   gerekçe `MODEL_ROUTING_NOTES` içinde yazılıdır.
+ *
+ * DÜRÜSTLÜK: bir slug katalogda olmazsa istek 404 döner; `tryOpenAIPool`
+ * bunu kota saymaz ve SIRADAKİ MODELE geçer. Yani yanlış slug hatı düşürmez,
+ * yalnız 200 ms bekletir.
+ */
 export const OPENROUTER_MODELS_LATEST = [
+  "deepseek/deepseek-v4.1-flash",
+  "qwen/qwen3.8-flash",
+  "z-ai/glm-5.3",
+  "xiaomi/mimo-v2.6-pro",
+  "deepseek/deepseek-v4-flash",
+  "google/gemma-4-31b-it:free",
+  // ESKİ YEDEKLER — yeni aile çalışmazsa hattı ayakta tutar.
   "google/gemini-2.0-flash-001",
   "meta-llama/llama-3.3-70b-instruct",
 ];
+
+/**
+ * GÖREV BAZLI MODEL YÖNLENDİRMESİ.
+ *
+ * Neden ayrı merdiven: uygulamanın iki AYRI tür yapay zekâ işi var ve
+ * bunlar tek bir "en iyi model" listesiyle aynı hizaya gelmez.
+ *   • `sweep` — 14 ajan konseyi gibi YÜKSEK HACİMLİ, JSON disiplini şart,
+ *     dilim bütçesi 10 sn: hızlı ve ucuz olan önce gelmeli.
+ *   • `deep`  — kısa liste seçimi, kazanan sentezi, rapor: kalite birincil.
+ *
+ * DİKKAT: sıralama kalite ÖLÇÜMÜ değildir (bkz. yukarıdaki uyarı). İstenirse
+ * `AI_ROUTING_DISABLE_ENV` ile geri alınabilir; o zaman eski tek liste kullanılır.
+ */
+export const OPENROUTER_MODELS_BY_TASK = {
+  /** Konsey/ajan dalgaları: çok çağrı, kısa yanıt, 10 sn'lik dilim. */
+  sweep: [
+    "qwen/qwen3.8-flash",
+    "deepseek/deepseek-v4.1-flash",
+    "google/gemma-4-31b-it:free",
+    "z-ai/glm-5.3",
+  ],
+  /** Sentez/rapor/kısa liste: kalite birincil, maliyet ikincil. */
+  deep: ["z-ai/glm-5.3", "xiaomi/mimo-v2.6-pro", "deepseek/deepseek-v4.1-flash"],
+} as const satisfies Record<string, readonly string[]>;
+
+/** Her modelin bu uygulamada NEDEN seçildiğinin kısa gerekçesi. */
+export const MODEL_ROUTING_NOTES: Record<string, string> = {
+  "deepseek/deepseek-v4.1-flash":
+    "Çok modlu (görsel de okuyor) + uzun bağlam; kısa listede ürün GÖRSELİ ile aday eşleştirme için tek seçenek.",
+  "qwen/qwen3.8-flash":
+    "Seyrek aktivasyonlu hızlı model; 14 ajan konseyinin JSON puanlaması için en ucuz kalite.",
+  "z-ai/glm-5.3":
+    "Açık ağırlıklı en güçlü kodlama/ajan modeli; kazanan sentezi ve rapor metni için.",
+  "xiaomi/mimo-v2.6-pro":
+    "Çok modlu amiral model; Türkçe metin üretimi ve rapor cümlesi için güçlü.",
+  "deepseek/deepseek-v4-flash":
+    "Aynı aileden önceki nesil; V4.1 erişilemezse aynı yeteneğin yedeği.",
+  "google/gemma-4-31b-it:free":
+    "ÜCRETSİZ ve yoğun 31B; kota biten anahtarlarda bedava yedek.",
+};
 export async function callLovableAI(
   prompt: string,
   temperature = 0.4,
@@ -69,21 +139,62 @@ export async function callLovableAI(
  * başarısız olursa kendi anahtar havuzlarına düşer, yani asla boş dönmez.
  */
 export async function callPremiumAI(prompt: string, temperature = 0.4): Promise<string> {
-  if (!hasGateway()) return directFallback(prompt, temperature);
+  if (!hasGateway()) return premiumFallback(prompt, temperature);
   try {
     return await callGatewayResponses(prompt, [
       "google/gemini-3.1-pro-preview",
       "google/gemini-3.6-flash",
       "openai/gpt-5.5",
       "google/gemini-2.5-pro",
+      // Kullanıcının sağladığı güçlü açık modeller: geçide düşen istekler
+      // için ek derinlik sağlar (slug'lar OpenRouter kataloğuyla aynıdır).
+      "z-ai/glm-5.3",
+      "xiaomi/mimo-v2.6-pro",
+      "deepseek/deepseek-v4.1-flash",
     ]);
   } catch (e) {
     try {
-      return await directFallback(prompt, temperature);
+      return await premiumFallback(prompt, temperature);
     } catch {
       throw e;
     }
   }
+}
+
+/**
+ * Ağ geçidi yokken PREMIUM yolun kendi anahtarlarımıza düşüşü.
+ *
+ * Sıralama kasıtlı: ÖNCE kaliteli OpenRouter merdiveni, SONRA genel süpürme.
+ * Önceden tek davranış genel süpürmeydi; süpürme ucuz modelle başladığı için
+ * kazanan sentezi gereğinden zayıf modellerle yapabiliyordu. Bir OpenRouter
+ * anahtarı varsa önce o denenir, olmazsa hiçbir şey değişmez.
+ */
+async function premiumFallback(prompt: string, temperature: number): Promise<string> {
+  const keys = openRouterEnvKeys();
+  if (keys.length) {
+    const text = await tryOpenAIPool(
+      "openrouter-deep",
+      keys,
+      "https://openrouter.ai/api/v1/chat/completions",
+      [...OPENROUTER_MODELS_BY_TASK.deep],
+      prompt,
+      temperature,
+      { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
+    );
+    if (text) return text;
+    // Derin merdiven de tutmazsa TAM aile merdiveni (yedekler dahil).
+    const wide = await tryOpenAIPool(
+      "openrouter-deep",
+      keys,
+      "https://openrouter.ai/api/v1/chat/completions",
+      [...OPENROUTER_MODELS_LATEST],
+      prompt,
+      temperature,
+      { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
+    );
+    if (wide) return wide;
+  }
+  return directFallback(prompt, temperature);
 }
 
 /**
@@ -325,7 +436,9 @@ function sweepConfig(name: SweepProvider): SweepConfig {
       return {
         keys: openRouterEnvKeys,
         url: "https://openrouter.ai/api/v1/chat/completions",
-        models: OPENROUTER_MODELS_LATEST,
+        // Yüksek hacimli yollarda (14 ajan konseyi, araç kartları) HIZLI
+        // merdiven kullanılır; derin merdiven yalnız `callPremiumAI`'de.
+        models: [...OPENROUTER_MODELS_BY_TASK.sweep],
         opts: { json: true, jsonOn400Retry: true, extraHeaders: { "X-Title": "Aroless AI" } },
       };
   }
@@ -423,8 +536,16 @@ async function directFallback(
     if (text) return text;
   }
 
-  // 7) PROVIDER_A..D — kullanıcı tanımlı OpenAI uyumlu havuzlar (BASE_URL + MODEL).
-  for (const group of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const) {
+  // 7) PROVIDER_A..E — kullanıcı tanımlı OpenAI uyumlu havuzlar (BASE_URL + MODEL).
+  // PROVIDER_E = SSB EVREN; uç ve model doğrulanmış varsayılanlardan gelir,
+  // `EVREN_MODEL`/`EVREN_MODELS` ile override edilebilir (virgüllü olabilir).
+  for (const group of [
+    "PROVIDER_A",
+    "PROVIDER_B",
+    "PROVIDER_C",
+    "PROVIDER_D",
+    "PROVIDER_E",
+  ] as const) {
     if (deadlineAt !== undefined && deadlineAt - Date.now() <= 0) break;
     const { keys, url, model } = customPoolConfig(group);
     if (!keys.length || !url) continue;
@@ -588,29 +709,47 @@ function readEnv(name: string): string {
 }
 
 /** Keys + endpoint + model of a custom PROVIDER_<X> pool (if configured). */
-function customPoolConfig(prefix: "PROVIDER_A" | "PROVIDER_B" | "PROVIDER_C" | "PROVIDER_D"): {
+function customPoolConfig(
+  prefix: "PROVIDER_A" | "PROVIDER_B" | "PROVIDER_C" | "PROVIDER_D" | "PROVIDER_E",
+): {
   keys: string[];
   url: string;
   model: string;
 } {
-  const keys = Array.from(
-    new Set(
-      Array.from({ length: 5 }, (_, i) => readEnv(`${prefix}_${i + 1}`)).filter(Boolean),
-    ),
-  );
+  const keys =
+    prefix === "PROVIDER_E"
+      ? evrenEnvKeys()
+      : Array.from(
+          new Set(
+            Array.from({ length: 5 }, (_, i) => readEnv(`${prefix}_${i + 1}`)).filter(Boolean),
+          ),
+        );
   const url =
-    readEnv(`${prefix}_BASE_URL`) ||
-    readEnv(`${prefix}_URL`) ||
-    readEnv(`${prefix}_API_URL`) ||
-    readEnv(`${prefix}_HOST`);
-  const model = readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct";
+    prefix === "PROVIDER_E"
+      ? evrenBaseUrl()
+      : readEnv(`${prefix}_BASE_URL`) ||
+        readEnv(`${prefix}_URL`) ||
+        readEnv(`${prefix}_API_URL`) ||
+        readEnv(`${prefix}_HOST`);
+  // EVREN'de model `auto` varsayılanla gelir veya `EVREN_MODELS` virgüllü
+  // liste olabilir; ilk slug kullanılır (havuz katmanı `evrenProvider` hepsini dener).
+  const model =
+    prefix === "PROVIDER_E"
+      ? (evrenModels()[0] ?? "")
+      : readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct";
   return { keys, url, model };
 }
 
 /** Keys of every custom PROVIDER_* pool (endpoint optional) — for the empty check. */
 function customPoolKeys(): string[] {
   const out: string[] = [];
-  for (const prefix of ["PROVIDER_A", "PROVIDER_B", "PROVIDER_C", "PROVIDER_D"] as const)
+  for (const prefix of [
+    "PROVIDER_A",
+    "PROVIDER_B",
+    "PROVIDER_C",
+    "PROVIDER_D",
+    "PROVIDER_E",
+  ] as const)
     out.push(...customPoolConfig(prefix).keys);
   return Array.from(new Set(out));
 }

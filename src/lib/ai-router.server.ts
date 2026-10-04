@@ -12,7 +12,7 @@ import {
   groqKeyPool,
   openRouterKeyPool,
 } from "./ai.server";
-import { hfEnvKeys } from "./ai-keys.server";
+import { evrenModels, hfEnvKeys } from "./ai-keys.server";
 import {
   markPoolGroupOutcome,
   parkPoolGroup,
@@ -46,6 +46,7 @@ export const FAST_CHAIN: ProviderId[] = [
   "pool_d",
   "openrouter",
   "huggingface",
+  "evren",
 ];
 /** Derin analiz / nihai sentez zinciri — kalite önce, ödeme yalnızca son çare. */
 export const DEEP_CHAIN: ProviderId[] = [
@@ -55,6 +56,10 @@ export const DEEP_CHAIN: ProviderId[] = [
   "sambanova",
   "cerebras",
   "huggingface",
+  // EVREN: ücretsiz katmanlar tükendiğinde, ÜCRETLİ Bedrock'tan ÖNCE. GLM-5.3 /
+  // DeepSeek-V4.1 gibi güçlü aileleri barındırıyor; 1 Kasım'da ücretsizliği
+  // bittiği için kalıcı çözüm değil — bu yüzden para harcamak yerine önce o.
+  "evren",
   "bedrock",
 ];
 export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = DEEP_CHAIN;
@@ -68,36 +73,53 @@ export const FINAL_SYNTHESIS_CHAIN: ProviderId[] = DEEP_CHAIN;
  * zincir yavaş sağlayıcılara kayar. Sonuç: 22 anahtarın 5'i kullanılır,
  * geri kalan 17 hiç işe yaramaz — hem yavaş hem verimsiz.
  *
- * ÇÖZÜM: Ajanlar sağlayıcıya GÖRE DAĞITILIR. Her ajan kendi birincil
- * sağlayıcısından başlar, 429 alırsa sıradakine geçer. Böylece ücretsiz
- * kotalar toplanır: 5 Groq + 5 Gemini + 5 OpenRouter + 5 HF + Cerebras +
- * SambaNova aynı anda kullanılabilir hale gelir.
+ * İKİNCİ SORUN (orta etap çözümü): 7 sağlayıcıya EŞİT dağıtmak, ajanları çok
+ * farklı kalitedeki motorlara dağıttı. Kullanıcı kararı belirli: ajanlar
+ * **EVREN ve Groq'un 5 anahtarı** üzerinde koşsun.
  *
- * `cycleCouncilChain` SAF bir fonksiyondur: aynı ajan sırası → aynı dağılım.
+ * ÇÖZÜM (iki kademe):
+ *   1. BİRİNCİL — EVREN ve Groq. Ajanlar bunlar arasında DÖNGÜLÜ dağılır
+ *      (tek sayılı ajanlar EVREN, çift sayılı ajanlar Groq). Böylece hem
+ *      kredisiz kapasite hem 5 Groq anahtarı aynı anda kullanılır.
+ *   2. YEDEK — EVREN/Groq biri hata verirse (429/404/timeout) zincir diğer ana
+ *      motora, o da olmazsa kalan 5 sağlayıcıya düşer.
+ *
+ * NEDEN DÖNGÜLÜ, NEDEN HEPSİ EVREN ÖNCE DEĞİL: EVREN henüz canlı
+ * doğrulanmadı. Hepsi EVREN'le başlasa, EVREN bir sorun çıkarırsa TEK hata
+ * noktası haline gelirdi. Döngü 14 ajanı iki ana motora yayar: EVREN çökerse
+ * yalnızca tek sayılı ajanlar bir deneme kaybeder, çift sayılılar hiç
+ * etkilenmez.
+ *
+ * `councilChainFor` SAF bir fonksiyondur: aynı ajan sırası → aynı dağılım.
  */
 const COUNCIL_PRIMARY_ORDER: ProviderId[] = [
-  "groq", // 5 anahtar, en hızlı, 14 ajanın dağılımının omurgası
+  "evren", // 1 Kasım'a kadar kredisiz + SINIRSIZ, 14 açık ağırlıklı model
+  "groq", // 5 anahtar, en hızlı, ücretsiz katmanın belkemiği
+];
+
+/** Birincil ikisi de düşerse sırayla denenecek yedek sağlayıcılar. */
+const COUNCIL_FALLBACK_ORDER: ProviderId[] = [
   "gemini", // 5 anahtar, en güçlü doğruluk
-  "cerebras", // hızlı, tek anahtar → yükü düşük tutar
+  "cerebras", // hızlı, tek anahtar
   "sambanova", // tek anahtar, yüksek bağlam
   "openrouter", // 5 anahtar, ücretsiz modeller
   "huggingface", // 5 token, en son çare
 ];
 
 /**
- * Ajan indeksi → sağlayıcı dağıtılmış zincir.
+ * Ajan indeksi → sağlayıcı zinciri.
  *
- * Her sağlayıcı "resmi sırası" ile birincil olur; kalan sağlayıcılar hata
- * durumunda yedek olarak arkasına eklenir. Groq gibi 5 anahtarlı gruplar
- * daha fazla ajan alır, tek anahtarlı gruplar (cerebras/sambanova) daha az —
- * böylece ücretsiz kota daha verimli tüketilir.
+ * 7 uzunlukta: [ana motor] + [diğer ana motor] + [5 yedek]. Ajanın birincili
+ * `COUNCIL_PRIMARY_ORDER` arasında döngülenir → 14 ajanın yarısı EVREN'den,
+ * yarısı Groq'tan başlar. Yedekler HER ajanda aynı sırada durur, yani bir
+ * sağlayıcı çöktüğünde 14 ajanın hepsi aynı yedeğe düşer.
  */
 export function councilChainFor(agentIndex: number): ProviderId[] {
   const total = COUNCIL_PRIMARY_ORDER.length;
   const primary = COUNCIL_PRIMARY_ORDER[((agentIndex % total) + total) % total] ?? "groq";
-  // Ajanın kendi sağlayıcısı + diğerleri (kendi sağlayıcısı hariç sona).
-  const rest = COUNCIL_PRIMARY_ORDER.filter((p) => p !== primary);
-  return [primary, ...rest];
+  // Diğer ana motor HEMEN arkasında: EVREN çöktüyse Groq, Groq çöktüyse EVREN.
+  const otherPrimary = COUNCIL_PRIMARY_ORDER.filter((p) => p !== primary);
+  return [primary, ...otherPrimary, ...COUNCIL_FALLBACK_ORDER];
 }
 
 export type ProviderId =
@@ -107,6 +129,7 @@ export type ProviderId =
   | "pool_b"
   | "pool_c"
   | "pool_d"
+  | "evren"
   | "groq"
   | "gemini"
   | "openrouter"
@@ -129,7 +152,38 @@ const POOL_PROVIDER_GROUP: Partial<Record<ProviderId, PoolGroup>> = {
   pool_b: "pool_b",
   pool_c: "pool_c",
   pool_d: "pool_d",
+  evren: "pool_e",
 };
+
+/**
+ * EVREN (SSB) sağlayıcısı — OpenAI uyumlu, yalnız API anahtarı gerekir.
+ *
+ * Farkı diğer `pooledProvider`'lardan: EVREN'de 14 model var ve varsayılan model
+ * `auto` — yani platform her isteği kendi değerlendirip uygun modele yönlendirir.
+ * Kullanıcı `EVREN_MODELS` ile birden fazla sabit slug da listeleyebilir; bu
+ * yüzden tek model yerine LİSTE döner ve `rotate` sırayla dener — bir slug 404
+ * verdiğinde zincir kırılmaz, sıradaki slug denenir.
+ */
+function evrenProvider(): ProviderCall {
+  return async (prompt, temperature, signal) => {
+    const keys = readPoolGroupKeys("pool_e");
+    const { baseUrl } = poolGroupConfig("pool_e");
+    const models = evrenModels();
+    if (!keys.length || !baseUrl || !models.length) {
+      throw new Error("no api key/endpoint/model configured for evren");
+    }
+    try {
+      const text = await rotate("evren", keys, models, (key, m) =>
+        openAICompatible({ url: baseUrl, key, model: m, prompt, temperature, signal }),
+      );
+      markPoolGroupOutcome("pool_e", 1, "ok");
+      return text;
+    } catch (e) {
+      parkGroupAfterFailure("pool_e", e);
+      throw e;
+    }
+  };
+}
 
 /** PROVIDER_A..D için OpenAI uyumlu sağlayıcı üretici (URL + model env'den). */
 function pooledProvider(group: PoolGroup): ProviderCall {
@@ -339,6 +393,7 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
   pool_b: pooledProvider("pool_b"),
   pool_c: pooledProvider("pool_c"),
   pool_d: pooledProvider("pool_d"),
+  evren: evrenProvider(),
 
   groq: async (prompt, temperature, signal) => {
     try {
