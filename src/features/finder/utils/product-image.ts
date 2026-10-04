@@ -1,52 +1,63 @@
 import { useEffect, useState } from "react";
+
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { classifyImageUrl } from "@/lib/product-image-verification";
 
 /**
- * Görsel aramasına verilecek SADE ÜRÜN ADI.
+ * ÜRÜN GÖRSELİ — ARAYÜZ SÖZLEŞMESİ.
  *
- * ÖLÇÜLEN HATA: pazaryeri kartlarının başlığı fiyat ve mağaza kuyruğuyla
- * geliyor ("Brightech Libra LED desk lamp ... for $97.99 at Walmart"). Bu
- * metin olduğu gibi görsel aramasına gidince arama motoru o ürünün fotoğrafını
- * değil, o cümleyi içeren bir sayfanın kapağını döndürüyor — yani alakasız
- * fotoğraf. Kuyruk temizleniyor; ürünün kendi adı kalıyor.
+ * DEĞİŞME (ölçülen hata, kullanıcı: "fotoğraflar çok alakasız"):
+ *   Eski sürüm, kaynaktan gelen görsel yoksa ürün ADINA web görsel araması
+ *   yapıyordu (`/api/public/product-image?q=<ürün adı>`) ve dönen İLK fotoğrafı
+ *   ürünün fotoğrafı olarak gösteriyordu. Arama motoru ürünün varlığına kanıt
+ *   değildir: logonun, banner'ın, kategori karosunun ya da BAŞKA bir ürünün
+ *   fotoğrafını döndürebiliyor. Bu tam olarak "uydurma görsel" idi.
+ *
+ *   Artık kural tek cümlelik:
+ *     GÖRSEL = ÜRÜNÜN KENDİ SAYFASINDAN DOĞRULANMIŞ FOTOĞRAF.
+ *   Doğrulanamıyorsa arayüz AÇIKÇA "doğrulanamadı" der — boş kutu değil.
+ *
+ * AI'ın ürettiği `image_url` de aynı kapıdan geçer: gerçek bir adres değilse
+ * ya da logo/yer tutucu desenine düşüyorsa KULLANILMAZ (bkz. §15 — AI ürün
+ * verisi üretmez, yalnız analiz eder).
  */
-export function cleanImageQuery(name: string): string {
-  return String(name ?? "")
-    .replace(/\s+at\s+[A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)?\s*$/u, "")
-    .replace(/\s+for\s+\$[\d.,]+\s*$/i, "")
-    .replace(/\s*[$€£]\s?[\d.,]+\s*$/u, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 80);
-}
 
-/** Only accepts a real, verifiable product image URL returned by the model. */
+/** Kaynak/AI tarafından verilen ham adres — kapıdan geçerse `null` değil, URL döner. */
 export function resolveProductImage(p: WinningProduct): string | null {
-  const u = p.image_url?.trim();
-  if (!u || !/^https?:\/\//i.test(u)) return null;
-  if (/source\.unsplash\.com|loremflickr|picsum\.photos|placehold|via\.placeholder|dummyimage/i.test(u))
-    return null;
-  return u;
+  const u = typeof p?.image_url === "string" ? p.image_url.trim() : "";
+  if (!u) return null;
+  // `classifyImageUrl` stok görsel servislerini, logoları, ikonları ve izleme
+  // piksellerini eler; geçerse adres gerçek bir ürün fotoğrafı olabilir.
+  return classifyImageUrl(u) ? null : u;
 }
 
 // Client-side cache to avoid refetching the same product image.
 const _imgCache = new Map<string, string>();
 
-export function useRealProductImage(name: string): string | null {
-  const [url, setUrl] = useState<string | null>(() => _imgCache.get(name.toLowerCase()) ?? null);
+/**
+ * Ürünün KENDİ SAYFASINDAN doğrulanmış fotoğrafı getirir.
+ *
+ * @param productUrl ürünün gerçek kaynak adresi (arama sonucu adresi DEĞİL).
+ *                  Boşsa HİÇBİR istek atılmaz ve `null` döner.
+ */
+export function useVerifiedProductImage(productUrl: string): string | null {
+  const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    const key = name.toLowerCase();
+    const key = productUrl.trim().toLowerCase();
+    if (!key) {
+      setUrl(null);
+      return;
+    }
     const hit = _imgCache.get(key);
     if (hit) {
       setUrl(hit);
       return;
     }
     let cancelled = false;
-    const query = cleanImageQuery(name);
-    if (!query) return;
-    fetch(`/api/public/product-image?q=${encodeURIComponent(query)}`)
+    fetch(`/api/public/product-image?u=${encodeURIComponent(key)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { url?: string } | null) => {
+      .then((d: { url?: string | null } | null) => {
+        // Yalnız DOĞRULANMIŞ (`verified: true`) adresler önbelleğe girer.
         if (cancelled || !d?.url) return;
         _imgCache.set(key, d.url);
         setUrl(d.url);
@@ -55,6 +66,20 @@ export function useRealProductImage(name: string): string | null {
     return () => {
       cancelled = true;
     };
-  }, [name]);
+  }, [productUrl]);
   return url;
+}
+
+/**
+ * Kartın tek giriş noktası.
+ *
+ * Sıra: (1) kaynaktan gelen ve kapıdan geçen ölçülmüş görsel, (2) yoksa ürünün
+ * kendi sayfasından doğrulanmış görsel. İkisi de yoksa `null` döner ve kart
+ * "Görsel doğrulanamadı" durumunu gösterir — asla yer tutucu fotoğraf göstermez.
+ */
+export function useCardProductImage(p: WinningProduct): string | null {
+  const measured = resolveProductImage(p);
+  const sourceUrl = typeof p?.source_url === "string" ? p.source_url : "";
+  const fetched = useVerifiedProductImage(measured ? "" : sourceUrl);
+  return measured ?? fetched;
 }

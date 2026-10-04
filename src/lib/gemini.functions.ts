@@ -4,11 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { withCreditRefund } from "@/lib/credit-guard.server";
 import { callGemini, extractJson } from "@/lib/ai.server";
 import type { RealEconomics } from "@/lib/real-economics";
-import {
-  type ConsensusResult,
-  type CouncilSummary,
-  type HybridScore,
-} from "@/lib/consensus-types";
+import { type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { MarketEvidence } from "@/lib/market-evidence";
 import type { WinnerBreakdown } from "@/lib/winner-score";
@@ -103,6 +99,18 @@ export type WinningProduct = {
   trend_score: number;
   emoji: string;
   image_url?: string;
+  /**
+   * ÜRÜNÜN GERÇEK KAYNAK ADRESİ (ölçülmüş, kazımdan gelir).
+   *
+   * NEDEN YENİ: doğrulanmış ürün görseli yalnız ürünün KENDİ sayfasından
+   * bulunabilir. `image_url` yoksa kart, görseli bu adresin sayfasından
+   * doğrular; adres de yoksa görsel doğrulanamaz ve arayüz bunu AÇIKÇA söyler
+   * (eskiden ürün adına web görsel araması yapılıyordu ve alakasız fotoğraf
+   * gösteriliyordu — bkz. `features/finder/utils/product-image.ts`).
+   *
+   * Boş string = kaynak adresi ölçülmedi. ASLA üretilmez.
+   */
+  source_url?: string;
   /**
    * ÖLÇÜLMÜŞ TEDARİK KANITI (Anahtarsız toptan kaynaktan gelir).
    *

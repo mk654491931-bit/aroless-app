@@ -32,6 +32,12 @@ import {
   type ProductDiscoveryStatus,
   type TopProduct,
 } from "./product-discovery.types";
+import {
+  describeFunnel,
+  productCompleteness,
+  productIdOf,
+  sourceConfidence,
+} from "./discovery-quality";
 
 /**
  * ADIM 1'in üst sınırı: 75 aday.
@@ -325,10 +331,7 @@ async function attachSupplierEconomics(
   const prices: number[] = [];
   for (let i = 0; i < survivors.length; i++) {
     const row = survivors[i];
-    const { supplier, margin } = buildEconomics(
-      { name: row.name, priceUsd: row.priceUsd },
-      offers,
-    );
+    const { supplier, margin } = buildEconomics({ name: row.name, priceUsd: row.priceUsd }, offers);
     if (supplier.samples === 0) continue;
     matched++;
     if (supplier.supplierPriceUsd !== null) prices.push(supplier.supplierPriceUsd);
@@ -439,6 +442,28 @@ export async function runScrapeFilterStep(
   const notes: string[] = [
     `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
       `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
+    // HUNI + ELEME DÖKÜMÜ (§25): "hangi aşamada kaç ürün elendi" sayıyla görünür.
+    describeFunnel(
+      {
+        scraped: stats.inputCount,
+        normalized: stats.inputCount - stats.rejectedInvalid,
+        filtered: survivors.length,
+        top75: survivors.length,
+      },
+      {
+        "geçersiz satır": stats.rejectedInvalid,
+        "stok dışı": stats.rejectedNotInStock,
+        "bozuk fiyat": stats.rejectedPrice,
+        "görsel yok": stats.rejectedMissingImage,
+        "marj tabanı": stats.rejectedMargin,
+        "skor tabanı": stats.rejectedScore,
+        bütünlük: stats.rejectedByCompleteness,
+        kaynak: stats.rejectedBySource,
+        duplicate: stats.rejectedByDuplicate,
+        rating: stats.rejectedByRating,
+        "bütçe kırpma": stats.truncatedForBudget,
+      },
+    ),
   ];
   if (supplierStats.matched > 0) {
     notes.push(
@@ -488,11 +513,13 @@ export async function runScrapeFilterStep(
 /**
  * Top-75 listesinden Gemini ile en iyi 25 adayı seçer.
  *
- * 25 NEDEN (ve neden 15 değil): 14 ajan konsesinde oy çeşitliliği, aday
- * sayısıyla artar — 15 adayda her ajan aynı 15 ürüne yoğunlaşıp oy
- * dağılımını yapay biçimde daraltıyordu. 25 aday, Top-5 seçimi için hem
- * yeterli çeşitlilik hem de maliyet açısından hâlâ ucuz (TEK Gemini çağrısı).
- */export const GEMINI_SHORTLIST_SIZE = 12;
+ * 25 NEDEN: hattın sözleşmesi 75 → 25 → 5'tir. 14 ajan konsesinde oy
+ * çeşitliliği aday sayısıyla artar; 12'den dar bir havuzda her ajan aynı
+ * birkaç ürüne yoğunlaşıp oy dağılımını yapay olarak daraltıyordu. Maliyet
+ * açısından hâlâ ucuz: bu TEK bir Gemini çağrısıdır.
+ *
+ * AZ sayıda aday varsa HAT SAYIYI DOLDURMAZ: 43 kaliteli ürün varsa 43 gider.
+ */ export const GEMINI_SHORTLIST_SIZE = 25;
 export async function runGeminiShortlistStep(
   products: readonly NormalizedProduct[],
   niche: string,
@@ -538,13 +565,32 @@ export async function runGeminiShortlistStep(
     consensus: [],
     next: "deep_analysis",
     notes: [
+      // HUNI (§25): aşama sayıları tek satırda görünür. Model seçimi kaç
+      // ürün verdiyse o kadarı, gerisi deterministik yedeklemedir — bu ayrım
+      // gizlenmez çünkü kullanıcı "model seçti" sanarken yedeğin çalışmış
+      // olması hatla ilgili bir hatadır.
+      describeFunnel({
+        gemini_input: products.length,
+        gemini_output: shortlist.length,
+      }),
       shortlistVia === "gemini"
         ? `Gemini ${products.length} → ${shortlist.length} aday seçti ` +
           `(${geminiPicks} seçim modelden, ${shortlist.length - geminiPicks} deterministik yedekleme).`
         : `deterministik yedek ${products.length} → ${shortlist.length} aday seçti.`,
+      // §11/§12 GÖZLEMLENEBİLİRLİK: kısa listenin ölçülmüş bütünlük ve kaynak
+      // güveni özeti. Düşük güven sayısı uydurulmaz; doğrudan ölçümden gelir.
+      ...(shortlist.length > 0 ? [describeShortlistQuality(shortlist)] : []),
       ...(shortlistVia === "gemini"
         ? []
         : ["Gemini çağrısı yapılmadı; ön skor sıralaması kullanıldı."]),
+      // SAYIYI DOLDURMA YASAĞI (§39): havuz küçükse bu not yazılır, liste
+      // uydurma ürünle tamamlanmaz.
+      ...(shortlist.length < GEMINI_SHORTLIST_SIZE
+        ? [
+            `Havuzda ${shortlist.length} kaliteli aday vardı; liste ${GEMINI_SHORTLIST_SIZE}'e ` +
+              `YAPILMADI — sayıyı doldurmak için sahte ürün eklenmez.`,
+          ]
+        : []),
     ],
   };
 }
@@ -577,13 +623,16 @@ export async function geminiShortlistSelector(
   deadlineAt?: number,
 ): Promise<NormalizedProduct[]> {
   const { callGemini } = await import("./ai.server");
-  const { z } = await import("zod");
+  const { resolveSelection } = await import("./discovery-ai-selection");
+  const { productIdOf } = await import("./discovery-quality");
 
   // DİKKAT: istem ile doğrulayıcı AYNI SÖZDİZİMİNİ konuşmalıdır.
   // Önceki sürüm isteme "sadece numara listesi ver" yazıyor, doğrulayıcı ise
   // yalnız `{"picks":[...]}` kabul ediyordu. Model talimatı izleyince (yani
   // DÜZGÜN çalışınca) yanıt doğrulamadan düşüyor ve hat sessizce yedeğe
   // kayıyordu — yani Gemini hiçbir zaman seçim yapamıyordu.
+  const candidates = products.slice(0, GEMINI_SHORTLIST_SIZE);
+  const roster = candidates.map((p) => ({ productId: productIdOf(p), product: p }));
   const prompt = buildShortlistPrompt(products, niche);
 
   // `grounded=false`: aday listesi SABİT ve elimizde. Google Search grounding
@@ -612,40 +661,145 @@ export async function geminiShortlistSelector(
     );
     return [];
   }
-  const Parsed = z.object({
-    picks: z.array(z.number().int().min(1).max(Math.min(products.length, GEMINI_SHORTLIST_SIZE))).min(1).max(12),
-  });
-  const parsed = Parsed.safeParse(parseLooseJson(raw));
-  if (!parsed.success) return [];
+  const parsed = parseLooseJson(raw);
 
-  // Geçersiz/tekrar eden indeksler elenir; model sırası korunur.
+  // 1) YENİ SÖZLEŞME (§14): `{picks:[{productId,score,reasoning}]}`.
+  //    `resolveSelection` yanıtı GERÇEK aday listesine karşı doğrular:
+  //    listede olmayan `productId` halüsinasyondur ve REDDEDİLİR; dönen kayıt
+  //    her zaman girdideki gerçek üründür (modelden başlık/fiyat/görsel
+  //    kopyalanmaz). Yanıt bozuksa `products` boş döner ve sıradaki yedek çalışır.
+  const resolved = resolveSelection(parsed, roster, {
+    limit: Math.min(GEMINI_SHORTLIST_SIZE, candidates.length),
+  });
+  if (resolved.products.length) {
+    if (resolved.rejected.length) {
+      console.log(
+        `[discovery] gemini seçimi doğrulaması: ${resolved.products.length} kabul, ` +
+          `${resolved.rejected.length} reddedildi (${resolved.rejected
+            .slice(0, 3)
+            .map((r) => `${r.productId}: ${r.reason}`)
+            .join(" | ")})`,
+      );
+    }
+    return resolved.products.map((entry) => entry.product);
+  }
+
+  // 2) GERİYE UYUMLU SÖZLEŞME: `{picks:[1,2,3]}`. İndeksler de sınır dışıysa
+  //    ve tekrarlıysa elenir; modelin sırası korunur.
+  const legacy = parseLegacyIndexPicks(parsed, candidates);
+  return legacy.map((index) => candidates[index - 1]).filter((p): p is NormalizedProduct => !!p);
+}
+
+/**
+ * ESKİ (indeks tabanlı) model yanıtını güvenli biçimde okur.
+ *
+ * Sınır dışı indeks sessizce düşer (ürün uydurmak yerine atlamak); tekrar
+ * eden indeks ilkiyle normalleştirilir. Bu yol yalnız geriye uyumluluk içindir:
+ * yeni sözleşme `productId` üzerinden çalışır.
+ */
+export function parseLegacyIndexPicks(
+  parsed: unknown,
+  candidates: readonly NormalizedProduct[],
+): number[] {
+  const picks = (parsed as { picks?: unknown } | null | undefined)?.picks;
+  if (!Array.isArray(picks)) return [];
   const seen = new Set<number>();
-  const picked: NormalizedProduct[] = [];
-  for (const index of parsed.data.picks) {
+  const out: number[] = [];
+  for (const raw of picks) {
+    const index = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isInteger(index)) continue;
+    if (index < 1 || index > candidates.length) continue;
     if (seen.has(index)) continue;
     seen.add(index);
-    const product = products[index - 1];
-    if (product) picked.push(product);
+    out.push(index);
   }
-  return picked;
+  return out;
 }
 
 /**
  * Gemini istemi — DIŞA AKTARILIR çünkü sözleşmesi bir TEST ile kilitlenir.
  *
  * Uyarı buraya yazıldı çünkü bu hatta iki kez aynı sınıf hata düştü: isteme
- * "sadece numara listesi ver" yazıp doğrulayıcıdan `{"picks":[…]}`
- * beklemek. Model talimatı İZLEDİĞİ için hata değil, doğru davranışıydı —
- * ve doğrulayıcı onu reddedip hat sessizce yedeğe düşürüyordu. İstem ile
- * doğrulayıcı aynı söz dizimini konuşmalıdır.
+ * "sadece numara listesi ver" yazıp doğrulayıcıdan `{"picks":[…]}` beklemek.
+ * Model talimatı İZLEDİĞİ için hata değil, doğru davranışıydı — ve doğrulayıcı
+ * onu reddedip hat sessizce yedeğe düşürüyordu. İstem ile doğrulayıcı aynı
+ * söz dizimini konuşmalıdır.
+ *
+ * SÖZLEŞME (§14): model YALNIZ `productId` + `score` + `reasoning` üretir.
+ * Ürün adı, fiyat, görsel ve adres YAZILMAZ — bunlar kaynaktan gelir. Modelin
+ * uydurduğu bir `productId` doğrulamada elenir.
  */
+/**
+ * Bir adayın ÖLÇÜLMÜŞ kalite sinyalleri (0-100) — AI YOK, ağ YOK.
+ *
+ * İki ayrı soruyu ayırır (§11/§12):
+ *   • `completeness` — "bu ürünün ne kadarı ölçüldü?" (alan varlığı)
+ *   • `confidence`   — "bu satıra ne kadar güvenilir?" (kaynak + kanıt + ölçüm)
+ *
+ * İkisi de YALNIZ gerçek veriye dayanır; eksik alan tahminle DOLDURULMAZ,
+ * yalnız skoru düşürür. `confidence` deterministik bir gösterge ve yeniden
+ * sıralama ölçütüdür — ürün verisi DEĞİLDİR.
+ */
+export function candidateQuality(product: NormalizedProduct): {
+  completeness: number;
+  confidence: number;
+} {
+  const completeness = productCompleteness(product).score;
+  const confidence = sourceConfidence({
+    origin: product.source,
+    url: product.url,
+    sourceCount: product.sources.length,
+    completenessScore: completeness,
+  });
+  return { completeness, confidence };
+}
+
+/**
+ * Kısa listenin ÖLÇÜLMÜŞ kalite özeti (§11/§12) — uydurma yok, ortalama + sayı.
+ *
+ * "Kaç ürün var" demez; "ne kadar kanıtlı" der. Düşük güven satırları
+ * sayıyla görünür, çünkü az kanıtlı bir adayı öne çıkarmak kaliteyi düşürür.
+ */
+export function describeShortlistQuality(products: readonly NormalizedProduct[]): string {
+  if (products.length === 0) return "";
+  const rows = products.map(candidateQuality);
+  const mean = (pick: (row: { completeness: number; confidence: number }) => number) =>
+    Math.round(rows.reduce((sum, row) => sum + pick(row), 0) / rows.length);
+  const lowConfidence = rows.filter((row) => row.confidence < 40).length;
+  return (
+    `Kalite (§11/§12): ortalama bütünlük ${mean((r) => r.completeness)}/100 · ` +
+    `ortalama kaynak güveni ${mean((r) => r.confidence)}/100` +
+    (lowConfidence > 0 ? ` · ${lowConfidence} aday ${40}/100 altı güvende` : "") +
+    "."
+  );
+}
+
 export function buildShortlistPrompt(
   products: readonly NormalizedProduct[],
   niche: string,
 ): string {
+  // LİSTEDE productId YAZIYOR — sözleşme buna bağlı. İstem "productId dön"
+  // diyor, doğrulayıcı da girdideki `productIdOf(p)` ile eşleştiriyor; kimlik
+  // listede görünmüyorsa model uydurmak zorunda kalır ve doğrulayıcı her
+  // seçimi eler (ölçülen hata: sıralı numara listesi varken model `1`, `7`
+  // diyordu, yeni sözleşmeye geçince listede kimlik olmadığı için seçim
+  // yapamıyordu). Satır NEREDEN GELİYOR diye: kaynak satırı, `productId` hattın
+  // tamamında sabit kalır (§24).
+  // Her satır GERÇEK kimliği ve ÖLÇÜLMÜŞ kalite sinyalini taşır (§11/§12):
+  // model, az kanıtlı bir adayı zengin kanıtlı bir adayın önüne koymamalıdır.
+  // `güven`/`bütünlük` uydurulmaz; kaynak+görsel+ölçüm durumundan türetilir.
   const roster = products
     .slice(0, GEMINI_SHORTLIST_SIZE)
-    .map((p, i) => `${i + 1}. ${p.name} (ön skor ${p.preScore}, kanıt ${p.dataCompleteness}/5)`)
+    .map((p) => {
+      const quality = candidateQuality(p);
+      const price = p.priceUsd === null ? "" : ` · fiyat $${p.priceUsd.toFixed(2)}`;
+      const rating = p.rating === null ? "" : ` · puan ${p.rating.toFixed(1)}`;
+      return (
+        `${productIdOf(p)} · ${p.name} · ön skor ${Math.round(p.preScore)} · ` +
+        `kanıt ${p.dataCompleteness}/5 · bütünlük ${quality.completeness}/100 · ` +
+        `güven ${quality.confidence}/100${price}${rating}`
+      );
+    })
     .join("\n");
   const want = Math.min(GEMINI_SHORTLIST_SIZE, products.length);
   return [
@@ -653,9 +807,14 @@ export function buildShortlistPrompt(
     `Aşağıdaki ${Math.min(products.length, GEMINI_SHORTLIST_SIZE)} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
     "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
     "",
+    "KESİN KURALLAR:",
+    "- Yalnız aşağıdaki adaylardan birinin productId değerini kullan.",
+    "- Yeni ürün üretme, listede olmayan kimlik yazma.",
+    "- Fiyat, görsel, adres veya marka YAZMA; bunlar zaten ölçülmüştür.",
+    "",
     "YANITINI SADECE geçerli JSON olarak ver, başka hiçbir metin yazma:",
-    '{"picks":[1,7,3]}',
-    `picks içinde tam olarak ${want} farklı indeks olsun, en güçlüden zayıfa doğru sıralansın.`,
+    '{"picks":[{"productId":"<listelenen kimlik>","score":0,"reasoning":"<kısa gerekçe>"}]}',
+    `picks içinde tam olarak ${want} farklı productId olsun, en güçlüden zayıfa doğru sıralansın.`,
     "",
     roster,
   ].join("\n");
@@ -757,7 +916,9 @@ export async function runDeepAnalysisStep(
       notes: ["Aday yok."],
     };
   }
-  const councilInput = products.slice(0, 12);
+  // Konsey TÜM kısa listeyi görür (75 → 25 → 5 sözleşmesi: 14 ajan Top 25'i
+  // değerlendirir). Daha dar bir dilim oy çeşitliliğini yapay olarak daraltıyordu.
+  const councilInput = products.slice(0, GEMINI_SHORTLIST_SIZE);
   const consensus = await runCouncil(councilInput);
   return {
     ok: true,
@@ -888,9 +1049,7 @@ export function runFinalRankStep(
     next: "",
     notes: [
       `${winners.length} ürün nihai listeye girdi (ortalama kalite puanı ${Math.round(
-        winners.length
-          ? winners.reduce((sum, row) => sum + qualityOf(row), 0) / winners.length
-          : 0,
+        winners.length ? winners.reduce((sum, row) => sum + qualityOf(row), 0) / winners.length : 0,
       )}).`,
       ...(gatedOut > 0
         ? [

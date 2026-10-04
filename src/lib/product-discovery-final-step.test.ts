@@ -116,9 +116,7 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
 
   it("normal parmak izli koşuda sözleşme değişmez", async () => {
     const batch = Array.from({ length: 3 }, (_, i) => candidate(i + 1, `fp-${i + 1}`));
-    const consensus = Array.from({ length: 3 }, (_, i) => consensusRow(i + 1, `fp-${i + 1}`));
-
-    const outcome = await executeProductDiscoveryStep({
+    const consensus = Array.from({ length: 3 }, (_, i) => consensusRow(i + 1, `fp-${i + 1}`));const outcome = await executeProductDiscoveryStep({
       step: "final",
       runId: "run-1",
       userId: "user-1",
@@ -127,9 +125,52 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
       consensus,
       deadlineAt: Date.now() + 10_000,
     });
-
     expect(outcome.ok).toBe(true);
     const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [string, { products: NormalizedProduct[] }];
     expect(payload.products.map((p) => p.name)).toEqual(["Air Fryer 1", "Air Fryer 2", "Air Fryer 3"]);
+  });
+
+  it("AJAN ÜRÜN VERİSİ DEĞİŞTİREMEZ — halüsinasyon kaynak alanına YAZILMAZ", async () => {
+    // AJAN KORUMASI: konsey satırı modelden geçtiği için "her şeyi yazabilir"
+    // görünür, ama ürünün üstüne YALNIZ skor + gerekçe yazılır. Kaynak
+    // kaydının adı, fiyatı, adresi ve görseli ölçülmüştür.
+    //
+    // Kapatılan kırılma: konsenyus satırı `name` alanı taşır. Bu satır kaynağa
+    // değil MODELE bağlı olduğunda, modelin uydurduğu bir ürün adı nihai
+    // ürüne sızabilirdi — "AI ürün verisi üretmez" ilkesi sessizce bozulurdu.
+    const batch = [candidate(1, "fp-1")];
+    const hallucinated = {
+      ...consensusRow(1, "fp-1"),
+      // Modelin uydurduğu alanlar — HİBİRİ kaynağa geçmemeli.
+      name: "Uydurma Ürün",
+      priceUsd: 29.99,
+      url: "https://hallucinated.test/p",
+      imageUrl: "https://hallucinated.test/img.jpg",
+    };
+
+    await executeProductDiscoveryStep({
+      step: "final",
+      runId: "run-1",
+      userId: "user-1",
+      input,
+      batch,
+      consensus: [hallucinated] as never,
+      deadlineAt: Date.now() + 10_000,
+    });
+
+    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [
+      string,
+      { products: Record<string, unknown>[]; topProducts: { title: string }[] },
+    ];
+    const winner = payload.products[0]!;
+    // Kaynak alanları DEĞİŞMEZ.
+    expect(winner.name).toBe("Air Fryer 1");
+    expect(winner.priceUsd).toBe(59.9);
+    expect(winner.url).toBe("https://example.test/p");
+    expect(winner.imageUrl).toBe("");
+    // Ajanın katkısı YALNIZ analiz alanındadır.
+    expect(winner.councilScore).toBe(95);
+    // Dış sözleşmede de modelin adı görünmez.
+    expect(payload.topProducts[0]!.title).toBe("Air Fryer 1");
   });
 });

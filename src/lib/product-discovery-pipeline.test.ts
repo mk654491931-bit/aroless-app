@@ -31,10 +31,13 @@ import {
 import { parseLooseJson, runGeminiShortlistStep } from "./product-discovery-pipeline.server";
 import {
   buildShortlistPrompt,
+  candidateQuality,
+  describeShortlistQuality,
   geminiShortlistSelector,
   selectWithGemini,
   GEMINI_SHORTLIST_SIZE,
 } from "./product-discovery-pipeline.server";
+import { productIdOf } from "./discovery-quality";
 
 /**
  * Gemini çağrısı taklit edilir: bu test AĞA ÇIKMAZ, yalnız süre sınırının
@@ -407,18 +410,215 @@ describe("buildShortlistPrompt", () => {
 
   it("istenen adet sayısını sabit bir sayı olarak yazar", () => {
     const prompt = buildShortlistPrompt(pool, "air fryer");
-    expect(prompt).toContain(`tam olarak ${GEMINI_SHORTLIST_SIZE} farklı indeks`);
+    expect(prompt).toContain(`tam olarak ${GEMINI_SHORTLIST_SIZE} farklı productId`);
   });
 
-  it("her adayı 1'den başlayan indeksle numaralandırır", () => {
+  it("her adayı GERÇEK productId ile listeler (model uydurma kimlik yazmasın)", () => {
+    // Regresyon kapısı: istem "productId dön" diyordu ama listede kimlik
+    // YOKTU (sıralı numara vardı). Model doğru davranıp listedeki tek bir
+    // kimliği kopyalayamayınca uydurmak zorunda kalıyor ve doğrulayıcı her
+    // seçimi eliyordu — hat sessizce yedeğe düşüyordu. Satırlar `productIdOf`
+    // ile üretilir, yani liste ile doğrulayıcının beklediği kimlikler aynıdır.
     const prompt = buildShortlistPrompt(pool, "air fryer");
-    expect(prompt).toContain("1. Ürün 1");
-    expect(prompt).toContain("2. Ürün 2");
+    for (const product of pool.slice(0, GEMINI_SHORTLIST_SIZE)) {
+      expect(prompt).toContain(productIdOf(product));
+    }
+  });
+
+  it("kimlik dışında ürün verisi istemde ÖLÇÜLMÜŞ olarak yazar", () => {
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain("Ürün 1");
+    expect(prompt).toContain("$59.90");
   });
 
   it("havuz kısa istenen sayıyı havuza indirir (1 üründen 25 istemez)", () => {
     const prompt = buildShortlistPrompt([fullProduct()], "air fryer");
-    expect(prompt).toContain("tam olarak 1 farklı indeks");
+    expect(prompt).toContain("tam olarak 1 farklı productId");
+  });
+
+  it("MODEL ÜRÜN VERİSİ YAZMAZ — yalnız kimlik + puan + gerekçe ister (§15)", () => {
+    // Regresyon kapısı: istem başlık/fiyat/görsel/adres YAZMAMALI, çünkü
+    // bunlar kaynaktan gelir; modelin yazdığı her alan doğrulamada elenir.
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain("productId");
+    expect(prompt).toContain("score");
+    expect(prompt).toContain("reasoning");
+    expect(prompt).toMatch(/Fiyat, görsel, adres veya marka YAZMA/);
+    expect(prompt).toMatch(/listede olmayan kimlik yazma/);
+  });
+
+  it("her adayın ÖLÇÜLMÜŞ bütünlük ve kaynak güvenini yazar (§11/§12)", () => {
+    // Regresyon kapısı: `dataCompletenessScore`/`sourceConfidence` tanımlıydı
+    // ama hatta HİÇ bağlı değildi (ölü kod). Bu test, modelin gördüğü satırın
+    // gerçekten ölçülmüş bir güven skoru taşıdığını kilitler.
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain("bütünlük");
+    expect(prompt).toContain("güven");
+    const confidence = candidateQuality(pool[0]).confidence;
+    expect(prompt).toContain(`güven ${confidence}/100`);
+  });
+
+  it("describeShortlistQuality ölçülmüş ortalamayı özetler, boş havuzda boş döner", () => {
+    expect(describeShortlistQuality([])).toBe("");
+    const summary = describeShortlistQuality(pool);
+    expect(summary).toContain("ortalama bütünlük");
+    expect(summary).toContain("ortalama kaynak güveni");
+    expect(summary).not.toContain("undefined");
+  });
+});
+
+/* ================= 5b. YENİ SÖZLEŞME: productId + doğrulama (§14/§32) */
+
+describe("Gemini kısa liste — productId sözleşmesi ve halüsinasyon kapısı", () => {
+  beforeEach(() => {
+    aiMock.callGemini.mockReset();
+  });
+
+  const p1 = fullProduct({ id: "sku-1", name: "Air Fryer 5.5L" });
+  const p2 = fullProduct({ id: "sku-2", name: "Air Fryer Pro 8L" });
+  const p3 = fullProduct({ id: "sku-3", name: "Air Fryer Mini 2L" });
+
+  it("GERÇEK productId'leri seçer ve kaydı GİRDİDEKİ kayıttan verir", async () => {
+    const { productIdOf } = await import("./discovery-quality");
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({
+        picks: [
+          { productId: productIdOf(p3), score: 93, reasoning: "ölçülmüş talep" },
+          { productId: productIdOf(p1), score: 71 },
+        ],
+      }),
+    );
+
+    const picked = await geminiShortlistSelector([p1, p2, p3], "air fryer");
+
+    expect(picked.map((p) => p.id)).toEqual(["sku-3", "sku-1"]);
+    // Model ürün verisini DEĞİŞTİRMEZ: fiyat kaynak değerinde kalır.
+    expect(picked[0]!.priceUsd).toBe(p3.priceUsd);
+  });
+
+  it("HALÜSİNASYON ürün kimliğini reddeder (uydurma ürün listeye giremez)", async () => {
+    const { productIdOf } = await import("./discovery-quality");
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({
+        picks: [
+          { productId: "p_olmayan_urun_999", score: 99 },
+          { productId: productIdOf(p2), score: 80 },
+        ],
+      }),
+    );
+
+    const picked = await geminiShortlistSelector([p1, p2, p3], "air fryer");
+
+    // Sahte ürün YOK; yalnız gerçek aday kaldı.
+    expect(picked.map((p) => p.id)).toEqual(["sku-2"]);
+  });
+
+  it("TAMAMEN uydurma yanıtta boş seçim döner (hat yedeğe düşer)", async () => {
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({ picks: [{ productId: "p_hayalet", score: 100 }] }),
+    );
+    await expect(geminiShortlistSelector([p1, p2], "air fryer")).resolves.toEqual([]);
+  });
+
+  it("geçersiz puandan gelen yanıt şemayı geçmez → yedek", async () => {
+    const { productIdOf } = await import("./discovery-quality");
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({ picks: [{ productId: productIdOf(p1), score: 150 }] }),
+    );
+    await expect(geminiShortlistSelector([p1, p2], "air fryer")).resolves.toEqual([]);
+  });
+
+  it("bozuk JSON → yedek (çökmez)", async () => {
+    aiMock.callGemini.mockResolvedValue("{picks:[{productId: broken");
+    await expect(geminiShortlistSelector([p1, p2], "air fryer")).resolves.toEqual([]);
+  });
+
+  it("model ürün verisi yazmaya çalışırsa YOK SAYILIR", async () => {
+    const { productIdOf } = await import("./discovery-quality");
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({
+        picks: [
+          {
+            productId: productIdOf(p1),
+            score: 80,
+            name: "Sahte Ürün",
+            priceUsd: 0.99,
+            imageUrl: "https://sahte.test/x.jpg",
+          },
+        ],
+      }),
+    );
+
+    const picked = await geminiShortlistSelector([p1, p2], "air fryer");
+
+    expect(picked).toHaveLength(1);
+    expect(picked[0]!.priceUsd).toBe(59.9);
+    expect(picked[0]!.imageUrl).toBe(p1.imageUrl);
+  });
+
+  it("mükerrer productId ilkini korur (QStash mükerrer teslimatı)", async () => {
+    const { productIdOf } = await import("./discovery-quality");
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({
+        picks: [
+          { productId: productIdOf(p1), score: 90 },
+          { productId: productIdOf(p1), score: 50 },
+        ],
+      }),
+    );
+
+    const picked = await geminiShortlistSelector([p1, p2, p3], "air fryer");
+    expect(picked).toHaveLength(1);
+  });
+
+  it("ESKİ indeks sözleşmesi hâlâ çalışır (geriye uyum)", async () => {
+    aiMock.callGemini.mockResolvedValue(JSON.stringify({ picks: [2, 1] }));
+    const picked = await geminiShortlistSelector([p1, p2, p3], "air fryer");
+    expect(picked.map((p) => p.id)).toEqual(["sku-2", "sku-1"]);
+  });
+
+  it("sınır dışı indeks sessizce düşer (uydurma yerine atlama)", async () => {
+    aiMock.callGemini.mockResolvedValue(JSON.stringify({ picks: [99, 2] }));
+    const picked = await geminiShortlistSelector([p1, p2], "air fryer");
+    expect(picked.map((p) => p.id)).toEqual(["sku-2"]);
+  });
+
+  it("havuz 25'ten küçükse sayı DOLDURULMAZ", async () => {
+    aiMock.callGemini.mockRejectedValue(new Error("offline"));
+    const result = await runGeminiShortlistStep([p1, p2], "air fryer");
+    expect(result.products).toHaveLength(2);
+    expect(result.notes.join(" ")).toContain("YAPILMADI");
+  });
+});
+
+/* ================= 5c. Huni ve kayıt izlenebilirliği (§25) */
+
+describe("hat gözlemlenebilirliği — huni sayıları notlarda görünür", () => {
+  it("kazıma/filtre hunisi kayıt/filtre/top75 sayılarını tek satırda yazar", async () => {
+    // NOT: bu test AĞA ÇIKMAZ. `runScrapeFilterStep` canlı kaynakları
+    // çağırdığı için burada yerine adımın kullandığı huni biçimi doğrulanır;
+    // sayıların kendisi `discovery-quality.test.ts`'te kilitlidir.
+    const { describeFunnel } = await import("./discovery-quality");
+    const line = describeFunnel(
+      { scraped: 1842, normalized: 1791, filtered: 312, top75: 75 },
+      { "bozuk görsel": 82, "eksik fiyat": 101, duplicate: 230 },
+    );
+    expect(line).toContain("SCRAPED: 1842");
+    expect(line).toContain("NORMALIZED: 1791");
+    expect(line).toContain("FILTERED: 312");
+    expect(line).toContain("TOP75: 75");
+    expect(line).toContain("eleme");
+    expect(line).toContain("duplicate: 230");
+  });
+
+  it("gemini adımı giriş/çıkış sayılarını yazar", async () => {
+    const pool = Array.from({ length: 30 }, (_, i) =>
+      fullProduct({ id: `s-${i}`, name: `Ürün ${i + 1}`, preScore: 100 - i }),
+    );
+    const result = await runGeminiShortlistStep(pool, "air fryer", 25);
+    const notes = result.notes.join(" ");
+    expect(notes).toContain("GEMINI_INPUT: 30");
+    expect(notes).toContain("GEMINI_OUTPUT: 25");
   });
 });
 

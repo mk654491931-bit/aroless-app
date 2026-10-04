@@ -72,6 +72,10 @@ export function toWinningProducts(
       // önceliklidir; alakasız web araması yalnız gerçek görsel yoksa devreye
       // girer (bkz. `product-card.tsx`).
       image_url: row.imageUrl || undefined,
+      // ÖLÇÜLMÜŞ kaynak adresi. Doğrulanmış görsel yalnız ürünün KENDİ
+      // sayfasından bulunabilir; kazımada adres yoksa görsel de doğrulanamaz
+      // ve kart bunu açıkça söyler. Adres ASLA uydurulmaz.
+      source_url: row.url || "",
       // Ölçülmedi: kazımada hedef kitle verisi yok.
       target_audience: "",
       // AI bu koşuda reklam açısı üretmedi ($0 kuralı: AI yalnız iki adımda).
@@ -79,9 +83,10 @@ export function toWinningProducts(
       // ÖLÇÜLMÜŞ TEDARİK FİYATI (Anahtarsız toptan kaynaktan gelir). Teklif
       // eşleşmediyse BOŞ kalır — eskiden de boştu ama sebebi "kaynak yok"du;
       // şimdi fiyat gerçekten ölçülüyor (bkz. `supplier-economics.ts`).
-      supplier_price_usd: row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
-        ? ""
-        : String(row.supplier.supplierPriceUsd),
+      supplier_price_usd:
+        row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
+          ? ""
+          : String(row.supplier.supplierPriceUsd),
       // "Net marj" ölçülmedi: kargo/gümrük/komisyon kaynakta YOK. 0 yazmak
       // uydurmadır; aşağıdaki `gross_margin_pct` ise İKİ ÖLÇÜMÜN aritmetiği
       // olduğu için gerçektir ve brüt marj olarak ETİKETLENİR.
@@ -97,9 +102,10 @@ export function toWinningProducts(
       supplier_links: row.supplier?.url ? [row.supplier.url] : [],
       alibaba_links: [],
       cost_breakdown: {
-        supplier_cost: row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
-          ? ""
-          : String(row.supplier.supplierPriceUsd),
+        supplier_cost:
+          row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
+            ? ""
+            : String(row.supplier.supplierPriceUsd),
         // Kargo/komisyon/reklam ölçülmedi → boş. Boş yazmak "0 $ demiyor":
         // bu alanların hiçbiri `0` değil, hiç ölçülmedi.
         shipping_cost: "",
@@ -254,7 +260,8 @@ export function hintsForFailure(reason: string): string {
     // İki durum ayrı ipucu hak eder: satır HİÇ gelmediyse "kaynaklar çalıştı"
     // demek yalan olurdu (canlı olayda satır gelmişti, o yüzden eski ipucu
     // doğruydu; ama artık ayrımı mesajın kendisi taşıyor).
-    return /\(0\/\d+ kaynak/.test(String(reason ?? "")) || /\b0 ham satır/.test(String(reason ?? ""))
+    return /\(0\/\d+ kaynak/.test(String(reason ?? "")) ||
+      /\b0 ham satır/.test(String(reason ?? ""))
       ? "Bu bir kurulum hatası DEĞİL: kaynaklardan hiç satır gelmedi (ağ engeli veya çok dar niş olabilir)."
       : "Bu bir kurulum hatası DEĞİL: kaynaklar çalıştı, sonuç ilk aşama elemesinde elendi.";
   }
@@ -296,9 +303,7 @@ const BLOCKING_SETUP_IDS = ["supabase_url", "supabase_service_role", "db_columns
 
 export function blockingSetupIssues(report: SetupReport | null | undefined): string[] {
   if (!report) return [];
-  const failed = new Map(
-    report.checks.filter((c) => !c.ok).map((c) => [c.id, c] as const),
-  );
+  const failed = new Map(report.checks.filter((c) => !c.ok).map((c) => [c.id, c] as const));
   return BLOCKING_SETUP_IDS.filter((id) => failed.has(id)).map((id) => failed.get(id)!.fix);
 }
 

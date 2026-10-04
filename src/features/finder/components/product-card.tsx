@@ -34,15 +34,25 @@ import { BuyerSimulation } from "@/components/buyer-simulation";
 import { UnlockedBadge } from "@/components/upgrade-gate";
 import { DecisionStrip, WinnerBadge, WinnerScorePanel } from "@/components/winner-score-panel";
 import { countryName } from "@/lib/countries";
-import { hasMeasuredNetProfit, measuredGrossMarginPct, measuredMarginPct, measuredMoney } from "@/lib/economics-evidence";
+import {
+  hasMeasuredNetProfit,
+  measuredGrossMarginPct,
+  measuredMarginPct,
+  measuredMoney,
+} from "@/lib/economics-evidence";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { enrichProduct, recommendationStyle, reliabilityStyle, NOT_MEASURED } from "@/lib/recommendation";
+import {
+  enrichProduct,
+  recommendationStyle,
+  reliabilityStyle,
+  NOT_MEASURED,
+} from "@/lib/recommendation";
 import { useMoney } from "@/lib/currency";
 import { netMarginView } from "../utils/export";
-import { resolveProductImage, useRealProductImage } from "../utils/product-image";
+import { useCardProductImage } from "../utils/product-image";
 
 /** Ölçülmemiş sayıyı "0,00" gibi gösterilemez — "—" yazılır. */
 function moneyOrDash(
@@ -119,7 +129,9 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
             <span className="text-muted-foreground flex items-center gap-1">
               <Radar size={10} /> Tedarik satışı
             </span>
-            <span className="text-right font-semibold">{s.soldTotal.toLocaleString("tr-TR")} adet</span>
+            <span className="text-right font-semibold">
+              {s.soldTotal.toLocaleString("tr-TR")} adet
+            </span>
           </>
         )}
 
@@ -190,10 +202,16 @@ function DollarGap({ p }: { p: WinningProduct }) {
   // Maliyet kanıtı yoksa bu blok tamamen uydurma olur (ölçülen hata: her
   // üründe "Koyarsın $0, Kazanırsın $0/adet"). Gösterilmez.
   if (!hasMeasuredNetProfit(p)) return null;
-  const supplier = re ? re.supplier : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const shipping = re ? re.shipping : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
+  const supplier = re
+    ? re.supplier
+    : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
+  const shipping = re
+    ? re.shipping
+    : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const ad = re ? re.cac : Number(String(cb?.ad_spend ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const netPerUnit = re ? re.net_per_unit : Number(String(cb?.net_profit ?? "0").replace(/[^0-9.]/g, "")) || 0;
+  const netPerUnit = re
+    ? re.net_per_unit
+    : Number(String(cb?.net_profit ?? "0").replace(/[^0-9.]/g, "")) || 0;
   const breakeven =
     p.unit_economics?.breakeven_units ??
     (netPerUnit > 0 ? Math.ceil((supplier + shipping) / Math.max(0.1, netPerUnit)) : 0);
@@ -207,19 +225,25 @@ function DollarGap({ p }: { p: WinningProduct }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Koyarsın</div>
-          <div className="text-xs font-bold text-foreground mt-0.5">{money(invest, { showUsd: false })}</div>
+          <div className="text-xs font-bold text-foreground mt-0.5">
+            {money(invest, { showUsd: false })}
+          </div>
           <div className="text-[9px] text-muted-foreground">tedarik+kargo+reklam</div>
         </div>
         <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
           <div className="text-[9px] uppercase text-emerald-300/80">Kazanırsın</div>
-          <div className="text-xs font-bold text-emerald-300 mt-0.5">{money(netPerUnit, { showUsd: false })} / adet</div>
+          <div className="text-xs font-bold text-emerald-300 mt-0.5">
+            {money(netPerUnit, { showUsd: false })} / adet
+          </div>
           <div className="text-[9px] text-muted-foreground">
             net marj %{re?.net_margin_pct ?? cb?.net_margin_pct ?? p.profit_margin_pct ?? 0}
           </div>
         </div>
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Başabaş</div>
-          <div className="text-xs font-bold text-foreground mt-0.5">{breakeven ? breakeven + " adet" : "—"}</div>
+          <div className="text-xs font-bold text-foreground mt-0.5">
+            {breakeven ? breakeven + " adet" : "—"}
+          </div>
           <div className="text-[9px] text-muted-foreground">
             {re ? re.monthly.units + " adet/ay ölçek" : "ilk siparişler"}
           </div>
@@ -271,7 +295,10 @@ function SevenDayPlan({ p }: { p: WinningProduct }) {
       </div>
       <div className="space-y-1.5">
         {days.slice(0, 3).map((d, i) => (
-          <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[11px]">
+          <div
+            key={i}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[11px]"
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-foreground">
                 {d.day} · {d.title}
@@ -295,10 +322,18 @@ function SevenDayPlan({ p }: { p: WinningProduct }) {
 
 function ScorePill({ label, value }: { label: string; value: number }) {
   const color =
-    value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : value >= 40 ? "text-blue-400" : "text-muted-foreground";
+    value >= 80
+      ? "text-emerald-400"
+      : value >= 60
+        ? "text-amber-400"
+        : value >= 40
+          ? "text-blue-400"
+          : "text-muted-foreground";
   const glow = value >= 80 ? "shadow-[0_0_8px_-2px_oklch(0.75_0.18_155/0.4)]" : "";
   return (
-    <div className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}>
+    <div
+      className={`rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-1 text-center transition-all ${glow}`}
+    >
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`text-xs font-bold ${color}`}>{value}</div>
     </div>
@@ -319,7 +354,15 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
   );
 }
 
-function MetricPill({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function MetricPill({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
     <div
       className={`rounded-md border px-1.5 py-1 text-center ${highlight ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300" : "bg-white/[0.04] border-white/10"}`}
@@ -341,12 +384,16 @@ function ConversionBlock({ p }: { p: WinningProduct }) {
         <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1">
           <Target size={11} /> Buyers per 1,000 viewers
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tone.cls}`}>{tone.label}</span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tone.cls}`}>
+          {tone.label}
+        </span>
       </div>
       <div className="mt-2 flex items-end gap-2">
         <span className="text-3xl font-black tracking-tight text-aurora leading-none">{value}</span>
         <span className="text-xs text-muted-foreground mb-1">/ 1,000 people</span>
-        <span className="ml-auto text-xs font-semibold text-foreground/80 mb-1">{(value / 10).toFixed(1)}% CVR</span>
+        <span className="ml-auto text-xs font-semibold text-foreground/80 mb-1">
+          {(value / 10).toFixed(1)}% CVR
+        </span>
       </div>
       <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div
@@ -368,11 +415,16 @@ function ConversionBlock({ p }: { p: WinningProduct }) {
             </div>
           ))}
         </div>
-      )}      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
-        {estimated ? "Estimated from category conversion benchmarks (price, trend and competition adjusted)." : p.conversion?.reasoning}
+      )}{" "}
+      <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
+        {estimated
+          ? "Estimated from category conversion benchmarks (price, trend and competition adjusted)."
+          : p.conversion?.reasoning}
       </p>
       {!estimated && p.conversion?.benchmark && (
-        <p className="mt-1 text-[10px] text-muted-foreground/70">Benchmark: {p.conversion.benchmark}</p>
+        <p className="mt-1 text-[10px] text-muted-foreground/70">
+          Benchmark: {p.conversion.benchmark}
+        </p>
       )}
     </div>
   );
@@ -387,20 +439,30 @@ function ConsistencyBadge({ p }: { p: WinningProduct }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className={`w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] transition ${
-          clean ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+          clean
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            : "border-amber-500/30 bg-amber-500/10 text-amber-300"
         }`}
       >
         <span className="flex items-center gap-1.5">
           {clean ? <ShieldCheck size={12} /> : <AlertTriangle size={12} />}
-          {clean ? `Consistency verified · ${report.checked} checks` : `${report.issues.length} consistency warning${report.issues.length > 1 ? "s" : ""}`}
+          {clean
+            ? `Consistency verified · ${report.checked} checks`
+            : `${report.issues.length} consistency warning${report.issues.length > 1 ? "s" : ""}`}
         </span>
         <span className="font-semibold">{report.score}/100</span>
       </button>
       {open && !clean && (
         <ul className="mt-1.5 space-y-1">
           {report.issues.map((i: Issue, idx: number) => (
-            <li key={idx} className="text-[11px] text-muted-foreground rounded-md bg-white/[0.03] border border-white/10 px-2 py-1.5">
-              <span className={i.level === "error" ? "text-rose-300" : "text-amber-300"}>[{i.field}]</span> {i.message}
+            <li
+              key={idx}
+              className="text-[11px] text-muted-foreground rounded-md bg-white/[0.03] border border-white/10 px-2 py-1.5"
+            >
+              <span className={i.level === "error" ? "text-rose-300" : "text-amber-300"}>
+                [{i.field}]
+              </span>{" "}
+              {i.message}
             </li>
           ))}
         </ul>
@@ -436,21 +498,32 @@ export function ProductCard({
 }) {
   const onOpen = () => (locked ? onUpgrade() : onOpenRaw());
 
-  const compColor = p.competition_level === "Low" ? "text-emerald-400" : p.competition_level === "Medium" ? "text-amber-400" : "text-rose-400";
+  const compColor =
+    p.competition_level === "Low"
+      ? "text-emerald-400"
+      : p.competition_level === "Medium"
+        ? "text-amber-400"
+        : "text-rose-400";
   const cb = p.cost_breakdown;
   const enriched = enrichProduct(p);
   const { money, currency } = useMoney();
   const rec = recommendationStyle(enriched.recommendation);
-  // GÖRSEL ÖNCELİĞİ: kaynaktan ölçülen görsel her zaman önce gelir.
-  // Ölçülen hata: `realImg || modelImg` sırası, ürün adına yapılan web
-  // görsel aramasını (alakasız fotoğraf) gerçek kaynak görselinin ÖNÜNE
-  // koyuyordu. Ölçülen görsel varsa web araması hiç yapılmaz.
-  const modelImg = resolveProductImage(p);
-  const realImg = useRealProductImage(modelImg ? "" : p.name);
-  const cardImage = modelImg ?? realImg;
+  // GÖRSEL — DOĞRULANMIŞ fotoğraf ya da AÇIK "doğrulanamadı" durumu.
+  //
+  // Ölçülen hata (kullanıcı: "fotoğraflar çok alakasız"): kart, kaynaktan
+  // gelen görsel yoksa ürün ADINA web görsel araması yapıyor ve dönen İLK
+  // fotoğrafı ürünün fotoğrafı gösteriyordu. Arama motoru ürüne kanıt değildir;
+  // logo, banner veya BAŞKA ürünün fotoğrafı dönüyordu. Artık görsel ya kaynaktan
+  // gelen ölçülmüş fotoğraf ya da ürünün kendi sayfasından doğrulanmış
+  // fotoğraftır; ikisi de yoksa yer tutucu gösterilMEZ, durum yazılır.
+  const resolvedImage = useCardProductImage(p);
   const isTopWinner = (p.winner_score ?? 0) >= 75;
   const isElite = (p.winner_score ?? 0) >= 85;
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Yüklenemeyen görsel adresi "kırık" sayılır: kart onu da göstermez, doğrulanamadı
+  // durumuna döner (yer tutucu fotoğraf yüklemek uydurmak olurdu).
+  const [brokenImage, setBrokenImage] = useState<string | null>(null);
+  const shownImage = resolvedImage && resolvedImage !== brokenImage ? resolvedImage : null;
 
   return (
     <article
@@ -474,7 +547,9 @@ export function ProductCard({
           aria-pressed={selected}
           title={selected ? "Karşılaştırmadan çıkar" : "Karşılaştırmaya ekle"}
           className={`absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition ${
-            selected ? "border-[oklch(0.62_0.17_255)]/70 bg-[oklch(0.62_0.17_255)]/30 text-white" : "border-white/20 bg-black/40 text-white/80 hover:bg-black/60"
+            selected
+              ? "border-[oklch(0.62_0.17_255)]/70 bg-[oklch(0.62_0.17_255)]/30 text-white"
+              : "border-white/20 bg-black/40 text-white/80 hover:bg-black/60"
           }`}
         >
           <Columns3 size={11} /> {selected ? "Seçildi" : "Karşılaştır"}
@@ -489,18 +564,36 @@ export function ProductCard({
         }}
         className="mb-3 -mx-3 -mt-3 sm:-mx-5 sm:-mt-5 aspect-[16/10] sm:aspect-[4/3] overflow-hidden rounded-t-xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border-b border-white/10 relative group cursor-pointer"
       >
-        {cardImage ? (
+        {shownImage ? (
           <img
-            src={cardImage}
+            src={shownImage}
             alt={p.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-700"
             onError={(e) => {
+              // Bozuk adres GÖSTERİLMEZ; kart dürüst "doğrulanamadı" durumuna
+              // döner (yer tutucu fotoğraf yüklemek uydurmak olurdu).
               (e.currentTarget as HTMLImageElement).style.display = "none";
+              setBrokenImage(shownImage);
             }}
           />
         ) : (
-          <div className="w-full h-full grid place-items-center text-5xl opacity-60 animate-pulse-soft">{p.emoji || "🛍️"}</div>
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-4 text-center">
+            <span className="text-3xl opacity-40" aria-hidden>
+              {p.emoji || "🛍️"}
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Ürün görseli doğrulanamadı
+            </span>
+            <span className="text-[10px] leading-tight text-muted-foreground/70">
+              Kaynaktan doğrulanabilir fotoğraf gelmediği için görsel gösterilmiyor.
+            </span>
+          </div>
+        )}
+        {!shownImage && (
+          <span className="absolute bottom-2 left-2 z-10 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+            Görsel doğrulanamadı
+          </span>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
         {isElite && (
@@ -528,7 +621,10 @@ export function ProductCard({
               </span>
               <span
                 className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${hybridBadge(p.hybrid.calculated_score).cls}`}
-                title={p.hybrid.tooltip || `Pazar ${p.hybrid.ai_1_score} · Lojistik ${p.hybrid.ai_2_score}`}
+                title={
+                  p.hybrid.tooltip ||
+                  `Pazar ${p.hybrid.ai_1_score} · Lojistik ${p.hybrid.ai_2_score}`
+                }
               >
                 {hybridBadge(p.hybrid.calculated_score).label} · {p.hybrid.calculated_score}
               </span>
@@ -536,7 +632,10 @@ export function ProductCard({
           )}
           <ConsensusBadge consensus={p.consensus} />
           <RealismBadge score={p.realism_score} />
-          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${rec.cls}`} title="AI recommendation">
+          <span
+            className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${rec.cls}`}
+            title="AI recommendation"
+          >
             {rec.emoji} {enriched.recommendation}
           </span>
           <button
@@ -585,8 +684,9 @@ export function ProductCard({
           {p.hybrid.tooltip && <p className="text-muted-foreground">{p.hybrid.tooltip}</p>}
           {p.hybrid.alt_country_code && (
             <p className="text-amber-300">
-              <CountryFlag code={p.hybrid.alt_country_code} size={10} /> Bu ürün {p.hybrid.alt_country_name ?? countryName(p.hybrid.alt_country_code)}{" "}
-              pazarında daha güçlü.
+              <CountryFlag code={p.hybrid.alt_country_code} size={10} /> Bu ürün{" "}
+              {p.hybrid.alt_country_name ?? countryName(p.hybrid.alt_country_code)} pazarında daha
+              güçlü.
               {p.hybrid.alt_country_note ? ` ${p.hybrid.alt_country_note}` : ""}
             </p>
           )}
@@ -611,8 +711,7 @@ export function ProductCard({
                 </>
               ) : (
                 <>
-                  (yalnızca analiz hattı) ={" "}
-                  <b className="text-foreground">{p.unified_score}/100</b>
+                  (yalnızca analiz hattı) = <b className="text-foreground">{p.unified_score}/100</b>
                 </>
               );
             })()}
@@ -624,7 +723,9 @@ export function ProductCard({
         <div className="mt-3 rounded-lg border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/[0.07] px-3 py-2 text-[11px] space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold">🧠 14&apos;lü AI Konsey</span>
-            <span className="font-extrabold text-foreground">Aroless Score {p.council.velora_score}/100</span>
+            <span className="font-extrabold text-foreground">
+              Aroless Score {p.council.velora_score}/100
+            </span>
           </div>
           <div className="text-muted-foreground">{p.council.verdict}</div>
           <div className="flex flex-wrap gap-1.5">
@@ -635,7 +736,9 @@ export function ProductCard({
                 title={`${t.engine}${t.reviewer_engine ? ` + hakem ${t.reviewer_engine}` : ""} — ${t.summary}${t.review_note ? ` | Hakem: ${t.review_note}` : ""}`}
               >
                 {t.title}: <b>{t.score}</b>
-                {typeof t.review_score === "number" && <span className="text-muted-foreground"> (hakem {t.review_score})</span>}
+                {typeof t.review_score === "number" && (
+                  <span className="text-muted-foreground"> (hakem {t.review_score})</span>
+                )}
               </span>
             ))}
           </div>
@@ -659,18 +762,28 @@ export function ProductCard({
               </span>
             )}
             {typeof p.council.auditor_score === "number" && (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5" title={p.council.auditor_note ?? ""}>
-                Denetçi {p.council.auditor_engine ?? "AI"}: <b className="text-foreground">{p.council.auditor_score}</b>
+              <span
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+                title={p.council.auditor_note ?? ""}
+              >
+                Denetçi {p.council.auditor_engine ?? "AI"}:{" "}
+                <b className="text-foreground">{p.council.auditor_score}</b>
               </span>
             )}
             {typeof p.council.confidence === "number" && (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Güven %{p.council.confidence}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                Güven %{p.council.confidence}
+              </span>
             )}
             {typeof p.council.disagreement === "number" && (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Fikir ayrılığı {p.council.disagreement}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                Fikir ayrılığı {p.council.disagreement}
+              </span>
             )}
             {typeof p.council.data_coverage === "number" && (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">Veri %{p.council.data_coverage}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                Veri %{p.council.data_coverage}
+              </span>
             )}
           </div>
           {p.council.action_plan.length > 0 && (
@@ -680,7 +793,9 @@ export function ProductCard({
               ))}
             </ul>
           )}
-          {p.council.risks.length > 0 && <div className="text-amber-300">⚠ {p.council.risks[0]}</div>}
+          {p.council.risks.length > 0 && (
+            <div className="text-amber-300">⚠ {p.council.risks[0]}</div>
+          )}
         </div>
       )}
 
@@ -697,21 +812,39 @@ export function ProductCard({
       {enriched.est_monthly_sales !== null && (
         <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
           <MetricPill label="Sales/mo" value={enriched.est_monthly_sales.toLocaleString()} />
-          <MetricPill label="Revenue" value={money(enriched.est_monthly_revenue_usd ?? 0, { compact: true, showUsd: false })} />
-          <MetricPill label="Net/mo" value={money(enriched.est_monthly_net_profit_usd ?? 0, { compact: true, showUsd: false })} highlight />
+          <MetricPill
+            label="Revenue"
+            value={money(enriched.est_monthly_revenue_usd ?? 0, { compact: true, showUsd: false })}
+          />
+          <MetricPill
+            label="Net/mo"
+            value={money(enriched.est_monthly_net_profit_usd ?? 0, {
+              compact: true,
+              showUsd: false,
+            })}
+            highlight
+          />
         </div>
       )}
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">Supplier</div>
-          <div className="text-xs font-semibold mt-0.5">{moneyOrDash(p.supplier_price_usd, money)}</div>
-          {currency !== "USD" && measuredMoney(p.supplier_price_usd) !== null && <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>}
+          <div className="text-xs font-semibold mt-0.5">
+            {moneyOrDash(p.supplier_price_usd, money)}
+          </div>
+          {currency !== "USD" && measuredMoney(p.supplier_price_usd) !== null && (
+            <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>
+          )}
         </div>
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">Sell</div>
-          <div className="text-xs font-semibold mt-0.5">{moneyOrDash(p.selling_price_usd, money)}</div>
-          {currency !== "USD" && measuredMoney(p.selling_price_usd) !== null && <div className="text-[9px] text-muted-foreground">{p.selling_price_usd}</div>}
+          <div className="text-xs font-semibold mt-0.5">
+            {moneyOrDash(p.selling_price_usd, money)}
+          </div>
+          {currency !== "USD" && measuredMoney(p.selling_price_usd) !== null && (
+            <div className="text-[9px] text-muted-foreground">{p.selling_price_usd}</div>
+          )}
         </div>
         {(() => {
           const nm = netMarginView(p);
@@ -743,8 +876,14 @@ export function ProductCard({
             <div
               className={`rounded-lg border p-2 ${nm.bad ? "bg-destructive/15 border-destructive/40" : "bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/20"}`}
             >
-              <div className={`text-[10px] uppercase ${nm.bad ? "text-destructive" : "text-emerald-300/80"}`}>Margin</div>
-              <div className={`text-xs font-semibold mt-0.5 flex items-center justify-center gap-0.5 ${nm.bad ? "text-destructive" : "text-emerald-300"}`}>
+              <div
+                className={`text-[10px] uppercase ${nm.bad ? "text-destructive" : "text-emerald-300/80"}`}
+              >
+                Margin
+              </div>
+              <div
+                className={`text-xs font-semibold mt-0.5 flex items-center justify-center gap-0.5 ${nm.bad ? "text-destructive" : "text-emerald-300"}`}
+              >
                 {!nm.bad && <Percent size={10} />}
                 {nm.text}
               </div>
@@ -777,21 +916,33 @@ export function ProductCard({
           <div className="grid grid-cols-2 gap-y-1 text-[11px]">
             <span className="text-muted-foreground flex items-center gap-1">
               <Package size={10} /> Supplier{" "}
-              <ProofBadge kind={p.market_evidence?.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"} />
+              <ProofBadge
+                kind={
+                  p.market_evidence?.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"
+                }
+              />
             </span>
-            <span className="text-right flex items-center justify-end gap-1">{money(cb.supplier_cost, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">
+              {money(cb.supplier_cost, { showUsd: false })}
+            </span>
             <span className="text-muted-foreground flex items-center gap-1">
               <Truck size={10} /> Shipping <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right flex items-center justify-end gap-1">{money(cb.shipping_cost, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">
+              {money(cb.shipping_cost, { showUsd: false })}
+            </span>
             <span className="text-muted-foreground flex items-center gap-1">
               <Store size={10} /> Platform fee <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right flex items-center justify-end gap-1">{money(cb.platform_fee, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">
+              {money(cb.platform_fee, { showUsd: false })}
+            </span>
             <span className="text-muted-foreground flex items-center gap-1">
               <Megaphone size={10} /> Ad spend <ProofBadge kind="Hesaplanmış" />
             </span>
-            <span className="text-right flex items-center justify-end gap-1">{money(cb.ad_spend, { showUsd: false })}</span>
+            <span className="text-right flex items-center justify-end gap-1">
+              {money(cb.ad_spend, { showUsd: false })}
+            </span>
             <span className="font-semibold text-emerald-300 flex items-center gap-1 pt-1 border-t border-white/10 mt-1">
               <DollarSign size={10} /> Net / unit
             </span>
@@ -802,13 +953,14 @@ export function ProductCard({
           {p.real_economics && (
             <div className="mt-2 space-y-1 border-t border-white/10 pt-2 text-[10px] text-muted-foreground">
               <div className="text-foreground/90">
-              Gerçekçi aylık net kâr:{" "}
-              <b className="text-emerald-300">
-                {enriched.monthly_net_low_usd === null || enriched.monthly_net_high_usd === null
-                  ? NOT_MEASURED
-                  : `${money(enriched.monthly_net_low_usd, { compact: true, showUsd: false })} – ${money(enriched.monthly_net_high_usd, { compact: true, showUsd: false })}`}
-              </b>{" "}
-                ({p.real_economics.monthly.units} adet/ay · ${p.real_economics.monthly.ad_budget_usd} reklam)
+                Gerçekçi aylık net kâr:{" "}
+                <b className="text-emerald-300">
+                  {enriched.monthly_net_low_usd === null || enriched.monthly_net_high_usd === null
+                    ? NOT_MEASURED
+                    : `${money(enriched.monthly_net_low_usd, { compact: true, showUsd: false })} – ${money(enriched.monthly_net_high_usd, { compact: true, showUsd: false })}`}
+                </b>{" "}
+                ({p.real_economics.monthly.units} adet/ay · $
+                {p.real_economics.monthly.ad_budget_usd} reklam)
               </div>
               <div className="flex flex-wrap gap-1">
                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px]">
@@ -829,16 +981,22 @@ export function ProductCard({
               {p.real_economics.benchmarks?.length > 0 && (
                 <details className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
                   <summary className="cursor-pointer text-[10px] font-semibold text-foreground/80">
-                    Kullanılan gerçek dünya verileri & kaynaklar ({p.real_economics.benchmarks.length})
+                    Kullanılan gerçek dünya verileri & kaynaklar (
+                    {p.real_economics.benchmarks.length})
                   </summary>
                   <div className="mt-2 space-y-1.5">
                     {p.real_economics.benchmarks.map((b) => (
-                      <div key={`${b.scope}-${b.label}`} className="rounded-md border border-white/10 bg-white/[0.03] p-1.5">
+                      <div
+                        key={`${b.scope}-${b.label}`}
+                        className="rounded-md border border-white/10 bg-white/[0.03] p-1.5"
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <span className="rounded-full border border-white/10 px-1.5 py-px text-[9px] uppercase tracking-wide text-muted-foreground">
                             {b.scope}
                           </span>
-                          <span className="text-[10px] font-semibold text-foreground/90">{b.value}</span>
+                          <span className="text-[10px] font-semibold text-foreground/90">
+                            {b.value}
+                          </span>
                         </div>
                         <div className="mt-1 text-[10px] text-foreground/80">{b.label}</div>
                         <div className="text-[10px] text-muted-foreground">{b.basis}</div>
@@ -868,23 +1026,25 @@ export function ProductCard({
         className="card-detail-toggle mt-3 w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-3 text-xs font-semibold text-foreground transition hover:bg-white/10"
       >
         {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        {detailsOpen ? "Analiz detaylarını gizle" : "Tam analizi göster — AI gerekçesi, konsey ve kanıt"}
+        {detailsOpen
+          ? "Analiz detaylarını gizle"
+          : "Tam analizi göster — AI gerekçesi, konsey ve kanıt"}
       </button>
 
       <div className={`card-detail-fold ${detailsOpen ? "is-open" : ""}`}>
         <div className="mt-3 space-y-2 text-xs">
-        <div className="flex gap-2">
-          <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
-          <span className="text-muted-foreground">{p.why_winning}</span>
-        </div>
-        {/* BOŞ SATIR YOK: ölçümlü hatta hedef kitle ölçülmediği için bu alan
-            boş gelir ve ikonun yanında boş bir çizgi çiziyordu. */}
-        {p.target_audience && (
           <div className="flex gap-2">
-            <Users size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
-            <span className="text-muted-foreground">{p.target_audience}</span>
+            <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
+            <span className="text-muted-foreground">{p.why_winning}</span>
           </div>
-        )}
+          {/* BOŞ SATIR YOK: ölçümlü hatta hedef kitle ölçülmediği için bu alan
+            boş gelir ve ikonun yanında boş bir çizgi çiziyordu. */}
+          {p.target_audience && (
+            <div className="flex gap-2">
+              <Users size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
+              <span className="text-muted-foreground">{p.target_audience}</span>
+            </div>
+          )}
           <div className="flex gap-2">
             <DollarSign size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
             <span className={compColor}>{p.competition_level} competition</span>
@@ -897,7 +1057,9 @@ export function ProductCard({
           )}
         </div>
 
-        {(p.health_score !== undefined || p.sellability_verdict || p.viral_probability_90d !== undefined) && (
+        {(p.health_score !== undefined ||
+          p.sellability_verdict ||
+          p.viral_probability_90d !== undefined) && (
           <div className="mt-3 rounded-lg bg-white/[0.03] border border-white/10 p-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
               <Activity size={11} /> Reliability
@@ -906,19 +1068,30 @@ export function ProductCard({
               {p.sellability_verdict && (
                 <div className="flex items-center justify-between text-xs">
                   <span>Verdict</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${reliabilityStyle(p.sellability_verdict).cls}`}>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full border ${reliabilityStyle(p.sellability_verdict).cls}`}
+                  >
                     {reliabilityStyle(p.sellability_verdict).icon} {p.sellability_verdict}
                   </span>
                 </div>
               )}
-              {p.health_score !== undefined && <ScoreBar label="Health" value={p.health_score} color="oklch(0.62 0.17 255)" />}
+              {p.health_score !== undefined && (
+                <ScoreBar label="Health" value={p.health_score} color="oklch(0.62 0.17 255)" />
+              )}
               {p.viral_probability_90d !== undefined && (
-                <ScoreBar label="Viral Potential" value={p.viral_probability_90d} color="oklch(0.75 0.18 200)" />
+                <ScoreBar
+                  label="Viral Potential"
+                  value={p.viral_probability_90d}
+                  color="oklch(0.75 0.18 200)"
+                />
               )}
               {p.data_sources && p.data_sources.length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">
                   {p.data_sources.slice(0, 3).map((s, i) => (
-                    <span key={i} className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5">
+                    <span
+                      key={i}
+                      className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5"
+                    >
                       {s}
                     </span>
                   ))}
@@ -945,7 +1118,9 @@ export function ProductCard({
             <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-emerald-300 mb-1">
               <Megaphone size={11} /> AI Sales Tactic
             </div>
-            <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{p.sales_tactic}</p>
+            <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">
+              {p.sales_tactic}
+            </p>
           </div>
         )}
 
@@ -963,18 +1138,25 @@ export function ProductCard({
                       ? "border-rose-500/40 bg-rose-500/10 text-rose-300"
                       : "border-amber-500/40 bg-amber-500/10 text-amber-300";
                 return (
-                  <div key={i} className="flex items-start gap-2 text-xs bg-white/[0.03] border border-white/10 rounded px-2 py-1.5">
+                  <div
+                    key={i}
+                    className="flex items-start gap-2 text-xs bg-white/[0.03] border border-white/10 rounded px-2 py-1.5"
+                  >
                     <img
                       src={logoForStore(pd.platform)}
                       alt=""
                       loading="lazy"
                       className="h-5 w-5 rounded bg-white/90 p-0.5 object-contain shrink-0"
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
+                      onError={(e) =>
+                        ((e.currentTarget as HTMLImageElement).style.display = "none")
+                      }
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{pd.platform}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${cls}`}>{pd.difficulty}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${cls}`}>
+                          {pd.difficulty}
+                        </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{pd.reason}</p>
                     </div>
@@ -999,17 +1181,22 @@ export function ProductCard({
                       alt=""
                       loading="lazy"
                       className="h-5 w-5 rounded bg-white/90 p-0.5 object-contain shrink-0"
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
+                      onError={(e) =>
+                        ((e.currentTarget as HTMLImageElement).style.display = "none")
+                      }
                     />
                     <span className="flex-1 truncate">
                       {cp.store}
-                      {cp.note ? <span className="text-[10px] text-muted-foreground ml-1">({cp.note})</span> : null}
+                      {cp.note ? (
+                        <span className="text-[10px] text-muted-foreground ml-1">({cp.note})</span>
+                      ) : null}
                     </span>
                     <span className="font-semibold tabular-nums">{cp.price}</span>
                     {cp.url && <ExternalLink size={10} className="text-muted-foreground" />}
                   </>
                 );
-                const cls = "flex items-center gap-2 text-xs bg-white/[0.03] border border-white/10 rounded px-2 py-1.5 hover:bg-white/[0.06] transition";
+                const cls =
+                  "flex items-center gap-2 text-xs bg-white/[0.03] border border-white/10 rounded px-2 py-1.5 hover:bg-white/[0.06] transition";
                 return cp.url ? (
                   <a key={i} href={cp.url} target="_blank" rel="noreferrer" className={cls}>
                     {inner}
@@ -1031,7 +1218,10 @@ export function ProductCard({
             </div>
             <ul className="space-y-1">
               {p.ad_angles.slice(0, 3).map((a, i) => (
-                <li key={i} className="text-xs bg-white/5 border border-white/10 rounded px-2 py-1.5">
+                <li
+                  key={i}
+                  className="text-xs bg-white/5 border border-white/10 rounded px-2 py-1.5"
+                >
                   {a}
                 </li>
               ))}
@@ -1088,14 +1278,15 @@ export function ProductCard({
         onClick={onOpen}
         className="mt-2 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-2 text-xs font-semibold text-white w-full flex items-center justify-center gap-1.5"
       >
-        {locked ? <Lock size={12} /> : <Radar size={12} />} Derinlemesine Analiz {locked && "· Kilitli"}
+        {locked ? <Lock size={12} /> : <Radar size={12} />} Derinlemesine Analiz{" "}
+        {locked && "· Kilitli"}
       </button>
       <button
         onClick={() => (locked ? onUpgrade() : onReport())}
         className="mt-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 w-full"
       >
-        {locked ? <Lock size={12} className="text-amber-300" /> : <FileText size={12} />} View Full Report{" "}
-        {locked && <span className="text-amber-300">· Kilitli</span>}
+        {locked ? <Lock size={12} className="text-amber-300" /> : <FileText size={12} />} View Full
+        Report {locked && <span className="text-amber-300">· Kilitli</span>}
       </button>
     </article>
   );
