@@ -42,6 +42,7 @@ import {
   scoreDeterministically,
   type DemandContext,
 } from "./product-discovery-filter.server";
+import { productIdOf } from "./discovery-core";
 import {
   RawProductSchema,
   type FilterStats,
@@ -167,24 +168,17 @@ export type ShortlistOptions = {
 /* ---------------------------------------------------------------- Yardım */
 
 /** Başlıktan kısa, kararlı bir slug (yalnız `id` geri düşüşü için). */
-function toSlug(title: string): string {
-  return title
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
 /**
- * Ürünün kimliği. Sıra: kaynağın verdiği `id` → parmak izi → başlık slug'ı.
- * Parmak izi neredeyse her zaman doludur (başlık boş değilse); slug yalnız
- * savunma amaçlıdır. `min(1)` şeması yüzünden BOŞ KALMASI engellenir.
+ * Ürünün kimliği — HAT BOYUNCA SABİT (§24).
+ *
+ * `shortlistId` artık kendi kimliğini ÜRETMEZ; ortak çekirdeğin `productIdOf`
+ * fonksiyonuna devreder. Böylece kısa listede modele gösterilen kimlik ile
+ * nihai sıralamada kullanılan kimlik AYNI olur — eskiden burada kaynak `id` →
+ * parmak izi → slug sırası vardı ve kimlik tüketiciden tüketiciye değişebiliyordu.
+ * `productIdOf` asla boş dönmez, `min(1)` şeması böylece garanti altındadır.
  */
-function shortlistId(p: { id: string; fingerprint: string; name: string }): string {
-  return p.id.trim() || p.fingerprint || toSlug(p.name) || "unknown";
+function shortlistId(p: NormalizedProduct): string {
+  return productIdOf(p);
 }
 
 /* ----------------------------------------------------------------- Adım 1 */

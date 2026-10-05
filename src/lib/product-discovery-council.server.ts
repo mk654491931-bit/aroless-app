@@ -16,6 +16,7 @@
 
 import { buildConsensus, completenessPenalty, type AgentVote } from "./product-discovery-consensus";
 import { COUNCIL_AGENT_KEYS, COUNCIL_AGENTS } from "./council-chain.server";
+import { productIdentityKey } from "./discovery-core";
 import type { Consensus, NormalizedProduct } from "./product-discovery.types";
 
 /** Toplam ajan sayısı (güven hesabının paydası). */
@@ -188,7 +189,7 @@ export async function runCouncilOnProducts(
   runAgents?: (product: NormalizedProduct) => Promise<AgentVote[]>,
 ): Promise<Consensus[]> {
   const out: Consensus[] = [];
-  for (const [index, product] of products.entries()) {
+  for (const product of products) {
     let votes: AgentVote[];
     try {
       votes = runAgents ? await runAgents(product) : deterministicVotes(product);
@@ -199,7 +200,7 @@ export async function runCouncilOnProducts(
     }
     out.push(
       buildConsensus({
-        candidateId: product.fingerprint || `P${index + 1}`,
+        candidateId: productIdentityKey(product),
         name: product.name,
         votes,
         totalAgents: TOTAL_AGENTS,

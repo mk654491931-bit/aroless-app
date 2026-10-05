@@ -26,6 +26,7 @@
 
 import { callGemini, withDeadline as withAiDeadline } from "./ai.server";
 import { COUNCIL_AGENTS, COUNCIL_AGENT_KEYS, type CouncilAgentKey } from "./council-chain.server";
+import { productIdentityKey } from "./discovery-core";
 import { buildConsensus, type AgentVote } from "./product-discovery-consensus";
 import { deterministicVotes } from "./product-discovery-council.server";
 import type { Consensus, NormalizedProduct } from "./product-discovery.types";
@@ -333,10 +334,10 @@ export function mergeCouncilVotes(
 ): CouncilMerge {
   // Deterministik oylar BİR KEZ üretilir: hem yedek hem zemin (AI boş dönerse).
   const baseline = new Map<string, AgentVote[]>();
-  products.forEach((p, i) => baseline.set(p.fingerprint || `P${i + 1}`, deterministicVotes(p)));
+  products.forEach((p) => baseline.set(productIdentityKey(p), deterministicVotes(p)));
 
   const perProduct = new Map<string, Map<string, AgentVote>>();
-  products.forEach((p, i) => perProduct.set(p.fingerprint || `P${i + 1}`, new Map()));
+  products.forEach((p) => perProduct.set(productIdentityKey(p), new Map()));
 
   const aiRoles: CouncilAgentKey[] = [];
   let aiAgents = 0;
@@ -352,7 +353,7 @@ export function mergeCouncilVotes(
     aiRoles.push(agent.key as CouncilAgentKey);
 
     products.forEach((product, index) => {
-      const key = product.fingerprint || `P${index + 1}`;
+      const key = productIdentityKey(product);
       const base = (baseline.get(key) ?? []) as AgentVote[];
       const fallbackVote = base.find((v) => v.agentKey === agent.key);
       const ai = scores.get(index + 1);
@@ -370,8 +371,8 @@ export function mergeCouncilVotes(
     });
   }
 
-  const consensus: Consensus[] = products.map((product, index) => {
-    const key = product.fingerprint || `P${index + 1}`;
+  const consensus: Consensus[] = products.map((product) => {
+    const key = productIdentityKey(product);
     const collected = perProduct.get(key) ?? new Map<string, AgentVote>();
     // Sözleşme: her ürünün TAM 14 oyu olur. Modelin atladığı rol deterministiğe
     // döner, oy sayısı asla 14'ten az olmaz.

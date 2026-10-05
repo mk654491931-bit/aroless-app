@@ -38,6 +38,7 @@ import {
   runScrapeFilterStep,
   type TopProduct,
 } from "./product-discovery-pipeline.server";
+import { productIdentityKey } from "./discovery-core";
 import type { DiscoveryStep } from "./product-discovery-qstash.server";
 import type { ShortlistStats } from "./product-discovery-shortlist.server";
 import type {
@@ -375,8 +376,9 @@ export async function executeProductDiscoveryStep(args: {
 
       /* ---------------------------------------------------------- 4. adım */
       case "final": {
-        // Uzlaşma (oy) satırları adaylara İKİ ANAHTARLA eşleşir: ürünün parmak
-        // izi VE konseyin sıra anahtarı (`P7`).
+        // Uzlaşma (oy) satırları adaylara ÜÇ ANAHTARLA eşleşir: ürünün parmak
+        // izi, ortak çekirdeğin sabit kimliği (§24) VE eski konseyin sıra
+        // anahtarı (`P7`).
         //
         // Ölçülen hata: eski eşleme YALNIZ parmak izine bakıyordu; konsey bir
         // ürünün parmak izini boş görüp `candidateId: "P7"` yazdığında o
@@ -388,6 +390,9 @@ export async function executeProductDiscoveryStep(args: {
         (args.batch as NormalizedProduct[]).forEach((product, index) => {
           const fingerprint = String(product.fingerprint ?? "");
           if (fingerprint) byId.set(fingerprint, product);
+          // Sabit kimlik (§24): konsey parmak izi boş görüp bu anahtarı
+          // yazdığında ürün YİNE bulunur — eşleşme sıraya bağlı kalmaz.
+          byId.set(productIdentityKey(product), product);
           byId.set(`P${index + 1}`, product);
         });
         const ranked = runFinalRankStep(args.consensus as never, input.topN, byId as never);

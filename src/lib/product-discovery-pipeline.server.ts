@@ -33,11 +33,11 @@ import {
   type TopProduct,
 } from "./product-discovery.types";
 import {
+  candidateQuality,
   describeFunnel,
-  productCompleteness,
+  describeShortlistQuality,
   productIdOf,
-  sourceConfidence,
-} from "./discovery-quality";
+} from "./discovery-core";
 
 /**
  * ADIM 1'in üst sınırı: 75 aday.
@@ -623,8 +623,9 @@ export async function geminiShortlistSelector(
   deadlineAt?: number,
 ): Promise<NormalizedProduct[]> {
   const { callGemini } = await import("./ai.server");
-  const { resolveSelection } = await import("./discovery-ai-selection");
-  const { productIdOf } = await import("./discovery-quality");
+  // Tek import yüzeyi: AI seçim doğrulaması ORTAK ÇEKİRDEKTEN gelir (kimlik
+  // zaten modül başında çekirdekten alınıyor).
+  const { resolveSelection } = await import("./discovery-core");
 
   // DİKKAT: istem ile doğrulayıcı AYNI SÖZDİZİMİNİ konuşmalıdır.
   // Önceki sürüm isteme "sadece numara listesi ver" yazıyor, doğrulayıcı ise
@@ -729,51 +730,6 @@ export function parseLegacyIndexPicks(
  * Ürün adı, fiyat, görsel ve adres YAZILMAZ — bunlar kaynaktan gelir. Modelin
  * uydurduğu bir `productId` doğrulamada elenir.
  */
-/**
- * Bir adayın ÖLÇÜLMÜŞ kalite sinyalleri (0-100) — AI YOK, ağ YOK.
- *
- * İki ayrı soruyu ayırır (§11/§12):
- *   • `completeness` — "bu ürünün ne kadarı ölçüldü?" (alan varlığı)
- *   • `confidence`   — "bu satıra ne kadar güvenilir?" (kaynak + kanıt + ölçüm)
- *
- * İkisi de YALNIZ gerçek veriye dayanır; eksik alan tahminle DOLDURULMAZ,
- * yalnız skoru düşürür. `confidence` deterministik bir gösterge ve yeniden
- * sıralama ölçütüdür — ürün verisi DEĞİLDİR.
- */
-export function candidateQuality(product: NormalizedProduct): {
-  completeness: number;
-  confidence: number;
-} {
-  const completeness = productCompleteness(product).score;
-  const confidence = sourceConfidence({
-    origin: product.source,
-    url: product.url,
-    sourceCount: product.sources.length,
-    completenessScore: completeness,
-  });
-  return { completeness, confidence };
-}
-
-/**
- * Kısa listenin ÖLÇÜLMÜŞ kalite özeti (§11/§12) — uydurma yok, ortalama + sayı.
- *
- * "Kaç ürün var" demez; "ne kadar kanıtlı" der. Düşük güven satırları
- * sayıyla görünür, çünkü az kanıtlı bir adayı öne çıkarmak kaliteyi düşürür.
- */
-export function describeShortlistQuality(products: readonly NormalizedProduct[]): string {
-  if (products.length === 0) return "";
-  const rows = products.map(candidateQuality);
-  const mean = (pick: (row: { completeness: number; confidence: number }) => number) =>
-    Math.round(rows.reduce((sum, row) => sum + pick(row), 0) / rows.length);
-  const lowConfidence = rows.filter((row) => row.confidence < 40).length;
-  return (
-    `Kalite (§11/§12): ortalama bütünlük ${mean((r) => r.completeness)}/100 · ` +
-    `ortalama kaynak güveni ${mean((r) => r.confidence)}/100` +
-    (lowConfidence > 0 ? ` · ${lowConfidence} aday ${40}/100 altı güvende` : "") +
-    "."
-  );
-}
-
 export function buildShortlistPrompt(
   products: readonly NormalizedProduct[],
   niche: string,

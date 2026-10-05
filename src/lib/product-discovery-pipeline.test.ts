@@ -31,12 +31,11 @@ import {
 import { parseLooseJson, runGeminiShortlistStep } from "./product-discovery-pipeline.server";
 import {
   buildShortlistPrompt,
-  candidateQuality,
-  describeShortlistQuality,
   geminiShortlistSelector,
   selectWithGemini,
   GEMINI_SHORTLIST_SIZE,
 } from "./product-discovery-pipeline.server";
+import { candidateQuality, describeShortlistQuality } from "./discovery-core";
 import { productIdOf } from "./discovery-quality";
 
 /**
