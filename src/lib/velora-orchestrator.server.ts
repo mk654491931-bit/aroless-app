@@ -1096,6 +1096,11 @@ export function winnerRows(dto: WinnerDto): WinnerRow[] {
         product_verification: product.verification ?? null,
         product_council_spread: product.councilSpread ?? null,
         product_council_alignment: product.councilAlignment ?? null,
+        // ÖLÇÜLEN ALANLAR KAYIPSIZ TAŞINIR: katsayı (confidence) ve rekabet
+        // puanı saklanmazsa geçici kova düştüğünde karne geri kurulurken bu
+        // GERÇEK veriler kaybolur ve yerine uydurma bir "50" yazılırdı.
+        product_council_confidence: product.councilConfidence ?? null,
+        product_competition_score: product.competitionScore ?? null,
         product_market_reach: product.marketReach ?? null,
         product_track_record: product.trackRecord ?? null,
         risks: product.risks,
@@ -1351,7 +1356,9 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
       priceRange: row.price_max > 0 ? `${row.price_min} - ${row.price_max}` : "",
       estimatedMarginPct: Math.max(0, Math.round(Number(row.est_margin_pct) || 0)),
       demandScore: clampScore(row.momentum),
-      competitionScore: 50,
+      // Rekabet puanı kalıcı payload'dan geri okunur; eski satırlarda yoksa
+      // (ölçülmemiş) nötr 50'ye düşer — uydurma bir yüksek/düşük değer yazılmaz.
+      competitionScore: clampScore(numberOr(payload["product_competition_score"], 50), 50),
       sentiment: "",
       whyNow: row.reason ?? "",
       risks: Array.isArray(payload["risks"]) ? (payload["risks"] as unknown[]).map(String) : [],
@@ -1367,6 +1374,13 @@ export function dossierFromWinnerRows(runId: string, rows: readonly WinnerRow[])
       councilCoverage: Math.max(0, Math.min(1, numberOr(payload["product_council_coverage"], 0))),
       councilSpread: Math.max(0, numberOr(payload["product_council_spread"], 0)),
       councilAlignment: alignmentOf(payload["product_council_alignment"]),
+      // Güven katsayısı YALNIZCA payload'da gerçekten varsa taşınır; yoksa
+      // "ölçülmedi" anlamında boş bırakılır (0 = güven yok demek DEĞİLDİR).
+      councilConfidence:
+        typeof payload["product_council_confidence"] === "number" &&
+        Number.isFinite(payload["product_council_confidence"] as number)
+          ? Math.max(0, Math.min(1, payload["product_council_confidence"] as number))
+          : undefined,
       marketReach: marketReachOf(
         payload["product_market_reach"],
         row.title,
@@ -2335,11 +2349,13 @@ export async function selfTestVeloraRun(
   },
 ): Promise<VeloraSelfTestReport> {
   const notes: string[] = [];
-  const ceiling = VELORA_PHASE_CEILING_MS;
+  // TAVAN FAZA GÖRE DEĞİŞİR: Faz 0 (kazıma) AI çağrısı yapmadığı için daha geniş
+  // bir tavana sahiptir. Tek bir sabit tavanla karşılaştırmak, 8-12 sn arasında
+  // biten meşru bir kazımayı yanlışlıkla "tavan aşıldı" diye raporlardı.
   const performance = state.phases.map((phase) => ({
     phase: `P${phase.id}:${phase.key}`,
     ms: phase.ms,
-    ceilingMs: ceiling,
+    ceilingMs: phaseCeilingFor(phase.id as VeloraPhaseId),
     withinCeiling: phase.withinCeiling,
   }));
   const agentsLogged = state.phases.reduce((total, phase) => total + phase.agents.length, 0);
@@ -2412,13 +2428,15 @@ export async function selfTestVeloraRun(
 
 /** İstenen biçimde son durum raporu (panelde ve logda gösterilir). */
 export function formatVeloraSelfTestReport(report: VeloraSelfTestReport, runId: string): string {
-  const perf = report.performance.map((p) => `${p.phase}=${p.ms}ms`).join(" · ");
+  // Her faz kendi tavanıyla birlikte yazılır (`ms/tavan`): tek bir sabit tavan
+  // göstermek Faz 0'ın gerçek limitini gizlerdi.
+  const perf = report.performance.map((p) => `${p.phase}=${p.ms}/${p.ceilingMs}ms`).join(" · ");
   const compliant = report.performance.every((p) => p.withinCeiling);
   return [
     `[RUN]: ${runId}`,
     `[STATUS]: ${report.status}`,
     `[PUSH RESULT]: ${report.pushResult.recordIds.length} kayıt (${report.pushResult.recordIds.slice(0, 3).join(", ") || "-"}) · ${report.pushResult.status}`,
-    `[PERFORMANCE]: ${perf || "-"} · tavan=${VELORA_PHASE_CEILING_MS}ms · uyumlu=${compliant ? "YES" : "NO"}`,
+    `[PERFORMANCE]: ${perf || "-"} · uyumlu=${compliant ? "YES" : "NO"}`,
     `[AGENTS]: ${report.agentsLogged}/${report.expectedAgents}`,
     `[TEST ${report.verdict}]: db_fetch=${report.dbFetchVerified ? "OK" : "FAIL"} · payload=${report.payloadIntegrity ? "OK" : "FAIL"}${report.notes.length ? ` · ${report.notes.join(", ")}` : ""}`,
   ].join("\n");

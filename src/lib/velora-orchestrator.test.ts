@@ -75,6 +75,7 @@ import {
   veloraAnalysisScore,
   veloraRunStatus,
   winnerRows,
+  dossierFromWinnerRows,
   formatVeloraSelfTestReport,
   phaseById,
   productConsensus,
@@ -1256,6 +1257,35 @@ describe("self-test (push doğrulaması)", () => {
     expect(report.verdict).toBe("FAIL");
     expect(report.notes.some((n) => n.startsWith("PUSH_FAILED"))).toBe(true);
   });
+
+  it("tavanı FAZA GÖRE raporlar: 8-12 sn'lik kazıma 'tavan aşıldı' sayılmaz", async () => {
+    const store = fakeStore();
+    const result = await startVeloraRun(
+      { userQuery: "mini ice maker" },
+      { store, runAgent: runAgentStub(stubRunner()) },
+    );
+    const state = store.states.get(result.runId!)!;
+    // Faz 0 (kazıma) 10 sn sürdü: 8 sn'lik AI tavanının üstünde ama kendi
+    // 12 sn'lik tavanının altında — meşru bir kazıma.
+    const harvest = state.phases.find((p) => p.id === 0)!;
+    harvest.ms = 10_000;
+    harvest.withinCeiling = true;
+
+    const report = await selfTestVeloraRun(state, {
+      store,
+      dossier: result.dossier!,
+      push: result.push!,
+    });
+    const p0 = report.performance.find((p) => p.phase.startsWith("P0:"))!;
+    const p1 = report.performance.find((p) => p.phase.startsWith("P1:"))!;
+    expect(p0.ceilingMs).toBe(VELORA_HARVEST_CEILING_MS);
+    expect(p1.ceilingMs).toBe(VELORA_PHASE_CEILING_MS);
+    expect(p0.withinCeiling).toBe(true);
+    expect(report.notes.some((n) => n.startsWith("PHASE_CEILING_EXCEEDED"))).toBe(false);
+    expect(formatVeloraSelfTestReport(report, result.runId!)).toContain(
+      `${p0.phase}=10000/${VELORA_HARVEST_CEILING_MS}ms`,
+    );
+  });
 });
 
 describe("kazanan karne (dossier) ve DTO", () => {
@@ -1300,6 +1330,7 @@ describe("kazanan karne (dossier) ve DTO", () => {
           analysisScore: 91,
           councilVotes: 12,
           councilCoverage: 12 / 14,
+          councilConfidence: 0.82,
           agentEvidence: ["CFO Agent: birim ekonomi canlı kanıtla uyumlu"],
           verification: "verified",
         },
@@ -1320,5 +1351,122 @@ describe("kazanan karne (dossier) ve DTO", () => {
     expect(payload["product_analysis_score"]).toBe(91);
     expect(payload["product_verification"]).toBe("verified");
     expect(payload["intersection_count"]).toBe(1);
+    // Güven katsayısı ve rekabet puanı ÖLÇÜLMÜŞ alanlardır; kalıcı payload'a
+    // yazılmazsa kova düştüğünde geri kurulumda kaybolurdu.
+    expect(payload["product_council_confidence"]).toBe(0.82);
+    expect(payload["product_competition_score"]).toBe(25);
+  });
+
+  it("geri kurulum ÖLÇÜLEN alanları korur: güven katsayısı ve rekabet puanı uydurulmaz", () => {
+    const dto = {
+      run_id: "r-round-trip",
+      query: "mini ice maker",
+      country: "US",
+      platform: "Amazon",
+      generated_at: "2026-09-23T10:00:00.000Z",
+      council_average: 80,
+      analysis_score: 90,
+      joint_score: 85,
+      joint_source: "joint" as const,
+      listed: true,
+      requested_top: 5,
+      intersection_count: 1,
+      rank_source: "council-average" as const,
+      finalists: 3,
+      evaluated: 2,
+      notes: [],
+      evidence: { live: true, scraped_trends: 2, radar: RADAR },
+      phases: [],
+      products: [
+        {
+          name: "Mini Ice Maker XR-500",
+          category: "Kitchen",
+          priceRange: "$29.99 - $49.00",
+          estimatedMarginPct: 55,
+          demandScore: 88,
+          competitionScore: 25,
+          sentiment: "positive",
+          whyNow: "rising demand",
+          risks: [],
+          councilScore: 74,
+          councilDecision: "LISTED",
+          winnerScore: 84,
+          rank: 1,
+          source: "ai" as const,
+          candidateId: "C1",
+          identity: "mini ice maker xr 500",
+          analysisScore: 91,
+          councilVotes: 12,
+          councilCoverage: 12 / 14,
+          councilConfidence: 0.82,
+          agentEvidence: [],
+          verification: "verified" as const,
+        },
+      ],
+    };
+
+    const rows = winnerRows(dto);
+    const rebuilt = dossierFromWinnerRows("r-round-trip", rows)!;
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt.products[0]!.competitionScore).toBe(25);
+    expect(rebuilt.products[0]!.councilConfidence).toBe(0.82);
+    expect(rebuilt.rank_source).toBe("council-average");
+  });
+
+  it("eski (güven alanı olmayan) kayıtta confidence BOŞ kalır, 0 diye uydurulmaz", () => {
+    const rows = winnerRows({
+      run_id: "r-legacy",
+      query: "mini ice maker",
+      country: "US",
+      platform: "Amazon",
+      generated_at: "2026-09-23T10:00:00.000Z",
+      council_average: 80,
+      analysis_score: 90,
+      joint_score: 85,
+      joint_source: "joint",
+      listed: true,
+      requested_top: 5,
+      intersection_count: 1,
+      rank_source: "council-average",
+      finalists: 3,
+      evaluated: 2,
+      notes: [],
+      evidence: { live: true, scraped_trends: 2, radar: RADAR },
+      phases: [],
+      products: [
+        {
+          name: "Mini Ice Maker XR-500",
+          category: "Kitchen",
+          priceRange: "$29.99 - $49.00",
+          estimatedMarginPct: 55,
+          demandScore: 88,
+          competitionScore: 25,
+          sentiment: "positive",
+          whyNow: "rising demand",
+          risks: [],
+          councilScore: 74,
+          councilDecision: "LISTED",
+          winnerScore: 84,
+          rank: 1,
+          source: "ai",
+          candidateId: "C1",
+          identity: "mini ice maker xr 500",
+          analysisScore: 91,
+          councilVotes: 12,
+          councilCoverage: 12 / 14,
+          agentEvidence: [],
+          verification: "verified",
+        },
+      ],
+    });
+    // Eski kayıtta alan yokmuş gibi davran.
+    const payload = rows[0]!.payload as Record<string, unknown>;
+    delete payload["product_council_confidence"];
+    delete payload["product_competition_score"];
+
+    const rebuilt = dossierFromWinnerRows("r-legacy", rows)!;
+    expect(rebuilt.products[0]!.councilConfidence).toBeUndefined();
+    // Rekabet ölçülmemişse dürüstçe nötr 50'ye düşer.
+    expect(rebuilt.products[0]!.competitionScore).toBe(50);
   });
 });
