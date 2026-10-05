@@ -283,3 +283,48 @@ describe("attachWinnerScores", () => {
     expect(scored[0].winner_score).toBe(85);
   });
 });
+
+describe("kâr marjı bileşeni UYDURMA yapmaz (ölçülen hata regresyonu)", () => {
+  const marginComponentOf = (p: Parameters<typeof computeWinnerScore>[0]) =>
+    computeWinnerScore(p).components.find((c) => c.key === "margin")!;
+
+  it("ölçülmüş marj yoksa nötr 50 verir ve gerekçede UYDURMA yüzde göstermez", () => {
+    // Ölçümlü keşif hattı: yalnız perakende fiyat ölçülür, net marj yoktur
+    // (`profit_margin_pct: 0`, `net_margin_pct: 0` — 0 = "ölçülmedi").
+    const margin = marginComponentOf({
+      name: "Ölçülmemiş ürün",
+      selling_price_usd: "$30",
+      profit_margin_pct: 0,
+      cost_breakdown: { net_margin_pct: 0 },
+    });
+    expect(margin.score).toBe(50);
+    expect(margin.reason).toContain("ölçülmedi");
+    expect(margin.reason).not.toMatch(/%\d/);
+  });
+
+  it("yalnız brüt marj ölçülmüşse onu 'brüt' diye etiketler, net diye sunmaz", () => {
+    const margin = marginComponentOf({
+      name: "Brüt ölçülmüş ürün",
+      selling_price_usd: "$30",
+      supplier_price_usd: "$4",
+      gross_margin_pct: 86,
+      profit_margin_pct: 0,
+      cost_breakdown: { supplier_cost: "$4", net_margin_pct: 0 },
+    });
+    expect(margin.reason).toContain("Brüt marj");
+    expect(margin.reason).toContain("86");
+    const grossEvidence = margin.evidence?.find((e) => e.metric === "Brüt marj");
+    expect(grossEvidence?.verified).toBe(true);
+  });
+
+  it("ölçülmüş NET marjı net diye etiketler", () => {
+    const margin = marginComponentOf({
+      name: "Net ölçülmüş ürün",
+      selling_price_usd: "$50",
+      supplier_price_usd: "$8",
+      profit_margin_pct: 40,
+    });
+    expect(margin.reason).toContain("Net marj");
+    expect(margin.reason).toContain("40");
+  });
+});

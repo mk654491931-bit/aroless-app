@@ -4,7 +4,7 @@
 // Mevcut skorların (hybrid / council / unified / realism) yerine geçmez;
 // hepsini tek bir karara indirger.
 // ============================================================================
-import { netMarginOf } from "./profitability";
+import { measuredGrossMarginPct, measuredMarginPct } from "./economics-evidence";
 import { parseMoney } from "./unit-economics";
 import type { MarketEvidence } from "./market-evidence";
 
@@ -67,6 +67,7 @@ type ScorableProduct = {
   hybrid?: { calculated_score?: number };
   council?: { velora_score?: number };
   cost_breakdown?: { supplier_cost?: string; net_margin_pct?: number };
+  gross_margin_pct?: number | null;
   platform_fit?: string[];
   sourcing?: { lead_time_days?: string; moq?: string; shipping_method?: string };
 };
@@ -133,13 +134,31 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
     .join(" · ");
 
   // ---- 3. Kâr marjı -------------------------------------------------------
-  const netMargin = netMarginOf(p);
-  const margin = clamp(netMargin * 2.2); // %45 net marj ≈ 100
+  //
+  // DÜRÜSTLÜK (ölçülen hata, 2026-10-05): burada `netMarginOf` çağrılıyordu ve
+  // o fonksiyon EKSİK maliyetleri (kargo, komisyon, reklam) TAHMİN ederek her
+  // ürüne bir "net marj" üretiyordu. Ölçümlü keşif hattında tedarik/kargo/
+  // komisyon ÖLÇÜLMEDİĞİ için aynı ürün kartın bir yerinde "Net marj ≈ %97",
+  // başka yerinde "%0" görünüyordu — hem absürt hem çelişkili. Artık sıra:
+  // ölçülmüş NET marj → ölçülmüş BRÜT marj (açıkça etiketli) → BİLİNMİYOR.
+  // Hiçbiri yoksa puan NÖTR (50) ve gerekçe "ölçülmedi" der; sayı UYDURULMAZ.
+  const measuredNet = measuredMarginPct(p);
+  const measuredGross = measuredGrossMarginPct(p);
+  const marginKind: "net" | "gross" | "none" =
+    measuredNet !== null ? "net" : measuredGross !== null ? "gross" : "none";
+  const marginValue = measuredNet ?? measuredGross;
+  const margin = marginKind === "none" ? 50 : clamp((marginValue ?? 0) * 2.2); // %45 net marj ≈ 100
   const price = parseMoney(p.selling_price_usd);
   if (price > 0 && price < 12) {
     penalties.push("Satış fiyatı $12 altında — reklam maliyetini kaldırması zor.");
   }
-  const marginReason = `Net marj ≈ %${Math.round(netMargin)}${price ? ` · satış fiyatı $${price.toFixed(2)}` : ""}`;
+  const priceNote = price ? ` · satış fiyatı $${price.toFixed(2)}` : "";
+  const marginReason =
+    marginKind === "none"
+      ? "Marj ölçülmedi (tedarik/kargo/komisyon kaynağı yok)"
+      : marginKind === "gross"
+        ? `Brüt marj ≈ %${Math.round(marginValue ?? 0)} (kargo öncesi)${priceNote}`
+        : `Net marj ≈ %${Math.round(marginValue ?? 0)}${priceNote}`;
 
   // ---- 4. Lojistik --------------------------------------------------------
   let logistics = 78;
@@ -247,14 +266,19 @@ export function computeWinnerScore(p: ScorableProduct): WinnerBreakdown {
       score: margin,
       weight: 0.22,
       reason: marginReason,
-      formula: "net marj % × 2.2 (≥%45 net marj = 100 puan)",
+      formula: "ölçülen marj % × 2.2 (≥%45 = 100 puan) · ölçülemezse nötr 50",
       evidence: [
         {
-          metric: "Net marj",
-          value: `%${Math.round(netMargin)}`,
-          source: "Birim ekonomi hesabı",
+          metric: marginKind === "gross" ? "Brüt marj" : "Net marj",
+          value: marginKind === "none" ? "ölçülmedi" : `%${Math.round(marginValue ?? 0)}`,
+          source:
+            marginKind === "none"
+              ? "—"
+              : marginKind === "gross"
+                ? "Ölçülen satış − toptan (kargo öncesi)"
+                : "Birim ekonomi hesabı",
           weight: 0.7,
-          verified: true,
+          verified: marginKind !== "none",
         },
         {
           metric: "Satış fiyatı",

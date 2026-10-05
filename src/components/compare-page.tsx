@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { marginForRanking } from "@/lib/economics-evidence";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { summarizeComparison } from "@/lib/compare.functions";
 import { creditErrorMessage } from "@/lib/credits";
@@ -83,7 +84,9 @@ export function ComparePage() {
       const products = selectedFavorites.slice(0, COMPARE_MAX_SELECT).map((f) => ({
         name: f.product.name,
         trend_score: f.product.trend_score,
-        profit_margin_pct: f.product.profit_margin_pct,
+        // Ölçülmemiş marjı (0) AI'a "%0 marj" diye göndermek yanıltıcıydı;
+        // ölçüldüyse değerini, yoksa `undefined` gönderiyoruz.
+        profit_margin_pct: marginForRanking(f.product).pct ?? undefined,
         competition_level: f.product.competition_level,
         sellability_verdict: f.product.sellability_verdict,
         why_winning: f.product.why_winning,
@@ -180,7 +183,14 @@ export function ComparePage() {
                       </span>
                       <span className="mt-0.5 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
                         <span>Trend {f.product.trend_score ?? "—"}</span>
-                        <span>· Marj %{f.product.profit_margin_pct ?? "—"}</span>
+                        <span>
+                          · Marj{" "}
+                          {(() => {
+                            const { pct, kind } = marginForRanking(f.product);
+                            if (pct === null) return "—";
+                            return kind === "gross" ? `%${pct} brüt` : `%${pct}`;
+                          })()}
+                        </span>
                         <span>· Rekabet {f.product.competition_level ?? "—"}</span>
                       </span>
                     </span>

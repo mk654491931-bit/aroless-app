@@ -1,4 +1,5 @@
 import { X, Columns3, Trash2 } from "lucide-react";
+import { marginForRanking } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { MarketFitPanel } from "@/components/market-fit-panel";
 
@@ -84,8 +85,14 @@ export function CompareModal({
     { label: "Net kâr", get: (p) => String(p.cost_breakdown?.net_profit ?? "—") },
 
     {
-      label: "Net marj",
-      get: (p) => num(p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct, "%"),
+      // Ölçülmemiş marj 0 DEĞİLDİR. Net ölçüldüyse net, yoksa brüt (etiketli),
+      // o da yoksa "—". 0 yazmak "ölçtük ve sıfır bulduk" demek olurdu.
+      label: "Marj",
+      get: (p) => {
+        const { pct, kind } = marginForRanking(p);
+        if (pct === null) return "—";
+        return kind === "gross" ? `%${pct} brüt` : `%${pct}`;
+      },
     },
     { label: "Rekabet", get: (p) => String(p.competition_level ?? "—") },
     { label: "Kanıt seviyesi", get: (p) => String(p.evidence_level ?? "—") },

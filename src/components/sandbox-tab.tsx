@@ -25,6 +25,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { marginForRanking } from "@/lib/economics-evidence";
 import { parseMoneyNum } from "@/lib/consistency";
 import {
   SIM_PLATFORMS,
@@ -550,7 +551,13 @@ function SetupView({
               <div className="text-xs text-muted-foreground">
                 Imported defaults · COGS <b className="text-foreground">{money(cogs)}</b> · price{" "}
                 <b className="text-foreground">{money(price)}</b> · margin{" "}
-                <b className="text-foreground">{product.profit_margin_pct}%</b>
+                <b className="text-foreground">
+                  {(() => {
+                    const { pct, kind } = marginForRanking(product);
+                    if (pct === null) return "—";
+                    return kind === "gross" ? `%${pct} brüt` : `%${pct}`;
+                  })()}
+                </b>
               </div>
             </div>
           )}

@@ -11,6 +11,7 @@ import {
   Boxes,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { marginForRanking } from "@/lib/economics-evidence";
 import { parseMoneyNum } from "@/lib/consistency";
 import { usePersistentState } from "@/components/finder-extras";
 
@@ -28,9 +29,12 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
   const stats = useMemo(() => {
     const n = products.length || 1;
     const scores = products.map((p) => p.winner_score ?? 0);
-    const margins = products.map(
-      (p) => p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0,
-    );
+    // Yalnız ÖLÇÜLMÜŞ marjlar ortalamaya girer. Ölçülmemiş alanlar eskiden 0
+    // sayılıp ortalamayı aşağı çekiyordu — "ölçülmedi" ile "sıfır marj"
+    // farklıdır. Hiçbiri ölçülmediyse ortalama YOKTUR (arayüz "—" gösterir).
+    const measuredMargins = products
+      .map((p) => marginForRanking(p).pct)
+      .filter((n): n is number => n !== null);
     const prices = products.map((p) => parseMoneyNum(p.selling_price_usd)).filter((v) => v > 0);
     const verified = products.filter(
       (p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75,
@@ -49,7 +53,9 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
 
     return {
       avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / n),
-      avgMargin: Math.round(margins.reduce((a, b) => a + b, 0) / n),
+      avgMargin: measuredMargins.length
+        ? Math.round(measuredMargins.reduce((a, b) => a + b, 0) / measuredMargins.length)
+        : null,
       medPrice: Math.round(median(prices)),
       verified,
       lowComp,
@@ -63,7 +69,11 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
 
   const cards = [
     { icon: <BarChart3 size={13} />, label: "Ort. Winner", value: `${stats.avgScore}` },
-    { icon: <DollarSign size={13} />, label: "Ort. net marj", value: `%${stats.avgMargin}` },
+    {
+      icon: <DollarSign size={13} />,
+      label: "Ort. marj",
+      value: stats.avgMargin === null ? "—" : `%${stats.avgMargin}`,
+    },
     {
       icon: <Boxes size={13} />,
       label: "Medyan fiyat",

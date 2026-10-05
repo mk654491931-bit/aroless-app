@@ -1,4 +1,5 @@
 import type { WinningProduct } from "./gemini.functions";
+import { measuredMoney } from "./economics-evidence";
 import { realEconomics } from "./real-economics";
 
 export type Issue = {
@@ -48,7 +49,13 @@ export function checkConsistency(p: WinningProduct): ConsistencyReport {
   }
 
   // 2. cost breakdown must reconcile with net profit
-  if (cb) {
+  //
+  // YALNIZ ölçülmüş net_profit varken anlamlıdır. Ölçümlü keşif hattında toptan
+  // fiyat ölçülür ama kargo/komisyon/reklam ÖLÇÜLMEZ; döküm kısmi olduğu için
+  // "net_profit = ''" gelir. Bunu 0 sayıp "net kâr uyuşmuyor" uyarısı üretmek
+  // YANLIŞTIR: kısmi döküm dürüsttür, çelişki değildir (ölçülen hata).
+  const netProfitMeasured = measuredMoney(cb?.net_profit) !== null;
+  if (cb && netProfitMeasured) {
     checked++;
     const costs =
       parseMoneyNum(cb.supplier_cost) +

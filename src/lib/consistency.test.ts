@@ -98,6 +98,28 @@ describe("checkConsistency", () => {
     expect(report.issues.some((i) => i.field === "profit_margin_pct")).toBe(true);
   });
 
+  it("kısmi (ölçülmüş) maliyet dökümünü çelişki SAYMAZ", () => {
+    // Ölçümlü keşif hattı: toptan fiyat ölçülür, kargo/komisyon/reklam
+    // ÖLÇÜLMEZ (boş string) ve net kâr yoktur. Eskiden net_profit "" → 0
+    // sayılıp "net kâr uyuşmuyor" uyarısı üretiliyordu.
+    const product = makeProduct({
+      selling_price_usd: "$30",
+      supplier_price_usd: "$4",
+      profit_margin_pct: 0,
+      cost_breakdown: {
+        supplier_cost: "$4",
+        shipping_cost: "",
+        platform_fee: "",
+        ad_spend: "",
+        net_profit: "",
+        net_margin_pct: 0,
+      },
+    });
+    const report = checkConsistency(product);
+    expect(report.issues.some((i) => i.field === "cost_breakdown")).toBe(false);
+    expect(report.issues.some((i) => i.field === "net_margin_pct")).toBe(false);
+  });
+
   it("flags out-of-range scores", () => {
     const product = makeProduct({
       trend_score: 120,

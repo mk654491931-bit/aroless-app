@@ -31,6 +31,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { marginLabel, measuredMoney } from "@/lib/economics-evidence";
 import { completeDeepDive, num } from "@/lib/deep-dive-complete";
 import {
   CheckItem,
@@ -232,11 +233,14 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <DollarSign size={10} /> Adet başı kâr
             </div>
             <div className="mt-1 font-semibold text-emerald-300">
-              {p.cost_breakdown?.net_profit ?? "—"}
+              {measuredMoney(p.cost_breakdown?.net_profit) === null
+                ? "—"
+                : p.cost_breakdown?.net_profit}
             </div>
-            <div className="text-[10px] text-muted-foreground">
-              Marj %{p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct}
-            </div>
+            {/* Ölçülmemiş marj "%0" DEĞİLDİR: brütse açıkça "brüt" etiketiyle,
+                hiç ölçülmediyse "—" gösterilir (0 ile 97'nin çelişmesi buradan
+                geliyordu). */}
+            <div className="text-[10px] text-muted-foreground">Marj {marginLabel(p, "—")}</div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-teal-300/90">
@@ -304,9 +308,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <DollarSign size={10} /> Net kâr / adet
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-emerald-300">
-                  {p.cost_breakdown?.net_profit ?? "—"}{" "}
+                  {measuredMoney(p.cost_breakdown?.net_profit) === null
+                    ? "—"
+                    : p.cost_breakdown?.net_profit}{" "}
                   <span className="text-[10px] font-normal opacity-80">
-                    (%{p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct})
+                    ({marginLabel(p, "—")})
                   </span>
                 </td>
               </tr>

@@ -26,10 +26,15 @@ const TOTAL_AGENTS = 14;
 const MEASURABLE_FIELDS = 5;
 
 /** Sinyallerin insan dili karşılıkları. */
+//
+// "margin" sinyali bir YÜZDE DEĞİLDİR: yalnızca FİYAT BANDI sağlığıdır (0-100).
+// Etiket "Marj" olduğu için kartta "Marj 80" yazısı `%80 kâr marjı` gibi
+// okunuyordu; aynı ürünün gerçek marj hücresi ise "—"/brüt gösterdiğinden
+// çelişki doğuyordu. Etiket "Fiyat bandı" olarak açıklığa kavuşturuldu.
 const SIGNAL_LABELS = {
   demand: "Talep",
   competition: "Düşük rekabet",
-  margin: "Marj",
+  margin: "Fiyat bandı",
   rating: "Ürün puanı",
   availability: "Bulg. kolaylığı",
 } as const;
