@@ -23,11 +23,7 @@
 import type { ToolId } from "./tools-prompts.server";
 
 export type AiCreditFeature =
-  | `tool:${ToolId}`
-  | "council"
-  | "agent-pipeline"
-  | "trend-analysis"
-  | "radar-scan";
+  `tool:${ToolId}` | "council" | "agent-pipeline" | "trend-analysis" | "radar-scan";
 
 /**
  * Araç başına jeton. `satisfies Record<ToolId, number>` kasıtlıdır: yeni bir
@@ -53,7 +49,7 @@ export const TOOL_CREDIT_COSTS = {
   "listing-visual": 1,
   "review-sentiment": 1,
   "price-strategy": 1,
-  "news": 1,
+  news: 1,
   "hs-classifier": 1,
   "compliance-check": 1,
   "competitor-intel": 1,

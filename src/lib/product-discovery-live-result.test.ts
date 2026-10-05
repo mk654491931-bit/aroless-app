@@ -117,7 +117,10 @@ describe("final adımı kullanıcıya HER ZAMAN gerçek ürün listesi verir", (
     // 3) Kalıcı sonuca yazılan sözleşme de aynı: istemci buradan okur.
     const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [
       string,
-      { products: NormalizedProduct[]; topProducts: { id: string; title: string; final_score: number; selection_reason: string }[] },
+      {
+        products: NormalizedProduct[];
+        topProducts: { id: string; title: string; final_score: number; selection_reason: string }[];
+      },
     ];
     expect(payload.topProducts).toHaveLength(outcome.topProducts!.length);
     // Kullanıcı GERÇEK ürün satırları görür: başlık ve gerekçe dolu.

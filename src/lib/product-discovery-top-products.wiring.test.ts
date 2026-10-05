@@ -99,9 +99,9 @@ describe("nihai 5 — kalıcı sonuç ve istemci", () => {
     expect(parseDiscoveryResult(null).topProducts).toEqual([]);
     expect(parseDiscoveryResult({ topProducts: "çöp" }).topProducts).toEqual([]);
     // Eksik alanlı satır elenir (yarım gerekçe gösterilmez).
-    expect(
-      parseDiscoveryResult({ topProducts: [{ id: "a", title: "b" }] }).topProducts,
-    ).toEqual([]);
+    expect(parseDiscoveryResult({ topProducts: [{ id: "a", title: "b" }] }).topProducts).toEqual(
+      [],
+    );
   });
 
   it("`final` adımı sözleşmeyi kalıcı sonuca yazar", async () => {

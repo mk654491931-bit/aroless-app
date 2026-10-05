@@ -115,9 +115,10 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       label: "SerpAPI ürün kaynağı (isteğe bağlı)",
       ok: set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY"),
       optional: true,
-      detail: set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY")
-        ? "tanımlı — Google Shopping üzerinden gerçek mağaza fiyatı, puan ve ürün görseli aranır"
-        : "Yok: gerçek fiyatlı ürün araması bu kaynağı atlar, kalan kaynaklarla hat yine çalışır.",
+      detail:
+        set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY")
+          ? "tanımlı — Google Shopping üzerinden gerçek mağaza fiyatı, puan ve ürün görseli aranır"
+          : "Yok: gerçek fiyatlı ürün araması bu kaynağı atlar, kalan kaynaklarla hat yine çalışır.",
       fix: "İsteğe bağlı — serapapi.com'da ücretsiz hesap açıp SERPAPI_KEY ekle.",
     },
     {
@@ -125,9 +126,10 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       label: "ScraperAPI pazaryeri kaynağı (isteğe bağlı)",
       ok: set(env, "SCRAPERAPI_KEY") || set(env, "SCRAPI_KEY") || set(env, "SCRAP_API_KEY"),
       optional: true,
-      detail: set(env, "SCRAPERAPI_KEY") || set(env, "SCRAPI_KEY") || set(env, "SCRAP_API_KEY")
-        ? "tanımlı — hedef ülkenin yerel pazaryerleri kazınır"
-        : "Yok: yerel pazaryeri kazıması atlanır, kalan kaynaklarla hat yine çalışır.",
+      detail:
+        set(env, "SCRAPERAPI_KEY") || set(env, "SCRAPI_KEY") || set(env, "SCRAP_API_KEY")
+          ? "tanımlı — hedef ülkenin yerel pazaryerleri kazınır"
+          : "Yok: yerel pazaryeri kazıması atlanır, kalan kaynaklarla hat yine çalışır.",
       fix: "İsteğe bağlı — scraperapi.com'da ücretsiz hesap açıp SCRAPERAPI_KEY ekle.",
     },
     {
@@ -151,12 +153,12 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       detail: directProviders.length
         ? `tanımlı — doğrudan sağlayıcı: ${directProviders
             .map((p) => `${p.label} → ${p.model}`)
-            .join(", ")}` +
-        (set(env, "OPENROUTER_API_KEY") ? " · OpenRouter da tanımlı" : "")
+            .join(", ")}` + (set(env, "OPENROUTER_API_KEY") ? " · OpenRouter da tanımlı" : "")
         : set(env, "OPENROUTER_API_KEY")
           ? "OpenRouter tanımlı — DeepSeek V4.1 Flash / GLM-5.3 / Qwen3.8 / MiMo-V2.6 / Gemma 4 tek anahtarla açılır"
           : "Yok: hat yalnız Gemini/Groq/Cerebras/HF ile çalışır — gelişmiş modeller kullanılmaz.",
-      fix: "İsteğe bağlı — OpenRouter anahtarı ekle VEYA doğrudan sağlayıcı anahtarı " +
+      fix:
+        "İsteğe bağlı — OpenRouter anahtarı ekle VEYA doğrudan sağlayıcı anahtarı " +
         "(örn. PROVIDER_A_1 + PROVIDER_A_BASE_URL) VEYA EVREN (EVREN_API_KEY + EVREN_BASE_URL + EVREN_MODEL). " +
         "Hazır uçlar `ai-keys.server.ts` içinde.",
     },

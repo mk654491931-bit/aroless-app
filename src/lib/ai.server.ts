@@ -24,11 +24,7 @@ import {
  * dönüyor. Kullanıcıya "yeni hat kurulamadı" diye yansıyordu. Emeklileri
  * merdivene geri sokmayalım; desteklenen 2.x/2.5x ailesi yeterli.
  */
-export const GEMINI_MODELS_LATEST = [
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-];
+export const GEMINI_MODELS_LATEST = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
 
 /** Groq ladder: strongest open model first, fastest one last. */
 export const GROQ_MODELS_LATEST = [
@@ -106,8 +102,7 @@ export const MODEL_ROUTING_NOTES: Record<string, string> = {
     "Çok modlu amiral model; Türkçe metin üretimi ve rapor cümlesi için güçlü.",
   "deepseek/deepseek-v4-flash":
     "Aynı aileden önceki nesil; V4.1 erişilemezse aynı yeteneğin yedeği.",
-  "google/gemma-4-31b-it:free":
-    "ÜCRETSİZ ve yoğun 31B; kota biten anahtarlarda bedava yedek.",
+  "google/gemma-4-31b-it:free": "ÜCRETSİZ ve yoğun 31B; kota biten anahtarlarda bedava yedek.",
 };
 export async function callLovableAI(
   prompt: string,
@@ -677,9 +672,9 @@ async function postOpenAICompat(opts: {
     });
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");
-      const err = new Error(
-        `${opts.model} ${resp.status}: ${body.slice(0, 160)}`,
-      ) as Error & { status?: number };
+      const err = new Error(`${opts.model} ${resp.status}: ${body.slice(0, 160)}`) as Error & {
+        status?: number;
+      };
       err.status = resp.status;
       throw err;
     }
@@ -1107,11 +1102,7 @@ export async function callGemini(
     if (left <= 0) {
       throw lastErr instanceof Error ? lastErr : new Error("timeout: gemini-chain");
     }
-    return await withDeadline(
-      callLovableAI(prompt, temperature),
-      left,
-      "gemini-gateway",
-    );
+    return await withDeadline(callLovableAI(prompt, temperature), left, "gemini-gateway");
   } catch {
     throw lastErr instanceof Error ? lastErr : new Error("Gemini request failed");
   }

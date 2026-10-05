@@ -70,11 +70,7 @@ export function DecisionStrip({
 }) {
   const { decision, confidence, tone, confTone } = decisionMeta(winner_score, evidence_level);
   const kanit =
-    evidence_level === "verified"
-      ? "Doğrulanmış"
-      : evidence_level === "partial"
-        ? "Kısmen"
-        : "AI";
+    evidence_level === "verified" ? "Doğrulanmış" : evidence_level === "partial" ? "Kısmen" : "AI";
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2">
       <span
@@ -84,20 +80,26 @@ export function DecisionStrip({
         <Target size={11} />
         {decision}
       </span>
-      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${confTone}`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${confTone}`}
+      >
         <ShieldCheck size={10} /> Güven: {confidence}
       </span>
-      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${evidenceStyle(evidence_level ?? "ai_only")}`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${evidenceStyle(evidence_level ?? "ai_only")}`}
+      >
         Kanıt: {kanit}
       </span>
       {typeof net_margin_pct === "number" && (
         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-foreground">
-          <TrendingUp size={10} className="text-emerald-400" /> Net marj %{Math.round(net_margin_pct)}
+          <TrendingUp size={10} className="text-emerald-400" /> Net marj %
+          {Math.round(net_margin_pct)}
         </span>
       )}
       {typeof ad_budget_usd === "number" && ad_budget_usd > 0 && (
         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-foreground">
-          <DollarSign size={10} className="text-sky-400" /> Test bütçesi ${Math.round(ad_budget_usd)}
+          <DollarSign size={10} className="text-sky-400" /> Test bütçesi $
+          {Math.round(ad_budget_usd)}
         </span>
       )}
       {typeof winner_score === "number" && (

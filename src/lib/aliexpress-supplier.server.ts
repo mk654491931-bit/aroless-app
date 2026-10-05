@@ -162,8 +162,10 @@ function toOffer(card: unknown): SupplierOffer | null {
 
   return {
     title,
-    unitPriceUsd: saleCurrency === "USD" || saleCurrency === "" ? measuredMoney(sale.minPrice) : null,
-    listPriceUsd: listCurrency === "USD" || listCurrency === "" ? measuredMoney(list.minPrice) : null,
+    unitPriceUsd:
+      saleCurrency === "USD" || saleCurrency === "" ? measuredMoney(sale.minPrice) : null,
+    listPriceUsd:
+      listCurrency === "USD" || listCurrency === "" ? measuredMoney(list.minPrice) : null,
     discountPct: discount !== null && discount > 0 ? Math.round(discount) : null,
     sold: soldExact !== null && soldExact >= 0 ? soldExact : soldFromText(obj(row.trade).tradeDesc),
     rating: rating !== null && rating > 0 && rating <= 5 ? rating : null,

@@ -53,7 +53,9 @@ async function loadRates(): Promise<Record<string, number> | null> {
  */
 export async function toUsd(amount: number, currency: string): Promise<number | null> {
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  const code = String(currency ?? "").trim().toUpperCase();
+  const code = String(currency ?? "")
+    .trim()
+    .toUpperCase();
   if (!code) return null;
   // USD zaten döndürme gerektirmez; kur çekmeye gerek yok (hızlı yol).
   if (code === "USD") return amount;

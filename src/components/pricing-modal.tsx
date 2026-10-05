@@ -5,10 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout } from "@/lib/paddle.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
-import {
-  isCheckoutCompleted,
-  useSubscriptionConfirmation,
-} from "@/lib/subscription-confirmation";
+import { isCheckoutCompleted, useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown } from "lucide-react";

@@ -11,14 +11,8 @@
 // ============================================================================
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  discoverySliceMs,
-  sliceWorkMs,
-} from "./product-discovery-slices.server";
-import {
-  runDiscoveryChain,
-  runOneDiscoveryStep,
-} from "./product-discovery-runner.server";
+import { discoverySliceMs, sliceWorkMs } from "./product-discovery-slices.server";
+import { runDiscoveryChain, runOneDiscoveryStep } from "./product-discovery-runner.server";
 import type { ProductDiscoveryInput } from "./product-discovery.types";
 
 const jobsMock = vi.hoisted(() => ({
@@ -405,52 +399,51 @@ describe("zincir sürücüsü dilim dilim koşar (runDiscoveryChain)", () => {
     });
     const seen: ExecArgs[] = [];
     const forced: boolean[] = [];
-    stepsMock.executeProductDiscoveryStep.mockImplementation(
-      async (args: ExecArgs, ) => {
-        seen.push(args);
-        const force = (stepsMock.executeProductDiscoveryStep.mock.calls.at(-1)?.[0] as
-          | { forceFinish?: boolean }
-          | undefined)?.forceFinish;
-        forced.push(force === true);
-        // `final` adımı bu testin konusu değil: doğrudan biter.
-        if (args.step !== "deep") {
-          return {
-            ok: true,
-            step: args.step,
-            status: "completed",
-            progress: 100,
-            products: args.batch,
-            consensus: [],
-            topProducts: [{ id: "fp-1", title: "Ürün 1", final_score: 80, selection_reason: "x" }],
-            notes: [],
-          };
-        }
-        // Son dilim ZORLA bitirilir: adımlar bu sözleşmeye uyar.
-        if (force) {
-          return {
-            ok: true,
-            step: "deep",
-            status: "deep_analysis",
-            progress: 90,
-            products: args.batch,
-            consensus: [{ candidateId: "fp-1", councilScore: 80 }],
-            notes: [],
-          };
-        }
+    stepsMock.executeProductDiscoveryStep.mockImplementation(async (args: ExecArgs) => {
+      seen.push(args);
+      const force = (
+        stepsMock.executeProductDiscoveryStep.mock.calls.at(-1)?.[0] as
+          { forceFinish?: boolean } | undefined
+      )?.forceFinish;
+      forced.push(force === true);
+      // `final` adımı bu testin konusu değil: doğrudan biter.
+      if (args.step !== "deep") {
+        return {
+          ok: true,
+          step: args.step,
+          status: "completed",
+          progress: 100,
+          products: args.batch,
+          consensus: [],
+          topProducts: [{ id: "fp-1", title: "Ürün 1", final_score: 80, selection_reason: "x" }],
+          notes: [],
+        };
+      }
+      // Son dilim ZORLA bitirilir: adımlar bu sözleşmeye uyar.
+      if (force) {
         return {
           ok: true,
           step: "deep",
           status: "deep_analysis",
-          progress: 85,
+          progress: 90,
           products: args.batch,
-          consensus: [],
-          partial: true,
-          sliceState: { done: ["role-0", `role-${args.slice}`], scores: {} },
-          sliceRemaining: 10,
+          consensus: [{ candidateId: "fp-1", councilScore: 80 }],
           notes: [],
         };
-      },
-    );
+      }
+      return {
+        ok: true,
+        step: "deep",
+        status: "deep_analysis",
+        progress: 85,
+        products: args.batch,
+        consensus: [],
+        partial: true,
+        sliceState: { done: ["role-0", `role-${args.slice}`], scores: {} },
+        sliceRemaining: 10,
+        notes: [],
+      };
+    });
 
     const outcome = await runDiscoveryChain({
       runId: "run-1",

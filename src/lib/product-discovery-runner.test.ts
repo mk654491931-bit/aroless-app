@@ -293,11 +293,7 @@ describe("final adımının kilidi (sıradaki adım bekletilmez)", () => {
     );
     jobsMock.advanceDiscoveryStatus.mockResolvedValue(true);
 
-    const claim = await claimDiscoveryStep(
-      "run-1",
-      "gemini",
-      checkpoint(["scrape_filter"]),
-    );
+    const claim = await claimDiscoveryStep("run-1", "gemini", checkpoint(["scrape_filter"]));
 
     expect(claim.state).toBe("claimed");
     expect(jobsMock.advanceDiscoveryStatus).toHaveBeenCalledWith(

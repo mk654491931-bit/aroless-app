@@ -11,7 +11,6 @@ import type { BuyerSimulation as BuyerSimulationType } from "@/components/buyer-
 import type { TrainingSection as TrainingSectionType } from "@/components/training-section";
 import type { PredictiveTrendsTab as PredictiveTrendsTabType } from "@/components/predictive-trends-tab";
 
-
 /**
  * Ağır panellerin ertelenmiş (deferred) sürümleri.
  *

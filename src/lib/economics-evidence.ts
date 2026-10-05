@@ -54,14 +54,17 @@ export function measuredMoney(value: unknown): number | null {
 }
 
 /** Kartın maliyet kalemi (klasik hattın `CostBreakdown` ile aynı yüzey). */
-export type CostEvidence = {
-  supplier_cost?: string | number | null;
-  shipping_cost?: string | number | null;
-  platform_fee?: string | number | null;
-  ad_spend?: string | number | null;
-  net_profit?: string | number | null;
-  net_margin_pct?: number | null;
-} | null | undefined;
+export type CostEvidence =
+  | {
+      supplier_cost?: string | number | null;
+      shipping_cost?: string | number | null;
+      platform_fee?: string | number | null;
+      ad_spend?: string | number | null;
+      net_profit?: string | number | null;
+      net_margin_pct?: number | null;
+    }
+  | null
+  | undefined;
 
 /** Ekonomisi incelenebilir bir ürünün alt küçük parçası. */
 export type EconomicsEvidenceInput = {

@@ -186,9 +186,7 @@ export function combineJointScores(input: {
     return { score: analysis, source: "analysis", analysisWeight: 1, councilWeight: 0 };
   }
   return {
-    score: Math.round(
-      analysis * JOINT_WEIGHT_ANALYSIS + council * JOINT_WEIGHT_COUNCIL,
-    ),
+    score: Math.round(analysis * JOINT_WEIGHT_ANALYSIS + council * JOINT_WEIGHT_COUNCIL),
     source: "joint",
     analysisWeight: JOINT_WEIGHT_ANALYSIS,
     councilWeight: JOINT_WEIGHT_COUNCIL,

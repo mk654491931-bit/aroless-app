@@ -74,7 +74,11 @@ describe("prefersReducedMotion / isLiteDevice", () => {
   });
 
   it("flags data-saver connections", () => {
-    vi.stubGlobal("navigator", { hardwareConcurrency: 8, deviceMemory: 8, connection: { saveData: true } });
+    vi.stubGlobal("navigator", {
+      hardwareConcurrency: 8,
+      deviceMemory: 8,
+      connection: { saveData: true },
+    });
     expect(isLiteDevice()).toBe(true);
   });
 

@@ -157,9 +157,7 @@ function describe(key: string, p: NormalizedProduct): string {
     case "compliance_officer":
       return `Marka ${p.brand || "yok"} · kategori ${p.category || "yok"}`;
     case "creative_director":
-      return `Vitrin kanıtı: not ${p.notes ? "var" : "yok"}, görsel ${
-        p.imageUrl ? "var" : "yok"
-      }`;
+      return `Vitrin kanıtı: not ${p.notes ? "var" : "yok"}, görsel ${p.imageUrl ? "var" : "yok"}`;
     case "retention_ltv":
       return `Tekrar satın alma sinyali: ${p.signals.demand}/100`;
     case "channel_fit":

@@ -228,10 +228,7 @@ function AdminPage() {
                         <TierBadge tier={u.subscription_tier} />
                       </Td>
                       <Td>
-                        <ExpiryCell
-                          end={u.current_period_end}
-                          status={u.subscription_status}
-                        />
+                        <ExpiryCell end={u.current_period_end} status={u.subscription_status} />
                       </Td>
                       <Td className="text-muted-foreground">{fmtDate(u.created_at)}</Td>
                     </tr>
@@ -352,11 +349,7 @@ function ExpiryCell({ end, status }: { end: string | null; status: string }) {
         })}
       </div>
       <div className="text-[10px] text-muted-foreground">
-        {left === null
-          ? status
-          : left > 0
-            ? `${left} gün kaldı`
-            : "süresi doldu"}
+        {left === null ? status : left > 0 ? `${left} gün kaldı` : "süresi doldu"}
       </div>
     </div>
   );

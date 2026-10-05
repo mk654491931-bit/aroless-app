@@ -163,7 +163,9 @@ export const ADMIN_MAX_PERIOD_MONTHS = 36;
 
 /** Metni geçerli bir paket kimliğine çevirir (büyük/küçük harf duyarsız). */
 export function normalizePlanId(value: unknown): PlanId | null {
-  const text = String(value ?? "").trim().toLowerCase();
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (text === "starter") return "Starter";
   if (text === "pro") return "Pro";
   if (text === "business" || text === "enterprise" || text === "ultra") return "Business";

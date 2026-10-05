@@ -7,10 +7,7 @@
 // içinde. Böyle bir hata kodla ilgisi olmadığı hâlde "build kırıldı" gibi
 // göründüğü için env girdisinin tek bir yerde savunmacı çözülmesi şarttır.
 import { describe, expect, it } from "vitest";
-import {
-  resolveFunctionMaxDuration,
-  VERCEL_MAX_FUNCTION_SECONDS,
-} from "../../nitro.config";
+import { resolveFunctionMaxDuration, VERCEL_MAX_FUNCTION_SECONDS } from "../../nitro.config";
 
 describe("resolveFunctionMaxDuration", () => {
   it("tanımlı değilse Vercel'in 300 sn varsayılanına düşer", () => {

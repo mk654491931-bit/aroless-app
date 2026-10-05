@@ -26,9 +26,7 @@ export const Route = createFileRoute("/api/search")({
         }
 
         const raw = (await request.json().catch(() => null)) as
-          | { data?: unknown }
-          | null
-          | undefined;
+          { data?: unknown } | null | undefined;
         if (!raw || typeof raw !== "object") {
           return json({ success: false, error: "Invalid JSON body" }, 400);
         }

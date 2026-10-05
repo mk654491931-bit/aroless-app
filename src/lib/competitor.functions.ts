@@ -102,8 +102,7 @@ async function buildCompetitorReport(data: {
   if (sellers.length < 5) {
     for (const a of aiSellers) {
       if (sellers.length >= 5) break;
-      if (!sellers.some((s) => s.seller.toLowerCase() === a.seller.toLowerCase()))
-        sellers.push(a);
+      if (!sellers.some((s) => s.seller.toLowerCase() === a.seller.toLowerCase())) sellers.push(a);
     }
   }
 
@@ -191,7 +190,9 @@ async function buildCountryStrategy(niche: string, country: string): Promise<str
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("STRATEGY_TIMEOUT")), ms)),
     ]);
   try {
-    const text = await withBudget(callGemini(countryStrategyPrompt(niche, country), undefined, 0.6, false));
+    const text = await withBudget(
+      callGemini(countryStrategyPrompt(niche, country), undefined, 0.6, false),
+    );
     const p = extractJson<{ strategy?: string }>(text, {});
     const s = String(p.strategy ?? "").trim();
     if (!s) throw new Error("AI boş strateji döndürdü — tekrar deneyin.");

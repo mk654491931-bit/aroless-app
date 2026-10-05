@@ -39,27 +39,28 @@ export function createIntersectionLazyComponent<P extends object>(
   importFn: () => Promise<{ default: ComponentType<P> }>,
   options?: IntersectionObserverInit,
 ): ComponentType<P> {
-  const Component = lazy(() =>
-    new Promise<{ default: ComponentType<P> }>((resolve) => {
-      if (typeof window === "undefined") {
-        importFn().then(resolve);
-        return;
-      }
+  const Component = lazy(
+    () =>
+      new Promise<{ default: ComponentType<P> }>((resolve) => {
+        if (typeof window === "undefined") {
+          importFn().then(resolve);
+          return;
+        }
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0]?.isIntersecting) {
-            observer.disconnect();
-            importFn().then(resolve);
-          }
-        },
-        { rootMargin: "50px", threshold: 0.01, ...options },
-      );
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries[0]?.isIntersecting) {
+              observer.disconnect();
+              importFn().then(resolve);
+            }
+          },
+          { rootMargin: "50px", threshold: 0.01, ...options },
+        );
 
-      // Dummy element oluştur
-      const dummy = document.createElement("div");
-      observer.observe(dummy);
-    }),
+        // Dummy element oluştur
+        const dummy = document.createElement("div");
+        observer.observe(dummy);
+      }),
   );
 
   return function LazyComponent(props: P) {

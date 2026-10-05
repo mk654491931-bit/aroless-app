@@ -41,7 +41,8 @@ function stubGemini(status: number, body: string) {
   return calls;
 }
 
-const HIGH_DEMAND = '{"error":{"code":503,"message":"This model is currently experiencing high demand."}}';
+const HIGH_DEMAND =
+  '{"error":{"code":503,"message":"This model is currently experiencing high demand."}}';
 
 describe("callGemini — 503 aşırı yük", () => {
   it("anahtar sayısı artsa bile istek sayısı ARTMAZ", async () => {
@@ -75,9 +76,7 @@ describe("callGemini — 503 aşırı yük", () => {
     const calls = stubGemini(403, '{"error":{"code":403,"message":"API key not valid"}}');
 
     const { callGemini } = await import("./ai.server");
-    await expect(
-      callGemini("test", undefined, 0.2, false, ["gemini-a"]),
-    ).rejects.toThrow();
+    await expect(callGemini("test", undefined, 0.2, false, ["gemini-a"])).rejects.toThrow();
 
     // Kota GERÇEKTEN anahtara özgüdür: park edilir, sıradaki anahtara geçilir.
     const tried = new Set(

@@ -126,10 +126,7 @@ export const claimReferral = createServerFn({ method: "POST" })
       return { ok: false, code: "profile_missing", reason: "Profil hazırlanıyor, tekrar dene." };
     if (me.referral_code === code)
       return { ok: false, code: "self", reason: "Kendi kodunu kullanamazsın." };
-    if (
-      Date.now() - new Date(me.created_at as string).getTime() >
-      REFERRAL_CLAIM_WINDOW_MS
-    ) {
+    if (Date.now() - new Date(me.created_at as string).getTime() > REFERRAL_CLAIM_WINDOW_MS) {
       return {
         ok: false,
         code: "window_closed",
@@ -142,7 +139,8 @@ export const claimReferral = createServerFn({ method: "POST" })
       .select("id")
       .eq("referred_user_id", context.userId)
       .maybeSingle();
-    if (existing) return { ok: false, code: "already_used", reason: "Zaten bir davet kodu kullandın." };
+    if (existing)
+      return { ok: false, code: "already_used", reason: "Zaten bir davet kodu kullandın." };
 
     const { data: referrer } = await supabaseAdmin
       .from("profiles")

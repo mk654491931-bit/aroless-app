@@ -48,9 +48,8 @@ export const Route = createFileRoute("/api/public/trend-radar")({
             label: string,
           ): Promise<T | Response> => {
             if (!session) return run();
-            const { chargeOrRespond, refundFeatureCredits } = await import(
-              "@/lib/credit-charge.server"
-            );
+            const { chargeOrRespond, refundFeatureCredits } =
+              await import("@/lib/credit-charge.server");
             const payment = await chargeOrRespond({
               userId: session.userId,
               token: session.token,

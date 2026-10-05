@@ -150,7 +150,10 @@ export async function executeProductDiscoveryStep(args: {
 }): Promise<StepOutcome> {
   const { step, runId, userId, input } = args;
   // DİLİM BAĞLAMI — tek yerde çözülür ki tüm adımlar aynı pencereyi görsün.
-  const slice = Number.isFinite(args.slice) && (args.slice as number) > 0 ? Math.floor(args.slice as number) : 0;
+  const slice =
+    Number.isFinite(args.slice) && (args.slice as number) > 0
+      ? Math.floor(args.slice as number)
+      : 0;
   const sliceDeadline = args.sliceDeadlineAt ?? args.deadlineAt ?? Date.now() + 8_000;
   const forceFinish = args.forceFinish === true;
 

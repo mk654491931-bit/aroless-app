@@ -23,9 +23,9 @@ export type AuthContext = { supabase: any; userId: string };
  * Çağıran, ikisinin de yetmediği durumda `isServiceRole` bayrağını kontrol
  * edip kullanıcıya anlaşılır bir mesaj vermelidir.
  */
-export async function adminOrUserClient(
-  context: { supabase: any },
-): Promise<{ client: SupabaseLike; isServiceRole: boolean }> {
+export async function adminOrUserClient(context: {
+  supabase: any;
+}): Promise<{ client: SupabaseLike; isServiceRole: boolean }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   try {
     // Proxy tuzağını tetikle: ortam değişkeni yoksa burada throw eder.

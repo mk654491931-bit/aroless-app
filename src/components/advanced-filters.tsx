@@ -109,64 +109,64 @@ export function AdvancedFilters({
       </div>
 
       <div className={`fold-phone ${open ? "is-open" : ""}`}>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <RangePair
-          label="Price ($)"
-          min={filters.priceMin}
-          max={filters.priceMax}
-          onMin={(v) => set("priceMin", v)}
-          onMax={(v) => set("priceMax", v)}
-          maxCap={100000}
-        />
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <RangePair
+            label="Price ($)"
+            min={filters.priceMin}
+            max={filters.priceMax}
+            onMin={(v) => set("priceMin", v)}
+            onMax={(v) => set("priceMax", v)}
+            maxCap={100000}
+          />
 
-        <SliderRow
-          label="Min margin %"
-          value={filters.marginMin}
-          onChange={(v) => set("marginMin", v)}
-          min={0}
-          max={90}
-        />
-        <SliderRow
-          label="Min AI score"
-          value={filters.aiMin}
-          onChange={(v) => set("aiMin", v)}
-          min={0}
-          max={100}
-        />
-        <SliderRow
-          label="Min buyers / 1k"
-          value={filters.buyersMin}
-          onChange={(v) => set("buyersMin", v)}
-          min={0}
-          max={60}
-        />
-        <SliderRow
-          label="Min health"
-          value={filters.healthMin}
-          onChange={(v) => set("healthMin", v)}
-          min={0}
-          max={100}
-        />
-        <SliderRow
-          label="Min viral 90d"
-          value={filters.viralMin}
-          onChange={(v) => set("viralMin", v)}
-          min={0}
-          max={100}
-        />
-        <SelectRow
-          label="Competition"
-          value={filters.competition}
-          onChange={(v) => set("competition", v as FinderFilters["competition"])}
-          options={["Any", "Low", "Medium", "High"]}
-        />
-        <SelectRow
-          label="Country"
-          value={filters.country}
-          onChange={(v) => set("country", v)}
-          options={countries}
-        />
-      </div>
+          <SliderRow
+            label="Min margin %"
+            value={filters.marginMin}
+            onChange={(v) => set("marginMin", v)}
+            min={0}
+            max={90}
+          />
+          <SliderRow
+            label="Min AI score"
+            value={filters.aiMin}
+            onChange={(v) => set("aiMin", v)}
+            min={0}
+            max={100}
+          />
+          <SliderRow
+            label="Min buyers / 1k"
+            value={filters.buyersMin}
+            onChange={(v) => set("buyersMin", v)}
+            min={0}
+            max={60}
+          />
+          <SliderRow
+            label="Min health"
+            value={filters.healthMin}
+            onChange={(v) => set("healthMin", v)}
+            min={0}
+            max={100}
+          />
+          <SliderRow
+            label="Min viral 90d"
+            value={filters.viralMin}
+            onChange={(v) => set("viralMin", v)}
+            min={0}
+            max={100}
+          />
+          <SelectRow
+            label="Competition"
+            value={filters.competition}
+            onChange={(v) => set("competition", v as FinderFilters["competition"])}
+            options={["Any", "Low", "Medium", "High"]}
+          />
+          <SelectRow
+            label="Country"
+            value={filters.country}
+            onChange={(v) => set("country", v)}
+            options={countries}
+          />
+        </div>
       </div>
     </div>
   );

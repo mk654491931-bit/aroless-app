@@ -94,11 +94,14 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
     expect(outcome.ok).toBe(true);
     expect(jobsMock.finishDiscoveryJob).toHaveBeenCalledTimes(1);
 
-    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [string, {
-      // Kazanan ürünler konsey skorunu ÜZERİNDE taşır (14 ajanın oyu).
-      products: (NormalizedProduct & { councilScore?: number })[];
-      topProducts: { id: string; title: string; final_score: number; selection_reason: string }[];
-    }];
+    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [
+      string,
+      {
+        // Kazanan ürünler konsey skorunu ÜZERİNDE taşır (14 ajanın oyu).
+        products: (NormalizedProduct & { councilScore?: number })[];
+        topProducts: { id: string; title: string; final_score: number; selection_reason: string }[];
+      },
+    ];
     // 14 ajanın seçtiği kazananlar KAYBOLMAZ: en yüksek skorlu 5 ürün teslim edilir.
     expect(payload.products).toHaveLength(5);
     expect(payload.products.map((p) => p.name)).toEqual([
@@ -116,7 +119,8 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
 
   it("normal parmak izli koşuda sözleşme değişmez", async () => {
     const batch = Array.from({ length: 3 }, (_, i) => candidate(i + 1, `fp-${i + 1}`));
-    const consensus = Array.from({ length: 3 }, (_, i) => consensusRow(i + 1, `fp-${i + 1}`));const outcome = await executeProductDiscoveryStep({
+    const consensus = Array.from({ length: 3 }, (_, i) => consensusRow(i + 1, `fp-${i + 1}`));
+    const outcome = await executeProductDiscoveryStep({
       step: "final",
       runId: "run-1",
       userId: "user-1",
@@ -126,8 +130,15 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
       deadlineAt: Date.now() + 10_000,
     });
     expect(outcome.ok).toBe(true);
-    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [string, { products: NormalizedProduct[] }];
-    expect(payload.products.map((p) => p.name)).toEqual(["Air Fryer 1", "Air Fryer 2", "Air Fryer 3"]);
+    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [
+      string,
+      { products: NormalizedProduct[] },
+    ];
+    expect(payload.products.map((p) => p.name)).toEqual([
+      "Air Fryer 1",
+      "Air Fryer 2",
+      "Air Fryer 3",
+    ]);
   });
 
   it("AJAN ÜRÜN VERİSİ DEĞİŞTİREMEZ — halüsinasyon kaynak alanına YAZILMAZ", async () => {

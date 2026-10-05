@@ -162,7 +162,8 @@ export function extractPrice(item: SerpShoppingResult): {
   const lastDot = raw.lastIndexOf(".");
   let numeric: string;
   if (lastComma === -1 && lastDot === -1) numeric = raw;
-  else if (lastComma > lastDot) numeric = `${raw.slice(0, lastComma).replace(/\./g, "")}.${raw.slice(lastComma + 1)}`;
+  else if (lastComma > lastDot)
+    numeric = `${raw.slice(0, lastComma).replace(/\./g, "")}.${raw.slice(lastComma + 1)}`;
   else numeric = raw.replace(/,/g, "");
   const n = Number(numeric);
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -208,7 +209,10 @@ export async function serpShoppingSearch(
 ): Promise<SerpShoppingResult[]> {
   const key = serpApiKey();
   if (!key) return [];
-  const code = String(country ?? "").trim().toUpperCase() || "US";
+  const code =
+    String(country ?? "")
+      .trim()
+      .toUpperCase() || "US";
   const url =
     `https://serpapi.com/search.json?engine=google_shopping&hl=${HL_BY_COUNTRY[code] ?? "en"}` +
     `&gl=${code.toLowerCase()}&num=20&q=${encodeURIComponent(query.slice(0, 90))}&api_key=${encodeURIComponent(key)}`;

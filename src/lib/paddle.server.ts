@@ -623,8 +623,7 @@ export function mapPaddleEvent(
 
     // Tier is taken from the active price, then customData (copied to renewals by
     // Paddle), then left null so the DB preserves the user's current plan.
-    const tier: PlanId | null =
-      planForAsset(settings, priceId, productId) ?? requestedPlan ?? null;
+    const tier: PlanId | null = planForAsset(settings, priceId, productId) ?? requestedPlan ?? null;
 
     // Out-of-order guard: a refund/reversal that arrives with a positive
     // grandTotal due to Paddle's eventual consistency still must not mint

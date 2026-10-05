@@ -488,8 +488,7 @@ export const getProfile = createServerFn({ method: "GET" })
 
 // ---------- SEO & Marketing generator ----------
 
-const SEO_PLATFORMS = ["TikTok", "Facebook", "Google Ads", "Instagram"] as const;
-export type AdPlatform = (typeof SEO_PLATFORMS)[number];
+export type AdPlatform = "TikTok" | "Facebook" | "Google Ads" | "Instagram";
 
 const SeoInput = z.object({
   product: z.string().min(2).max(160),
@@ -544,8 +543,7 @@ Return STRICT JSON only:
 
 // ---------- Creative Studio (TikTok / Reels scripts) ----------
 
-const SCRIPT_FORMATS = ["TikTok", "Instagram Reels"] as const;
-export type ScriptFormat = (typeof SCRIPT_FORMATS)[number];
+export type ScriptFormat = "TikTok" | "Instagram Reels";
 
 const ScriptInput = z.object({
   product: z.string().min(2).max(160),

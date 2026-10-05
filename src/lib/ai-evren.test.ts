@@ -7,17 +7,8 @@
  * başına "hazır" sayılmaz, uç uydurulmaz.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  evrenBaseUrl,
-  evrenEnvKeys,
-  evrenModels,
-  evrenStatus,
-} from "./ai-keys.server";
-import {
-  buildPoolNodes,
-  poolGroupAvailable,
-  poolGroupConfigured,
-} from "./ai-pool.server";
+import { evrenBaseUrl, evrenEnvKeys, evrenModels, evrenStatus } from "./ai-keys.server";
+import { buildPoolNodes, poolGroupAvailable, poolGroupConfigured } from "./ai-pool.server";
 import { groqEnvKeys } from "./ai-keys.server";
 import { DEEP_CHAIN, FAST_CHAIN, councilChainFor } from "./ai-router.server";
 import { envChecks } from "./product-discovery-preflight.server";

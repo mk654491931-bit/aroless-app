@@ -140,12 +140,7 @@ function getCurrentKey(pool: AIKeyPool): string | null {
 /**
  * Error'u logla ve pool state'i güncelle
  */
-function recordError(
-  pool: AIKeyPool,
-  status: number,
-  message: string,
-  autoRotate = true,
-): void {
+function recordError(pool: AIKeyPool, status: number, message: string, autoRotate = true): void {
   pool.lastError = {
     timestamp: Date.now(),
     status,
@@ -352,7 +347,9 @@ async function callSingleProvider(opts: CallAPIOptions): Promise<APICallResult> 
         };
       }
 
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
       const content = data.choices?.[0]?.message?.content?.trim();
 
       if (!content) {

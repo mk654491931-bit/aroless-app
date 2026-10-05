@@ -512,7 +512,13 @@ export function SearchProgress({ label }: { label: string }) {
               }`}
               title={s}
             >
-              {i < stageIdx ? <ShieldCheck size={10} /> : i === stageIdx ? <Loader2 size={10} className="animate-spin" /> : <span className="h-1 w-1 rounded-full bg-white/30" />}
+              {i < stageIdx ? (
+                <ShieldCheck size={10} />
+              ) : i === stageIdx ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <span className="h-1 w-1 rounded-full bg-white/30" />
+              )}
               <span className="hidden sm:inline">{s}</span>
               <span className="sm:hidden">{i + 1}</span>
             </span>
@@ -526,7 +532,8 @@ export function SearchProgress({ label }: { label: string }) {
           <span className="opacity-40">·</span>
           {prevStage ? (
             <span>
-              Son tamamlanan: <b className="text-foreground/80">{prevStage}</b> · {prevStageAge} sn önce
+              Son tamamlanan: <b className="text-foreground/80">{prevStage}</b> · {prevStageAge} sn
+              önce
             </span>
           ) : (
             <span>Başlatılıyor…</span>
@@ -536,7 +543,8 @@ export function SearchProgress({ label }: { label: string }) {
           </span>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
-          Tahminle değil, talep + maliyet + rekabet + risk verisiyle seç — canlı veriler doğrulanıyor.
+          Tahminle değil, talep + maliyet + rekabet + risk verisiyle seç — canlı veriler
+          doğrulanıyor.
         </p>
       </div>
       <ResultGridSkeleton count={6} />

@@ -3,7 +3,18 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Coins, LayoutDashboard, Settings as SettingsIcon, Bell, Zap, LogOut, Radar, Users, Wrench, ChevronDown } from "lucide-react";
+import {
+  Coins,
+  LayoutDashboard,
+  Settings as SettingsIcon,
+  Bell,
+  Zap,
+  LogOut,
+  Radar,
+  Users,
+  Wrench,
+  ChevronDown,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
@@ -69,7 +80,10 @@ export function AppTopbar() {
   );
   const credits = balances.total;
   const breakdown = creditBreakdownLabel(balances);
-  const publicId = useMemo(() => (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null, [profileQ.data]);
+  const publicId = useMemo(
+    () => (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null,
+    [profileQ.data],
+  );
   const title =
     TITLES[pathname] ??
     (pathname.startsWith("/tools")
@@ -121,11 +135,20 @@ export function AppTopbar() {
                 <ChevronDown size={10} className="text-white/40" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" sideOffset={8} className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl">
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
+            >
               <div className="space-y-3 p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold tracking-wide text-white/90">Kullanım Hakkın</p>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">{tier}{isAdmin ? " · admin 250" : ""}</span>
+                  <p className="text-xs font-semibold tracking-wide text-white/90">
+                    Kullanım Hakkın
+                  </p>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">
+                    {tier}
+                    {isAdmin ? " · admin 250" : ""}
+                  </span>
                 </div>
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
@@ -143,26 +166,53 @@ export function AppTopbar() {
                     <span className="font-mono text-[11px] text-white/70">{balances.general}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Finder</span>
-                    <span className="font-mono text-xs font-semibold">{quota.credits}<span className="font-normal text-white/40"> /ay</span></span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                      <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Finder
+                    </span>
+                    <span className="font-mono text-xs font-semibold">
+                      {quota.credits}
+                      <span className="font-normal text-white/40"> /ay</span>
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Wrench size={12} className="text-sky-400" /> AI Araç</span>
-                    <span className="font-mono text-xs font-semibold">{quota.toolRuns}<span className="font-normal text-white/40"> /ay</span></span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                      <Wrench size={12} className="text-sky-400" /> AI Araç
+                    </span>
+                    <span className="font-mono text-xs font-semibold">
+                      {quota.toolRuns}
+                      <span className="font-normal text-white/40"> /ay</span>
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Users size={12} className="text-violet-400" /> Konsey</span>
-                    <span className="font-mono text-xs font-semibold">{quota.councilRuns}<span className="font-normal text-white/40"> /ay</span></span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                      <Users size={12} className="text-violet-400" /> Konsey
+                    </span>
+                    <span className="font-mono text-xs font-semibold">
+                      {quota.councilRuns}
+                      <span className="font-normal text-white/40"> /ay</span>
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70"><Radar size={12} className="text-emerald-400" /> Radar</span>
-                    <span className="font-mono text-xs font-semibold">{quota.radarScans}<span className="font-normal text-white/40"> /ay</span></span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                      <Radar size={12} className="text-emerald-400" /> Radar
+                    </span>
+                    <span className="font-mono text-xs font-semibold">
+                      {quota.radarScans}
+                      <span className="font-normal text-white/40"> /ay</span>
+                    </span>
                   </div>
                 </div>
                 <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-white/55">
-                  {isAdmin ? "Admin: her kalemde 250 jeton (test/limit yok)." : "Kota ay başında yenilenir. Free planda Finder 2 jeton."}
+                  {isAdmin
+                    ? "Admin: her kalemde 250 jeton (test/limit yok)."
+                    : "Kota ay başında yenilenir. Free planda Finder 2 jeton."}
                 </div>
-                <Link to="/pricing" className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90">Paketleri gör</Link>
+                <Link
+                  to="/pricing"
+                  className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90"
+                >
+                  Paketleri gör
+                </Link>
               </div>
             </PopoverContent>
           </Popover>
@@ -177,9 +227,15 @@ export function AppTopbar() {
                 <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {credits}/{quota.credits}
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" sideOffset={8} className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl">
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
+            >
               <div className="space-y-3 p-4">
-                <p className="text-xs font-semibold tracking-wide text-white/90">Kullanım Hakkın · {tier}</p>
+                <p className="text-xs font-semibold tracking-wide text-white/90">
+                  Kullanım Hakkın · {tier}
+                </p>
                 <div className="space-y-2.5 text-xs">
                   <div className="flex justify-between">
                     <span className="text-white/60">Harcanabilir jeton</span>
@@ -198,23 +254,57 @@ export function AppTopbar() {
                     <span className="font-mono font-semibold">{quota.credits} /ay</span>
                   </div>
 
-                  <div className="flex justify-between"><span className="text-white/60">AI Araç</span><span className="font-mono font-semibold">{quota.toolRuns} /ay</span></div>
-                  <div className="flex justify-between"><span className="text-white/60">Konsey</span><span className="font-mono font-semibold">{quota.councilRuns} /ay</span></div>
-                  <div className="flex justify-between"><span className="text-white/60">Radar</span><span className="font-mono font-semibold">{quota.radarScans} /ay</span></div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">AI Araç</span>
+                    <span className="font-mono font-semibold">{quota.toolRuns} /ay</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Konsey</span>
+                    <span className="font-mono font-semibold">{quota.councilRuns} /ay</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Radar</span>
+                    <span className="font-mono font-semibold">{quota.radarScans} /ay</span>
+                  </div>
                 </div>
-                <Link to="/pricing" className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black">Paketleri gör</Link>
+                <Link
+                  to="/pricing"
+                  className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black"
+                >
+                  Paketleri gör
+                </Link>
               </div>
             </PopoverContent>
           </Popover>
           {/* 4’lü kota — xl'de tek satır özet (desktop) */}
-          <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex" title={isAdmin ? "Admin: her kalemde 250 jeton" : `Free: Finder 2 jeton · Tool ${quota.toolRuns} · Konsey ${quota.councilRuns} · Radar ${quota.radarScans}`}>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Coins size={10} className="text-[oklch(0.85_0.18_90)]" />{quota.credits}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Wrench size={10} className="text-sky-400" />{quota.toolRuns}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Users size={10} className="text-violet-400" />{quota.councilRuns}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5"><Radar size={10} className="text-emerald-400" />{quota.radarScans}</span>
+          <span
+            className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex"
+            title={
+              isAdmin
+                ? "Admin: her kalemde 250 jeton"
+                : `Free: Finder 2 jeton · Tool ${quota.toolRuns} · Konsey ${quota.councilRuns} · Radar ${quota.radarScans}`
+            }
+          >
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+              <Coins size={10} className="text-[oklch(0.85_0.18_90)]" />
+              {quota.credits}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+              <Wrench size={10} className="text-sky-400" />
+              {quota.toolRuns}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+              <Users size={10} className="text-violet-400" />
+              {quota.councilRuns}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+              <Radar size={10} className="text-emerald-400" />
+              {quota.radarScans}
+            </span>
           </span>
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] md:inline-flex">
-            <Zap size={11} /> {tier}{isAdmin ? " · 250" : ""}
+            <Zap size={11} /> {tier}
+            {isAdmin ? " · 250" : ""}
           </span>
 
           <Link to="/notifications" className="topbar-btn" title="Notifications">

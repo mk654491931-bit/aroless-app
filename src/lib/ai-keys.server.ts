@@ -178,11 +178,7 @@ export function geminiEnvKeys(): string[] {
 export function groqEnvKeys(): string[] {
   return collectEnvKeys({
     base: ["GROQ_API_KEY"],
-    patterns: [
-      (i) => `GROQ_API_KEY_${i}`,
-      (i) => `GROQ_${i}_API_KEY`,
-      (i) => `GROQ_API_KEY${i}`,
-    ],
+    patterns: [(i) => `GROQ_API_KEY_${i}`, (i) => `GROQ_${i}_API_KEY`, (i) => `GROQ_API_KEY${i}`],
   });
 }
 
@@ -232,8 +228,7 @@ export function sambanovaEnvKeys(): string[] {
  * matter which suffix the user stored keys under.
  */
 export function anyAiKeyConfigured(): boolean {
-  const gateway =
-    process.env["AI_GATEWAY_API_KEY"] || process.env["LOVABLE_API_KEY"];
+  const gateway = process.env["AI_GATEWAY_API_KEY"] || process.env["LOVABLE_API_KEY"];
   if (gateway?.trim()) return true;
   return (
     geminiEnvKeys().length > 0 ||
@@ -291,12 +286,20 @@ export function evrenModels(env: Record<string, string | undefined> = process.en
  * varsayılanlardan gelir (`evrenBaseUrl` / `evrenModels`). Kullanıcı üçüncü
  * ve dördüncü kutuyu doldurmak zorunda değil.
  */
-export function evrenStatus(
-  env: Record<string, string | undefined> = process.env,
-): { keys: number; baseUrl: boolean; models: string[]; ready: boolean } {
+export function evrenStatus(env: Record<string, string | undefined> = process.env): {
+  keys: number;
+  baseUrl: boolean;
+  models: string[];
+  ready: boolean;
+} {
   let keys = 0;
   for (let i = 1; i <= 8; i++) {
-    const names = [`PROVIDER_E_${i}`, `EVREN_API_KEY_${i}`, `EVREN_${i}_API_KEY`, `EVREN_API_KEY${i}`];
+    const names = [
+      `PROVIDER_E_${i}`,
+      `EVREN_API_KEY_${i}`,
+      `EVREN_${i}_API_KEY`,
+      `EVREN_API_KEY${i}`,
+    ];
     if (names.some((n) => (env[n] ?? "").trim())) keys++;
   }
   if ((env["PROVIDER_E_1"] ?? "").trim() && !keys) keys = 1;

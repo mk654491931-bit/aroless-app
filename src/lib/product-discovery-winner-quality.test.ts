@@ -124,8 +124,7 @@ describe("ölçülen hacim ve kaynak sayısı konsey oyuna girer", () => {
   it("hacimli ürünün talep ajanları daha yüksek puanlar", () => {
     const rich = deterministicVotes(withVolume("Air Fryer X", 5000, ["a", "b", "c"]));
     const thin = deterministicVotes(withVolume("Air Fryer Y", null, []));
-    const pick = (votes: typeof rich, key: string) =>
-      votes.find((v) => v.agentKey === key)!.score;
+    const pick = (votes: typeof rich, key: string) => votes.find((v) => v.agentKey === key)!.score;
     expect(pick(rich, "trend_hunter")).toBeGreaterThan(pick(thin, "trend_hunter"));
     expect(pick(rich, "cro")).toBeGreaterThan(pick(thin, "cro"));
   });
@@ -230,7 +229,9 @@ describe("nihai kalite sıralaması ve kapısı", () => {
       byId,
     );
     expect(result.ok).toBe(true);
-    const ids = (result.consensus as unknown as { candidateId: string }[]).map((r) => r.candidateId);
+    const ids = (result.consensus as unknown as { candidateId: string }[]).map(
+      (r) => r.candidateId,
+    );
     expect(ids).not.toContain("junk");
     expect(ids).not.toContain("worse");
     expect(ids).toHaveLength(4);
@@ -243,11 +244,7 @@ describe("nihai kalite sıralaması ve kapısı", () => {
       ["b", candidate("b", 1)],
       ["c", candidate("c", 0)],
     ]);
-    const result = runFinalRankStep(
-      [row("a", 18), row("b", 12), row("c", 6)] as never,
-      5,
-      byId,
-    );
+    const result = runFinalRankStep([row("a", 18), row("b", 12), row("c", 6)] as never, 5, byId);
     // Kapı hepsini elerdi ama taban gereği boş olmayan bir liste teslim edilir.
     // Taban 3'ten 1'e düşürüldü: kırılgan nişlerde 5 ürün gelmeyebiliyor ve
     // 3'lü taban listeyi yine eliyordu, yani kullanıcı boş sonuçla kalıyordu.

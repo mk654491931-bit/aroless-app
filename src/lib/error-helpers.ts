@@ -18,7 +18,7 @@ export function isNoCreditsError(error: { message?: string } | null | undefined)
  * Checks if an error message is a JWT-related issue (clock skew, expired token).
  */
 export function isJwtError(error: Error | string | null | undefined): boolean {
-  const msg = typeof error === "string" ? error : error?.message ?? "";
+  const msg = typeof error === "string" ? error : (error?.message ?? "");
   return /jwt/i.test(msg);
 }
 
@@ -65,7 +65,13 @@ export function classifyServerError(error: unknown): {
  * Attempts to refund a credit on error. Fire-and-forget — never throws.
  */
 export async function tryRefundCredit(
-  supabase: { from: (table: string) => { update: (vals: Record<string, number>) => { eq: (col: string, val: string) => Promise<unknown> } } },
+  supabase: {
+    from: (table: string) => {
+      update: (vals: Record<string, number>) => {
+        eq: (col: string, val: string) => Promise<unknown>;
+      };
+    };
+  },
   userId: string,
   currentCredits: number,
 ): Promise<void> {

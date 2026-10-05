@@ -99,7 +99,6 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-
 export function AuthShowcase() {
   const ref = useScrollReveal<HTMLDivElement>();
 

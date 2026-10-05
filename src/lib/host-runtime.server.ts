@@ -35,13 +35,7 @@ export type HostRuntime = {
 type Env = Record<string, string | undefined>;
 
 /** Kalıcı Node sunucusu üreten Nitro preset'leri. */
-const PERSISTENT_PRESETS = new Set([
-  "node-server",
-  "node",
-  "platform-sh",
-  "bun",
-  "deno",
-]);
+const PERSISTENT_PRESETS = new Set(["node-server", "node", "platform-sh", "bun", "deno"]);
 
 /** Sunucusuz (serverless) olduğu bilinen preset'ler. */
 const SERVERLESS_PRESETS = new Set([
@@ -310,9 +304,7 @@ export function hostRuntimeSummary(env: Env = process.env): {
  * gibi gösterir (ya da tersini yapar).
  */
 export type DeadlineOutcome<T> =
-  | { kind: "value"; value: T }
-  | { kind: "rejected" }
-  | { kind: "pending" };
+  { kind: "value"; value: T } | { kind: "rejected" } | { kind: "pending" };
 
 /** Bir söze üst sınır koyar; süre aşılırsa `pending` döner (bekleyip 504 olmaz). */
 export function withDeadlineOutcome<T>(

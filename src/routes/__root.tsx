@@ -243,7 +243,9 @@ function RootComponent() {
       if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
         const v = ref.toUpperCase();
         window.localStorage.setItem("aroless.ref", v);
-        try { window.localStorage.removeItem("velora.ref"); } catch {}
+        try {
+          window.localStorage.removeItem("velora.ref");
+        } catch {}
       }
     } catch {
       /* yoksay */

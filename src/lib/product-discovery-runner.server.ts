@@ -59,10 +59,7 @@ import {
   sliceWorkMs,
   writeSliceState,
 } from "./product-discovery-slices.server";
-import {
-  executeProductDiscoveryStep,
-  type StepOutcome,
-} from "./product-discovery-steps.server";
+import { executeProductDiscoveryStep, type StepOutcome } from "./product-discovery-steps.server";
 import type { ProductDiscoveryInput, ProductDiscoveryStatus } from "./product-discovery.types";
 
 type EnvMap = Record<string, string | undefined>;
@@ -302,9 +299,10 @@ export async function claimDiscoveryStep(
 
   const start = STEP_START_STATE[step];
   const running = STEP_RUNNING_STATE[step];
-  const slice = Number.isFinite(opts.slice) && (opts.slice as number) > 0
-    ? Math.floor(opts.slice as number)
-    : 0;
+  const slice =
+    Number.isFinite(opts.slice) && (opts.slice as number) > 0
+      ? Math.floor(opts.slice as number)
+      : 0;
 
   if (slice > 0) {
     const cursor = readSliceState(checkpoint?.slices, step);
@@ -327,7 +325,7 @@ export async function claimDiscoveryStep(
       : { state: "in-progress", job };
   }
 
-  let claimFrom = job.discoveryStatus;
+  const claimFrom = job.discoveryStatus;
 
   if (step === "final") {
     const done = (checkpoint ?? (await readDiscoveryCheckpoint(runId)))?.done ?? [];
@@ -375,7 +373,9 @@ export async function claimDiscoveryStep(
     progress: 10,
     step,
   });
-  return claimed ? { state: "claimed", job: { ...job, discoveryStatus: running } } : { state: "in-progress", job };
+  return claimed
+    ? { state: "claimed", job: { ...job, discoveryStatus: running } }
+    : { state: "in-progress", job };
 }
 
 /**
@@ -408,7 +408,9 @@ export async function runOneDiscoveryStep(args: {
   // fazladan sorgu yapılmaz.
   const checkpoint = await readDiscoveryCheckpoint(args.runId);
   const slice =
-    Number.isFinite(args.slice) && (args.slice as number) > 0 ? Math.floor(args.slice as number) : 0;
+    Number.isFinite(args.slice) && (args.slice as number) > 0
+      ? Math.floor(args.slice as number)
+      : 0;
   const claim = await claimDiscoveryStep(args.runId, args.step, checkpoint, { slice });
   if (claim.state === "in-progress") return { ok: true, deduped: true };
   if (claim.state === "terminal") return { ok: true, deduped: true };
@@ -536,8 +538,12 @@ export async function runDiscoveryChain(args: {
   /** Bu çağrıda adımlara harcanan gerçek süre (ms) — teşhis için. */
   let spentMs = 0;
 
-  let checkpoint: DiscoveryCheckpoint =
-    (await readDiscoveryCheckpoint(args.runId)) ?? { v: 1, done: [], shortlist: [], votes: [] };
+  let checkpoint: DiscoveryCheckpoint = (await readDiscoveryCheckpoint(args.runId)) ?? {
+    v: 1,
+    done: [],
+    shortlist: [],
+    votes: [],
+  };
 
   for (const step of DISCOVERY_STEPS) {
     // Zincir her zaman baştan taranır ve bitmiş adımlar atlanır: sıradaki adım

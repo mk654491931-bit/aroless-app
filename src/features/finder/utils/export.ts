@@ -104,9 +104,15 @@ export function buildShopifyCsv(products: WinningProduct[]): string {
     const handle = slugify(p.name || "product");
     const bodyHtml =
       `<p>${(p.description || "").replace(/</g, "&lt;")}</p>` +
-      (p.why_winning ? `<p><strong>Why it wins:</strong> ${p.why_winning.replace(/</g, "&lt;")}</p>` : "") +
-      (p.target_audience ? `<p><strong>For:</strong> ${p.target_audience.replace(/</g, "&lt;")}</p>` : "") +
-      (p.ad_angles?.length ? `<ul>${p.ad_angles.map((a) => `<li>${a.replace(/</g, "&lt;")}</li>`).join("")}</ul>` : "");
+      (p.why_winning
+        ? `<p><strong>Why it wins:</strong> ${p.why_winning.replace(/</g, "&lt;")}</p>`
+        : "") +
+      (p.target_audience
+        ? `<p><strong>For:</strong> ${p.target_audience.replace(/</g, "&lt;")}</p>`
+        : "") +
+      (p.ad_angles?.length
+        ? `<ul>${p.ad_angles.map((a) => `<li>${a.replace(/</g, "&lt;")}</li>`).join("")}</ul>`
+        : "");
     const tags = [
       ...(p.platform_fit ?? []),
       p.competition_level ? `competition:${p.competition_level}` : "",
@@ -195,7 +201,8 @@ export function netMarginView(p: WinningProduct): { text: string; bad: boolean }
   if (net === null || !(sell > 0)) return { text: NOT_MEASURED, bad: false };
   const pct = (net / sell) * 100;
   if (net <= 0 || pct <= 0) return { text: "0% (UNPROFITABLE)", bad: true };
-  if (pct < MIN_NET_MARGIN_PCT) return { text: `${pct.toFixed(0)}% (BELOW ${MIN_NET_MARGIN_PCT}%)`, bad: true };
+  if (pct < MIN_NET_MARGIN_PCT)
+    return { text: `${pct.toFixed(0)}% (BELOW ${MIN_NET_MARGIN_PCT}%)`, bad: true };
   return { text: `${pct.toFixed(0)}%`, bad: false };
 }
 

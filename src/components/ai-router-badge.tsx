@@ -6,12 +6,12 @@
 import { Cpu } from "lucide-react";
 
 const PROVIDERS = [
-  { id: "groq",        keys: 5, color: "text-orange-400" },
-  { id: "gemini",      keys: 5, color: "text-blue-400"   },
-  { id: "openrouter",  keys: 5, color: "text-violet-400" },
+  { id: "groq", keys: 5, color: "text-orange-400" },
+  { id: "gemini", keys: 5, color: "text-blue-400" },
+  { id: "openrouter", keys: 5, color: "text-violet-400" },
   { id: "huggingface", keys: 5, color: "text-yellow-400" },
-  { id: "cerebras",    keys: 1, color: "text-emerald-400" },
-  { id: "sambanova",   keys: 1, color: "text-pink-400"   },
+  { id: "cerebras", keys: 1, color: "text-emerald-400" },
+  { id: "sambanova", keys: 1, color: "text-pink-400" },
 ];
 
 const TOTAL_KEYS = PROVIDERS.reduce((s, p) => s + p.keys, 0); // 22
@@ -45,7 +45,9 @@ export function AiRouterPanel() {
       <div className="flex items-center gap-2">
         <Cpu size={14} className="text-indigo-400" />
         <h3 className="text-sm font-semibold text-slate-100">Smart AI Router</h3>
-        <span className="ml-auto text-[11px] text-slate-500">{PROVIDERS.length} providers · {TOTAL_KEYS} keys</span>
+        <span className="ml-auto text-[11px] text-slate-500">
+          {PROVIDERS.length} providers · {TOTAL_KEYS} keys
+        </span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {PROVIDERS.map((p) => (
@@ -59,7 +61,8 @@ export function AiRouterPanel() {
         ))}
       </div>
       <p className="text-[11px] text-slate-600">
-        Round-Robin rotation · Circuit breaker (3 failures → 60s cooldown) · Exponential backoff on 429
+        Round-Robin rotation · Circuit breaker (3 failures → 60s cooldown) · Exponential backoff on
+        429
       </p>
     </div>
   );

@@ -12,7 +12,10 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     token = data.session?.access_token;
     if (token) headers.set("Authorization", `Bearer ${token}`);
   } catch (error) {
-    console.error("[api-client] Could not read the Supabase session; the request may be unauthorized.", error);
+    console.error(
+      "[api-client] Could not read the Supabase session; the request may be unauthorized.",
+      error,
+    );
   }
   if (!token && typeof window !== "undefined") {
     console.warn("[api-client] No Supabase access token available for protected API request.");

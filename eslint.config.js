@@ -6,7 +6,19 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi", "node_modules", "**/*.gen.ts"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vercel",
+      ".vinxi",
+      ".tanstack",
+      ".vly-run",
+      ".lovable",
+      "node_modules",
+      "**/*.gen.ts",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -38,15 +50,33 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/explicit-module-boundary-types": "error",
+      // Stilistik kural: modern TS'te ve özellikle React bileşenlerinde (JSX/null/
+      // portal döndürebilirler) yüzlerce gereksiz anotasyon üretiyordu. `strict`
+      // zaten çıkarım doğruluğunu güvence altına alır; typescript-eslint bu kuralı
+      // "stylistic" kategorisinde tutar ve kullanımını önermez.
+      "@typescript-eslint/explicit-module-boundary-types": "off",
       "no-console": ["warn", { allow: ["warn", "error"] }],
       "no-debugger": "error",
       "no-var": "error",
       "prefer-const": "error",
       "prefer-arrow-callback": "error",
       "no-unneeded-ternary": "error",
-      eqeqeq: ["error", "always"],
+      // `== null` / `!= null` null VEYA undefined'ı tek seferde yakalayan
+      // yerleşik ve güvenli bir kalıptır; yalnız bu karşılaştırma serbest bırakılır.
+      eqeqeq: ["error", "always", { null: "ignore" }],
+      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
   eslintPluginPrettier,
+  {
+    // `vite.config.ts` kasıtlı olarak `// @ts-nocheck` ile yazılmıştır (dinamik
+    // eklenti içe aktarımları tip güvenli değil) ve Freebuff kuralları gereği bu
+    // dosya değiştirilmez. Prettier de kapalı: böylece Vite/HMR yapılandırması
+    // ve Freebuff'ın zorunlu ayarları yeniden yazılmadan korunur.
+    files: ["vite.config.ts"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+      "prettier/prettier": "off",
+    },
+  },
 );

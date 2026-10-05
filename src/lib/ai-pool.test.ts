@@ -108,20 +108,10 @@ describe("ai-pool availability registry", () => {
     const fast = buildPoolNodes("fast");
     // unconfigured fast groups (groq/openrouter/hf) fall away → cerebras first
     expect(fast[0].group).toBe("cerebras");
-    expect(fast.map((n) => n.group)).toEqual([
-      "cerebras",
-      "pool_a",
-      "pool_b",
-      "sambanova",
-    ]);
+    expect(fast.map((n) => n.group)).toEqual(["cerebras", "pool_a", "pool_b", "sambanova"]);
     const deep = buildPoolNodes("deep");
     expect(deep[0].group).toBe("sambanova");
-    expect(deep.map((n) => n.group)).toEqual([
-      "sambanova",
-      "cerebras",
-      "pool_a",
-      "pool_b",
-    ]);
+    expect(deep.map((n) => n.group)).toEqual(["sambanova", "cerebras", "pool_a", "pool_b"]);
   });
 
   it("registers the real 22-key pool (user env naming)", () => {

@@ -56,7 +56,10 @@ describe("runInBackground", () => {
   });
 
   it("aynı key ile ikinci kez kuyruğa alınmaz", async () => {
-    const first = runInBackground("a", () => new Promise(() => {}), { env: PERSISTENT, key: "job-1" });
+    const first = runInBackground("a", () => new Promise(() => {}), {
+      env: PERSISTENT,
+      key: "job-1",
+    });
     const second = runInBackground("a", async () => "x", { env: PERSISTENT, key: "job-1" });
     expect(first.started).toBe(true);
     expect(second).toEqual({ started: false, reason: "duplicate", key: "job-1" });

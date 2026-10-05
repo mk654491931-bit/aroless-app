@@ -67,7 +67,9 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     const route = await read("src/routes/index.tsx");
     expect(route).toContain("stillRunning");
     // "Sonuç bulunamadı" kartı, iş hâlâ sürerken gösterilmemeli.
-    expect(route).toContain("results.length === 0 && !stillRunning");
+    // Kaynak kodu biçimlendirici satırlara bölebilir; boşlukları normalize
+    // ederek koşulu anlam düzeyinde doğrula (biçim değişse de kilit sürer).
+    expect(route.replace(/\s+/g, " ")).toContain("results.length === 0 && !stillRunning");
     expect(route).toContain("Analiz sunucuda çalışmaya devam ediyor");
   });
 
@@ -119,7 +121,6 @@ describe("sessiz ölüm kapatılır: takılan koşu dürüstçe başarısız olu
   });
 });
 
-
 describe("gerçek hat durumunda klasik hat devreye girmez", () => {
   it("başarısız iş `fallback: false` döner", async () => {
     const src = await read(HOOK);
@@ -127,7 +128,7 @@ describe("gerçek hat durumunda klasik hat devreye girmez", () => {
     expect(failedAt).toBeGreaterThan(-1);
     const branch = src.slice(failedAt, failedAt + 1400);
     expect(branch).toContain("fallback: false");
-    expect(branch).toContain("state.error ?? \"pipeline_failed\"");
+    expect(branch).toContain('state.error ?? "pipeline_failed"');
   });
 
   it("boş sonuç da ikinci bir aramayı tetiklemez", async () => {

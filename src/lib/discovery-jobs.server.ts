@@ -614,10 +614,7 @@ export async function discoveryStoreHealth(): Promise<DiscoveryStoreHealth> {
   try {
     // Tek hafif sorgu: üç RPC'nin varlığını ve `discovery_status` kolonunu
     // aynı anda ölçer. RLS/service rolü doğrulanmış olur.
-    const { data, error } = await jobStore()
-      .from("searches")
-      .select("discovery_status")
-      .limit(1);
+    const { data, error } = await jobStore().from("searches").select("discovery_status").limit(1);
     if (error) {
       return {
         ok: false,
@@ -906,9 +903,10 @@ async function qstashPublish(
 
   // 15 sn alt sınırdır: bu değerin altında QStash soğuk başlangıcı bekleyemez ve
   // sağlıklı bir dilim zaman aşımına uğrar gibi görünür.
-  const window = Number.isFinite(timeoutSeconds) && (timeoutSeconds as number) > 0
-    ? Math.min(LONG_LIVED_MAX_SECONDS, Math.max(15, Math.round(timeoutSeconds as number)))
-    : qstashTimeoutSeconds();
+  const window =
+    Number.isFinite(timeoutSeconds) && (timeoutSeconds as number) > 0
+      ? Math.min(LONG_LIVED_MAX_SECONDS, Math.max(15, Math.round(timeoutSeconds as number)))
+      : qstashTimeoutSeconds();
   const qstashTimeout = `${window}s`;
 
   const controller = new AbortController();
@@ -1073,13 +1071,14 @@ export async function setJobMessageId(jobId: string, messageId: string): Promise
     .update({ qstash_message_id: messageId } as never)
     .eq("id", jobId);
   if (error && !isMissingColumn(error) && !isMissingRpc(error)) throw new Error(error.message);
-}function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+}
+function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
   return Boolean(
     error &&
-      (error.code === "42883" ||
-        /could not find the function|function .* does not exist|undefined function/i.test(
-          error.message ?? "",
-        )),
+    (error.code === "42883" ||
+      /could not find the function|function .* does not exist|undefined function/i.test(
+        error.message ?? "",
+      )),
   );
 }
 
@@ -1087,11 +1086,11 @@ export async function setJobMessageId(jobId: string, messageId: string): Promise
 function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
   return Boolean(
     error &&
-      (error.code === "42703" ||
-        error.code === "PGRST204" ||
-        /column .* does not exist|could not find the .* column|schema cache/i.test(
-          error.message ?? "",
-        )),
+    (error.code === "42703" ||
+      error.code === "PGRST204" ||
+      /column .* does not exist|could not find the .* column|schema cache/i.test(
+        error.message ?? "",
+      )),
   );
 }
 
@@ -1111,7 +1110,10 @@ async function applyLegacyStatusPatch(
   patch: { status: string; result?: unknown; error: string | null },
 ): Promise<void> {
   const withLease = { ...patch, locked_until: null };
-  const { error } = await jobStore().from(JOB_TABLE).update(withLease as never).eq("id", jobId);
+  const { error } = await jobStore()
+    .from(JOB_TABLE)
+    .update(withLease as never)
+    .eq("id", jobId);
   if (!error) return;
   // Kolon yoksa (migration uygulanmamış) lease'siz tekrar dene.
   if (!isMissingColumn(error)) throw new Error(error.message);

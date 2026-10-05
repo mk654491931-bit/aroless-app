@@ -72,7 +72,7 @@ describe("describeDiscoveryFailure", () => {
   });
 
   it("sağlayıcı hatasında ipucu migration'a değil AI motoruna gösterir", () => {
-    const raw = 'gemini: Gemini error: 404 models/gemini-1.5-flash is not found';
+    const raw = "gemini: Gemini error: 404 models/gemini-1.5-flash is not found";
     const hint = hintsForFailure(raw);
     expect(hint).toContain("AI sağlayıcısı");
     expect(hint).toContain("DEĞİL");

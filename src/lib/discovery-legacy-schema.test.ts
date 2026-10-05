@@ -72,9 +72,7 @@ describe("locked_until kolonu yokken iş sonlandırma", () => {
   it("markJobCompleted RPC yok + kolon yoksa yine de tamamlar", async () => {
     const mod = await import("./discovery-jobs.server");
 
-    await expect(
-      mod.markJobCompleted("job-1", { products: [] } as never),
-    ).resolves.toBeUndefined();
+    await expect(mod.markJobCompleted("job-1", { products: [] } as never)).resolves.toBeUndefined();
 
     // İlk deneme lease'li, kolon yoksa ikinci deneme lease'siz olmalı.
     expect(sentPatches.length).toBeGreaterThanOrEqual(2);

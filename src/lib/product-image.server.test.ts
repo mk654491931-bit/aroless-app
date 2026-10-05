@@ -6,8 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveProductImage, scraperApiConfigured } from "./product-image.server";
 
-const BING_HTML =
-  '<a class="iusc" m="{"murl":"https://cdn.example.com/widget.jpg"}"></a>';
+const BING_HTML = '<a class="iusc" m="{"murl":"https://cdn.example.com/widget.jpg"}"></a>';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -60,9 +59,12 @@ describe("resolveProductImage (ScrapAPI/ScraperAPI)", () => {
         return new Response("<html>vqd=123-456</html>", { status: 200 });
       }
       if (url.startsWith("https://duckduckgo.com/i.js")) {
-        return new Response(JSON.stringify({ results: [{ image: "https://img.example/ddg.jpg" }] }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ results: [{ image: "https://img.example/ddg.jpg" }] }),
+          {
+            status: 200,
+          },
+        );
       }
       return new Response("", { status: 500 });
     });

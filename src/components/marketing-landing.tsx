@@ -23,7 +23,12 @@ import { AgentConsole } from "@/components/landing/agent-console";
 import { CapabilitySimulator } from "@/components/landing/capability-simulator";
 import { AgentTopology } from "@/components/landing/agent-topology";
 import { CountUp } from "@/components/landing/count-up";
-import { FaqSection, Testimonials, type FaqItem, type ReviewItem } from "@/components/landing/sections";
+import {
+  FaqSection,
+  Testimonials,
+  type FaqItem,
+  type ReviewItem,
+} from "@/components/landing/sections";
 import { PLANS } from "@/lib/plans";
 
 const ECOSYSTEMS = [
@@ -67,10 +72,30 @@ const BENTO = [
 ];
 
 const METRICS = [
-  { value: <CountUp end={99.9} decimals={1} suffix="%" />, label: "Attribution accuracy", sim: true, note: "Simülasyon referansı" },
-  { value: <CountUp end={50} prefix="<" suffix="ms" />, label: "Median agent latency", sim: true, note: "Lokal simülasyon" },
-  { value: <CountUp end={10} suffix="k+" />, label: "Simulated events processed", sim: true, note: "Demo payload" },
-  { value: <CountUp end={312} prefix="+" suffix="%" />, label: "Median ROI uplift in sim pilots", sim: true, note: "Pilot simülasyonu" },
+  {
+    value: <CountUp end={99.9} decimals={1} suffix="%" />,
+    label: "Attribution accuracy",
+    sim: true,
+    note: "Simülasyon referansı",
+  },
+  {
+    value: <CountUp end={50} prefix="<" suffix="ms" />,
+    label: "Median agent latency",
+    sim: true,
+    note: "Lokal simülasyon",
+  },
+  {
+    value: <CountUp end={10} suffix="k+" />,
+    label: "Simulated events processed",
+    sim: true,
+    note: "Demo payload",
+  },
+  {
+    value: <CountUp end={312} prefix="+" suffix="%" />,
+    label: "Median ROI uplift in sim pilots",
+    sim: true,
+    note: "Pilot simülasyonu",
+  },
 ];
 
 /* What we do — animated capability cards (hover-follow spotlight) */
@@ -138,35 +163,40 @@ const REVIEWS: ReviewItem[] = [
     role: "E-commerce operator · Istanbul",
     market: "TR",
     initials: "EK",
-    quote: "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
+    quote:
+      "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
   },
   {
     name: "Jonas Weber",
     role: "FBA seller · Berlin",
     market: "DE",
     initials: "JW",
-    quote: "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
+    quote:
+      "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
   },
   {
     name: "Marta Silva",
     role: "DTC brand lead · Lisbon",
     market: "EU",
     initials: "MS",
-    quote: "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
+    quote:
+      "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
   },
   {
     name: "Ahmet Demir",
     role: "Wholesale exporter · Gaziantep",
     market: "TR",
     initials: "AD",
-    quote: "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
+    quote:
+      "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
   },
   {
     name: "Sarah Mitchell",
     role: "Dropshipping operator · Manchester",
     market: "UK",
     initials: "SM",
-    quote: "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
+    quote:
+      "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
   },
 ];
 
@@ -179,7 +209,10 @@ export function MarketingLanding() {
   return (
     <div className="relative min-h-screen overflow-x-clip bg-[#050608] font-sans text-slate-200 antialiased">
       {/* Page atmosphere */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[52rem] overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[52rem] overflow-hidden"
+      >
         <div className="ent-orb ent-orb-a" />
         <div className="ent-orb ent-orb-b" />
         <div className="ent-grid-bg" />
@@ -193,11 +226,21 @@ export function MarketingLanding() {
             <BrandLogo />
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
-            <a href="#platform" className="transition hover:text-slate-100">Platform</a>
-            <a href="#architecture" className="transition hover:text-slate-100">Architecture</a>
-            <a href="#metrics" className="transition hover:text-slate-100">Metrics</a>
-            <a href="#faq" className="transition hover:text-slate-100">FAQ</a>
-            <Link to="/pricing" className="transition hover:text-slate-100">Pricing</Link>
+            <a href="#platform" className="transition hover:text-slate-100">
+              Platform
+            </a>
+            <a href="#architecture" className="transition hover:text-slate-100">
+              Architecture
+            </a>
+            <a href="#metrics" className="transition hover:text-slate-100">
+              Metrics
+            </a>
+            <a href="#faq" className="transition hover:text-slate-100">
+              FAQ
+            </a>
+            <Link to="/pricing" className="transition hover:text-slate-100">
+              Pricing
+            </Link>
           </nav>
           <div className="flex items-center gap-2">
             <Link
@@ -239,13 +282,15 @@ export function MarketingLanding() {
               </p>
 
               <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-300">
-                {["Deterministic, replayable runs", "SOC2-aligned data handling", "Simulation-first onboarding"].map(
-                  (item) => (
-                    <li key={item} className="inline-flex items-center gap-1.5">
-                      <BadgeCheck size={15} className="text-emerald-400" /> {item}
-                    </li>
-                  ),
-                )}
+                {[
+                  "Deterministic, replayable runs",
+                  "SOC2-aligned data handling",
+                  "Simulation-first onboarding",
+                ].map((item) => (
+                  <li key={item} className="inline-flex items-center gap-1.5">
+                    <BadgeCheck size={15} className="text-emerald-400" /> {item}
+                  </li>
+                ))}
               </ul>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -256,7 +301,10 @@ export function MarketingLanding() {
                 >
                   <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
                     Deploy Aroless Swarm
-                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight
+                      size={16}
+                      className="transition-transform group-hover:translate-x-0.5"
+                    />
                   </span>
                 </Link>
                 <a
@@ -269,7 +317,8 @@ export function MarketingLanding() {
 
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1.5">
-                  <Zap size={13} className="text-indigo-300" /> <CountUp end={99.99} decimals={2} suffix="%" /> uptime
+                  <Zap size={13} className="text-indigo-300" />{" "}
+                  <CountUp end={99.99} decimals={2} suffix="%" /> uptime
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Lock size={13} className="text-emerald-400" /> No credit card to start
@@ -447,7 +496,8 @@ export function MarketingLanding() {
               <div>
                 <p className="font-semibold text-white">Enterprise-readiness checklist</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Signed payloads · immutable event log · role-scoped agents · region-pinned data · deterministic replays
+                  Signed payloads · immutable event log · role-scoped agents · region-pinned data ·
+                  deterministic replays
                 </p>
               </div>
             </div>
@@ -471,7 +521,8 @@ export function MarketingLanding() {
                 Deterministic agent execution keeps every run measurable, auditable and repeatable.
               </p>
               <p className="mx-auto mt-2 max-w-xl text-[11px] text-amber-300/80">
-                Aşağıdaki 4 değer <strong>simülasyon / demo referansıdır</strong> — gerçek üretim metrikleri değil. Fiyatlandırmayla karıştırılmamalı.
+                Aşağıdaki 4 değer <strong>simülasyon / demo referansıdır</strong> — gerçek üretim
+                metrikleri değil. Fiyatlandırmayla karıştırılmamalı.
               </p>
             </div>
             <div className="grid grid-cols-2 divide-x divide-y divide-white/5 lg:grid-cols-4 lg:divide-y-0">
@@ -486,13 +537,22 @@ export function MarketingLanding() {
                     {m.value}
                     {m.sim && <span className="align-super text-[10px] text-amber-300">*</span>}
                   </div>
-                  <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">{m.label}</div>
+                  <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">
+                    {m.label}
+                  </div>
                   {m.note && <div className="mt-1 text-[10px] text-slate-600">{m.note}</div>}
                 </div>
               ))}
             </div>
             <div className="border-t border-white/10 px-6 py-3 text-center text-[10px] leading-relaxed text-slate-500">
-              * <strong>Simülasyon değeri</strong> — lokal deterministik demo payload’ları üzerinden ölçülmüştür. Canlı trafik, veri kaynağı ve kullanım profiline göre değişir. <Link to="/pricing" className="underline decoration-slate-600 underline-offset-4 hover:text-slate-300">Gerçek fiyatlar için /pricing →</Link>
+              * <strong>Simülasyon değeri</strong> — lokal deterministik demo payload’ları üzerinden
+              ölçülmüştür. Canlı trafik, veri kaynağı ve kullanım profiline göre değişir.{" "}
+              <Link
+                to="/pricing"
+                className="underline decoration-slate-600 underline-offset-4 hover:text-slate-300"
+              >
+                Gerçek fiyatlar için /pricing →
+              </Link>
             </div>
           </div>
         </section>
@@ -507,7 +567,12 @@ export function MarketingLanding() {
               Şeffaf fiyatlandırma. Tüm modüller açık.
             </h2>
             <p className="mt-3 text-sm text-slate-400 sm:text-base">
-              Fiyatlar yalnızca <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">src/lib/plans.ts → PLANS</code> üzerinden gelir. Landing, /pricing ve ödeme modalı aynı kaynağı okur — fiyat değişince tek yer güncellenir.
+              Fiyatlar yalnızca{" "}
+              <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">
+                src/lib/plans.ts → PLANS
+              </code>{" "}
+              üzerinden gelir. Landing, /pricing ve ödeme modalı aynı kaynağı okur — fiyat değişince
+              tek yer güncellenir.
             </p>
           </div>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
@@ -517,30 +582,50 @@ export function MarketingLanding() {
                 className={`relative overflow-hidden rounded-2xl border p-6 ${p.highlight ? "border-indigo-400/40 bg-gradient-to-b from-indigo-500/10 via-[#0F1117]/88 to-[#0F1117]/88 shadow-[0_0_40px_-20px_rgba(99,102,241,0.6)]" : "border-white/10 bg-[#0F1117]/88"}`}
               >
                 {p.highlight && (
-                  <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">En popüler</span>
+                  <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                    En popüler
+                  </span>
                 )}
                 <h3 className="text-lg font-bold text-white">{p.label}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight text-white">${p.usd}</span>
+                  <span className="text-4xl font-extrabold tracking-tight text-white">
+                    ${p.usd}
+                  </span>
                   <span className="text-sm text-slate-500">/ay</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{p.credits} kredi / ay</span>
-                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">Tüm modüller açık</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+                    {p.credits} kredi / ay
+                  </span>
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+                    Tüm modüller açık
+                  </span>
                 </div>
                 <ul className="mt-4 space-y-1.5 text-sm text-slate-400">
                   {p.features.slice(0, 4).map((f) => (
-                    <li key={f} className="flex items-start gap-2"><Check size={14} className="mt-0.5 shrink-0 text-emerald-400" /> {f}</li>
+                    <li key={f} className="flex items-start gap-2">
+                      <Check size={14} className="mt-0.5 shrink-0 text-emerald-400" /> {f}
+                    </li>
                   ))}
                 </ul>
-                <Link to="/pricing" className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-white text-[#050608] hover:bg-slate-200" : "border border-white/15 text-slate-200 hover:bg-white/5"}`}>
+                <Link
+                  to="/pricing"
+                  className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-white text-[#050608] hover:bg-slate-200" : "border border-white/15 text-slate-200 hover:bg-white/5"}`}
+                >
                   Detaylar <ArrowRight size={14} />
                 </Link>
               </div>
             ))}
           </div>
           <p className="mx-auto mt-4 max-w-2xl text-center text-[11px] leading-relaxed text-slate-500">
-            Görsel metriklerle fiyat ilişkisi yoktur — <strong className="text-slate-300">%99.9 doğruluk / +%312 ROI</strong> gibi sayılar simülasyon kartlarındaki yön gösterici değerlerdir, fatura değildir. Güncel ve bağlayıcı fiyatlar her zaman <Link to="/pricing" className="underline underline-offset-4 hover:text-slate-300">/pricing</Link> ve ödeme adımında gösterilir.
+            Görsel metriklerle fiyat ilişkisi yoktur —{" "}
+            <strong className="text-slate-300">%99.9 doğruluk / +%312 ROI</strong> gibi sayılar
+            simülasyon kartlarındaki yön gösterici değerlerdir, fatura değildir. Güncel ve bağlayıcı
+            fiyatlar her zaman{" "}
+            <Link to="/pricing" className="underline underline-offset-4 hover:text-slate-300">
+              /pricing
+            </Link>{" "}
+            ve ödeme adımında gösterilir.
           </p>
         </section>
 
@@ -556,8 +641,14 @@ export function MarketingLanding() {
         {/* ── Final CTA ──────────────────────────────────────────── */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/92 px-6 py-14 text-center sm:px-12">
-            <div aria-hidden="true" className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+            />
             <div className="relative">
               <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                 Deploy your swarm in minutes, not quarters.
@@ -567,10 +658,17 @@ export function MarketingLanding() {
                 the pipeline provisions itself.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                <Link to="/auth" search={{ mode: "signup" }} className="sweep-frame group rounded-xl">
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup" }}
+                  className="sweep-frame group rounded-xl"
+                >
                   <span className="relative z-[1] flex h-12 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-7 text-sm font-semibold text-white transition group-hover:brightness-110">
                     Deploy Aroless Swarm
-                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight
+                      size={16}
+                      className="transition-transform group-hover:translate-x-0.5"
+                    />
                   </span>
                 </Link>
                 <a
@@ -610,10 +708,18 @@ export function MarketingLanding() {
             simulation payloads.
           </p>
           <div className="flex items-center gap-4 text-xs text-slate-500">
-            <Link to="/auth" className="hover:text-slate-200">Sign in</Link>
-            <Link to="/pricing" className="hover:text-slate-200">Pricing</Link>
-            <a href="#faq" className="hover:text-slate-200">FAQ</a>
-            <a href="#reviews" className="hover:text-slate-200">Reviews</a>
+            <Link to="/auth" className="hover:text-slate-200">
+              Sign in
+            </Link>
+            <Link to="/pricing" className="hover:text-slate-200">
+              Pricing
+            </Link>
+            <a href="#faq" className="hover:text-slate-200">
+              FAQ
+            </a>
+            <a href="#reviews" className="hover:text-slate-200">
+              Reviews
+            </a>
           </div>
         </div>
       </footer>

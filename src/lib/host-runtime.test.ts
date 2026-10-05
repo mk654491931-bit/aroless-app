@@ -79,7 +79,9 @@ describe("platformDurationSeconds", () => {
     // (eski davranış: `functionMaxDurationSeconds` ile aynı).
     expect(platformDurationSeconds({ VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe(300);
     expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "300" })).toBe(300);
-    expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5000" })).toBe(900);
+    expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5000" })).toBe(
+      900,
+    );
     expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "5" })).toBe(300);
     // Eski varsayılanı isteyen kurulumlar env ile daraltabilir (fast profil).
     expect(platformDurationSeconds({ VERCEL: "1", VERCEL_FUNCTION_MAX_DURATION: "60" })).toBe(60);

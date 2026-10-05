@@ -7,14 +7,23 @@ export function TabSwitcher({
   onTab,
   favoritesCount,
 }: {
-  tabDefs: { id: Tab; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[];
+  tabDefs: {
+    id: Tab;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+  }[];
   tab: Tab;
   onTab: (t: Tab) => void;
   favoritesCount: number;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [pill, setPill] = useState<{ left: number; width: number; top: number; height: number } | null>(null);
+  const [pill, setPill] = useState<{
+    left: number;
+    width: number;
+    top: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     const measure = () => {
@@ -32,7 +41,12 @@ export function TabSwitcher({
         if (!w2 || !el2) return;
         const wr = w2.getBoundingClientRect();
         const br = el2.getBoundingClientRect();
-        setPill({ left: br.left - wr.left, width: br.width, top: br.top - wr.top, height: br.height });
+        setPill({
+          left: br.left - wr.left,
+          width: br.width,
+          top: br.top - wr.top,
+          height: br.height,
+        });
       }, 80);
       setPill({ left: b.left - w.left, width: b.width, top: b.top - w.top, height: b.height });
     };
@@ -82,7 +96,9 @@ export function TabSwitcher({
             >
               <Icon size={14} /> {td.label}
               {td.id === "library" && favoritesCount > 0 && (
-                <span className="ml-1 text-[10px] rounded-full bg-white/15 px-1.5 py-0.5">{favoritesCount}</span>
+                <span className="ml-1 text-[10px] rounded-full bg-white/15 px-1.5 py-0.5">
+                  {favoritesCount}
+                </span>
               )}
             </button>
           );

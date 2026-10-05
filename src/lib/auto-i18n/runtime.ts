@@ -192,8 +192,11 @@ function schedule(node?: Node) {
   if (scheduled) return;
   scheduled = true;
   const run = () => flush();
-  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
-    .requestIdleCallback;
+  const ric = (
+    window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }
+  ).requestIdleCallback;
   if (typeof ric === "function") {
     ric(run, { timeout: 120 });
   } else {

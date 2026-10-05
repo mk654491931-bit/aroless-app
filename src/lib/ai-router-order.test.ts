@@ -37,13 +37,7 @@ describe("provider chain f/p ordering", () => {
 
   it("both chains cover the full configured pool", () => {
     for (const chain of [FAST_CHAIN, DEEP_CHAIN]) {
-      for (const p of [
-        "groq",
-        "gemini",
-        "openrouter",
-        "huggingface",
-        "evren",
-      ] as ProviderId[])
+      for (const p of ["groq", "gemini", "openrouter", "huggingface", "evren"] as ProviderId[])
         expect(chain).toContain(p);
     }
   });

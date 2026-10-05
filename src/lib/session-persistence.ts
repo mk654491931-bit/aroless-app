@@ -41,7 +41,12 @@ function doFlushSession() {
         existing = {};
       }
     }
-    const updated: SessionData = { ...existing, ...patch, timestamp: Date.now(), version: SESSION_VERSION };
+    const updated: SessionData = {
+      ...existing,
+      ...patch,
+      timestamp: Date.now(),
+      version: SESSION_VERSION,
+    };
     localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
   } catch {
     /* storage kapalı */
@@ -51,8 +56,11 @@ function scheduleSessionFlush() {
   if (flushTimer !== null || flushIdle !== null) return;
   flushTimer = window.setTimeout(() => {
     flushTimer = null;
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
-      .requestIdleCallback;
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      }
+    ).requestIdleCallback;
     if (typeof ric === "function") {
       flushIdle = ric(() => doFlushSession(), { timeout: 1500 }) as unknown as number;
     } else {
@@ -117,7 +125,8 @@ export const sessionManager = {
         flushTimer = null;
       }
       if (flushIdle !== null) {
-        const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+          .cancelIdleCallback;
         if (typeof cic === "function") cic(flushIdle);
         else clearTimeout(flushIdle);
         flushIdle = null;
@@ -134,7 +143,8 @@ export const sessionManager = {
    */
   saveScrollPosition(route: string, position: number) {
     if (typeof window === "undefined") return;
-    const current = pendingPatch?.scrollPositions ?? sessionManager.getSession()?.scrollPositions ?? {};
+    const current =
+      pendingPatch?.scrollPositions ?? sessionManager.getSession()?.scrollPositions ?? {};
     const next = { ...current, [route]: position };
     pendingPatch = { ...(pendingPatch ?? {}), scrollPositions: next };
     scheduleSessionFlush();

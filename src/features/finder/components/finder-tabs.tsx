@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Copy, Search, Wand2, Megaphone, Film, Loader2, Bookmark, Download, HeartOff, Target, ExternalLink } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Search,
+  Wand2,
+  Megaphone,
+  Film,
+  Loader2,
+  Bookmark,
+  Download,
+  HeartOff,
+  Target,
+  ExternalLink,
+} from "lucide-react";
 import { CreditCost } from "@/components/credit-cost";
 import { buyersPer1000 } from "@/lib/consistency";
 import type { Platform, SeoKit, CreativeScript, FavoriteRow } from "@/lib/gemini.functions";
@@ -26,7 +39,8 @@ function CopyButton({ text, label, compact }: { text: string; label?: string; co
       onClick={copy}
       className={`text-[11px] inline-flex items-center gap-1 text-muted-foreground hover:text-foreground ${compact ? "" : "mt-3"}`}
     >
-      {ok ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />} {label ?? (ok ? "Copied" : "Copy")}
+      {ok ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}{" "}
+      {label ?? (ok ? "Copied" : "Copy")}
     </button>
   );
 }
@@ -38,7 +52,10 @@ function KitBlock({ title, items }: { title: string; items: string[] }) {
       <div className="text-sm font-semibold mb-3">{title}</div>
       <ul className="space-y-2">
         {items.map((t, i) => (
-          <li key={i} className="flex items-start justify-between gap-3 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+          <li
+            key={i}
+            className="flex items-start justify-between gap-3 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2"
+          >
             <span>{t}</span>
             <CopyButton text={t} compact />
           </li>
@@ -60,7 +77,10 @@ function KitView({ kit }: { kit: SeoKit }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {kit.keywords.map((k, i) => (
-              <span key={i} className="text-xs bg-white/5 border border-white/10 rounded-full px-2.5 py-1">
+              <span
+                key={i}
+                className="text-xs bg-white/5 border border-white/10 rounded-full px-2.5 py-1"
+              >
                 {k}
               </span>
             ))}
@@ -76,9 +96,13 @@ function KitView({ kit }: { kit: SeoKit }) {
           <div className="grid md:grid-cols-2 gap-3">
             {kit.ad_copy.map((a, i) => (
               <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <div className="text-[11px] uppercase tracking-wider text-[oklch(0.68_0.15_255)] mb-1">{a.platform}</div>
+                <div className="text-[11px] uppercase tracking-wider text-[oklch(0.68_0.15_255)] mb-1">
+                  {a.platform}
+                </div>
                 <div className="text-sm font-semibold">{a.hook}</div>
-                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{a.primary}</p>
+                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">
+                  {a.primary}
+                </p>
                 <div className="text-[11px] mt-2 inline-block rounded-full bg-gradient-to-r from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25 border border-white/10 px-2 py-0.5">
                   CTA: {a.cta}
                 </div>
@@ -97,7 +121,9 @@ export function SeoTab({
   onOutOfCredits,
   qc,
 }: {
-  seoFn: (opts: { data: { product: string; audience: string; platform: Platform } }) => Promise<SeoKit>;
+  seoFn: (opts: {
+    data: { product: string; audience: string; platform: Platform };
+  }) => Promise<SeoKit>;
   onOutOfCredits: () => void;
   qc: QueryClient;
 }) {
@@ -107,7 +133,8 @@ export function SeoTab({
   const [kit, setKit] = useState<SeoKit | null>(null);
 
   const mut = useMutation({
-    mutationFn: (v: { product: string; audience: string; platform: Platform }) => seoFn({ data: v }),
+    mutationFn: (v: { product: string; audience: string; platform: Platform }) =>
+      seoFn({ data: v }),
     onSuccess: (res) => {
       setKit(res);
       qc.invalidateQueries({ queryKey: ["profile"] });
@@ -142,14 +169,18 @@ export function SeoTab({
           <span className="text-gradient">SEO & Marketing</span> Tools
         </h1>
         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-          Generate high-converting titles, meta descriptions, keywords, and platform-specific ad copy.
+          Generate high-converting titles, meta descriptions, keywords, and platform-specific ad
+          copy.
         </p>
         <div className="mt-3">
           <CreditCost amount={1} label="Her üretim 1 kredi" />
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="glass rounded-2xl p-4 md:p-6 max-w-4xl mx-auto space-y-3">
+      <form
+        onSubmit={onSubmit}
+        className="glass rounded-2xl p-4 md:p-6 max-w-4xl mx-auto space-y-3"
+      >
         <div className="grid md:grid-cols-[1fr_1fr_180px] gap-3">
           <input
             value={product}
@@ -231,7 +262,9 @@ function ScriptCard({ s }: { s: CreativeScript }) {
         <div className="text-[11px] uppercase tracking-wider text-[oklch(0.68_0.15_255)] flex items-center gap-1">
           <Film size={12} /> {s.format}
         </div>
-        <div className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5">{s.duration_seconds}s</div>
+        <div className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5">
+          {s.duration_seconds}s
+        </div>
       </div>
       <h3 className="font-bold text-lg leading-tight">{s.title}</h3>
       <div className="mt-3 space-y-3 text-sm">
@@ -261,7 +294,10 @@ function ScriptCard({ s }: { s: CreativeScript }) {
         {s.hashtags?.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {s.hashtags.map((h, i) => (
-              <span key={i} className="text-[11px] bg-white/5 border border-white/10 rounded-full px-2 py-0.5">
+              <span
+                key={i}
+                className="text-[11px] bg-white/5 border border-white/10 rounded-full px-2 py-0.5"
+              >
                 {h.startsWith("#") ? h : `#${h}`}
               </span>
             ))}
@@ -278,7 +314,9 @@ export function CreativeTab({
   onOutOfCredits,
   qc,
 }: {
-  scriptsFn: (opts: { data: { product: string; audience: string; platform: Platform } }) => Promise<{ scripts: CreativeScript[] }>;
+  scriptsFn: (opts: {
+    data: { product: string; audience: string; platform: Platform };
+  }) => Promise<{ scripts: CreativeScript[] }>;
   onOutOfCredits: () => void;
   qc: QueryClient;
 }) {
@@ -288,7 +326,8 @@ export function CreativeTab({
   const [scripts, setScripts] = useState<CreativeScript[]>([]);
 
   const mut = useMutation({
-    mutationFn: (v: { product: string; audience: string; platform: Platform }) => scriptsFn({ data: v }),
+    mutationFn: (v: { product: string; audience: string; platform: Platform }) =>
+      scriptsFn({ data: v }),
     onSuccess: (res) => {
       setScripts(res.scripts);
       qc.invalidateQueries({ queryKey: ["profile"] });
@@ -323,14 +362,18 @@ export function CreativeTab({
           <span className="text-gradient">Creative Studio</span>
         </h1>
         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-          Viral TikTok & Instagram Reels scripts — hook, storyline, visuals, and CTA, ready to shoot.
+          Viral TikTok & Instagram Reels scripts — hook, storyline, visuals, and CTA, ready to
+          shoot.
         </p>
         <div className="mt-3">
           <CreditCost amount={1} label="Her üretim 1 kredi" />
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="glass rounded-2xl p-4 md:p-6 max-w-4xl mx-auto space-y-3">
+      <form
+        onSubmit={onSubmit}
+        className="glass rounded-2xl p-4 md:p-6 max-w-4xl mx-auto space-y-3"
+      >
         <div className="grid md:grid-cols-[1fr_1fr_180px] gap-3">
           <input
             value={product}
@@ -416,10 +459,16 @@ function Stat({
     <div
       className={`rounded-lg border p-2 ${danger ? "bg-destructive/15 border-destructive/40" : highlight ? "bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/20" : "bg-white/5 border-white/10"}`}
     >
-      <div className={`text-[10px] uppercase ${danger ? "text-destructive" : highlight ? "text-emerald-300/80" : "text-muted-foreground"}`}>
+      <div
+        className={`text-[10px] uppercase ${danger ? "text-destructive" : highlight ? "text-emerald-300/80" : "text-muted-foreground"}`}
+      >
         {label}
       </div>
-      <div className={`text-xs font-semibold mt-0.5 ${danger ? "text-destructive" : highlight ? "text-emerald-300" : ""}`}>{value}</div>
+      <div
+        className={`text-xs font-semibold mt-0.5 ${danger ? "text-destructive" : highlight ? "text-emerald-300" : ""}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -451,7 +500,9 @@ export function LibraryTab({
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
             My <span className="text-gradient">Product Library</span>
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">Saved winners — export directly to Shopify.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Saved winners — export directly to Shopify.
+          </p>
         </div>
         <button
           onClick={exportCsv}
@@ -482,7 +533,10 @@ export function LibraryTab({
           {favorites.map((f) => {
             const p = f.product;
             return (
-              <article key={f.id} className="premium-card grain card-lift rounded-xl p-5 flex flex-col hover:-translate-y-1">
+              <article
+                key={f.id}
+                className="premium-card grain card-lift rounded-xl p-5 flex flex-col hover:-translate-y-1"
+              >
                 <div className="flex items-start justify-between mb-2">
                   <div className="text-3xl">{p.emoji || "🛍️"}</div>
                   <button
@@ -507,14 +561,20 @@ export function LibraryTab({
                   ))}
                 </div>
                 <h3 className="font-bold text-lg leading-tight">{p.name}</h3>
-                {f.notes && <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">{f.notes}</p>}
+                {f.notes && (
+                  <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">
+                    {f.notes}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                   <Stat label="Supplier" value={p.supplier_price_usd} />
                   <Stat label="Sell" value={p.selling_price_usd} />
                   {(() => {
                     const nm = netMarginView(p);
-                    return <Stat label="Margin" value={nm.text} highlight={!nm.bad} danger={nm.bad} />;
+                    return (
+                      <Stat label="Margin" value={nm.text} highlight={!nm.bad} danger={nm.bad} />
+                    );
                   })()}
                 </div>
                 <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">

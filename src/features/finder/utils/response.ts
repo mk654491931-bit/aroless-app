@@ -22,7 +22,9 @@ export function toProductList(res: unknown): WinningProduct[] {
     for (const key of ["products", "results"]) {
       const candidate = object[key];
       if (Array.isArray(candidate)) {
-        return candidate.filter((item) => item !== null && typeof item === "object") as WinningProduct[];
+        return candidate.filter(
+          (item) => item !== null && typeof item === "object",
+        ) as WinningProduct[];
       }
     }
 

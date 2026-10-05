@@ -62,9 +62,7 @@ export function AdminPlanAssign() {
       assignFn({ data: { email: email.trim().toLowerCase(), plan, months, grantCredits } }),
     onSuccess: (data) => {
       setSnapshot(data);
-      toast.success(
-        `${data.email ?? "Kullanıcı"} → ${data.tier} paketi ${months} ay tanımlandı.`,
-      );
+      toast.success(`${data.email ?? "Kullanıcı"} → ${data.tier} paketi ${months} ay tanımlandı.`);
       refreshAdminViews();
     },
     onError: (e: Error) => toast.error(e.message),

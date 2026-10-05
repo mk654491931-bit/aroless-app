@@ -216,7 +216,11 @@ describe("konsey dilim yürütücüsü", () => {
 
   it("kısmi durum bozuksa yalnız o satır elenir (hat düşmez)", () => {
     const parsed = deserializeCouncilScores({
-      cfo: [{ i: 1, score: 70, note: "x" }, { i: 0, score: 10 }, { i: 2, score: "çok" }],
+      cfo: [
+        { i: 1, score: 70, note: "x" },
+        { i: 0, score: 10 },
+        { i: 2, score: "çok" },
+      ],
       // Tanınmayan/bozuk satırlar elenir (ara nokta serbest JSON'dur).
       tanimsiz: "olmadı",
       cmo: [{ i: 1, score: 999 }],
@@ -230,9 +234,10 @@ describe("konsey dilim yürütücüsü", () => {
   });
 
   it("dilim defteri serileştirmesi tur atar (ara nokta JSON'a yazılabilir)", () => {
-    const state = serializeCouncilState(new Map([["cfo", new Map([[1, { score: 61, note: "n" }]])]]), [
-      "cfo",
-    ]);
+    const state = serializeCouncilState(
+      new Map([["cfo", new Map([[1, { score: 61, note: "n" }]])]]),
+      ["cfo"],
+    );
     expect(state).toEqual({ scores: { cfo: [{ i: 1, score: 61, note: "n" }] }, done: ["cfo"] });
   });
 

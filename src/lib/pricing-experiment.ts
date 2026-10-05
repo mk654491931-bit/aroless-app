@@ -26,7 +26,9 @@ function hashDjb2(input: string): number {
  * Boş string → control.
  */
 export function abVariant(seed: string): AbVariant {
-  const s = String(seed ?? "").trim().toLowerCase();
+  const s = String(seed ?? "")
+    .trim()
+    .toLowerCase();
   if (!s) return "control";
   const bucket = hashDjb2(s) % 100;
   return bucket < EXPERIMENT_SPLIT_PCT ? "variant" : "control";

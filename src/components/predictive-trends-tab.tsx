@@ -120,8 +120,7 @@ export function PredictiveTrendsTab({ country }: { country: string }) {
     staleTime: 60 * 60 * 1000,
     // Saatlik yenileme; tarama henüz sürüyorsa (warming) kısa aralıklarla
     // tekrar sor ki liste dolduğunda kendiliğinden görünsün.
-    refetchInterval: (query) =>
-      query.state.data?.status === "warming" ? 5_000 : 60 * 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.status === "warming" ? 5_000 : 60 * 60 * 1000),
   });
 
   const active = VIEWS.find((v) => v.id === view)!;

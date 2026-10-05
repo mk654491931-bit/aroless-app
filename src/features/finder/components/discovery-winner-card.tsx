@@ -127,7 +127,9 @@ export function DiscoveryWinnerCard({
         <div className="rounded-lg bg-muted/30 py-2">
           <dt className="text-[10px] text-muted-foreground">Tedarik</dt>
           <dd className="text-sm font-semibold tabular-nums">
-            {winner.supplier?.supplierPriceUsd != null ? fmtPrice(winner.supplier.supplierPriceUsd) : "—"}
+            {winner.supplier?.supplierPriceUsd != null
+              ? fmtPrice(winner.supplier.supplierPriceUsd)
+              : "—"}
           </dd>
         </div>
         <div className="rounded-lg bg-muted/30 py-2">

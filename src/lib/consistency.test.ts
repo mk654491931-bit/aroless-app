@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  parseMoneyNum,
-  checkConsistency,
-  buyersPer1000,
-  conversionTone,
-} from "./consistency";
+import { parseMoneyNum, checkConsistency, buyersPer1000, conversionTone } from "./consistency";
 import type { WinningProduct } from "./gemini.functions";
 
 describe("parseMoneyNum", () => {

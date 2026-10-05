@@ -26,9 +26,7 @@ import { describe, expect, it } from "vitest";
 /** Adı bilerek bozuk bırakılan, yeniden adlandırılmaması gereken dosya. */
 const LEGACY_MALFORMED = "20260827_100000_harden_admin_and_security.sql";
 
-const MIGRATIONS_DIR = fileURLToPath(
-  new URL("../../supabase/migrations/", import.meta.url),
-);
+const MIGRATIONS_DIR = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
 
 const filenames = readdirSync(MIGRATIONS_DIR)
   .filter((name) => name.endsWith(".sql"))
@@ -77,10 +75,7 @@ describe("supabase/migrations dosya adlari", () => {
       }
     }
 
-    expect(collisions).toEqual([
-      "20260827 → 20260827000000",
-      "20260827 → 20260827120000",
-    ]);
+    expect(collisions).toEqual(["20260827 → 20260827000000", "20260827 → 20260827120000"]);
   });
 });
 

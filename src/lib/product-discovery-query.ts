@@ -80,7 +80,7 @@ export function asciiFold(value: string): string {
 
 /** Sonundaki Türkçe ekleri atar (yukarıdaki sırayla, en uzun ek önce). */
 export function stripTurkishAffixes(token: string): string {
-  let out = asciiFold(token).trim();
+  const out = asciiFold(token).trim();
   for (const suffix of SUFFIXES) {
     if (out.length > suffix.length + 2 && out.endsWith(suffix)) {
       return out.slice(0, -suffix.length);
@@ -320,16 +320,7 @@ export function isTurkishQuery(niche: string): boolean {
  * Kapsam TR + EN: niş Türkçe ("coşku oyunu") ya da İngilizce
  * ("strategy game") olabilir; ikisi de ASCII'ye indirilerek bakılır.
  */
-const GAME_WORDS = new Set([
-  "oyun",
-  "oyunlar",
-  "game",
-  "games",
-  "gaming",
-  "steam",
-  "rpg",
-  "fps",
-]);
+const GAME_WORDS = new Set(["oyun", "oyunlar", "game", "games", "gaming", "steam", "rpg", "fps"]);
 
 /**
  * Niş OYUN mu? Yalnız Steam kaynağı için gerekir.

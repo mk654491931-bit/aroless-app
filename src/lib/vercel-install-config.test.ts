@@ -95,7 +95,10 @@ describe("package-lock.json senkron", () => {
   };
   const lock = JSON.parse(repoFile("package-lock.json")) as {
     lockfileVersion?: number;
-    packages?: Record<string, { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>;
+    packages?: Record<
+      string,
+      { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+    >;
   };
   const root = lock.packages?.[""] ?? {};
 

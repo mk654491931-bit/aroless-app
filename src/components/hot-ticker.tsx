@@ -58,8 +58,7 @@ export function HotTicker() {
     staleTime: 60 * 60 * 1000,
     // Tarama hazır değilken (warming/stale) kısa aralıkla yokla; hazır olduğunda
     // saatlik ritme dön.
-    refetchInterval: (query) =>
-      query.state.data?.status === "ready" ? 60 * 60 * 1000 : 6_000,
+    refetchInterval: (query) => (query.state.data?.status === "ready" ? 60 * 60 * 1000 : 6_000),
     enabled: open,
   });
 

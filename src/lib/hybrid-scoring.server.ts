@@ -172,6 +172,10 @@ export async function scoreProductForCountry(
     calculated_score: calculated,
     tooltip: `${label} için hibrit skor ${calculated}/100 — talep ${ai1}, marj + lojistik ${ai2}.`,
     badge_note:
-      calculated >= 75 ? "Güçlü pazar uyumu" : calculated >= 60 ? "Uygun pazar" : "Zayıf pazar uyumu",
+      calculated >= 75
+        ? "Güçlü pazar uyumu"
+        : calculated >= 60
+          ? "Uygun pazar"
+          : "Zayıf pazar uyumu",
   };
 }

@@ -20,7 +20,7 @@ const LEGACY_KEY_MAP: Record<string, string> = {
   "aroless.finder.recent": "velora.finder.recent",
   "aroless.finder.presets": "velora.finder.presets",
   "aroless:target-country": "velora:target-country",
-  "aroless_cookie_consent": "velora_cookie_consent",
+  aroless_cookie_consent: "velora_cookie_consent",
   "aroless.onboarding.v1": "velora.onboarding.v1",
   "aroless.checklist.hidden": "velora.checklist.hidden",
   "aroless-theme": "velora-theme",

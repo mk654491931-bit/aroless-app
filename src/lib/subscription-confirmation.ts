@@ -52,7 +52,11 @@ const FREE_TIER_NAMES = new Set(["free", "", "null", "undefined"]);
  * iddia etmektir.
  */
 export function isPaidTier(tier: string | null | undefined): boolean {
-  return !FREE_TIER_NAMES.has(String(tier ?? "").trim().toLowerCase());
+  return !FREE_TIER_NAMES.has(
+    String(tier ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 /** Paddle.js `checkout.completed` olayını tanır — indirim durumundan BAĞIMSIZ. */
@@ -146,7 +150,8 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
         // göstermeyi engellerdi. Sunucudan taze okumak zorunlu.
         try {
           await qc.invalidateQueries({ queryKey: ["profile"] });
-          const fresh = (await refetch()) as { subscription_tier?: string | null } | null | undefined;
+          const fresh = (await refetch()) as
+            { subscription_tier?: string | null } | null | undefined;
           lastError = null;
           const step = confirmationStep({
             tier: fresh?.subscription_tier,

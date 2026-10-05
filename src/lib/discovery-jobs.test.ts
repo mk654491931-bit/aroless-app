@@ -160,7 +160,9 @@ describe("workerBudgetMs / clientWaitMs", () => {
     expect(remainingWorkerBudgetMs({ enqueuedAtMs: Number.NaN })).toBe(workerBudgetMs());
     // Gelecekteki damga (saat kayması) negatif gecikme üretmez, tavanı aşamaz.
     const now = 1_000_000_000_000;
-    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now + 5_000, now })).toBe(DISCOVERY_MAX_BUDGET_MS);
+    expect(remainingWorkerBudgetMs({ enqueuedAtMs: now + 5_000, now })).toBe(
+      DISCOVERY_MAX_BUDGET_MS,
+    );
   });
 
   it("dar platform limiti kuyruk düşülünce tamamen reddedilmez", () => {
@@ -406,9 +408,9 @@ describe("workerJobsUrl", () => {
     expect(workerJobsUrl({ WORKER_URL: "https://aroless.onrender.com/" })).toBe(
       "https://aroless.onrender.com/api/jobs",
     );
-    expect(
-      workerJobsUrl({ DISCOVERY_WORKER_URL: "https://aroless.onrender.com/api/worker" }),
-    ).toBe("https://aroless.onrender.com/api/jobs");
+    expect(workerJobsUrl({ DISCOVERY_WORKER_URL: "https://aroless.onrender.com/api/worker" })).toBe(
+      "https://aroless.onrender.com/api/jobs",
+    );
     // WORKER_URL öncelikli.
     expect(
       workerJobsUrl({

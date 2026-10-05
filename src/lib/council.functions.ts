@@ -58,8 +58,7 @@ export type CouncilAnalysisStart =
   | { status: "unavailable"; error: string };
 
 export type CouncilAnalysisPoll =
-  | { status: "ready"; report: CouncilReport }
-  | { status: "processing" };
+  { status: "ready"; report: CouncilReport } | { status: "processing" };
 
 function creditError(message: string | null | undefined): Error {
   return new Error(

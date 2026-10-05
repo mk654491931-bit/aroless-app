@@ -186,7 +186,7 @@ export async function openPaddleOverlay(
         allowLogout: false,
       },
       ...((session.email ?? options?.email)
-        ? { customer: { email: session.email ?? options?.email! } }
+        ? { customer: { email: session.email ?? options?.email ?? "" } }
         : {}),
       ...(options?.discountCode ? { discountCode: options.discountCode } : {}),
     });

@@ -12,7 +12,7 @@
 // ÇÖZÜM: her teslimat EN FAZLA bir DİLİM kadar çalışır (`DISCOVERY_SLICE_MS`,
 // varsayılan 10 sn). Adım dilim içinde bitmezse:
 //   • o ana kadarki ilerleme ARA NOKTaya yazılır (hangi roller konuştu, hangi
-//     kaynaklar okundu), 
+//     kaynaklar okundu),
 //   • aynı adım için SIRADAKİ dilim QStash'e yayınlanır,
 //   • zincir böylece adım adım ilerler ve hiçbir fonksiyon uzun koşmaz.
 //
@@ -82,11 +82,13 @@ export function sliceWorkMs(env: EnvMap = process.env): number {
  * anı. Zincir sözü (280 sn) dilimleme yüzünden uzayamaz; süre bittiğinde
  * adımlar kalan işi deterministiğe düşürerek BİTİRİR (dürüst yedek).
  */
-export function sliceDeadlineAt(args: {
-  now?: number;
-  chainDeadlineAt?: number;
-  env?: EnvMap;
-} = {}): number {
+export function sliceDeadlineAt(
+  args: {
+    now?: number;
+    chainDeadlineAt?: number;
+    env?: EnvMap;
+  } = {},
+): number {
   const now = args.now ?? Date.now();
   // Dilim kendi süresi kadar sürer; zincir bitiş anı daha yakınsa o an biter.
   return Math.min(now + sliceWorkMs(args.env), args.chainDeadlineAt ?? Number.POSITIVE_INFINITY);

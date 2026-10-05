@@ -34,7 +34,13 @@ function SourcingHub() {
   const [offer, setOffer] = useState("");
   const [legit, setLegit] = useState({ url: "", notes: "" });
   const [spec, setSpec] = useState({ product: "", reviews: "" });
-  const [comp, setComp] = useState({ product: "", channel: "Amazon US", country: "US", material: "", url: "" });
+  const [comp, setComp] = useState({
+    product: "",
+    channel: "Amazon US",
+    country: "US",
+    material: "",
+    url: "",
+  });
 
   return (
     <HubShell

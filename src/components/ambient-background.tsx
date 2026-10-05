@@ -82,7 +82,11 @@ export function AmbientBackground() {
     };
 
     const wake = () => {
-      if (!raf && !document.hidden && !document.documentElement.classList.contains("is-scrolling")) {
+      if (
+        !raf &&
+        !document.hidden &&
+        !document.documentElement.classList.contains("is-scrolling")
+      ) {
         raf = requestAnimationFrame(tick);
       }
     };

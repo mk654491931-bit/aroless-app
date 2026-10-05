@@ -33,7 +33,7 @@ describe("describeSearchFailure", () => {
 
     const blank = describeSearchFailure(undefined);
     expect(blank.body).toBeTruthy();
-    blank.title.length > 0 && expect(blank.title).toBeTruthy();
+    expect(blank.title.length).toBeGreaterThan(0);
   });
 
   it("does not misclassify a plain network failure as auth", () => {

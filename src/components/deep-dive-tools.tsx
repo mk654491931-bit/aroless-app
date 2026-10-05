@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Download, FileDown, FileText, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { num } from "@/lib/deep-dive-complete";
+import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
@@ -15,8 +16,7 @@ export function useChecklist(scope: string) {
 
   useEffect(() => {
     try {
-      const { getBrandedItem } = require("@/lib/brand-storage");
-      const raw = getBrandedItem(storageKey) as string | null;
+      const raw = getBrandedItem(storageKey);
       if (raw) setDone(JSON.parse(raw) as Record<string, boolean>);
     } catch {
       /* yoksay */
@@ -27,7 +27,6 @@ export function useChecklist(scope: string) {
     setDone((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       try {
-        const { setBrandedItem } = require("@/lib/brand-storage");
         setBrandedItem(storageKey, JSON.stringify(next));
       } catch {
         /* yoksay */

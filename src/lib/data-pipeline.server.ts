@@ -215,7 +215,9 @@ export function signalsBlock(s: PipelineSignals): string {
   if (s.amazon.length) lines.push(`AMAZON MOVERS & SHAKERS: ${s.amazon.join(" | ")}`);
   if (s.tiktok.length) lines.push(`TIKTOK CREATIVE CENTER: ${s.tiktok.join(" | ")}`);
   if (s.radar?.length)
-    lines.push(`TREND RADAR (Google/Amazon/TikTok/Yandex/RSS/GitHub kazımaları): ${s.radar.join(" | ")}`);
+    lines.push(
+      `TREND RADAR (Google/Amazon/TikTok/Yandex/RSS/GitHub kazımaları): ${s.radar.join(" | ")}`,
+    );
   if (s.reddit.length)
     lines.push(
       `REDDIT CONSUMER SIGNALS:\n${s.reddit

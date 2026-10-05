@@ -82,7 +82,9 @@ export function CustomCursor() {
     const onOver = (e: PointerEvent) => {
       if (!enabled) return;
       const t = e.target as HTMLElement | null;
-      const interactive = !!t?.closest("a, button, [role='button'], input, select, textarea, [data-cursor-hover]");
+      const interactive = !!t?.closest(
+        "a, button, [role='button'], input, select, textarea, [data-cursor-hover]",
+      );
       ring.style.transform += "";
       ring.classList.toggle("is-hover", interactive);
       dot.classList.toggle("is-hover", interactive);

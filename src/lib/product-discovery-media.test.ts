@@ -43,9 +43,9 @@ describe("looksLikeMediaRelease", () => {
 describe("isSellableProductRow", () => {
   it("dijital lisans kataloğundaki satırı kaynağından dolayı eler", () => {
     // Başlık belirsiz olsa bile KAYNAK kapısı devrede: iTunes dijitaldir.
-    expect(isSellableProductRow("Inception (2010)", "itunes", { priceUsd: 9.99, rating: 4.6 })).toBe(
-      false,
-    );
+    expect(
+      isSellableProductRow("Inception (2010)", "itunes", { priceUsd: 9.99, rating: 4.6 }),
+    ).toBe(false);
   });
 
   it("medya çıkışını hangi kaynaktan gelirse gelsin eler", () => {
@@ -67,9 +67,9 @@ describe("isSellableProductRow", () => {
 describe("looksLikeProductRow — dijital lisans kataloğu", () => {
   it("fiyatı ve puanı olsa bile iTunes satırı ürün DEĞİLDİR", () => {
     expect(DIGITAL_ONLY_SOURCES.has("itunes")).toBe(true);
-    expect(
-      looksLikeProductRow("Inception (2010)", "itunes", { priceUsd: 9.99, rating: 4.6 }),
-    ).toBe(false);
+    expect(looksLikeProductRow("Inception (2010)", "itunes", { priceUsd: 9.99, rating: 4.6 })).toBe(
+      false,
+    );
   });
 
   it("gerçek pazaryeri satırı üründür", () => {
@@ -92,7 +92,9 @@ describe("relevanceScore — dil bağımsız alakalılık", () => {
   it("İngilizce başlığı Türkçe nişle de tam puan alır", () => {
     // ÖLÇÜLEN HATA: bu başlık Türkçe tokenlarla 0/2 idi ve katı bir kapı
     // en iyi ürünleri düşürürdü.
-    expect(relevanceScore("Brightech Libra LED desk lamp with USB-C port", "LED masa lambası")).toBe(1);
+    expect(
+      relevanceScore("Brightech Libra LED desk lamp with USB-C port", "LED masa lambası"),
+    ).toBe(1);
   });
 
   it("Türkçe başlığı da tam puan alır", () => {

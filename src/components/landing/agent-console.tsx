@@ -10,16 +10,56 @@ type LogLine = {
 };
 
 const SIMULATION_LOGS: LogLine[] = [
-  { badge: "Trend-Scan-01", kind: "agent", text: "Identified viral TikTok item (+420% demand surge)." },
-  { badge: "Deal-Engine-04", kind: "agent", text: "Matched merchant deal with 18 tier-1 creators (3.4k projected GMV)." },
-  { badge: "Content-Orchestrator", kind: "success", text: "Dispatched 8 automated ad copy variations across channels." },
-  { badge: "Attribution-Mesh", kind: "info", text: "Attribution graph updated — 14 conversions re-mapped to top performer." },
-  { badge: "Deal-Engine-04", kind: "agent", text: "Negotiated fee override: 12% → 9.4% on recurring subscription tier." },
-  { badge: "Payout-Infra", kind: "success", text: "Scheduled 32 creator payouts · compliant, auditable ledger." },
-  { badge: "Trend-Scan-01", kind: "warn", text: "Flagged 3 items with anomalous return-rate signals for review." },
-  { badge: "Content-Orchestrator", kind: "agent", text: "A/B test launched — 6 hook variants, 2 market segments." },
-  { badge: "Attribution-Mesh", kind: "success", text: "ROAS attribution window consolidated across 9 networks." },
-  { badge: "Swarm-Orchestrator", kind: "info", text: "Pipeline idle → next scheduled sweep in 4m 12s." },
+  {
+    badge: "Trend-Scan-01",
+    kind: "agent",
+    text: "Identified viral TikTok item (+420% demand surge).",
+  },
+  {
+    badge: "Deal-Engine-04",
+    kind: "agent",
+    text: "Matched merchant deal with 18 tier-1 creators (3.4k projected GMV).",
+  },
+  {
+    badge: "Content-Orchestrator",
+    kind: "success",
+    text: "Dispatched 8 automated ad copy variations across channels.",
+  },
+  {
+    badge: "Attribution-Mesh",
+    kind: "info",
+    text: "Attribution graph updated — 14 conversions re-mapped to top performer.",
+  },
+  {
+    badge: "Deal-Engine-04",
+    kind: "agent",
+    text: "Negotiated fee override: 12% → 9.4% on recurring subscription tier.",
+  },
+  {
+    badge: "Payout-Infra",
+    kind: "success",
+    text: "Scheduled 32 creator payouts · compliant, auditable ledger.",
+  },
+  {
+    badge: "Trend-Scan-01",
+    kind: "warn",
+    text: "Flagged 3 items with anomalous return-rate signals for review.",
+  },
+  {
+    badge: "Content-Orchestrator",
+    kind: "agent",
+    text: "A/B test launched — 6 hook variants, 2 market segments.",
+  },
+  {
+    badge: "Attribution-Mesh",
+    kind: "success",
+    text: "ROAS attribution window consolidated across 9 networks.",
+  },
+  {
+    badge: "Swarm-Orchestrator",
+    kind: "info",
+    text: "Pipeline idle → next scheduled sweep in 4m 12s.",
+  },
 ];
 
 const kindStyles: Record<LogKind, string> = {
@@ -107,7 +147,10 @@ export function AgentConsole() {
       </div>
 
       {/* Stream */}
-      <div ref={scrollRef} className="scroll-thin h-64 space-y-2 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed">
+      <div
+        ref={scrollRef}
+        className="scroll-thin h-64 space-y-2 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed"
+      >
         {lines.map((line, i) => (
           <div
             key={`${i}-${line.badge}-${line.text.slice(0, 12)}`}

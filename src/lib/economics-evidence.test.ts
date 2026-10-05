@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import {
-  hasMeasuredEconomics,
-  measuredMarginPct,
-  measuredMoney,
-} from "./economics-evidence";
+import { hasMeasuredEconomics, measuredMarginPct, measuredMoney } from "./economics-evidence";
 import { enrichProduct, NOT_MEASURED } from "./recommendation";
 import { netMarginView } from "@/features/finder/utils/export";
 import type { WinningProduct } from "./gemini.functions";
@@ -101,9 +97,7 @@ describe("ölçümlü hatta uydurma sayı üretilmez", () => {
   });
 
   it("marj ölçülmediği için ürün kırmızı 'Avoid' rozeti almaz", () => {
-    const e = enrichProduct(
-      measuredOnlyProduct({ competition_level: "High", trend_score: 20 }),
-    );
+    const e = enrichProduct(measuredOnlyProduct({ competition_level: "High", trend_score: 20 }));
     expect(e.recommendation).toBe("Watch");
   });
 

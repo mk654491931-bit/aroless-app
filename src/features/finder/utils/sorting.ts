@@ -3,7 +3,8 @@ import { marginForRanking } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct } from "@/lib/recommendation";
 
-export type SortKey = "winner" | "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
+export type SortKey =
+  "winner" | "ai" | "buyers" | "margin" | "trend" | "profit" | "realism" | "momentum";
 
 export const SORTS: { id: SortKey; label: string }[] = [
   { id: "winner", label: "Winner Score" },

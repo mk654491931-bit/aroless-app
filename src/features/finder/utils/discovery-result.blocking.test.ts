@@ -15,11 +15,12 @@ import { describe, expect, it } from "vitest";
 
 import { blockingSetupIssues, type SetupReport } from "./discovery-result";
 
-const check = (
-  id: string,
-  ok: boolean,
-  fix = `${id} düzelt`,
-): SetupReport["checks"][number] => ({ id, label: id, ok, fix });
+const check = (id: string, ok: boolean, fix = `${id} düzelt`): SetupReport["checks"][number] => ({
+  id,
+  label: id,
+  ok,
+  fix,
+});
 
 const report = (checks: SetupReport["checks"]): SetupReport => ({
   ok: checks.filter((c) => !c.optional).every((c) => c.ok),

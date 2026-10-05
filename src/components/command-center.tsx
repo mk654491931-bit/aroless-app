@@ -776,8 +776,7 @@ function useLogStream(
     // "null" olarak görünür.
     const n = (v?: number) => (typeof v === "number" && Number.isFinite(v) ? v : "null");
     const templates = [
-      () =>
-        `feed.load { "status": ${JSON.stringify(feedStatus ?? "unknown")}, "cache": "hourly" }`,
+      () => `feed.load { "status": ${JSON.stringify(feedStatus ?? "unknown")}, "cache": "hourly" }`,
       () =>
         `econ.compute { "retail": ${e.retail.toFixed(2)}, "net": ${e.net_profit.toFixed(2)}, "net_margin_pct": ${e.net_margin_pct} }`,
       () =>

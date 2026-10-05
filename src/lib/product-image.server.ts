@@ -100,10 +100,11 @@ async function ddgFirstImage(q: string): Promise<string | null> {
   const vqd = await ddgToken(q);
   if (!vqd) return null;
   const { text } = await fetchText(
-    `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(
-      q,
-    )}&vqd=${vqd}&f=,,,,,&p=1`,
-    { referer: "https://duckduckgo.com/", accept: "application/json, text/javascript, */*; q=0.01" },
+    `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(q)}&vqd=${vqd}&f=,,,,,&p=1`,
+    {
+      referer: "https://duckduckgo.com/",
+      accept: "application/json, text/javascript, */*; q=0.01",
+    },
   );
   if (!text) return null;
   try {

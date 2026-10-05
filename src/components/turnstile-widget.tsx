@@ -27,11 +27,7 @@ export function turnstileConfigured(): boolean {
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types -- inferred JSX return is clearer than annotation
-export function TurnstileWidget({
-  onToken,
-}: {
-  onToken: (token: string) => void;
-}) {
+export function TurnstileWidget({ onToken }: { onToken: (token: string) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
 

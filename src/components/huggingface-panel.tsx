@@ -78,9 +78,8 @@ export function HuggingFacePanel() {
         gösterir — kullanıcı bir motor seçmez, hat MÜSAİT OLANI kendisi seçer.
       */}
       <p className="text-xs text-muted-foreground mb-3">
-        Yedek AI havuzunun bir üyesi. Token tanımlıysa havuz Gemini/Groq/
-        OpenRouter yoğun olduğunda Hugging Face'e düşer; tanımlı değilse hat
-        yalnız bu üyeyi atlar ve diğerleriyle devam eder.
+        Yedek AI havuzunun bir üyesi. Token tanımlıysa havuz Gemini/Groq/ OpenRouter yoğun olduğunda
+        Hugging Face'e düşer; tanımlı değilse hat yalnız bu üyeyi atlar ve diğerleriyle devam eder.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input

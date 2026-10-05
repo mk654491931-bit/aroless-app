@@ -29,7 +29,12 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { FinderIntroCard, NoResultsCard, SearchErrorCard, SearchProgress } from "@/components/search-states";
+import {
+  FinderIntroCard,
+  NoResultsCard,
+  SearchErrorCard,
+  SearchProgress,
+} from "@/components/search-states";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getProfile,
@@ -70,10 +75,21 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LockedPanel } from "@/components/upgrade-gate";
 import { CreditCost } from "@/components/credit-cost";
 import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
-import { AdvancedFilters, DEFAULT_FILTERS, applyFilters, type FinderFilters } from "@/components/advanced-filters";
+import {
+  AdvancedFilters,
+  DEFAULT_FILTERS,
+  applyFilters,
+  type FinderFilters,
+} from "@/components/advanced-filters";
 import { RejectedPanel, type RejectedCandidate } from "@/components/winner-score-panel";
 import { TARGET_COUNTRIES, DEFAULT_TARGET_COUNTRY, countryName } from "@/lib/countries";
-import { countryFit, fitLabel, commissionRange, shipDays, recommendedPlatforms } from "@/lib/platform-market";
+import {
+  countryFit,
+  fitLabel,
+  commissionRange,
+  shipDays,
+  recommendedPlatforms,
+} from "@/lib/platform-market";
 import { CountryCurrencyBadge } from "@/components/country-flag";
 import { DataSourcesButton } from "@/components/header-extras";
 import { HYBRID_DEFAULT_MIN_SCORE } from "@/lib/consensus-types";
@@ -85,10 +101,19 @@ import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
 import { FinderInsights, FilterPresets } from "@/components/finder-insights";
 import { VeloraDeepAnalysis } from "@/components/velora-deep-analysis";
-import { DeepSearchPanel, DEFAULT_DEEP_SEARCH, type DeepSearchOptions } from "@/components/deep-search-panel";
+import {
+  DeepSearchPanel,
+  DEFAULT_DEEP_SEARCH,
+  type DeepSearchOptions,
+} from "@/components/deep-search-panel";
 import { X as XIcon } from "lucide-react";
 import { MarketingLanding } from "@/components/marketing-landing";
-import { OnboardingWizard, ActivationChecklist, useOnboarding, sanitizeOnboardingResult } from "@/components/onboarding-wizard";
+import {
+  OnboardingWizard,
+  ActivationChecklist,
+  useOnboarding,
+  sanitizeOnboardingResult,
+} from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
 import { storedRefAction, type ReferralClaimResult } from "@/lib/referral-rules";
 import { getBrandedItem, removeBrandedItem } from "@/lib/brand-storage";
@@ -112,7 +137,8 @@ export const Route = createFileRoute("/")({
       { title: "Aroless — Winning Product Finder" },
       {
         name: "description",
-        content: "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports.",
+        content:
+          "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports.",
       },
     ],
   }),
@@ -137,18 +163,37 @@ function Dashboard() {
   const [validatorFocus, setValidatorFocus] = useState(false);
   const [category, setCategory] = usePersistentState<string>("aroless.finder.category", "Any");
   const [audience, setAudience] = usePersistentState<string>("aroless.finder.audience", "");
-  const [platforms, setPlatforms] = usePersistentState<Platform[]>("aroless.finder.platforms", ["Shopify", "TikTok Shop"]);
+  const [platforms, setPlatforms] = usePersistentState<Platform[]>("aroless.finder.platforms", [
+    "Shopify",
+    "TikTok Shop",
+  ]);
   const [budget, setBudget] = usePersistentState<Budget>("aroless.finder.budget", "$500 - $2,000");
-  const marketplace: MarketplaceId = platforms.some((p) => p === "Trendyol" || p === "Hepsiburada") ? "turkey" : "global";
-  const [targetCountry, setTargetCountry] = usePersistentState<string>("aroless.finder.country", DEFAULT_TARGET_COUNTRY);
+  const marketplace: MarketplaceId = platforms.some((p) => p === "Trendyol" || p === "Hepsiburada")
+    ? "turkey"
+    : "global";
+  const [targetCountry, setTargetCountry] = usePersistentState<string>(
+    "aroless.finder.country",
+    DEFAULT_TARGET_COUNTRY,
+  );
   const effectiveCountry = marketplace === "turkey" ? "TR" : targetCountry;
-  const blockedSelected = platforms.filter((p) => countryFit(p, effectiveCountry) === "unavailable");
+  const blockedSelected = platforms.filter(
+    (p) => countryFit(p, effectiveCountry) === "unavailable",
+  );
   const [recoOpen, setRecoOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [minScore, setMinScore] = usePersistentState<number>("aroless.finder.min_score", HYBRID_DEFAULT_MIN_SCORE);
+  const [minScore, setMinScore] = usePersistentState<number>(
+    "aroless.finder.min_score",
+    HYBRID_DEFAULT_MIN_SCORE,
+  );
   const [engine, setEngine] = usePersistentState<EngineId>("aroless.finder.engine", "default");
-  const [useGithubTrends, setUseGithubTrends] = usePersistentState<boolean>("aroless.finder.github_trends", true);
-  const [deepSearch, setDeepSearch] = usePersistentState<DeepSearchOptions>("aroless.finder.deep_search", DEFAULT_DEEP_SEARCH);
+  const [useGithubTrends, setUseGithubTrends] = usePersistentState<boolean>(
+    "aroless.finder.github_trends",
+    true,
+  );
+  const [deepSearch, setDeepSearch] = usePersistentState<DeepSearchOptions>(
+    "aroless.finder.deep_search",
+    DEFAULT_DEEP_SEARCH,
+  );
   const advancedSelectionCount = [
     category !== "Any",
     audience.trim().length > 0,
@@ -159,7 +204,12 @@ function Dashboard() {
     JSON.stringify(deepSearch) !== JSON.stringify(DEFAULT_DEEP_SEARCH),
   ].filter(Boolean).length;
 
-  const { recent, push: pushRecent, remove: removeRecent, clear: clearRecent } = useRecentSearches();
+  const {
+    recent,
+    push: pushRecent,
+    remove: removeRecent,
+    clear: clearRecent,
+  } = useRecentSearches();
   const nicheInputRef = useRef<HTMLInputElement>(null);
 
   const [results, setResults] = useState<WinningProduct[]>([]);
@@ -177,7 +227,13 @@ function Dashboard() {
   const [compareNames, setCompareNames] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const toggleCompare = (name: string) =>
-    setCompareNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : prev.length >= 4 ? prev : [...prev, name]));
+    setCompareNames((prev) =>
+      prev.includes(name)
+        ? prev.filter((n) => n !== name)
+        : prev.length >= 4
+          ? prev
+          : [...prev, name],
+    );
   const compareProducts = results.filter((p) => compareNames.includes(p.name));
 
   useEffect(() => {
@@ -299,9 +355,12 @@ function Dashboard() {
    */
   const balances = creditBalances(profileQ.data as CreditProfile | undefined);
 
-  const togglePlatform = useCallback((p: Platform) => {
-    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  }, [setPlatforms]);
+  const togglePlatform = useCallback(
+    (p: Platform) => {
+      setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    },
+    [setPlatforms],
+  );
 
   const {
     searching,
@@ -349,7 +408,8 @@ function Dashboard() {
   // Actually use the hook's fallbackNotice directly.
 
   const saveMut = useMutation({
-    mutationFn: (p: WinningProduct) => saveFavFn({ data: { name: p.name, collection_name: "Default", product: p } }),
+    mutationFn: (p: WinningProduct) =>
+      saveFavFn({ data: { name: p.name, collection_name: "Default", product: p } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["favorites"] });
       toast.success("Saved to library");
@@ -406,7 +466,9 @@ function Dashboard() {
   const credits = balances.total;
   const creditBreakdown = creditBreakdownLabel(balances);
   const tier = profileQ.data?.subscription_tier ?? "Free";
-  const isPaidTier = ["starter", "pro", "business", "enterprise"].includes(String(tier).toLowerCase());
+  const isPaidTier = ["starter", "pro", "business", "enterprise"].includes(
+    String(tier).toLowerCase(),
+  );
   const locked = !isAdmin && !isPaidTier;
   const favorites = favsQ.data ?? [];
   const favoriteNames = new Set(favorites.map((f) => f.name));
@@ -582,7 +644,12 @@ function Dashboard() {
             />
           </div>
           <div className="laptop-shell grain px-3 py-6 md:px-8 md:py-10">
-            <TabSwitcher tabDefs={tabDefs} tab={tab} onTab={setTab} favoritesCount={favorites.length} />
+            <TabSwitcher
+              tabDefs={tabDefs}
+              tab={tab}
+              onTab={setTab}
+              favoritesCount={favorites.length}
+            />
             <div key={tab} className="surface-morph">
               {tab === "finder" && (
                 <>
@@ -596,11 +663,16 @@ function Dashboard() {
                       <h1 className="mt-5 text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05]">
                         {t("hero_1")} <span className="text-aurora">{t("hero_2")}</span>
                       </h1>
-                      <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">{t("ui.hero_sub2")}</p>
+                      <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+                        {t("ui.hero_sub2")}
+                      </p>
                       <RotatingSlogan />
                       <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
                         {[t("ui.f1"), t("ui.f2"), t("ui.f3"), t("ui.f4")].map((f) => (
-                          <span key={f} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur">
+                          <span
+                            key={f}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur"
+                          >
                             <ShieldCheck size={11} className="text-emerald-400" /> {f}
                           </span>
                         ))}
@@ -608,11 +680,19 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  <form onSubmit={onSubmit} className="finder-form premium-card grain relative mx-auto max-w-5xl space-y-4 rounded-2xl p-5 md:p-7">
+                  <form
+                    onSubmit={onSubmit}
+                    className="finder-form premium-card grain relative mx-auto max-w-5xl space-y-4 rounded-2xl p-5 md:p-7"
+                  >
                     <div className="grid gap-3">
                       <div className="flex items-center gap-2">
-                        <div className={`light-wave relative flex-1 ${nicheFocus ? "is-focused" : ""}`}>
-                          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]" />
+                        <div
+                          className={`light-wave relative flex-1 ${nicheFocus ? "is-focused" : ""}`}
+                        >
+                          <Search
+                            size={16}
+                            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]"
+                          />
                           <input
                             ref={nicheInputRef}
                             value={niche}
@@ -635,12 +715,17 @@ function Dashboard() {
                               <XIcon size={12} />
                             </button>
                           ) : (
-                            <kbd className="pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground">/</kbd>
+                            <kbd className="pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              /
+                            </kbd>
                           )}
                           {nicheFocus && (
                             <span aria-hidden className="field-particles">
                               {[12, 28, 44, 60, 76, 90].map((l, i) => (
-                                <i key={l} style={{ left: `${l}%`, animationDelay: `${i * 0.18}s` }} />
+                                <i
+                                  key={l}
+                                  style={{ left: `${l}%`, animationDelay: `${i * 0.18}s` }}
+                                />
                               ))}
                             </span>
                           )}
@@ -663,7 +748,11 @@ function Dashboard() {
                           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)]"
                         >
                           {TARGET_COUNTRIES.map((c) => (
-                            <option key={c.code} value={c.code} className="bg-[oklch(0.20_0.035_255)]">
+                            <option
+                              key={c.code}
+                              value={c.code}
+                              className="bg-[oklch(0.20_0.035_255)]"
+                            >
                               {c.flag} {c.label}
                             </option>
                           ))}
@@ -712,7 +801,9 @@ function Dashboard() {
                         )}
                         {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
-                      <span className="text-[11px] text-muted-foreground">AI, platforms, audience and research depth</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        AI, platforms, audience and research depth
+                      </span>
                     </div>
 
                     {advancedOpen && (
@@ -730,7 +821,18 @@ function Dashboard() {
                               onChange={(e) => setCategory(e.target.value)}
                               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none transition focus:border-[oklch(0.62_0.17_255)]"
                             >
-                              {["Any", "Beauty", "Fitness", "Home", "Tech", "Pets", "Fashion", "Kids", "Outdoor", "Kitchen"].map((c) => (
+                              {[
+                                "Any",
+                                "Beauty",
+                                "Fitness",
+                                "Home",
+                                "Tech",
+                                "Pets",
+                                "Fashion",
+                                "Kids",
+                                "Outdoor",
+                                "Kitchen",
+                              ].map((c) => (
                                 <option key={c} className="bg-[oklch(0.20_0.035_255)]">
                                   {c}
                                 </option>
@@ -752,9 +854,14 @@ function Dashboard() {
 
                         <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 backdrop-blur">
                           <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-                            <Cpu size={12} className="text-[var(--accent-active)]" /> {t("ui.engine")}
+                            <Cpu size={12} className="text-[var(--accent-active)]" />{" "}
+                            {t("ui.engine")}
                           </label>
-                          <div role="group" aria-label={t("ui.engine")} className="flex flex-wrap items-center gap-1.5">
+                          <div
+                            role="group"
+                            aria-label={t("ui.engine")}
+                            className="flex flex-wrap items-center gap-1.5"
+                          >
                             {ENGINES.map((e) => {
                               const on = engine === e.id;
                               return (
@@ -769,13 +876,17 @@ function Dashboard() {
                                       : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
                                   }`}
                                 >
-                                  {on && <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.72_0.14_255)] animate-pulse-soft" />}
+                                  {on && (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.72_0.14_255)] animate-pulse-soft" />
+                                  )}
                                   {e.label}
                                 </button>
                               );
                             })}
                           </div>
-                          <span className="text-[11px] text-muted-foreground">{engineLabel(engine).hint}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {engineLabel(engine).hint}
+                          </span>
                           <EtaBadge running={searching} etaMs={etaMs} />
                         </div>
 
@@ -791,11 +902,17 @@ function Dashboard() {
                                 className="normal-case tracking-normal text-[11px] inline-flex items-center gap-1 rounded-full border border-[oklch(0.62_0.17_255)]/45 bg-[oklch(0.62_0.17_255)]/12 px-2.5 py-1 text-[oklch(0.86_0.10_255)] hover:bg-[oklch(0.62_0.17_255)]/22"
                               >
                                 {countryName(effectiveCountry)} için öner
-                                <ChevronDown size={11} className={recoOpen ? "rotate-180 transition" : "transition"} />
+                                <ChevronDown
+                                  size={11}
+                                  className={recoOpen ? "rotate-180 transition" : "transition"}
+                                />
                               </button>
                               {recoOpen && (
                                 <>
-                                  <span className="fixed inset-0 z-30" onClick={() => setRecoOpen(false)} />
+                                  <span
+                                    className="fixed inset-0 z-30"
+                                    onClick={() => setRecoOpen(false)}
+                                  />
                                   <div className="absolute right-0 z-40 mt-1 max-h-64 w-56 overflow-auto rounded-xl border border-white/10 bg-[oklch(0.20_0.035_255)] p-1 shadow-2xl">
                                     {TARGET_COUNTRIES.map((c) => (
                                       <button
@@ -847,12 +964,20 @@ function Dashboard() {
                                     alt=""
                                     loading="lazy"
                                     className="h-5 w-5 shrink-0 rounded-full bg-white/90 p-0.5 object-contain"
-                                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
+                                    onError={(e) =>
+                                      ((e.currentTarget as HTMLImageElement).style.display = "none")
+                                    }
                                   />
                                   <span className="min-w-0 truncate">{p}</span>
-                                  {fit === "native" && <span className="chip-fit-badge border-emerald-400/25 bg-emerald-400/10 text-emerald-300">yerel</span>}
+                                  {fit === "native" && (
+                                    <span className="chip-fit-badge border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
+                                      yerel
+                                    </span>
+                                  )}
                                   {fit === "cross-border" && (
-                                    <span className="chip-fit-badge border-sky-400/25 bg-sky-400/10 text-sky-300">sınır ötesi</span>
+                                    <span className="chip-fit-badge border-sky-400/25 bg-sky-400/10 text-sky-300">
+                                      sınır ötesi
+                                    </span>
                                   )}
                                 </button>
                               );
@@ -860,8 +985,9 @@ function Dashboard() {
                           </div>
                           {blockedSelected.length > 0 && (
                             <p className="mt-2 text-[11px] text-amber-300/90">
-                              {blockedSelected.join(", ")} — {countryName(effectiveCountry)} pazarında satış yapılamıyor. Sonuçlar bu kanallara göre
-                              optimize edilmez.
+                              {blockedSelected.join(", ")} — {countryName(effectiveCountry)}{" "}
+                              pazarında satış yapılamıyor. Sonuçlar bu kanallara göre optimize
+                              edilmez.
                             </p>
                           )}
                         </div>
@@ -872,7 +998,9 @@ function Dashboard() {
                               <span className="flex items-center gap-1.5">
                                 <Gauge size={12} /> Minimum AI Skoru
                               </span>
-                              <span className="text-foreground font-semibold normal-case tracking-normal">{minScore}</span>
+                              <span className="text-foreground font-semibold normal-case tracking-normal">
+                                {minScore}
+                              </span>
                             </label>
                             <div className="range-shell relative mt-1.5">
                               <input
@@ -883,13 +1011,19 @@ function Dashboard() {
                                 value={minScore}
                                 onChange={(e) => setMinScore(Number(e.target.value))}
                                 className="range-fill w-full"
-                                style={{ "--range-pct": `${((minScore - 50) / (90 - 50)) * 100}%` } as React.CSSProperties}
+                                style={
+                                  {
+                                    "--range-pct": `${((minScore - 50) / (90 - 50)) * 100}%`,
+                                  } as React.CSSProperties
+                                }
                               />
                               <span aria-hidden className="range-tooltip">
                                 {minScore}
                               </span>
                             </div>
-                            <p className="mt-1 text-[11px] text-muted-foreground">Hibrit skor = Pazar talebi (%55) + Kâr & lojistik (%45)</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Hibrit skor = Pazar talebi (%55) + Kâr & lojistik (%45)
+                            </p>
                           </div>
                         </div>
 
@@ -901,13 +1035,23 @@ function Dashboard() {
                             onChange={(e) => setUseGithubTrends(e.target.checked)}
                             className="h-4 w-4 accent-[oklch(0.62_0.17_255)]"
                           />
-                          <label htmlFor="use-github-trends" className="flex-1 text-sm cursor-pointer">
+                          <label
+                            htmlFor="use-github-trends"
+                            className="flex-1 text-sm cursor-pointer"
+                          >
                             <span className="font-medium">Include GitHub repo trends</span>
-                            <p className="text-[11px] text-muted-foreground">Adds public open-source repository momentum as an extra signal (free, rate-limit safe).</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Adds public open-source repository momentum as an extra signal (free,
+                              rate-limit safe).
+                            </p>
                           </label>
                         </div>
 
-                        <DeepSearchPanel value={deepSearch} onChange={setDeepSearch} onReset={() => setDeepSearch(DEFAULT_DEEP_SEARCH)} />
+                        <DeepSearchPanel
+                          value={deepSearch}
+                          onChange={setDeepSearch}
+                          onReset={() => setDeepSearch(DEFAULT_DEEP_SEARCH)}
+                        />
                         <CountryInfoBox code={targetCountry} niche={niche} />
                       </div>
                     )}
@@ -915,7 +1059,8 @@ function Dashboard() {
                     <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">
                         <CreditCost amount={1} />
-                        Bu arama 1 kredi harcar · bakiyeniz <span className="font-semibold text-foreground">{credits}</span>{" "}
+                        Bu arama 1 kredi harcar · bakiyeniz{" "}
+                        <span className="font-semibold text-foreground">{credits}</span>{" "}
                         <span className="text-[11px] text-muted-foreground/70">
                           ({creditBreakdown})
                         </span>
@@ -950,31 +1095,48 @@ function Dashboard() {
                     </button>
                   )}
 
-                  <FinderMemoryBar recent={recent} onPick={(q) => { setNiche(q); if (!searching) runSearch(q, setResultQuery); }} onRemove={removeRecent} onClear={clearRecent} />
+                  <FinderMemoryBar
+                    recent={recent}
+                    onPick={(q) => {
+                      setNiche(q);
+                      if (!searching) runSearch(q, setResultQuery);
+                    }}
+                    onRemove={removeRecent}
+                    onClear={clearRecent}
+                  />
 
                   <section className="mt-10">
                     <div className="premium-card grain rounded-2xl p-5 max-w-5xl mx-auto mb-8">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <ShieldCheck size={15} className="text-emerald-400" />
-                        <h2 className="text-sm font-semibold">Validate My Product — “Will it sell?”</h2>
+                        <h2 className="text-sm font-semibold">
+                          Validate My Product — “Will it sell?”
+                        </h2>
                         <CreditCost amount={1} />
                       </div>
                       <p className="text-xs text-muted-foreground mb-3">
-                        Paste a product link, product name or niche. Our 3-agent engine (Market Scan → Product Finder → Risk Audit) returns a
-                        Dual-Gemini Consensus Report. Uses 1 credit.
+                        Paste a product link, product name or niche. Our 3-agent engine (Market Scan
+                        → Product Finder → Risk Audit) returns a Dual-Gemini Consensus Report. Uses
+                        1 credit.
                       </p>
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
                           const q = validatorQuery.trim();
-                          if (q.length < 2) return toast.error("Enter a product link, name or niche.");
+                          if (q.length < 2)
+                            return toast.error("Enter a product link, name or niche.");
                           validateMut.mutate(q);
                         }}
                         className="flex flex-col sm:flex-row gap-2"
                       >
                         <div className="flex flex-1 items-center gap-2">
-                          <div className={`light-wave relative flex-1 ${validatorFocus ? "is-focused" : ""}`}>
-                            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]" />
+                          <div
+                            className={`light-wave relative flex-1 ${validatorFocus ? "is-focused" : ""}`}
+                          >
+                            <Search
+                              size={16}
+                              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]"
+                            />
                             <input
                               value={validatorQuery}
                               onChange={(e) => setValidatorQuery(e.target.value)}
@@ -986,7 +1148,10 @@ function Dashboard() {
                             {validatorFocus && (
                               <span aria-hidden className="field-particles">
                                 {[14, 32, 50, 68, 86].map((l, i) => (
-                                  <i key={l} style={{ left: `${l}%`, animationDelay: `${i * 0.2}s` }} />
+                                  <i
+                                    key={l}
+                                    style={{ left: `${l}%`, animationDelay: `${i * 0.2}s` }}
+                                  />
                                 ))}
                               </span>
                             )}
@@ -1042,20 +1207,36 @@ function Dashboard() {
                       <SearchProgress label="AI motorları analiz ediyor — bu 15-30 saniye sürebilir…" />
                     )}
                     {!searching && searchError && results.length === 0 && (
-                      <SearchErrorCard error={searchError} onRetry={() => runSearch(searchError.niche ?? niche, setResultQuery)} onEdit={jumpToSearch} />
-                    )}
-                    {!searching && !searchError && searchAttempt && results.length === 0 && !stillRunning && (
-                      <NoResultsCard niche={searchAttempt} onRetry={() => runSearch(searchAttempt, setResultQuery)} onEdit={jumpToSearch} />
-                    )}
-                    {!searching && !searchError && !searchAttempt && results.length === 0 && !stillRunning && (
-                      <FinderIntroCard
-                        examples={FINDER_EXAMPLE_NICHES as unknown as string[]}
-                        onExample={(ex) => {
-                          setNiche(ex);
-                          runSearch(ex, setResultQuery);
-                        }}
+                      <SearchErrorCard
+                        error={searchError}
+                        onRetry={() => runSearch(searchError.niche ?? niche, setResultQuery)}
+                        onEdit={jumpToSearch}
                       />
                     )}
+                    {!searching &&
+                      !searchError &&
+                      searchAttempt &&
+                      results.length === 0 &&
+                      !stillRunning && (
+                        <NoResultsCard
+                          niche={searchAttempt}
+                          onRetry={() => runSearch(searchAttempt, setResultQuery)}
+                          onEdit={jumpToSearch}
+                        />
+                      )}
+                    {!searching &&
+                      !searchError &&
+                      !searchAttempt &&
+                      results.length === 0 &&
+                      !stillRunning && (
+                        <FinderIntroCard
+                          examples={FINDER_EXAMPLE_NICHES as unknown as string[]}
+                          onExample={(ex) => {
+                            setNiche(ex);
+                            runSearch(ex, setResultQuery);
+                          }}
+                        />
+                      )}
                     {(enriching || !searching) &&
                       results.length > 0 &&
                       (() => {
@@ -1064,11 +1245,20 @@ function Dashboard() {
                           if (band === "winner") return (p.winner_score ?? 0) >= 70;
                           if (band === "high") return enrichProduct(p).ai_score >= 80;
                           if (band === "lowcomp") return p.competition_level === "Low";
-                          if (band === "margin") return (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40;
+                          if (band === "margin")
+                            return (
+                              (p.cost_breakdown?.net_margin_pct ?? p.profit_margin_pct ?? 0) >= 40
+                            );
                           if (band === "saved") return favoriteNames.has(p.name);
-                          if (band === "verified") return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
-                          if (band === "rising") return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
-                          if (band === "shippable") return (p.score_breakdown?.components.find((c) => c.key === "logistics")?.score ?? 0) >= 70;
+                          if (band === "verified")
+                            return p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75;
+                          if (band === "rising")
+                            return (p.market_evidence?.trend_momentum_pct ?? 0) > 0;
+                          if (band === "shippable")
+                            return (
+                              (p.score_breakdown?.components.find((c) => c.key === "logistics")
+                                ?.score ?? 0) >= 70
+                            );
                           return true;
                         };
                         const filtered = applyFilters(results, filters)
@@ -1083,19 +1273,30 @@ function Dashboard() {
                         const shown = sortProducts(filtered, sortBy, onlyLaunch, sortDesc);
                         const bands = [
                           { id: "all", label: `Tümü (${results.length})` },
-                          { id: "winner", label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})` },
+                          {
+                            id: "winner",
+                            label: `Winner 70+ (${results.filter((p) => (p.winner_score ?? 0) >= 70).length})`,
+                          },
                           { id: "high", label: "80+ AI skoru" },
                           { id: "lowcomp", label: "Düşük rekabet" },
                           { id: "margin", label: "Marj %40+" },
                           { id: "saved", label: "Kaydedilenler" },
-                          { id: "verified", label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})` },
+                          {
+                            id: "verified",
+                            label: `Doğrulanmış (${results.filter((p) => p.evidence_level === "verified" || (p.realism_score ?? 0) >= 75).length})`,
+                          },
                           { id: "rising", label: "Canlı yükselişte" },
                           { id: "shippable", label: "Kargoya uygun" },
                         ] as const;
                         return (
                           <>
                             <FinderInsights products={filtered} />
-                            <AdvancedFilters products={results} filters={filters} onChange={setFilters} onReset={() => setFilters(DEFAULT_FILTERS)} />
+                            <AdvancedFilters
+                              products={results}
+                              filters={filters}
+                              onChange={setFilters}
+                              onReset={() => setFilters(DEFAULT_FILTERS)}
+                            />
                             <FilterPresets
                               current={{ filters, band, sortBy, sortDesc, onlyLaunch }}
                               onApply={(s) => {
@@ -1139,7 +1340,10 @@ function Dashboard() {
                             {shown.length === 0 && (
                               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                                 <AlertTriangle size={14} className="shrink-0" />
-                                <span>Analiz {results.length} ürün buldu ama aktif filtreler hepsini gizliyor.</span>
+                                <span>
+                                  Analiz {results.length} ürün buldu ama aktif filtreler hepsini
+                                  gizliyor.
+                                </span>
                                 <button
                                   onClick={() => {
                                     setFilters(DEFAULT_FILTERS);
@@ -1184,10 +1388,14 @@ function Dashboard() {
                               />
                             </div>
                             <RejectedPanel items={rejected} />
-                            {compareProducts.length > 0 && <div aria-hidden className="h-24 sm:h-20" />}
+                            {compareProducts.length > 0 && (
+                              <div aria-hidden className="h-24 sm:h-20" />
+                            )}
                             <CompareTray
                               products={compareProducts}
-                              onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                              onRemove={(n) =>
+                                setCompareNames((prev) => prev.filter((x) => x !== n))
+                              }
                               onClear={() => setCompareNames([])}
                               onOpen={() => setCompareOpen(true)}
                             />
@@ -1195,7 +1403,9 @@ function Dashboard() {
                               <CompareModal
                                 products={compareProducts}
                                 onClose={() => setCompareOpen(false)}
-                                onRemove={(n) => setCompareNames((prev) => prev.filter((x) => x !== n))}
+                                onRemove={(n) =>
+                                  setCompareNames((prev) => prev.filter((x) => x !== n))
+                                }
                               />
                             )}
                           </>
@@ -1205,25 +1415,84 @@ function Dashboard() {
                 </>
               )}
 
-              {tab === "trends" && (locked ? <LockedPanel onUpgrade={() => setShowPricing(true)} title="Predictive Trends — Sadece abonelik alanlara özel" /> : <PredictiveTrendsTab country={targetCountry} />)}
-              {tab === "seo" && (locked ? <LockedPanel onUpgrade={() => setShowPricing(true)} title="SEO Kit — Sadece abonelik alanlara özel" /> : <SeoTab seoFn={seoFn} onOutOfCredits={() => setShowPricing(true)} qc={qc} />)}
-              {tab === "creative" && (locked ? <LockedPanel onUpgrade={() => setShowPricing(true)} title="Creative Studio — Sadece abonelik alanlara özel" /> : <CreativeTab scriptsFn={scriptsFn} onOutOfCredits={() => setShowPricing(true)} qc={qc} />)}
-              {tab === "library" && (locked ? <LockedPanel onUpgrade={() => setShowPricing(true)} title="Library — Sadece abonelik alanlara özel" /> : <LibraryTab favorites={favorites} loading={favsQ.isLoading} onDelete={(id) => delMut.mutate(id)} onSeo={(name) => { setTab("seo"); requestRun("seo", name); }} onCreative={(name) => { setTab("creative"); requestRun("creative", name); }} />)}
+              {tab === "trends" &&
+                (locked ? (
+                  <LockedPanel
+                    onUpgrade={() => setShowPricing(true)}
+                    title="Predictive Trends — Sadece abonelik alanlara özel"
+                  />
+                ) : (
+                  <PredictiveTrendsTab country={targetCountry} />
+                ))}
+              {tab === "seo" &&
+                (locked ? (
+                  <LockedPanel
+                    onUpgrade={() => setShowPricing(true)}
+                    title="SEO Kit — Sadece abonelik alanlara özel"
+                  />
+                ) : (
+                  <SeoTab seoFn={seoFn} onOutOfCredits={() => setShowPricing(true)} qc={qc} />
+                ))}
+              {tab === "creative" &&
+                (locked ? (
+                  <LockedPanel
+                    onUpgrade={() => setShowPricing(true)}
+                    title="Creative Studio — Sadece abonelik alanlara özel"
+                  />
+                ) : (
+                  <CreativeTab
+                    scriptsFn={scriptsFn}
+                    onOutOfCredits={() => setShowPricing(true)}
+                    qc={qc}
+                  />
+                ))}
+              {tab === "library" &&
+                (locked ? (
+                  <LockedPanel
+                    onUpgrade={() => setShowPricing(true)}
+                    title="Library — Sadece abonelik alanlara özel"
+                  />
+                ) : (
+                  <LibraryTab
+                    favorites={favorites}
+                    loading={favsQ.isLoading}
+                    onDelete={(id) => delMut.mutate(id)}
+                    onSeo={(name) => {
+                      setTab("seo");
+                      requestRun("seo", name);
+                    }}
+                    onCreative={(name) => {
+                      setTab("creative");
+                      requestRun("creative", name);
+                    }}
+                  />
+                ))}
 
               {tab === "training" && (
                 <>
                   <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
                     <CreditCost kind="free" />
-                    Simülatör ve alıştırmalar her pakette açıktır. Yalnızca AI destekli tam simülasyon başlatma
-                    <CreditCost kind="sim" amount={1} className="mx-1" /> kullanır; Quick Drill kredi harcamaz.
+                    Simülatör ve alıştırmalar her pakette açıktır. Yalnızca AI destekli tam
+                    simülasyon başlatma
+                    <CreditCost kind="sim" amount={1} className="mx-1" /> kullanır; Quick Drill
+                    kredi harcamaz.
                   </div>
-                  <TrainingSection onUpgrade={() => setShowPricing(true)} catalog={[...results, ...favorites.map((f) => f.product).filter((p) => !results.some((r) => r.name === p.name))]} />
+                  <TrainingSection
+                    onUpgrade={() => setShowPricing(true)}
+                    catalog={[
+                      ...results,
+                      ...favorites
+                        .map((f) => f.product)
+                        .filter((p) => !results.some((r) => r.name === p.name)),
+                    ]}
+                  />
                 </>
               )}
               {tab === "academy" && (
                 <>
                   <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
-                    <CreditCost kind="free" /> 21 günlük eğitim programı her üyeliğe dahildir — kredi harcamaz.
+                    <CreditCost kind="free" /> 21 günlük eğitim programı her üyeliğe dahildir —
+                    kredi harcamaz.
                   </div>
                   <AcademyTab />
                 </>
@@ -1244,8 +1513,14 @@ function Dashboard() {
           onDismiss={() => setPipelineDismissed(true)}
         />
         <ReportModal product={reportProduct} onClose={() => setReportProduct(null)} />
-        <ProductDeepDiveModal product={deepDiveProduct} onClose={() => setDeepDiveProduct(null)} onSendToSimulator={() => setTab("training")} />
-        <DraggableCopilot context={`Dashboard · sekme: ${tab} · niş: ${niche} · ülke: ${targetCountry}`} />
+        <ProductDeepDiveModal
+          product={deepDiveProduct}
+          onClose={() => setDeepDiveProduct(null)}
+          onSendToSimulator={() => setTab("training")}
+        />
+        <DraggableCopilot
+          context={`Dashboard · sekme: ${tab} · niş: ${niche} · ülke: ${targetCountry}`}
+        />
         <ConsensusReportModal report={validationReport} onClose={() => setValidationReport(null)} />
       </div>
     </CurrencyProvider>

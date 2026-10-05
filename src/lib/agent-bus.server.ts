@@ -66,8 +66,7 @@ class AgentBus {
   }
 
   once<T extends BusEventType>(type: T, handler: Handler<T>): () => void {
-    let off: (() => void) | undefined;
-    off = this.on(type, ((payload: unknown) => {
+    const off = this.on(type, ((payload: unknown) => {
       off?.();
       return (handler as (p: unknown) => void | Promise<void>)(payload);
     }) as Handler<T>);
@@ -127,12 +126,18 @@ class AgentBus {
   }
 
   getStats(): { traceId: string; emitted: number; dropped: number; pending: number } {
-    return { traceId: this.traceId, emitted: this.emitted, dropped: this.dropped, pending: this.queue.length };
+    return {
+      traceId: this.traceId,
+      emitted: this.emitted,
+      dropped: this.dropped,
+      pending: this.queue.length,
+    };
   }
 }
 
 export function createAgentBus(traceId?: string): AgentBus {
-  const id = traceId ?? `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const id =
+    traceId ?? `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   return new AgentBus(id);
 }
 

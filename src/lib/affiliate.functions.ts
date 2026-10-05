@@ -90,7 +90,8 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       applied: !!row,
       status: row && isAffiliateStatus(row.status) ? row.status : null,
       commission_rate_pct: row?.commission_rate_pct ?? DEFAULT_COMMISSION_RATE_PCT,
-      referral_code: ((profileRes.data as { referral_code?: string } | null)?.referral_code ?? "") as string,
+      referral_code: ((profileRes.data as { referral_code?: string } | null)?.referral_code ??
+        "") as string,
       earned_cents: commissions.reduce((s, c) => s + (c.commission_cents ?? 0), 0),
       paid_transactions: commissions.length,
       recent: commissions.slice(0, 10).map((c) => ({
@@ -118,7 +119,11 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
       // Basit kötüye kullanım koruması: aynı hesap 1 saatte en fazla 5 kez.
       const limited = await rateLimit(`affiliate:apply:${context.userId}`, 5, 3600);
       if (limited) {
-        return { ok: false, status: null, reason: "Çok fazla deneme yaptın, biraz sonra tekrar dene." };
+        return {
+          ok: false,
+          status: null,
+          reason: "Çok fazla deneme yaptın, biraz sonra tekrar dene.",
+        };
       }
 
       const { client, isServiceRole } = await adminOrUserClient(context);
@@ -141,7 +146,8 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
           status: "pending",
           commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
         });
-        if (error) return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
+        if (error)
+          return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
         return { ok: true, status: "pending" };
       }
 
@@ -390,14 +396,10 @@ export const adminListAffiliates = createServerFn({ method: "GET" })
     const [affiliatesRes, commissionsRes] = await Promise.all([
       supabaseAdmin
         .from("affiliates")
-        .select(
-          "user_id, status, commission_rate_pct, verified_at, created_at",
-        )
+        .select("user_id, status, commission_rate_pct, verified_at, created_at")
         .order("created_at", { ascending: false })
         .limit(200),
-      supabaseAdmin
-        .from("affiliate_commissions")
-        .select("affiliate_id, commission_cents"),
+      supabaseAdmin.from("affiliate_commissions").select("affiliate_id, commission_cents"),
     ]);
 
     const rows = (affiliatesRes.data ?? []) as Array<{
@@ -463,20 +465,20 @@ const SetStatusSchema = z.object({
  */
 export const adminSetAffiliateStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SetStatusSchema.parse(input))  .handler(async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
+  .inputValidator((input: unknown) => SetStatusSchema.parse(input))
+  .handler(async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
     await assertAdmin(context);
     const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
     // verify_affiliate() bilinçli olarak service_role'a açıktır; anahtar yoksa
     // kullanıcıya ham bir ortam hatası yerine ne yapması gerektiğini söyle.
     if (!isServiceRole) throw missingServiceRoleError();
 
-      const { data: result, error } = await supabaseAdmin.rpc("verify_affiliate", {
-        _admin_id: context.userId,
-        _user_id: data.userId,
-        _status: data.status,
-        _rate_pct: data.ratePct ?? null,
-      });
-      if (error || String(result) !== "ok") throw forbidden();
-      return { ok: true, status: data.status };
-    },
-  );
+    const { data: result, error } = await supabaseAdmin.rpc("verify_affiliate", {
+      _admin_id: context.userId,
+      _user_id: data.userId,
+      _status: data.status,
+      _rate_pct: data.ratePct ?? null,
+    });
+    if (error || String(result) !== "ok") throw forbidden();
+    return { ok: true, status: data.status };
+  });

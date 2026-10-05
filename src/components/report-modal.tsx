@@ -14,7 +14,12 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { enrichProduct, recommendationStyle, formatMeasuredCurrency, NOT_MEASURED } from "@/lib/recommendation";
+import {
+  enrichProduct,
+  recommendationStyle,
+  formatMeasuredCurrency,
+  NOT_MEASURED,
+} from "@/lib/recommendation";
 import { marginLabel } from "@/lib/economics-evidence";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
@@ -112,7 +117,9 @@ export function ReportModal({
     line(
       `Supplier: ${product.supplier_price_usd || NOT_MEASURED}   Sell: ${product.selling_price_usd || NOT_MEASURED}   Margin: ${marginLabel(product, NOT_MEASURED)}`,
     );
-    line(`Est. Monthly Sales: ${enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}`);
+    line(
+      `Est. Monthly Sales: ${enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}`,
+    );
     line(`Est. Monthly Revenue: ${formatMeasuredCurrency(enriched.est_monthly_revenue_usd)}`);
     line(`Est. Monthly Net Profit: ${formatMeasuredCurrency(enriched.est_monthly_net_profit_usd)}`);
     line(`Competition: ${product.competition_level}`);
@@ -182,7 +189,11 @@ export function ReportModal({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
               <Stat
                 label={t("est_monthly_sales")}
-                value={enriched.est_monthly_sales === null ? NOT_MEASURED : enriched.est_monthly_sales.toLocaleString()}
+                value={
+                  enriched.est_monthly_sales === null
+                    ? NOT_MEASURED
+                    : enriched.est_monthly_sales.toLocaleString()
+                }
               />
               <Stat
                 label={t("est_revenue")}

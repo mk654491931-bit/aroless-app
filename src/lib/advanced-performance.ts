@@ -61,7 +61,7 @@ export function initializeWebVitalsTracking(
     });
     clsObserver.observe({ type: "layout-shift", buffered: true });
     unsubscribes.push(() => clsObserver.disconnect());
-  } catch (e) {
+  } catch {
     console.debug("CLS tracking not supported");
   }
 
@@ -81,7 +81,7 @@ export function initializeWebVitalsTracking(
     });
     lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
     unsubscribes.push(() => lcpObserver.disconnect());
-  } catch (e) {
+  } catch {
     console.debug("LCP tracking not supported");
   }
 
@@ -90,9 +90,10 @@ export function initializeWebVitalsTracking(
     const fidObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         const interaction = entry as FirstInput | PerformanceEventTiming;
-        const duration = "processingDuration" in interaction
-          ? interaction.processingDuration
-          : (entry as PerformanceEntry).duration;
+        const duration =
+          "processingDuration" in interaction
+            ? interaction.processingDuration
+            : (entry as PerformanceEntry).duration;
         callback?.({
           name: "FID",
           value: duration,
@@ -103,7 +104,7 @@ export function initializeWebVitalsTracking(
     });
     fidObserver.observe({ type: "first-input", buffered: true });
     unsubscribes.push(() => fidObserver.disconnect());
-  } catch (e) {
+  } catch {
     console.debug("FID tracking not supported");
   }
 
@@ -125,7 +126,7 @@ export function initializeWebVitalsTracking(
     });
     ttfbObserver.observe({ type: "navigation", buffered: true });
     unsubscribes.push(() => ttfbObserver.disconnect());
-  } catch (e) {
+  } catch {
     console.debug("TTFB tracking not supported");
   }
 
@@ -154,7 +155,8 @@ export function getResourceMetrics(): ResourceMetrics[] {
     type: entry.entryType,
     duration: (entry as PerformanceResourceTiming).duration,
     size: (entry as PerformanceResourceTiming).transferSize || 0,
-    cached: (entry as PerformanceResourceTiming).transferSize === 0 &&
+    cached:
+      (entry as PerformanceResourceTiming).transferSize === 0 &&
       (entry as PerformanceResourceTiming).decodedBodySize > 0,
   }));
 }
@@ -207,7 +209,7 @@ export function trackLongTasks(callback?: (task: LongTaskMetric) => void): () =>
     });
     observer.observe({ type: "longtask", buffered: true });
     return () => observer.disconnect();
-  } catch (e) {
+  } catch {
     console.debug("Long task tracking not supported");
     return () => {};
   }
@@ -224,8 +226,13 @@ export function useWebVitalsMonitoring() {
   const [memoryMetrics, setMemoryMetrics] = useState<MemoryMetrics | null>(null);
 
   useEffect(() => {
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-    const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      }
+    ).requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+      .cancelIdleCallback;
     let idleId: number | null = null;
     let unsubscribeVitals: (() => void) | null = null;
     let memoryInterval: number | null = null;

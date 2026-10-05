@@ -107,9 +107,7 @@ describe("normalizeNiche", () => {
 describe("looksLikeProductRow", () => {
   // ÖLÇÜLEN GERÇEK: kazanan 5 ürünün 5'i de ansiklopedi maddesiydi.
   it("Wikipedia maddesini ürün SAYMAZ", () => {
-    expect(looksLikeProductRow("Light-emitting diode - Wikipedia", "wikipedia-demand")).toBe(
-      false,
-    );
+    expect(looksLikeProductRow("Light-emitting diode - Wikipedia", "wikipedia-demand")).toBe(false);
   });
 
   it("tanım cümlesini ürün SAYMAZ", () => {

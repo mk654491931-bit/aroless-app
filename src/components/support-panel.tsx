@@ -115,14 +115,14 @@ export function SupportPanel() {
                 </span>
               </div>
             </div>
-            <div className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{t.message}</div>
+            <div className="mt-1 text-xs text-muted-foreground whitespace-pre-line">
+              {t.message}
+            </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
               {new Date(t.created_at).toLocaleString()}
             </div>
             {t.admin_note && (
-              <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">
-                Yanıt: {t.admin_note}
-              </div>
+              <div className="mt-2 rounded-lg bg-primary/10 p-2 text-xs">Yanıt: {t.admin_note}</div>
             )}
           </div>
         ))}

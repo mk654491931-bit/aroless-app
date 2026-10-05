@@ -60,22 +60,36 @@ export function initializePerformanceOptimizations(
       if (Object.keys(pendingVitals).length === 0) return;
       const snapshot = { ...pendingVitals };
       for (const k of Object.keys(pendingVitals)) delete pendingVitals[k];
-      const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      const idle = (
+        window as unknown as {
+          requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+        }
+      ).requestIdleCallback;
       const doWrite = () => {
         try {
-          sessionManager.updateField("lastWebVitals", snapshot as unknown as Record<string, number>);
-        } catch { /* yoksay */ }
+          sessionManager.updateField(
+            "lastWebVitals",
+            snapshot as unknown as Record<string, number>,
+          );
+        } catch {
+          /* yoksay */
+        }
       };
       if (typeof idle === "function") idle(doWrite, { timeout: 2000 });
       else setTimeout(doWrite, 300);
     };
     const scheduleIdle = (cb: () => void) => {
-      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      const ric = (
+        window as unknown as {
+          requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+        }
+      ).requestIdleCallback;
       if (typeof ric === "function") return ric(cb, { timeout: 2500 });
       return window.setTimeout(cb, 900) as unknown as number;
     };
     const cancelIdle = (id: number) => {
-      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback;
       if (typeof cic === "function") cic(id);
       else clearTimeout(id);
     };
@@ -88,7 +102,8 @@ export function initializePerformanceOptimizations(
         onMetric?.(metric);
         if (enableSessionPersistence) {
           pendingVitals[metric.name] = metric.value;
-          if (vitalsFlushTimer === null) vitalsFlushTimer = window.setTimeout(flushVitals, 1200) as unknown as number;
+          if (vitalsFlushTimer === null)
+            vitalsFlushTimer = window.setTimeout(flushVitals, 1200) as unknown as number;
         }
       });
     });
@@ -145,26 +160,39 @@ export function initializePerformanceOptimizations(
   }
 
   // 5. Long-task observer — sadece debug'ta ve idle'da kurulur (prod'da kapalı)
-  if (debug && typeof window !== "undefined" && "performance" in window && "PerformanceObserver" in window) {
+  if (
+    debug &&
+    typeof window !== "undefined" &&
+    "performance" in window &&
+    "PerformanceObserver" in window
+  ) {
     let ltIdle: number | null = null;
     let ltObserver: PerformanceObserver | null = null;
-    const ric2 = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const ric2 = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      }
+    ).requestIdleCallback;
     const setup = () => {
       ltIdle = null;
       try {
         ltObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (entry.duration > 200) console.warn(`⚠️ Long task: ${entry.name} (${entry.duration.toFixed(0)}ms)`);
+            if (entry.duration > 200)
+              console.warn(`⚠️ Long task: ${entry.name} (${entry.duration.toFixed(0)}ms)`);
           }
         });
         ltObserver.observe({ type: "longtask", buffered: true });
-      } catch { /* desteklenmiyor */ }
+      } catch {
+        /* desteklenmiyor */
+      }
     };
     if (typeof ric2 === "function") ltIdle = ric2(setup, { timeout: 4000 });
     else ltIdle = window.setTimeout(setup, 1500) as unknown as number;
     cleanups.push(() => {
       if (ltIdle !== null) {
-        const cic2 = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        const cic2 = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+          .cancelIdleCallback;
         if (typeof cic2 === "function") cic2(ltIdle);
         else clearTimeout(ltIdle);
       }
@@ -291,9 +319,7 @@ export async function getPerformanceHints(): Promise<string[]> {
     const slowResources = resources.filter((r) => r.duration > 1000);
 
     if (slowResources.length > 0) {
-      hints.push(
-        `⏱️ ${slowResources.length} slow resources detected - consider optimization`,
-      );
+      hints.push(`⏱️ ${slowResources.length} slow resources detected - consider optimization`);
     }
   }
 

@@ -67,17 +67,17 @@ describe("affiliate eligibility", () => {
     const base = { status: "verified", amountCents: 2900 };
     expect(shouldEarnCommission({ ...base, eventType: "transaction.completed" })).toBe(true);
     // Refunds/chargebacks carry no positive amount → no commission event.
-    expect(shouldEarnCommission({ ...base, eventType: "transaction.completed", amountCents: 0 })).toBe(
-      false,
-    );
+    expect(
+      shouldEarnCommission({ ...base, eventType: "transaction.completed", amountCents: 0 }),
+    ).toBe(false);
     expect(
       shouldEarnCommission({ ...base, eventType: "transaction.completed", amountCents: -2900 }),
     ).toBe(false);
     // Only the completed-payment event triggers a commission.
     expect(shouldEarnCommission({ ...base, eventType: "subscription.canceled" })).toBe(false);
     // Pending/revoked affiliates never earn even with a paid event.
-    expect(shouldEarnCommission({ ...base, eventType: "transaction.completed", status: "pending" })).toBe(
-      false,
-    );
+    expect(
+      shouldEarnCommission({ ...base, eventType: "transaction.completed", status: "pending" }),
+    ).toBe(false);
   });
 });

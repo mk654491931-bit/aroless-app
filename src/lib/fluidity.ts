@@ -142,13 +142,19 @@ export function initFluidity(): () => void {
     if (cancelled || isLiteMode()) return;
     // İlk boyama + derleme gürültüsü geçtikten sonra, idle zamanında ölç — ana thread bloklanmaz
     const doSchedule = () => {
-      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
-        .requestIdleCallback;
+      const ric = (
+        window as unknown as {
+          requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+        }
+      ).requestIdleCallback;
       if (typeof ric === "function") {
-        idleId = ric(() => {
-          idleId = null;
-          runMeasure();
-        }, { timeout: 2800 }) as unknown as number;
+        idleId = ric(
+          () => {
+            idleId = null;
+            runMeasure();
+          },
+          { timeout: 2800 },
+        ) as unknown as number;
       } else {
         timer = window.setTimeout(() => {
           timer = null;
@@ -178,7 +184,8 @@ export function initFluidity(): () => void {
     cancelled = true;
     if (timer !== null) window.clearTimeout(timer);
     if (idleId !== null) {
-      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback;
       if (typeof cic === "function") cic(idleId);
       else clearTimeout(idleId);
     }

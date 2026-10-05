@@ -90,10 +90,9 @@ describe("buildShortlist — fiyat kapısı", () => {
 
   it("GEÇERSİZ fiyatı (0) yine de eler", () => {
     // Kapı gevşetilirken bu korunmalı: 0 fiyat ölçülen değer değil, bozuk veri.
-    const { products, stats } = buildShortlist(
-      [githubRow({ priceUsd: 0 })],
-      { requireImage: false },
-    );
+    const { products, stats } = buildShortlist([githubRow({ priceUsd: 0 })], {
+      requireImage: false,
+    });
 
     expect(products).toHaveLength(0);
     expect(stats.rejectedPrice).toBe(1);

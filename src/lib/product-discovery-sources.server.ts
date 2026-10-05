@@ -14,11 +14,7 @@
 // ============================================================================
 
 import type { RawProduct } from "./product-discovery.types";
-import {
-  isGameNiche,
-  normalizeNiche,
-  productQueryVariants,
-} from "./product-discovery-query";
+import { isGameNiche, normalizeNiche, productQueryVariants } from "./product-discovery-query";
 import {
   arcticPostUrl,
   fetchArcticPosts,
@@ -481,9 +477,8 @@ export const serpApiShoppingSource: ProductSource = {
   name: "serpapi-shopping",
   timeoutMs: 9_000,
   async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
-    const { serpApiConfigured, serpShoppingSearch, toRawProducts } = await import(
-      "./serpapi-shopping.server"
-    );
+    const { serpApiConfigured, serpShoppingSearch, toRawProducts } =
+      await import("./serpapi-shopping.server");
     if (!serpApiConfigured()) return [];
 
     const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
@@ -502,11 +497,12 @@ export const serpApiShoppingSource: ProductSource = {
     // "kedi tırmalama tahtası" göndermek boş sonuç demekti. Artık:
     //   • TR → yerel Türkçe önce, sonra İngilizce
     //   • diğer ülkeler → İngilizce karşılık önce, sonra özgün metin
-    const code = String(country ?? "").trim().toUpperCase() || "US";
+    const code =
+      String(country ?? "")
+        .trim()
+        .toUpperCase() || "US";
     const local = trMarketplaceQueries(niche);
-    const { englishProductQuery, productQueryVariants } = await import(
-      "./product-discovery-query"
-    );
+    const { englishProductQuery, productQueryVariants } = await import("./product-discovery-query");
     const english = [englishProductQuery(niche), ...productQueryVariants(niche), niche]
       .map((q) => q.trim())
       .filter(Boolean);
@@ -858,7 +854,6 @@ export function hasMeasuredField(row: {
  * bir dijital katalogdan tekrarlanması bu iki kapıyla engellenir.
  * ---------------------------------------------------------------------------
  */
-
 
 /* ------------------------------------- 8. Open Library (GERÇEK kitap + puan) */
 
@@ -1472,7 +1467,13 @@ export const steamSource: ProductSource = {
       // Adayları önce nişe göre süzeriz: Steam araması GEVŞEKTİR, "lamp"
       // için alakasız oyunlar da döner. Kapı burada, ağ çağrısından ÖNCE
       // çalışır — puan isteyeceğimiz oyun sayısını da böyle kısar.
-      const candidates: { id: number; title: string; price: number; currency: string; image: string }[] = [];
+      const candidates: {
+        id: number;
+        title: string;
+        price: number;
+        currency: string;
+        image: string;
+      }[] = [];
       const seen = new Set<string>();
       for (const item of json.items) {
         const title = String(item.name ?? "").trim();
@@ -1576,7 +1577,10 @@ export const steamSource: ProductSource = {
  */
 const TR_MARKETPLACES: readonly { name: string; search: (q: string) => string }[] = [
   { name: "Trendyol", search: (q) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}` },
-  { name: "Hepsiburada", search: (q) => `https://www.hepsiburada.com/search?q=${encodeURIComponent(q)}` },
+  {
+    name: "Hepsiburada",
+    search: (q) => `https://www.hepsiburada.com/search?q=${encodeURIComponent(q)}`,
+  },
 ];
 
 /**
@@ -1597,15 +1601,24 @@ const TR_MARKETPLACES: readonly { name: string; search: (q: string) => string }[
  * (`marketplace-jsonld.ts`) markadan bağımsızdır, yeni bir ülke eklemek
  * yalnızca buraya iki satır eklemektir.
  */
-const MARKETPLACES_BY_COUNTRY: Record<string, readonly { name: string; search: (q: string) => string }[]> = {
+const MARKETPLACES_BY_COUNTRY: Record<
+  string,
+  readonly { name: string; search: (q: string) => string }[]
+> = {
   TR: TR_MARKETPLACES,
   US: [
     { name: "Walmart", search: (q) => `https://www.walmart.com/search?q=${encodeURIComponent(q)}` },
-    { name: "eBay", search: (q) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+    {
+      name: "eBay",
+      search: (q) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    },
   ],
   GB: [
     { name: "Amazon UK", search: (q) => `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}` },
-    { name: "eBay UK", search: (q) => `https://www.ebay.co.uk/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+    {
+      name: "eBay UK",
+      search: (q) => `https://www.ebay.co.uk/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    },
   ],
   DE: [
     { name: "Amazon DE", search: (q) => `https://www.amazon.de/s?k=${encodeURIComponent(q)}` },
@@ -1613,35 +1626,58 @@ const MARKETPLACES_BY_COUNTRY: Record<string, readonly { name: string; search: (
   ],
   FR: [
     { name: "Amazon FR", search: (q) => `https://www.amazon.fr/s?k=${encodeURIComponent(q)}` },
-    { name: "Cdiscount", search: (q) => `https://www.cdiscount.com/search/${encodeURIComponent(q)}/` },
+    {
+      name: "Cdiscount",
+      search: (q) => `https://www.cdiscount.com/search/${encodeURIComponent(q)}/`,
+    },
   ],
   IT: [
     { name: "Amazon IT", search: (q) => `https://www.amazon.it/s?k=${encodeURIComponent(q)}` },
-    { name: "eBay IT", search: (q) => `https://www.ebay.it/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+    {
+      name: "eBay IT",
+      search: (q) => `https://www.ebay.it/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    },
   ],
   ES: [
     { name: "Amazon ES", search: (q) => `https://www.amazon.es/s?k=${encodeURIComponent(q)}` },
-    { name: "eBay ES", search: (q) => `https://www.ebay.es/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+    {
+      name: "eBay ES",
+      search: (q) => `https://www.ebay.es/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    },
   ],
   NL: [{ name: "Amazon NL", search: (q) => `https://www.amazon.nl/s?k=${encodeURIComponent(q)}` }],
   CA: [
     { name: "Amazon CA", search: (q) => `https://www.amazon.ca/s?k=${encodeURIComponent(q)}` },
-    { name: "Walmart CA", search: (q) => `https://www.walmart.ca/search?q=${encodeURIComponent(q)}` },
+    {
+      name: "Walmart CA",
+      search: (q) => `https://www.walmart.ca/search?q=${encodeURIComponent(q)}`,
+    },
   ],
   AU: [
     { name: "Amazon AU", search: (q) => `https://www.amazon.com.au/s?k=${encodeURIComponent(q)}` },
-    { name: "eBay AU", search: (q) => `https://www.ebay.com.au/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+    {
+      name: "eBay AU",
+      search: (q) => `https://www.ebay.com.au/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    },
   ],
   PL: [{ name: "Amazon PL", search: (q) => `https://www.amazon.pl/s?k=${encodeURIComponent(q)}` }],
   SE: [{ name: "Amazon SE", search: (q) => `https://www.amazon.se/s?k=${encodeURIComponent(q)}` }],
   BR: [
-    { name: "Mercado Livre", search: (q) => `https://lista.mercadolivre.com.br/${encodeURIComponent(q)}` },
+    {
+      name: "Mercado Livre",
+      search: (q) => `https://lista.mercadolivre.com.br/${encodeURIComponent(q)}`,
+    },
   ],
   MX: [
-    { name: "Mercado Libre MX", search: (q) => `https://listado.mercadolibre.com.mx/${encodeURIComponent(q)}` },
+    {
+      name: "Mercado Libre MX",
+      search: (q) => `https://listado.mercadolibre.com.mx/${encodeURIComponent(q)}`,
+    },
   ],
   IN: [{ name: "Amazon IN", search: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}` }],
-  JP: [{ name: "Amazon JP", search: (q) => `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}` }],
+  JP: [
+    { name: "Amazon JP", search: (q) => `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}` },
+  ],
 };
 
 /**
@@ -1656,7 +1692,9 @@ export function marketplacesForCountry(country: string | undefined | null): {
   code: string;
   sites: readonly { name: string; search: (q: string) => string }[];
 } {
-  const code = String(country ?? "").trim().toUpperCase();
+  const code = String(country ?? "")
+    .trim()
+    .toUpperCase();
   if (code && MARKETPLACES_BY_COUNTRY[code]) return { code, sites: MARKETPLACES_BY_COUNTRY[code] };
   // GLOBAL / boş → en geniş yerel liste (ABD) ve TR sorgusu da denenir.
   return { code: code || "GLOBAL", sites: MARKETPLACES_BY_COUNTRY.US };
@@ -1742,78 +1780,81 @@ async function scrapeMarketplaceCountry(niche: string, country: string): Promise
     return [];
   }
 
-    // Kredi bütçesi bu çağrı boyunca ORTAK: varyantlar çarpmaz.
-    let probesLeft = TR_MARKETPLACE_PROBES;
+  // Kredi bütçesi bu çağrı boyunca ORTAK: varyantlar çarpmaz.
+  let probesLeft = TR_MARKETPLACE_PROBES;
 
-    for (const query of trMarketplaceQueries(niche)) {
-      const out: RawProduct[] = [];
-      for (const site of sites) {
-        // Kredi bitti: başka pazar/varyant DENEMEZ.
-        if (probesLeft <= 0) break;
-        probesLeft -= 1;
-
-        let html: string | null = null;
-        try {
-          html = await fetchThroughScraperApi(site.search(query), {
-            countryCode: code === "GLOBAL" ? "us" : code.toLowerCase(),
-            timeoutMs: 4_000,
-          });
-        } catch (e) {
-          // Servis düştü / kota doldu / 403 → SONRAKİ PAZARA GEÇ.
-          console.log(
-            `[discovery] ${sourceLabel} ${site.name} okunamadı: ${(e as Error).message.slice(0, 80)}`,
-          );
-          continue;
-        }
-        if (!html) continue;
-
-        const rows = parseMarketplaceHtml(html, 12);
-        for (const row of rows) {
-          const title = row.title;
-          if (!matchesNiche(title, query)) continue;
-          // Fiyat TL'dir. Kur GERÇEK bir servisten çekilir (anahtarsız); kur
-          // gelmezse fiyat ölçülmedi sayılır — TAHMİN EDİLMEZ.
-          const usd = row.priceLocal !== null && row.currency ? await toUsd(row.priceLocal, row.currency) : null;
-          const product: RawProduct = {
-            title,
-            brand: row.brand,
-            seller: row.seller || site.name,
-            priceUsd: usd,
-            rating: row.rating,
-            ratingCount: row.ratingCount,
-            inStock: row.inStock,
-            source: sourceLabel,
-            url: row.url,
-            imageUrl: row.imageUrl,
-            notes: [
-              site.name,
-              row.priceLocal !== null && row.currency
-                ? `${row.priceLocal.toLocaleString("tr-TR")} ${row.currency}` +
-                  (usd !== null ? ` ≈ $${usd}` : " (kur alınamadı)")
-                : "",
-              row.rating !== null ? `puan ${row.rating}/5` : "",
-              row.ratingCount !== null ? `${row.ratingCount} değerlendirme` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")
-              .slice(0, 200),
-          };
-          if (!hasMeasuredField(product)) continue;
-          out.push(product);
-        }
-        // İlk pazar gerçek ürün döndürürse diğerlerine harcanmaz.
-        if (out.length) break;
-      }
-      // YALNIZ BOŞ DÖNMEYEN SONUÇ ÖNBELLEĞE YAZILIR. Geçici bir pazar
-      // engeli (403, kısa süreli hata) nişi bir gün boyunca boş
-      // göstermesin; boş sonuç yeniden denenebilsin.
-      if (out.length) {
-        await cacheSet(key, `marketplace:${code}`, out, TR_MARKETPLACE_TTL_MS);
-        return out;
-      }
+  for (const query of trMarketplaceQueries(niche)) {
+    const out: RawProduct[] = [];
+    for (const site of sites) {
+      // Kredi bitti: başka pazar/varyant DENEMEZ.
       if (probesLeft <= 0) break;
+      probesLeft -= 1;
+
+      let html: string | null = null;
+      try {
+        html = await fetchThroughScraperApi(site.search(query), {
+          countryCode: code === "GLOBAL" ? "us" : code.toLowerCase(),
+          timeoutMs: 4_000,
+        });
+      } catch (e) {
+        // Servis düştü / kota doldu / 403 → SONRAKİ PAZARA GEÇ.
+        console.log(
+          `[discovery] ${sourceLabel} ${site.name} okunamadı: ${(e as Error).message.slice(0, 80)}`,
+        );
+        continue;
+      }
+      if (!html) continue;
+
+      const rows = parseMarketplaceHtml(html, 12);
+      for (const row of rows) {
+        const title = row.title;
+        if (!matchesNiche(title, query)) continue;
+        // Fiyat TL'dir. Kur GERÇEK bir servisten çekilir (anahtarsız); kur
+        // gelmezse fiyat ölçülmedi sayılır — TAHMİN EDİLMEZ.
+        const usd =
+          row.priceLocal !== null && row.currency
+            ? await toUsd(row.priceLocal, row.currency)
+            : null;
+        const product: RawProduct = {
+          title,
+          brand: row.brand,
+          seller: row.seller || site.name,
+          priceUsd: usd,
+          rating: row.rating,
+          ratingCount: row.ratingCount,
+          inStock: row.inStock,
+          source: sourceLabel,
+          url: row.url,
+          imageUrl: row.imageUrl,
+          notes: [
+            site.name,
+            row.priceLocal !== null && row.currency
+              ? `${row.priceLocal.toLocaleString("tr-TR")} ${row.currency}` +
+                (usd !== null ? ` ≈ $${usd}` : " (kur alınamadı)")
+              : "",
+            row.rating !== null ? `puan ${row.rating}/5` : "",
+            row.ratingCount !== null ? `${row.ratingCount} değerlendirme` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 200),
+        };
+        if (!hasMeasuredField(product)) continue;
+        out.push(product);
+      }
+      // İlk pazar gerçek ürün döndürürse diğerlerine harcanmaz.
+      if (out.length) break;
     }
-    return [];
+    // YALNIZ BOŞ DÖNMEYEN SONUÇ ÖNBELLEĞE YAZILIR. Geçici bir pazar
+    // engeli (403, kısa süreli hata) nişi bir gün boyunca boş
+    // göstermesin; boş sonuç yeniden denenebilsin.
+    if (out.length) {
+      await cacheSet(key, `marketplace:${code}`, out, TR_MARKETPLACE_TTL_MS);
+      return out;
+    }
+    if (probesLeft <= 0) break;
+  }
+  return [];
 }
 
 /* ------------------------------------------ Sorgu varyantlarıyla ürün kazıma */
@@ -1865,71 +1906,71 @@ export const bingShoppingSource: ProductSource = {
     return scrapeWithQueryVariants(niche, 6_000, async (query) => {
       const cards = await bingShoppingCards(query);
 
-    const out: RawProduct[] = [];
-    const seen = new Set<string>();
-    for (const card of cards) {
-      const title = decode(
-        /<span title="([^"]{10,200})"/.exec(card)?.[1] ??
-          /<div class="br-offTtl[^"]*"[^>]*>([\s\S]{0,200}?)<\/div>/.exec(card)?.[1] ??
-          "",
-      );
-      if (!title || title.length < 8) continue;
-      if (!matchesNiche(title, query)) continue;
+      const out: RawProduct[] = [];
+      const seen = new Set<string>();
+      for (const card of cards) {
+        const title = decode(
+          /<span title="([^"]{10,200})"/.exec(card)?.[1] ??
+            /<div class="br-offTtl[^"]*"[^>]*>([\s\S]{0,200}?)<\/div>/.exec(card)?.[1] ??
+            "",
+        );
+        if (!title || title.length < 8) continue;
+        if (!matchesNiche(title, query)) continue;
 
-      const key = title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
+        const key = title.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-      const price = priceFromText(
-        /class="br-price"[^>]*>([\s\S]{0,40}?)<\/div>/.exec(card)?.[1] ?? "",
-      );
-      const starRaw = /aria-label="Star Rating:\s*([0-9.]+)\s*out of 5/i.exec(card)?.[1];
-      const rating = starRaw !== undefined ? Number(starRaw) : NaN;
-      const countRaw = /class="sa_rt_num"[^>]*>\s*([0-9][0-9,]*)/.exec(card)?.[1];
-      const ratingCount = countRaw !== undefined ? Number(countRaw.replace(/,/g, "")) : NaN;
-      // Kart yazdıysa ölçülmüş talep; yazmadıysa talep ÖLÇÜLELEMEDİ.
-      //
-      // DİKKAT: `br-offSecLbl` açılış etiketinde `style="top:150px;"` vardır;
-      // HTML'i düz metin gibi tarayan geniş bir regex ilk `>`'da kesilip boş
-      // bir dize yakalar ve "görüntülenme" iddiası SAYI ÜRETMEZ. Bu yüzden
-      // yalnız `resp-one-line` kutusu okunur ve içinde RAKAM olması şartı
-      // aranır — kanıtsız talep satışı yapmayız.
-      const viewedRaw = /class="resp-one-line[^"]*"[^>]*>([^<]{1,24})</.exec(card)?.[1]?.trim();
-      // "1K+ viewed" → "1K+": kaynak zaten "görüntülenme" kelimesini biz ekliyoruz.
-      const viewed =
-        viewedRaw && /\d/.test(viewedRaw) ? viewedRaw.replace(/\s*viewed\s*$/i, "").trim() : "";
-      const href = /<a class="br-offLink"[^>]*href="([^"]+)"/.exec(card)?.[1];
+        const price = priceFromText(
+          /class="br-price"[^>]*>([\s\S]{0,40}?)<\/div>/.exec(card)?.[1] ?? "",
+        );
+        const starRaw = /aria-label="Star Rating:\s*([0-9.]+)\s*out of 5/i.exec(card)?.[1];
+        const rating = starRaw !== undefined ? Number(starRaw) : NaN;
+        const countRaw = /class="sa_rt_num"[^>]*>\s*([0-9][0-9,]*)/.exec(card)?.[1];
+        const ratingCount = countRaw !== undefined ? Number(countRaw.replace(/,/g, "")) : NaN;
+        // Kart yazdıysa ölçülmüş talep; yazmadıysa talep ÖLÇÜLELEMEDİ.
+        //
+        // DİKKAT: `br-offSecLbl` açılış etiketinde `style="top:150px;"` vardır;
+        // HTML'i düz metin gibi tarayan geniş bir regex ilk `>`'da kesilip boş
+        // bir dize yakalar ve "görüntülenme" iddiası SAYI ÜRETMEZ. Bu yüzden
+        // yalnız `resp-one-line` kutusu okunur ve içinde RAKAM olması şartı
+        // aranır — kanıtsız talep satışı yapmayız.
+        const viewedRaw = /class="resp-one-line[^"]*"[^>]*>([^<]{1,24})</.exec(card)?.[1]?.trim();
+        // "1K+ viewed" → "1K+": kaynak zaten "görüntülenme" kelimesini biz ekliyoruz.
+        const viewed =
+          viewedRaw && /\d/.test(viewedRaw) ? viewedRaw.replace(/\s*viewed\s*$/i, "").trim() : "";
+        const href = /<a class="br-offLink"[^>]*href="([^"]+)"/.exec(card)?.[1];
 
-      const row: RawProduct = {
-        title: title.slice(0, 180),
-        brand: brandFromTitle(title),
-        seller: decode(/class="br-offSlrTxt"[^>]*>([^<]{2,40})</.exec(card)?.[1] ?? ""),
-        priceUsd: price,
-        rating: Number.isFinite(rating) && rating >= 0 && rating <= 5 ? rating : null,
-        ratingCount: Number.isFinite(ratingCount) && ratingCount >= 0 ? ratingCount : null,
-        // Kart stok durumu bildirmiyor → bilinmiyor (`null` = eleme yok).
-        inStock: null,
-        source: "bing-shopping",
-        url: href ? bingRealUrl(decode(href)) : "",
-        imageUrl: imageFromShoppingCard(card),
-        viewed90d: parseViewed90d(viewed),
-        notes: [
-          viewed ? `${viewed.trim()} görüntülenme / 90g` : "",
-          Number.isFinite(ratingCount) ? `${ratingCount} değerlendirme` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ")
-          .slice(0, 200),
-      };
-      // Gürültü kapısı: ne fiyatı ne puanı olan kart kanıt değildir.
-      if (!hasMeasuredField(row)) continue;
-      out.push(row);
-    }
-    // Kart vardı ama hiçbiri ölçülebilir değildi → bu bir HATA değil, kaynağın
-    // dürüst cevabı: "bu nişte bana ölçülebilir ürün yok". `ok:true, items:0`
-    // döner (dosyanın gürültü kapısı sözleşmesi). Hata yalnız SAYFA yapısı
-    // değişmiş / engellenmişse atılır.
-    return out.slice(0, BING_SHOPPING_LIMIT);
+        const row: RawProduct = {
+          title: title.slice(0, 180),
+          brand: brandFromTitle(title),
+          seller: decode(/class="br-offSlrTxt"[^>]*>([^<]{2,40})</.exec(card)?.[1] ?? ""),
+          priceUsd: price,
+          rating: Number.isFinite(rating) && rating >= 0 && rating <= 5 ? rating : null,
+          ratingCount: Number.isFinite(ratingCount) && ratingCount >= 0 ? ratingCount : null,
+          // Kart stok durumu bildirmiyor → bilinmiyor (`null` = eleme yok).
+          inStock: null,
+          source: "bing-shopping",
+          url: href ? bingRealUrl(decode(href)) : "",
+          imageUrl: imageFromShoppingCard(card),
+          viewed90d: parseViewed90d(viewed),
+          notes: [
+            viewed ? `${viewed.trim()} görüntülenme / 90g` : "",
+            Number.isFinite(ratingCount) ? `${ratingCount} değerlendirme` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 200),
+        };
+        // Gürültü kapısı: ne fiyatı ne puanı olan kart kanıt değildir.
+        if (!hasMeasuredField(row)) continue;
+        out.push(row);
+      }
+      // Kart vardı ama hiçbiri ölçülebilir değildi → bu bir HATA değil, kaynağın
+      // dürüst cevabı: "bu nişte bana ölçülebilir ürün yok". `ok:true, items:0`
+      // döner (dosyanın gürültü kapısı sözleşmesi). Hata yalnız SAYFA yapısı
+      // değişmiş / engellenmişse atılır.
+      return out.slice(0, BING_SHOPPING_LIMIT);
     });
   },
 };
@@ -2004,9 +2045,10 @@ export async function runSources(
 ): Promise<{ products: RawProduct[]; reports: SourceReport[] }> {
   const products: RawProduct[] = [];
   const country = String(opts.country ?? "").trim();
-  const cap = Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
-    ? Math.round(opts.capMs as number)
-    : Number.POSITIVE_INFINITY;
+  const cap =
+    Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
+      ? Math.round(opts.capMs as number)
+      : Number.POSITIVE_INFINITY;
   const reports: SourceReport[] = await Promise.all(
     sources.map(async (source): Promise<SourceReport> => {
       const startedAt = Date.now();
@@ -2019,10 +2061,7 @@ export async function runSources(
             ? source.scrapeForCountry(niche, country)
             : source.scrape(niche),
           new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error(`timeout>${budgetMs}ms`)),
-              budgetMs,
-            );
+            timer = setTimeout(() => reject(new Error(`timeout>${budgetMs}ms`)), budgetMs);
           }),
         ]);
         products.push(...rows);

@@ -70,8 +70,10 @@ export async function allowScraperCredit(): Promise<boolean | null> {
 
 /** Kota tükendiğinde kullanıcıya gösterilecek dürüst mesaj. */
 export function scraperQuotaMessage(): string {
-  return `Scraper kotası ayda ${monthlyLimit().toLocaleString("tr-TR")} istekle sınırlı ve bu ay doldu; ` +
-    `bu arama anahtarsız kaynaklardan yapıldı.`;
+  return (
+    `Scraper kotası ayda ${monthlyLimit().toLocaleString("tr-TR")} istekle sınırlı ve bu ay doldu; ` +
+    `bu arama anahtarsız kaynaklardan yapıldı.`
+  );
 }
 
 /* ------------------------------------------------------------- SerpAPI kotası */
@@ -146,7 +148,9 @@ export async function allowSerpApiCredit(): Promise<boolean | null> {
     }
     return data !== false;
   } catch (e) {
-    console.log(`[serpapi] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`);
+    console.log(
+      `[serpapi] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
     return null;
   }
 }

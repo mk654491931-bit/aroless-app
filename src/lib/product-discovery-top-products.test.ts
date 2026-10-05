@@ -69,10 +69,22 @@ describe("buildTopProducts — baş ürün küratörü sözleşmesi", () => {
 
   it("düşük rekabeti yüksek doygunluk olarak değil, avantaj olarak anlatır", () => {
     const open = buildTopProducts([
-      { fingerprint: "a", name: "A", councilScore: 80, priceUsd: 30, signals: { demand: 80, margin: 80, competition: 90 } },
+      {
+        fingerprint: "a",
+        name: "A",
+        councilScore: 80,
+        priceUsd: 30,
+        signals: { demand: 80, margin: 80, competition: 90 },
+      },
     ]);
     const saturated = buildTopProducts([
-      { fingerprint: "b", name: "B", councilScore: 80, priceUsd: 30, signals: { demand: 80, margin: 80, competition: 20 } },
+      {
+        fingerprint: "b",
+        name: "B",
+        councilScore: 80,
+        priceUsd: 30,
+        signals: { demand: 80, margin: 80, competition: 20 },
+      },
     ]);
     expect(open.top_products[0]!.selection_reason).toMatch(/düşük/);
     expect(open.top_products[0]!.selection_reason).toMatch(/doygunluk yok/);

@@ -128,12 +128,13 @@ export function ComparePage() {
         <section className="premium-card grain relative overflow-hidden rounded-2xl p-5">
           <div className="hero-halo" aria-hidden="true" />
           <h2 className="relative flex items-center gap-2 text-xl font-black tracking-tight">
-            <Columns3 size={18} className="text-[var(--accent-active)]" /> Kayıtlı ürünlerini yan yana
-            koy
+            <Columns3 size={18} className="text-[var(--accent-active)]" /> Kayıtlı ürünlerini yan
+            yana koy
           </h2>
           <p className="relative mt-2 max-w-2xl text-sm text-muted-foreground">
             Ürün Bulucu'dan kaydettiğin ürünlerden 2–4 tanesini seç; marj, rekabet, kanıt ve trend
-            metrikleri tek tabloda karşılaştırılsın, AI hangisinin kazanacağını gerekçesiyle söylesin.
+            metrikleri tek tabloda karşılaştırılsın, AI hangisinin kazanacağını gerekçesiyle
+            söylesin.
           </p>
         </section>
 

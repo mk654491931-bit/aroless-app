@@ -460,10 +460,7 @@ function fillNullable<T>(primary: T | null, fallback: T | null): T | null {
  * tamamı üzerinden YENİDEN hesaplanır — böylece kazanan temsilcinin skoru
  * gerçekten taşıdığı kanıtı yansıtır.
  */
-export function mergeDuplicates(
-  a: NormalizedProduct,
-  b: NormalizedProduct,
-): NormalizedProduct {
+export function mergeDuplicates(a: NormalizedProduct, b: NormalizedProduct): NormalizedProduct {
   // Sinyaller daha yüksek ön skorlu satırdan gelir: sinyaller KOHT içinde
   // hesaplandığı için ikisinin karışımı anlamsız olurdu.
   const base = b.preScore > a.preScore ? b : a;
@@ -489,14 +486,19 @@ export function mergeDuplicates(
     // Birleşik alanlar spread SONRASINA yazılır; ters sırada `richest` onları
     // ezerdi ve "iki kaynakta görüldü" kanıtı kaybolurdu.
     sources: Array.from(new Set([...a.sources, ...b.sources])),
-    notes: Array.from(new Set([a.notes, b.notes].filter(Boolean))).join(" · ").slice(0, 200),
+    notes: Array.from(new Set([a.notes, b.notes].filter(Boolean)))
+      .join(" · ")
+      .slice(0, 200),
   };
 
   // Bütünlük ve puan, BİRLEŞMİŞ kanıt üzerinden yeniden hesaplanır.
   const { dataCompleteness, missingFields } = evidenceCompleteness(merged);
   const preScore = Math.max(
     0,
-    Math.min(100, Math.round(signalWeightedScore(base.signals) - evidencePenalty(dataCompleteness))),
+    Math.min(
+      100,
+      Math.round(signalWeightedScore(base.signals) - evidencePenalty(dataCompleteness)),
+    ),
   );
   return { ...merged, dataCompleteness, missingFields, preScore };
 }

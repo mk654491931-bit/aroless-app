@@ -129,10 +129,8 @@ function isMissingColumn(error: { code?: string; message?: string } | null): boo
   if (!error) return false;
   return Boolean(
     error.code === "42703" ||
-      error.code === "PGRST204" ||
-      /column .* does not exist|could not find the .* column|schema cache/i.test(
-        error.message ?? "",
-      ),
+    error.code === "PGRST204" ||
+    /column .* does not exist|could not find the .* column|schema cache/i.test(error.message ?? ""),
   );
 }
 
@@ -141,10 +139,10 @@ function isMissingRpc(error: { code?: string; message?: string } | null): boolea
   if (!error) return false;
   return Boolean(
     error.code === "42883" ||
-      error.code === "PGRST202" ||
-      /could not find the function|function .* does not exist|undefined function|schema cache/i.test(
-        error.message ?? "",
-      ),
+    error.code === "PGRST202" ||
+    /could not find the function|function .* does not exist|undefined function|schema cache/i.test(
+      error.message ?? "",
+    ),
   );
 }
 
@@ -257,18 +255,16 @@ export async function createDiscoveryJob(args: {
     params: args.input,
     status: "processing",
   };
-  const { error } = await store
-    .from(JOB_TABLE)
-    .insert({
-      ...legacyRow,
-      discovery_status: "queued",
-      discovery_progress: 5,
-      discovery_step: "scrape_filter",
-      charged_credits: args.chargedCredits,
-      // `chargeOnce` bu iş için krediyi gerçekten düştü; bayrak yalnızca
-      // "alındı" bilgisini satırda tutar ve tek seferlik iadeyi mümkün kılar.
-      credit_charged: true,
-    } as never);
+  const { error } = await store.from(JOB_TABLE).insert({
+    ...legacyRow,
+    discovery_status: "queued",
+    discovery_progress: 5,
+    discovery_step: "scrape_filter",
+    charged_credits: args.chargedCredits,
+    // `chargeOnce` bu iş için krediyi gerçekten düştü; bayrak yalnızca
+    // "alındı" bilgisini satırda tutar ve tek seferlik iadeyi mümkün kılar.
+    credit_charged: true,
+  } as never);
 
   if (error) {
     // Migration uygulanmamış olabilir (keşif kolonları yok). Hat bu yüzden
@@ -328,9 +324,7 @@ export async function readDiscoveryJob(runId: string): Promise<DiscoveryJobRecor
  * Bozuk/eski satırlarda `null` döner — çağıran "girdiyi bilmiyorum" diyip işi
  * dürüstçe durdurur (yanlış varsayılanlarla koşturmaz).
  */
-export async function readDiscoveryInput(
-  runId: string,
-): Promise<ProductDiscoveryInput | null> {
+export async function readDiscoveryInput(runId: string): Promise<ProductDiscoveryInput | null> {
   const { data, error } = await jobStore()
     .from(JOB_TABLE)
     .select("params")

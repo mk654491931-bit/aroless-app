@@ -60,7 +60,10 @@ export const auditStore = createServerFn({ method: "POST" })
         trust_signals: [],
         estimated_cr_gain_pct: 0,
       });
-      report.health_score = Math.max(0, Math.min(100, Math.round(Number(report.health_score) || 0)));
+      report.health_score = Math.max(
+        0,
+        Math.min(100, Math.round(Number(report.health_score) || 0)),
+      );
 
       const { data: saved } = await context.supabase
         .from("store_audits")

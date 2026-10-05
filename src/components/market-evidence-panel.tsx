@@ -31,7 +31,9 @@ export function ProofBadge({
             ? "border-amber-500/35 bg-amber-500/10 text-amber-300"
             : "border-rose-500/35 bg-rose-500/10 text-rose-300";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls}`}
+    >
       {kind}
       {kind === "Canlı veri" && date ? ` — ${date}` : ""}
     </span>
@@ -61,9 +63,16 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">🔎 Canlı piyasa kanıtı</span>
         <span className="flex items-center gap-1.5">
-          <ProofBadge kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
+          <ProofBadge
+            kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"}
+            date={checkedDate}
+          />
           <span className={up ? "text-emerald-300" : "text-rose-300"}>
-            {up ? <TrendingUp size={11} className="inline -mt-0.5" /> : <TrendingDown size={11} className="inline -mt-0.5" />}{" "}
+            {up ? (
+              <TrendingUp size={11} className="inline -mt-0.5" />
+            ) : (
+              <TrendingDown size={11} className="inline -mt-0.5" />
+            )}{" "}
             {up ? "+" : ""}
             {ev.trend_momentum_pct}% / 30g
           </span>
@@ -77,7 +86,10 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
       <div className="flex flex-wrap gap-2 text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           Tedarik ~<b className="text-foreground">${ev.supplier_price_usd.toFixed(2)}</b>
-          <ProofBadge kind={ev.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
+          <ProofBadge
+            kind={ev.supplier_source === "aliexpress" ? "Canlı veri" : "AI tahmini"}
+            date={checkedDate}
+          />
         </span>
         {ev.market_price_usd > 0 && (
           <span className="inline-flex items-center gap-1.5">
@@ -92,8 +104,14 @@ export function MarketEvidencePanel({ ev }: { ev?: MarketEvidence }) {
           </span>
         )}
         <span className="inline-flex items-center gap-1.5">
-          Talep kaynağı <b className="text-foreground">{ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}</b>
-          <ProofBadge kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"} date={checkedDate} />
+          Talep kaynağı{" "}
+          <b className="text-foreground">
+            {ev.trend_source === "google-trends" ? "Google Trends" : "tahmini"}
+          </b>
+          <ProofBadge
+            kind={ev.trend_source === "google-trends" ? "Canlı veri" : "AI tahmini"}
+            date={checkedDate}
+          />
         </span>
       </div>
 

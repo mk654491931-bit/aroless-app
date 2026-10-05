@@ -286,7 +286,9 @@ function AuthPage() {
         if (referralCode) {
           // Profil satırı girişten hemen sonra oluşmayabilir; tekrar denemek
           // için kodu localStorage'da birak (index.tsx bu işi tamamlar).
-          const referral = await claimReferralFn({ data: { code: referralCode } }).catch(() => null);
+          const referral = await claimReferralFn({ data: { code: referralCode } }).catch(
+            () => null,
+          );
           if (referral?.ok) {
             removeBrandedItem("aroless.ref");
             toast.success(`Davet bonusu uygulandı · +${referral.credits ?? 0} kredi`);
@@ -347,7 +349,8 @@ function AuthPage() {
           if (error.message.includes("Invalid login credentials")) {
             msg = "Invalid email or password.";
           } else if (error.message.includes("Email not confirmed")) {
-            msg = "Your email is not verified yet. Check your inbox or resend the verification email below.";
+            msg =
+              "Your email is not verified yet. Check your inbox or resend the verification email below.";
             unconfirmed = true;
           } else {
             msg = error.message;
@@ -648,7 +651,8 @@ function AuthPage() {
                       <div className="space-y-2">
                         {emailDeliveryFailed && (
                           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                            E-posta gönderilemedi. Destek ekibiyle iletişime geçin: destek@aroless.tech
+                            E-posta gönderilemedi. Destek ekibiyle iletişime geçin:
+                            destek@aroless.tech
                           </p>
                         )}
                         <p className="text-sm text-muted-foreground">
@@ -850,7 +854,9 @@ function AuthPage() {
                             if (error) {
                               toast.error(error.message);
                             } else {
-                              toast.success("Password reset link sent. Check your inbox.", { duration: 5000 });
+                              toast.success("Password reset link sent. Check your inbox.", {
+                                duration: 5000,
+                              });
                             }
                           }}
                           className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
@@ -880,11 +886,20 @@ function AuthPage() {
                             Please wait…
                           </>
                         ) : mode === "signin" ? (
-                          <>Sign in <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Sign in{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         ) : otpStep ? (
-                          <>Verify email <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Verify email{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         ) : (
-                          <>Create account <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <>
+                            Create account{" "}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </>
                         )}
                       </span>
                     </button>
@@ -920,34 +935,39 @@ const AUTH_REVIEWS: ReviewItem[] = [
     role: "E-ticaret operatörü · İstanbul",
     market: "TR",
     initials: "EK",
-    quote: "Üç ürünü trend zirvesine çıkmadan radar üzerinden lansmana aldık. Kâr tablosu, ikinci en çok satan ürünümüzü sessizce öldürecek komisyon yapısını yakaladı.",
+    quote:
+      "Üç ürünü trend zirvesine çıkmadan radar üzerinden lansmana aldık. Kâr tablosu, ikinci en çok satan ürünümüzü sessizce öldürecek komisyon yapısını yakaladı.",
   },
   {
     name: "Ahmet Demir",
     role: "İhracatçı · Gaziantep",
     market: "TR",
     initials: "AD",
-    quote: "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum. İlk haftada kendini amorti etti.",
+    quote:
+      "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum. İlk haftada kendini amorti etti.",
   },
   {
     name: "Merve Aksoy",
     role: "Dropshipping · İzmir",
     market: "TR",
     initials: "MA",
-    quote: "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi. Reklam senaryolarını da neredeyse olduğu gibi kullanıyoruz.",
+    quote:
+      "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi. Reklam senaryolarını da neredeyse olduğu gibi kullanıyoruz.",
   },
   {
     name: "Can Yılmaz",
     role: "Ajans kurucusu · Ankara",
     market: "TR",
     initials: "CY",
-    quote: "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu, satış konuşmalarını kısalttı.",
+    quote:
+      "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu, satış konuşmalarını kısalttı.",
   },
   {
     name: "Zeynep Şahin",
     role: "Mağaza denetçisi · Bursa",
     market: "TR",
     initials: "ZŞ",
-    quote: "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ve dışa aktarma ile ürünleri aynı gün pazara taşıyoruz.",
+    quote:
+      "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ve dışa aktarma ile ürünleri aynı gün pazara taşıyoruz.",
   },
 ];

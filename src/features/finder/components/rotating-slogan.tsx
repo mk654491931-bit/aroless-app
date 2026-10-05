@@ -11,7 +11,10 @@ export function RotatingSlogan() {
     <div className="mt-6 flex justify-center">
       <div className="premium-card rounded-full px-5 py-2 h-10 flex items-center gap-2 overflow-hidden">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[oklch(0.66_0.15_255)] animate-pulse-soft" />
-        <span key={i} className="text-sm font-semibold text-foreground/90 animate-rise-in whitespace-nowrap">
+        <span
+          key={i}
+          className="text-sm font-semibold text-foreground/90 animate-rise-in whitespace-nowrap"
+        >
           {SLOGANS[i]}
         </span>
       </div>

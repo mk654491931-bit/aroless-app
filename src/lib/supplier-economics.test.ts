@@ -40,26 +40,24 @@ function offer(over: Partial<SupplierOfferLike> = {}): SupplierOfferLike {
 
 describe("matchSupplierOffer", () => {
   it("alakalı teklifi bulur", () => {
-    const hit = matchSupplierOffer(
-      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
-      [offer({ title: "Kedi tırmalama tahtası için battaniye" }), offer()],
-    );
+    const hit = matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+      offer({ title: "Kedi tırmalama tahtası için battaniye" }),
+      offer(),
+    ]);
     expect(hit?.offer.url).toContain("3256809985321027");
   });
 
   it("alakasız teklifi KULLANMAZ — kanıt uydurmak marj uydurmaktan kötüdür", () => {
-    const hit = matchSupplierOffer(
-      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
-      [offer({ title: "Wireless Bluetooth Speaker 40W" })],
-    );
+    const hit = matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+      offer({ title: "Wireless Bluetooth Speaker 40W" }),
+    ]);
     expect(hit).toBeNull();
   });
 
   it("fiyatı olmayan teklifi aday saymaz", () => {
-    const hit = matchSupplierOffer(
-      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
-      [offer({ unitPriceUsd: null })],
-    );
+    const hit = matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+      offer({ unitPriceUsd: null }),
+    ]);
     expect(hit).toBeNull();
   });
 });
@@ -86,9 +84,10 @@ describe("buildSupplierEvidence", () => {
   });
 
   it("satış adedi ölçülmemişse null kalır", () => {
-    const evidence = buildSupplierEvidence({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
-      offer({ sold: null }),
-    ]);
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer({ sold: null })],
+    );
     expect(evidence.soldTotal).toBeNull();
   });
 });
@@ -101,7 +100,9 @@ describe("buildMarginEvidence", () => {
   });
 
   it("satış fiyatı yoksa marj yoktur — 0 değil", () => {
-    expect(buildMarginEvidence({ sellUsd: null, supplierUsd: 26.36 })).toEqual(emptyMarginEvidence());
+    expect(buildMarginEvidence({ sellUsd: null, supplierUsd: 26.36 })).toEqual(
+      emptyMarginEvidence(),
+    );
   });
 
   it("toptan fiyat satıştan yüksekse marj hesaplanmaz", () => {
@@ -176,7 +177,10 @@ describe("productTitleMatch — ölçülen alakasız eşleşme regresyonu", () =
 
   it("aynı nişte farklı ürün ailesini AYIRIR (mat ≠ kedi ağacı)", () => {
     const evidence = buildSupplierEvidence(
-      { name: "FukUMARU Cat Scratching Mat 3 Pack, Reversible Cat Scratcher Board", priceUsd: 9.99 },
+      {
+        name: "FukUMARU Cat Scratching Mat 3 Pack, Reversible Cat Scratcher Board",
+        priceUsd: 9.99,
+      },
       [offer()],
     );
     expect(evidence.samples).toBe(0);
@@ -185,9 +189,7 @@ describe("productTitleMatch — ölçülen alakasız eşleşme regresyonu", () =
 
 describe("hasMeasuredNetProfit — toptan fiyat ölçüldü diye net marj UYDURULMAZ", () => {
   it("yalnız toptan maliyet varsa net kâr ÖLÇÜLMEMİŞ sayılır", () => {
-    expect(
-      hasMeasuredNetProfit({ cost_breakdown: { supplier_cost: "26.36" } }),
-    ).toBe(false);
+    expect(hasMeasuredNetProfit({ cost_breakdown: { supplier_cost: "26.36" } })).toBe(false);
   });
 
   it("dört maliyet kalemi birlikte ölçülmüşse net kâr hesaplanabilir", () => {

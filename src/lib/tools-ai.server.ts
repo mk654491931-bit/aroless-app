@@ -100,7 +100,8 @@ export async function callOpenRouter(prompt: string, temperature = 0.4): Promise
         const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
         return json.choices?.[0]?.message?.content ?? "{}";
       } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") lastErr = new Error("OpenRouter timeout");
+        if (e instanceof Error && e.name === "AbortError")
+          lastErr = new Error("OpenRouter timeout");
         else lastErr = e;
       } finally {
         clearTimeout(timer);
@@ -120,7 +121,7 @@ export async function callGroq2(prompt: string, temperature = 0.3): Promise<stri
 }
 
 export type Provider =
-  | "gemini" | "groq" | "openrouter" | "hf" | "cerebras" | "sambanova" | "lovable";
+  "gemini" | "groq" | "openrouter" | "hf" | "cerebras" | "sambanova" | "lovable";
 
 /**
  * Motor sırası — "hangisi müsaitse ondan alsın".
@@ -293,13 +294,19 @@ async function synthesize(
   const used = new Set(drafts.map((d) => d.provider));
   const editor = order.find((p) => !used.has(p)) ?? order[0];
   const body = drafts
-    .map((d, i) => `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 4000)}`)
+    .map(
+      (d, i) =>
+        `### TASLAK ${i + 1} (motor: ${d.provider})\n${JSON.stringify(d.data).slice(0, 4000)}`,
+    )
     .join("\n\n");
   const criticPrompt = `${prompt}\n\nA\u015fa\u011f\u0131da ayn\u0131 g\u00f6reve verilmi\u015f ${drafts.length} ba\u011f\u0131ms\u0131z AI tasla\u011f\u0131 var. Sen ba\u015f analistsin (edit\u00f6r/ele\u015ftirmen):\n${body}\n\nG\u00f6revin:\n1. Say\u0131sal \u00e7eli\u015fkileri tespit et; en ger\u00e7ek\u00e7i/muhafazak\u00e2r olan\u0131 se\u00e7 ve gerekiyorsa kendin yeniden hesapla.\n2. Genel ge\u00e7er, dolgu c\u00fcmleleri at. Sadece bu vakaya \u00f6zg\u00fc, \u00f6l\u00e7\u00fclebilir \u00e7\u0131kt\u0131lar b\u0131rak.\n3. Taslaklar\u0131n atlad\u0131\u011f\u0131 riskleri, gizli maliyetleri ve aksiyonlar\u0131 ekle.\n4. Dok\u00fcman istenen g\u00f6revlerde en iyi tasla\u011f\u0131 temel al ama yeniden yazarak g\u00fc\u00e7lendir.\nTek ve nihai cevab\u0131 \u00fcret.\n\n${SCHEMA_HINT}`;
   // Editör de aynı çok sağlayıcılı havuzdan çağrılır (düşük sıcaklık = daha kararlı).
   const runnerFor = buildRunners(criticPrompt, 0.25);
   const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
-    Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+    Promise.race([
+      p,
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
   // En fazla 2 editör dene, her biri 8sn — fazlası 504 demek.
   const editors = [editor, ...order.filter((o) => o !== editor)].slice(0, 2);
   for (const p of editors) {

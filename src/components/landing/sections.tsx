@@ -5,13 +5,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  ArrowRight,
-  ChevronDown,
-  MessageSquareQuote,
-  Sparkles,
-  Star,
-} from "lucide-react";
+import { ArrowRight, ChevronDown, MessageSquareQuote, Sparkles, Star } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Shared landing building blocks (landing + auth pages)               */
@@ -127,7 +121,9 @@ export function Testimonials({
               <ArrowRight
                 size={15}
                 className={`shrink-0 text-slate-500 transition-transform ${
-                  active === i ? "translate-x-0 text-indigo-300" : "-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
+                  active === i
+                    ? "translate-x-0 text-indigo-300"
+                    : "-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
                 }`}
               />
             </button>

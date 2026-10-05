@@ -30,7 +30,15 @@ function stubSteam(opts: {
     price?: { currency?: string; final?: number };
     tiny_image?: string;
   }[];
-  summaries?: Record<number, { review_score?: number; total_reviews?: number; total_positive?: number; total_negative?: number }>;
+  summaries?: Record<
+    number,
+    {
+      review_score?: number;
+      total_reviews?: number;
+      total_positive?: number;
+      total_negative?: number;
+    }
+  >;
 }) {
   calls.length = 0;
   vi.stubGlobal("fetch", async (input: string | URL) => {
@@ -44,7 +52,8 @@ function stubSteam(opts: {
       const id = Number(review[1]);
       return respond({ query_summary: opts.summaries?.[id] ?? {} });
     }
-    if (url.includes("storesearch")) return respond({ total: opts.items?.length ?? 0, items: opts.items ?? [] });
+    if (url.includes("storesearch"))
+      return respond({ total: opts.items?.length ?? 0, items: opts.items ?? [] });
     return respond({});
   });
 }
@@ -56,8 +65,17 @@ afterEach(() => {
 describe("steamSource — gerçek sayı, uydurma yok", () => {
   it("Steam'in 1-10 puanını 5'lik ölçeğe böler ve değerlendirme sayısını korur", async () => {
     stubSteam({
-      items: [{ name: "Great Strategy Game", id: 11, price: { currency: "USD", final: 1999 }, tiny_image: "i.png" }],
-      summaries: { 11: { review_score: 8, total_reviews: 1540, total_positive: 1300, total_negative: 240 } },
+      items: [
+        {
+          name: "Great Strategy Game",
+          id: 11,
+          price: { currency: "USD", final: 1999 },
+          tiny_image: "i.png",
+        },
+      ],
+      summaries: {
+        11: { review_score: 8, total_reviews: 1540, total_positive: 1300, total_negative: 240 },
+      },
     });
 
     const rows = await steamSource.scrape("strategy game");
@@ -157,7 +175,8 @@ describe("steamSource — gerçek sayı, uydurma yok", () => {
     const original = globalThis.fetch;
     vi.stubGlobal("fetch", async (input: string | URL) => {
       const url = String(input);
-      if (url.includes("appreviews")) return { ok: false, status: 500, text: async () => "" } as Response;
+      if (url.includes("appreviews"))
+        return { ok: false, status: 500, text: async () => "" } as Response;
       return original(input as string);
     });
 

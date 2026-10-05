@@ -50,10 +50,7 @@ import {
   verifyQStashSignature,
 } from "@/lib/product-discovery-security.server";
 import { readDiscoveryJob } from "@/lib/product-discovery-jobs.server";
-import {
-  enqueueDiscoveryStep,
-  type DiscoveryStep,
-} from "@/lib/product-discovery-qstash.server";
+import { enqueueDiscoveryStep, type DiscoveryStep } from "@/lib/product-discovery-qstash.server";
 import { runOneDiscoveryStep } from "@/lib/product-discovery-runner.server";
 
 export const Route = createFileRoute("/api/product-discovery/step")({
@@ -83,7 +80,10 @@ export const Route = createFileRoute("/api/product-discovery/step")({
         // 2) ŞEMA
         const parsed = DiscoveryStepPayloadSchema.safeParse(verified.body);
         if (!parsed.success) {
-          return jsonResponse({ error: "Geçersiz adım gövdesi.", issues: parsed.error.issues }, 400);
+          return jsonResponse(
+            { error: "Geçersiz adım gövdesi.", issues: parsed.error.issues },
+            400,
+          );
         }
         const payload = parsed.data;
         const { runId, userId, input } = payload;
@@ -179,9 +179,7 @@ export const Route = createFileRoute("/api/product-discovery/step")({
         // İlerleme (hangi roller konuştu, hangi kaynaklar okundu) ara noktada
         // olduğu için sıradaki dilim tam kaldığı yerden devam eder.
         if (result.outcome.partial) {
-          const carried = result.outcome.products.length
-            ? result.outcome.products
-            : payload.batch;
+          const carried = result.outcome.products.length ? result.outcome.products : payload.batch;
           const queued = await enqueueDiscoveryStep({
             runId,
             userId: job.userId,

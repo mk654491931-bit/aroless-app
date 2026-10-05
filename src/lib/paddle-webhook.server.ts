@@ -121,7 +121,8 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
         subscriptionId: command.paddleSubscriptionId,
       });
       if (entitlement) {
-        if (!command.customerId && entitlement.customerId) command.customerId = entitlement.customerId;
+        if (!command.customerId && entitlement.customerId)
+          command.customerId = entitlement.customerId;
         if (!command.paddleSubscriptionId && entitlement.subscriptionId)
           command.paddleSubscriptionId = entitlement.subscriptionId;
         if (!command.priceId && entitlement.priceId) command.priceId = entitlement.priceId;
@@ -185,10 +186,7 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     //    olduğu için kendi kendini onarma yolu devre dışı kalıyor, paket
     //    tanımlanmıyor ve hesap "Free" görünüyordu. İndirim kodu kullanıldığı
     //    hâlde ücret ödenmemiş olmak bir hata değil, meşru bir alışveriş.
-    if (
-      TRANSACTION_EVENTS.has(event.eventType) &&
-      (!command.tier || command.tier === "Free")
-    ) {
+    if (TRANSACTION_EVENTS.has(event.eventType) && (!command.tier || command.tier === "Free")) {
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("subscription_tier")
@@ -237,9 +235,7 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
       const decision = creditGrantDecision({
         eventType: event.eventType,
         transactionStatus: (event.data as Record<string, unknown> | null)?.["status"] as
-          | string
-          | null
-          | undefined,
+          string | null | undefined,
         alreadyRecorded,
         searchCredits: command.searchCredits,
         simCredits: command.simCredits,

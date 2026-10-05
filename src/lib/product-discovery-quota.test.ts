@@ -26,7 +26,11 @@ const marketplaceHtml = `<html><head>
         "@type": "Product",
         name: "Philips Hue Masa Lambası",
         aggregateRating: { ratingValue: "4.6", bestRating: "5", ratingCount: "1284" },
-        offers: { price: "249.99", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+        offers: {
+          price: "249.99",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+        },
       },
     },
   ],
@@ -135,7 +139,8 @@ describe("trMarketplaceSource — kredi koruması", () => {
     const rows = await scrape();
     expect(rows.length).toBeGreaterThan(0);
     expect(cachedWrites).toBe(1);
-  });it("BOŞ sonucu önbelleğe YAZMAZ (geçici hata nişi bir gün boş bırakmaz)", async () => {
+  });
+  it("BOŞ sonucu önbelleğe YAZMAZ (geçici hata nişi bir gün boş bırakmaz)", async () => {
     // Sayfa ürün döndürür ama hiçbiri nişle eşleşmez → sonuç boş.
     const rows = await scrape("qqqzzz bulunmayan niş qqqzzz");
     expect(rows).toEqual([]);
@@ -143,7 +148,7 @@ describe("trMarketplaceSource — kredi koruması", () => {
     expect(cachedWrites).toBe(0);
   });
 
-it("ilk pazar ürün döndürürse ikinciye GİTMEZ (tek kredi)", async () => {
+  it("ilk pazar ürün döndürürse ikinciye GİTMEZ (tek kredi)", async () => {
     await scrape();
     // Türkçe sorgu önce denendiği için ilk pazar isabet ediyor: 1 kredi.
     expect(proxiedFetches).toBe(1);

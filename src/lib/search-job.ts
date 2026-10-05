@@ -38,9 +38,11 @@ export async function startSearchJob(input: unknown): Promise<{ jobId: string }>
     body: JSON.stringify(input),
   });
 
-  const payload = (await res.json().catch(() => null)) as
-    | { success?: boolean; jobId?: string; error?: string }
-    | null;
+  const payload = (await res.json().catch(() => null)) as {
+    success?: boolean;
+    jobId?: string;
+    error?: string;
+  } | null;
 
   if (!res.ok || !payload?.success || !payload.jobId) {
     throw new SearchJobError(payload?.error || `Arama başlatılamadı (${res.status})`);
@@ -64,7 +66,11 @@ async function readJob(jobId: string): Promise<SearchJobRow | null> {
  */
 export async function waitForSearchResult<T = unknown>(
   jobId: string,
-  opts?: { timeoutMs?: number; pollIntervalMs?: number; onTick?: (status: SearchJobStatus) => void },
+  opts?: {
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+    onTick?: (status: SearchJobStatus) => void;
+  },
 ): Promise<T> {
   const timeoutMs = opts?.timeoutMs ?? 300_000;
   const pollIntervalMs = opts?.pollIntervalMs ?? 3_000;

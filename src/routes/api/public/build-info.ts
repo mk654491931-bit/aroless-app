@@ -89,8 +89,7 @@ export const Route = createFileRoute("/api/public/build-info")({
         );
       },
       // Tanımsız metotlara dürüst yanıt (405), sessiz 404 değil.
-      POST: async () =>
-        jsonError(405, "build-info yalnız GET kabul eder."),
+      POST: async () => jsonError(405, "build-info yalnız GET kabul eder."),
     },
   },
 });

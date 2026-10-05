@@ -39,7 +39,8 @@ export const Route = createFileRoute("/api/public/tool")({
           const { isCacheableToolResult, toolCacheParts, toolCacheTtlMs } =
             await import("@/lib/tools-cache.server");
           const { toolCreditCost } = await import("@/lib/credit-costs");
-          const { chargeOrRespond, refundFeatureCredits } = await import("@/lib/credit-charge.server");
+          const { chargeOrRespond, refundFeatureCredits } =
+            await import("@/lib/credit-charge.server");
           const prompt = buildPrompt(tool, input);
           const creditCost = toolCreditCost(tool);
 
@@ -50,9 +51,7 @@ export const Route = createFileRoute("/api/public/tool")({
           const withBudget = <T>(p: Promise<T>, ms = budgetMs): Promise<T> =>
             Promise.race([
               p,
-              new Promise<never>((_, rej) =>
-                setTimeout(() => rej(new Error("TOOL_TIMEOUT")), ms),
-              ),
+              new Promise<never>((_, rej) => setTimeout(() => rej(new Error("TOOL_TIMEOUT")), ms)),
             ]);
 
           /**
@@ -78,8 +77,7 @@ export const Route = createFileRoute("/api/public/tool")({
           const computeCached = async <T>(compute: () => Promise<T>): Promise<ToolGate<T>> => {
             const ttlMs = toolCacheTtlMs(tool);
             const scope = `tool:${tool}`;
-            const key =
-              ttlMs === null ? null : await cacheKey(scope, toolCacheParts(tool, input));
+            const key = ttlMs === null ? null : await cacheKey(scope, toolCacheParts(tool, input));
 
             if (key) {
               const hit = await cacheGet<T>(key);
@@ -178,7 +176,11 @@ export const Route = createFileRoute("/api/public/tool")({
             );
           }
           if (/T\u00fcm motorlar|\u015fu anda yo\u011fun/i.test(msg)) {
-            return jsonError(503, msg || "Tüm motorlar yoğun, birkaç saniye sonra tekrar deneyin.", e);
+            return jsonError(
+              503,
+              msg || "Tüm motorlar yoğun, birkaç saniye sonra tekrar deneyin.",
+              e,
+            );
           }
           return jsonError(500, "İşlem tamamlanamadı. Lütfen tekrar deneyin.", e);
         }

@@ -193,9 +193,7 @@ export function useProductDiscovery(): {
             consensus: res.result?.consensus ?? prev.consensus,
             // Sözleşme yalnız terminal sonuçta gelir; ara yoklamada üstüne
             // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
-            topProducts: res.result?.topProducts.length
-              ? res.result.topProducts
-              : prev.topProducts,
+            topProducts: res.result?.topProducts.length ? res.result.topProducts : prev.topProducts,
             error: res.error ?? null,
           };
           // İlerleme parmak izi değiştiyse "takılma saati" sıfırlanır.

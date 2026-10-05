@@ -170,10 +170,7 @@ const STALLED_RUN_ABANDON_MS = 20 * 60_000;
  */
 function driverBudgetMs(): number {
   const usable = platformDurationSeconds() * 1000 - 20_000;
-  return Math.min(
-    discoverySliceMs() * DRIVER_SLICE_COUNT,
-    Math.max(MIN_SLICE_BUDGET_MS, usable),
-  );
+  return Math.min(discoverySliceMs() * DRIVER_SLICE_COUNT, Math.max(MIN_SLICE_BUDGET_MS, usable));
 }
 
 const StartSchema = z.object({
@@ -472,10 +469,8 @@ export const advanceDiscoveryRun = createServerFn({ method: "POST" })
     // kullanıcı GERÇEK SEBEBİ görür.
     if (!terminal && !backgroundOwned && job.updatedAt !== null) {
       if (Date.now() - job.updatedAt > STALLED_RUN_ABANDON_MS) {
-        await failAndRefund(
-          data.runId,
-          "stalled_no_carrier",
-          (amount) => refundFeatureCredits(job.userId, amount, "stalled"),
+        await failAndRefund(data.runId, "stalled_no_carrier", (amount) =>
+          refundFeatureCredits(job.userId, amount, "stalled"),
         );
         return (await readRunSnapshot(data.runId, context.userId)) ?? { ok: false as const };
       }

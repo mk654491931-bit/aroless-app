@@ -273,9 +273,7 @@ describe("salvageShortlist — ilk aşama boş kalırsa hat ürünle devam eder"
     const rescued = salvageShortlist([weak, strong, other], { context: CONTEXT });
     // `strong` ve `weak` aynı üründür (parmak izi) → tek satır kalır.
     expect(rescued.survivors).toHaveLength(2);
-    expect(rescued.survivors[0]!.preScore).toBeGreaterThanOrEqual(
-      rescued.survivors[1]!.preScore,
-    );
+    expect(rescued.survivors[0]!.preScore).toBeGreaterThanOrEqual(rescued.survivors[1]!.preScore);
     // Ölçülmüş alan birleşmede kaybolmaz: fiyat/zengin satırdan gelir.
     const merged = rescued.survivors.find((p) => p.name.includes("Model 10"))!;
     expect(merged.priceUsd).toBe(strong.priceUsd);

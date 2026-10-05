@@ -66,7 +66,11 @@ describe("chargeAiCredits", () => {
   it("pahalı aracı (consensus) bakiyeden düştüğü kadar çağırır", async () => {
     balance(9);
     h.rpc.mockResolvedValue({ data: 8, error: null });
-    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "tool:consensus" });
+    const outcome = await chargeAiCredits({
+      userId: USER,
+      token: TOKEN,
+      feature: "tool:consensus",
+    });
     expect(outcome).toEqual({ ok: true, charged: 2, remaining: 8, admin: false });
     expect(h.rpc).toHaveBeenCalledTimes(2);
   });
@@ -76,7 +80,11 @@ describe("chargeAiCredits", () => {
     h.rpc
       .mockResolvedValueOnce({ data: 8, error: null })
       .mockResolvedValueOnce({ data: null, error: { message: "no_credits" } });
-    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "tool:consensus" });
+    const outcome = await chargeAiCredits({
+      userId: USER,
+      token: TOKEN,
+      feature: "tool:consensus",
+    });
     expect(outcome).toEqual({ ok: false, reason: "NO_CREDITS", charged: 0 });
     expect(h.refund).toHaveBeenCalledTimes(1);
     expect(h.refund).toHaveBeenCalledWith(USER, 1, "partial_no_credits");
@@ -88,7 +96,11 @@ describe("chargeAiCredits", () => {
     h.rpc
       .mockResolvedValueOnce({ data: 8, error: null })
       .mockResolvedValueOnce({ data: null, error: { message: "permission denied" } });
-    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "tool:consensus" });
+    const outcome = await chargeAiCredits({
+      userId: USER,
+      token: TOKEN,
+      feature: "tool:consensus",
+    });
     expect(outcome).toEqual({ ok: false, reason: "UNAVAILABLE", charged: 0 });
     expect(h.refund).toHaveBeenCalledWith(USER, 1, "deduct_error");
     errorSpy.mockRestore();
@@ -110,7 +122,11 @@ describe("chargeAiCredits", () => {
   it("bakiye okunamazsa kararı gerçek düşme denemesi verir", async () => {
     h.maybeSingle.mockResolvedValue({ data: null, error: { message: "boom" } });
     h.rpc.mockResolvedValue({ data: 3, error: null });
-    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "trend-analysis" });
+    const outcome = await chargeAiCredits({
+      userId: USER,
+      token: TOKEN,
+      feature: "trend-analysis",
+    });
     expect(outcome.ok).toBe(true);
     expect(h.rpc).toHaveBeenCalledTimes(1);
   });

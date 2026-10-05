@@ -88,9 +88,12 @@ function parsePrice(value: unknown): number | null {
  * döner. Kur çevrimi çağırana bırakılmıştır (`fx-rates.server.ts`), çünkü
  * ayrıştırıcı SAF olmalıdır — burada ağ çağrısı olmaz.
  */
-function readOffer(
-  record: Record<string, unknown>,
-): { price: number | null; currency: string; inStock: boolean | null; seller: string } {
+function readOffer(record: Record<string, unknown>): {
+  price: number | null;
+  currency: string;
+  inStock: boolean | null;
+  seller: string;
+} {
   const offersRaw = record["offers"];
   const offers = (Array.isArray(offersRaw) ? offersRaw : [offersRaw])
     .map(asRecord)
@@ -111,7 +114,9 @@ function readOffer(
           : null
       : null;
     const seller = asRecord(offer["seller"])?.["name"];
-    const currency = firstString(offer, ["priceCurrency", "currency"]) || firstString(spec ?? {}, ["priceCurrency"]);
+    const currency =
+      firstString(offer, ["priceCurrency", "currency"]) ||
+      firstString(spec ?? {}, ["priceCurrency"]);
     return {
       price,
       currency: currency.toUpperCase(),
@@ -130,7 +135,10 @@ function readOffer(
  * okunur ve puan `5 / bestRating` ile normalize edilir — aksi halde 10'lu
  * sistemde 9,2 puan 5'lik ölçekte "9,2" görünür ve ürün yanlış sıralanır.
  */
-function readRating(record: Record<string, unknown>): { rating: number | null; count: number | null } {
+function readRating(record: Record<string, unknown>): {
+  rating: number | null;
+  count: number | null;
+} {
   const agg = asRecord(record["aggregateRating"]);
   if (!agg) return { rating: null, count: null };
   const value = Number(agg["ratingValue"]);
@@ -191,7 +199,7 @@ export function parseMarketplaceHtml(html: string, limit = 12): MarketplaceRow[]
     let parsed: unknown;
     try {
       // Pazaryerleri JSON-LD'nin başına/sonuna BOM veya yorum karıştırabiliyor.
-      parsed = JSON.parse(block.replace(/^﻿/, ""));
+      parsed = JSON.parse(block.replace(/^\uFEFF/, ""));
     } catch {
       // Bozuk JSON-LD nadir değildir; sessizce geç, diğer bloklara bak.
       continue;
@@ -212,7 +220,9 @@ export function parseMarketplaceHtml(html: string, limit = 12): MarketplaceRow[]
         title: title.slice(0, 180),
         url: firstString(product, ["url", "@id"]),
         imageUrl: firstImage(product),
-        brand: firstString(asRecord(product["brand"]) ?? {}, ["name"]) || firstString(product, ["brand"]),
+        brand:
+          firstString(asRecord(product["brand"]) ?? {}, ["name"]) ||
+          firstString(product, ["brand"]),
         priceLocal: offer.price,
         currency: offer.currency,
         rating,

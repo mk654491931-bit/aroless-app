@@ -246,7 +246,10 @@ function cleanRawRows(
     //
     // Kalan koruma: fiyat VARSA geçerli olmalı. 0/negatif/NaN ölçüm değil,
     // bozuk veridir (parse kaynağında patlamış olabilir) → elenir.
-    if (parsed.data.priceUsd !== null && (!Number.isFinite(parsed.data.priceUsd) || parsed.data.priceUsd <= 0)) {
+    if (
+      parsed.data.priceUsd !== null &&
+      (!Number.isFinite(parsed.data.priceUsd) || parsed.data.priceUsd <= 0)
+    ) {
       stats.rejectedPrice++;
       continue;
     }
@@ -293,7 +296,10 @@ function cleanRawRows(
  */
 export function preferProductRows(rows: readonly RawProduct[], niche = ""): RawProduct[] {
   const products = rows.filter((row) =>
-    isSellableProductRow(row.title, row.source ?? "", { priceUsd: row.priceUsd, rating: row.rating }),
+    isSellableProductRow(row.title, row.source ?? "", {
+      priceUsd: row.priceUsd,
+      rating: row.rating,
+    }),
   );
   if (!products.length) {
     const rest = rows.filter(
@@ -483,9 +489,7 @@ export function salvageShortlist(
     const incumbent = best.get(key);
     best.set(key, incumbent ? mergeDuplicates(incumbent, p) : p);
   }
-  const survivors = [...best.values()]
-    .sort((a, b) => b.preScore - a.preScore)
-    .slice(0, limit);
+  const survivors = [...best.values()].sort((a, b) => b.preScore - a.preScore).slice(0, limit);
   return { products: survivors.map(toLlmProduct), survivors, rescued: survivors.length };
 }
 

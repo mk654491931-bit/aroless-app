@@ -304,8 +304,7 @@ export async function runProductDiscovery(
       alibaba:
         "Alibaba / 1688 bulk sourcing — respect real MOQs and give per-unit landed cost at MOQ.",
       local: "Local / domestic suppliers or 3PL stock with 1-4 day delivery in the target country.",
-      print_on_demand:
-        "Print-on-demand / custom-printed products (Printful, Printify style) only.",
+      print_on_demand: "Print-on-demand / custom-printed products (Printful, Printify style) only.",
     };
     deepLines.push(`- SOURCING MODEL (mandatory): ${map[data.sourcing]}`);
   }
@@ -636,11 +635,17 @@ JSON shape:
         };
         const hfEnginePromises = [
           (async () => {
-            const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "llama" }), "llama");
+            const text = await callHuggingFace(
+              buildHfPrompt({ ...hfBase, engine: "llama" }),
+              "llama",
+            );
             return mapHfProducts(text, data.platforms as string[], "llama");
           })(),
           (async () => {
-            const text = await callHuggingFace(buildHfPrompt({ ...hfBase, engine: "qwen" }), "qwen");
+            const text = await callHuggingFace(
+              buildHfPrompt({ ...hfBase, engine: "qwen" }),
+              "qwen",
+            );
             return mapHfProducts(text, data.platforms as string[], "qwen");
           })(),
         ];
@@ -755,9 +760,8 @@ JSON shape:
   const minScore = Math.max(0, Math.min(100, Math.round(data.min_score ?? 65)));
 
   const { runConsensus } = await import("@/lib/agents.server");
-  const { scoreProductForCountry, runCountryCrossMatch } = await import(
-    "@/lib/hybrid-scoring.server"
-  );
+  const { scoreProductForCountry, runCountryCrossMatch } =
+    await import("@/lib/hybrid-scoring.server");
 
   // Judge at most 2 products at a time: each product fans out into several
   // agent calls, so an unbounded Promise.all is what trips rate limits.
@@ -1006,7 +1010,6 @@ JSON shape:
     const { runCouncil } = await import("@/lib/council.server");
     const list = [...finalProducts];
     let enrichedCount = 0;
-    let failures = 0;
 
     // KARNELER PARALEL KOŞAR.
     //
@@ -1040,10 +1043,7 @@ JSON shape:
       settled.forEach((outcome, i) => {
         const p = targets[i];
         if (!p) return;
-        if (outcome.status === "rejected") {
-          failures += 1;
-          return;
-        }
+        if (outcome.status === "rejected") return;
         try {
           const report = outcome.value;
           const council: CouncilSummary = {
@@ -1078,14 +1078,12 @@ JSON shape:
           };
           // Karne gӧvdesi boşsa (tüm motorlar susmuş) ürünü karne ile
           // etiketlemeyiz: karnesi olmayan ürün karnesi varmış gibi gösterilmez.
-          if (!council.executive_report && council.velora_score <= 0) {
-            failures += 1;
-          } else {
+          if (council.executive_report || council.velora_score > 0) {
             list[i] = { ...p, council };
             enrichedCount += 1;
           }
         } catch {
-          failures += 1;
+          // Bu ürün karne alamadı; deterministik sonuca düşer, diğerlerini etkilemez.
         }
       });
     }

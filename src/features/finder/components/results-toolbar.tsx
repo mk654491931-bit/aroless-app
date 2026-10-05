@@ -1,5 +1,13 @@
 import { toast } from "sonner";
-import { Search, Copy, Download, ArrowDownWideNarrow, ArrowUpWideNarrow, FileJson, X as XIcon } from "lucide-react";
+import {
+  Search,
+  Copy,
+  Download,
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  FileJson,
+  X as XIcon,
+} from "lucide-react";
 import { buyersPer1000 } from "@/lib/consistency";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, formatCurrency, NOT_MEASURED } from "@/lib/recommendation";
@@ -7,7 +15,15 @@ import { marginForRanking } from "@/lib/economics-evidence";
 import { SORTS, type SortKey, sortProducts } from "../utils/sorting";
 import { toCsv } from "../utils/export";
 
-function SummaryStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function SummaryStat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
     <div
       className={`rounded-xl border px-3 py-2 ${highlight ? "border-emerald-500/25 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5" : "border-white/10 bg-white/[0.04]"}`}
@@ -44,14 +60,22 @@ export function ResultsToolbar({
   country: string;
 }) {
   const shown = sortProducts(products, sortBy, onlyLaunch, sortDesc);
-  const avgBuyers = shown.length ? Math.round(shown.reduce((a, p) => a + buyersPer1000(p).value, 0) / shown.length) : 0;
+  const avgBuyers = shown.length
+    ? Math.round(shown.reduce((a, p) => a + buyersPer1000(p).value, 0) / shown.length)
+    : 0;
   // Ölçülmemiş alanların toplamı "0" OLMAZ: yalnız GERÇEKTEN ölçülmüş
   // ürünler toplanır, hiçbiri ölçülmediyse "—" yazılır.
-  const measuredProfit = shown.map((p) => enrichProduct(p).est_monthly_net_profit_usd).filter((n): n is number => n !== null);
+  const measuredProfit = shown
+    .map((p) => enrichProduct(p).est_monthly_net_profit_usd)
+    .filter((n): n is number => n !== null);
   const totalProfit = measuredProfit.length ? measuredProfit.reduce((a, b) => a + b, 0) : null;
   const launches = products.filter((p) => enrichProduct(p).recommendation === "Launch").length;
-  const avgScore = shown.length ? Math.round(shown.reduce((a, p) => a + enrichProduct(p).ai_score, 0) / shown.length) : 0;
-  const measuredMargins = shown.map((p) => marginForRanking(p).pct).filter((n): n is number => n !== null);
+  const avgScore = shown.length
+    ? Math.round(shown.reduce((a, p) => a + enrichProduct(p).ai_score, 0) / shown.length)
+    : 0;
+  const measuredMargins = shown
+    .map((p) => marginForRanking(p).pct)
+    .filter((n): n is number => n !== null);
   const avgMargin = measuredMargins.length
     ? Math.round(measuredMargins.reduce((a, b) => a + b, 0) / measuredMargins.length)
     : null;
@@ -68,9 +92,18 @@ export function ResultsToolbar({
   };
 
   const downloadJson = () => {
-    const blob = new Blob([JSON.stringify({ niche, country, generated_at: new Date().toISOString(), products: shown }, null, 2)], {
-      type: "application/json;charset=utf-8",
-    });
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          { niche, country, generated_at: new Date().toISOString(), products: shown },
+          null,
+          2,
+        ),
+      ],
+      {
+        type: "application/json;charset=utf-8",
+      },
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -84,7 +117,9 @@ export function ResultsToolbar({
       const e = enrichProduct(p);
       return `${i + 1}. ${p.name} — AI ${e.ai_score} · ${p.selling_price_usd ?? "?"} · marj ${marginForRanking(p).pct === null ? NOT_MEASURED : `${marginForRanking(p).pct}%${marginForRanking(p).kind === "gross" ? " brüt" : ""}`} · ${e.recommendation}`;
     });
-    await navigator.clipboard.writeText([`Aroless — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"));
+    await navigator.clipboard.writeText(
+      [`Aroless — ${niche || "product finder"} (${country}) · ${stamp}`, ...lines].join("\n"),
+    );
     toast.success("Özet panoya kopyalandı");
   };
 
@@ -94,19 +129,36 @@ export function ResultsToolbar({
         <SummaryStat label="Products" value={String(shown.length)} />
         <SummaryStat
           label="Avg Winner Score"
-          value={String(shown.length ? Math.round(shown.reduce((s, p) => s + (p.winner_score ?? 0), 0) / shown.length) : 0)}
+          value={String(
+            shown.length
+              ? Math.round(shown.reduce((s, p) => s + (p.winner_score ?? 0), 0) / shown.length)
+              : 0,
+          )}
           highlight
         />
         <SummaryStat label="Launch-ready" value={String(launches)} />
         <SummaryStat label="Avg AI score" value={String(avgScore)} />
-        <SummaryStat label="Avg net margin" value={avgMargin === null ? NOT_MEASURED : `${avgMargin}%`} />
+        <SummaryStat
+          label="Avg net margin"
+          value={avgMargin === null ? NOT_MEASURED : `${avgMargin}%`}
+        />
         <SummaryStat label="Avg buyers / 1k" value={String(avgBuyers)} />
-        <SummaryStat label="Doğrulanmış" value={`${shown.filter((p) => (p.realism_score ?? 0) >= 75).length}/${shown.length}`} />
-        <SummaryStat label="Est. monthly profit" value={totalProfit === null ? NOT_MEASURED : formatCurrency(totalProfit)} highlight />
+        <SummaryStat
+          label="Doğrulanmış"
+          value={`${shown.filter((p) => (p.realism_score ?? 0) >= 75).length}/${shown.length}`}
+        />
+        <SummaryStat
+          label="Est. monthly profit"
+          value={totalProfit === null ? NOT_MEASURED : formatCurrency(totalProfit)}
+          highlight
+        />
       </div>
 
       <div className="relative">
-        <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search
+          size={13}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
         <input
           value={query}
           onChange={(e) => onQuery(e.target.value)}
@@ -127,7 +179,9 @@ export function ResultsToolbar({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="chip-rail flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mr-1">Sort</span>
+          <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mr-1">
+            Sort
+          </span>
           {SORTS.map((s) => (
             <button
               key={s.id}

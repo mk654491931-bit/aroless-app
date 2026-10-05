@@ -67,52 +67,54 @@ export function AdminTickets() {
       <div className="space-y-3">
         {!q.isError &&
           rows.map((tk) => (
-          <div key={tk.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-white/10 px-2 py-0.5">{tk.category}</span>
-              <span className="rounded-full border border-white/10 px-2 py-0.5">
-                {STATUS_LABEL[tk.status] ?? tk.status}
-              </span>
-              <span>{tk.email ?? "—"}</span>
-              <span>{new Date(tk.created_at).toLocaleString()}</span>
-            </div>
-            <div className="mt-1.5 text-sm font-semibold">{tk.subject}</div>
-            <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{tk.message}</p>
+            <div key={tk.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  {tk.category}
+                </span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  {STATUS_LABEL[tk.status] ?? tk.status}
+                </span>
+                <span>{tk.email ?? "—"}</span>
+                <span>{new Date(tk.created_at).toLocaleString()}</span>
+              </div>
+              <div className="mt-1.5 text-sm font-semibold">{tk.subject}</div>
+              <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{tk.message}</p>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {STATUSES.map((s) => (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {STATUSES.map((s) => (
+                  <button
+                    key={s}
+                    disabled={save.isPending}
+                    onClick={() => save.mutate({ id: tk.id, status: s })}
+                    className={`rounded-lg border px-2.5 py-1 text-xs transition ${
+                      tk.status === s
+                        ? "border-[oklch(0.62_0.17_255)] bg-[oklch(0.62_0.17_255)]/20"
+                        : "border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    {STATUS_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={notes[tk.id] ?? tk.admin_note ?? ""}
+                  onChange={(e) => setNotes((n) => ({ ...n, [tk.id]: e.target.value }))}
+                  placeholder="Yönetici notu"
+                  className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
                 <button
-                  key={s}
                   disabled={save.isPending}
-                  onClick={() => save.mutate({ id: tk.id, status: s })}
-                  className={`rounded-lg border px-2.5 py-1 text-xs transition ${
-                    tk.status === s
-                      ? "border-[oklch(0.62_0.17_255)] bg-[oklch(0.62_0.17_255)]/20"
-                      : "border-white/10 hover:bg-white/10"
-                  }`}
+                  onClick={() => save.mutate({ id: tk.id, admin_note: notes[tk.id] ?? "" })}
+                  className="rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10"
                 >
-                  {STATUS_LABEL[s]}
+                  Kaydet
                 </button>
-              ))}
+              </div>
             </div>
-
-            <div className="mt-2 flex gap-2">
-              <input
-                value={notes[tk.id] ?? tk.admin_note ?? ""}
-                onChange={(e) => setNotes((n) => ({ ...n, [tk.id]: e.target.value }))}
-                placeholder="Yönetici notu"
-                className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs outline-none focus:border-[oklch(0.62_0.17_255)]"
-              />
-              <button
-                disabled={save.isPending}
-                onClick={() => save.mutate({ id: tk.id, admin_note: notes[tk.id] ?? "" })}
-                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10"
-              >
-                Kaydet
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
       </div>
     </section>
   );

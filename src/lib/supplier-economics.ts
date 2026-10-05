@@ -76,11 +76,51 @@ export const SUPPLIER_MIN_RELEVANCE = 0.5;
  * niş gibi kullanıldığında jenerik kelimelerin skoru şişirmesiydi.
  */
 const GENERIC_WORDS = new Set([
-  "with", "for", "and", "the", "from", "your", "our", "pack", "set", "pcs", "piece",
-  "pieces", "count", "size", "inch", "inches", "large", "small", "medium", "big",
-  "premium", "ultra", "super", "multi", "portable", "indoor", "outdoor", "color",
-  "colour", "colourful", "new", "high", "low", "top", "best", "type", "style",
-  "free", "shipping", "sale", "hot", "brand", "store", "shop", "item",
+  "with",
+  "for",
+  "and",
+  "the",
+  "from",
+  "your",
+  "our",
+  "pack",
+  "set",
+  "pcs",
+  "piece",
+  "pieces",
+  "count",
+  "size",
+  "inch",
+  "inches",
+  "large",
+  "small",
+  "medium",
+  "big",
+  "premium",
+  "ultra",
+  "super",
+  "multi",
+  "portable",
+  "indoor",
+  "outdoor",
+  "color",
+  "colour",
+  "colourful",
+  "new",
+  "high",
+  "low",
+  "top",
+  "best",
+  "type",
+  "style",
+  "free",
+  "shipping",
+  "sale",
+  "hot",
+  "brand",
+  "store",
+  "shop",
+  "item",
 ]);
 
 /**
@@ -267,8 +307,12 @@ export function buildSupplierEvidence(
       productTitleMatch(candidate.name, offer.title) === best.relevance,
   );
   const pool = aligned.length ? aligned : [best.offer];
-  const prices = pool.map((o) => measuredMoney(o.unitPriceUsd)).filter((n): n is number => n !== null);
-  const lists = pool.map((o) => measuredMoney(o.listPriceUsd)).filter((n): n is number => n !== null);
+  const prices = pool
+    .map((o) => measuredMoney(o.unitPriceUsd))
+    .filter((n): n is number => n !== null);
+  const lists = pool
+    .map((o) => measuredMoney(o.listPriceUsd))
+    .filter((n): n is number => n !== null);
   const discounts = pool
     .map((o) => o.discountPct)
     .filter((n): n is number => typeof n === "number" && n > 0);
@@ -284,7 +328,9 @@ export function buildSupplierEvidence(
     supplierLowUsd: money2(percentile(prices, 0.25)),
     supplierHighUsd: money2(percentile(prices, 0.75)),
     listPriceUsd: money2(median(lists)),
-    discountPct: discounts.length ? Math.round(discounts.reduce((a, b) => a + b, 0) / discounts.length) : null,
+    discountPct: discounts.length
+      ? Math.round(discounts.reduce((a, b) => a + b, 0) / discounts.length)
+      : null,
     soldTotal: solds.length ? solds.reduce((a, b) => a + b, 0) : null,
     store: topSold?.store ?? "",
     shipFrom: topSold?.shipFrom ?? best.offer.shipFrom,
@@ -299,9 +345,10 @@ export function buildSupplierEvidence(
  * fiyatına eşit/üstse marj `null`'dur: "sıfır marj" değil, ÖLÇÜLEN bir
  * durum (zarar) — onu göstermek yerine karar katmanının işine bırakılır.
  */
-export function buildMarginEvidence(
-  input: { sellUsd: number | null; supplierUsd: number | null },
-): MarginEvidence {
+export function buildMarginEvidence(input: {
+  sellUsd: number | null;
+  supplierUsd: number | null;
+}): MarginEvidence {
   const sell = measuredMoney(input.sellUsd);
   const buy = measuredMoney(input.supplierUsd);
   if (sell === null || buy === null || buy >= sell) return emptyMarginEvidence();

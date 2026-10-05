@@ -154,7 +154,9 @@ describe("parseMarketplaceHtml", () => {
       name: "Tekrar Ürün",
       offers: { price: "10", priceCurrency: "TRY" },
     };
-    const rows = parseMarketplaceHtml(pageWithLd({ "@type": "ItemList", itemListElement: [{ item: product }, { item: product }] }));
+    const rows = parseMarketplaceHtml(
+      pageWithLd({ "@type": "ItemList", itemListElement: [{ item: product }, { item: product }] }),
+    );
     expect(rows).toHaveLength(1);
   });
 
@@ -166,7 +168,9 @@ describe("parseMarketplaceHtml", () => {
         offers: { price: `${i + 1}`, priceCurrency: "TRY" },
       },
     }));
-    expect(parseMarketplaceHtml(pageWithLd({ "@type": "ItemList", itemListElement: items }), 12)).toHaveLength(12);
+    expect(
+      parseMarketplaceHtml(pageWithLd({ "@type": "ItemList", itemListElement: items }), 12),
+    ).toHaveLength(12);
   });
 
   it("boş ve geçersiz girdide istisna fırlatmaz", () => {

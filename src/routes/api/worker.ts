@@ -56,8 +56,7 @@ export const Route = createFileRoute("/api/worker")({
           input: parsed.data,
           // Kuyruk gecikmesini (QStash teslimi + soğuk başlangıç) sözden
           // düşebilmek için taşınır; olmazsa sabit tavana düşer.
-          enqueuedAtMs:
-            typeof payload.enqueuedAtMs === "number" ? payload.enqueuedAtMs : undefined,
+          enqueuedAtMs: typeof payload.enqueuedAtMs === "number" ? payload.enqueuedAtMs : undefined,
         });
 
         // Hata durumunda bile 200 dönülür: kayıt "failed" olarak işlendi, QStash'in
