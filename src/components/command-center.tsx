@@ -400,8 +400,15 @@ export function CommandCenter() {
                           <span className="rounded-md border border-[--accent-active]/40 bg-[--accent-active]/10 px-1.5 py-0.5 font-mono text-[10px] text-[--accent-active]">
                             Finger {finger} · 30%
                           </span>
-                          <span className="rounded-md border border-[--profit]/40 bg-[--profit]/10 px-1.5 py-0.5 font-mono text-[10px] text-[--profit]">
-                            {e.net_margin_pct.toFixed(0)}% net
+                          {/* DÜRÜSTLÜK: bu akışın tedarik maliyeti AI adayından
+                              gelir; kargo/komisyon/reklam ise model varsayımıdır.
+                              Bu yüzden marj TAHSİNİNİ açıkça "tahmini" diye
+                              etiketliyoruz — kazınmış ölçüm gibi okunmasın. */}
+                          <span
+                            title="AI aday tedarik maliyeti + model varsayılanı kargo/komisyon/CAC ile hesaplanan TAHMİNİ net marj (kazınmış ölçüm değil)."
+                            className="rounded-md border border-[--profit]/40 bg-[--profit]/10 px-1.5 py-0.5 font-mono text-[10px] text-[--profit]"
+                          >
+                            {e.net_margin_pct.toFixed(0)}% net · tahmini
                           </span>
                         </div>
                       </div>

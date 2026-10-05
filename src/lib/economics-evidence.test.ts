@@ -128,4 +128,24 @@ describe("ölçümlü hatta uydurma sayı üretilmez", () => {
     expect(view.text).toBe("44%");
     expect(view.bad).toBe(false);
   });
+
+  it("eksik maliyet dökümünde kalan kalemleri TAHMİN edip net marj üretmez", () => {
+    // Toptan ölçülür ama kargo/komisyon/reklam ölçülmez: eskiden
+    // computeUnitEconomics bunları tahmin edip bir net marj üretiyordu.
+    // Artık "—" döner — ölçülmemiş kalemi varsaymak uydurma olurdu.
+    const view = netMarginView(
+      measuredOnlyProduct({
+        supplier_price_usd: "$5",
+        cost_breakdown: {
+          supplier_cost: "$5",
+          shipping_cost: "",
+          platform_fee: "",
+          ad_spend: "",
+          net_profit: "",
+          net_margin_pct: 0,
+        },
+      }),
+    );
+    expect(view).toEqual({ text: NOT_MEASURED, bad: false });
+  });
 });

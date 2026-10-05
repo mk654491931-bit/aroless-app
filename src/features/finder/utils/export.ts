@@ -2,7 +2,7 @@ import { buyersPer1000 } from "@/lib/consistency";
 import { hasMeasuredNetProfit, measuredMarginPct } from "@/lib/economics-evidence";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, NOT_MEASURED } from "@/lib/recommendation";
-import { computeUnitEconomics, parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
+import { parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
 
 export function toCsv(list: WinningProduct[]): string {
   const head = [
@@ -155,7 +155,17 @@ export function buildShopifyCsv(products: WinningProduct[]): string {
 
 /**
  * ACTUAL net margin for the MARGIN badge: (net profit / selling price) * 100.
- * Falls back to the derived cost stack when the AI omitted a cost breakdown.
+ *
+ * DÜRÜSTLÜK (ölçülen hata, 2026-10-05): eskiden döküm yoksa
+ * `computeUnitEconomics` çağrılıp kargo/komisyon/reklam TAHMİN ediliyor ve
+ * sonuç "net marj" diye gösteriliyordu. Ölçümlü keşif hattında bu, kazınmamış
+ * bir sayıyı gerçek gibi sunmak demekti. Artık net marj YALNIZ ölçülmüş
+ * girdilerden gelir:
+ *   • dökümde `net_profit` ölçülmüşse → o,
+ *   • dört maliyet kalemi de ölçülmüşse → satış − (tedarik+kargo+komisyon+reklam),
+ *   • döküm yok ama gerçek-dünya modeli varsa → modelin net/adet değeri
+ *     (kart bunu zaten varsayımlarıyla BİRLİKTE, "tahmini" bağlamında gösterir),
+ *   • hiçbiri yoksa → "—". Uydurma tahmin YOK.
  */
 export function netMarginView(p: WinningProduct): { text: string; bad: boolean } {
   // ÖLÇÜM YOKSA MARJ DA YOKTUR. Ölçülen hata: keşif hattının maliyet alanları
@@ -164,25 +174,25 @@ export function netMarginView(p: WinningProduct): { text: string; bad: boolean }
   if (!hasMeasuredNetProfit(p)) return { text: NOT_MEASURED, bad: false };
   const cb = p.cost_breakdown;
   const sell = parseMoney(p.selling_price_usd);
-  let net: number;
+  let net: number | null = null;
   if (cb) {
-    net = parseMoney(cb.net_profit);
-    if (!net)
-      net =
-        sell -
-        (parseMoney(cb.supplier_cost) +
-          parseMoney(cb.shipping_cost) +
-          parseMoney(cb.platform_fee) +
-          parseMoney(cb.ad_spend));
-  } else {
-    net = computeUnitEconomics({
-      retail_price: sell,
-      supplier_cost: p.supplier_price_usd,
-    }).net_profit;
+    const declared = parseMoney(cb.net_profit);
+    if (declared) net = declared;
+    else {
+      const supplier = parseMoney(cb.supplier_cost);
+      const shipping = parseMoney(cb.shipping_cost);
+      const fee = parseMoney(cb.platform_fee);
+      const ad = parseMoney(cb.ad_spend);
+      // Dört kalem de ölçülmüşse aritmetik geçerlidir; biri bile boşsa net
+      // BİLİNMİYORdur (eksik kalemi tahmin etmek uydurma olurdu).
+      if (supplier && shipping && fee && ad) net = sell - (supplier + shipping + fee + ad);
+    }
+  } else if (p.real_economics) {
+    net = p.real_economics.net_per_unit;
   }
-  // Satış fiyatı da yoksa yüzde hesaplanamaz — bu da "ölçtük ve sıfır
+  // Satış fiyatı da net de yoksa yüzde hesaplanamaz — bu da "ölçtük ve sıfır
   // bulduk" DEĞİLDİR.
-  if (!(sell > 0)) return { text: NOT_MEASURED, bad: false };
+  if (net === null || !(sell > 0)) return { text: NOT_MEASURED, bad: false };
   const pct = (net / sell) * 100;
   if (net <= 0 || pct <= 0) return { text: "0% (UNPROFITABLE)", bad: true };
   if (pct < MIN_NET_MARGIN_PCT) return { text: `${pct.toFixed(0)}% (BELOW ${MIN_NET_MARGIN_PCT}%)`, bad: true };
