@@ -8,6 +8,7 @@ import { ArrowLeft, Sparkles, Loader2, BellRing, Coins } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
+import { reconcileMySubscription } from "@/lib/paddle.functions";
 import { useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
 import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -46,6 +47,7 @@ function SettingsPage() {
   const { user, loading } = useAuth();
   const qc = useQueryClient();
   const profileFn = useServerFn(getFullProfile);
+  const reconcileMySubscriptionFn = useServerFn(reconcileMySubscription);
   const updateFn = useServerFn(updateProfilePrefs);
   const search = Route.useSearch();
 
@@ -83,6 +85,12 @@ function SettingsPage() {
     enabled: justPaid && !loading && !!user,
     tier: profQ.data?.subscription_tier,
     refetch: profileFn,
+    // Webhook gecikirse/kaçarsa Paddle'ın kendi kaydından yazdır — kullanıcı
+    // "Paddle başladı diyor ama uygulamada başlamıyor" durumunda kalmasın.
+    reconcile: async () => {
+      const res = await reconcileMySubscriptionFn();
+      return res.ok ? res.tier : null;
+    },
     onConfirmed: () => {
       void qc.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Aboneliğin başlatıldı!");

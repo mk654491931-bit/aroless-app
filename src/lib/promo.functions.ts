@@ -55,7 +55,9 @@ const CreateInput = z.object({
     .min(3)
     .max(32)
     .regex(/^[A-Za-z0-9_-]+$/, "Only letters, numbers, - and _"),
-  discount_pct: z.number().int().min(1).max(100),
+  // 0 = indirim yok. İndirimler Paddle panelinde tanımlanır; bir kod yalnız
+  // atıf/sayım için kullanılabilir (affiliate kodları hep 0'dır).
+  discount_pct: z.number().int().min(0).max(100),
   max_redemptions: z.number().int().min(1).max(100000).nullable().optional(),
   expires_at: z.string().nullable().optional(),
   /** Kod sahibi influencer hesabı (auth.users.id) — opsiyonel. */

@@ -93,13 +93,47 @@ export type SubscriptionConfirmationOptions = {
   tier?: string | null;
   /** Profili yeniden oku. Önbellek ATLANIR — sunucudan taze veri şart. */
   refetch: () => Promise<unknown>;
+  /**
+   * YETKİ TAZELEME — webhook gecikirse Paddle'ın kendi kaydından yazdır.
+   *
+   * NEDEN: aktivasyon yalnız webhook'a bağlıydı. Bildirim adresi/imza yanlışsa
+   * ya da teslimat gecikirse kullanıcı ödeme yapmış olmasına rağmen "Free"
+   * kalıyordu ("Paddle başladı diyor ama uygulamada başlamıyor"). Bu geri
+   * çağrı sunucudan Paddle'ı okumasını ister; sunucu aboneliği bulup yazarsa
+   * dönen plan ücretli olur ve doğrulama GERÇEK veriyle tamamlanır.
+   *
+   * Dönen değer: tazelenen plan (yoksa null/undefined). Hata fırlatırsa
+   * yoklama dürüstçe devam eder.
+   */
+  reconcile?: () => Promise<string | null | undefined>;
   /** Doğrulandığında çağrılır (paket gerçekten tanımlandı). */
   onConfirmed?: () => void;
   /** Zaman aşımında çağrılır — "başladı" DEĞİL, "doğrulanamadı". */
   onTimeout?: () => void;
   maxAttempts?: number;
   intervalMs?: number;
+  /** Tazeleme en fazla kaç kez çağrılır (Paddle API'si boşa yorulmasın). */
+  maxReconciles?: number;
 };
+
+/**
+ * Tazeleme zamanı geldi mi? (SAF kural — test edilebilir.)
+ *
+ * Webhook'a önce zaman tanınır (ilk iki yoklama yalnız bekler); sonra her
+ * ikinci yoklamada bir tazeleme denenir ve toplam deneme `maxReconciles` ile
+ * sınırlanır. Böylece "webhook gelmedi" durumu en geç birkaç saniyede çözülür,
+ * webhook normal çalışıyorsa Paddle API'si gereksiz çağrılmaz.
+ */
+export function shouldReconcile(args: {
+  attempt: number;
+  reconcilesDone: number;
+  maxReconciles: number;
+  hasReconcile: boolean;
+}): boolean {
+  if (!args.hasReconcile) return false;
+  if (args.reconcilesDone >= args.maxReconciles) return false;
+  return args.attempt >= 2 && args.attempt % 2 === 0;
+}
 
 /**
  * Ödeme sonrası abonelik aktivasyonunu doğrular.
@@ -112,9 +146,10 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
   status: ConfirmationStatus;
   attempts: number;
 } {
-  const { enabled, tier, refetch, onConfirmed, onTimeout } = opts;
+  const { enabled, tier, refetch, onConfirmed, onTimeout, reconcile } = opts;
   const maxAttempts = opts.maxAttempts ?? 10;
   const intervalMs = opts.intervalMs ?? 1_500;
+  const maxReconciles = opts.maxReconciles ?? 3;
   const qc = useQueryClient();
   const [status, setStatus] = useState<ConfirmationStatus>("idle");
   const [attempts, setAttempts] = useState(0);
@@ -142,6 +177,7 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
 
     const run = async () => {
       let lastError: unknown = null;
+      let reconcilesDone = 0;
       for (let attempt = 0; attempt <= maxAttempts; attempt++) {
         if (cancelled) return;
         attemptRef.current = attempt;
@@ -161,6 +197,28 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
           });
           if (step.status === "confirmed") return stop("confirmed");
           if (step.status === "timeout") return stop("timeout");
+
+          // Webhook gelmediyse Paddle'ın kendi kaydından tazele. Doğrulanan
+          // plan dönerse "başladı" demek için GERÇEK bir dayanak olur.
+          if (
+            !cancelled &&
+            shouldReconcile({
+              attempt,
+              reconcilesDone,
+              maxReconciles,
+              hasReconcile: Boolean(reconcile),
+            })
+          ) {
+            reconcilesDone += 1;
+            try {
+              const reconciledTier = await reconcile?.();
+              if (isPaidTier(reconciledTier)) return stop("confirmed");
+            } catch (e) {
+              // Tazeleme başarısız → yoklama sürer, zaman aşımı dürüstçe kalır.
+              console.warn("[Paddle] Yetki tazelenemedi:", e);
+            }
+          }
+
           await new Promise((r) => setTimeout(r, step.delayMs ?? intervalMs));
         } catch (e) {
           lastError = e;

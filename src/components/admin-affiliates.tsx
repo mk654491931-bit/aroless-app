@@ -24,11 +24,10 @@ import {
   type AdminAffiliatePayout,
 } from "@/lib/affiliate.functions";
 import {
-  DEFAULT_AFFILIATE_DISCOUNT_PCT,
+  AFFILIATE_CODE_DISCOUNT_PCT,
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_PAYOUT_CENTS,
-  affiliatePromoCode,
-  isDuplicateCodeError,
+  isValidAffiliateCode,
   type PayoutMethod,
 } from "@/lib/affiliate";
 import { createPromoCode } from "@/lib/promo.functions";
@@ -71,10 +70,10 @@ export function AdminAffiliates() {
   const [method, setMethod] = useState<PayoutMethod>("wise");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
-  // Görevlendirme formundaki "kodu da oluştur" seçeneği ve yeni kodların indirimi.
-  const [withCode, setWithCode] = useState(true);
-  const [discount, setDiscount] = useState(DEFAULT_AFFILIATE_DISCOUNT_PCT);
-  // Üretilen son kod + paylaşım linki (toast kaybolmasın diye panelde de durur).
+  // Kod ELLE yazılır: hangi affiliate'e hangi kodu verdiğini admin belirler.
+  const [codeFor, setCodeFor] = useState<string | null>(null);
+  const [codeDraft, setCodeDraft] = useState("");
+  // Verilen son kod + paylaşım linki (toast kaybolmasın diye panelde de durur).
   const [issued, setIssued] = useState<{ email: string; code: string; link: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -102,13 +101,6 @@ export function AdminAffiliates() {
       setRate("");
       lookup.reset();
       refresh();
-      // İstenmişse görevlendirmeyle birlikte kişiye özel kod da üret.
-      if (withCode) {
-        giveCode.mutate({
-          userId: res.target.id,
-          email: res.target.email,
-        });
-      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -138,35 +130,24 @@ export function AdminAffiliates() {
   });
 
   /**
-   * Affiliate'e özel promosyon kodu üretir. Kod çakışırsa (aynı e-posta ön eki
-   * daha önce kullanılmışsa) yeni kodla yeniden dener; sunucu `affiliate_id`yi
-   * yazdığı için kodla gelen kullanıcıların komisyonu bu affiliate'e gider.
+   * Admin'in YAZDIĞI kodu bir affiliate'e bağlar.
+   *
+   * Kod indirim taşımaz (`AFFILIATE_CODE_DISCOUNT_PCT = 0`): indirimler Paddle
+   * panelinde tanımlanır. Kod tek işi yapar — kimin getirdiğini ve komisyonun
+   * kime gideceğini (`affiliate_id`) belirler. Kod zaten varsa sunucu
+   * "Bu kod zaten var." der; sessizce yeniden adlandırmayız, admin karar verir.
    */
   const giveCode = useMutation({
-    mutationFn: async (v: { userId: string; email: string | null }) => {
-      const pct = Math.min(
-        100,
-        Math.max(1, Math.trunc(discount) || DEFAULT_AFFILIATE_DISCOUNT_PCT),
-      );
-      let lastError: Error | null = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        try {
-          return await createCodeFn({
-            data: {
-              code: affiliatePromoCode(v.email),
-              discount_pct: pct,
-              max_redemptions: null,
-              expires_at: null,
-              affiliate_id: v.userId,
-            },
-          });
-        } catch (e) {
-          lastError = e as Error;
-          // Yalnızca kod çakışmasında yeni kodla dene; diğer hatalar gerçek.
-          if (!isDuplicateCodeError(lastError.message)) throw lastError;
-        }
-      }
-      throw lastError ?? new Error("Kod oluşturulamadı, lütfen tekrar dene.");
+    mutationFn: async (v: { userId: string; email: string | null; code: string }) => {
+      return await createCodeFn({
+        data: {
+          code: v.code.trim().toUpperCase(),
+          discount_pct: AFFILIATE_CODE_DISCOUNT_PCT,
+          max_redemptions: null,
+          expires_at: null,
+          affiliate_id: v.userId,
+        },
+      });
     },
     onSuccess: (row, v) => {
       const link =
@@ -175,7 +156,9 @@ export function AdminAffiliates() {
           : `${window.location.origin}/auth?promo=${encodeURIComponent(row.code)}`;
       setIssued({ email: v.email ?? "Affiliate", code: row.code, link });
       setCopiedCode(false);
-      toast.success(`${v.email ?? "Affiliate"} için kod: ${row.code} (%${row.discount_pct})`);
+      setCodeFor(null);
+      setCodeDraft("");
+      toast.success(`${v.email ?? "Affiliate"} için kod bağlandı: ${row.code} (indirimsiz)`);
       refresh();
       qc.invalidateQueries({ queryKey: ["admin-promos"] });
       qc.invalidateQueries({ queryKey: ["admin-promo-stats"] });
@@ -291,37 +274,10 @@ export function AdminAffiliates() {
           Görevlendir
         </button>
 
-        {/* Görevlendirmeyle birlikte kişiye özel kod üretme seçeneği. */}
-        <div className="sm:col-span-3 -mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <label className="inline-flex items-center gap-1.5 font-medium">
-            <input
-              type="checkbox"
-              checked={withCode}
-              onChange={(e) => setWithCode(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-white/20 bg-white/5"
-            />
-            Görevlendirirken ona özel promosyon kodu da oluştur
-          </label>
-          <label className="inline-flex items-center gap-1.5 text-muted-foreground">
-            Yeni kodlarda müşteri indirimi
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={discount}
-              onChange={(e) =>
-                setDiscount(
-                  e.target.value === "" ? DEFAULT_AFFILIATE_DISCOUNT_PCT : Number(e.target.value),
-                )
-              }
-              className="w-16 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs outline-none focus:border-[oklch(0.62_0.17_255)]"
-            />
-            %
-          </label>
-          <span className="text-muted-foreground">
-            Kod e-postadan türetilir (ör. <code className="font-mono">AYSE-7K2M</code>) ve
-            affiliate'in panelinde kayıt linki olarak görünür.
-          </span>
+        <div className="sm:col-span-3 -mt-1 text-xs text-muted-foreground">
+          Kod vermek için listeden affiliate'in satırındaki <b>“Kod ver”</b> düğmesini kullan. Kodu
+          sen yazarsın; kod <b>indirim taşımaz</b> (indirimler Paddle panelinde tanımlanır), yalnız
+          komisyonun kime gideceğini belirler.
         </div>
 
         {/* Üretilen kod: admin'in kopyalayıp influencer'a gönderebilmesi için. */}
@@ -420,7 +376,16 @@ export function AdminAffiliates() {
                     onMarkPaid={() => markPaid.mutate({ userId: r.user_id, method, reference })}
                     onApprove={() => setStatus.mutate({ userId: r.user_id, status: "verified" })}
                     onSuspend={() => setStatus.mutate({ userId: r.user_id, status: "revoked" })}
-                    onGiveCode={() => giveCode.mutate({ userId: r.user_id, email: r.email })}
+                    codeOpen={codeFor === r.user_id}
+                    codeDraft={codeDraft}
+                    setCodeDraft={setCodeDraft}
+                    onToggleCode={() => {
+                      setCodeDraft("");
+                      setCodeFor(codeFor === r.user_id ? null : r.user_id);
+                    }}
+                    onGiveCode={() =>
+                      giveCode.mutate({ userId: r.user_id, email: r.email, code: codeDraft })
+                    }
                     issuing={giveCode.isPending && giveCode.variables?.userId === r.user_id}
                     busy={setStatus.isPending}
                   />
@@ -458,6 +423,11 @@ type RowProps = {
   onMarkPaid: () => void;
   onApprove: () => void;
   onSuspend: () => void;
+  /** Kod verme satırı açık mı? */
+  codeOpen: boolean;
+  codeDraft: string;
+  setCodeDraft: (v: string) => void;
+  onToggleCode: () => void;
   onGiveCode: () => void;
   issuing: boolean;
 };
@@ -481,6 +451,10 @@ function FragmentRow({
   onMarkPaid,
   onApprove,
   onSuspend,
+  codeOpen,
+  codeDraft,
+  setCodeDraft,
+  onToggleCode,
   onGiveCode,
   issuing,
 }: RowProps) {
@@ -537,13 +511,15 @@ function FragmentRow({
               <Wallet size={12} /> Ödeme
             </button>
             <button
-              onClick={onGiveCode}
-              disabled={issuing}
-              title="Bu affiliate'e özel promosyon kodu üret"
-              className="inline-flex items-center gap-1 rounded-lg border border-[oklch(0.62_0.17_255)]/40 bg-[oklch(0.62_0.17_255)]/10 px-2.5 py-1.5 text-xs font-medium hover:bg-[oklch(0.62_0.17_255)]/20 disabled:opacity-50"
+              onClick={onToggleCode}
+              title="Bu affiliate'e kod ver (kodu sen yazarsın)"
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+                codeOpen
+                  ? "border-[oklch(0.62_0.17_255)]/60 bg-[oklch(0.62_0.17_255)]/20"
+                  : "border-[oklch(0.62_0.17_255)]/40 bg-[oklch(0.62_0.17_255)]/10 hover:bg-[oklch(0.62_0.17_255)]/20"
+              }`}
             >
-              {issuing ? <Loader2 size={12} className="animate-spin" /> : <Ticket size={12} />} Kod
-              ver
+              <Ticket size={12} /> Kod ver
             </button>
             {row.status === "verified" ? (
               <button
@@ -656,6 +632,47 @@ function FragmentRow({
               >
                 Kapat
               </button>
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {/* KOD VERME — kodu admin YAZAR; kod indirim taşımaz, yalnız atıf yapar. */}
+      {codeOpen && (
+        <tr className="border-t border-white/5 bg-[oklch(0.62_0.17_255)]/[0.04]">
+          <td colSpan={7} className="px-5 py-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs">
+                <span className="mb-1 block text-muted-foreground">
+                  {row.email ?? "Affiliate"} için kod (sen yazarsın)
+                </span>
+                <input
+                  value={codeDraft}
+                  onChange={(e) => setCodeDraft(e.target.value.toUpperCase())}
+                  maxLength={32}
+                  placeholder="ÖRNEK20"
+                  className="w-56 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm uppercase outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
+              </label>
+              <button
+                onClick={onGiveCode}
+                disabled={issuing || !isValidAffiliateCode(codeDraft)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {issuing ? <Loader2 size={13} className="animate-spin" /> : <Ticket size={13} />} Bu
+                kodu ver
+              </button>
+              <button
+                onClick={onToggleCode}
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs hover:bg-white/10"
+              >
+                Vazgeç
+              </button>
+              <span className="text-xs text-muted-foreground">
+                3-32 karakter, harf/rakam/<code className="font-mono">-</code>/
+                <code className="font-mono">_</code> · <b>indirim yok</b>: indirimleri Paddle
+                panelinde tanımla; bu kod yalnız komisyonu bu affiliate'e bağlar.
+              </span>
             </div>
           </td>
         </tr>

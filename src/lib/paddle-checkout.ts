@@ -16,9 +16,18 @@ export type CheckoutSessionClient = {
   email?: string | null;
 };
 
+/**
+ * İNDİRİM KODU BURADAN GEÇMEZ (bilinçli tasarım kararı).
+ *
+ * NEDEN: indirimler TEK kaynaktan — Paddle panelinden — yönetilir. Uygulama
+ * kodları (affiliate kodları dahil) indirim taşımaz, yalnız atıf/sayım yapar.
+ * Müşteri indirim kodunu Paddle'ın kendi ödeme ekranında girer; böylece
+ * "Paddle'da tanımlı indirim" ile "uygulamadaki yüzde" çakışamaz ve hangi
+ * indirimin uygulandığı sorusunun tek yanıtı olur. Bu yüzden eski
+ * `discountCode` parametresi kasıtlı olarak KALDIRILDI: uygulamanın indirim
+ * dayatabileceği bir yol bırakılmaz.
+ */
 export type OpenCheckoutOptions = {
-  /** Validated discount code (Paddle discount or app code mirrored in Paddle). */
-  discountCode?: string | null;
   /** Customer email to prefill in a price-based checkout. */
   email?: string | null;
   /** Plan whose Vite price ID should be used when no transaction ID is supplied. */
@@ -188,7 +197,6 @@ export async function openPaddleOverlay(
       ...((session.email ?? options?.email)
         ? { customer: { email: session.email ?? options?.email ?? "" } }
         : {}),
-      ...(options?.discountCode ? { discountCode: options.discountCode } : {}),
     });
 
     return true;

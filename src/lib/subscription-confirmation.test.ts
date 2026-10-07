@@ -13,6 +13,7 @@ import {
   confirmationStep,
   isCheckoutCompleted,
   isPaidTier,
+  shouldReconcile,
   type ConfirmationStatus,
 } from "./subscription-confirmation";
 
@@ -98,6 +99,32 @@ describe("confirmationStep — bekleme ve zaman aşımı", () => {
   });
 });
 
+describe("shouldReconcile — Paddle'dan tazeleme zamanı", () => {
+  /** Webhook gelmediyse yetki Paddle'ın kendi kaydından yazdırılır. */
+  const base = { reconcilesDone: 0, maxReconciles: 3, hasReconcile: true };
+
+  it("webhook'a önce zaman tanınır: ilk iki yoklamada tazelenmez", () => {
+    // Normal akışta webhook saniyeler içinde yazar; API boşa çağrılmaz.
+    expect(shouldReconcile({ ...base, attempt: 0 })).toBe(false);
+    expect(shouldReconcile({ ...base, attempt: 1 })).toBe(false);
+  });
+
+  it("üçüncü yoklamadan itibaren her ikinci denemede tazeler", () => {
+    expect(shouldReconcile({ ...base, attempt: 2 })).toBe(true);
+    expect(shouldReconcile({ ...base, attempt: 3 })).toBe(false);
+    expect(shouldReconcile({ ...base, attempt: 4 })).toBe(true);
+  });
+
+  it("tazeleme sayısı sınırına uyar (Paddle API'si boşa yorulmaz)", () => {
+    expect(shouldReconcile({ ...base, attempt: 2, reconcilesDone: 3 })).toBe(false);
+    expect(shouldReconcile({ ...base, attempt: 4, reconcilesDone: 2 })).toBe(true);
+  });
+
+  it("tazeleme bağlanmamışsa hiç denenmez", () => {
+    expect(shouldReconcile({ ...base, attempt: 6, hasReconcile: false })).toBe(false);
+  });
+});
+
 // ============================================================================
 // KABLOLAMA SÖZLEŞMESİ — asıl hatanın kendisi buradaydı.
 // ============================================================================
@@ -144,5 +171,28 @@ describe("ödeme sonrası dönüş kullanıcıya geri bildirim verir", () => {
   it("successUrl hâlâ doğrulama için paid=1 üretir", async () => {
     const src = await read("src/lib/paddle-checkout.ts");
     expect(src).toContain("/settings?paid=1");
+  });
+
+  // ÖLÇÜLEN HATA 3: "Paddle abonelik başladı diyor ama uygulamada başlamıyor."
+  // Aktivasyon yalnız webhook'a bağlıysa, bildirim adresi/imza yanlış olduğunda
+  // kullanıcı ödeme yapmış olmasına rağmen "Free" kalır. Tazeleme yolu bu
+  // yüzden HER iki doğrulama noktasına da bağlı olmalı — biri unutulursa hata
+  // o girişte geri döner.
+  it("pricing-modal webhook gecikirse Paddle'dan tazeler", async () => {
+    const src = await read("src/components/pricing-modal.tsx");
+    expect(src).toContain("reconcileMySubscription");
+    expect(src).toMatch(/reconcile:\s*async/);
+  });
+
+  it("settings.tsx de (ödeme dönüşü) Paddle'dan tazeler", async () => {
+    const src = await read("src/routes/settings.tsx");
+    expect(src).toContain("reconcileMySubscription");
+    expect(src).toMatch(/reconcile:\s*async/);
+  });
+
+  it("webhook ucu GET ile canlı olduğunu bildirir (adres/imza sessizce yanlış kalmasın)", async () => {
+    const src = await read("src/routes/api/public/webhook/paddle.ts");
+    expect(src).toContain("GET:");
+    expect(src).toContain("configured");
   });
 });

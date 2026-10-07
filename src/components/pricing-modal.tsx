@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { createCheckout } from "@/lib/paddle.functions";
+import { createCheckout, reconcileMySubscription } from "@/lib/paddle.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { isCheckoutCompleted, useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
 import { getFullProfile } from "@/lib/analysis.functions";
@@ -15,6 +15,7 @@ const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
 export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const checkout = useServerFn(createCheckout);
+  const reconcileFn = useServerFn(reconcileMySubscription);
   const profileFn = useServerFn(getFullProfile);
   const { currency, rate, fmt, isLive } = useMoney();
   const [loading, setLoading] = useState<PlanId | null>(null);
@@ -47,6 +48,12 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   const confirmation = useSubscriptionConfirmation({
     enabled: paid,
     refetch: profileFn,
+    // Webhook gecikirse Paddle'ın kendi kaydından yazdır: "Paddle başladı
+    // diyor ama uygulamada başlamıyor" belirtisi böylece kalıcı olarak çözülür.
+    reconcile: async () => {
+      const res = await reconcileFn();
+      return res.ok ? res.tier : null;
+    },
     onConfirmed: () => {
       void qc.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Aboneliğin başlatıldı!", {

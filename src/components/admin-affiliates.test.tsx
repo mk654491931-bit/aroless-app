@@ -73,16 +73,21 @@ describe("AdminAffiliates", () => {
   it("kodu sonradan vermek için her satırda buton sunar", () => {
     state.rows = [row({})];
     const out = html();
-    expect(out).toMatch(/Kod\s+ver/);
+    expect(out).toContain("Kod ver</button>");
+    // Kod satırı kapalıyken (varsayılan) yazma alanı GÖRÜNMEMELİ.
+    expect(out).not.toContain("için kod (sen yazarsın)");
   });
 
-  it("görevlendirme formunda kodu otomatik oluşturma seçeneği ve indirim alanı var", () => {
+  it("kodun ELLE yazıldığını ve indirim taşımadığını söyler", () => {
     state.rows = [row({})];
     const out = html();
-    expect(out).toContain("Görevlendirirken ona özel promosyon kodu da oluştur");
-    expect(out).toContain("Yeni kodlarda müşteri indirimi");
-    // Varsayılan indirim %20; boş kalsaydı kod sunucudan reddedilirdi.
-    expect(out).toContain('value="20"');
+    // Otomatik üretim kaldırıldı: admin kodu kendi yazar.
+    expect(out).toMatch(/Kod vermek için listeden[\s\S]*“Kod ver”/);
+    expect(out).toContain("indirim taşımaz");
+    expect(out).toContain("Paddle panelinde");
+    // Eski otomatik üretim seçeneği artık OLMAMALI.
+    expect(out).not.toContain("Görevlendirirken ona özel promosyon kodu da oluştur");
+    expect(out).not.toContain("Yeni kodlarda müşteri indirimi");
   });
 
   it("onaysız başvuruda 'Onayla', onaylıda 'Askıya al' gösterir", () => {
@@ -106,8 +111,10 @@ describe("AdminAffiliates", () => {
     state.rows = [];
     const out = html();
     expect(out).toContain("Henüz affiliate başvurusu yok");
-    // Başvuru gelmeden de hesap görevlendirilip kod verilebilmeli.
+    // Başvuru gelmeden de hesap görevlendirilebilmeli.
     expect(out).toContain("Görevlendir");
-    expect(out).toContain("Görevlendirirken ona özel promosyon kodu da oluştur");
+    // Kod VERME düğmesi yalnız affiliate satırlarında bulunur; ipucu metni
+    // (“Kod ver”) düğme değildir, o yüzden `</button>` ile aranır.
+    expect(out).not.toContain("Kod ver</button>");
   });
 });

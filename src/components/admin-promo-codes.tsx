@@ -28,7 +28,9 @@ export function AdminPromoCodes() {
   const delFn = useServerFn(deletePromoCode);
 
   const [code, setCode] = useState(randomCode());
-  const [pct, setPct] = useState(20);
+  // Varsayılan 0: indirimler Paddle panelinde tanımlanır. Uygulama kodu
+  // yalnız atıf/sayım yapar (affiliate kodları hep indirimsizdir).
+  const [pct, setPct] = useState(0);
   const [maxUses, setMaxUses] = useState<string>("");
   const [expires, setExpires] = useState<string>("");
   const [affiliateId, setAffiliateId] = useState<string>("");
@@ -129,16 +131,20 @@ export function AdminPromoCodes() {
 
         <label className="text-xs">
           <span className="mb-1 block text-muted-foreground">
-            İndirim: <b className="text-foreground">%{pct}</b>
+            İndirim: <b className="text-foreground">{pct > 0 ? `%${pct}` : "yok"}</b>
           </span>
           <input
             type="range"
-            min={1}
+            min={0}
             max={100}
             value={pct}
             onChange={(e) => setPct(Number(e.target.value))}
             className="w-full accent-[oklch(0.62_0.17_255)]"
           />
+          <span className="mt-1 block text-[10px] text-muted-foreground">
+            0 = indirim yok. İndirimleri Paddle panelinde tanımla; uygulama checkout'a indirim kodu
+            göndermez.
+          </span>
         </label>
 
         <label className="text-xs">
@@ -247,7 +253,9 @@ export function AdminPromoCodes() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-right font-semibold">%{p.discount_pct}</td>
+                  <td className="px-5 py-3 text-right font-semibold">
+                    {p.discount_pct > 0 ? `%${p.discount_pct}` : "—"}
+                  </td>
                   <td className="px-5 py-3 text-right text-muted-foreground">
                     {p.times_redeemed}
                     {p.max_redemptions ? ` / ${p.max_redemptions}` : ""}

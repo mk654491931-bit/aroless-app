@@ -93,57 +93,27 @@ export function isEligibleAffiliate(status: unknown): boolean {
 }
 
 /**
- * Admin bir affiliate'i görevlendirirken ona özel promosyon kodu üretir; kodun
- * müşteriye verdiği indirim bu varsayılanla başlar (admin panelden değiştirir).
- */
-export const DEFAULT_AFFILIATE_DISCOUNT_PCT = 20;
-
-/**
  * Sunucu tarafı kuralı (`createPromoCode` zod şeması: 3-32 karakter,
- * `^[A-Za-z0-9_-]+$`) ile birebir aynı. Üretilen kodun geçerliliğini burada
- * test edebilmek için tek kaynak olarak tutulur.
+ * `^[A-Za-z0-9_-]+$`) ile birebir aynı. Admin kodu elle yazdığı için geçerlilik
+ * istemcide de kontrol edilir; kural tek kaynak olarak burada tutulur.
  */
 export const AFFILIATE_CODE_PATTERN = /^[A-Za-z0-9_-]{3,32}$/;
 
-// Karışan karakterler (0/O, 1/I) yok — kod DM'de/telefonda okunacak.
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-/** Rastgele kod kuyruğu; `rng` testlerde sabitlenebilsin diye dışarıdan verilebilir. */
-export function randomCodeSuffix(len = 4, rng: () => number = Math.random): string {
-  const size = Math.max(0, Math.floor(len));
-  return Array.from(
-    { length: size },
-    () => CODE_ALPHABET[Math.floor(rng() * CODE_ALPHABET.length)] ?? "X",
-  ).join("");
-}
-
-/** * Affiliate'e özel kod: e-postanın baş kısmından türetilir, böylece admin
- * listede kodun kime ait olduğunu tek bakışta görür (`ayse@…` → `AYSE-7K2M`).
- * Baş kısım anlamlı uzunlukta değilse jenerik `VLR…` koduna düşer.
+/**
+ * Affiliate kodunun uygulama içi indirimi YOKTUR.
  *
- * `+etiket` (plus-addressing) aynı kişinin ikinci adresidir: `john.doe+news@…`
- * ile `john.doe@…` aynı kodu üretsin diye etiket önce atılır.
+ * NEDEN: indirimler tek kaynaktan (Paddle paneli) yönetilir. Kod, komisyonun
+ * kime gideceğini belirler ve kullanımı sayar; checkout'a indirim kodu
+ * gönderilmez. Bu sabit, koda yanlışlıkla indirim yazan yolları engeller.
  */
-export function affiliatePromoCode(
-  email: string | null | undefined,
-  rng: () => number = Math.random,
-): string {
-  const local = (email ?? "").split("@")[0] ?? "";
-  const base = (local.split("+")[0] ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  return base.length >= 3
-    ? `${base.slice(0, 8)}-${randomCodeSuffix(4, rng)}`
-    : `VLR${randomCodeSuffix(6, rng)}`;
-}
+export const AFFILIATE_CODE_DISCOUNT_PCT = 0;
 
 /**
- * Kod üretiminde çakışma hatası mı?
- *
- * `createPromoCode` aynı kodu ikinci kez görürse "Bu kod zaten var." der; bunu
- * yakalayıp yeni kodla yeniden denemek için koşul tek yerde tutulur (sunucu
- * mesajı değişirse test kırılır, sessizce yutulmaz).
+ * Kodun geçerliliği — admin kodu ELLE yazar, sunucu aynı kuralı (`createPromoCode`
+ * zod şeması) uygular. Boşluklar kırpılır; harf/rakam/`-`/`_` dışına izin verilmez.
  */
-export function isDuplicateCodeError(message: string): boolean {
-  return /zaten var|duplicate|already exists/i.test(message);
+export function isValidAffiliateCode(code: string): boolean {
+  return AFFILIATE_CODE_PATTERN.test(code.trim());
 }
 
 /**

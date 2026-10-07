@@ -162,6 +162,41 @@ export function paddleSettings(): PaddleSettings | null {
 }
 
 /**
+ * KURULUM TEŞHİSİ — yalnız EKSİK değişkenlerin ADLARI.
+ *
+ * NEDEN APAYRI BİR İŞLEV: "Paddle abonelik başladı diyor ama uygulamada
+ * başlamıyor" belirtisinin en sık sebebi eksik bir ortam değişkenidir ve
+ * webhook bu durumda 500 döner (Paddle yeniden dener, kullanıcı bekler).
+ * Teşhis ucu adları söyleyebilmeli ki kurulum tek bakışta tamamlanabilsin;
+ * DEĞERLER ASLA okunmaz/yazılmaz — yalnız var/yok bilgisi döner.
+ */
+export function paddleSetupStatus(): {
+  ready: boolean;
+  environment: PaddleEnvironment;
+  missingEnv: string[];
+  /** Hiç fiyat/ürün kimliği tanımlı olmayan planlar (o planlar satılamaz). */
+  missingPlanAssets: PlanId[];
+} {
+  const missingEnv: string[] = [];
+  if (!process.env["PADDLE_API_KEY"]) missingEnv.push("PADDLE_API_KEY");
+  if (!firstDefined("PADDLE_WEBHOOK_SECRET_KEY", "PADDLE_WEBHOOK_SECRET")) {
+    missingEnv.push("PADDLE_WEBHOOK_SECRET_KEY");
+  }
+  if (!firstDefined("PADDLE_CLIENT_TOKEN", "VITE_PADDLE_CLIENT_TOKEN")) {
+    missingEnv.push("PADDLE_CLIENT_TOKEN");
+  }
+  const missingPlanAssets = (["Starter", "Pro", "Business"] as const).filter(
+    (plan) => !firstDefined(...PLAN_PRICE_ENV[plan]) && !firstDefined(...PLAN_PRODUCT_ENV[plan]),
+  );
+  return {
+    ready: missingEnv.length === 0,
+    environment: resolvePaddleEnvironment(),
+    missingEnv,
+    missingPlanAssets,
+  };
+}
+
+/**
  * İşlemde UYGULANMIŞ indirim kodunun kimliği (yoksa `null`).
  *
  * NEDEN VAR: sahibi “%100 indirim kodu kullandım ama Paddle bunu doğrulamadı”
@@ -766,6 +801,211 @@ export function creditGrantDecision(args: {
     granted: true,
     reason: "granted",
   };
+}
+
+/* ========================================================================== */
+/* YETKİ TAZELEME (RECONCILE) — webhook gecikse/kaçsa da doğruyu YAZAR         */
+/*
+ * ÖLÇÜLEN ŞİKÂYET: "Paddle abonelik başladı diyor ama uygulamada başlamıyor."
+ *
+ * Neden olur: aktivasyon webhook'a bağlıdır. Paddle panelinde bildirim adresi
+ * eksik/yanlışsa, imza sırrı eskimişse ya da teslimat gecikirse istek hiç
+ * işlenmez (401/404/gecikme) ve kullanıcı ödeme yapmış olmasına rağmen "Free"
+ * kalır. Webhook TEK kaynak olmamalıdır; Paddle'ın kendi kaydı da bir
+ * kaynaktır.
+ *
+ * ÇÖZÜM: ödeme bittikten sonra istemci, sunucudan "aboneliğimi Paddle'dan
+ * okuyup yaz" diyebilir. Tazeleme, webhook'un YAZDIĞI AYNI yolu
+ * (`process_paddle_event`) kullanır; yalnız olay kimliği farklıdır
+ * (`reconcile:<abonelik>:<durum>:<dönem>`), bu yüzden tekrarlansa bile
+ * idempotenttir ve dönem/durum değiştiğinde yeni durum yazılır.
+ *
+ * SESSİZ BAŞARI YOK: plan çözülemezse komut üretilmez ve çağıran nedenini
+ * raporlar — "yazdım sayılır" diye uydurma bir yetki verilmez.
+ * ========================================================================== */
+
+/** Paddle aboneliğinden bizim için anlamlı alanlar. */
+export type PaddleSubscriptionSnapshot = {
+  subscriptionId: string;
+  status: string | null;
+  customerId: string | null;
+  priceId: string | null;
+  productId: string | null;
+  /** `customData.plan` — yalnız fiyat/ürün kimliği çözülemezse kullanılır. */
+  planHint: PlanId | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  nextBilledAt: string | null;
+  cancelAtPeriodEnd: boolean;
+};
+
+/** Abonelik nesnesini (SDK) sade bir anlık görüntüye indirger. */
+export function subscriptionSnapshot(sub: {
+  id?: string | null;
+  status?: string | null;
+  customerId?: string | null;
+  nextBilledAt?: string | null;
+  scheduledChange?: { action?: string | null } | null;
+  currentBillingPeriod?: { startsAt?: string | null; endsAt?: string | null } | null;
+  items?: Array<{ price?: { id?: string | null; productId?: string | null } | null }> | null;
+  customData?: Record<string, unknown> | null;
+}): PaddleSubscriptionSnapshot | null {
+  if (!sub?.id) return null;
+  const item = Array.isArray(sub.items) ? sub.items[0] : undefined;
+  const hint = sub.customData?.["plan"];
+  return {
+    subscriptionId: sub.id,
+    status: sub.status ?? null,
+    customerId: sub.customerId ?? null,
+    priceId: item?.price?.id ?? null,
+    productId: item?.price?.productId ?? null,
+    planHint: isPlanId(hint) ? hint : null,
+    periodStart: sub.currentBillingPeriod?.startsAt ?? null,
+    periodEnd: sub.currentBillingPeriod?.endsAt ?? null,
+    nextBilledAt: sub.nextBilledAt ?? null,
+    cancelAtPeriodEnd: sub.scheduledChange?.action === "cancel",
+  };
+}
+
+/** Planı çözer: ÖNCE Paddle'ın gerçek fiyat/ürün kimliği, sonra customData. */
+export function planForSnapshot(
+  settings: PaddleSettings,
+  snapshot: PaddleSubscriptionSnapshot,
+): PlanId | null {
+  return planForAsset(settings, snapshot.priceId, snapshot.productId) ?? snapshot.planHint;
+}
+
+/**
+ * Tazeleme olayının kimliği — aynı durum için aynı, dönem/durum değişince yeni.
+ * Kimlik çakışırsa veritabanı tekilleştirmesi devreye girer (idempotent).
+ */
+export function reconcileEventKey(snapshot: PaddleSubscriptionSnapshot): string {
+  return `reconcile:${snapshot.subscriptionId}:${snapshot.status ?? "-"}:${snapshot.periodEnd ?? "-"}`;
+}
+
+/** Aboneliğin son tamamlanmış işlemi (kredi idempotansı + ciro kaydı için). */
+export type PaddleTransactionSnapshot = {
+  transactionId: string | null;
+  amountCents: number | null;
+  currency: string | null;
+};
+
+export function transactionSnapshot(
+  txn: {
+    id?: string | null;
+    currencyCode?: string | null;
+    details?: { totals?: { grandTotal?: unknown } | null } | null;
+  } | null,
+): PaddleTransactionSnapshot | null {
+  if (!txn?.id) return null;
+  const gt = txn.details?.totals?.grandTotal;
+  const amountCents =
+    typeof gt === "string" && gt !== ""
+      ? Math.max(0, Math.round(Number(gt)) || 0)
+      : typeof gt === "number"
+        ? Math.max(0, Math.round(gt))
+        : null;
+  return { transactionId: txn.id, amountCents, currency: txn.currencyCode ?? null };
+}
+
+/**
+ * Tazeleme komutunu üretir (SAF — ağ/DB yok).
+ *
+ * `null` döner: plan çözülemedi (indirimli/özel fiyat ya da tanınmayan ürün) —
+ * o durumda YAZILMAZ, çağıran nedenini raporlar.
+ */
+export function reconcileCommand(args: {
+  settings: PaddleSettings;
+  snapshot: PaddleSubscriptionSnapshot;
+  transaction: PaddleTransactionSnapshot | null;
+  userId: string;
+  occurredAt: string;
+}): PaddleEventCommand | null {
+  const { settings, snapshot, transaction, userId, occurredAt } = args;
+  const plan = planForSnapshot(settings, snapshot);
+  if (!plan) return null;
+  const grants = SUBSCRIPTION_CREDIT_GRANTS[plan];
+  return {
+    eventId: reconcileEventKey(snapshot),
+    // Olay tipi bilinçli olarak "reconcile.*": kayıtlarda (processed_webhook_events,
+    // transactions.provider_event) kaynağın webhook DEĞİL tazeleme olduğu görülür.
+    eventType: "reconcile.subscription",
+    occurredAt,
+    userId,
+    customerId: snapshot.customerId,
+    tier: plan,
+    status: snapshot.status,
+    paddleSubscriptionId: snapshot.subscriptionId,
+    priceId: snapshot.priceId,
+    productId: snapshot.productId,
+    transactionId: transaction?.transactionId ?? null,
+    currency: transaction?.currency ?? null,
+    amountCents: transaction?.amountCents ?? null,
+    periodStart: snapshot.periodStart,
+    periodEnd: snapshot.periodEnd,
+    nextBilledAt: snapshot.nextBilledAt,
+    cancelAtPeriodEnd: snapshot.cancelAtPeriodEnd,
+    searchCredits: grants.search,
+    simCredits: grants.sim,
+  };
+}
+
+/** Plan → abonelik durumu (Paddle) — tazelemede kabul edilen aktif durumlar. */
+export const LIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
+
+/** E-posta ile Paddle müşterisini bulur (profilde customer ID yoksa). */
+export async function findPaddleCustomerIdByEmail(email: string): Promise<string | null> {
+  if (!email?.includes("@")) return null;
+  try {
+    const paddle = getPaddleClient();
+    const [first] = await paddle.customers.list({ email: [email], perPage: 1 }).next();
+    return first?.id ?? null;
+  } catch (error) {
+    console.warn(
+      "[Paddle] Müşteri e-posta ile bulunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+/** Müşterinin CANLI (active/trialing) aboneliğini okur. */
+export async function fetchLiveSubscription(
+  customerId: string,
+): Promise<PaddleSubscriptionSnapshot | null> {
+  try {
+    const paddle = getPaddleClient();
+    const [first] = await paddle.subscriptions
+      .list({
+        customerId: [customerId],
+        status: [...LIVE_SUBSCRIPTION_STATUSES],
+        perPage: 1,
+      })
+      .next();
+    return first ? subscriptionSnapshot(first) : null;
+  } catch (error) {
+    console.warn("[Paddle] Abonelik okunamadı:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/** Aboneliğin son TAMAMLANMIŞ işlemi (kredi ve ciro kaydı için). */
+export async function fetchLastCompletedTransaction(
+  subscriptionId: string,
+): Promise<PaddleTransactionSnapshot | null> {
+  try {
+    const paddle = getPaddleClient();
+    const [first] = await paddle.transactions
+      .list({ subscriptionId: [subscriptionId], status: ["completed" as never], perPage: 1 })
+      .next();
+    return transactionSnapshot(first ?? null);
+  } catch (error) {
+    console.warn(
+      "[Paddle] Aboneliğin işlemi okunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
 }
 
 /**
