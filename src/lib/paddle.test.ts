@@ -3,6 +3,7 @@ import {
   creditGrantDecision,
   mapPaddleEvent,
   planForAsset,
+  refundSignal,
   type PaddleSettings,
 } from "./paddle.server";
 
@@ -280,5 +281,45 @@ describe("mapPaddleEvent — attribution safety", () => {
       items: [{ price: { id: "pri_pro" } }],
     });
     expect(malformed!.userId).toBeNull();
+  });
+});
+
+describe("refundSignal — iade/chargeback mahsubu için işlem çözümü", () => {
+  it("normal ödeme olaylarını iade saymaz", () => {
+    const s = refundSignal("transaction.completed", {
+      id: "txn_1",
+      status: "completed",
+      details: { totals: { grandTotal: "5900" } },
+    });
+    expect(s.isRefund).toBe(false);
+    expect(s.transactionId).toBeNull();
+  });
+
+  it("adjustment.created olayını iade sayar ve İŞLEM kimliğini adjustment'tan okur", () => {
+    const s = refundSignal("adjustment.created", {
+      id: "adj_1",
+      action: "refund",
+      status: "approved",
+      transactionId: "txn_777",
+    });
+    expect(s.isRefund).toBe(true);
+    // adjustment'ın kendi `id`si DEĞİL, bağlı işlemin kimliği dönmeli.
+    expect(s.transactionId).toBe("txn_777");
+  });
+
+  it("adjustment nesnesi içindeki transactionId'yi de bulur", () => {
+    const s = refundSignal("adjustment.updated", {
+      id: "adj_2",
+      adjustment: { type: "chargeback", transactionId: "txn_888" },
+    });
+    expect(s.isRefund).toBe(true);
+    expect(s.transactionId).toBe("txn_888");
+    expect(s.reason).toContain("chargeback");
+  });
+
+  it("refunded/reversed durumlu işlem olayını iade sayar (transaction id = gövde id)", () => {
+    const s = refundSignal("transaction.updated", { id: "txn_999", status: "refunded" });
+    expect(s.isRefund).toBe(true);
+    expect(s.transactionId).toBe("txn_999");
   });
 });

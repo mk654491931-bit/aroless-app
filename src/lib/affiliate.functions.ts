@@ -3,8 +3,14 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   DEFAULT_COMMISSION_RATE_PCT,
+  MIN_PAYOUT_CENTS,
   isAffiliateStatus,
+  isCommissionStatus,
+  isPayoutMethod,
+  payoutEligibility,
   type AffiliateStatus,
+  type CommissionStatus,
+  type PayoutMethod,
 } from "@/lib/affiliate";
 import {
   buildAdminPromoUsers,
@@ -44,13 +50,27 @@ export type AffiliateSummary = {
   status: AffiliateStatus | null;
   commission_rate_pct: number;
   referral_code: string;
+  /** Affiliate'in SAHİP olduğu promo kodu (varsa) — paylaşacağı kod. */
+  promo_code: string | null;
+  /** Toplam kazanç (pending + paid; reversed hariç). */
   earned_cents: number;
+  /** Henüz ödenmemiş birikim. */
+  pending_cents: number;
+  /** Şimdiye kadar ödenmiş toplam. */
+  paid_cents: number;
+  /** Ödeme eşiği (varsayılan $75). */
+  min_payout_cents: number;
+  /** pending >= eşik mi? (ödemeye hazır) */
+  payout_eligible: boolean;
+  /** Eşiğe kalan tutar. */
+  payout_remaining_cents: number;
   paid_transactions: number;
   recent: Array<{
     id: string;
     tier: string | null;
     gross_amount_cents: number;
     commission_cents: number;
+    status: CommissionStatus;
     created_at: string;
   }>;
 };
@@ -68,7 +88,7 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
     const uid = context.userId;
     const { client } = await adminOrUserClient(context);
 
-    const [affiliateRes, profileRes, commissionsRes] = await Promise.all([
+    const [affiliateRes, profileRes, commissionsRes, ownedCodeRes] = await Promise.all([
       client
         .from("affiliates")
         .select("user_id, status, commission_rate_pct, verified_by, verified_at, created_at")
@@ -77,14 +97,30 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       client.from("profiles").select("referral_code").eq("id", uid).maybeSingle(),
       client
         .from("affiliate_commissions")
-        .select("id, tier, gross_amount_cents, commission_cents, created_at")
+        .select("id, tier, gross_amount_cents, commission_cents, status, created_at")
         .eq("affiliate_id", uid)
         .order("created_at", { ascending: false })
         .limit(50),
+      client
+        .from("promo_codes")
+        .select("code")
+        .eq("affiliate_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const row = affiliateRes.data as AffiliateStatusRow | null;
     const commissions = (commissionsRes.data ?? []) as AffiliateSummary["recent"];
+
+    let pendingCents = 0;
+    let paidCents = 0;
+    for (const c of commissions) {
+      if (c.status === "paid") paidCents += c.commission_cents ?? 0;
+      else if (c.status !== "reversed") pendingCents += c.commission_cents ?? 0;
+    }
+    const eligibility = payoutEligibility(pendingCents);
+    const ownedCode = (ownedCodeRes.data as { code?: string | null } | null)?.code ?? null;
 
     return {
       applied: !!row,
@@ -92,13 +128,20 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       commission_rate_pct: row?.commission_rate_pct ?? DEFAULT_COMMISSION_RATE_PCT,
       referral_code: ((profileRes.data as { referral_code?: string } | null)?.referral_code ??
         "") as string,
-      earned_cents: commissions.reduce((s, c) => s + (c.commission_cents ?? 0), 0),
-      paid_transactions: commissions.length,
+      promo_code: ownedCode ? ownedCode.toUpperCase() : null,
+      earned_cents: pendingCents + paidCents,
+      pending_cents: pendingCents,
+      paid_cents: paidCents,
+      min_payout_cents: MIN_PAYOUT_CENTS,
+      payout_eligible: eligibility.eligible,
+      payout_remaining_cents: eligibility.remainingCents,
+      paid_transactions: commissions.filter((c) => c.status !== "reversed").length,
       recent: commissions.slice(0, 10).map((c) => ({
         id: c.id,
         tier: c.tier ?? null,
         gross_amount_cents: c.gross_amount_cents ?? 0,
         commission_cents: c.commission_cents ?? 0,
+        status: isCommissionStatus(c.status) ? c.status : "pending",
         created_at: c.created_at,
       })),
     };
@@ -195,21 +238,20 @@ export const getMyPromoPerformance = createServerFn({ method: "GET" })
 
     const { data: profile } = await client
       .from("profiles")
-      .select("promo_code, subscription_tier")
+      .select("subscription_tier")
       .eq("id", uid)
       .maybeSingle();
 
-    // Hesabın kendi kodu: profilde kayıtlı kod, yoksa redemptions kaydı.
-    let code = (profile as { promo_code?: string | null } | null)?.promo_code ?? null;
-    if (!code) {
-      const { data: own } = await client
-        .from("promo_redemptions")
-        .select("code")
-        .eq("user_id", uid)
-        .maybeSingle();
-      code = (own as { code?: string | null } | null)?.code ?? null;
-    }
-    const normalized = String(code ?? "")
+    // Affiliate'in SAHİP OLDUĞU kod: admin'in ona bağladığı promo kodu.
+    // (Kullanıcının kaydolurken KULLANDIĞI kod değil — bu ayrım önemli.)
+    const { data: owned } = await client
+      .from("promo_codes")
+      .select("code")
+      .eq("affiliate_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const normalized = String((owned as { code?: string | null } | null)?.code ?? "")
       .trim()
       .toUpperCase();
     if (!normalized) return null;
@@ -481,4 +523,234 @@ export const adminSetAffiliateStatus = createServerFn({ method: "POST" })
     });
     if (error || String(result) !== "ok") throw forbidden();
     return { ok: true, status: data.status };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Admin: ÖDEME (payout) paneli — kime ne kadar borçluyuz, ödendi mi?   */
+/* Ödemeler manuel yapılır (Wise / IBAN); sistem eşiği ve kaydı tutar.  */
+/* ------------------------------------------------------------------ */
+
+export type AdminAffiliatePayout = {
+  user_id: string;
+  email: string | null;
+  status: string;
+  commission_rate_pct: number;
+  payout_method: PayoutMethod | null;
+  payout_note: string | null;
+  pending_cents: number;
+  pending_count: number;
+  paid_cents: number;
+  paid_count: number;
+  reversed_cents: number;
+  last_paid_at: string | null;
+  /** pending >= ödeme eşiği ($75) */
+  eligible: boolean;
+  /** Eşiğe kalan tutar. */
+  remaining_cents: number;
+  /** Affiliate'e bağlı promo kodları. */
+  promo_codes: string[];
+};
+
+/**
+ * Ödeme ekranı: affiliate başına birikmiş (pending) / ödenmiş (paid) toplamlar,
+ * ödeme bilgisi ve eşik durumu. Toplamlar tek sorguda (affiliate_payout_summary)
+ * hesaplanır — tüm komisyon satırlarını istemciye çekmek yerine optimize edilmiştir.
+ */
+export const adminListAffiliatePayouts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AdminAffiliatePayout[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [affRes, summaryRes, promoRes] = await Promise.all([
+      supabaseAdmin
+        .from("affiliates")
+        .select("user_id, status, commission_rate_pct, payout_method, payout_note")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabaseAdmin.rpc("affiliate_payout_summary"),
+      supabaseAdmin.from("promo_codes").select("code, affiliate_id").limit(500),
+    ]);
+
+    const affiliates = (affRes.data ?? []) as Array<{
+      user_id: string;
+      status: string;
+      commission_rate_pct: number;
+      payout_method: string | null;
+      payout_note: string | null;
+    }>;
+    if (affiliates.length === 0) return [];
+
+    const summaries = new Map(
+      (
+        (summaryRes.data ?? []) as Array<{
+          affiliate_id: string;
+          pending_cents: number;
+          pending_count: number;
+          paid_cents: number;
+          paid_count: number;
+          reversed_cents: number;
+          last_paid_at: string | null;
+        }>
+      ).map((s) => [s.affiliate_id, s]),
+    );
+
+    const codesByAffiliate = new Map<string, string[]>();
+    for (const r of (promoRes.data ?? []) as Array<{
+      code: string;
+      affiliate_id: string | null;
+    }>) {
+      if (!r.affiliate_id) continue;
+      const list = codesByAffiliate.get(r.affiliate_id) ?? [];
+      list.push(r.code);
+      codesByAffiliate.set(r.affiliate_id, list);
+    }
+
+    const emailsRes = await supabaseAdmin
+      .from("profiles")
+      .select("id, email")
+      .in(
+        "id",
+        affiliates.map((a) => a.user_id),
+      );
+    const emailById = new Map(
+      ((emailsRes.data ?? []) as Array<{ id: string; email: string | null }>).map((p) => [
+        p.id,
+        p.email,
+      ]),
+    );
+
+    return affiliates
+      .map((a) => {
+        const s = summaries.get(a.user_id);
+        const pending = Number(s?.pending_cents ?? 0);
+        const eligibility = payoutEligibility(pending);
+        return {
+          user_id: a.user_id,
+          email: emailById.get(a.user_id) ?? null,
+          status: a.status,
+          commission_rate_pct: a.commission_rate_pct,
+          payout_method: isPayoutMethod(a.payout_method) ? a.payout_method : null,
+          payout_note: a.payout_note,
+          pending_cents: pending,
+          pending_count: Number(s?.pending_count ?? 0),
+          paid_cents: Number(s?.paid_cents ?? 0),
+          paid_count: Number(s?.paid_count ?? 0),
+          reversed_cents: Number(s?.reversed_cents ?? 0),
+          last_paid_at: s?.last_paid_at ?? null,
+          eligible: eligibility.eligible,
+          remaining_cents: eligibility.remainingCents,
+          promo_codes: codesByAffiliate.get(a.user_id) ?? [],
+        };
+      })
+      .sort((x, y) => y.pending_cents - x.pending_cents);
+  });
+
+const MarkPaidInput = z.object({
+  userId: z.string().uuid(),
+  method: z.enum(["wise", "iban", "other"]),
+  reference: z.string().trim().max(120).optional(),
+});
+
+/**
+ * Bir affiliate'in TÜM bekleyen komisyonlarını "ödendi" işaretler.
+ * Ödeme eşiği ($75) veritabanında da zorlanır: eşiğin altındaysa 409 döner.
+ */
+export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => MarkPaidInput.parse(i))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{
+      ok: true;
+      paid_cents: number;
+      paid_count: number;
+      reference: string;
+    }> => {
+      await assertAdmin(context);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      // Referans verilmediyse partiyi tek bir dekont no ile etiketle.
+      const reference =
+        data.reference?.trim() ||
+        `PAY-${new Date()
+          .toISOString()
+          .replace(/[-:.TZ]/g, "")
+          .slice(0, 14)}`;
+
+      const { data: result, error } = await supabaseAdmin.rpc("admin_mark_affiliate_paid", {
+        _admin_id: context.userId,
+        _affiliate_id: data.userId,
+        _method: data.method,
+        _reference: reference,
+      });
+      if (error) {
+        if (/below_threshold/i.test(error.message)) {
+          const err = new Error(
+            `Ödeme eşiği: birikmiş komisyon en az $${MIN_PAYOUT_CENTS / 100} olmalı.`,
+          ) as Error & { statusCode: number };
+          err.statusCode = 409;
+          throw err;
+        }
+        if (/forbidden/i.test(error.message)) throw forbidden();
+        throw new Error(error.message);
+      }
+      const row = (Array.isArray(result) ? result[0] : result) as {
+        paid_cents: number;
+        paid_count: number;
+      } | null;
+      return {
+        ok: true,
+        paid_cents: Number(row?.paid_cents ?? 0),
+        paid_count: Number(row?.paid_count ?? 0),
+        reference,
+      };
+    },
+  );
+
+const ReverseCommissionInput = z.object({
+  commissionId: z.string().uuid(),
+  reason: z.string().trim().max(200).optional(),
+});
+
+/** Admin: tek bir komisyon satırını mahsup et (iade/chargeback/düzeltme). */
+export const adminReverseCommission = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => ReverseCommissionInput.parse(i))
+  .handler(async ({ data, context }): Promise<{ ok: boolean; result: string }> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: result, error } = await supabaseAdmin.rpc("admin_reverse_commission", {
+      _admin_id: context.userId,
+      _commission_id: data.commissionId,
+      _reason: data.reason ?? "manual",
+    });
+    if (error) {
+      if (/forbidden/i.test(error.message)) throw forbidden();
+      throw new Error(error.message);
+    }
+    return { ok: String(result) === "ok", result: String(result) };
+  });
+
+const PayoutDetailsInput = z.object({
+  userId: z.string().uuid(),
+  method: z.enum(["wise", "iban", "other"]).nullable(),
+  note: z.string().trim().max(500).nullable(),
+});
+
+/** Admin: influencer'ın ödeme bilgisini (yöntem + not/IBAN) kaydeder. */
+export const adminUpdateAffiliatePayout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => PayoutDetailsInput.parse(i))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("affiliates")
+      .update({ payout_method: data.method, payout_note: data.note })
+      .eq("user_id", data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

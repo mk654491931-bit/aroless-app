@@ -50,6 +50,7 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     planForAsset,
     resolvePaddleEntitlement,
     resolvePaddleCustomerEmail,
+    refundSignal,
     SUBSCRIPTION_CREDIT_GRANTS,
   } = await import("@/lib/paddle.server");
 
@@ -93,6 +94,58 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
           : parsed;
     } catch {
       /* raw body was validated by unmarshal already */
+    }
+
+    // 4b. İADE / CHARGEBACK → affiliate komisyonu mahsubu.
+    //     İade edilen ödemenin komisyonu influencer'da kalmamalı. İade olayları
+    //     normal entitlement akışından geçmez (mapPaddleEvent bilinçli olarak
+    //     null döner), bu yüzden ayrı ve idempotent bir RPC çalıştırılır:
+    //     event_id dedupe + işleme bağlı komisyonun 'reversed' işaretlenmesi.
+    const refund = refundSignal(event.eventType, event.data);
+    if (refund.isRefund) {
+      const rpc = supabaseAdmin.rpc as unknown as (
+        name: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: string | null; error: { message: string; code?: string } | null }>;
+
+      let lastRefundError: { message: string; code?: string } | null = null;
+      for (let attempt = 0; attempt < MAX_RPC_RETRIES; attempt++) {
+        const res = await rpc("process_paddle_refund", {
+          _event_id: event.eventId,
+          _event_type: event.eventType,
+          _occurred_at: event.occurredAt,
+          _transaction_id: refund.transactionId,
+          _reason: refund.reason,
+          _payload: auditPayload,
+        });
+        if (!res.error) {
+          console.log(
+            `[Paddle Webhook] ↺ ${event.eventType} (${event.eventId}) → komisyon mahsubu ` +
+              `(işlem ${refund.transactionId ?? "-"}, sebep ${refund.reason})`,
+          );
+          return text("ok", 200);
+        }
+        // Migration uygulanmamışsa iade olayı sonsuz 500 döngüsü yaratmasın:
+        // fonksiyon yoksa ack'le ve durumu logla.
+        if (/could not find the function|does not exist|schema cache/i.test(res.error.message)) {
+          console.warn(
+            `[Paddle Webhook] process_paddle_refund bulunamadı — migration uygulanmamış olabilir.`,
+          );
+          return text("ok", 200);
+        }
+        lastRefundError = res.error;
+        const transient =
+          /timeout|connection|temporarily|deadlock|serialization/i.test(res.error.message) ||
+          (res.error as { code?: string }).code === "54000";
+        if (!transient || attempt === MAX_RPC_RETRIES - 1) break;
+        await new Promise((r) => setTimeout(r, 400 * 2 ** attempt + Math.random() * 200));
+      }
+      console.error(
+        `[Paddle Webhook] process_paddle_refund failed (${event.eventId}):`,
+        lastRefundError?.message,
+      );
+      // Mahsup başarısız → Paddle yeniden denesin.
+      return text("Webhook islenemedi", 500);
     }
 
     // 5. Map event → database command (structural, tolerant of optional fields).

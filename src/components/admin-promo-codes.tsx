@@ -10,6 +10,7 @@ import {
   deletePromoCode,
   getPromoCodeStats,
 } from "@/lib/promo.functions";
+import { adminListAffiliates } from "@/lib/affiliate.functions";
 
 function randomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -30,12 +31,19 @@ export function AdminPromoCodes() {
   const [pct, setPct] = useState(20);
   const [maxUses, setMaxUses] = useState<string>("");
   const [expires, setExpires] = useState<string>("");
+  const [affiliateId, setAffiliateId] = useState<string>("");
   const [copied, setCopied] = useState<string | null>(null);
 
   const statsFn = useServerFn(getPromoCodeStats);
+  const listAffiliatesFn = useServerFn(adminListAffiliates);
   const q = useQuery({ queryKey: ["admin-promos"], queryFn: () => listFn() });
   const statsQ = useQuery({ queryKey: ["admin-promo-stats"], queryFn: () => statsFn() });
+  // Kodu bir influencer'a bağlamak için onaylı/tüm affiliate listesi.
+  const affQ = useQuery({ queryKey: ["admin-affiliates"], queryFn: () => listAffiliatesFn() });
+  const affiliates = affQ.data ?? [];
   const statOf = (c: string) => (statsQ.data ?? []).find((s) => s.code === c);
+  const affiliateEmail = (id: string | null) =>
+    id ? (affiliates.find((a) => a.user_id === id)?.email ?? "—") : "—";
 
   const create = useMutation({
     mutationFn: () =>
@@ -45,6 +53,7 @@ export function AdminPromoCodes() {
           discount_pct: pct,
           max_redemptions: maxUses ? Number(maxUses) : null,
           expires_at: expires ? new Date(expires).toISOString() : null,
+          affiliate_id: affiliateId || null,
         },
       }),
     onSuccess: () => {
@@ -52,7 +61,10 @@ export function AdminPromoCodes() {
       setCode(randomCode());
       setMaxUses("");
       setExpires("");
+      setAffiliateId("");
       qc.invalidateQueries({ queryKey: ["admin-promos"] });
+      qc.invalidateQueries({ queryKey: ["admin-affiliates"] });
+      qc.invalidateQueries({ queryKey: ["admin-affiliate-payouts"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -92,7 +104,7 @@ export function AdminPromoCodes() {
           e.preventDefault();
           create.mutate();
         }}
-        className="grid gap-3 border-b border-white/10 p-5 sm:grid-cols-2 lg:grid-cols-5"
+        className="grid gap-3 border-b border-white/10 p-5 sm:grid-cols-2 lg:grid-cols-6"
       >
         <label className="text-xs">
           <span className="mb-1 block text-muted-foreground">Kod</span>
@@ -151,6 +163,25 @@ export function AdminPromoCodes() {
           />
         </label>
 
+        <label className="text-xs">
+          <span className="mb-1 block text-muted-foreground">Influencer (komisyon sahibi)</span>
+          <select
+            value={affiliateId}
+            onChange={(e) => setAffiliateId(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+          >
+            <option value="">— sadece indirim kodu —</option>
+            {affiliates
+              .filter((a) => a.status !== "revoked")
+              .map((a) => (
+                <option key={a.user_id} value={a.user_id}>
+                  {a.email ?? a.user_id}
+                  {a.status === "verified" ? "" : " (onay bekliyor)"}
+                </option>
+              ))}
+          </select>
+        </label>
+
         <button
           type="submit"
           disabled={create.isPending}
@@ -171,6 +202,7 @@ export function AdminPromoCodes() {
           <thead className="bg-white/[0.02] text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Kod</th>
+              <th className="px-5 py-3 text-left font-medium">Influencer</th>
               <th className="px-5 py-3 text-right font-medium">İndirim</th>
               <th className="px-5 py-3 text-right font-medium">Kullanım</th>
               <th className="px-5 py-3 text-right font-medium">Kaydolan</th>
@@ -184,7 +216,7 @@ export function AdminPromoCodes() {
           <tbody>
             {q.isLoading && (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-muted-foreground">
+                <td colSpan={10} className="py-10 text-center text-muted-foreground">
                   <Loader2 className="inline animate-spin" />
                 </td>
               </tr>
@@ -205,6 +237,15 @@ export function AdminPromoCodes() {
                         <Copy size={12} className="opacity-50" />
                       )}
                     </button>
+                  </td>
+                  <td className="px-5 py-3 text-xs">
+                    {p.affiliate_id ? (
+                      <span className="inline-flex rounded-full border border-[oklch(0.62_0.17_255)]/40 bg-[oklch(0.62_0.17_255)]/10 px-2 py-0.5">
+                        {affiliateEmail(p.affiliate_id)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right font-semibold">%{p.discount_pct}</td>
                   <td className="px-5 py-3 text-right text-muted-foreground">
@@ -272,7 +313,7 @@ export function AdminPromoCodes() {
               ))}
             {!q.isLoading && (q.data ?? []).length === 0 && (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-muted-foreground">
+                <td colSpan={10} className="py-10 text-center text-muted-foreground">
                   Henüz promosyon kodu yok
                 </td>
               </tr>

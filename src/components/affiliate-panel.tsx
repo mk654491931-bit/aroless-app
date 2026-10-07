@@ -74,12 +74,23 @@ export function AffiliatePanel() {
   });
 
   const data: AffiliateSummary | undefined = q.data;
+  // Paylaşılacak link: öncelikle affiliate'in SAHİP olduğu promo kodu
+  // (kodla gelen kullanıcı komisyon üretir), yoksa davet koduna düşer.
   const link =
-    typeof window !== "undefined" && data?.referral_code
-      ? `${window.location.origin}/auth?ref=${data.referral_code}`
-      : "";
+    typeof window === "undefined"
+      ? ""
+      : data?.promo_code
+        ? `${window.location.origin}/auth?promo=${data.promo_code}`
+        : data?.referral_code
+          ? `${window.location.origin}/auth?ref=${data.referral_code}`
+          : "";
   const status = data?.status ?? null;
   const meta = status ? STATUS_META[status] : null;
+  const money = (cents: number | undefined) =>
+    `$${((cents ?? 0) / 100).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   const copy = async () => {
     if (!link) return;
@@ -178,18 +189,18 @@ export function AffiliatePanel() {
                 </button>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Coins size={13} /> Birikmiş komisyon
+                    <Coins size={13} /> Birikmiş (ödenmemiş)
                   </div>
-                  <div className="text-2xl font-bold">
-                    $
-                    {((data?.earned_cents ?? 0) / 100).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                  <div className="text-2xl font-bold">{money(data?.pending_cents)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Check size={13} /> Ödenen toplam
                   </div>
+                  <div className="text-2xl font-bold">{money(data?.paid_cents)}</div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -197,6 +208,36 @@ export function AffiliatePanel() {
                   </div>
                   <div className="text-2xl font-bold">{data?.paid_transactions ?? 0}</div>
                 </div>
+              </div>
+
+              {/* ÖDEME EŞİĞİ NOTU — ödemeler birikmiş kazanç $75'i geçince yapılır. */}
+              <div
+                className={`mt-3 flex flex-wrap items-center gap-2 rounded-xl border p-3 text-xs ${
+                  data?.payout_eligible
+                    ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 text-[oklch(0.85_0.12_150)]"
+                    : "border-white/10 bg-white/[0.03] text-muted-foreground"
+                }`}
+              >
+                {data?.payout_eligible ? (
+                  <>
+                    <BadgeCheck size={13} />
+                    <span>
+                      <b>Ödemeye hazır.</b> Birikmiş kazancın {money(data?.min_payout_cents)}{" "}
+                      eşiğini geçti; ödemen admin tarafından <b>Wise</b> veya <b>IBAN</b> ile
+                      yapılır.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CalendarClock size={13} />
+                    <span>
+                      Ödeme eşiği <b className="text-foreground">{money(data?.min_payout_cents)}</b>
+                      : birikmiş kazancın{" "}
+                      <b className="text-foreground">{money(data?.payout_remaining_cents)}</b> daha
+                      biriktiğinde ödeme yapılır. Bakiye devreder.
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Kendi promo kodunun performansı — yalnızca toplamlar. */}
@@ -267,8 +308,31 @@ export function AffiliatePanel() {
                         <span className="truncate">
                           {c.tier ?? "Abonelik"} · ${(c.gross_amount_cents / 100).toFixed(2)} ödeme
                         </span>
-                        <span className="font-semibold text-[oklch(0.75_0.19_150)]">
-                          +${(c.commission_cents / 100).toFixed(2)}
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                              c.status === "paid"
+                                ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 text-[oklch(0.75_0.19_150)]"
+                                : c.status === "reversed"
+                                  ? "border-[oklch(0.68_0.20_25)]/40 bg-[oklch(0.68_0.20_25)]/10 text-[oklch(0.72_0.19_25)]"
+                                  : "border-white/10 bg-white/5 text-muted-foreground"
+                            }`}
+                          >
+                            {c.status === "paid"
+                              ? "Ödendi"
+                              : c.status === "reversed"
+                                ? "İade"
+                                : "Bekliyor"}
+                          </span>
+                          <span
+                            className={`font-semibold ${
+                              c.status === "reversed"
+                                ? "text-muted-foreground line-through"
+                                : "text-[oklch(0.75_0.19_150)]"
+                            }`}
+                          >
+                            +${(c.commission_cents / 100).toFixed(2)}
+                          </span>
                         </span>
                       </li>
                     ))}

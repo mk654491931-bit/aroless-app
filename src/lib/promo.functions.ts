@@ -28,6 +28,8 @@ export type PromoCodeRow = {
   active: boolean;
   expires_at: string | null;
   created_at: string;
+  /** Kodun sahibi influencer (yoksa null) — komisyon ona gider. */
+  affiliate_id: string | null;
 };
 
 export const listPromoCodes = createServerFn({ method: "GET" })
@@ -38,7 +40,7 @@ export const listPromoCodes = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("promo_codes")
       .select(
-        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at",
+        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at, affiliate_id",
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -56,6 +58,8 @@ const CreateInput = z.object({
   discount_pct: z.number().int().min(1).max(100),
   max_redemptions: z.number().int().min(1).max(100000).nullable().optional(),
   expires_at: z.string().nullable().optional(),
+  /** Kod sahibi influencer hesabı (auth.users.id) — opsiyonel. */
+  affiliate_id: z.string().uuid().nullable().optional(),
 });
 
 export const createPromoCode = createServerFn({ method: "POST" })
@@ -72,9 +76,10 @@ export const createPromoCode = createServerFn({ method: "POST" })
         max_redemptions: data.max_redemptions ?? null,
         expires_at: data.expires_at || null,
         created_by: context.userId,
+        affiliate_id: data.affiliate_id ?? null,
       })
       .select(
-        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at",
+        "id, code, discount_pct, max_redemptions, times_redeemed, active, expires_at, created_at, affiliate_id",
       )
       .single();
     if (error)

@@ -485,6 +485,69 @@ export function isRefundPayload(data: unknown): boolean {
   return false;
 }
 
+/**
+ * İADE/CHARGEBACK SİNYALİ + ilgili İŞLEM kimliği (saf karar, ağ/DB yok).
+ *
+ * NEDEN VAR: iade edilen bir ödemenin affiliate komisyonu influencer'da
+ * kalmamalıdır. İade olayları (`adjustment.created/updated`, durumu
+ * refunded/reversed/charged_back olan işlemler) normal entitlement akışından
+ * GEÇMEZ (mapPaddleEvent bunları bilinçli olarak null döner). Bu yüzden ayrı bir
+ * mahsup yoluna ihtiyaç vardır. Bu işlev yalnız "iade mi?" ve "hangi işlem?"
+ * sorusunu yanıtlar; yan etkisi yoktur ki DB olmadan test edilebilsin.
+ *
+ * İŞLEM KİMLİĞİ: `transaction.*` olaylarında gövdenin `id`si işlem kimliğidir.
+ * `adjustment.*` olaylarında ise `id` ADJUSTMENT kimliğidir — işlem kimliği
+ * ayrı alanda (`transactionId`) gelir. İkisi karıştırılırsa mahsup yanlış
+ * satıra denk gelmez; bu yüzden ayırım burada açıkça yapılır.
+ */
+export type RefundSignal = {
+  isRefund: boolean;
+  transactionId: string | null;
+  reason: string;
+};
+
+export function refundSignal(eventType: string, data: unknown): RefundSignal {
+  const none: RefundSignal = { isRefund: false, transactionId: null, reason: "" };
+  const record = (data ?? {}) as Record<string, unknown>;
+  const type = String(eventType ?? "").toLowerCase();
+  const adjustment = record["adjustment"] as Record<string, unknown> | undefined;
+  const adjustmentType =
+    typeof adjustment?.["type"] === "string" ? String(adjustment["type"]).toLowerCase() : "";
+  const status = typeof record["status"] === "string" ? String(record["status"]).toLowerCase() : "";
+
+  const isAdjustment = type.startsWith("adjustment.");
+  const refundishStatus = ["refunded", "reversed", "charged_back", "chargeback"].includes(status);
+  const refundishAdjustment =
+    adjustmentType.includes("refund") || adjustmentType.includes("chargeback");
+
+  if (!isAdjustment && !refundishStatus && !refundishAdjustment && !isRefundPayload(data)) {
+    return none;
+  }
+
+  const fromTop =
+    typeof record["transactionId"] === "string" && record["transactionId"]
+      ? (record["transactionId"] as string)
+      : null;
+  const fromAdjustment =
+    typeof adjustment?.["transactionId"] === "string" && adjustment["transactionId"]
+      ? (adjustment["transactionId"] as string)
+      : null;
+  // `transaction.*` olayında gövdenin `id`si işlem kimliğidir; adjustment'ta değil.
+  const fromTransactionIdField =
+    type.startsWith("transaction.") && typeof record["id"] === "string"
+      ? (record["id"] as string)
+      : null;
+
+  const transactionId = fromTop ?? fromAdjustment ?? fromTransactionIdField ?? null;
+  const reason = isAdjustment
+    ? `adjustment:${adjustmentType || status || "refund"}`
+    : refundishAdjustment
+      ? adjustmentType
+      : status || "refund";
+
+  return { isRefund: true, transactionId, reason };
+}
+
 export type PaddleEventCommand = {
   eventId: string;
   eventType: string;

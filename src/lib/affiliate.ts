@@ -15,6 +15,47 @@ export const DEFAULT_COMMISSION_RATE_PCT = 30;
 /** Minimum gross payment (minor units) that earns a commission (anti-dust). */
 export const MIN_COMMISSION_GROSS_CENTS = 100; // $1.00
 
+/**
+ * ÖDEME EŞİĞİ: bir affiliate'e manuel ödeme (Wise/IBAN) yapılabilmesi için
+ * birikmiş (pending) komisyonun ulaşması gereken alt sınır (minor units).
+ *
+ * NEDEN VAR: her transfer (Wise komisyonu / banka havalesi masrafı) sabit bir
+ * maliyet taşır. $75 altındaki bakiyeler için ödeme yapmak, masrafı kazançtan
+ * büyük hâle getirir. Bakiye devreder; eşiğe ulaşınca ödenir.
+ */
+export const MIN_PAYOUT_CENTS = 7500; // $75.00
+
+/** Ödeme yöntemi — nakit çıkışı manuel yapılır (Wise / IBAN / diğer). */
+export type PayoutMethod = "wise" | "iban" | "other";
+
+export const PAYOUT_METHODS: readonly PayoutMethod[] = ["wise", "iban", "other"];
+
+export function isPayoutMethod(value: unknown): value is PayoutMethod {
+  return value === "wise" || value === "iban" || value === "other";
+}
+
+/** Komisyon satırının ödeme durumu. */
+export type CommissionStatus = "pending" | "paid" | "reversed";
+
+export function isCommissionStatus(value: unknown): value is CommissionStatus {
+  return value === "pending" || value === "paid" || value === "reversed";
+}
+
+/**
+ * Bir affiliate'in bekleyen bakiyesi ödenebilir mi? Eşiğin altındaysa kalan
+ * tutarı da döner (panel "$23 daha birikince ödenir" diyebilsin diye).
+ */
+export function payoutEligibility(pendingCents: number): {
+  eligible: boolean;
+  remainingCents: number;
+} {
+  const pending = Number.isFinite(pendingCents) ? Math.max(0, Math.floor(pendingCents)) : 0;
+  return {
+    eligible: pending >= MIN_PAYOUT_CENTS,
+    remainingCents: Math.max(0, MIN_PAYOUT_CENTS - pending),
+  };
+}
+
 export type AffiliateStatus = "pending" | "verified" | "revoked";
 
 export const AFFILIATE_STATUSES: readonly AffiliateStatus[] = ["pending", "verified", "revoked"];

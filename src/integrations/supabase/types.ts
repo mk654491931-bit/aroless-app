@@ -16,7 +16,13 @@ export type Database = {
           created_at: string;
           gross_amount_cents: number;
           id: string;
+          paid_at: string | null;
+          paid_method: string | null;
+          payout_ref: string | null;
           referred_user_id: string | null;
+          reversed_at: string | null;
+          reversed_reason: string | null;
+          status: string;
           subscription_id: string | null;
           tier: string | null;
           transaction_id: string | null;
@@ -28,7 +34,13 @@ export type Database = {
           created_at?: string;
           gross_amount_cents?: number;
           id?: string;
+          paid_at?: string | null;
+          paid_method?: string | null;
+          payout_ref?: string | null;
           referred_user_id?: string | null;
+          reversed_at?: string | null;
+          reversed_reason?: string | null;
+          status?: string;
           subscription_id?: string | null;
           tier?: string | null;
           transaction_id?: string | null;
@@ -40,7 +52,13 @@ export type Database = {
           created_at?: string;
           gross_amount_cents?: number;
           id?: string;
+          paid_at?: string | null;
+          paid_method?: string | null;
+          payout_ref?: string | null;
           referred_user_id?: string | null;
+          reversed_at?: string | null;
+          reversed_reason?: string | null;
+          status?: string;
           subscription_id?: string | null;
           tier?: string | null;
           transaction_id?: string | null;
@@ -51,6 +69,8 @@ export type Database = {
         Row: {
           commission_rate_pct: number;
           created_at: string;
+          payout_method: string | null;
+          payout_note: string | null;
           status: string;
           updated_at: string;
           user_id: string;
@@ -60,6 +80,8 @@ export type Database = {
         Insert: {
           commission_rate_pct?: number;
           created_at?: string;
+          payout_method?: string | null;
+          payout_note?: string | null;
           status?: string;
           updated_at?: string;
           user_id: string;
@@ -69,6 +91,8 @@ export type Database = {
         Update: {
           commission_rate_pct?: number;
           created_at?: string;
+          payout_method?: string | null;
+          payout_note?: string | null;
           status?: string;
           updated_at?: string;
           user_id?: string;
@@ -575,6 +599,7 @@ export type Database = {
       promo_codes: {
         Row: {
           active: boolean;
+          affiliate_id: string | null;
           code: string;
           created_at: string;
           created_by: string | null;
@@ -587,6 +612,7 @@ export type Database = {
         };
         Insert: {
           active?: boolean;
+          affiliate_id?: string | null;
           code: string;
           created_at?: string;
           created_by?: string | null;
@@ -599,6 +625,7 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          affiliate_id?: string | null;
           code?: string;
           created_at?: string;
           created_by?: string | null;
@@ -1169,6 +1196,42 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_mark_affiliate_paid: {
+        Args: {
+          _admin_id: string;
+          _affiliate_id: string;
+          _method: string;
+          _reference: string;
+        };
+        Returns: { paid_cents: number; paid_count: number }[];
+      };
+      admin_reverse_commission: {
+        Args: { _admin_id: string; _commission_id: string; _reason: string };
+        Returns: string;
+      };
+      affiliate_payout_summary: {
+        Args: never;
+        Returns: {
+          affiliate_id: string;
+          last_paid_at: string | null;
+          paid_cents: number;
+          paid_count: number;
+          pending_cents: number;
+          pending_count: number;
+          reversed_cents: number;
+        }[];
+      };
+      process_paddle_refund: {
+        Args: {
+          _event_id: string;
+          _event_type: string;
+          _occurred_at: string;
+          _payload: Json;
+          _reason: string;
+          _transaction_id: string;
+        };
+        Returns: string;
+      };
       apply_for_affiliate: { Args: never; Returns: string };
       apply_subscription_credits: {
         Args: {

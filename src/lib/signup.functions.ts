@@ -88,11 +88,20 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Promosyon kodu verildiyse kayıt öncesi doğrula.
-    let promo: { id: string; code: string; discount_pct: number } | null = null;
+    // `affiliate_id` = kodun sahibi influencer. Kullanıcı bu kodla kaydolursa
+    // komisyon ona gider (bkz. process_paddle_event adım 8).
+    let promo: {
+      id: string;
+      code: string;
+      discount_pct: number;
+      affiliate_id: string | null;
+    } | null = null;
     if (data.promoCode) {
       const { data: row } = await supabaseAdmin
         .from("promo_codes")
-        .select("id, code, discount_pct, active, expires_at, max_redemptions, times_redeemed")
+        .select(
+          "id, code, discount_pct, active, expires_at, max_redemptions, times_redeemed, affiliate_id",
+        )
         .eq("code", data.promoCode)
         .maybeSingle();
       if (!row) throw new Error("Promosyon kodu bulunamadı.");
@@ -106,7 +115,12 @@ export const startEmailSignup = createServerFn({ method: "POST" })
       ) {
         throw new Error("Promosyon kodu kullanım limitine ulaştı.");
       }
-      promo = { id: row.id, code: row.code, discount_pct: row.discount_pct };
+      promo = {
+        id: row.id,
+        code: row.code,
+        discount_pct: row.discount_pct,
+        affiliate_id: (row as { affiliate_id?: string | null }).affiliate_id ?? null,
+      };
     }
 
     const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -164,7 +178,16 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     if (promo) {
       try {
         promoDiscount = promo.discount_pct;
-        await supabaseAdmin.from("profiles").update({ promo_code: promo.code }).eq("id", userId);
+        // Kod sahibi bir affiliate ise, kullanıcıyı ona KALICI olarak bağla.
+        // Bu alan komisyonun kime gideceğini belirler; yazma service role ile
+        // yapılır (profiles.referred_by istemciye kapalıdır).
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            promo_code: promo.code,
+            ...(promo.affiliate_id ? { referred_by: promo.affiliate_id } : {}),
+          })
+          .eq("id", userId);
         await supabaseAdmin
           .from("promo_redemptions")
           .upsert(

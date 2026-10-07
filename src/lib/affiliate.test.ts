@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_COMMISSION_GROSS_CENTS,
+  MIN_PAYOUT_CENTS,
   clampCommissionRate,
   computeCommissionCents,
+  isCommissionStatus,
   isEligibleAffiliate,
+  isPayoutMethod,
+  payoutEligibility,
   shouldEarnCommission,
 } from "./affiliate";
 
@@ -79,5 +83,40 @@ describe("affiliate eligibility", () => {
     expect(
       shouldEarnCommission({ ...base, eventType: "transaction.completed", status: "pending" }),
     ).toBe(false);
+  });
+});
+
+describe("affiliate payout rules", () => {
+  it("pays out only when the pending balance reaches the $75 threshold", () => {
+    expect(MIN_PAYOUT_CENTS).toBe(7500);
+    expect(payoutEligibility(7499).eligible).toBe(false);
+    expect(payoutEligibility(7500).eligible).toBe(true);
+    expect(payoutEligibility(9000).eligible).toBe(true);
+  });
+
+  it("reports how much is left before the next payout", () => {
+    expect(payoutEligibility(0).remainingCents).toBe(7500);
+    expect(payoutEligibility(5000).remainingCents).toBe(2500);
+    expect(payoutEligibility(7500).remainingCents).toBe(0);
+    // Above the threshold the remaining amount never goes negative.
+    expect(payoutEligibility(12000).remainingCents).toBe(0);
+  });
+
+  it("treats invalid pending values as zero", () => {
+    expect(payoutEligibility(Number.NaN).eligible).toBe(false);
+    expect(payoutEligibility(-100).remainingCents).toBe(7500);
+  });
+
+  it("validates payout methods and commission statuses", () => {
+    expect(isPayoutMethod("wise")).toBe(true);
+    expect(isPayoutMethod("iban")).toBe(true);
+    expect(isPayoutMethod("other")).toBe(true);
+    expect(isPayoutMethod("paypal")).toBe(false);
+    expect(isPayoutMethod(null)).toBe(false);
+
+    expect(isCommissionStatus("pending")).toBe(true);
+    expect(isCommissionStatus("paid")).toBe(true);
+    expect(isCommissionStatus("reversed")).toBe(true);
+    expect(isCommissionStatus("unknown")).toBe(false);
   });
 });

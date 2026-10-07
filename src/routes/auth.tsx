@@ -178,7 +178,12 @@ function AuthPage() {
   // Kartı yeniden mount etmek giriş animasyonunu, captcha widget'ını ve mobil
   // klavye odağını sıfırlıyordu; bu da bölümün açılıp kapanmasına yol açıyordu.
   const [shaking, setShaking] = useState(false);
-  const [promoCode, setPromoCode] = useState("");
+  // Influencer linkiyle (`?promo=KOD`) gelen kullanıcı için kodu ön-doldur.
+  const [promoCode, setPromoCode] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : (new URLSearchParams(window.location.search).get("promo")?.trim().toUpperCase() ?? ""),
+  );
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
   const [referralCode] = useState(() =>
