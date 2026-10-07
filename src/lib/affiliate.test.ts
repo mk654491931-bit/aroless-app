@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  AFFILIATE_CODE_PATTERN,
+  DEFAULT_AFFILIATE_DISCOUNT_PCT,
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_COMMISSION_GROSS_CENTS,
   MIN_PAYOUT_CENTS,
+  affiliatePromoCode,
   clampCommissionRate,
   computeCommissionCents,
   isCommissionStatus,
   isEligibleAffiliate,
   isPayoutMethod,
   payoutEligibility,
+  randomCodeSuffix,
   shouldEarnCommission,
 } from "./affiliate";
 
@@ -118,5 +122,69 @@ describe("affiliate payout rules", () => {
     expect(isCommissionStatus("paid")).toBe(true);
     expect(isCommissionStatus("reversed")).toBe(true);
     expect(isCommissionStatus("unknown")).toBe(false);
+  });
+});
+
+describe("affiliate'e özel promosyon kodu", () => {
+  /** Kod sunucudan geçebilmeli: createPromoCode aynı kuralı uygular. */
+  const serverAccepts = (code: string) => AFFILIATE_CODE_PATTERN.test(code);
+
+  it("e-postanın baş kısmını kullanır, böylece kodun sahibi listede tanınır", () => {
+    expect(affiliatePromoCode("ayse@ornek.com")).toMatch(/^AYSE-[A-Z0-9]{4}$/);
+    expect(affiliatePromoCode("mehmet.yilmaz@gmail.com")).toMatch(/^MEHMETYI-[A-Z0-9]{4}$/);
+  });
+
+  it("baş kısımdaki ayraçları ve büyük/küçük harf farkını temizler", () => {
+    // . + - _ gibi karakterler kod şemasında yok; temizlenmeleri gerekir.
+    expect(affiliatePromoCode("john.doe+news@x.com")).toMatch(/^JOHNDOE-[A-Z0-9]{4}$/);
+    expect(affiliatePromoCode("A.B_C-d@x.com")).toMatch(/^[A-Z0-9]{3,8}-[A-Z0-9]{4}$/);
+  });
+
+  it("kısa/boş/geçersiz baş kısımda jenerik VLR koduna düşer", () => {
+    expect(affiliatePromoCode("a@x.com")).toMatch(/^VLR[A-Z0-9]{6}$/);
+    expect(affiliatePromoCode("şğ@x.com")).toMatch(/^VLR[A-Z0-9]{6}$/);
+    expect(affiliatePromoCode(null)).toMatch(/^VLR[A-Z0-9]{6}$/);
+    expect(affiliatePromoCode(undefined)).toMatch(/^VLR[A-Z0-9]{6}$/);
+    expect(affiliatePromoCode("")).toMatch(/^VLR[A-Z0-9]{6}$/);
+  });
+
+  it("kullanıcı adı uzunsa 8 karakterde keser (32 karakter sınırını aşmaz)", () => {
+    const code = affiliatePromoCode("cokuzunbirkullaniciadi@x.com");
+    expect(code).toMatch(/^COKUZUNB-[A-Z0-9]{4}$/);
+    expect(code.length).toBeLessThanOrEqual(32);
+  });
+
+  it("üretilen her kod sunucunun kabul ettiği biçimde", () => {
+    const emails = [
+      "ayse@ornek.com",
+      "a@x.com",
+      null,
+      "weird..name@@x.com",
+      "kullanıcı.ş@x.com",
+      "x-y_z1@a.b",
+      "12345678901234567890@a.b",
+    ];
+    for (const email of emails) {
+      const code = affiliatePromoCode(email);
+      expect(serverAccepts(code), `${email} → ${code} sunucudan geçmeli`).toBe(true);
+    }
+  });
+
+  it("her çağrıda farklı bir kod üretir (aynı kişiye ikinci kod verilebilir)", () => {
+    const codes = new Set(Array.from({ length: 30 }, () => affiliatePromoCode("ayse@ornek.com")));
+    // Rastgelelik pratikte tekil olmalı; 30 denemede en az 25 farklı kod beklenir.
+    expect(codes.size).toBeGreaterThanOrEqual(25);
+  });
+
+  it("rng sabitlenebilir ve alfabeyi sınırlarında kullanır", () => {
+    expect(randomCodeSuffix(4, () => 0)).toBe("AAAA");
+    expect(randomCodeSuffix(6, () => 0.999999)).toBe("999999");
+    expect(randomCodeSuffix(0)).toBe("");
+    // Karışan karakterler alfabede yok (okunabilirlik kuralı).
+    expect(randomCodeSuffix(200, () => Math.random())).not.toMatch(/[01IO]/);
+  });
+
+  it("varsayılan indirim %20 ve sunucunun 1-100 sınırı içinde", () => {
+    expect(DEFAULT_AFFILIATE_DISCOUNT_PCT).toBe(20);
   });
 });

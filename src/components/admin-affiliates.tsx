@@ -2,7 +2,18 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Banknote, Loader2, Megaphone, ShieldCheck, ShieldX, UserPlus, Wallet } from "lucide-react";
+import {
+  Banknote,
+  Check,
+  Copy,
+  Loader2,
+  Megaphone,
+  ShieldCheck,
+  ShieldX,
+  Ticket,
+  UserPlus,
+  Wallet,
+} from "lucide-react";
 import {
   adminListAffiliatePayouts,
   adminMarkAffiliatePaid,
@@ -12,7 +23,14 @@ import {
   findAdminAffiliateTarget,
   type AdminAffiliatePayout,
 } from "@/lib/affiliate.functions";
-import { DEFAULT_COMMISSION_RATE_PCT, MIN_PAYOUT_CENTS, type PayoutMethod } from "@/lib/affiliate";
+import {
+  DEFAULT_AFFILIATE_DISCOUNT_PCT,
+  DEFAULT_COMMISSION_RATE_PCT,
+  MIN_PAYOUT_CENTS,
+  affiliatePromoCode,
+  type PayoutMethod,
+} from "@/lib/affiliate";
+import { createPromoCode } from "@/lib/promo.functions";
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending: {
@@ -44,6 +62,7 @@ export function AdminAffiliates() {
   const listPayoutsFn = useServerFn(adminListAffiliatePayouts);
   const markPaidFn = useServerFn(adminMarkAffiliatePaid);
   const saveDetailsFn = useServerFn(adminUpdateAffiliatePayout);
+  const createCodeFn = useServerFn(createPromoCode);
 
   const [email, setEmail] = useState("");
   const [rate, setRate] = useState("");
@@ -51,6 +70,12 @@ export function AdminAffiliates() {
   const [method, setMethod] = useState<PayoutMethod>("wise");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
+  // Görevlendirme formundaki "kodu da oluştur" seçeneği ve yeni kodların indirimi.
+  const [withCode, setWithCode] = useState(true);
+  const [discount, setDiscount] = useState(DEFAULT_AFFILIATE_DISCOUNT_PCT);
+  // Üretilen son kod + paylaşım linki (toast kaybolmasın diye panelde de durur).
+  const [issued, setIssued] = useState<{ email: string; code: string; link: string } | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const q = useQuery({
     queryKey: ["admin-affiliate-payouts"],
@@ -76,6 +101,13 @@ export function AdminAffiliates() {
       setRate("");
       lookup.reset();
       refresh();
+      // İstenmişse görevlendirmeyle birlikte kişiye özel kod da üret.
+      if (withCode) {
+        giveCode.mutate({
+          userId: res.target.id,
+          email: res.target.email,
+        });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -103,6 +135,59 @@ export function AdminAffiliates() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  /**
+   * Affiliate'e özel promosyon kodu üretir. Kod çakışırsa (aynı e-posta ön eki
+   * daha önce kullanılmışsa) yeni kodla yeniden dener; sunucu `affiliate_id`yi
+   * yazdığı için kodla gelen kullanıcıların komisyonu bu affiliate'e gider.
+   */
+  const giveCode = useMutation({
+    mutationFn: async (v: { userId: string; email: string | null }) => {
+      const pct = Math.min(
+        100,
+        Math.max(1, Math.trunc(discount) || DEFAULT_AFFILIATE_DISCOUNT_PCT),
+      );
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          return await createCodeFn({
+            data: {
+              code: affiliatePromoCode(v.email),
+              discount_pct: pct,
+              max_redemptions: null,
+              expires_at: null,
+              affiliate_id: v.userId,
+            },
+          });
+        } catch (e) {
+          lastError = e as Error;
+          if (!/zaten var|duplicate/i.test(lastError.message)) throw lastError;
+        }
+      }
+      throw lastError ?? new Error("Kod oluşturulamadı, lütfen tekrar dene.");
+    },
+    onSuccess: (row, v) => {
+      const link =
+        typeof window === "undefined"
+          ? ""
+          : `${window.location.origin}/auth?promo=${encodeURIComponent(row.code)}`;
+      setIssued({ email: v.email ?? "Affiliate", code: row.code, link });
+      setCopiedCode(false);
+      toast.success(`${v.email ?? "Affiliate"} için kod: ${row.code} (%${row.discount_pct})`);
+      refresh();
+      qc.invalidateQueries({ queryKey: ["admin-promos"] });
+      qc.invalidateQueries({ queryKey: ["admin-promo-stats"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const copyIssued = async () => {
+    if (!issued?.link) return;
+    await navigator.clipboard.writeText(issued.link);
+    setCopiedCode(true);
+    toast.success("Kayıt linki kopyalandı");
+    setTimeout(() => setCopiedCode(false), 1600);
+  };
 
   const saveDetails = useMutation({
     mutationFn: (v: { userId: string; method: PayoutMethod; note: string }) =>
@@ -204,6 +289,67 @@ export function AdminAffiliates() {
           Görevlendir
         </button>
 
+        {/* Görevlendirmeyle birlikte kişiye özel kod üretme seçeneği. */}
+        <div className="sm:col-span-3 -mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <label className="inline-flex items-center gap-1.5 font-medium">
+            <input
+              type="checkbox"
+              checked={withCode}
+              onChange={(e) => setWithCode(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-white/20 bg-white/5"
+            />
+            Görevlendirirken ona özel promosyon kodu da oluştur
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-muted-foreground">
+            Yeni kodlarda müşteri indirimi
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={discount}
+              onChange={(e) =>
+                setDiscount(
+                  e.target.value === "" ? DEFAULT_AFFILIATE_DISCOUNT_PCT : Number(e.target.value),
+                )
+              }
+              className="w-16 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs outline-none focus:border-[oklch(0.62_0.17_255)]"
+            />
+            %
+          </label>
+          <span className="text-muted-foreground">
+            Kod e-postadan türetilir (ör. <code className="font-mono">AYSE-7K2M</code>) ve
+            affiliate'in panelinde kayıt linki olarak görünür.
+          </span>
+        </div>
+
+        {/* Üretilen kod: admin'in kopyalayıp influencer'a gönderebilmesi için. */}
+        {issued && (
+          <div className="sm:col-span-3 flex flex-wrap items-center gap-2 rounded-lg border border-[oklch(0.75_0.19_150)]/30 bg-[oklch(0.75_0.19_150)]/10 px-3 py-2 text-xs">
+            <Ticket size={13} className="text-[oklch(0.75_0.19_150)]" />
+            <span>
+              <b>{issued.email}</b> için kod hazır:
+            </span>
+            <code className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[11px] font-semibold">
+              {issued.code}
+            </code>
+            <button
+              type="button"
+              onClick={copyIssued}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 hover:bg-white/10"
+            >
+              {copiedCode ? <Check size={12} /> : <Copy size={12} />} Kayıt linkini kopyala
+            </button>
+            <span className="font-mono text-[10px] text-muted-foreground">{issued.link}</span>
+            <button
+              type="button"
+              onClick={() => setIssued(null)}
+              className="ml-auto rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10"
+            >
+              Kapat
+            </button>
+          </div>
+        )}
+
         <div className="sm:col-span-3 -mt-1 flex flex-wrap items-center gap-2 text-xs">
           <button
             type="button"
@@ -272,6 +418,8 @@ export function AdminAffiliates() {
                     onMarkPaid={() => markPaid.mutate({ userId: r.user_id, method, reference })}
                     onApprove={() => setStatus.mutate({ userId: r.user_id, status: "verified" })}
                     onSuspend={() => setStatus.mutate({ userId: r.user_id, status: "revoked" })}
+                    onGiveCode={() => giveCode.mutate({ userId: r.user_id, email: r.email })}
+                    issuing={giveCode.isPending && giveCode.variables?.userId === r.user_id}
                     busy={setStatus.isPending}
                   />
                 );
@@ -308,6 +456,8 @@ type RowProps = {
   onMarkPaid: () => void;
   onApprove: () => void;
   onSuspend: () => void;
+  onGiveCode: () => void;
+  issuing: boolean;
 };
 
 /** Tek affiliate satırı + açılır ödeme paneli. */
@@ -329,6 +479,8 @@ function FragmentRow({
   onMarkPaid,
   onApprove,
   onSuspend,
+  onGiveCode,
+  issuing,
 }: RowProps) {
   return (
     <>
@@ -381,6 +533,15 @@ function FragmentRow({
               }`}
             >
               <Wallet size={12} /> Ödeme
+            </button>
+            <button
+              onClick={onGiveCode}
+              disabled={issuing}
+              title="Bu affiliate'e özel promosyon kodu üret"
+              className="inline-flex items-center gap-1 rounded-lg border border-[oklch(0.62_0.17_255)]/40 bg-[oklch(0.62_0.17_255)]/10 px-2.5 py-1.5 text-xs font-medium hover:bg-[oklch(0.62_0.17_255)]/20 disabled:opacity-50"
+            >
+              {issuing ? <Loader2 size={12} className="animate-spin" /> : <Ticket size={12} />} Kod
+              ver
             </button>
             {row.status === "verified" ? (
               <button
