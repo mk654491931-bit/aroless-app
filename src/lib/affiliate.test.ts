@@ -9,6 +9,7 @@ import {
   clampCommissionRate,
   computeCommissionCents,
   isCommissionStatus,
+  isDuplicateCodeError,
   isEligibleAffiliate,
   isPayoutMethod,
   payoutEligibility,
@@ -186,5 +187,17 @@ describe("affiliate'e özel promosyon kodu", () => {
 
   it("varsayılan indirim %20 ve sunucunun 1-100 sınırı içinde", () => {
     expect(DEFAULT_AFFILIATE_DISCOUNT_PCT).toBe(20);
+  });
+
+  it("yalnızca kod çakışması yeniden denemeye yol açar", () => {
+    // createPromoCode'un çakışma mesajı (panel bunu görünce yeni kod üretir).
+    expect(isDuplicateCodeError("Bu kod zaten var.")).toBe(true);
+    // Postgres/PostgREST varyantları da yakalanmalı (mesaj dile göre değişebilir).
+    expect(isDuplicateCodeError("duplicate key value violates unique constraint")).toBe(true);
+    expect(isDuplicateCodeError("Code already exists")).toBe(true);
+    // Gerçek hatalar yutulmamalı; yoksa admin hatayı hiç görmez.
+    expect(isDuplicateCodeError("Forbidden")).toBe(false);
+    expect(isDuplicateCodeError("Kod oluşturulamadı")).toBe(false);
+    expect(isDuplicateCodeError("network request failed")).toBe(false);
   });
 });

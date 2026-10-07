@@ -28,6 +28,7 @@ import {
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_PAYOUT_CENTS,
   affiliatePromoCode,
+  isDuplicateCodeError,
   type PayoutMethod,
 } from "@/lib/affiliate";
 import { createPromoCode } from "@/lib/promo.functions";
@@ -161,7 +162,8 @@ export function AdminAffiliates() {
           });
         } catch (e) {
           lastError = e as Error;
-          if (!/zaten var|duplicate/i.test(lastError.message)) throw lastError;
+          // Yalnızca kod çakışmasında yeni kodla dene; diğer hatalar gerçek.
+          if (!isDuplicateCodeError(lastError.message)) throw lastError;
         }
       }
       throw lastError ?? new Error("Kod oluşturulamadı, lütfen tekrar dene.");

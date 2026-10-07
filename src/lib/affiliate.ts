@@ -136,6 +136,17 @@ export function affiliatePromoCode(
 }
 
 /**
+ * Kod üretiminde çakışma hatası mı?
+ *
+ * `createPromoCode` aynı kodu ikinci kez görürse "Bu kod zaten var." der; bunu
+ * yakalayıp yeni kodla yeniden denemek için koşul tek yerde tutulur (sunucu
+ * mesajı değişirse test kırılır, sessizce yutulmaz).
+ */
+export function isDuplicateCodeError(message: string): boolean {
+  return /zaten var|duplicate|already exists/i.test(message);
+}
+
+/**
  * Whether a payment event should produce a commission record.
  * Refunds / failed payments carry no gross amount, so they map to false and
  * the ledger simply never sees a negative commission.
