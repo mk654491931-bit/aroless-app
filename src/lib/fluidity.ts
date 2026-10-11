@@ -122,8 +122,14 @@ export function initFluidity(): () => void {
   } catch {
     stored = false;
   }
-  if (stored) enableLiteMode("session");
-  else if (isLiteDevice()) enableLiteMode("device");
+  // SAKİN VARSAYILAN: site artık HER ZAMAN hafif/sakin modda başlar.
+  //
+  // Eskiden bu yalnızca zayıf cihazlarda (veya kare ölçümü kötü çıkınca)
+  // açılıyordu; kullanıcı sürekli hareket eden arka planları ve parlama
+  // efektlerini istemediğini belirtti, bu yüzden sakin görünüm varsayılan
+  // oldu. Ölçüm adımı yine durur: `isLiteMode()` true olduğu için kare
+  // ölçümü hiç başlamaz, boşa iş yapılmaz.
+  enableLiteMode(stored ? "session" : isLiteDevice() ? "device" : "calm-default");
 
   const syncHidden = () => {
     root.classList.toggle(HIDDEN_CLASS, document.hidden);

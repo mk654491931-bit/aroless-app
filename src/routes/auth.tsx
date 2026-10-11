@@ -32,7 +32,6 @@ import { SignupLegalConsent } from "@/components/legal/signup-legal-consent";
 import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { ExampleReviews, type ExampleReview } from "@/components/landing/sections";
-import { QuantumMesh } from "@/components/premium-fx";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 export const Route = createFileRoute("/auth")({
@@ -539,20 +538,13 @@ function AuthPage() {
 
   return (
     <div className="auth-stage relative min-h-screen overflow-x-clip">
-      {/* Animated aurora / grid / beam backdrop — muted to a matte finish */}
+      {/* Sakin arka plan: yalnızca soluk aurora + statik ızgara + vinyet.
+          Dönen ışık huzmesi, yörüngeler ve shimmer katmanları kaldırıldı;
+          ayrıca canvas "quantum mesh" (sürekli rAF + fare parallax) artık
+          çizilmiyor. Renk korunur, hareket kalkar. */}
       <div aria-hidden className="auth-aurora" />
       <div aria-hidden className="auth-grid" />
-      <div aria-hidden className="auth-beam" />
-      <div aria-hidden className="auth-orbits">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div aria-hidden className="auth-shimmer" />
       <div aria-hidden className="auth-vignette" />
-
-      {/* Quantum data mesh */}
-      <QuantumMesh />
 
       {/* Ambient aurora orbs */}
       <div

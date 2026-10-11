@@ -3046,3 +3046,114 @@ html.light .custom-cursor-ring {
   .custom-cursor-dot,
   .custom-cursor-ring { transition: opacity 0.01ms; }
 }
+
+/* ============================================================
+   SAKİN GÖRÜNÜM — varsayılan
+   ------------------------------------------------------------
+   Geri bildirim: sürekli dönen ışıklar, kayan ağlar ve parlama
+   efektleri sayfayı yorucu yapıyordu. Bu blok YALNIZCA dekoratif ve
+   sonsuz (infinite) animasyonları durdurur. Korunanlar:
+     • tek seferlik giriş animasyonları (rise-in, fade-up, stagger-in,
+       line-fade-in, console-log-in, page-fade-in)
+     • işlevsel geçişler: hover/focus, hata sarsıntısı, akordeon, spinner
+   Sahne kaybolmaz; yalnızca hareket ve parlaklık kısılır.
+   ============================================================ */
+
+/* 1) Sonsuz dönen/kayan/parlayan dekoratif katmanlar durur. */
+.ent-orb,
+.ent-orb-a,
+.ent-orb-b,
+.ent-grid-bg,
+.hero-orb,
+.hero-orb-a,
+.hero-orb-b,
+.hero-orb-c,
+.hero-grid-pan,
+.aroless-shine,
+.velora-shine,
+.aroless-halo,
+.velora-halo,
+.mercury,
+.mercury-pill,
+.neon-field,
+.field-particles i,
+.light-wave::before,
+.light-trace::after,
+.surface-morph,
+.trace-spin,
+.vm-spin,
+.vm-pulse,
+.marquee-x,
+.cta-sheen,
+.sweep-frame,
+.winner-shimmer,
+.progress-stripe,
+.border-flow,
+.border-sweep,
+.auth-aurora,
+.auth-grid,
+.auth-beam,
+.auth-orbits,
+.auth-orbits span,
+.auth-shimmer,
+.ticker-scroll,
+.heartbeat,
+.elite-glow,
+.holo-badge,
+.pupil,
+.morph-pill,
+.morph-pill::before,
+.morph-pill::after,
+.ambient-halo,
+.ambient-drift,
+.animate-pulse-soft,
+.animate-pulse-ring,
+.animate-float-slow,
+.animate-ping,
+.float-slow,
+.pulse-ring {
+  animation: none !important;
+}
+
+/* 2) Işıma (glow) ve parlak gölgeler kısılır. */
+.glow,
+.elite-glow {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 16%, transparent) !important;
+}
+.sweep-frame {
+  box-shadow: 0 4px 18px -12px rgba(99, 102, 241, 0.3) !important;
+}
+.sweep-frame:hover {
+  box-shadow: 0 6px 22px -12px rgba(99, 102, 241, 0.4) !important;
+  transform: none;
+}
+
+/* 3) Arka plan ışıkları daha soluk ve daha yumuşak: renk kalır, gürültü gider. */
+.auth-aurora,
+.amb-aurora,
+.amb-blob,
+.amb-swirl,
+.ambient-halo,
+.ambient-drift,
+.ent-orb,
+.hero-orb {
+  opacity: 0.3 !important;
+  filter: blur(28px) !important;
+}
+.aroless-halo,
+.velora-halo {
+  opacity: 0.25 !important;
+}
+
+/* 4) Statik kalan ızgara/ışık katmanları da geri çekilir. */
+.auth-grid,
+.auth-beam,
+.auth-shimmer,
+.ent-grid-bg,
+.amb-grid,
+.amb-rays,
+.amb-scan,
+.amb-beam,
+.amb-particles {
+  opacity: 0.45 !important;
+}

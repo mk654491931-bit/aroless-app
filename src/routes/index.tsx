@@ -96,7 +96,7 @@ import { DataSourcesButton } from "@/components/header-extras";
 import { HYBRID_DEFAULT_MIN_SCORE } from "@/lib/consensus-types";
 import { Globe, Gauge, Swords, Cpu, ChevronDown } from "lucide-react";
 import { CompareTray, CompareModal } from "@/components/compare-tray";
-import { AmbientBackdrop, GlobalRippleLayer, BiometricButton } from "@/components/premium-fx";
+import { AmbientBackdrop, BiometricButton } from "@/components/premium-fx";
 import { ENGINES, engineLabel, type EngineId, type MarketplaceId } from "@/lib/engines";
 import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
@@ -498,7 +498,8 @@ function Dashboard() {
     <CurrencyProvider country={targetCountry}>
       <div className="relative min-h-screen">
         <AmbientBackdrop />
-        <GlobalRippleLayer />
+        {/* GlobalRippleLayer kaldırıldı: her tıklamada sayfa üzerinde dalga
+            animasyonu üretiyordu. Sakin görünümde bu tür süsleme istenmiyor. */}
         <HotTicker />
         {/* AKICILIK: sabit başlıkta `backdrop-blur-xl` YOK. Yapışkan bir
             yüzeyin arkası kaydırma boyunca sürekli değiştiği için blur her

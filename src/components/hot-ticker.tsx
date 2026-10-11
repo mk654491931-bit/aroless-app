@@ -98,7 +98,9 @@ export function HotTicker() {
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="relative min-h-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)]">
+        {/* Sakin görünüm: kayan (loop) animasyon kaldırıldı, liste normal
+            kaydırılabilir hâle geldi. Aynı bilgi, duran bir yüzeyde. */}
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
           {isLoading && (
             <div className="flex h-24 items-center justify-center text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -108,9 +110,9 @@ export function HotTicker() {
             <p className="p-3 text-[11px] text-muted-foreground">Canlı veri şu an alınamadı.</p>
           )}
           {items.length > 0 && (
-            <div className="ticker-scroll space-y-2 p-2">
-              {[...items, ...items].map((p, i) => (
-                <TickerCard key={`${p.id}-${i}`} p={p} />
+            <div className="space-y-2 p-2">
+              {items.map((p) => (
+                <TickerCard key={p.id} p={p} />
               ))}
             </div>
           )}

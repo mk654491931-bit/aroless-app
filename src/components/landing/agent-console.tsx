@@ -76,14 +76,14 @@ function pad(value: number): string {
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    // Akıcılık: sekme görünmüyorken saat için boşuna render tetikleme.
+    // Sakin görünüm: saniye başına render YOK. Saat dakikada bir tazelenir.
     const id = window.setInterval(() => {
       if (document.hidden) return;
       setNow(new Date());
-    }, 1000);
+    }, 30_000);
     return () => window.clearInterval(id);
   }, []);
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 /**
@@ -105,7 +105,8 @@ export function AgentConsole() {
         const next = [...prev, SIMULATION_LOGS[tickRef.current]!];
         return next.length > 14 ? next.slice(next.length - 14) : next;
       });
-    }, 2800);
+      // Sakin görünüm: log akışı 2.8 sn yerine 6 sn'de bir satır ekler.
+    }, 6000);
     return () => window.clearInterval(id);
   }, []);
 
