@@ -1888,5 +1888,24 @@ const dict: Record<string, string> = {
   Visitors: "Ziyaretçi",
   Conversion: "Dönüşüm",
   Cash: "Nakit",
+
+  /* --- Ürün kategorileri (İngilizce anahtar → Türkçe etiket) ---
+     Ürün Bulucu ve onboarding aynı kanonik anahtarları kullanır; kullanıcı
+     Türkçe arayüzde kategori seçerken İngilizce anahtar görmesin. */
+  Any: "Tümü",
+  Fitness: "Spor & Fitness",
+  Home: "Ev & Yaşam",
+  Tech: "Elektronik",
+  Pets: "Evcil Hayvan",
+  Kids: "Bebek & Çocuk",
+  Outdoor: "Outdoor & Kamp",
+  Kitchen: "Mutfak",
+
+  /* --- Landing / pazarlama (İngilizce kalan yüzeyler) --- */
+  "Get access": "Ücretsiz başla",
+  Metrics: "Metrikler",
+  "What we do": "Ne yapıyoruz",
+  "Instant value engine": "Anında değer motoru",
+  "System architecture": "Sistem mimarisi",
 };
 export default dict;

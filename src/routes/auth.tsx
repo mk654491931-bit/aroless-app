@@ -31,8 +31,8 @@ import { removeBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 import { SignupLegalConsent } from "@/components/legal/signup-legal-consent";
 import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
+import { ExampleReviews, type ExampleReview } from "@/components/landing/sections";
 import { QuantumMesh } from "@/components/premium-fx";
-import { Testimonials, type ReviewItem } from "@/components/landing/sections";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
 
 export const Route = createFileRoute("/auth")({
@@ -70,9 +70,25 @@ const PERKS = [
 ];
 
 // The form owns all of this page's state, so without memo every keystroke
-// re-rendered the full marketing showcase and the review wall below it.
+// re-rendered the full marketing showcase below it.
 const StaticShowcase = memo(AuthShowcase);
-const StaticTestimonials = memo(Testimonials);
+
+/**
+ * Şifre sıfırlama bağlantısı `#access_token=…&type=recovery` (implicit) ya da
+ * `?type=recovery` (PKCE dönüşü) ile gelir. İlk render'da URL'den okunur, böylece
+ * Supabase oturumu kurmadan önce "yeni şifre" ekranı hazır olur.
+ */
+function detectRecoveryFromUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const { hash, search } = window.location;
+  // Supabase implicit akışta `type=recovery` bilgisini hash'e koyar; ek olarak
+  // resetPasswordForEmail'e verdiğimiz `?reset=1` işareti, hash düşse bile
+  // ekranın açılmasını garanti eder.
+  return (
+    /(?:^|[#&?])type=recovery(?:&|$)/.test(`${hash}${search}`) ||
+    /(?:^|[?&])reset=1(?:&|$)/.test(search)
+  );
+}
 
 /* ---------------- Haptic ripple wrapper ---------------- */
 type Ripple = { id: number; x: number; y: number };
@@ -186,6 +202,13 @@ function AuthPage() {
   );
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
+  // Şifre sıfırlama (recovery) akışı: e-postadaki bağlantı bir recovery
+  // oturumu açar (URL'de `type=recovery`). Bu bayrak açıkken normal giriş/kayıt
+  // formu yerine "yeni şifre" ekranı gösterilir ve kullanıcı otomatik olarak
+  // panele yönlendirilmez — aksi hâlde şifresini hiç belirleyemezdi.
+  const [recovery, setRecovery] = useState(detectRecoveryFromUrl);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [referralCode] = useState(() =>
     typeof window === "undefined"
       ? ""
@@ -210,7 +233,9 @@ function AuthPage() {
   const claimReferralFn = useServerFn(claimReferral);
 
   useEffect(() => {
-    if (!user) return;
+    // Recovery sırasında oturum açılır ama kullanıcı henüz yeni şifresini
+    // belirlemedi: bu ekrandan ayrılmamalı.
+    if (!user || recovery) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -224,7 +249,17 @@ function AuthPage() {
     return () => {
       cancelled = true;
     };
-  }, [user, nav, registerFingerprintFn]);
+  }, [user, recovery, nav, registerFingerprintFn]);
+
+  // Supabase, recovery bağlantısı işlendiğinde PASSWORD_RECOVERY olayı yayar.
+  // URL kontrolünü (ilk render) tamamlar: farklı akış/depolama hâllerinde de
+  // "yeni şifre" ekranının açılmasını garanti eder.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -362,10 +397,13 @@ function AuthPage() {
           }
           setShaking(true);
           if (unconfirmed) {
+            // Doğrulanmamış e-postada oturum AÇILMAZ. Buradan çıkış yapılmazsa
+            // akış alttaki "Hoş geldiniz!" ve yönlendirmeye düşer; kullanıcı
+            // başarı sanıp panelsiz kalırdı.
             toast.error(msg, { duration: 6000 });
-          } else {
-            throw new Error(msg);
+            return;
           }
+          throw new Error(msg);
         }
         toast.success("Hoş geldiniz!");
         nav({ to: getRedirectPath() });
@@ -399,6 +437,105 @@ function AuthPage() {
     setBusy("google");
     await googleDirect();
   };
+
+  /** Recovery oturumuyla yeni şifre belirleme. */
+  const submitRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error("Şifre en az 6 karakter olmalı.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error("Şifreler birbiriyle eşleşmiyor.");
+      return;
+    }
+    setBusy("email");
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success("Şifren güncellendi. Artık yeni şifrenle giriş yapabilirsin.");
+      // Recovery parçasını URL'den temizle: sayfa yenilenirse ekran tekrar açılmasın.
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      setRecovery(false);
+      setNewPassword("");
+      setConfirmNewPassword("");
+      nav({ to: getRedirectPath() });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (recovery) {
+    return (
+      <div className="auth-stage relative min-h-screen">
+        <div aria-hidden className="auth-aurora" />
+        <div aria-hidden className="auth-grid" />
+        <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center px-4">
+          <form
+            onSubmit={submitRecovery}
+            className="matte-card premium-card relative w-full overflow-hidden p-7 sm:p-8"
+          >
+            <div className="flex items-center gap-2.5">
+              <img src="/logo-mark.png" alt="Aroless" className="h-9 w-9 object-contain" />
+              <span className="text-base font-light uppercase tracking-[0.3em] text-foreground/95">
+                Aroless
+              </span>
+            </div>
+            <h1 className="mt-5 text-2xl font-bold tracking-tight">Yeni şifre belirle</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Hesabın için yeni bir şifre gir. En az 6 karakter olmalı.
+            </p>
+
+            <div className="mt-6 space-y-3">
+              <input
+                type="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="Yeni şifre"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="inp w-full rounded-xl border border-border bg-transparent px-4 py-3 text-sm"
+              />
+              <input
+                type="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="Yeni şifre (tekrar)"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                className="inp w-full rounded-xl border border-border bg-transparent px-4 py-3 text-sm"
+              />
+              {confirmNewPassword.length > 0 && confirmNewPassword !== newPassword && (
+                <p className="text-xs text-destructive">Şifreler eşleşmiyor.</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={busy !== null}
+              className="glow mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-2)] px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy === "email" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Kaydediliyor…
+                </>
+              ) : (
+                <>
+                  Şifreyi güncelle <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-stage relative min-h-screen overflow-x-clip">
@@ -843,8 +980,9 @@ function AuthPage() {
                       </>
                     )}
 
-                    {/* Forgot password (signin only) */}
-                    {!otpStep && mode === "signin" && password.length > 0 && (
+                    {/* Forgot password (signin only) — şifre yazılmadan da görünür:
+                        kullanıcı tam da şifresini hatırlamadığında buna ihtiyaç duyar. */}
+                    {!otpStep && mode === "signin" && (
                       <div className="flex justify-end">
                         <button
                           type="button"
@@ -853,8 +991,10 @@ function AuthPage() {
                               toast.error("Enter your email first.");
                               return;
                             }
+                            // `?reset=1` bir işaret: dönüş URL'inde hash kaybolsa
+                            // bile /auth hangi modda açılacağını bilir.
                             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                              redirectTo: `${window.location.origin}/auth`,
+                              redirectTo: `${window.location.origin}/auth?reset=1`,
                             });
                             if (error) {
                               toast.error(error.message);
@@ -921,20 +1061,23 @@ function AuthPage() {
         </section>
       </div>
 
-      {/* ---------- Reviews under the auth card ---------- */}
+      {/* ---------- Örnek yorumlar ----------
+          Kullanıcının isteğiyle geri geldi, ama artık temsilî olduğu açıkça
+          yazıyor: bölüm altında uyarı + her kartta "Örnek" etiketi. */}
       <div className="relative pb-20">
         <div aria-hidden className="mx-auto h-px w-full max-w-3xl bg-border/60" />
-        <StaticTestimonials
-          items={AUTH_REVIEWS}
-          title="Onlarca satıcı veriyle büyüyor"
-          subtitle="Giriş yapmadan önce — Aroless kullanıcılarının gerçek hikâyeleri."
+        <ExampleReviews
+          items={AUTH_EXAMPLES}
+          title="Temsilî kullanıcı senaryoları"
+          subtitle="Ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış örnekler."
         />
       </div>
     </div>
   );
 }
 
-const AUTH_REVIEWS: ReviewItem[] = [
+/** Temsilî örnek yorumlar — GERÇEK müşteri yorumu DEĞİLDİR. */
+const AUTH_EXAMPLES: ExampleReview[] = [
   {
     name: "Elif Kaya",
     role: "E-ticaret operatörü · İstanbul",
@@ -949,7 +1092,7 @@ const AUTH_REVIEWS: ReviewItem[] = [
     market: "TR",
     initials: "AD",
     quote:
-      "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum. İlk haftada kendini amorti etti.",
+      "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum.",
   },
   {
     name: "Merve Aksoy",
@@ -957,7 +1100,7 @@ const AUTH_REVIEWS: ReviewItem[] = [
     market: "TR",
     initials: "MA",
     quote:
-      "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi. Reklam senaryolarını da neredeyse olduğu gibi kullanıyoruz.",
+      "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi.",
   },
   {
     name: "Can Yılmaz",
@@ -965,7 +1108,7 @@ const AUTH_REVIEWS: ReviewItem[] = [
     market: "TR",
     initials: "CY",
     quote:
-      "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu, satış konuşmalarını kısalttı.",
+      "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu.",
   },
   {
     name: "Zeynep Şahin",
@@ -973,6 +1116,6 @@ const AUTH_REVIEWS: ReviewItem[] = [
     market: "TR",
     initials: "ZŞ",
     quote:
-      "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ve dışa aktarma ile ürünleri aynı gün pazara taşıyoruz.",
+      "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ile ürünleri aynı gün pazara taşıyoruz.",
   },
 ];

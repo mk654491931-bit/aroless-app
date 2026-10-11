@@ -352,13 +352,17 @@ function DashboardPage() {
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi icon={History} label="Analiz" value={analyses.length} sub="Son 14 gün" />
         <Kpi icon={Bookmark} label="Kayıtlı ürün" value={favorites.length} sub="Kütüphane" />
+        {/* `|| 1` idi: hiç koleksiyon yokken KPI "1" gösterip kullanıcıyı
+            yanıltıyordu. Artık gerçek sayı görünür (0 dahil). */}
         <Kpi
           icon={TrendingUp}
           label="Koleksiyon"
-          value={collectionData.length || 1}
+          value={collectionData.length}
           sub="Kategorize kayıt"
         />
-        <Kpi icon={CreditCard} label="Kalan kredi" value={credits} sub={`${spent} harcandı`} />
+        {/* "ayırıcı" ile yazılır: i18n katmanı "·" çevresindeki parçaları ayrı
+            çevirebiliyor, aksi hâlde `${spent} harcandı` tek parça kalıyordu. */}
+        <Kpi icon={CreditCard} label="Kalan kredi" value={credits} sub={`${spent} · harcandı`} />
       </section>
 
       {/* ── Activity + credit balance ───────────────────────────────────── */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,16 @@ import { PLANS, type PlanId } from "@/lib/plans";
 
 const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
-export function PricingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PricingModal({
+  open,
+  initialPlan = null,
+  onClose,
+}: {
+  open: boolean;
+  /** Modala girer girmez ödemesi açılacak paket (ör. /pricing'den gelindiğinde). */
+  initialPlan?: PlanId | null;
+  onClose: () => void;
+}) {
   const checkout = useServerFn(createCheckout);
   const reconcileFn = useServerFn(reconcileMySubscription);
   const profileFn = useServerFn(getFullProfile);
@@ -21,6 +30,7 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
   const [loading, setLoading] = useState<PlanId | null>(null);
   const [paid, setPaid] = useState(false);
   const qc = useQueryClient();
+  const autoRan = useRef<PlanId | null>(null);
 
   /**
    * Ödeme bitti olayı — indirimli de indirimsiz de aynı olayla gelir.
@@ -31,10 +41,10 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
    * sayılıyordu. `isCheckoutCompleted` tek doğruluk kaynağı olarak
    * `paddle-checkout.ts` içinde `paddle.Event.on` ile de bağlanır.
    */
-  const onCheckoutEvent = (event: unknown) => {
+  const onCheckoutEvent = useCallback((event: unknown) => {
     if (!isCheckoutCompleted(event)) return;
     setPaid(true);
-  };
+  }, []);
 
   /**
    * Ödeme bittikten sonra aboneliğin GERÇEKTEN başladığını doğrular.
@@ -69,30 +79,12 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
     },
   });
 
-  // İndirim kodunun tek kaynağı Paddle'dır: kullanıcı ödeme ekranında
-  // kodu kendisi girer, uygulama checkout'a kod dayatmaz.
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-      // Modal kapanınca doğrulama durumu SIFIRLANIR. Aksi hâlde sonraki açılışta
-      // `paid` hâlâ true kalır, hook anında yeniden tetiklenir ve kullanıcı
-      // hiç ödeme yapmadan “abonelik başlatıldı” akışı başlardı — bu, olmayan
-      // bir abonelik iddiası olurdu.
-      setPaid(false);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const subscribe = async (plan: PlanId) => {
+  /**
+   * Bir paketi doğrudan satın al. İçerideki butonlar da, /pricing gibi dış
+   * yüzeyler (initialPlan) da bu tek yolu kullanır — böylece ödeme davranışı
+   * iki yerde ayrışamaz.
+   */
+  const subscribe = useCallback(async (plan: PlanId) => {
     setLoading(plan);
     let opened = false;
     let email: string | null | undefined;
@@ -130,7 +122,39 @@ export function PricingModal({ open, onClose }: { open: boolean; onClose: () => 
       toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
     }
     setLoading(null);
-  };
+  }, [checkout, onCheckoutEvent]);
+
+  // İndirim kodunun tek kaynağı Paddle'dır: kullanıcı ödeme ekranında
+  // kodu kendisi girer, uygulama checkout'a kod dayatmaz.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+      // Modal kapanınca doğrulama durumu SIFIRLANIR. Aksi hâlde sonraki açılışta
+      // `paid` hâlâ true kalır, hook anında yeniden tetiklenir ve kullanıcı
+      // hiç ödeme yapmadan “abonelik başlatıldı” akışı başlardı — bu, olmayan
+      // bir abonelik iddiası olurdu.
+      setPaid(false);
+      autoRan.current = null;
+    };
+  }, [open, onClose]);
+
+  // /pricing'den gelen `initialPlan`: modal açılır açılmaz o paketin ödemesi açılır.
+  useEffect(() => {
+    if (!open || !initialPlan) return;
+    if (autoRan.current === initialPlan) return;
+    autoRan.current = initialPlan;
+    void subscribe(initialPlan);
+  }, [open, initialPlan, subscribe]);
+
+  if (!open) return null;
 
   return createPortal(
     <div

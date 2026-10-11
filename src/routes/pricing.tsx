@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Check, Sparkles, Zap, Crown, ArrowRight, ShieldCheck } from "lucide-react";
-import { PLANS, USAGE_ROWS } from "@/lib/plans";
+import { PLANS, USAGE_ROWS, type PlanId } from "@/lib/plans";
 import { BrandLogo } from "@/components/brand-logo";
 import { useFxRates } from "@/lib/currency";
+import { useAuth } from "@/hooks/use-auth";
+import { PricingModal } from "@/components/pricing-modal";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -69,8 +71,13 @@ const FAQ = [
 
 function PricingPage() {
   const { data } = useFxRates();
+  const { user, loading: authLoading } = useAuth();
+  const nav = useNavigate();
   const [cur, setCur] = useState<Cur>("USD");
-  const [yearly, setYearly] = useState(false);
+  // Seçilen paket için ödeme modalı. Tek ödeme yolu (PricingModal) yeniden
+  // kullanılır; /pricing eski sürümde yalnız /auth'a yönlendiriyordu ve
+  // buradan satın almak MÜMKÜN DEĞİLDİ.
+  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
 
   useEffect(() => {
     try {
@@ -83,8 +90,11 @@ function PricingPage() {
   }, []);
 
   const rate = cur === "TRY" ? (data?.rates?.TRY ?? 34.2) : 1;
+  // Tek satış modeli aylık aboneliktir; yıllık plan gerçek bir Paddle fiyatına
+  // bağlı olmadığı için kaldırıldı (kullanıcıya alınamayacak bir seçenek
+  // gösteriyordu).
   const price = (usd: number) => {
-    const v = usd * rate * (yearly ? 10 : 1);
+    const v = usd * rate;
     if (v === 0) return cur === "TRY" ? "₺0" : "$0";
     return new Intl.NumberFormat(cur === "TRY" ? "tr-TR" : "en-US", {
       style: "currency",
@@ -145,20 +155,9 @@ function PricingPage() {
                 </button>
               ))}
             </div>
-            <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
-              <button
-                onClick={() => setYearly(false)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${!yearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >
-                Aylık
-              </button>
-              <button
-                onClick={() => setYearly(true)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${yearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >
-                Yıllık · 2 ay hediye
-              </button>
-            </div>
+            <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">
+              Aylık abonelik
+            </span>
           </div>
         </div>
 
@@ -182,9 +181,7 @@ function PricingPage() {
                 </div>
                 <div className="mt-4 text-3xl font-extrabold">
                   {price(p.usd)}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    /{yearly ? "yıl" : "ay"}
-                  </span>
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">/ay</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">
@@ -202,12 +199,27 @@ function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  to="/auth"
-                  className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold ${p.highlight ? "bg-primary text-primary-foreground" : "border border-white/15 hover:bg-white/5"}`}
+                <button
+                  type="button"
+                  disabled={authLoading}
+                  onClick={() => {
+                    if (authLoading) return;
+                    // Oturum yoksa önce kayıt; kullanıcı bu sayfaya geri döner ve
+                    // paketi buradan satın alır. Oturum varsa ödeme doğrudan açılır.
+                    if (!user) {
+                      void nav({
+                        to: "/auth",
+                        search: { mode: "signup", redirect: "/pricing" },
+                      });
+                      return;
+                    }
+                    setCheckoutPlan(p.id);
+                  }}
+                  className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${p.highlight ? "bg-primary text-primary-foreground" : "border border-white/15 hover:bg-white/5"}`}
                 >
-                  {p.label}'a geç <ArrowRight size={15} />
-                </Link>
+                  {user ? `${p.label} paketini al` : `${p.label} ile başla`}
+                  <ArrowRight size={15} />
+                </button>
               </div>
             );
           })}
@@ -275,6 +287,12 @@ function PricingPage() {
           iptal
         </div>
       </div>
+
+      <PricingModal
+        open={checkoutPlan !== null}
+        initialPlan={checkoutPlan}
+        onClose={() => setCheckoutPlan(null)}
+      />
     </div>
   );
 }

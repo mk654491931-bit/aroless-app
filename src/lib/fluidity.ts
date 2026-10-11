@@ -64,7 +64,8 @@ export function enableLiteMode(reason = "manual"): void {
   } catch {
     /* depolama kapalı olabilir */
   }
-  console.log(`[fluidity] hafif mod açıldı (${reason})`);
+  // Yalnız geliştirmede logla: üretimde konsol gürültüsü yapmasın.
+  if (import.meta.env.DEV) console.log(`[fluidity] hafif mod açıldı (${reason})`);
   try {
     window.dispatchEvent(new CustomEvent(LITE_EVENT, { detail: { reason } }));
   } catch {

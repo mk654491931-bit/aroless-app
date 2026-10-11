@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SIMULATOR_STATE_KEY } from "@/lib/simulator-state";
 import {
   Store,
   Play,
@@ -111,7 +112,7 @@ type ViewId =
   | "coach"
   | "log";
 
-const KEY = "omni-training-run-v1";
+const KEY = SIMULATOR_STATE_KEY;
 const ArolessIcon = ({ size = 14 }: { size?: number }) => <ArolessMark size={size} />;
 
 const money = (n: number) =>

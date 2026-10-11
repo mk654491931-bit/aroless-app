@@ -1,5 +1,5 @@
 /**
- * Tek satış modelimiz: 3 aylık abonelik paketi.
+ * Tek satış modelimiz: aylık abonelik paketi.
  * Tek seferlik kredi paketi / ek satış yoktur.
  *
  * ÖNEMLİ: Tüm modüller her pakette AÇIKTIR. Paketler arasındaki fark

@@ -24,10 +24,10 @@ import { CapabilitySimulator } from "@/components/landing/capability-simulator";
 import { AgentTopology } from "@/components/landing/agent-topology";
 import { CountUp } from "@/components/landing/count-up";
 import {
+  ExampleReviews,
   FaqSection,
-  Testimonials,
+  type ExampleReview,
   type FaqItem,
-  type ReviewItem,
 } from "@/components/landing/sections";
 import { PLANS } from "@/lib/plans";
 
@@ -47,26 +47,26 @@ const ECOSYSTEMS = [
 const BENTO = [
   {
     icon: Layers,
-    title: "Automated Attribution",
-    text: "Cross-network conversion mapping collapses into one auditable ROAS picture — no spreadsheet reconciliation, no black-box credit.",
+    title: "Ürün Bulucu",
+    text: "Tek aramada veri kaynakları taranır; talep, rekabet ve gerçek birim maliyet (tedarik + kargo + komisyon + KDV) aynı kartta birleşir.",
     span: "lg:col-span-2",
   },
   {
     icon: ShieldCheck,
-    title: "Security & Compliance",
-    text: "Least-privilege agent roles, signed payloads, immutable event log and deterministic replays for every run.",
+    title: "Trend Radar",
+    text: "20+ platformdaki talep ve fiyat hareketleri izlenir; trend herkese görünmeden önce raporlanır.",
     span: "lg:col-span-2",
   },
   {
     icon: Workflow,
-    title: "Multi-Agent Swarm Logic",
-    text: "Specialized agents negotiate via a shared decision mesh — trend scan, deal engine, content dispatch and payout act as one system.",
+    title: "14'lü AI Konsey",
+    text: "Farklı uzman roller aynı ürünü ayrı ayrı tartışır; risk, aksiyon ve varsayımlar ayrıştırılmış tek bir raporda toplanır.",
     span: "lg:col-span-3",
   },
   {
     icon: CircleDollarSign,
-    title: "Real-Time Payout Infrastructure",
-    text: "Fee optimization, threshold rules and scheduled settlements run on an auditable ledger with per-agent reconciliation.",
+    title: "Denetçi & ROI motoru",
+    text: "Rakip mağazalar ve listingler denetlenir; fiyat, stok ve kampanya senaryolarının kârlılığı önceden simüle edilir.",
     span: "lg:col-span-1",
   },
 ];
@@ -74,27 +74,27 @@ const BENTO = [
 const METRICS = [
   {
     value: <CountUp end={99.9} decimals={1} suffix="%" />,
-    label: "Attribution accuracy",
+    label: "Demo: eşleşme doğruluğu",
     sim: true,
     note: "Simülasyon referansı",
   },
   {
     value: <CountUp end={50} prefix="<" suffix="ms" />,
-    label: "Median agent latency",
+    label: "Demo: ajan yanıt süresi",
     sim: true,
     note: "Lokal simülasyon",
   },
   {
     value: <CountUp end={10} suffix="k+" />,
-    label: "Simulated events processed",
+    label: "Demo: işlenen olay sayısı",
     sim: true,
-    note: "Demo payload",
+    note: "Demo verisi",
   },
   {
     value: <CountUp end={312} prefix="+" suffix="%" />,
-    label: "Median ROI uplift in sim pilots",
+    label: "Demo: simülasyon ROI artışı",
     sim: true,
-    note: "Pilot simülasyonu",
+    note: "Simülasyon senaryosu",
   },
 ];
 
@@ -103,100 +103,105 @@ const WHAT_WE_DO = [
   {
     icon: Search,
     step: "01",
-    title: "Scan the market like an analyst",
-    text: "Trend agents watch 20+ platforms and 20+ country economies in real time — demand surges, seasonal shifts and margin anomalies surface before they become obvious.",
+    title: "Piyasayı analist gibi tara",
+    text: "20+ platform ve ülke ekonomisi izlenir; talep sıçramaları, sezon kaymaları ve marj bozulmaları herkes fark etmeden önce yüzeye çıkar.",
     accent: "indigo",
   },
   {
     icon: Gauge,
     step: "02",
-    title: "Score products on real economics",
-    text: "Winner Scores combine demand signals with genuine unit economics — supplier cost, shipping, fees, VAT, returns and ad spend — so a +420% trend never hides a -12% margin.",
+    title: "Ürünü gerçek ekonomi ile puanla",
+    text: "Ödül puanı yalnız talebi değil gerçek birim ekonomisini de okur: tedarik, kargo, komisyon, KDV, iade ve reklam. %420 trend, -%12 marjı gizleyemez.",
     accent: "emerald",
   },
   {
     icon: Workflow,
     step: "03",
-    title: "Match merchants to the right creators",
-    text: "Our deal engine pairs verified sellers with tier-1 creators by audience fit, fee structure and compliance — then drafts hooks, ad copy and campaign briefs automatically.",
+    title: "Sınırsız deneme: eğitim simülatörü",
+    text: "Karar vermeden önce sezon ve kampanya senaryolarını simüle et. Yaptığın hatanın bedelini gerçek stokla değil, simülasyonda öde.",
     accent: "indigo",
   },
   {
     icon: LineChart,
     step: "04",
-    title: "Attribute, pay out, and prove ROI",
-    text: "Every conversion is mapped across networks on one auditable ledger. Creators get paid on time; you see exactly which dollar earned which return — no black boxes.",
+    title: "Kanıtı ve aksiyonu birlikte al",
+    text: "14'lü AI Konsey her ürün için riski, aksiyonu ve varsayımları ayrı ayrı yazar. Hangi veriye dayandığını görürsün — kara kutu yok.",
     accent: "emerald",
+  },
+];
+
+/**
+ * Temsilî örnek yorumlar — GERÇEK müşteri yorumu DEĞİLDİR.
+ * Arayüzde hem bölüm hem kart seviyesinde "örnek" olarak etiketlenir
+ * (bkz. sections.tsx → ExampleReviews).
+ */
+const EXAMPLE_REVIEWS: ExampleReview[] = [
+  {
+    name: "Elif Kaya",
+    role: "E-ticaret operatörü · İstanbul",
+    market: "TR",
+    initials: "EK",
+    quote:
+      "Üç ürünü trend zirvesine çıkmadan radar üzerinden lansmana aldık. Kâr tablosu, ikinci en çok satan ürünümüzü sessizce öldürecek komisyon yapısını yakaladı.",
+  },
+  {
+    name: "Ahmet Demir",
+    role: "İhracatçı · Gaziantep",
+    market: "TR",
+    initials: "AD",
+    quote:
+      "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum.",
+  },
+  {
+    name: "Merve Aksoy",
+    role: "Dropshipping · İzmir",
+    market: "TR",
+    initials: "MA",
+    quote:
+      "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi.",
+  },
+  {
+    name: "Can Yılmaz",
+    role: "Ajans kurucusu · Ankara",
+    market: "TR",
+    initials: "CY",
+    quote:
+      "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu.",
+  },
+  {
+    name: "Zeynep Şahin",
+    role: "Mağaza denetçisi · Bursa",
+    market: "TR",
+    initials: "ZŞ",
+    quote:
+      "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ile ürünleri aynı gün pazara taşıyoruz.",
   },
 ];
 
 const FAQ_ITEMS: FaqItem[] = [
   {
-    q: "Is this a real multi-agent system or just a simulation on the landing page?",
-    a: "The landing demos run deterministic, pre-loaded local payloads so you can feel the workflow instantly with zero setup. Inside the product, the same pipeline runs against live market data: trend scanning, scoring, matching and attribution agents orchestrate real workflows you can inspect step by step.",
+    q: "Landing'deki demolar gerçek mi, simülasyon mu?",
+    a: "Demolar deterministik ve yerel veriyle çalışır; dış servise istek gitmez. Ürünün içinde aynı hat gerçek piyasa verisiyle çalışır ve her adımı inceleyebilirsin.",
   },
   {
-    q: "Which platforms and countries does Aroless cover?",
-    a: "Aroless models 20+ e-commerce platforms — Amazon, TikTok Shop, Shopify, Trendyol, Hepsiburada, eBay, Etsy, Zalando, Allegro and more — across 20+ country economies, each with its own commission, VAT, shipping and certification logic baked into the score.",
+    q: "Hangi platform ve ülkeleri kapsıyor?",
+    a: "Amazon, TikTok Shop, Shopify, Trendyol, Hepsiburada, eBay, Etsy, Zalando ve daha fazlası ile 20+ ülke ekonomisi modellenir. Her ülkenin komisyon, KDV, kargo ve sertifikasyon mantığı puanlamaya dahildir.",
   },
   {
-    q: "How is a product score calculated?",
-    a: "Scores are a hybrid of demand momentum and real unit economics: historical and predicted demand, competition level, gross margin after supplier/shipping/fees/taxes, plus compliance and return-rate risk. Every score ships with the evidence behind it.",
+    q: "Ürün puanı nasıl hesaplanıyor?",
+    a: "Puan iki parçadan oluşur: talep momentumu ve gerçek birim ekonomisi. Talep tahminleri, rekabet seviyesi, tedarik/kargo/komisyon/vergi sonrası marj, uyumluluk ve iade riski birlikte değerlendirilir. Her puanın arkasındaki kanıt kartta gösterilir.",
   },
   {
-    q: "Do you handle payouts to creators and affiliates?",
-    a: "Yes — the payout infrastructure layer schedules settlements, negotiates fee overrides and keeps an immutable, auditable ledger per agent and merchant. You can run it end-to-end or plug Aroless into your existing stack via API.",
+    q: "Ödeme ve iptal nasıl işliyor?",
+    a: "Ödemeler Paddle üzerinden alınır. Aboneliği istediğin zaman iptal edebilirsin; dönem sonuna kadar erişimin devam eder, otomatik yenileme durur.",
   },
   {
-    q: "What about security and compliance?",
-    a: "Agents run with least-privilege roles, all payloads are signed, every run is recorded on an immutable event log and replays are deterministic. Data can be region-pinned for EU/GDPR or Turkey/KVKK workflows.",
+    q: "Veri güvenliği nasıl sağlanıyor?",
+    a: "Veriler Supabase üzerinde tutulur ve satır düzeyi güvenlik (RLS) ile erişim kullanıcı bazında kısıtlanır. KVKK aydınlatma metni ve veri işleme sözleşmesi uygulama içinde yer alır.",
   },
   {
-    q: "Can I try it before paying?",
-    a: "Yes. Signing up starts you with welcome credits so you can run real analyses before choosing a plan — no credit card required to begin.",
-  },
-];
-
-const REVIEWS: ReviewItem[] = [
-  {
-    name: "Elif Kaya",
-    role: "E-commerce operator · Istanbul",
-    market: "TR",
-    initials: "EK",
-    quote:
-      "We launched three products based on the radar before the trend peaked. The margin table caught a fee structure that would have silently killed our second best-seller.",
-  },
-  {
-    name: "Jonas Weber",
-    role: "FBA seller · Berlin",
-    market: "DE",
-    initials: "JW",
-    quote:
-      "The attribution mesh is the first thing that survived an audit by our finance team. Payouts and creator fees are provable, and renewals land without chasing anyone.",
-  },
-  {
-    name: "Marta Silva",
-    role: "DTC brand lead · Lisbon",
-    market: "EU",
-    initials: "MS",
-    quote:
-      "Our creators matched through Aroless convert 3x better than the lists we were buying. The hooks are genuinely good — we ship most of them as-is.",
-  },
-  {
-    name: "Ahmet Demir",
-    role: "Wholesale exporter · Gaziantep",
-    market: "TR",
-    initials: "AD",
-    quote:
-      "I export to six countries and used to keep the economics in spreadsheets. Now I see landed cost per country in seconds. It paid for itself in the first week.",
-  },
-  {
-    name: "Sarah Mitchell",
-    role: "Dropshipping operator · Manchester",
-    market: "UK",
-    initials: "SM",
-    quote:
-      "The simulator let me test the whole pipeline before committing. What I learned there stopped me from repeating a mistake that cost me money twice last year.",
+    q: "Ödemeden önce deneyebilir miyim?",
+    a: "Evet. Kayıt olduğunda hoş geldin kredisi tanımlanır; Ürün Bulucu'yu kredi kartı girmeden denersin.",
   },
 ];
 
@@ -266,26 +271,26 @@ export function MarketingLanding() {
           <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
-                <Sparkles size={12} /> Autonomous Multi-Agent Infrastructure
+                <Sparkles size={12} /> E-ticaret satıcıları için yapay zekâ
               </div>
               <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl xl:text-6xl">
-                Turn market signals into{" "}
+                Piyasa sinyallerini{" "}
                 <span className="bg-gradient-to-r from-indigo-300 via-white to-emerald-300 bg-clip-text text-transparent">
-                  orchestrated revenue
+                  kârlı ürün kararlarına
                 </span>{" "}
-                on autopilot.
+                çevir.
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-                Aroless coordinates specialized agents — trend scanning, merchant–creator matching,
-                content dispatch, attribution and payout — into one deterministic pipeline for
-                affiliate &amp; e-commerce teams.
+                Aroless; Ürün Bulucu, Trend Radar, mağaza denetimi, finans motoru ve 14'lü AI
+                Konsey'i tek panelde birleştirir. Talep, rekabet ve gerçek maliyet aynı ekranda
+                hesaplanır — ve her skorun arkasındaki kanıt görünür.
               </p>
 
               <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-300">
                 {[
-                  "Deterministic, replayable runs",
-                  "SOC2-aligned data handling",
-                  "Simulation-first onboarding",
+                  "Kaynak bazlı kanıt",
+                  "Supabase RLS ile satır düzeyi güvenlik",
+                  "Kayıt anında hoş geldin kredisi",
                 ].map((item) => (
                   <li key={item} className="inline-flex items-center gap-1.5">
                     <BadgeCheck size={15} className="text-emerald-400" /> {item}
@@ -300,7 +305,7 @@ export function MarketingLanding() {
                   className="sweep-frame group rounded-xl"
                 >
                   <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
-                    Deploy Aroless Swarm
+                    Ücretsiz başla
                     <ArrowRight
                       size={16}
                       className="transition-transform group-hover:translate-x-0.5"
@@ -308,23 +313,22 @@ export function MarketingLanding() {
                   </span>
                 </Link>
                 <a
-                  href="#architecture"
+                  href="#platform"
                   className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 px-5 text-sm font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/5"
                 >
-                  View Architecture Docs
+                  Nasıl çalışıyor?
                 </a>
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1.5">
-                  <Zap size={13} className="text-indigo-300" />{" "}
-                  <CountUp end={99.99} decimals={2} suffix="%" /> uptime
+                  <Zap size={13} className="text-indigo-300" /> Kredi kullanımı — sürpriz fatura yok
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Lock size={13} className="text-emerald-400" /> No credit card to start
+                  <Lock size={13} className="text-emerald-400" /> Başlamak için kredi kartı gerekmez
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Rocket size={13} className="text-slate-400" /> Provisioned in minutes
+                  <Rocket size={13} className="text-slate-400" /> Kayıt sonrası hemen kullanılabilir
                 </span>
               </div>
             </div>
@@ -341,7 +345,7 @@ export function MarketingLanding() {
           {/* Ecosystem strip */}
           <div className="mt-16">
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-600">
-              Orchestrating across major affiliate &amp; commerce ecosystems
+              Şu platformlar için modelleme yapılır
             </p>
             <div className="mx-auto mt-4 flex max-w-3xl flex-wrap items-center justify-center gap-2">
               {ECOSYSTEMS.map((name) => (
@@ -363,11 +367,11 @@ export function MarketingLanding() {
               <Bot size={12} /> What we do
             </span>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Four agents. One outcome: revenue you can trace.
+              Dört adım, tek sonuç: izlenebilir karar.
             </h2>
             <p className="mt-3 text-slate-400">
-              Aroless turns the affiliate &amp; e-commerce loop into a deterministic pipeline —
-              hover a card to see how each stage works.
+              Aroless e-ticaret araştırmasını izlenebilir bir hatta dönüştürür — her adımın nasıl
+              çalıştığını görmek için kartların üzerine gel.
             </p>
           </div>
 
@@ -434,11 +438,11 @@ export function MarketingLanding() {
               <Zap size={12} /> Instant value engine
             </span>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Experience the swarm. No sign-up, no network.
+              Motoru kurmadan dene. Kayıt yok, ağ yok.
             </h2>
             <p className="mt-3 text-slate-400">
-              Select a vertical and run the multi-agent pipeline — every payload is pre-loaded
-              locally, so the demo is instant and fully deterministic.
+              Bir kategori seç ve çok adımlı hattı çalıştır. Tüm veri yerelde hazır olduğu için
+              demo anında ve tamamen deterministik çalışır.
             </p>
           </div>
           <div className="mt-10">
@@ -453,11 +457,11 @@ export function MarketingLanding() {
               <Network size={12} /> System architecture
             </span>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              A pipeline you can trace end to end
+              Uçtan uca izlenebilen bir hat
             </h2>
             <p className="mt-3 text-slate-400">
-              Data ingestion → agent decision mesh → automated conversion. Every hop is
-              deterministic and replayable.
+              Veri toplama → kaynak doğrulama → puanlama → konsey raporu. Her adım deterministik
+              ve tekrarlanabilir.
             </p>
           </div>
 
@@ -494,19 +498,20 @@ export function MarketingLanding() {
                 <FileText size={18} className="text-emerald-300" />
               </div>
               <div>
-                <p className="font-semibold text-white">Enterprise-readiness checklist</p>
+                <p className="font-semibold text-white">Veri ve erişim</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Signed payloads · immutable event log · role-scoped agents · region-pinned data ·
-                  deterministic replays
+                  Supabase RLS ile satır düzeyi yetkilendirme · KVKK aydınlatma ve veri işleme
+                  sözleşmesi · ödemeler Paddle üzerinden
                 </p>
               </div>
             </div>
-            <a
-              href="#architecture"
+            <Link
+              to="/legal/$slug"
+              params={{ slug: "kvkk-aydinlatma-metni" }}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-400/40 hover:text-emerald-300"
             >
-              View Architecture Docs <ArrowRight size={13} />
-            </a>
+              Yasal metinler <ArrowRight size={13} />
+            </Link>
           </div>
         </section>
 
@@ -514,11 +519,11 @@ export function MarketingLanding() {
         <section id="metrics" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/88">
             <div className="border-b border-white/10 px-6 py-5 text-center">
-              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                Engineered for throughput, built for trust
-              </h2>
+              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">              Simülasyon referansları
+            </h2>
               <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
-                Deterministic agent execution keeps every run measurable, auditable and repeatable.
+                Aşağıdaki değerler ürünün nasıl ölçtüğünü göstermek için yerel demo verisiyle
+                üretilir; gerçek sonuçlar kullanılan veri kaynağına göre değişir.
               </p>
               <p className="mx-auto mt-2 max-w-xl text-[11px] text-amber-300/80">
                 Aşağıdaki 4 değer <strong>simülasyon / demo referansıdır</strong> — gerçek üretim
@@ -651,11 +656,11 @@ export function MarketingLanding() {
             />
             <div className="relative">
               <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Deploy your swarm in minutes, not quarters.
+                İlk analizini dakikalar içinde al.
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400 sm:text-base">
-                Start with a guided simulation, then connect your first data sources. The rest of
-                the pipeline provisions itself.
+                Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya
+                da kredi kartı gerekmez.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                 <Link
@@ -664,7 +669,7 @@ export function MarketingLanding() {
                   className="sweep-frame group rounded-xl"
                 >
                   <span className="relative z-[1] flex h-12 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-7 text-sm font-semibold text-white transition group-hover:brightness-110">
-                    Deploy Aroless Swarm
+                    Ücretsiz başla
                     <ArrowRight
                       size={16}
                       className="transition-transform group-hover:translate-x-0.5"
@@ -672,14 +677,14 @@ export function MarketingLanding() {
                   </span>
                 </Link>
                 <a
-                  href="#architecture"
+                  href="#platform"
                   className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/15 px-6 text-sm font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/5"
                 >
-                  View Architecture Docs
+                  Motoru dene
                 </a>
               </div>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-xs text-slate-500">
-                {["No credit card", "Simulation-first onboarding", "Cancel anytime"].map((t) => (
+                {["Kredi kartı gerekmez", "Kayıt anında hoş geldin kredisi", "İstediğin zaman iptal"].map((t) => (
                   <span key={t} className="inline-flex items-center gap-1.5">
                     <Check size={13} className="text-emerald-400" /> {t}
                   </span>
@@ -689,12 +694,12 @@ export function MarketingLanding() {
           </div>
         </section>
 
-        {/* ── Reviews ────────────────────────────────────────────── */}
-        <div id="reviews" className="scroll-mt-24">
-          <Testimonials
-            items={REVIEWS}
-            title="Loved by merchants and creator teams"
-            subtitle="Market operators across Europe and Turkey on running their loop with Aroless."
+        {/* ── Örnek yorumlar (temsilî — gerçek müşteri yorumu değil) ──── */}
+        <div id="examples" className="scroll-mt-24">
+          <ExampleReviews
+            items={EXAMPLE_REVIEWS}
+            title="Temsilî kullanıcı senaryoları"
+            subtitle="Ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış örnekler."
           />
         </div>
       </main>
@@ -717,8 +722,8 @@ export function MarketingLanding() {
             <a href="#faq" className="hover:text-slate-200">
               FAQ
             </a>
-            <a href="#reviews" className="hover:text-slate-200">
-              Reviews
+            <a href="#examples" className="hover:text-slate-200">
+              Örnekler
             </a>
           </div>
         </div>

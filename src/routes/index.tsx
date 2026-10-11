@@ -75,6 +75,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LockedPanel } from "@/components/upgrade-gate";
 import { CreditCost } from "@/components/credit-cost";
 import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
+import { hasSimulatorProgress } from "@/lib/simulator-state";
 import {
   AdvancedFilters,
   DEFAULT_FILTERS,
@@ -268,6 +269,16 @@ function Dashboard() {
   }, []);
 
   const [showPricing, setShowPricing] = useState(false);
+  // Başlangıç görevleri için gerçek sinyal: simülatörde kaydedilmiş koşu var mı?
+  // Kullanıcı eğitim sekmesindeyken yoklanır (localStorage'ı sürekli okumadan).
+  const [simPlayed, setSimPlayed] = useState(hasSimulatorProgress);
+  useEffect(() => {
+    if (tab !== "training" || simPlayed) return;
+    const id = window.setInterval(() => {
+      if (hasSimulatorProgress()) setSimPlayed(true);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [tab, simPlayed]);
   const [reportProduct, setReportProduct] = useState<WinningProduct | null>(null);
   const [deepDiveProduct, setDeepDiveProduct] = useState<WinningProduct | null>(null);
   const [validatorQuery, setValidatorQuery] = useState("");
@@ -637,7 +648,7 @@ function Dashboard() {
                 },
                 {
                   label: "Simülatörde bir sezon oyna",
-                  done: false,
+                  done: simPlayed,
                   action: () => setTab("training"),
                 },
               ]}

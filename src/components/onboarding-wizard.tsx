@@ -4,6 +4,7 @@ import { Rocket, ArrowRight, ArrowLeft, Check, X, AlertTriangle } from "lucide-r
 import { toast } from "sonner";
 import { TARGET_COUNTRIES, countryName } from "@/lib/countries";
 import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
+import { isProductCategory, type ProductCategory } from "@/lib/product-categories";
 
 const KEY = "aroless.onboarding.v1";
 
@@ -15,22 +16,30 @@ export type OnboardingResult = {
 };
 
 const PLATFORM_CHOICES = ["Shopify", "TikTok Shop", "Amazon", "Etsy", "Trendyol", "Hepsiburada"];
-const CATEGORY_CHOICES = [
-  "Ev & Yaşam",
-  "Sağlık & Bakım",
-  "Elektronik Aksesuar",
-  "Evcil Hayvan",
-  "Spor & Outdoor",
-  "Bebek & Çocuk",
+/**
+ * Saklanan değer Ürün Bulucu'nun kanonik anahtarıdır (PRODUCT_CATEGORIES);
+ * görünen etiket Türkçedir. Eskiden Türkçe etiket saklanıyordu ve arama
+ * filtresi onu tanımadığı için seçim sessizce "Any" oluyordu.
+ */
+const CATEGORY_OPTIONS: { value: ProductCategory; label: string }[] = [
+  { value: "Beauty", label: "Güzellik & Kişisel Bakım" },
+  { value: "Fitness", label: "Spor & Fitness" },
+  { value: "Home", label: "Ev & Yaşam" },
+  { value: "Tech", label: "Elektronik & Teknoloji" },
+  { value: "Pets", label: "Evcil Hayvan" },
+  { value: "Fashion", label: "Moda & Aksesuar" },
+  { value: "Kids", label: "Bebek & Çocuk" },
+  { value: "Outdoor", label: "Outdoor & Kamp" },
+  { value: "Kitchen", label: "Mutfak & Küçük Ev Aletleri" },
 ];
 const BUDGET_CHOICES = ["$0 - $500", "$500 - $2,000", "$2,000 - $10,000", "$10,000+"];
 
 const DEFAULTS = {
   country: "US",
   platform: "Shopify",
-  category: CATEGORY_CHOICES[0],
+  category: "Beauty" as ProductCategory,
   budget: BUDGET_CHOICES[1],
-} as const;
+};
 
 /** UI seçenekleri — payload'ı göndermeden önce her alanı kısıtlı kümeye çeker. */
 export function sanitizeOnboardingResult(
@@ -45,10 +54,7 @@ export function sanitizeOnboardingResult(
     typeof input.platform === "string" && PLATFORM_CHOICES.includes(input.platform)
       ? input.platform
       : DEFAULTS.platform;
-  const category =
-    typeof input.category === "string" && CATEGORY_CHOICES.includes(input.category)
-      ? input.category
-      : DEFAULTS.category;
+  const category = isProductCategory(input.category) ? input.category : DEFAULTS.category;
   const budget =
     typeof input.budget === "string" && BUDGET_CHOICES.includes(input.budget)
       ? input.budget
@@ -96,7 +102,7 @@ export function OnboardingWizard({
   const [step, setStep] = useState(0);
   const [country, setCountry] = useState("US");
   const [platform, setPlatform] = useState("Shopify");
-  const [category, setCategory] = useState(CATEGORY_CHOICES[0]);
+  const [category, setCategory] = useState<ProductCategory>(DEFAULTS.category);
   const [budget, setBudget] = useState(BUDGET_CHOICES[1]);
   const [error, setError] = useState<string | null>(null);
 
@@ -142,14 +148,14 @@ export function OnboardingWizard({
       hint: "İlk aramanı bu kategoriyle hazırlayacağız.",
       body: (
         <div className="flex flex-wrap gap-2">
-          {CATEGORY_CHOICES.map((c) => (
+          {CATEGORY_OPTIONS.map((o) => (
             <button
-              key={c}
+              key={o.value}
               type="button"
-              onClick={() => setCategory(c)}
-              className={`rounded-lg border px-3 py-2 text-sm ${category === c ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
+              onClick={() => setCategory(o.value)}
+              className={`rounded-lg border px-3 py-2 text-sm ${category === o.value ? "border-primary/60 bg-primary/15" : "border-white/10 hover:bg-white/5"}`}
             >
-              {c}
+              {o.label}
             </button>
           ))}
         </div>

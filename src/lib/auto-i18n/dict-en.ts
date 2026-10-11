@@ -2122,5 +2122,49 @@ const dict: Record<string, string> = {
   "Hibrit AI motoru": "Hybrid AI engine",
   "Kaynaklı tahminler": "Sourced estimates",
   "21 ülke ekonomisi": "21 country economies",
+
+  /* --- Panel KPI'ları (dashboard) --- */
+  "Kayıtlı ürün": "Saved products",
+  Koleksiyon: "Collections",
+  "Kalan kredi": "Credits left",
+  "Son 14 gün": "Last 14 days",
+  Kütüphane: "Library",
+  "Kategorize kayıt": "Categorized records",
+  "Analiz aktivitesi (son 14 gün)": "Analysis activity (last 14 days)",
+  harcandı: "spent",
+  "Koleksiyonlara göre kayıtlar": "Saves by collection",
+  "Koleksiyon dağılımını görmek için bir ürün kaydet.":
+    "Save a product to see the collection breakdown.",
+
+  /* --- Fiyatlandırma --- */
+  "Ücretsiz başla": "Start free",
+  Şeffaf: "Transparent",
+  "Aylık abonelik": "Monthly subscription",
+  "En popüler": "Most popular",
+
+  /* --- Şifre sıfırlama --- */
+  "Yeni şifre belirle": "Set a new password",
+  "Hesabın için yeni bir şifre gir. En az 6 karakter olmalı.":
+    "Choose a new password for your account. It must be at least 6 characters.",
+  "Yeni şifre": "New password",
+  "Yeni şifre (tekrar)": "New password (repeat)",
+  "Şifreyi güncelle": "Update password",
+  "Kaydediliyor…": "Saving…",
+  "Şifreler eşleşmiyor.": "Passwords do not match.",
+  "Şifren güncellendi. Artık yeni şifrenle giriş yapabilirsin.":
+    "Your password was updated. You can now sign in with the new password.",
+
+  /* --- Ürün modülleri --- */
+  "Mağaza Denetçisi": "Store Auditor",
+
+  /* --- Temsilî (örnek) yorumlar --- */
+  "Örnek yorumlar": "Example reviews",
+  "Temsilî kullanıcı senaryoları": "Illustrative user scenarios",
+  "Aşağıdakiler temsilî senaryolardır.": "The following are illustrative scenarios.",
+  "Ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış örnekler.":
+    "Examples written to show which problems the product solves.",
+  "Bu yorumlar gerçek müşteri yorumu değildir; ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış temsilî örneklerdir.":
+    "These are not real customer reviews; they are illustrative examples written to show which problems the product solves.",
+  Örnek: "Example",
 };
 export default dict;
