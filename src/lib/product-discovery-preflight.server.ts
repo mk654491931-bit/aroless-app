@@ -1,4 +1,8 @@
-import { configuredDirectModelProviders, evrenStatus } from "./ai-keys.server";
+import {
+  configuredDirectModelProviders,
+  evrenStatus,
+  jinaKeyCount,
+} from "./ai-keys.server";
 // ============================================================================
 // PRODUCT DISCOVERY — HAT ÖNCE KONTROLÜ (PREFLIGHT).
 //
@@ -67,6 +71,8 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
   // Yalnız sağlayıcı İSMİ döner; anahtar değeri ASLA okunmaz.
   const directProviders = configuredDirectModelProviders(env);
   const evren = evrenStatus(env);
+  /** Kaç okuma anahtarı var (yalnız SAYI; anahtar değeri asla okunmaz/yazılmaz). */
+  const jinaKeys = jinaKeyCount(env);
   return [
     {
       id: "qstash_token",
@@ -131,6 +137,19 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
           ? "tanımlı — hedef ülkenin yerel pazaryerleri kazınır"
           : "Yok: yerel pazaryeri kazıması atlanır, kalan kaynaklarla hat yine çalışır.",
       fix: "İsteğe bağlı — scraperapi.com'da ücretsiz hesap açıp SCRAPERAPI_KEY ekle.",
+    },
+    {
+      id: "jina_reader",
+      label: "Ürün okuyucu anahtarı (Jina Reader)",
+      ok: jinaKeys > 0,
+      optional: true,
+      detail:
+        jinaKeys > 0
+          ? `tanımlı — ${jinaKeys} anahtar yük paylaşır (≈${jinaKeys * 10}M token kota, arama başına ~75K token).`
+          : "Yok: okumalar anahtarsız ücretsiz katmanda koşar (~20 istek/dk); kota dolunca 429 gelir ve o sayfanın ürün satırları havuzdan düşer.",
+      fix:
+        "Önerilir — jina.ai'de ücretsiz hesap aç, anahtarları JINA_API_KEY_1 ve JINA_API_KEY_2 olarak ekle " +
+        "(her anahtar 10M token). Birden fazla anahtar arasında yük paylaşılır ve kota dolan anahtar soğumaya alınır.",
     },
     {
       id: "evren",

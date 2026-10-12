@@ -72,6 +72,18 @@ export function toWinningProducts(
       // önceliklidir; alakasız web araması yalnız gerçek görsel yoksa devreye
       // girer (bkz. `product-card.tsx`).
       image_url: row.imageUrl || undefined,
+      // ÖLÇÜLMÜŞ SAYISAL ALANLAR — kriter vektörü (`winner-criteria.ts`) ve
+      // sayı denetimi bunları kullanır; metne gömülü bırakmak yerine sayı olarak
+      // taşınır. `null` = ölçülmedi (0 uydurulmaz).
+      measured: {
+        rating: row.rating ?? null,
+        ratingCount: row.ratingCount ?? null,
+        // Ölçümlü keşif hattı bu İKİ alanı KAZIMAZ (`DiscoveryWinner` şemasında
+        // yoktur), o yüzden `null` kalır — kriterlerde "ölçülmedi" sayılır ve
+        // puanlamaya katılmaz (bkz. `winner-criteria.ts` `measuredCount`).
+        salesVolume: null,
+        viewed90d: null,
+      },
       // ÖLÇÜLMÜŞ kaynak adresi. Doğrulanmış görsel yalnız ürünün KENDİ
       // sayfasından bulunabilir; kazımada adres yoksa görsel de doğrulanamaz
       // ve kart bunu açıkça söyler. Adres ASLA uydurulmaz.

@@ -32,6 +32,11 @@ const READY: PreflightEnv = {
   EVREN_API_KEY: "ev",
   EVREN_BASE_URL: "https://evren.example.test/v1/chat/completions",
   EVREN_MODEL: "deepseek-v4.1-flash",
+  // ÜRÜN OKUYUCU (Jina Reader): iki anahtar yük paylaşır (her biri 10M token).
+  // Ürün satırlarının tamamı bu uçtan okunur; yokluğu hatı düşürmez ama
+  // anahtarsız ücretsiz katmanda 429 riski yüksektir.
+  JINA_API_KEY_1: "j1",
+  JINA_API_KEY_2: "j2",
 };
 
 const byId = (checks: { id: string }[], id: string) =>
@@ -106,9 +111,24 @@ describe("preflight env kontrolleri", () => {
     expect(check?.ok).toBe(false);
     expect(check?.optional).toBe(true);
     // Hat hazır sayılır: Gemini yoksa yalnız seçim deterministik olur.
-    // SerpAPI/ScraperAPI/OpenRouter/EVREN tanımlı olduğu için tek eksik budur;
-    // hepsi isteğe bağlıdır ve yoklukları hattı düşürmez.
+    // SerpAPI/ScraperAPI/OpenRouter/EVREN/Jina okuyucu tanımlı olduğu için tek
+    // eksik budur; hepsi isteğe bağlıdır ve yoklukları hattı düşürmez.
     expect(summarize(checks)).toBe("Hat çalışmaya hazır (1 isteğe bağlı eksik).");
+  });
+
+  it("Jina okuyucu anahtarlarını SAYIYLA bildirir (isteğe bağlı, sır yok)", () => {
+    // Ölçülen gerçek: bir arama ~75K token harcıyor; anahtar başına 10M token
+    // olduğu için kaç anahtar tanımlı olduğu doğrudan arama kapasitesidir.
+    const withKeys = byId(envChecks(READY), "jina_reader");
+    expect(withKeys?.ok).toBe(true);
+    expect(withKeys?.optional).toBe(true);
+    expect(String((withKeys as unknown as { detail: string }).detail)).toContain("2 anahtar");
+
+    const without = envChecks({ ...READY, JINA_API_KEY_1: undefined, JINA_API_KEY_2: undefined });
+    const check = byId(without, "jina_reader");
+    expect(check?.ok).toBe(false);
+    expect(check?.optional).toBe(true);
+    expect(check?.fix).toContain("JINA_API_KEY_1");
   });
 
   it("boş string 'tanımlı' sayılmaz", () => {

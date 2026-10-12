@@ -38,7 +38,25 @@ describe("vercel.json", () => {
   it("şema doğrulamasını kıracak yorum anahtarı taşımaz", () => {
     // `vercel.json` şeması `additionalProperties: false` kullanır: yorum
     // amaçlı `//` anahtarları build'i şema doğrulamasında kırar.
-    expect(Object.keys(config).sort()).toEqual(["$schema", "buildCommand", "installCommand"]);
+    expect(Object.keys(config).sort()).toEqual([
+      "$schema",
+      "buildCommand",
+      "crons",
+      "installCommand",
+    ]);
+  });
+
+  it("günlük radar tazeleme cron'u bir kez koşar (Hobby tavanı: günde 1)", () => {
+    // Vercel Hobby gerçeği: cron var ama EN SIK günde 1 kez koşar ve saat
+    // ±59 dk sapabilir; başarısız koşu TEKRAR DENENMEZ. Bu yüzden iş
+    // idempotenttir ve uç `CRON_SECRET` yoksa 503 döner (fail-closed).
+    const crons = (config as unknown as { crons?: { path: string; schedule: string }[] }).crons;
+    expect(Array.isArray(crons)).toBe(true);
+    expect(crons?.length).toBe(1);
+    expect(crons?.[0]?.path).toBe("/api/cron/radar-refresh");
+    // Saat 6:00 UTC = 09:00 TR: kullanıcı sabah radara baktığında bugünün
+    // ürünleri hazır olur (cron koşusu başarısız olursa elle tetiklenebilir).
+    expect(crons?.[0]?.schedule).toBe("0 6 * * *");
   });
 });
 

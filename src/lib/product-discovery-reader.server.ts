@@ -10,16 +10,27 @@
  *   kullanıcının gördüğü "saçma rakamlar" buradan geliyordu.
  *
  * ÇÖZÜM: Jina Reader (`r.jina.ai`) sayfayı kendi altyapısından okuyup temiz
- *   Markdown döndürür. ANAHTARSIZ ücretsizdir (~20 istek/dk); `JINA_API_KEY`
- *   (jina.ai'den ücretsiz) eklenirse limit yükselir. Her satırda GERÇEK
+ *   Markdown döndürür. ANAHTARSIZ ücretsizdir (~20 istek/dk); `JINA_API_KEY_1.._8`
+ *   (jina.ai'den ücretsiz, HER ANAHTAR 10M token) eklenirse anahtarlar arasında
+ *   yük paylaşılır ve kota dolan anahtar soğumaya alınır. Her satırda GERÇEK
  *   başlık, fiyat (TL), puan, değerlendirme sayısı, görsel ve ürün linki vardır.
+ *
+ * BÜTÇE GERÇEĞİ (ölçüm 2026-10-12, gerçek gövdeler): HB sayfası 85.266 karakter
+ *   ≈ 21.300 token, n11 sayfası 58.025 karakter ≈ 14.500 token → TR araması
+ *   ≈ 57K token. Bu yüzden okuma tarafı ÖLÇÜLEREK kısıldı:
+ *   • `DISCOVERY_READER_PAGES` (varsayılan 2) — eskiden 4 HB sayfası okunuyordu.
+ *   • Motor yükseltmesi yalnız GEREKTİĞİNDE (`readPageWithEscalation`).
+ *   • Ücretsiz katman sayfa başına 429 döndüğünde satır kaybolmasın diye
+ *     devre kesici ölü host'u atlar, anahtar havuzu sıradaki anahtara geçer.
+ *   • Kaç satırın neden düştüğü SAYILIR (`readerHealth().sources`).
  *
  * KURALLAR:
  *   • Uydurma yok — ölçülemeyen alan `null` kalır.
- *   • Sonuç 6 saat önbelleğe yazılır (aynı niş tekrar arandığında ücretsiz).
+ *   • Sonuç 3 saat önbelleğe yazılır (aynı niş tekrar arandığında ücretsiz).
  *   • Fail-soft: bir site düşerse diğeri devam eder; hiçbiri düşerse [] döner.
  */
 import type { RawProduct } from "./product-discovery.types";
+import { jinaEnvKeys } from "./ai-keys.server";
 
 /**
  * OKUMA MOTORU — ÖLÇÜLMÜŞ FARK (2026-10-12, n11 arama sayfası):
@@ -417,29 +428,532 @@ export function parseNewegg(md: string): GlobalReaderRow[] {
   return out;
 }
 
-async function readPage(
+/* ------------------------------------------------- OKUMA GÜVENİLİRLİĞİ VE KOTA */
+
+/**
+ * OKUMA ANAHTAR HAVUZU — anahtar başına 10M token, yük paylaşımlı.
+ *
+ * ÖLÇÜLEN SORUN: anahtarsız ücretsiz katman ~20 istek/dk. Bir arama 6 sayfa
+ * okuyor (4× Hepsiburada + 1 n11 + 2 AliExpress/Newegg); 429 gelince O SAYFA
+ * boş dönüyordu — yani ürün satırı ve görseli sessizce kayboluyordu.
+ *
+ * ÇÖZÜM: anahtarlar round-robin dağıtılır, 401/402/403/429 alan anahtar
+ * ATLANIR ve sıradaki denenir. Hepsi biterse anahtarsız son bir deneme yapılır
+ * (fail-soft: eski davranış korunur, tek anahtar yanlış yazıldı diye hat
+ * durmaz).
+ */
+class ReaderHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`reader ${status}`);
+  }
+}
+
+/** Yalnız ek zaman aşımı/soket hataları "anahtar hatası" sayılmaz. */
+function statusOf(err: unknown): number | null {
+  return err instanceof ReaderHttpError ? err.status : null;
+}
+
+type KeyHealth = {
+  ok: number;
+  failed: number;
+  lastStatus: number | null;
+  /**
+   * Bu anahtarla OKUNAN toplam karakter. Jina yanıtı markdown'dır ve kota
+   * TOKEN üzerinden işler; karakter sayısı elimizdeki tek ölçümdür
+   * (tahmini token = karakter / `CHARS_PER_TOKEN`).
+   */
+  chars: number;
+  /** Kota/anahtar hatasından sonra bu anahtarın ATLANDIĞI an (ms). */
+  cooldownUntil: number;
+};
+
+const keyHealth = new Map<number, KeyHealth>();
+let jinaCursor = 0;
+
+/**
+ * ANAHTARSIZ (ücretsiz katman) OKUMALAR — panoda GÖRÜNMESİ gerekir.
+ *
+ * NEDEN: anahtar havuzu devredeyken bile `readPage` anahtarsız son bir deneme
+ * yapar (hepsi 429/401 alırsa). Ayrıca kullanıcı anahtarı YANLIŞ ADLA eklerse
+ * (ör. `JINA_KEY_API`) okumalar sessizce anahtarsız devam eder. Bu sayaç olmadan
+ * "2 anahtarım var ama kota hiç harcanmıyor" durumu görünmez kalırdı.
+ */
+const anonymous = { reads: 0, failed: 0, chars: 0 };
+
+/**
+ * KOTA HATASI ALAN ANAHTARI KISA SÜRE ATLA (ölçülen sorun).
+ *
+ * 429 alan bir anahtara bir sonraki sayfada hemen tekrar gitmek, her seferinde
+ * boşa giden bir tur + ~1 sn demekti. Anahtar 60 sn soğumaya alınır; sıradaki
+ * anahtar devralır. Soğuma sonrası tekrar denenir (kalıcı karantina değil).
+ */
+export const KEY_COOLDOWN_MS = 60_000;
+
+/**
+ * KARAKTER→TOKEN KATSAYISI (yaklaşık).
+ *
+ * ÖLÇÜM (2026-10-12): bir HB arama sayfası 85.266 karakter, bir n11 sayfası
+ * 58.025 karakter. Markdown gövdesinde (Türkçe + fiyat/etiket tekrarları)
+ * ölçülen oran ≈ 4 karakter/token; bu yüzden kota takibi için 4 kullanılır ve
+ * arayüzde "tahmini" diye etiketlenir — kesin token sayacı Jina panelindedir.
+ */
+export const CHARS_PER_TOKEN = 4;
+
+/** Anahtar başına VARSAYILAN bütçe: ücretsiz Jina hesabı 10M token verir. */
+export const DEFAULT_KEY_TOKEN_BUDGET = 10_000_000;
+
+/**
+ * ARAMA BAŞINA TAHMİNİ TOKEN MALİYETİ — bütçenin kaç aramaya yettiğini söyler.
+ *
+ * ÖLÇÜLEN (2026-10-12, aynı gün Jina'dan okunan gerçek gövdeler):
+ *   • HB arama sayfası 85.266 karakter ≈ 21.300 token × 2 sayfa = 42.600
+ *   • n11 arama sayfası 58.025 karakter ≈ 14.500 token × 1 sayfa = 14.500
+ *   → TR araması ≈ 57.100 token (bu yüzden aşağıdaki sabit 57.000).
+ * Global aramada AliExpress (~8.500) + Newegg (~20.000) sayfaları da eklenir;
+ * sabit TR tabanını kullanır, yani "kalan arama" sayısı İYİMSER DEĞİL, kaba bir
+ * ALT SINIR gibi okunmalıdır (panelde "tahmini" diye etiketlenir).
+ */
+export const TOKENS_PER_SEARCH_ESTIMATE = 57_000;
+
+/** Anahtar başına token bütçesi (`JINA_KEY_TOKEN_BUDGET` ile değiştirilebilir). */
+export function keyTokenBudget(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number((env["JINA_KEY_TOKEN_BUDGET"] ?? "").trim());
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_KEY_TOKEN_BUDGET;
+}
+
+/**
+ * ANAHTAR SIRASI — "en az kullanılan önce", soğumadakiler en sona.
+ *
+ * NEDEN round-robin'e ek olarak kullanım sayısı: iki anahtarın her birinde 10M
+ * token var ve arama başına maliyet ~75-100K token. Saf round-robin'de bir
+ * anahtar diğerinden daha çok kota harcıyor olamaz ama YENİDEN BAŞLATMA
+ * sonrası imleç sıfırlanır; kullanım sayacı başarısız (429) anahtarı da
+ * geriye atarak toplam kapasiteyi korur. Kullanım eşitse imleç sırası korunur
+ * (davranış değişmez, eski test geçerli kalır).
+ */
+export function jinaKeyOrder(
+  keys: readonly string[],
+  cursor: number,
+  now: number = Date.now(),
+): { key: string; index: number }[] {
+  if (keys.length === 0) return [{ key: "", index: -1 }];
+  const rotation: number[] = [];
+  for (let i = 0; i < keys.length; i += 1) {
+    rotation.push((((cursor + i) % keys.length) + keys.length) % keys.length);
+  }
+  const usage = (index: number): number => {
+    const h = keyHealth.get(index);
+    return h ? h.ok + h.failed : 0;
+  };
+  const cooling = (index: number): number => {
+    const h = keyHealth.get(index);
+    return h && h.cooldownUntil > now ? 1 : 0;
+  };
+  const position = new Map(rotation.map((index, order) => [index, order]));
+  const sorted = [...rotation].sort((a, b) => {
+    const ca = cooling(a);
+    const cb = cooling(b);
+    if (ca !== cb) return ca - cb;
+    const ua = usage(a);
+    const ub = usage(b);
+    if (ua !== ub) return ua - ub;
+    return (position.get(a) ?? 0) - (position.get(b) ?? 0);
+  });
+  return sorted.map((index) => ({ key: keys[index] ?? "", index }));
+}
+
+/**
+ * ANAHTAR SONUCU — sayaçlar + soğuma.
+ *
+ * `chars`: bu denemede okunan gövde uzunluğu (başarısızda 0). Ölçüm yalnız
+ * BAŞARILI okumada bütçeye yazılır; hata yanıtı kota harcamaz (gövde yoktur).
+ */
+function noteKeyResult(
+  index: number,
+  ok: boolean,
+  status: number | null,
+  chars = 0,
+  now: number = Date.now(),
+): void {
+  if (index < 0) {
+    if (ok) {
+      anonymous.reads += 1;
+      anonymous.chars += Math.max(0, chars);
+    } else {
+      anonymous.failed += 1;
+    }
+    return;
+  }
+  const cur = keyHealth.get(index) ?? {
+    ok: 0,
+    failed: 0,
+    lastStatus: null,
+    chars: 0,
+    cooldownUntil: 0,
+  };
+  if (ok) {
+    cur.ok += 1;
+    cur.chars += Math.max(0, chars);
+    cur.cooldownUntil = 0;
+  } else {
+    cur.failed += 1;
+    cur.lastStatus = status;
+    // Kota/anahtar hatalarında kısa soğuma; 404/5xx anahtar sorunu değildir.
+    if (status === 401 || status === 402 || status === 403 || status === 429) {
+      cur.cooldownUntil = now + KEY_COOLDOWN_MS;
+    }
+  }
+  keyHealth.set(index, cur);
+}
+
+/**
+ * KAYNAK SAYAÇLARI — "kaç sayfa okundu, kaç satır çıktı, kaçı neden düştü".
+ *
+ * NEDEN: fiyatsız/görselsiz satırlar havuza alınmaz (`continue`), bu YERİNDE bir
+ * karar; ama sessiz kaldığında operatör "kaynak bozuk" ile "sayfa engellendi"
+ * ayrımını yapamıyordu. Ölçülen örnek: HB sayfası 37 kart döndürürken yalnız
+ * 12 kartta ürün görseli var — yani satırların ~%68'i görselsiz düşüyor ve bu
+ * Jina katmanında değil KAYNAK sayfasında böyle.
+ */
+type SourceStat = {
+  pages: number;
+  rows: number;
+  kept: number;
+  droppedNoPrice: number;
+  droppedNoImage: number;
+  emptyPages: number;
+};
+
+const sourceStats = new Map<string, SourceStat>();
+
+function sourceStat(site: string): SourceStat {
+  const cur = sourceStats.get(site) ?? {
+    pages: 0,
+    rows: 0,
+    kept: 0,
+    droppedNoPrice: 0,
+    droppedNoImage: 0,
+    emptyPages: 0,
+  };
+  sourceStats.set(site, cur);
+  return cur;
+}
+
+/** Bir sayfa okundu: kaç satır parse edildi (0 = engellendi ya da sonuç yok). */
+export function noteSourcePage(site: string, rows: number): void {
+  const s = sourceStat(site);
+  s.pages += 1;
+  s.rows += rows;
+  if (rows === 0) s.emptyPages += 1;
+}
+
+/** Havuza giren (aranabilir) satır sayısı. */
+export function noteSourceKept(site: string, kept: number): void {
+  sourceStat(site).kept += kept;
+}
+
+/** Havuza ALINMAYAN satır — sebebiyle birlikte sayılır. */
+export function noteSourceDrop(site: string, reason: "no_price" | "no_image", n = 1): void {
+  const s = sourceStat(site);
+  if (reason === "no_price") s.droppedNoPrice += n;
+  else s.droppedNoImage += n;
+}
+
+/**
+ * DEVRE KESİCİ (host başına): aynı host art arda 3 kez başarısız olursa 5 dk
+ * boyunca ATLANIR. NEDEN: bir site engellediğinde (Cloudflare 403, DNS hatası)
+ * her arama aynı ölü isteği tekrar tekrar deniyordu ve hattın süre bütçesini
+ * ürün ÜRETEN sayfalardan çalıyordu. Kayıt yalnız süreç içindedir (sıcak
+ * başlatmada sıfırlanır) — kalıcı durum gerektirmez, yanlış açık kalma riski yok.
+ */
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 5 * 60_000;
+const hostBreakers = new Map<string, { failures: number; openedAt: number | null }>();
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return String(url).slice(0, 40);
+  }
+}
+
+export function circuitAllow(url: string, now: number = Date.now()): boolean {
+  const b = hostBreakers.get(hostOf(url));
+  if (!b || b.openedAt === null) return true;
+  if (now - b.openedAt >= BREAKER_COOLDOWN_MS) {
+    // Soğuma bitti: yarı-açık durum, tek deneme hakkı verilir.
+    hostBreakers.set(hostOf(url), { failures: 0, openedAt: null });
+    return true;
+  }
+  return false;
+}
+
+export function circuitRecord(url: string, ok: boolean, now: number = Date.now()): void {
+  const host = hostOf(url);
+  const b = hostBreakers.get(host) ?? { failures: 0, openedAt: null };
+  if (ok) {
+    hostBreakers.set(host, { failures: 0, openedAt: null });
+    return;
+  }
+  b.failures += 1;
+  if (b.failures >= BREAKER_THRESHOLD) b.openedAt = now;
+  hostBreakers.set(host, b);
+}
+
+/**
+ * OKUYUCU SAĞLIĞI — `/health` ve ön kontrol paneli için (yalnız sayaç; SIR YOK).
+ *
+ * `keys`        = bu dağıtımda kaç okuma anahtarı tanımlı (0 = anahtarsız katman).
+ * `tokensEstimated` = anahtarlarla okunan TOPLAM karakter / 4 (tahmini token).
+ * `searchesLeft`    = bütçe ÷ ölçülen arama başına maliyet (kaba kapasite).
+ * `sources`/`drops` = kaynak başına sayfa, satır, havuza giren ve düşen satır.
+ */
+export function readerHealth(now: number = Date.now()): {
+  keys: number;
+  keysOk: number;
+  keysFailed: number;
+  openCircuits: string[];
+  cooldownMs: number;
+  tokensEstimated: number;
+  budgetPerKeyTokens: number;
+  budgetUsedPct: number;
+  /** Tahmini kalan arama sayısı (bütçe − kullanım, arama başına ~57K token). */
+  searchesLeftEstimated: number;
+  /** Anahtarsız (ücretsiz katman) okumalar — anahtar yanlış adla eklenmişse buradan anlaşılır. */
+  anonymous: { reads: number; failed: number; tokensEstimated: number };
+  perKey: { slot: number; ok: number; failed: number; tokensEstimated: number; cooling: boolean }[];
+  sources: Record<string, SourceStat>;
+} {
+  const keys = jinaEnvKeys().length;
+  let keysOk = 0;
+  let keysFailed = 0;
+  let chars = 0;
+  const perKey: { slot: number; ok: number; failed: number; tokensEstimated: number; cooling: boolean }[] =
+    [];
+  for (const [slot, h] of [...keyHealth.entries()].sort((a, b) => a[0] - b[0])) {
+    keysOk += h.ok;
+    keysFailed += h.failed;
+    chars += h.chars;
+    perKey.push({
+      slot: slot + 1,
+      ok: h.ok,
+      failed: h.failed,
+      tokensEstimated: Math.round(h.chars / CHARS_PER_TOKEN),
+      cooling: h.cooldownUntil > now,
+    });
+  }
+  const openCircuits: string[] = [];
+  for (const [host, b] of hostBreakers) {
+    if (b.openedAt !== null && now - b.openedAt < BREAKER_COOLDOWN_MS) openCircuits.push(host);
+  }
+  const budget = keyTokenBudget();
+  const tokensEstimated = Math.round(chars / CHARS_PER_TOKEN);
+  const totalBudget = budget * Math.max(1, keys);
+  return {
+    keys,
+    keysOk,
+    keysFailed,
+    openCircuits,
+    cooldownMs: BREAKER_COOLDOWN_MS,
+    tokensEstimated,
+    budgetPerKeyTokens: budget,
+    // İki ondalık: bütçe 10M token olduğu için tek ondalıkta küçük kullanım
+    // (ör. 2.500 token = %0,01) `0` görünürdü ve sayaç "çalışmıyor" sanılırdı.
+    budgetUsedPct: totalBudget > 0 ? Math.round((tokensEstimated / totalBudget) * 10_000) / 100 : 0,
+    searchesLeftEstimated: Math.max(
+      0,
+      Math.floor((totalBudget - tokensEstimated) / TOKENS_PER_SEARCH_ESTIMATE),
+    ),
+    anonymous: {
+      reads: anonymous.reads,
+      failed: anonymous.failed,
+      tokensEstimated: Math.round(anonymous.chars / CHARS_PER_TOKEN),
+    },
+    perKey,
+    sources: Object.fromEntries(sourceStats),
+  };
+}
+
+/** Testler için durum sıfırlama (üretimde çağrılmaz). */
+export function resetReaderHealth(): void {
+  keyHealth.clear();
+  hostBreakers.clear();
+  sourceStats.clear();
+  anonymous.reads = 0;
+  anonymous.failed = 0;
+  anonymous.chars = 0;
+  jinaCursor = 0;
+}
+
+/**
+ * ENGELLENMİŞ GÖVDE TESPİTİ (ölçülen hata).
+ *
+ * n11 taze bir aramada `direct` motoruyla **200 + 1.041 karakter** döndü ve
+ * gövdesi "Attention Required! | Cloudflare" idi. Yalnız HTTP durumuna bakan
+ * okuyucu bunu BAŞARILI sayıp boş bir liste üretiyordu (sessiz kayıp). Bu
+ * yüzden "engelli" hem engel metninden hem de ANORMAL KISA gövdeden anlaşılır.
+ */
+export function looksBlocked(text: string): boolean {
+  if (/Attention Required|Just a moment|Cloudflare Ray ID|Enable JavaScript and cookies/i.test(text)) {
+    return true;
+  }
+  return text.trim().length < 2_000;
+}
+
+/** Engelli gövde de anahtar/kota hatası gibi ele alınır (sıradaki deneme). */
+class ReaderBlockedError extends ReaderHttpError {
+  constructor() {
+    super(403);
+  }
+}
+
+/**
+ * SAYFA OKUMA — anahtar havuzu + yedekleme + devre kesici.
+ *
+ * DIŞA AÇIK: anahtar yedeği ve devre kesici davranışı yalnız burada yaşar;
+ * ikisi de "ürün satırı kaybolmasın" sözleşmesinin parçasıdır ve doğrudan
+ * ölçülebilir olmalıdır (bkz. `product-discovery-reader.keys.test.ts`).
+ */
+async function fetchRead(
   url: string,
   timeoutMs: number,
-  engine: Engine = "direct",
+  engine: Engine,
+  key: string,
 ): Promise<string> {
   const headers: Record<string, string> = {
     Accept: "text/plain",
     "X-Return-Format": "markdown",
     // "direct" motoru tarayıcı açmadan okur: ölçülen ~3,7 sn (varsayılan ~13 sn).
-    // n11 ise yalnız tarayıcı motoruyla okunabiliyor (ölçüldü: direct 403).
+    // Engellenirse `readPageWithEscalation` tarayıcı motoruyla tekrar dener.
     "X-Engine": engine,
   };
-  const key = process.env.JINA_API_KEY?.trim();
   if (key) headers.Authorization = `Bearer ${key}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(READER + url, { headers, signal: ctrl.signal });
-    if (!res.ok) throw new Error(`reader ${res.status}`);
-    return await res.text();
+    if (!res.ok) throw new ReaderHttpError(res.status);
+    const text = await res.text();
+    if (looksBlocked(text)) throw new ReaderBlockedError();
+    return text;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * SAYFA OKUMA — anahtar havuzu + yedekleme + devre kesici.
+ *
+ * DIŞA AÇIK: anahtar yedeği ve devre kesici davranışı yalnız burada yaşar;
+ * ikisi de "ürün satırı kaybolmasın" sözleşmesinin parçasıdır ve doğrudan
+ * ölçülebilir olmalıdır (bkz. `product-discovery-reader.keys.test.ts`).
+ */
+export async function readPage(
+  url: string,
+  timeoutMs: number,
+  engine: Engine = "direct",
+): Promise<string> {
+  if (!circuitAllow(url)) {
+    console.warn(`[discovery] okuyucu devre kesici açık: ${hostOf(url)} — bu koşuda atlandı`);
+    throw new Error(`reader circuit open: ${hostOf(url)}`);
+  }
+  const keys = jinaEnvKeys();
+  const order = jinaKeyOrder(keys, jinaCursor);
+  if (keys.length > 0) jinaCursor = (jinaCursor + 1) % keys.length;
+
+  let lastError: unknown = null;
+  let sawAuthFailure = false;
+  for (const { key, index } of order) {
+    try {
+      const text = await fetchRead(url, timeoutMs, engine, key);
+      // Kota ölçümü: okunan gövde bu anahtarın bütçesine yazılır.
+      noteKeyResult(index, true, null, text.length);
+      circuitRecord(url, true);
+      return text;
+    } catch (err) {
+      lastError = err;
+      const status = statusOf(err);
+      noteKeyResult(index, false, status);
+      // YALNIZ anahtar/kota hatalarında sıradaki anahtar denenir
+      // (401/402/403/429). 404/5xx ve ağ hataları anahtar sorunu DEĞİLDİR:
+      // aynı isteği başka anahtarla tekrarlamak bütçeyi boşa harcar.
+      if (status === 401 || status === 402 || status === 403 || status === 429) {
+        sawAuthFailure = true;
+        continue;
+      }
+      break;
+    }
+  }
+  // SON SAVUNMA: anahtarsız istek (ücretsiz katman) — YALNIZ anahtar/kota
+  // hatası görüldüğünde. Sayfa yoksa (404) veya sunucu hatasıysa (5xx) bu
+  // deneme anlamsızdır: aynı yanıtı alır ve boşa istek olur.
+  if (keys.length > 0 && sawAuthFailure) {
+    try {
+      const text = await fetchRead(url, timeoutMs, engine, "");
+      circuitRecord(url, true);
+      return text;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  circuitRecord(url, false);
+  throw lastError instanceof Error ? lastError : new Error("reader failed");
+}
+
+/**
+ * SAYFA BÜTÇESİ — `direct` motor n11'de engellenirse tarayıcı motoruna yükselt.
+ *
+ * ÖLÇÜM (2026-10-12, niş = "termos", TAZE sayfa):
+ *   `direct`  → engellendi: 1.041 karakter + "Attention Required! | Cloudflare"
+ *   `browser` → 200, 62.596 karakter, 40 gerçek ürün bağlantısı
+ * Aynı gün önbellekteki sayfada direct 200/58.025 karakter döndüğü için
+ * "direct her zaman çalışır" varsayımı yanlıştı. Bu yüzden SIRA ŞUDUR: önce
+ * ucuz motor, engellenirse pahalı motor — ve yalnız TEK yükseltme yapılır.
+ */
+export async function readPageWithEscalation(
+  url: string,
+  timeoutMs: number,
+  primary: Engine = "direct",
+): Promise<{ text: string; engine: Engine }> {
+  try {
+    return { text: await readPage(url, timeoutMs, primary), engine: primary };
+  } catch (err) {
+    if (primary !== "direct") throw err;
+    console.warn(
+      `[discovery] okuyucu ${hostOf(url)} ${primary} motorunda okunamadı (${String(
+        err instanceof Error ? err.message : err,
+      ).slice(0, 60)}) — tarayıcı motoruna yükseltiliyor`,
+    );
+    const text = await readPage(url, PER_SITE_BROWSER_TIMEOUT_MS, "browser");
+    return { text, engine: "browser" };
+  }
+}
+
+/**
+ * SAYFA BÜTÇESİ — bir aramada kaç HB sayfası okunacak.
+ *
+ * NEDEN 4 YERİNE 2 (ölçüm, 2026-10-12, niş = "bardak"):
+ *   • Her HB sayfası 85.266 karakter ≈ 21.300 token.
+ *   • 4 sayfa = ~85.000 token/arama; 10M token bütçeli BİR anahtarla
+ *     yalnız ~117 arama yapılabiliyordu.
+ *   • 4 sayfa 144 benzersiz ürün verirken 2 sayfa 74 ürün veriyor — ama vitrine
+ *     giren GERÇEK sayı görsel kapısından geçen satırlardır (ölçülen: 37
+ *     kartın 12'si) ve ilk 2 sayfa havuzun tamamını doldurmaya yetiyor.
+ * Yani ürün kaybı ölçülemezken token tasarrufu kesin: arama başına ~%50.
+ * İstenirse `DISCOVERY_READER_PAGES=4` ile eski davranışa dönülür (1..6).
+ */
+export const DEFAULT_TR_PAGES = 2;
+
+export function readerPageBudget(env: Record<string, string | undefined> = process.env): number {
+  const value = (env["DISCOVERY_READER_PAGES"] ?? "").trim();
+  // BOŞ/BOZUK DEĞER = "AYARLANMADI". Tanımsız env boş dize verir ve `Number("")`
+  // 0'dır; doğrudan aralığa kırpılırsa bütçe sessizce 1 sayfaya düşerdi
+  // (varsayılan 2 yerine) — yani bir yazım hatası havuzu yarıya indirirdi.
+  if (!value) return DEFAULT_TR_PAGES;
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return DEFAULT_TR_PAGES;
+  return Math.min(6, Math.max(1, Math.round(raw)));
 }
 
 /**
@@ -484,28 +998,43 @@ export async function scrapeTrReader(niche: string): Promise<RawProduct[]> {
   if (hit && hit.length) return hit;
 
   const enc = encodeURIComponent(q);
-  // N11 GERİ GELDİ — ÖLÇÜLDÜ (2026-10-12, aynı gün düzeltilmiş ölçüm):
-  //   `X-Engine: direct`  → 403 "Attention Required! | Cloudflare"
-  //   `X-Engine: browser` → **200, 59 KB, 22 gerçek ürün satırı**
-  // Engel kaynakta değil MOTORDAYDI. Bu yüzden n11 tarayıcı motoruyla,
-  // uzun zaman aşımıyla okunur; HB istekleriyle PARALEL koşar (TR tarafının
-  // duvar süresi Hepsiburada'nın altında kalır: ölçülen 4,9 sn vs 0,4–13 sn).
+  // MOTOR SEÇİMİ — ÖLÇÜLDÜ (2026-10-12, iki ayrı gün):
+  //   n11 önbellekli sayfa: `direct` 200 / 58.025 karakter (tarayıcı ile AYNI)
+  //   n11 taze sayfa:       `direct` 1.041 karakter + Cloudflare engeli
+  //                         `browser` 200 / 62.596 karakter / 40 ürün linki
+  // Yani "direct" ne her zaman çalışır ne her zaman düşer: ÖNCE ucuz motor,
+  // engellenirse tarayıcı motoru (`readPageWithEscalation`). Böylece çalışan
+  // durumda 20 sn'lik tarayıcı tavanına hiç girilmez.
+  const pages = Math.max(1, readerPageBudget());
+  const hbJobs: Array<Promise<ReaderRow[]>> = [];
+  for (let page = 1; page <= pages; page += 1) {
+    const url = `https://www.hepsiburada.com/ara?q=${enc}${page > 1 ? `&sayfa=${page}` : ""}`;
+    hbJobs.push(
+      readPage(url, PER_SITE_TIMEOUT_MS).then((md) => {
+        const parsed = parseHepsiburada(md);
+        noteSourcePage("Hepsiburada", parsed.length);
+        if (parsed.length === 0) {
+          console.warn(`[discovery] tr-reader HB sayfa ${page}: 0 satır (engellendi ya da sonuç yok)`);
+        }
+        return parsed;
+      }),
+    );
+  }
   const jobs: Array<Promise<ReaderRow[]>> = [
-    readPage(`https://www.hepsiburada.com/ara?q=${enc}`, PER_SITE_TIMEOUT_MS).then(
-      parseHepsiburada,
-    ),
-    readPage(`https://www.hepsiburada.com/ara?q=${enc}&sayfa=2`, PER_SITE_TIMEOUT_MS).then(
-      parseHepsiburada,
-    ),
-    readPage(`https://www.hepsiburada.com/ara?q=${enc}&sayfa=3`, PER_SITE_TIMEOUT_MS).then(
-      parseHepsiburada,
-    ),
-    readPage(`https://www.hepsiburada.com/ara?q=${enc}&sayfa=4`, PER_SITE_TIMEOUT_MS).then(
-      parseHepsiburada,
-    ),
-    readPage(`https://www.n11.com/arama?q=${enc}`, PER_SITE_BROWSER_TIMEOUT_MS, "browser").then(
-      parseN11,
-    ),
+    ...hbJobs,
+    readPageWithEscalation(`https://www.n11.com/arama?q=${enc}`, PER_SITE_TIMEOUT_MS)
+      .then(({ text }) => {
+        const parsed = parseN11(text);
+        noteSourcePage("n11", parsed.length);
+        if (parsed.length === 0) {
+          console.warn("[discovery] tr-reader n11: 0 satır (engellendi ya da sonuç yok)");
+        }
+        return parsed;
+      })
+      .catch((err) => {
+        console.warn(`[discovery] tr-reader n11 okunamadı: ${String(err).slice(0, 100)}`);
+        return [] as ReaderRow[];
+      }),
   ];
   const settled = await Promise.allSettled(jobs);
   const rows: ReaderRow[] = [];
@@ -518,7 +1047,20 @@ export async function scrapeTrReader(niche: string): Promise<RawProduct[]> {
   const stamp = priceStamp();
   const products: RawProduct[] = [];
   for (const r of dedupeRows(rows)) {
-    if (r.priceTry === null || !r.imageUrl) continue; // fiyatsız/görselsiz ürün havuza girmez
+    // Fiyatsız/görselsiz satır "kazanan ürün" olamaz (marj ve vitrin görseli
+    // ölçülemez) — bu karar korunur, ama NEDEN düştüğü artık SAYILIR.
+    // Ölçülen olgu: HB sayfası 37 kart döndürürken yalnız 12'sinde ürün görseli
+    // var; satır kaybının %68'i görsel kapısında. Sessiz kalırsa operatör
+    // "kaynak bozuk" ile "sayfa engellendi" ayrımını yapamıyordu.
+    if (r.priceTry === null) {
+      noteSourceDrop(r.site, "no_price");
+      continue;
+    }
+    if (!r.imageUrl) {
+      noteSourceDrop(r.site, "no_image");
+      continue;
+    }
+    noteSourceKept(r.site, 1);
     const usd = await toUsd(r.priceTry, "TRY");
     products.push({
       title: r.title,
@@ -576,7 +1118,16 @@ export async function scrapeAliExpress(niche: string): Promise<RawProduct[]> {
     `https://www.aliexpress.com/w/wholesale-${slug}.html?page=2`,
   ];
   const settled = await Promise.allSettled(
-    pages.map((u) => readPage(u, PER_SITE_TIMEOUT_MS).then(parseAliExpress)),
+    pages.map((u) =>
+      readPage(u, PER_SITE_TIMEOUT_MS).then((md) => {
+        const parsed = parseAliExpress(md);
+        noteSourcePage("AliExpress", parsed.length);
+        if (parsed.length === 0) {
+          console.warn(`[discovery] ali-reader boş sayfa: ${u.slice(0, 70)}`);
+        }
+        return parsed;
+      }),
+    ),
   );
   const rows: GlobalReaderRow[] = [];
   for (const s of settled) {
@@ -593,8 +1144,16 @@ export async function scrapeAliExpress(niche: string): Promise<RawProduct[]> {
     seen.add(r.url);
     seen.add(dedupe);
     // Fiyatsız satır "kazanan ürün" olamaz: marj hesaplanamaz. Görsel de
-    // vitrinin şartı; ikisi de ölçülmüş alandır, uydurulmaz.
-    if (r.priceUsd === null || !r.imageUrl) continue;
+    // vitrinin şartı; ikisi de ölçülmüş alandır, uydurulmaz. Sebep sayılır.
+    if (r.priceUsd === null) {
+      noteSourceDrop(r.site, "no_price");
+      continue;
+    }
+    if (!r.imageUrl) {
+      noteSourceDrop(r.site, "no_image");
+      continue;
+    }
+    noteSourceKept(r.site, 1);
     products.push({
       title: r.title,
       brand: "",
@@ -652,7 +1211,19 @@ export async function scrapeNewegg(niche: string): Promise<RawProduct[]> {
     `https://www.newegg.com/p/pl?d=${slug}&page=2`,
   ];
   const settled = await Promise.allSettled(
-    pages.map((u) => readPage(u, PER_SITE_TIMEOUT_MS).then(parseNewegg)),
+    pages.map((u) =>
+      readPage(u, PER_SITE_TIMEOUT_MS).then((md) => {
+        const parsed = parseNewegg(md);
+        // ÖLÇÜLEN ayrım: "ssd" araması 45 kart verirken "bardak" araması
+        // 16.598 karakterlik SONUÇSUZ sayfa döndü. İkisi de 0 satır üretir ama
+        // biri hata değildir; uyarı metni bunu "sonuç yok" diye açıkça söyler.
+        noteSourcePage("Newegg", parsed.length);
+        if (parsed.length === 0) {
+          console.warn(`[discovery] newegg-reader boş sayfa: ${u.slice(0, 70)}`);
+        }
+        return parsed;
+      }),
+    ),
   );
   const rows: GlobalReaderRow[] = [];
   for (const s of settled) {
@@ -670,8 +1241,16 @@ export async function scrapeNewegg(niche: string): Promise<RawProduct[]> {
     seen.add(r.url);
     seen.add(dedupe);
     // Fiyatsız satır "kazanan" olamaz (marj hesaplanamaz); görselsiz satır
-    // vitrine giremez. İkisi de ölçülmüş alan — uydurulmaz.
-    if (r.priceUsd === null || !r.imageUrl) continue;
+    // vitrine giremez. İkisi de ölçülmüş alan — uydurulmaz. Sebep sayılır.
+    if (r.priceUsd === null) {
+      noteSourceDrop(r.site, "no_price");
+      continue;
+    }
+    if (!r.imageUrl) {
+      noteSourceDrop(r.site, "no_image");
+      continue;
+    }
+    noteSourceKept(r.site, 1);
     products.push({
       title: r.title,
       brand: r.brand ?? "",

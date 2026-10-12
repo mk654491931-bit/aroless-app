@@ -21,6 +21,7 @@ import {
   discoveryStoreHealth,
 } from "./lib/discovery-jobs.server";
 import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
+import { readerHealth } from "./lib/product-discovery-reader.server";
 import { rateLimitBackendStatus } from "./lib/api-guard.server";
 import {
   discoverySliceMs,
@@ -191,6 +192,15 @@ export default {
               // `missing` boş DEĞİLSE kurulum eksiktir (değerleri asla içermez).
               discoveryStore: await discoveryStoreHealth(),
             },
+            // ÜRÜN OKUYUCU (Jina Reader) — "ürün satırları nereden geliyor ve
+            // kota nasıl gidiyor" sorusunun tek adresi. `keys` 0 ise okumalar
+            // anahtarsız ücretsiz katmanda (~20 istek/dk. 429 riski yüksek);
+            // `tokensEstimated`/`budgetUsedPct` ise 10M token bütçesinin ne
+            // kadarının harcandığını gösterir. `sources` kaynak başına kaç
+            // sayfa okunduğunu, kaç satırın havuza GİRDİĞİNİ ve kaçının
+            // neden (fiyatsız/görselsiz) düştüğünü söyler — sessiz kaybın
+            // panosu burasıdır. SIR YOK: yalnız sayaç.
+            reader: readerHealth(),
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),
             // İstek sınırının nerede tutulduğu. "memory" görünüyorsa

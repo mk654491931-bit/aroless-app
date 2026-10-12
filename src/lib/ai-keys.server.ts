@@ -206,6 +206,53 @@ export function hfEnvKeys(): string[] {
   });
 }
 
+/**
+ * JINA READER — ürün okuyucularının OKUMA anahtarı (AI anahtarı DEĞİL).
+ *
+ *
+ * NEDEN HAVUZ: tüm pazaryeri okumaları (Hepsiburada, n11, AliExpress, Newegg)
+ * `r.jina.ai` üzerinden geçer. Anahtarsız ücretsiz katman ~20 istek/dk ile
+ * sınırlıdır ve yoğun saatte okumalar 429'a düşer — yani `imageUrl`/`priceUsd`
+ * taşıyan GERÇEK ürün satırları kaybolur. Ücretsiz hesap anahtar başına
+ * 10M token verir; iki anahtar yük paylaşınca günlük tavan ikiye katlanır.
+ *
+ * ADLAR: `JINA_API_KEY`, `JINA_API_KEY_1..8`, `JINA_1_API_KEY`, `JINA_API_KEY1`.
+ * Hiçbiri yoksa okuyucu eski davranışa (anahtarsız) döner — fail-soft.
+ */
+/** Jina anahtar adlarının TEK kaynağı — `jinaEnvKeys` ve ön kontrol aynı listeyi tarar. */
+const JINA_KEY_NAMES: string[] = (() => {
+  const names = ["JINA_API_KEY", "JINA_READER_API_KEY", "JINA_KEY"];
+  for (let i = 1; i <= 8; i += 1) {
+    names.push(
+      `JINA_API_KEY_${i}`,
+      `JINA_${i}_API_KEY`,
+      `JINA_API_KEY${i}`,
+      `JINA_READER_API_KEY_${i}`,
+    );
+  }
+  return names;
+})();
+
+export function jinaEnvKeys(
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const out: string[] = [];
+  for (const name of JINA_KEY_NAMES) {
+    const value = (env[name] ?? "").trim();
+    if (value) out.push(value);
+  }
+  return Array.from(new Set(out));
+}
+
+/**
+ * Bu dağıtımda kaç Jina okuma anahtarı TANIMLI? (YALNIZ SAYI — değer dışarı
+ * verilmez.) Ön kontrol paneli `env` nesnesiyle saf çağırabilsin diye ayrıdır:
+ * sayaç "kaç anahtar yük paylaşıyor" sorusunun tek yanıtıdır.
+ */
+export function jinaKeyCount(env: Record<string, string | undefined> = process.env): number {
+  return jinaEnvKeys(env).length;
+}
+
 /** Cerebras: CEREBRAS_API_KEY, CEREBRAS_API_KEY_1..8 */
 export function cerebrasEnvKeys(): string[] {
   return collectEnvKeys({

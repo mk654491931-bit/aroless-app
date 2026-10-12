@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Sparkles,
   ExternalLink,
@@ -26,6 +26,8 @@ import {
   Users,
 } from "lucide-react";
 import { ConsensusBadge } from "@/components/consensus-report";
+import { WinnerCriteriaChips } from "@/components/winner-criteria-chips";
+import { auditNumericClaims, type WinnerCriteriaInput } from "@/lib/winner-criteria";
 import { CountryFlag } from "@/components/country-flag";
 import { MarketEvidencePanel, ProofBadge, RealismBadge } from "@/components/market-evidence-panel";
 import { MarketFitPanel } from "@/components/market-fit-panel";
@@ -529,6 +531,44 @@ export function ProductCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const shownImage = resolvedImage && resolvedImage !== brokenImage ? resolvedImage : null;
 
+  // KANIT VEKTÖRÜ (①): kart artık tek bir skor değil, 6 kriterin ÖLÇÜM
+  // DURUMUNU gösterir. Ölçülmeyen kriter "—" kalır; 0 uydurulmaz.
+  const criteriaInput = useMemo<WinnerCriteriaInput>(() => {
+    const margin =
+      typeof p.gross_margin_pct === "number" && p.gross_margin_pct > 0 ? p.gross_margin_pct : null;
+    return {
+      name: p.name,
+      priceUsd: measuredMoney(p.selling_price_usd),
+      rating: p.measured?.rating ?? null,
+      ratingCount: p.measured?.ratingCount ?? null,
+      salesVolume: p.measured?.salesVolume ?? null,
+      viewed90d: p.measured?.viewed90d ?? null,
+      imageUrl: shownImage ?? p.image_url ?? "",
+      sourceUrl: p.source_url ?? "",
+      sources: p.data_sources ?? [],
+      marginPct: margin,
+      supplierPriceUsd: measuredMoney(p.supplier_price_usd),
+    };
+  }, [p, shownImage]);
+
+  // SAYI DENETİMİ (②): açıklamada geçen her sayı ÖLÇÜLMÜŞ bir değere dayanmalı.
+  // Kanıtsız sayı taşıyan cümle düşürülür; TÜM cümleler düşerse metin boş
+  // bırakılmaz (boş kart bilgi kaybıdır), özgün metin korunur.
+  const auditedDescription = useMemo(() => {
+    const raw = p.description ?? "";
+    const allowed = [
+      criteriaInput.priceUsd,
+      criteriaInput.rating,
+      criteriaInput.ratingCount,
+      criteriaInput.salesVolume,
+      criteriaInput.viewed90d,
+      criteriaInput.marginPct,
+      criteriaInput.supplierPriceUsd,
+    ].filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+    const { kept, dropped } = auditNumericClaims(raw, allowed);
+    return dropped.length > 0 && kept.trim() !== "" ? kept : raw;
+  }, [p.description, criteriaInput]);
+
   return (
     <article
       className={`premium-card grain card-lift rounded-xl p-3 sm:p-5 hover:-translate-y-1 border flex flex-col animate-rise-in relative transition-all duration-300 ${
@@ -661,7 +701,8 @@ export function ProductCard({
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         <WinnerBadge score={p.winner_score} level={p.evidence_level} />
       </div>
-      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{auditedDescription}</p>
+      <WinnerCriteriaChips input={criteriaInput} className="mt-2" />
       <div className="mt-2">
         <DecisionStrip
           winner_score={p.winner_score}

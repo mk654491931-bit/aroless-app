@@ -409,6 +409,13 @@ OPEN_PAGERANK_KEY
 TREND_WEBHOOK_SECRET
 HOT_PRODUCTS_WAIT_MS
 
+# Ürün okuyucu (Jina Reader) — her anahtar 10M token, yük paylaşılır
+JINA_API_KEY_1
+JINA_API_KEY_2
+#   (isteğe bağlı ayarlar)
+# JINA_KEY_TOKEN_BUDGET  → anahtar başına bütçe (varsayılan 10000000)
+# DISCOVERY_READER_PAGES → arama başına HB sayfası (varsayılan 2, 1..6)
+
 # AWS/SES kullanılıyorsa
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
@@ -419,6 +426,39 @@ AWS_SES_FROM_EMAIL
 Gerçek değerler **yalnızca** Vercel'in Environment Variables ekranına girilir (veya
 yerelde `.env`'e); `.env.example` sadece anahtar adlarını içerir. Secret'ları
 Git'e yazma.
+
+#### Ürün okuyucu bütçesi (Jina Reader)
+
+Ürün satırlarının tamamı `r.jina.ai` üzerinden okunur (Hepsiburada, n11,
+AliExpress, Newegg). Anahtarsız ücretsiz katman ~20 istek/dk olduğu için yoğun
+saatte 429 alınır ve O SAYFANIN ürün satırları havuzdan düşer — sessiz ürün
+kaybının en büyük kaynağı buydu. Ücretsiz hesap **anahtar başına 10M token**
+verir; anahtarlar arasında yük paylaşılır ve kota dolan anahtar 60 sn soğumaya
+alınır (`JINA_API_KEY_1`, `JINA_API_KEY_2`, … `_8`).
+
+Ölçülen maliyet (2026-10-12, gerçek Jina gövdeleri):
+
+| Sayfa | Karakter | Tahmini token |
+| --- | --- | --- |
+| Hepsiburada arama sayfası | 85.266 | ~21.300 |
+| n11 arama sayfası | 58.025 | ~14.500 |
+| AliExpress liste sayfası | ~34.000 | ~8.500 |
+| Newegg liste sayfası | ~80.000 | ~20.000 |
+
+Yani bir TR araması ≈ **57K token** (2 HB sayfası + n11), bir global arama
+≈ 90K token. 10M tokenlık bir anahtar ≈ 175 TR aramasına yeter. Bu yüzden:
+
+- `DISCOVERY_READER_PAGES` varsayılanı **2**'dir (eskiden 4 sayfa okunuyordu ve
+  arama başına ~85K token gidiyordu — ölçülen ürün kaybı olmadan yarıya indi).
+- Aynı niş 3 saat içinde tekrar aranırsa Jina'ya **hiç** istek gitmez (önbellek).
+- Sayfa başına ürün görseli ölçümü: HB 37 kartın 12'sinde görsel taşır; geri
+  kalanı görsel kapısında elenir. Bu kayıp `/health` → `reader.sources`
+  altında `droppedNoImage` olarak görünür (sessiz kaybolmaz).
+
+Canlı kanıt: `/health` yanıtındaki `reader` bloğu kaç anahtar tanımlı olduğunu,
+anahtar başına okuma/token sayacını, bütçenin yüzde kaçının harcandığını ve
+tahmini kalan arama sayısını gösterir. Aynı bilgi ön kontrol panelinde de
+(`jina_reader` satırı) vardır.
 
 #### Uzak işçi kullanırsanız (isteğe bağlı)
 

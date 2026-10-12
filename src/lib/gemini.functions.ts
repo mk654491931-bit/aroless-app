@@ -132,6 +132,21 @@ export type WinningProduct = {
   market_verdict?: import("@/lib/market-verdict").MarketVerdict;
   sales_tactic?: string;
   ai_insight?: string;
+  /**
+   * ÖLÇÜLMÜŞ SAYISAL ALANLAR (kazıma satırından AYNEN taşınır).
+   *
+   * NEDEN AYRI ALAN: kriter vektörü (bkz. `winner-criteria.ts`) "talep kanıtı"
+   * ve "puan" kriterlerini yalnız ÖLÇÜLMÜŞ sayılarla doldurur. Bu alanlar
+   * `confidence_reason` metnine gömülü kalırsa arayüz onları tekrar ayrıştırmak
+   * zorunda kalırdı (kırılgan); burada sayı olarak taşınır. `null` = ölçülmedi —
+   * 0 UYDURULMAZ.
+   */
+  measured?: {
+    rating: number | null;
+    ratingCount: number | null;
+    salesVolume: number | null;
+    viewed90d: number | null;
+  };
   platform_difficulty?: Array<{
     platform: string;
     difficulty: "Easy" | "Medium" | "Hard";

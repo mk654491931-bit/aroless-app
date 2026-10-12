@@ -42,6 +42,7 @@ import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
 import { Route as ToolsSourcingRouteImport } from './routes/tools/sourcing'
+import { Route as ApiCronRadarRefreshRouteImport } from './routes/api/cron.radar-refresh'
 import { Route as ApiProductDiscoveryPreflightRouteImport } from './routes/api/product-discovery.preflight'
 import { Route as ApiProductDiscoveryStartRouteImport } from './routes/api/product-discovery.start'
 import { Route as ApiProductDiscoveryStepRouteImport } from './routes/api/product-discovery.step'
@@ -225,6 +226,11 @@ const ToolsSourcingRoute = ToolsSourcingRouteImport.update({
   path: '/tools/sourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronRadarRefreshRoute = ApiCronRadarRefreshRouteImport.update({
+  id: '/api/cron/radar-refresh',
+  path: '/api/cron/radar-refresh',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProductDiscoveryPreflightRoute =
   ApiProductDiscoveryPreflightRouteImport.update({
     id: '/api/product-discovery/preflight',
@@ -349,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
@@ -401,6 +408,7 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
@@ -454,6 +462,7 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
   '/api/product-discovery/step': typeof ApiProductDiscoveryStepRoute
@@ -508,6 +517,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
@@ -612,6 +623,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
     | '/api/product-discovery/step'
@@ -664,6 +676,7 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ApiCronRadarRefreshRoute: typeof ApiCronRadarRefreshRoute
   ApiProductDiscoveryPreflightRoute: typeof ApiProductDiscoveryPreflightRoute
   ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
   ApiProductDiscoveryStepRoute: typeof ApiProductDiscoveryStepRoute
@@ -916,6 +929,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsSourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/radar-refresh': {
+      id: '/api/cron/radar-refresh'
+      path: '/api/cron/radar-refresh'
+      fullPath: '/api/cron/radar-refresh'
+      preLoaderRoute: typeof ApiCronRadarRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/product-discovery/preflight': {
       id: '/api/product-discovery/preflight'
       path: '/api/product-discovery/preflight'
@@ -1081,6 +1101,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ApiCronRadarRefreshRoute: ApiCronRadarRefreshRoute,
   ApiProductDiscoveryPreflightRoute: ApiProductDiscoveryPreflightRoute,
   ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,
   ApiProductDiscoveryStepRoute: ApiProductDiscoveryStepRoute,

@@ -25,7 +25,15 @@ import {
 } from "@/components/ui/select";
 import { PageHero } from "@/components/page-hero";
 import { useAuth } from "@/hooks/use-auth";
-import { getRadar, radarWatchlist, type RadarItem } from "@/lib/radar.functions";
+import {
+  getPickAccuracy,
+  getRadar,
+  getRadarHistory,
+  radarWatchlist,
+  type RadarItem,
+} from "@/lib/radar.functions";
+import { RADAR_FLAG_LABEL } from "@/lib/radar-series";
+import { RadarSparkline } from "@/components/radar-sparkline";
 import { creditErrorMessage } from "@/lib/credits";
 import { toast } from "sonner";
 
@@ -162,6 +170,8 @@ function RadarPage() {
   const [country, setCountry] = useState<string>("US");
   const radarFn = useServerFn(getRadar);
   const watchFn = useServerFn(radarWatchlist);
+  const historyFn = useServerFn(getRadarHistory);
+  const accuracyFn = useServerFn(getPickAccuracy);
 
   useEffect(() => {
     if (!loading && !user)
@@ -184,6 +194,24 @@ function RadarPage() {
     enabled: !!user && !!q.data,
     staleTime: 60 * 60 * 1000,
   });
+
+  // GÜNLÜK SERİ: `radar_items` gün gün kayıt tutuyor; "trend" iddiası ancak
+  // bu seri gösterilince kanıtlanır. Veri yoksa bölüm hiç çizilmez.
+  const history = useQuery({
+    queryKey: ["radar-history", country],
+    queryFn: () => historyFn({ data: { country: country as "US", days: 14 } }),
+    enabled: !!user,
+    staleTime: 60 * 60 * 1000,
+  });
+
+  // ÖNERİ İSABETİ: radar önerileri kullanıcının GERÇEK ROI kayıtlarıyla eşleşir.
+  const accuracy = useQuery({
+    queryKey: ["radar-accuracy"],
+    queryFn: () => accuracyFn(),
+    enabled: !!user,
+    staleTime: 60 * 60 * 1000,
+  });
+  const series = useMemo(() => history.data?.series ?? [], [history.data]);
 
   const items = useMemo(() => (q.data?.items ?? []) as RadarItem[], [q.data]);
   const avg = items.length
@@ -227,7 +255,10 @@ function RadarPage() {
               title="Bugünün radarını yeniden üret"
               onClick={() =>
                 radarFn({ data: { country: country as "US", refresh: true } })
-                  .then(() => q.refetch())
+                  .then(() => {
+                    void history.refetch();
+                    return q.refetch();
+                  })
                   .catch((e: unknown) => {
                     // Jeton yetersizse sessizce yutma: kullanıcı ne olduğunu görsün.
                     toast.error(creditErrorMessage(e, "Radar yenilenemedi"));
@@ -271,6 +302,88 @@ function RadarPage() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {series.length > 0 && (
+        <div className="premium-card mb-5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <Activity size={14} /> Geçmiş trend · son {history.data?.days ?? 14} gün
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              günlük kayıtlardan hesaplandı; ölçülmeyen alan değişime katılmaz
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-white/5">
+            {series.slice(0, 6).map((s) => (
+              <li key={s.key} className="flex items-center justify-between gap-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold">{s.title}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <span>
+                      {s.days} gün · skor {s.scoreDelta >= 0 ? "+" : ""}
+                      {s.scoreDelta}
+                    </span>
+                    <span>
+                      momentum {s.momentumDelta >= 0 ? "+" : ""}
+                      {s.momentumDelta}
+                    </span>
+                    {s.priceChangePct !== null && (
+                      <span>
+                        fiyat {s.priceChangePct >= 0 ? "+" : ""}
+                        {s.priceChangePct}%
+                      </span>
+                    )}
+                    {s.flags.map((f) => (
+                      <span
+                        key={f}
+                        className={`rounded-full border px-1.5 py-0.5 ${
+                          f === "momentum-kirildi"
+                            ? "border-rose-400/30 bg-rose-400/10 text-rose-300"
+                            : f === "fiyat-dusuyor"
+                              ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                              : "border-white/10 bg-white/5"
+                        }`}
+                      >
+                        {RADAR_FLAG_LABEL[f]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <RadarSparkline
+                  values={s.spark}
+                  stroke={s.scoreDelta < 0 ? "var(--loss, #f87171)" : "var(--brand)"}
+                  className="shrink-0"
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {accuracy.data && (
+        <div className="premium-card mb-5 p-4">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <Star size={14} /> Öneri isabeti
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{accuracy.data.summary}</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {accuracy.data.byCriterion.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs"
+              >
+                <span className="text-muted-foreground">{c.label}</span>
+                <span className="font-semibold">
+                  {c.profitRate === null ? "—" : `%${Math.round(c.profitRate * 100)} kârlı`}
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                    ({c.linked}/{c.picks} sonuçlu)
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

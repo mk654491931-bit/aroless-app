@@ -13,6 +13,13 @@ import {
   type RadarEvidence,
   type RadarSeed,
 } from "@/lib/radar.server";
+import {
+  buildRadarSeries,
+  RADAR_HISTORY_DAYS_DEFAULT as RADAR_HISTORY_DAYS,
+  type RadarSnapshotRow,
+} from "@/lib/radar-series";
+import { measurePickAccuracy, type PickLike } from "@/lib/pick-outcomes";
+import type { RoiEntry } from "@/lib/roi-math";
 
 export type RadarItem = RadarSeed & {
   id: string;
@@ -287,4 +294,66 @@ export const radarWatchlist = createServerFn({ method: "POST" })
       }
     }
     return { matches };
+  });
+
+/**
+ * RADAR GEÇMİŞ SERİSİ — gün gün skor/momentum/fiyat hareketi.
+ *
+ * NEDEN: `radar_items` günlük kayıt tutuyor ama arayüz yalnız BUGÜNÜ
+duyuruyordu; "radar" trend değil fotoğraftı. Bu uç son N günü okuyup
+ * `buildRadarSeries` ile ürün başına seriye çevirir (hesaplar saf ve testli).
+ */
+export const getRadarHistory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        country: z.enum(RADAR_COUNTRIES).default("US"),
+        days: z.number().int().min(2).max(60).default(RADAR_HISTORY_DAYS),
+      })
+      .parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const cutoff = new Date(Date.now() - data.days * 86_400_000).toISOString().slice(0, 10);
+    const { data: rows, error } = await context.supabase
+      .from("radar_items")
+      .select("day,title,winner_score,momentum,price_min,price_max,est_margin_pct")
+      .eq("country", data.country)
+      .gte("day", cutoff)
+      .order("day", { ascending: true })
+      .limit(1000);
+    if (error) return { series: [], days: data.days, error: error.message };
+    const series = buildRadarSeries((rows ?? []) as RadarSnapshotRow[]).slice(0, 12);
+    return { series, days: data.days, error: null };
+  });
+
+/**
+ * ÖNERİ İSABETİ — radar önerileri kullanıcının GERÇEK ROI kayıtlarıyla eşleşir.
+ *
+ * NEDEN: öneri (`radar_items`) ve gerçek sonuç (`roi_entries`) iki ayrı yerde
+duruyordu; birleşmeden "önerdiğimiz ürünler kâr etti mi?" ölçülemiyordu.
+ * Eşleşmeyen öneriler oranların DIŞINDA tutulur (0 kâr varsayılmaz).
+ */
+export const getPickAccuracy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const [picks, roi] = await Promise.all([
+      context.supabase
+        .from("radar_items")
+        .select("title,day,winner_score,momentum,price_min,price_max,est_margin_pct")
+        .order("day", { ascending: false })
+        .limit(200),
+      context.supabase.from("roi_entries").select("*").limit(500),
+    ]);
+    const pickRows: PickLike[] = (picks.data ?? []).map((r) => ({
+      title: String(r.title ?? ""),
+      day: String(r.day ?? ""),
+      winnerScore: Number(r.winner_score ?? 0),
+      momentum: Number(r.momentum ?? 0),
+      priceMin: Number(r.price_min ?? 0),
+      priceMax: Number(r.price_max ?? 0),
+      marginPct: Number(r.est_margin_pct ?? 0),
+    }));
+    const accuracy = measurePickAccuracy(pickRows, (roi.data ?? []) as unknown as RoiEntry[]);
+    return { ...accuracy, error: picks.error?.message ?? roi.error?.message ?? null };
   });
