@@ -88,10 +88,19 @@ export const MIN_DELIVERED_WINNERS = 1;
 /**
  * GÖRSEL KAPISININ AÇILMASI İÇİN GEREKEN EN AZ FOTOĞRAFLI SATIR.
  *
- * ÖLÇÜLDÜ (2026-10-12): ücretsiz pazaryeri okuyucuları fotoğrafı her satırda
- * getirir (TR/Hepsiburada ölçümü: 34/34; global/AliExpress: görselli). Bu
- * eşiğin altında görsel ZORUNLU kılınmaz, çünkü havuzda fotoğraflı ürün hiç
- * yoksa kapı listeyi boşaltır ve kullanıcı ürün yerine hata görür.
+ * ÖLÇÜLDÜ (2026-10-12, gerçek ağ, uçtan uca ilk aşama): ücretsiz pazaryeri
+ * okuyucuları fotoğrafı her satırda getirir.
+ *   "air fryer"/US → 68 ham satır, 33'ü fotoğraflı (AliExpress + Newegg)
+ *   "bardak"/TR  → 100 ham satır, 70'i fotoğraflı (Hepsiburada + n11)
+ * İki havuzda da fotoğraflı satır sayısı bu eşiğin 6-14 KATI. Yani eşik
+ * bağlayıcı kısıt DEĞİLDİR: yalnız "havuzda gerçek ürün var mı" sorusunu
+ * yanıtlar. Eşiğin altında görsel ZORUNLU kılınmaz çünkü fotoğraflı ürün hiç
+ * yoksa kapı listeyi boşaltır ve kullanıcı ürün yerine hata görür (kapı sonrası
+ * boş liste zaten bir kez gevşetilir — bkz. `runScrapeFilterStep`).
+ *
+ * Bu satırlar `product-discovery-reader.fixtures.test.ts` ile kilitlidir:
+ * kaydedilmiş fixture havuzu kapıdan geçirilir ve fotoğrafsız satırların
+ * listeye GİRMEDİĞİ doğrulanır.
  */
 export const MIN_IMAGED_POOL = 5;
 

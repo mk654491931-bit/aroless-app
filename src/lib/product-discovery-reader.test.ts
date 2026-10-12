@@ -28,12 +28,21 @@ describe("tr-reader parse", () => {
     expect(r.ratingCount).toBe(694);
   });
   it("n11 kalın fiyatı güncel fiyat sayar", () => {
-    const md = "[![Image 235: Stanley Quencher 1.18 L Pipetli Termos Bardak](https://n11scdn.akamaized.net/a1/200/x.jpg) ### Stanley Quencher 10 günün en düşük fiyatı! 1.489 TL **1.400 TL**](https://www.n11.com/urun/stanley-quencher-118?x=1)";
+    const md =
+      "[![Image 235: Stanley Quencher 1.18 L Pipetli Termos Bardak](https://n11scdn.akamaized.net/a1/200/x.jpg) ### Stanley Quencher 10 günün en düşük fiyatı! 1.489 TL **1.400 TL**](https://www.n11.com/urun/stanley-quencher-118?x=1)";
     const [r] = parseN11(md);
     expect(r.priceTry).toBe(1400);
   });
   it("aynı ürünü tek satıra indirir", () => {
-    const a = { title: "Cam Bardak 6lı", url: "u1", imageUrl: "i", priceTry: 1, rating: null, ratingCount: null, site: "n11" as const };
+    const a = {
+      title: "Cam Bardak 6lı",
+      url: "u1",
+      imageUrl: "i",
+      priceTry: 1,
+      rating: null,
+      ratingCount: null,
+      site: "n11" as const,
+    };
     expect(dedupeRows([a, { ...a, url: "u2" }])).toHaveLength(1);
   });
 });
@@ -46,7 +55,7 @@ describe("tr-reader parse", () => {
 describe("AliExpress okuyucu (global gerçek ürün satırı)", () => {
   // Sayfa biçimi ölçülmüş hâliyle kullanılır: tek satır = tek ürün.
   const line =
-    '*   [![Image 50: 5.5L Digital Air Fryer Oven with Touchscreen](https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_480x480q75.jpg_.avif) ' +
+    "*   [![Image 50: 5.5L Digital Air Fryer Oven with Touchscreen](https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_480x480q75.jpg_.avif) " +
     "![Image 51](https://ae-pic-a1.aliexpress-media.com/kf/H48x48.png) " +
     "### 5.5L Digital Air Fryer Oven with Touchscreen $84.99 $242.47 -64% 4.4 175 sold]" +
     "(https://www.aliexpress.us/item/3256806001234567.html?gatewayAdapt=glo2usa)";
@@ -60,14 +69,12 @@ describe("AliExpress okuyucu (global gerçek ürün satırı)", () => {
     expect(r.url).toBe("https://www.aliexpress.us/item/3256806001234567.html");
     // Boyut eki 960×960 webp ile değiştirilir (ölçüldü: AVIF'i çözemeyen
     // tarayıcıda da görünür, tam çözünürlüklü dosyayı indirmez).
-    expect(r.imageUrl).toBe(
-      "https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_960x960q75.jpg",
-    );
+    expect(r.imageUrl).toBe("https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_960x960q75.jpg");
   });
 
   it("fiyatı olmayan satırda fiyat UYDURMAZ (null kalır)", () => {
     const noPrice =
-      '[![Image 3: Silicone Baking Mat Set Kitchen Tool](https://ae-pic-a1.aliexpress-media.com/kf/Sxyz.jpg_480x480q75.jpg_.avif) ' +
+      "[![Image 3: Silicone Baking Mat Set Kitchen Tool](https://ae-pic-a1.aliexpress-media.com/kf/Sxyz.jpg_480x480q75.jpg_.avif) " +
       "### Silicone Baking Mat Set Kitchen Tool 2 sold]" +
       "(https://www.aliexpress.us/item/3256806009999999.html)";
     const [r] = parseAliExpress(noPrice);
@@ -94,11 +101,31 @@ describe("AliExpress okuyucu (global gerçek ürün satırı)", () => {
 import { applyHardFilter, MIN_COMMERCE_POOL } from "./product-discovery-filter.server";
 describe("ticari kanıt kapısı", () => {
   const base = (name: string, extra: Record<string, unknown>) =>
-    ({ name, source: "scraped", sources: [], brand: "", seller: "", priceUsd: null, rating: null, ratingCount: null,
-       inStock: null, url: "", notes: "", imageUrl: "", category: "", viewed90d: null, salesVolume: null,
-       dataCompleteness: 1, preScore: 50, signals: {}, ...extra }) as never;
+    ({
+      name,
+      source: "scraped",
+      sources: [],
+      brand: "",
+      seller: "",
+      priceUsd: null,
+      rating: null,
+      ratingCount: null,
+      inStock: null,
+      url: "",
+      notes: "",
+      imageUrl: "",
+      category: "",
+      viewed90d: null,
+      salesVolume: null,
+      dataCompleteness: 1,
+      preScore: 50,
+      signals: {},
+      ...extra,
+    }) as never;
   it("yeterli gerçek ürün varsa fiyatsız/puansız sinyal satırlarını eler", () => {
-    const real = Array.from({ length: MIN_COMMERCE_POOL }, (_, i) => base(`Cam Bardak Model ${i}`, { priceUsd: 5 + i }));
+    const real = Array.from({ length: MIN_COMMERCE_POOL }, (_, i) =>
+      base(`Cam Bardak Model ${i}`, { priceUsd: 5 + i }),
+    );
     const junk = base("someuser/github-repo", { preScore: 99 });
     const { survivors } = applyHardFilter([...real, junk]);
     expect(survivors.map((p: { name: string }) => p.name)).not.toContain("someuser/github-repo");

@@ -76,10 +76,18 @@ export function useVerifiedProductImage(productUrl: string): string | null {
  * Sıra: (1) kaynaktan gelen ve kapıdan geçen ölçülmüş görsel, (2) yoksa ürünün
  * kendi sayfasından doğrulanmış görsel. İkisi de yoksa `null` döner ve kart
  * "Görsel doğrulanamadı" durumunu gösterir — asla yer tutucu fotoğraf göstermez.
+ *
+ * `measuredFailed`: ölçülen görsel TARAYICIDA yüklenemedi (kart `<img onError>`).
+ * Bu durumda sıra kaymaz, bir sonraki kanıt katmanına DÜŞER: ürünün kendi
+ * sayfasından doğrulanmış görsel denenir. NEDEN GEREKLİ: ölçülen adres
+ * CDN'de silinmiş/daraltılmış olabilir (ölçüm anı ile görüntüleme anı
+ * arasında); o anda kullanıcı hiçbir fotoğraf görmüyordu, oysa ürün
+ * sayfasında GERÇEK bir fotoğraf vardı. Kırık adres yine gösterilmez:
+ * yalnızca doğrulanmış katmana inilir.
  */
-export function useCardProductImage(p: WinningProduct): string | null {
+export function useCardProductImage(p: WinningProduct, measuredFailed = false): string | null {
   const measured = resolveProductImage(p);
   const sourceUrl = typeof p?.source_url === "string" ? p.source_url : "";
-  const fetched = useVerifiedProductImage(measured ? "" : sourceUrl);
-  return measured ?? fetched;
+  const fetched = useVerifiedProductImage(measured && !measuredFailed ? "" : sourceUrl);
+  return measuredFailed ? fetched : (measured ?? fetched);
 }

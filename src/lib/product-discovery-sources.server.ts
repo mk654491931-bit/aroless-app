@@ -1993,7 +1993,9 @@ export const trReaderSource: ProductSource = {
   name: "tr-reader",
   timeoutMs: 9_500,
   async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
-    const c = String(country ?? "").trim().toUpperCase();
+    const c = String(country ?? "")
+      .trim()
+      .toUpperCase();
     if (c && c !== "TR" && c !== "TÜRKIYE" && c !== "TURKEY") return [];
     const { scrapeTrReader } = await import("./product-discovery-reader.server");
     return scrapeTrReader(niche);
@@ -2029,11 +2031,37 @@ export const aliExpressReaderSource: ProductSource = {
   },
 };
 
+/**
+ * İKİNCİ GLOBAL OKUYUCU (Newegg) — MARKA + DEĞERLENDİRME SAYISI veren tek kaynak.
+ *
+ * NEDEN ÜLKE KAPISI VAR (ölçülen gerçek, 2026-10-12): Newegg ABD perakendecisidir;
+ * TR kullanıcısı için ne kargo ne fiyat geçerlidir, üstelik TR havuzu o nişte
+ * Hepsiburada + n11 ile zaten doludur. Bu yüzden kaynak YALNIZ hedef ülke TR
+ * olmadığında koşar: TR'de bütçeyi gerçek yerel satırdan çalmaz, TR dışında ise
+ * AliExpress'e bağımlılığı kırar (ölçüldü: Amazon/Walmart/HD/eBay/Target 403 ya
+ * da boş iskelet dönerken Newegg 200 / 39–44 KB / 20+ gerçek kart verir).
+ */
+export const neweggReaderSource: ProductSource = {
+  name: "newegg-reader",
+  timeoutMs: 9_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { scrapeNewegg } = await import("./product-discovery-reader.server");
+    return scrapeNewegg(niche);
+  },
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    if (String(country).toUpperCase() === "TR") return [];
+    const { scrapeNewegg } = await import("./product-discovery-reader.server");
+    return scrapeNewegg(niche);
+  },
+};
+
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
-  // ÜCRETSİZ gerçek TR ürün satırları (fiyat + puan + görsel + link).
+  // ÜCRETSİZ gerçek TR ürün satırları (Hepsiburada + n11; fiyat + puan + görsel).
   trReaderSource,
   // ÜCRETSİZ gerçek GLOBAL ürün satırları (fiyat + satış adedi + görsel + link).
   aliExpressReaderSource,
+  // ÜCRETSİZ İKİNCİ global kaynak: marka + değerlendirme sayısı (TR'de kapalı).
+  neweggReaderSource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,

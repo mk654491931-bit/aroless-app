@@ -516,13 +516,17 @@ export function ProductCard({
   // logo, banner veya BAŞKA ürünün fotoğrafı dönüyordu. Artık görsel ya kaynaktan
   // gelen ölçülmüş fotoğraf ya da ürünün kendi sayfasından doğrulanmış
   // fotoğraftır; ikisi de yoksa yer tutucu gösterilMEZ, durum yazılır.
-  const resolvedImage = useCardProductImage(p);
+  // Yüklenemeyen görsel adresi "kırık" sayılır: kart onu da göstermez; yer
+  // tutucu fotoğraf yüklemek uydurmak olurdu.
+  //
+  // ÖLÇÜLEN EKSİK (2026-10-12): kırık görselde kart doğrudan "doğrulanamadı"ya
+  // düşüyordu, oysa ürünün KENDİ sayfasında gerçek fotoğraf olabiliyor. Artık
+  // kırık görsel bir SONRAKİ kanıt katmanına iner (ürün sayfası doğrulaması).
+  const [brokenImage, setBrokenImage] = useState<string | null>(null);
+  const resolvedImage = useCardProductImage(p, brokenImage !== null);
   const isTopWinner = (p.winner_score ?? 0) >= 75;
   const isElite = (p.winner_score ?? 0) >= 85;
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // Yüklenemeyen görsel adresi "kırık" sayılır: kart onu da göstermez, doğrulanamadı
-  // durumuna döner (yer tutucu fotoğraf yüklemek uydurmak olurdu).
-  const [brokenImage, setBrokenImage] = useState<string | null>(null);
   const shownImage = resolvedImage && resolvedImage !== brokenImage ? resolvedImage : null;
 
   return (
@@ -566,14 +570,19 @@ export function ProductCard({
       >
         {shownImage ? (
           <img
+            // `key` zorunlu: kaynak değiştiğinde (kırık ölçülmüş görsel → ürün
+            // sayfasından doğrulanmış görsel) React AYNI DOM düğümünü yeniden
+            // kullanırsa tarayıcıdaki "bozuk görsel" durumu taşınabilir; yeni
+            // düğüm her adreste temiz bir yükleme başlatır.
+            key={shownImage}
             src={shownImage}
             alt={p.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-700"
-            onError={(e) => {
-              // Bozuk adres GÖSTERİLMEZ; kart dürüst "doğrulanamadı" durumuna
-              // döner (yer tutucu fotoğraf yüklemek uydurmak olurdu).
-              (e.currentTarget as HTMLImageElement).style.display = "none";
+            onError={() => {
+              // Bozuk adres GÖSTERİLMEZ; kart bir sonraki kanıt katmanına
+              // düşer, o da yoksa dürüst "doğrulanamadı" durumu yazılır
+              // (yer tutucu fotoğraf yüklemek uydurmak olurdu).
               setBrokenImage(shownImage);
             }}
           />
