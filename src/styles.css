@@ -3069,8 +3069,6 @@ html.light .custom-cursor-ring {
 .hero-orb-b,
 .hero-orb-c,
 .hero-grid-pan,
-.aroless-shine,
-.velora-shine,
 .aroless-halo,
 .velora-halo,
 .mercury,
@@ -3156,4 +3154,22 @@ html.light .custom-cursor-ring {
 .amb-beam,
 .amb-particles {
   opacity: 0.45 !important;
+}
+
+/* 5) Harf harf beliren AROLESS yazısı görünür KALIR.
+   .aroless-letter başlangıçta opacity:0'dır ve ancak tek seferlik
+   "letter-in" animasyonuyla görünür. Yukarıdaki toplu `animation: none`
+   bu düzenek kuralını da vurduğunda (aroless-letter.aroless-shine) başlık
+   tamamen kayboluyordu. Bu yüzden giriş animasyonu geri açılır; yalnızca
+   sonsuz "aroless-shine" parlama taraması durdurulmuş kalır. */
+.aroless-letter.aroless-shine,
+.velora-letter.velora-shine {
+  animation: letter-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* "Hareketi azalt" tercihinde giriş de anında olsun; yazı görünür kalır. */
+  .aroless-letter.aroless-shine,
+  .velora-letter.velora-shine {
+    animation-duration: 0.01s !important;
+  }
 }
