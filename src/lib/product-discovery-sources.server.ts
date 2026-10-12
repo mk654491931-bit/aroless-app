@@ -2004,9 +2004,36 @@ export const trReaderSource: ProductSource = {
   },
 };
 
+/**
+ * ÜCRETSİZ GLOBAL PAZARYERİ OKUYUCU (AliExpress, Jina Reader üzerinden).
+ *
+ * NEDEN BU KADAR ÖNEMLİ (ölçülen gerçek, 2026-10-12, niş = "air fryer"/US):
+ * 28 ham satırın TAMAMI GitHub deposu, Wikipedia maddesi ve haber snippet'iydi;
+ * satılabilir ürün satırı SIFIRDI. Kapılar bunları haklı olarak eledi, kullanıcı
+ * ürün kartı yerine tek bir "kapsam" satırı gördü — yani "sonuçlar saçma" ve
+ * "fotoğraf çıkmıyor" şikâyetinin kök nedeni buydu. Amazon/Walmart/Etsy Jina
+ * üzerinden 403 dönerken AliExpress okunabiliyor (ölçüldü: 29 KB gerçek liste).
+ * Ülkeden bağımsız koşar: fiyatı `$` olarak ölçer, yerel para birimini USD
+ * sanmaz (bkz. `product-discovery-reader.server.ts`).
+ */
+export const aliExpressReaderSource: ProductSource = {
+  name: "aliexpress-reader",
+  timeoutMs: 9_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { scrapeAliExpress } = await import("./product-discovery-reader.server");
+    return scrapeAliExpress(niche);
+  },
+  async scrapeForCountry(niche: string): Promise<RawProduct[]> {
+    const { scrapeAliExpress } = await import("./product-discovery-reader.server");
+    return scrapeAliExpress(niche);
+  },
+};
+
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ gerçek TR ürün satırları (fiyat + puan + görsel + link).
   trReaderSource,
+  // ÜCRETSİZ gerçek GLOBAL ürün satırları (fiyat + satış adedi + görsel + link).
+  aliExpressReaderSource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,

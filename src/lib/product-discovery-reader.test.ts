@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { dedupeRows, parseHepsiburada, parseN11, parseTry } from "./product-discovery-reader.server";
+import {
+  aliExpressImage,
+  dedupeRows,
+  parseAliExpress,
+  parseHepsiburada,
+  parseN11,
+  parseTry,
+  parseUsd,
+} from "./product-discovery-reader.server";
 
 describe("tr-reader parse", () => {
   it("Türk fiyat biçimini doğru okur", () => {
@@ -27,6 +35,59 @@ describe("tr-reader parse", () => {
   it("aynı ürünü tek satıra indirir", () => {
     const a = { title: "Cam Bardak 6lı", url: "u1", imageUrl: "i", priceTry: 1, rating: null, ratingCount: null, site: "n11" as const };
     expect(dedupeRows([a, { ...a, url: "u2" }])).toHaveLength(1);
+  });
+});
+
+/**
+ * ALIEXPRESS (GLOBAL) — "air fryer"/US nişinde 28 ham satırın tamamı
+ * GitHub/Wikipedia/haber olduğu için ölçülen gerçek: global nişlerde
+ * tek satılabilir ürün kaynağı burasıdır (bkz. dosya başlığı).
+ */
+describe("AliExpress okuyucu (global gerçek ürün satırı)", () => {
+  // Sayfa biçimi ölçülmüş hâliyle kullanılır: tek satır = tek ürün.
+  const line =
+    '*   [![Image 50: 5.5L Digital Air Fryer Oven with Touchscreen](https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_480x480q75.jpg_.avif) ' +
+    "![Image 51](https://ae-pic-a1.aliexpress-media.com/kf/H48x48.png) " +
+    "### 5.5L Digital Air Fryer Oven with Touchscreen $84.99 $242.47 -64% 4.4 175 sold]" +
+    "(https://www.aliexpress.us/item/3256806001234567.html?gatewayAdapt=glo2usa)";
+
+  it("başlık, fiyat, puan, satış adedi, görsel ve ürün linkini ölçer", () => {
+    const [r] = parseAliExpress(line);
+    expect(r.title).toBe("5.5L Digital Air Fryer Oven with Touchscreen");
+    expect(r.priceUsd).toBe(84.99);
+    expect(r.rating).toBe(4.4);
+    expect(r.sold).toBe(175);
+    expect(r.url).toBe("https://www.aliexpress.us/item/3256806001234567.html");
+    // Boyut eki 960×960 webp ile değiştirilir (ölçüldü: AVIF'i çözemeyen
+    // tarayıcıda da görünür, tam çözünürlüklü dosyayı indirmez).
+    expect(r.imageUrl).toBe(
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sabc123.jpg_960x960q75.jpg",
+    );
+  });
+
+  it("fiyatı olmayan satırda fiyat UYDURMAZ (null kalır)", () => {
+    const noPrice =
+      '[![Image 3: Silicone Baking Mat Set Kitchen Tool](https://ae-pic-a1.aliexpress-media.com/kf/Sxyz.jpg_480x480q75.jpg_.avif) ' +
+      "### Silicone Baking Mat Set Kitchen Tool 2 sold]" +
+      "(https://www.aliexpress.us/item/3256806009999999.html)";
+    const [r] = parseAliExpress(noPrice);
+    expect(r.priceUsd).toBeNull();
+    // Puan da yazılmadı → uydurulmaz; yalnız ölçülen satış adedi taşınır.
+    expect(r.rating).toBeNull();
+    expect(r.sold).toBe(2);
+  });
+
+  it("görsel adresi AliExpress CDN değilse boş döner (rastgele görsel gösterilmez)", () => {
+    expect(aliExpressImage("https://example.com/a_480x480q75.jpg_.avif")).toBe("");
+    expect(aliExpressImage("https://ae-pic-a1.aliexpress-media.com/kf/A.jpg")).toBe(
+      "https://ae-pic-a1.aliexpress-media.com/kf/A.jpg",
+    );
+  });
+
+  it("USD biçimini binlik ayraçla doğru okur", () => {
+    expect(parseUsd("$1,299.00")).toBe(1299);
+    expect(parseUsd("$84.99")).toBe(84.99);
+    expect(parseUsd("$")).toBeNull();
   });
 });
 

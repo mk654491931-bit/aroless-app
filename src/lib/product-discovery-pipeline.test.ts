@@ -28,7 +28,12 @@ import {
   runCouncilOnProducts,
   TOTAL_AGENTS,
 } from "./product-discovery-council.server";
-import { parseLooseJson, runGeminiShortlistStep } from "./product-discovery-pipeline.server";
+import {
+  MIN_IMAGED_POOL,
+  parseLooseJson,
+  runGeminiShortlistStep,
+  shouldRequireImages,
+} from "./product-discovery-pipeline.server";
 import {
   buildShortlistPrompt,
   geminiShortlistSelector,
@@ -783,5 +788,39 @@ describe("gemini kısa liste — sağlayıcı hatasında hat düşmez", () => {
 
     expect(result.ok).toBe(true);
     expect(result.products.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * GÖRSEL KAPISI — "ürünlerin fotoğrafları çıkmıyor" şikâyetinin regresyon
+ * kilidi. Geçmişte kapı sabit KAPALI'ydu (`requireImage: false`) ve vitrin
+ * fotoğrafsız sinyal satırlarıyla (GitHub deposu, Wikipedia maddesi,
+ * haber snippet'i) doluyordu. Artık kapı ÖLÇÜME bağlıdır: havuzda yeterince
+ * fotoğraflı ürün varsa görsel zorunlu, yoksa liste boşaltılmaz.
+ */
+describe("görsel kapısı kararı (ölçüme bağlı)", () => {
+  const row = (imageUrl: string) => ({ imageUrl });
+
+  it("havuzda yeterli fotoğraflı ürün varsa kapı AÇILIR", () => {
+    const rows = [
+      ...Array.from({ length: MIN_IMAGED_POOL }, (_, i) => row(`https://cdn.test/${i}.jpg`)),
+      row(""), // fotoğrafsız sinyal satırı kapıyı kapatmaz, yalnız elenir
+    ];
+    expect(shouldRequireImages(rows, 25)).toBe(true);
+  });
+
+  it("fotoğraflı ürün YOKSA kapı kapalı kalır (boş ekran yasak)", () => {
+    const rows = Array.from({ length: 20 }, () => row(""));
+    expect(shouldRequireImages(rows, 25)).toBe(false);
+  });
+
+  it("boşlukla doldurulmuş görsel adresi fotoğraf SAYILMAZ", () => {
+    const rows = Array.from({ length: 10 }, () => row("   "));
+    expect(shouldRequireImages(rows, 25)).toBe(false);
+  });
+
+  it("küçük hedefte (topN < eşik) eşik hedefe iner", () => {
+    expect(shouldRequireImages([row("a.jpg"), row("b.jpg"), row("c.jpg")], 3)).toBe(true);
+    expect(shouldRequireImages([row("a.jpg"), row("b.jpg")], 3)).toBe(false);
   });
 });

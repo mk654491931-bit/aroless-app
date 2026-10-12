@@ -85,6 +85,35 @@ export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 33;
  */
 export const MIN_DELIVERED_WINNERS = 1;
 
+/**
+ * GÖRSEL KAPISININ AÇILMASI İÇİN GEREKEN EN AZ FOTOĞRAFLI SATIR.
+ *
+ * ÖLÇÜLDÜ (2026-10-12): ücretsiz pazaryeri okuyucuları fotoğrafı her satırda
+ * getirir (TR/Hepsiburada ölçümü: 34/34; global/AliExpress: görselli). Bu
+ * eşiğin altında görsel ZORUNLU kılınmaz, çünkü havuzda fotoğraflı ürün hiç
+ * yoksa kapı listeyi boşaltır ve kullanıcı ürün yerine hata görür.
+ */
+export const MIN_IMAGED_POOL = 5;
+
+/**
+ * Görsel kapısı AÇIK mı? — saf karar fonksiyonu (ağ yok, DB yok).
+ *
+ * KURAL: havuzda en az `Math.min(topN, MIN_IMAGED_POOL)` fotoğraflı satır
+ * varsa görsel ZORUNLU olur; yoksa kapı kapalı kalır (liste asla boşaltılmaz).
+ * Ayrı export edilir çünkü tek bir hatada "vitrin fotoğrafsız ürünle dolar"
+ * regresyonu doğrudan bu karardan çıkar ve ölçülebilir olmalıdır.
+ */
+export function shouldRequireImages(
+  rows: readonly { imageUrl?: string | null }[],
+  topN: number,
+  minPool: number = MIN_IMAGED_POOL,
+): boolean {
+  const threshold = Math.max(1, Math.min(topN, minPool));
+  let imaged = 0;
+  for (const r of rows) if (String(r.imageUrl ?? "").trim() !== "") imaged += 1;
+  return imaged >= threshold;
+}
+
 /* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
 
 /**
@@ -397,22 +426,43 @@ export async function runScrapeFilterStep(
     ms: r.ms,
     error: r.error,
   }));
-  // GÖRSEL KAPI NEDEN KAPALI — canlıda açmak hatı boşaltırdı:
-  // `requireImage` varsayılan olarak `true` gelir, ama HİÇBİR kaynak
-  // `imageUrl` üretmiyor (kazıyıcılar fotoğrafı değil ürün sayfasını
-  // getiriyor). Kapı açık kalsaydı 75 ürünün TAMAMI elenir ve Gemini
-  // aşamasına boş liste giderdi. Kaynaklar görsel alanını doldurmaya başladığında
-  // bu değer `true`'ya çevrilebilir; o ana kadar ölçülmemiş görsel nedeniyle
-  // ürün kaybetmek, hattı çalıştırmaktan daha kötüdür.
-  const built = buildShortlist(raw, {
+  // GÖRSEL KAPISI — ARTIK SABİT KAPALI DEĞİL, ÖLÇÜME BAĞLI.
+  //
+  // Geçmişte buraya `requireImage: false` yazılmıştı çünkü "hiçbir kaynak
+  // `imageUrl` üretmiyor" sanılıyordu ve kapı açıkken listenin tamamı elenip
+  // Gemini aşamasına boş liste gidiyordu.
+  //
+  // ÖLÇÜLDÜ (2026-10-12, gerçek ağ): bu gerekçe ARTIK DOĞRU DEĞİL. Ücretsiz
+  // pazaryeri okuyucuları her satırda gerçek fotoğraf getiriyor:
+  //   "led masa lambası"/TR → 34 satır, 34'ü görselli (Hepsiburada)
+  //   "air fryer"        /US → AliExpress satırları görselli + fiyatlı + satış adetli
+  // Yani görselsiz satırlar artık gerçek ürün DEĞİL; GitHub depoları, Wikipedia
+  // maddeleri ve haber snippet'leridir — kartlarda "fotoğraf yok" olarak görünen
+  // şey tam olarak onlardı. Kapıyı kapalı tutmak, vitrini bu satırlarla
+  // dolduruyordu.
+  //
+  // GÜVENLİK KURALI (eski arıza tekrarlanmasın): görsel ZORUNLU kılınır ama
+  // YALNIZ havuzda yeterince fotoğraflı ürün varsa. Havuzda fotoğraflı ürün
+  // yoksa (ör. yalnız talep sinyali dönen bir niş) eski davranış korunur ve
+  // liste boş bırakılmaz. Ayrıca kapı sonrası liste boş kalırsa kapı bir kez
+  // gevşetilir — "boş ekran" hiçbir zaman doğru cevap değildir.
+  const imagedCount = raw.filter((r) => String(r.imageUrl ?? "").trim() !== "").length;
+  const requireImage = shouldRequireImages(raw, topN);
+  const shortlistOptions = {
     // Alakalılık kapısı nişi bilmeli: kaynakların dilinden bağımsız
     // (TR ya da EN) güçlü eşleşmeleri ayırır.
     niche,
     limit: topN,
     context: { nicheMomentumPct, nicheEngagement },
     perSource,
-    requireImage: false,
-  });
+  } as const;
+  let built = buildShortlist(raw, { ...shortlistOptions, requireImage });
+  // Kapı listeyi boşalttıysa (ölçüm yanıltıcıysa) ürün kaybetmek yerine
+  // kapıyı bırakırız: boş sonuç kullanıcıya yanlış bilgi verir, eksik görsel
+  // yalnızca dürüst bir "doğrulanamadı" etiketi gösterir.
+  if (requireImage && built.survivors.length === 0 && raw.length > 0) {
+    built = buildShortlist(raw, { ...shortlistOptions, requireImage: false });
+  }
   const stats = built.stats;
   let products = built.products;
   let survivors = built.survivors;
@@ -440,6 +490,7 @@ export async function runScrapeFilterStep(
   const supplierStats = await attachSupplierEconomics(survivors, niche, country);
 
   const notes: string[] = [
+    `Görsel kapısı: ${requireImage ? "açık" : "kapalı"} (havuzda ${imagedCount} fotoğraflı satır).`,
     `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
       `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
     // HUNI + ELEME DÖKÜMÜ (§25): "hangi aşamada kaç ürün elendi" sayıyla görünür.
