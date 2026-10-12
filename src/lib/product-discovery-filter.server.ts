@@ -38,6 +38,8 @@ export const MIN_RATING = 3.5;
 export const MIN_RATING_COUNT = 3;
 /** Veri bütünlüğü bu altındaysa ürün listeye giremez. */
 export const MIN_COMPLETENESS = 1;
+/** Ticari kanıt kapısının devreye girmesi için gereken en az gerçek ürün satırı. */
+export const MIN_COMMERCE_POOL = 5;
 
 /**
  * Kanıt yuvalarının okuduğu alanlar. `ParsedRawProduct` de `NormalizedProduct`
@@ -399,6 +401,27 @@ export function applyHardFilter(
       continue;
     }
     byCompleteness.push(p);
+  }
+
+  // 5b) TİCARİ KANIT KAPISI — "saçma rakamlar"ın kök nedeni.
+  //    Ölçülen (2026-10-12, "bardak"/TR): GitHub depoları, Hacker News
+  //    başlıkları, haber/Wikipedia sinyal satırları "ürün" gibi Top-75'e
+  //    giriyor ve EN ÜSTE çıkıyordu. Bunlar nişin TALEP BAĞLAMIdır, satılabilir
+  //    ürün değildir. Havuzda yeterince gerçek ticari satır (fiyat veya
+  //    hacimli puan) varsa, ticari kanıtı olmayan her satır elenir.
+  //    Ticari satır azsa (anahtarsız/dijital niş) eski davranış korunur.
+  const hasCommerce = (p: NormalizedProduct) =>
+    p.priceUsd !== null ||
+    (p.rating !== null && (p.ratingCount ?? 0) > 0) ||
+    (p.salesVolume ?? 0) > 0;
+  const commerceCount = byCompleteness.filter(hasCommerce).length;
+  if (commerceCount >= MIN_COMMERCE_POOL) {
+    for (let i = byCompleteness.length - 1; i >= 0; i -= 1) {
+      if (!hasCommerce(byCompleteness[i])) {
+        stats.rejectedByCompleteness++;
+        byCompleteness.splice(i, 1);
+      }
+    }
   }
 
   // 6) Tekilleştirme. İKİ anahtar kullanılır:

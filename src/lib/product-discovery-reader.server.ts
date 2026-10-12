@@ -1,0 +1,206 @@
+/**
+ * ÜCRETSİZ PAZARYERİ OKUYUCU — Hepsiburada + n11 (Türkiye).
+ *
+ * NEDEN VAR (ölçülen gerçek, 2026-10-12, niş = "bardak", ülke = TR):
+ *   16 kaynağın HİÇBİRİ gerçek ürün satırı döndürmedi. Türk pazaryerleri
+ *   (Trendyol, Hepsiburada, n11, Akakçe, Cimri) veri merkezi IP'lerine 403
+ *   veriyor; `tr-marketplace` ScraperAPI anahtarı yoksa hiç çalışmıyor. Havuz
+ *   GitHub depoları, Hacker News başlıkları ve alakasız sayfalarla doluyordu —
+ *   kullanıcının gördüğü "saçma rakamlar" buradan geliyordu.
+ *
+ * ÇÖZÜM: Jina Reader (`r.jina.ai`) sayfayı kendi altyapısından okuyup temiz
+ *   Markdown döndürür. ANAHTARSIZ ücretsizdir (~20 istek/dk); `JINA_API_KEY`
+ *   (jina.ai'den ücretsiz) eklenirse limit yükselir. Her satırda GERÇEK
+ *   başlık, fiyat (TL), puan, değerlendirme sayısı, görsel ve ürün linki vardır.
+ *
+ * KURALLAR:
+ *   • Uydurma yok — ölçülemeyen alan `null` kalır.
+ *   • Sonuç 6 saat önbelleğe yazılır (aynı niş tekrar arandığında ücretsiz).
+ *   • Fail-soft: bir site düşerse diğeri devam eder; hiçbiri düşerse [] döner.
+ */
+import type { RawProduct } from "./product-discovery.types";
+
+const READER = "https://r.jina.ai/";
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const PER_SITE_TIMEOUT_MS = 8_500;
+
+export interface ReaderRow {
+  title: string;
+  url: string;
+  imageUrl: string;
+  priceTry: number | null;
+  rating: number | null;
+  ratingCount: number | null;
+  site: "Hepsiburada" | "n11";
+}
+
+/** "1.359,15" → 1359.15 · "599" → 599 · "2.905" → 2905 */
+export function parseTry(raw: string): number | null {
+  const s = String(raw ?? "").trim().replace(/\s/g, "");
+  if (!s) return null;
+  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 && n < 5_000_000 ? Math.round(n * 100) / 100 : null;
+}
+
+const TL_RE = /(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s?(?:TL|₺)/g;
+
+function cleanTitle(t: string): string {
+  return t.replace(/\s+/g, " ").replace(/^Image \d+:\s*/i, "").trim().slice(0, 160);
+}
+
+/**
+ * Hepsiburada arama sayfası (Jina Markdown).
+ * Biçim: `*   [![Image n: BAŞLIK](görsel)](https://www.hepsiburada.com/...-p(m)-KOD "BAŞLIK") ...`
+ * ardından gelen satırda: `Ürün puanı 4.6, 694 değerlendirme ... 249,99 TL`
+ * Fiyat = satırdaki SON TL değeri (taksit/kupon tutarları önce gelir).
+ */
+export function parseHepsiburada(md: string): ReaderRow[] {
+  const out: ReaderRow[] = [];
+  const lines = md.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const link = line.match(
+      /\]\((https:\/\/www\.hepsiburada\.com\/[^\s)"]+-p[m]?-[A-Z0-9]+)(?:\s+"([^"]+)")?\)/,
+    );
+    if (!link || !line.trimStart().startsWith("*")) continue;
+    const img = line.match(/!\[Image \d+:\s*([^\]]+)\]\((https:\/\/productimages\.hepsiburada\.net\/[^)\s]+)\)/);
+    const title = cleanTitle(link[2] || img?.[1] || "");
+    if (title.length < 6) continue;
+    // Puan + fiyat bir-iki satır aşağıdadır; sonraki ürüne geçmeden ara.
+    let meta = "";
+    for (let j = i + 1; j < Math.min(lines.length, i + 4); j += 1) {
+      if (lines[j].trimStart().startsWith("*   [")) break;
+      meta += " " + lines[j];
+    }
+    const rate = meta.match(/Ürün puanı\s*([\d.,]+),\s*(\d+)\s*değerlendirme/);
+    const prices = [...meta.matchAll(TL_RE)].map((m) => parseTry(m[1])).filter((n): n is number => n !== null);
+    out.push({
+      title,
+      url: link[1],
+      imageUrl: img?.[2]?.replace("/222-222/", "/500-500/") ?? "",
+      priceTry: prices.length ? prices[prices.length - 1] : null,
+      rating: rate ? Math.min(5, Number(rate[1].replace(",", "."))) : null,
+      ratingCount: rate ? Number(rate[2]) : null,
+      site: "Hepsiburada",
+    });
+  }
+  return out;
+}
+
+/**
+ * n11 arama sayfası (Jina Markdown).
+ * Biçim: `[![Image n: BAŞLIK](görsel) ### BAŞLIK ... 1.489 TL **1.400 TL**](https://www.n11.com/urun/...)`
+ * Kalın (**) fiyat güncel satış fiyatıdır; yoksa son TL değeri alınır.
+ */
+export function parseN11(md: string): ReaderRow[] {
+  const out: ReaderRow[] = [];
+  const re =
+    /\[!\[Image \d+:\s*([^\]]+)\]\((https:\/\/n11scdn\.akamaized\.net\/[^)\s]+)\)([^\n]*?)\]\((https:\/\/www\.n11\.com\/urun\/[^)\s"]+)/g;
+  for (const m of md.matchAll(re)) {
+    const title = cleanTitle(m[1]);
+    if (title.length < 6 || /^SQUARE$/i.test(title)) continue;
+    const body = m[3];
+    const bold = body.match(/\*\*(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s?TL\*\*/);
+    const all = [...body.matchAll(TL_RE)].map((x) => parseTry(x[1])).filter((n): n is number => n !== null);
+    out.push({
+      title,
+      url: m[4].split("?")[0],
+      imageUrl: m[2],
+      priceTry: bold ? parseTry(bold[1]) : all.length ? all[all.length - 1] : null,
+      rating: null,
+      // n11 liste sayfası değerlendirme sayısını güvenilir vermez: ölçülmedi.
+      ratingCount: null,
+      site: "n11",
+    });
+  }
+  return out;
+}
+
+async function readPage(url: string, timeoutMs: number): Promise<string> {
+  const headers: Record<string, string> = {
+    Accept: "text/plain",
+    "X-Return-Format": "markdown",
+    // "direct" motoru tarayıcı açmadan okur: ölçülen ~3,7 sn (varsayılan ~13 sn).
+    "X-Engine": "direct",
+  };
+  const key = process.env.JINA_API_KEY?.trim();
+  if (key) headers.Authorization = `Bearer ${key}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(READER + url, { headers, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`reader ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Aynı ürünü (aynı link veya aynı normalize başlık) tek satıra indirir. */
+export function dedupeRows(rows: ReaderRow[]): ReaderRow[] {
+  const seen = new Set<string>();
+  const out: ReaderRow[] = [];
+  for (const r of rows) {
+    const k1 = r.url;
+    const k2 = r.title.toLocaleLowerCase("tr-TR").replace(/[^a-zçğıöşü0-9]+/g, "");
+    if (seen.has(k1) || seen.has(k2)) continue;
+    seen.add(k1);
+    seen.add(k2);
+    out.push(r);
+  }
+  return out;
+}
+
+export async function scrapeTrReader(niche: string): Promise<RawProduct[]> {
+  const q = String(niche ?? "").trim().slice(0, 80);
+  if (!q) return [];
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const key = await cacheKey("tr-reader:v1", [q.toLocaleLowerCase("tr-TR")]);
+  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
+  if (hit && hit.length) return hit;
+
+  const enc = encodeURIComponent(q);
+  const jobs: Array<Promise<ReaderRow[]>> = [
+    readPage(`https://www.hepsiburada.com/ara?q=${enc}`, PER_SITE_TIMEOUT_MS).then(parseHepsiburada),
+    readPage(`https://www.hepsiburada.com/ara?q=${enc}&sayfa=2`, PER_SITE_TIMEOUT_MS).then(parseHepsiburada),
+    readPage(`https://www.hepsiburada.com/ara?q=${enc}&sayfa=3`, PER_SITE_TIMEOUT_MS).then(parseHepsiburada),
+    readPage(`https://www.n11.com/arama?q=${enc}`, PER_SITE_TIMEOUT_MS).then(parseN11),
+    readPage(`https://www.n11.com/arama?q=${enc}&pg=2`, PER_SITE_TIMEOUT_MS).then(parseN11),
+  ];
+  const settled = await Promise.allSettled(jobs);
+  const rows: ReaderRow[] = [];
+  for (const s of settled) {
+    if (s.status === "fulfilled") rows.push(...s.value);
+    else console.warn(`[discovery] tr-reader sayfa okunamadı: ${String(s.reason).slice(0, 100)}`);
+  }
+
+  const { toUsd } = await import("./fx-rates.server");
+  const products: RawProduct[] = [];
+  for (const r of dedupeRows(rows)) {
+    if (r.priceTry === null || !r.imageUrl) continue; // fiyatsız/görselsiz ürün havuza girmez
+    const usd = await toUsd(r.priceTry, "TRY");
+    products.push({
+      title: r.title,
+      brand: "",
+      seller: r.site,
+      priceUsd: usd,
+      rating: r.rating,
+      ratingCount: r.ratingCount,
+      inStock: true,
+      source: "tr-reader",
+      url: r.url,
+      imageUrl: r.imageUrl,
+      notes: [
+        r.site,
+        `${r.priceTry.toLocaleString("tr-TR")} TL` + (usd !== null ? ` ≈ $${usd}` : ""),
+        r.rating !== null ? `puan ${r.rating}/5` : "",
+        r.ratingCount !== null ? `${r.ratingCount} değerlendirme` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+  }
+  if (products.length) await cacheSet(key, "tr-reader:v1", products, CACHE_TTL_MS).catch(() => {});
+  return products;
+}

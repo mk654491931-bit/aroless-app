@@ -1985,7 +1985,28 @@ export const bingShoppingSource: ProductSource = {
  * 11 kaynağın toplam süresi en yavaşınki kadardır (≈7 sn tavan), toplamı
  * değil — Vercel Hobby bütçesi için bu kritiktir.
  */
+/**
+ * ÜCRETSİZ TR PAZARYERİ OKUYUCU (Hepsiburada + n11, Jina Reader üzerinden).
+ * Anahtar gerekmez; yalnız TR hedefinde çalışır. Bkz. `product-discovery-reader.server.ts`.
+ */
+export const trReaderSource: ProductSource = {
+  name: "tr-reader",
+  timeoutMs: 9_500,
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    const c = String(country ?? "").trim().toUpperCase();
+    if (c && c !== "TR" && c !== "TÜRKIYE" && c !== "TURKEY") return [];
+    const { scrapeTrReader } = await import("./product-discovery-reader.server");
+    return scrapeTrReader(niche);
+  },
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { scrapeTrReader } = await import("./product-discovery-reader.server");
+    return scrapeTrReader(niche);
+  },
+};
+
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
+  // ÜCRETSİZ gerçek TR ürün satırları (fiyat + puan + görsel + link).
+  trReaderSource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,
