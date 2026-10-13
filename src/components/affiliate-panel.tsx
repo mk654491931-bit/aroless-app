@@ -267,9 +267,22 @@ export function AffiliatePanel() {
                   className="mt-0.5"
                 />
                 <span>
-                  Affiliate program şartlarını kabul ediyorum: <b>%30</b> yinelenen komisyon,
-                  birikmiş kazanç <b>$75</b> eşiğini geçince ödeme ve komisyonların ödemeden önce
-                  <b> 30 gün iade/chargeback penceresi</b> boyunca bekletilmesi.
+                  <a
+                    href="/legal/affiliate-program-sartlari"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-[oklch(0.75_0.17_255)] underline underline-offset-2"
+                  >
+                    Affiliate program şartlarını
+                  </a>{" "}
+                  kabul ediyorum: <b>%30</b> komisyon (bir müşteri için <b>en fazla 12 ay</b> —
+                  müşteri kaç ay ücretli kaldıysa o kadar), birikmiş kazanç <b>$75</b> eşiğini
+                  geçince ödeme, ödemeden önce <b>30 gün</b> iade/chargeback beklemesi ve iade
+                  edilen ödemelerin komisyondan mahsubu.
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    Kendi kodunla kendi hesabından alım yapmak (kendine atıf) yasaktır; tespit
+                    edilirse komisyon ödenmez. Vergi/mükellefiyet yükümlülüğü katılımcıya aittir.
+                  </span>
                 </span>
               </label>
               <button

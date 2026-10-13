@@ -183,6 +183,17 @@ describe("AffiliatePanel", () => {
     expect(out).toContain("Başvuru yap");
   });
 
+  it("şart onayı 12 aylık komisyon penceresini yazar ve şart belgesine bağlar", () => {
+    state.affiliate = { ...state.affiliate, status: null, applied: false };
+    state.promoPerformance = null;
+    const out = html(<AffiliatePanel />);
+    // Kabul edilen metin, kodun gerçekten uyguladığı sınırı söylemek zorunda.
+    expect(out).toContain("en fazla 12 ay");
+    expect(out).toContain("/legal/affiliate-program-sartlari");
+    expect(out).toContain("30 gün");
+    expect(out).toMatch(/kendine atıf/i);
+  });
+
   it("surfaces a load failure with a retry", () => {
     state.promoError = true;
     const out = html(<AffiliatePanel />);

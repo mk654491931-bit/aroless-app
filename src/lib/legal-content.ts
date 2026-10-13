@@ -330,6 +330,103 @@ export const COOKIES: LegalDoc = {
   ],
 };
 
-export const LEGAL_DOCS: LegalDoc[] = [TOS, KVKK, DPA, COOKIES];
+/**
+ * AFFILIATE (INFLUENCER) PROGRAM ŞARTLARI.
+ *
+ * NEDEN AYRI BELGE: başvuru ekranındaki onay kutusu bir SÖZLEŞME kanıtıdır
+ * (`affiliates.terms_accepted_at`). Kabul edilen metnin, kodun gerçekte
+ * uyguladığı kurallarla birebir aynı olması gerekir; aksi hâlde komisyon
+ * anlaşmazlığında "şartlar yazmıyordu" itirazı haklı çıkar. Bu yüzden oran,
+ * 30 günlük bekleme, $75 eşiği ve 12 AYLIK PENCERE burada açıkça yazılır.
+ * Sayılar `src/lib/affiliate.ts` / `affiliate-payout.ts` ile aynıdır; biri
+ * değişirse bu belge de güncellenmelidir.
+ */
+export const AFFILIATE_TERMS: LegalDoc = {
+  slug: "affiliate-program-sartlari",
+  title: "Affiliate (Influencer) Program Şartları",
+  short: "Affiliate Program Şartları",
+  summary:
+    "Aroless'un influencer/affiliate programında komisyon oranı, süresi, ödeme koşulları ve yasak davranışlar.",
+  updated: "13 Ekim 2026",
+  sections: [
+    {
+      id: "kapsam",
+      heading: "1. Kapsam",
+      body: [
+        "Bu şartlar, Aroless affiliate programına başvuran ve admin onayıyla programda etkinleşen katılımcılar için geçerlidir.",
+        "Başvuruda beyan edilen kitle/kanal bilgileri doğru olmalıdır; yanlış beyan başvurunun reddine veya hesabın askıya alınmasına yol açar.",
+        "Başvuru formundaki onay kutusu, bu şartların kabul edildiğinin kanıtı olarak tarih-saat ile birlikte kaydedilir.",
+      ],
+    },
+    {
+      id: "komisyon",
+      heading: "2. Komisyon Oranı ve Süresi",
+      body: [
+        "Komisyon oranı varsayılan olarak %30'dur; hesaba özel farklı bir oran tanımlanabilir.",
+        "Komisyon, yalnız programda onaylı (verified) hesaplara ve müşterinin başarıyla tamamlanmış ödemelerine göre hesaplanır.",
+        "Komisyon ÖDENEN tutar üzerinden hesaplanır: indirim uygulanmış bir alışverişte komisyon da düşer; %100 indirimli (0 tutarlı) ödemede komisyon doğmaz.",
+        "Komisyon, müşteri ücretli aboneliğini sürdürdüğü sürece her yenileme ödemesinde yeniden yazılır — ancak bir müşteri için EN FAZLA 12 AY. Müşteri aboneliğini bırakırsa komisyon yalnız ücretli kaldığı ay sayısı kadar olur; 12 ay dolduktan sonra o müşteriden yeni komisyon doğmaz.",
+        "Aynı ödeme iki kez komisyona sayılmaz; her ödeme tek bir komisyon satırı üretir.",
+      ],
+    },
+    {
+      id: "mahsup",
+      heading: "3. İade ve Chargeback (Mahsup)",
+      body: [
+        "İade edilen veya banka itirazına (chargeback) konu olan bir ödeme için yazılmış komisyon mahsup edilir (ödenmez).",
+        "Mahsup edilen ay, 12 aylık komisyon penceresini tüketmez; o ay gelir üretmediği için değerlendirme dışıdır.",
+      ],
+    },
+    {
+      id: "odeme",
+      heading: "4. Ödeme Koşulları",
+      body: [
+        "Ödeme eşiği $75'tir. Bunun altındaki bakiyeler birikir ve eşik aşıldığında ödenir.",
+        "Bir komisyon, iade/chargeback riskinin kapanması için ödemeden önce 30 GÜN bekletilir. Eşik ve bekleme, ÖDENEBİLİR bakiyeye göre değerlendirilir.",
+        "Ödeme Wise veya banka havalesi (IBAN) ile manuel ve dönemsel olarak yapılır. Ödeme bilgisi (yöntem, hesap sahibi, IBAN/Wise e-postası) kayıtlı ve geçerli olmalıdır; IBAN mod-97 kontrolünden geçmelidir, aksi hâlde ödeme yapılamaz.",
+        "Her ödeme bir referans numarasıyla kaydedilir; hangi komisyonun ödendiği panelde görünür.",
+      ],
+    },
+    {
+      id: "vergi",
+      heading: "5. Vergi ve Yasal Yükümlülükler",
+      body: [
+        "Komisyon geliri katılımcının kendi geliridir; vergi, mükellefiyet ve beyan yükümlülükleri katılımcıya aittir.",
+        "Aroless yalnızca ödemeyi yapar ve ödeme kaydını tutar. Vergi kimlik/mükellef numarası alanı OPSİYONELDİR ve şirket olmayan katılımcı için ödeme şartı değildir.",
+        "Bazı ülkelerde banka veya Wise, yüksek tutarlı transferlerde ek bilgi isteyebilir; bu durumda talep Aroless tarafından iletilir.",
+      ],
+    },
+    {
+      id: "yasaklar",
+      heading: "6. Yasak Davranışlar",
+      body: [
+        "Kendi hesabından veya kendi cihazından kendi kodunu kullanarak komisyon üretmek (kendine atıf) yasaktır; bu tespit edilirse atıf yazılmaz ve hesap askıya alınır.",
+        "Sahte hesap, bot trafiği, tıklama yönlendirme hilesi veya kazandığı trafiği yapay olarak şişirme yasaktır.",
+        "Aroless adına garanti, kesin kazanç veya resmî temsil iddiası içeren yanıltıcı tanıtım yapılamaz.",
+        "Marka adı ve logolar yalnız program kapsamında ve izin verilen biçimde kullanılabilir; spam/e-posta bombardımanı yasaktır.",
+        "Kurallara aykırılık hâlinde doğmuş ama ödenmemiş komisyonlar ödenmez.",
+      ],
+    },
+    {
+      id: "degisiklik",
+      heading: "7. Değişiklik, Askıya Alma ve Fesih",
+      body: [
+        "Aroless programı, oranı ve ödeme koşullarını değiştirebilir. Değişiklik yürürlüğe girdiği andan SONRAKİ ödemeler için geçerlidir; o ana kadar doğmuş komisyon hakları korunur.",
+        "Aroless, kurallara aykırılık veya kötüye kullanım tespitinde hesabı gerekçesini bildirerek askıya alabilir veya programdan çıkarabilir.",
+        "Katılımcı dilediği zaman programdan ayrılabilir; ayrılma anında ödenmemiş ve eşiği geçmiş bakiyesi ödeme koşullarına göre ödenir.",
+      ],
+    },
+    {
+      id: "veri",
+      heading: "8. Kişisel Veriler",
+      body: [
+        "Ödeme bilgileri (hesap sahibi, IBAN, Wise e-postası, varsa vergi no) yalnız ödeme yapmak ve kaydını tutmak amacıyla işlenir; satır düzeyi güvenlik (RLS) ile korunur ve yalnız ödeme aşamasında yetkili yönetici tarafından görülür.",
+        "Veri işleme detayları için KVKK Aydınlatma Metni geçerlidir.",
+      ],
+    },
+  ],
+};
+
+export const LEGAL_DOCS: LegalDoc[] = [TOS, KVKK, DPA, COOKIES, AFFILIATE_TERMS];
 
 export const getLegalDoc = (slug: string) => LEGAL_DOCS.find((d) => d.slug === slug);
