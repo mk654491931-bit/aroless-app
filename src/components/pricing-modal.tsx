@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createCheckout, reconcileMySubscription } from "@/lib/paddle.functions";
+import { getMyPromoCode } from "@/lib/promo.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { isCheckoutCompleted, useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
 import { getFullProfile } from "@/lib/analysis.functions";
@@ -24,6 +25,7 @@ export function PricingModal({
   onClose: () => void;
 }) {
   const checkout = useServerFn(createCheckout);
+  const promoFn = useServerFn(getMyPromoCode);
   const reconcileFn = useServerFn(reconcileMySubscription);
   const profileFn = useServerFn(getFullProfile);
   const { currency, rate, fmt, isLive } = useMoney();
@@ -89,6 +91,11 @@ export function PricingModal({
     let opened = false;
     let email: string | null | undefined;
 
+    // Hesaba bağlı kod (kayıt sırasında veya `?promo=` linkiyle) ödeme ekranına
+    // ön-doldurulur: kullanıcı kodu ikinci kez yazmaz. Okunamazsa (oturum yok /
+    // geçici hata) ödeme akışı etkilenmez — kod olmadan devam edilir.
+    const promo = await promoFn().catch(() => null);
+
     try {
       // Önce server transaction'ı kullanılır; userId + plan metadata'sı
       // güvenilir biçimde webhook'a taşınır.
@@ -102,11 +109,7 @@ export function PricingModal({
           priceId: session.priceId,
           email: session.email,
         },
-        {
-          email: session.email,
-          plan,
-          onEvent: onCheckoutEvent,
-        },
+        { email: session.email, plan, promo, onEvent: onCheckoutEvent },
       );
     } catch (error) {
       console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
@@ -115,17 +118,15 @@ export function PricingModal({
     // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
     // doğrudan ilgili planın public price ID'siyle açılır.
     if (!opened) {
-      opened = await openPaddlePlanCheckout(plan, { email, onEvent: onCheckoutEvent });
+      opened = await openPaddlePlanCheckout(plan, { email, promo, onEvent: onCheckoutEvent });
     }
 
     if (!opened) {
       toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
     }
     setLoading(null);
-  }, [checkout, onCheckoutEvent]);
+  }, [checkout, promoFn, onCheckoutEvent]);
 
-  // İndirim kodunun tek kaynağı Paddle'dır: kullanıcı ödeme ekranında
-  // kodu kendisi girer, uygulama checkout'a kod dayatmaz.
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;

@@ -6,6 +6,7 @@
  * via dynamic import.
  */
 
+import { paddlePrefillDiscountCode } from "@/lib/affiliate";
 import type { PlanId } from "@/lib/plans";
 
 export type CheckoutSessionClient = {
@@ -17,21 +18,28 @@ export type CheckoutSessionClient = {
 };
 
 /**
- * İNDİRİM KODU BURADAN GEÇMEZ (bilinçli tasarım kararı).
+ * İNDİRİM KODU ÖN-DOLDURMA (tek noktada kapılanır).
  *
- * NEDEN: indirimler TEK kaynaktan — Paddle panelinden — yönetilir. Uygulama
- * kodları (affiliate kodları dahil) indirim taşımaz, yalnız atıf/sayım yapar.
- * Müşteri indirim kodunu Paddle'ın kendi ödeme ekranında girer; böylece
- * "Paddle'da tanımlı indirim" ile "uygulamadaki yüzde" çakışamaz ve hangi
- * indirimin uygulandığı sorusunun tek yanıtı olur. Bu yüzden eski
- * `discountCode` parametresi kasıtlı olarak KALDIRILDI: uygulamanın indirim
- * dayatabileceği bir yol bırakılmaz.
+ * Kullanıcının hesabına bağlı bir kod varsa (kayıt sırasında ya da `?promo=`
+ * linkiyle) ödeme ekranına ÖN-DOLDURULUR; böylece kodu ikinci kez yazması
+ * gerekmez ve "kodu kullanan kişi" indirimini gerçekten görür.
+ *
+ * SINIR (kasıtlı): karar `paddlePrefillDiscountCode()` içindedir ve YALNIZ
+ * gerçekten indirim taşıyan (`discount_pct > 0`) kodlar geçer. Affiliate kodları
+ * indirim taşımaz ve Paddle'da indirim kaydı olmayabilir — onları göndermek
+ * müşteriye "geçersiz kod" hatası gösterirdi. İndirimin NE olacağına yine
+ * Paddle karar verir; uygulama indirim hesaplamaz.
  */
 export type OpenCheckoutOptions = {
   /** Customer email to prefill in a price-based checkout. */
   email?: string | null;
   /** Plan whose Vite price ID should be used when no transaction ID is supplied. */
   plan?: PlanId;
+  /**
+   * Kullanıcının hesabına bağlı promosyon kodu (sunucudan okunur).
+   * `discountPct > 0` değilse Paddle'a HİÇ gönderilmez.
+   */
+  promo?: { code?: string | null; discountPct?: number | null } | null;
   /** Called for every Paddle.js checkout event (e.g. checkout.completed). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onEvent?: (event: any) => void;
@@ -164,6 +172,16 @@ export async function openPaddleOverlay(
       }
     }
 
+    // Ön-doldurulacak kod: yalnız gerçekten indirim taşıyan kodlar (affiliate
+    // kodları değil) Paddle'a gider. Kod çözülemezse checkout AÇILIR.
+    const prefillCode = paddlePrefillDiscountCode({
+      code: options?.promo?.code,
+      discountPct: options?.promo?.discountPct,
+    });
+    if (prefillCode) {
+      console.info("[Paddle] checkout indirim kodu ön-dolduruluyor");
+    }
+
     const origin = window.location.origin;
     // ÖNEMLİ: `customData` olmadan ham fiyat checkout'u, webhook'un ödemeyi
     // kime bağlayacağını bilemediği için SAHİPSİZ bir ödeme üretir: kullanıcı
@@ -187,19 +205,23 @@ export async function openPaddleOverlay(
     paddle.Checkout.open({
       ...checkout,
       customData,
+      // Kod varsa ön-doldurulur; Paddle kodun geçerliliğine kendisi karar verir.
+      // `allowDiscountRemoval: true` yanlış bir kodun satın almayı kilitlemesini
+      // önler (müşteri kodu kaldırıp devam edebilir).
+      ...(prefillCode ? { discountCode: prefillCode } : {}),
       settings: {
         displayMode: "overlay",
         theme: detectTheme(),
         locale: "tr",
         successUrl: `${origin}/settings?paid=1`,
         allowLogout: false,
-        // İNDİRİM KODU ALANI. Müşteri kodu Paddle'ın KENDİ ekranında girer
-        // (indirimler tek kaynaktan — Paddle panelinden — yönetilir; uygulama
-        // checkout'a indirim dayatmaz). Paddle.js varsayılanı `true` olsa da
-        // alanın görünmesi Paddle panelindeki "Allow buyers to add a discount
-        // code" ayarına bağlıdır; bu yüzden niyet burada açıkça yazılır.
-        // `allowDiscountRemoval` yanlış yazılmış bir kodun checkout'u
-        // kilitlemeden düzeltilebilmesini sağlar.
+        // İNDİRİM KODU ALANI. Ön-doldurma yalnızca bir kolaylıktır; müşteri
+        // kodunu Paddle'ın KENDİ ekranında da girebilir/değiştirebilir
+        // (indirimler tek kaynaktan — Paddle panelinden — yönetilir). Paddle.js
+        // varsayılanı `true` olsa da alanın görünmesi Paddle panelindeki
+        // "Allow buyers to add a discount code" ayarına bağlıdır; bu yüzden
+        // niyet burada açıkça yazılır. `allowDiscountRemoval` yanlış bir kodun
+        // checkout'u kilitlemeden düzeltilebilmesini sağlar.
         showAddDiscounts: true,
         allowDiscountRemoval: true,
       },

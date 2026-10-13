@@ -511,8 +511,12 @@ Zincir: **kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**
    (`promo_codes.affiliate_id`). Kod **indirim taşımaz** (`discount_pct = 0`):
    indirimler tek kaynaktan — Paddle panelinden — yönetilir, böylece "hangi indirim
    uygulandı" sorusunun tek yanıtı olur. Admin isterse Paddle'da aynı metinle bir
-   indirim kodu da tanımlar; müşteri onu Paddle ödeme ekranındaki kod alanında girer
-   (`showAddDiscounts: true`).
+   indirim kodu da tanımlar. Kullanıcının hesabına bağlı kod ödeme ekranına
+   **otomatik ön-doldurulur** (`paddlePrefillDiscountCode`); kod alanı ayrıca
+   açıktır (`showAddDiscounts: true`) ve yanlış bir kod kaldırılabilir
+   (`allowDiscountRemoval: true`). Ön-doldurma YALNIZ indirim taşıyan
+   (`discount_pct > 0`) kodlar için yapılır — affiliate kodları indirim taşımadığı
+   ve Paddle'da indirim kaydı olmadığı için checkout'a **hiç gönderilmez**.
 2. **Kayıt**: influencer'ın linki `https://<site>/auth?promo=KOD` biçimindedir. Kod
    URL'de yoksa `aroless.promo` localStorage anahtarından okunur (`__root.tsx`) —
    landing'e uğrayan ya da Google ile hesap açan kullanıcıda atıf böylece kaybolmaz.

@@ -117,6 +117,40 @@ export function isValidAffiliateCode(code: string): boolean {
 }
 
 /**
+ * PADDLE ÖDEME EKRANINA ÖN-DOLDURULACAK KOD (saf karar).
+ *
+ * NEDEN VAR: kullanıcı kayıt olurken (ya da `?promo=` linkiyle) bir kod
+ * bağladıysa, ödeme ekranında aynı kodu yeniden yazması gerekmez — kod
+ * checkout'a ön-doldurulur. Bu, "kodu kullanan kişi"nin indirimi gerçekten
+ * görmesini sağlar; kod yalnız komisyon atfı için saklanıyor olsaydı müşteri
+ * indirimi hiç görmezdi.
+ *
+ * TEK KAYNAK KURALI KORUNUR: uygulama indirimi KENDİ hesaplamaz. Yalnız
+ * `promo_codes` tablosunda GERÇEKTEN indirim taşıyan (`discount_pct > 0`) ve
+ * geçerli bir kodu Paddle'a "önerir"; indirimin ne olacağına Paddle karar verir.
+ *
+ * AFFILIATE KODU ASLA GÖNDERİLMEZ: affiliate kodları indirim taşımaz
+ * (`AFFILIATE_CODE_DISCOUNT_PCT = 0`) ve Paddle tarafında indirim kaydı
+ * olmayabilir. Böyle bir kodu ön-doldurmak, müşterinin ödeme ekranında
+ * "geçersiz kod" hatası görmesine yol açardı — yani komisyon için verilen kod,
+ * satın almayı engelleyen bir hataya dönüşürdü.
+ */
+export function paddlePrefillDiscountCode(opts: {
+  /** Kullanıcının profilindeki kod (`profiles.promo_code`). */
+  code?: string | null;
+  /** Kodun uygulamada tanımlı indirimi (0 = indirim yok). */
+  discountPct?: number | null;
+}): string | null {
+  const code = String(opts.code ?? "")
+    .trim()
+    .toUpperCase();
+  if (!isValidAffiliateCode(code)) return null;
+  const pct = opts.discountPct;
+  if (typeof pct !== "number" || !Number.isFinite(pct) || pct <= 0) return null;
+  return code;
+}
+
+/**
  * KENDİ KENDİNİ REFERANS KORUMASI (saf karar).
  *
  * RİSK: bir affiliate, kendi affiliate koduyla İKİNCİ bir hesap açıp o

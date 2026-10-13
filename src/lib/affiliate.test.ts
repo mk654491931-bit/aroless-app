@@ -12,6 +12,7 @@ import {
   isSelfReferralDevice,
   isPayoutMethod,
   isValidAffiliateCode,
+  paddlePrefillDiscountCode,
   payoutEligibility,
   shouldEarnCommission,
 } from "./affiliate";
@@ -147,6 +148,27 @@ describe("affiliate kodu — admin yazar, indirim taşımaz", () => {
     expect(isValidAffiliateCode("AYSE 20")).toBe(false); // iç boşluk
     expect(isValidAffiliateCode("AYŞE20")).toBe(false); // ş kod şemasında yok
     expect(isValidAffiliateCode("AYSE%20")).toBe(false);
+  });
+});
+
+describe("paddlePrefillDiscountCode — ödeme ekranına ön-doldurma", () => {
+  it("indirim taşıyan kodu ön-doldurur (büyük harfe çevirir)", () => {
+    expect(paddlePrefillDiscountCode({ code: " ayse20 ", discountPct: 20 })).toBe("AYSE20");
+  });
+
+  it("AFFILIATE kodunu ASLA göndermez (indirim taşımaz, Paddle'da kaydı olmayabilir)", () => {
+    // %30 komisyon kodu müşteriye "geçersiz kod" hatası göstermemeli.
+    expect(paddlePrefillDiscountCode({ code: "AYSE30", discountPct: 0 })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "AYSE30", discountPct: null })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "AYSE30" })).toBeNull();
+  });
+
+  it("kodsuz / geçersiz kod / anlamsız yüzdede null döner", () => {
+    expect(paddlePrefillDiscountCode({ code: null, discountPct: 20 })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "ab", discountPct: 20 })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "%20OFF", discountPct: 20 })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "AYSE20", discountPct: -5 })).toBeNull();
+    expect(paddlePrefillDiscountCode({ code: "AYSE20", discountPct: Number.NaN })).toBeNull();
   });
 });
 

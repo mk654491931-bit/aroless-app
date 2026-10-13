@@ -973,15 +973,14 @@ function AuthPage() {
                             className="inp w-full bg-transparent py-3 pr-4 text-sm font-mono uppercase placeholder:font-sans placeholder:normal-case"
                           />
                         </div>
-                        {/* DÜRÜST METİN: uygulama kodu checkout'a indirim olarak
-                            GÖNDERMEZ (indirimler tek kaynaktan — Paddle
-                            panelinden — yönetilir). Kodun işlevi atıf/sayım ve
-                            affiliate komisyonudur; indirim taşıyan kodlar Paddle
-                            ödeme ekranında girilir. Eski "otomatik uygulanır"
-                            ifadesi ölçülmemiş bir vaatti. */}
+                        {/* DÜRÜST METİN: kod hesaba bağlanır; indirim taşıyan
+                            kodlar Paddle ödeme ekranına ÖN-DOLDURULUR
+                            (`paddlePrefillDiscountCode`). Affiliate kodları
+                            indirim taşımadığı için checkout'a hiç gönderilmez
+                            — onların işi atıf/komisyon. */}
                         <p className="text-[11px] text-muted-foreground">
-                          Kod hesabına bağlanır ve komisyon atfı için kullanılır. İndirim taşıyan
-                          kodları Paddle ödeme ekranındaki kod alanına girebilirsin.
+                          Kod hesabına bağlanır; indirim taşıyan kodlar ödeme ekranına otomatik
+                          eklenir. Affiliate komisyonu da bu kod üzerinden yürür.
                         </p>
                         <SignupLegalConsent value={consent} onChange={setConsent} />
                       </>

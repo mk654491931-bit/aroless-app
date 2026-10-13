@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { apiFetch } from "@/lib/api-client";
+import { getMyPromoCode } from "@/lib/promo.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { isCheckoutCompleted } from "@/lib/subscription-confirmation";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ const TIERS: Tier[] = [
 export function PricingCard({ className }: { className?: string }) {
   const [loading, setLoading] = useState(false);
   const qc = useQueryClient();
+  const promoFn = useServerFn(getMyPromoCode);
 
   /**
    * Ödeme bitti olayı — indirim durumundan BAĞIMSIZ.
@@ -71,6 +74,11 @@ export function PricingCard({ className }: { className?: string }) {
   async function upgrade() {
     setLoading(true);
     let opened = false;
+
+    // Hesaba bağlı kod (varsa) ödeme ekranına ön-doldurulur. Oturum yoksa
+    // (landing sayfası) okuma hata verir ve yok sayılır — ödeme yine açılır.
+    const promo = await promoFn().catch(() => null);
+
     try {
       const resp = await apiFetch("/api/checkout", {
         method: "POST",
@@ -94,7 +102,7 @@ export function PricingCard({ className }: { className?: string }) {
             priceId: json.priceId,
             email: json.email ?? null,
           },
-          { plan: "Pro", onEvent: onCheckoutEvent },
+          { plan: "Pro", promo, onEvent: onCheckoutEvent },
         );
       }
     } catch (error) {
@@ -102,7 +110,7 @@ export function PricingCard({ className }: { className?: string }) {
     }
 
     if (!opened) {
-      opened = await openPaddlePlanCheckout("Pro", { onEvent: onCheckoutEvent });
+      opened = await openPaddlePlanCheckout("Pro", { promo, onEvent: onCheckoutEvent });
     }
     if (!opened) toast.error("Ödeme penceresi açılamadı. Lütfen tekrar deneyin.");
     setLoading(false);

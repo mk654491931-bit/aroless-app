@@ -35,6 +35,8 @@ const signupServer = read("./signup.server.ts");
 const affiliateFns = read("./affiliate.functions.ts");
 const paddleCheckout = read("./paddle-checkout.ts");
 const affiliatePanel = read("../components/affiliate-panel.tsx");
+const pricingModal = read("../components/pricing-modal.tsx");
+const pricingCard = read("../components/pricing-card.tsx");
 
 describe("?promo=KOD taşınması (atıf kaybına karşı)", () => {
   it("__root.tsx geçerli kodu localStorage'a yazar", () => {
@@ -99,15 +101,26 @@ describe("ödeme ekranı ve indirim yolu", () => {
     expect(paddleCheckout).toMatch(/allowDiscountRemoval: true/);
   });
 
-  it("checkout'a indirim DAYATILMAZ (tek kaynak: Paddle)", () => {
-    // `discountCode`/`discountId` uygulama tarafından gönderilmemelidir.
-    expect(paddleCheckout).not.toMatch(/discountCode\s*:/);
-    expect(paddleCheckout).not.toMatch(/discountId\s*:/);
+  it("hesaba bağlı kod checkout'a ÖN-DOLDURULUR", () => {
+    // Kod, saf karar fonksiyonundan geçirilip Paddle'a verilir.
+    expect(paddleCheckout).toMatch(/paddlePrefillDiscountCode\(\{/);
+    expect(paddleCheckout).toMatch(/\.\.\.\(prefillCode \? \{ discountCode: prefillCode \}/);
   });
 
-  it("kayıt ekranı 'otomatik uygulanır' gibi ÖLÇÜLMEMİŞ bir vaat vermez", () => {
+  it("iki ödeme yüzeyi de kodu çözüp checkout'a geçirir (biri eksik kalmasın)", () => {
+    for (const [name, source] of [
+      ["pricing-modal", pricingModal],
+      ["pricing-card", pricingCard],
+    ] as const) {
+      expect(source, name).toMatch(/useServerFn\(getMyPromoCode\)/);
+      expect(source, name).toMatch(/await promoFn\(\)\.catch\(\(\) => null\)/);
+      expect(source, name).toMatch(/promo/);
+    }
+  });
+
+  it("kayıt ekranı metni ÖN-DOLDURMAYI anlatır (eski 'otomatik uygulanır' vaadi yok)", () => {
     expect(auth).not.toMatch(/applied automatically at checkout/i);
-    expect(auth).toMatch(/Paddle ödeme ekran/);
+    expect(auth).toMatch(/ödeme ekranına otomatik/);
   });
 });
 
