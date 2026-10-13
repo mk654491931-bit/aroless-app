@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAdminPromoUsers,
   myPromoPerformance,
+  promoClaimDecision,
   summarizePromoByCode,
   type AdminPromoUser,
   type PromoProfileRow,
@@ -386,5 +387,57 @@ describe("myPromoPerformance", () => {
         "signups",
       ].sort(),
     );
+  });
+});
+
+describe("promoClaimDecision — kayıt sonrası kod sahiplenme", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("yeni hesapta kodu sahiplenmeye izin verir", () => {
+    const decision = promoClaimDecision({
+      existingPromoCode: null,
+      code: "ayse30",
+      accountAgeMs: 2 * DAY,
+    });
+    expect(decision).toEqual({ ok: true, idempotent: false });
+  });
+
+  it("aynı kod yeniden gönderilirse idempotent başarı döner (kod temizlenir)", () => {
+    // Çift tıklama / sayfa yenileme hata göstermemelidir.
+    expect(
+      promoClaimDecision({ existingPromoCode: "AYSE30", code: "ayse30", accountAgeMs: DAY }),
+    ).toEqual({ ok: true, idempotent: true });
+  });
+
+  it("hesaba başka kod bağlıysa atıf DEĞİŞTİRİLMEZ", () => {
+    const decision = promoClaimDecision({
+      existingPromoCode: "ESKI20",
+      code: "AYSE30",
+      accountAgeMs: DAY,
+    });
+    expect(decision).toEqual({ ok: false, code: "already_used" });
+  });
+
+  it("30 günü geçen hesapta kod bağlanmaz (sonradan komisyon kaçırma kapalı)", () => {
+    const decision = promoClaimDecision({
+      existingPromoCode: null,
+      code: "AYSE30",
+      accountAgeMs: 31 * DAY,
+    });
+    expect(decision).toEqual({ ok: false, code: "window_closed" });
+  });
+
+  it("hesap yaşı bilinmiyorsa pencere kapalı sayılır", () => {
+    expect(promoClaimDecision({ code: "AYSE30", accountAgeMs: null })).toEqual({
+      ok: false,
+      code: "window_closed",
+    });
+  });
+
+  it("boş kodu reddeder", () => {
+    expect(promoClaimDecision({ code: "   ", accountAgeMs: DAY })).toEqual({
+      ok: false,
+      code: "not_found",
+    });
   });
 });

@@ -116,6 +116,7 @@ import {
   sanitizeOnboardingResult,
 } from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
+import { claimPromoCode, type PromoClaimResult } from "@/lib/promo.functions";
 import { storedRefAction, type ReferralClaimResult } from "@/lib/referral-rules";
 import { getBrandedItem, removeBrandedItem } from "@/lib/brand-storage";
 
@@ -298,11 +299,14 @@ function Dashboard() {
 
   const onboarding = useOnboarding();
   const claimReferralFn = useServerFn(claimReferral);
+  const claimPromoCodeFn = useServerFn(claimPromoCode);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    void (async () => {
+
+    /** Davet kodu (?ref=KOD) — davet bonusu + kredi. */
+    const claimStoredReferral = async () => {
       const code = (getBrandedItem("aroless.ref") ?? "").trim().toUpperCase();
       if (!code) return;
       // Kod, başarılı olana kadar SİLİNMEZ. Yeni kayıtta profil satırı
@@ -329,11 +333,54 @@ function Dashboard() {
         toast.error(res.reason ?? "Davet kodu uygulanamadı.");
         return;
       }
+    };
+
+    /**
+     * Affiliate/promosyon kodu (?promo=KOD) — atıf + %30 komisyon zinciri.
+     *
+     * Kayıt formu görülmeden açılan hesaplarda (Google ile giriş, önce landing
+     * sonra kayıt) kod kayboluyordu; artık `__root.tsx` sakladığı kodu burada
+     * hesaba bağlarız. Kayıt formundan gelinmişse sunucu zaten bağlamıştır ve
+     * çağrı idempotenttir ("Kod zaten hesabına bağlı").
+     */
+    const claimStoredPromo = async () => {
+      const code = (getBrandedItem("aroless.promo") ?? "").trim().toUpperCase();
+      if (!code) return;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
+        let res: PromoClaimResult;
+        try {
+          res = await claimPromoCodeFn({ data: { code } });
+        } catch {
+          return; // ağ hatası: kod saklı kalır, sonraki açılışta yeniden denenir
+        }
+        if (cancelled) return;
+        if (res.ok) {
+          removeBrandedItem("aroless.promo");
+          // Kodsuz hesaplanmış kullanıcıya sessizce dokunmayız; yalnız affiliate
+          // kodunda kısa bir onay gösterilir (indirim vaadi verilmez).
+          if (res.affiliate) toast.success("Affiliate kodun hesabına bağlandı.");
+          qc.invalidateQueries({ queryKey: ["profile"] });
+          return;
+        }
+        const action = storedRefAction(res.code);
+        if (action === "clear") removeBrandedItem("aroless.promo");
+        if (action === "retry" && attempt === 0) continue;
+        if (action === "keep") return;
+        toast.error(res.reason ?? "Promosyon kodu bağlanamadı.");
+        return;
+      }
+    };
+
+    void (async () => {
+      await claimStoredReferral();
+      if (cancelled) return;
+      await claimStoredPromo();
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, claimReferralFn, qc]);
+  }, [user, claimReferralFn, claimPromoCodeFn, qc]);
 
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],

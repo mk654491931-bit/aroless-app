@@ -193,6 +193,15 @@ export async function openPaddleOverlay(
         locale: "tr",
         successUrl: `${origin}/settings?paid=1`,
         allowLogout: false,
+        // İNDİRİM KODU ALANI. Müşteri kodu Paddle'ın KENDİ ekranında girer
+        // (indirimler tek kaynaktan — Paddle panelinden — yönetilir; uygulama
+        // checkout'a indirim dayatmaz). Paddle.js varsayılanı `true` olsa da
+        // alanın görünmesi Paddle panelindeki "Allow buyers to add a discount
+        // code" ayarına bağlıdır; bu yüzden niyet burada açıkça yazılır.
+        // `allowDiscountRemoval` yanlış yazılmış bir kodun checkout'u
+        // kilitlemeden düzeltilebilmesini sağlar.
+        showAddDiscounts: true,
+        allowDiscountRemoval: true,
       },
       ...((session.email ?? options?.email)
         ? { customer: { email: session.email ?? options?.email ?? "" } }

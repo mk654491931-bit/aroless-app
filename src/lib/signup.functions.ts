@@ -2,7 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isDisposableEmail } from "@/lib/disposable-email";
 import { maskEmail } from "@/lib/log-redact";
-import { applyFingerprintPolicy, generateOtp, hashOtp, sendOtpEmail } from "@/lib/signup.server";
+import {
+  applyFingerprintPolicy,
+  generateOtp,
+  hashOtp,
+  isSelfReferralSignup,
+  notifySelfReferralBlocked,
+  sendOtpEmail,
+} from "@/lib/signup.server";
 import { clientIp, hashIp, verifyTurnstile } from "@/lib/turnstile.server";
 import { hashValue, rateLimit } from "@/lib/api-guard.server";
 import { getRequest } from "@tanstack/react-start/server";
@@ -178,16 +185,37 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     if (promo) {
       try {
         promoDiscount = promo.discount_pct;
-        // Kod sahibi bir affiliate ise, kullanıcıyı ona KALICI olarak bağla.
-        // Bu alan komisyonun kime gideceğini belirler; yazma service role ile
-        // yapılır (profiles.referred_by istemciye kapalıdır).
-        await supabaseAdmin
-          .from("profiles")
-          .update({
-            promo_code: promo.code,
-            ...(promo.affiliate_id ? { referred_by: promo.affiliate_id } : {}),
-          })
-          .eq("id", userId);
+
+        // SELF-REFERRAL KORUMASI: aynı cihazdan kendi affiliate koduyla açılan
+        // ikinci hesap %30 komisyonu affiliate'in kendisine yazdırırdı (kalıcı
+        // indirim). Cihaz parmak izi affiliate'in hesabına çıkıyorsa atıf
+        // (referred_by VE promo_code) YAZILMAZ; komisyon zinciri bu kullanıcı
+        // için hiç doğmaz. Kullanım kaydı yine tutulur — admin panelde kodun
+        // kaç kişiyi getirdiği görünür, ama kazanç doğmaz.
+        const selfReferral = await isSelfReferralSignup(supabaseAdmin, {
+          affiliateUserId: promo.affiliate_id,
+          visitorId: data.visitorId,
+        });
+        if (selfReferral && promo.affiliate_id) {
+          await notifySelfReferralBlocked(supabaseAdmin, {
+            userId,
+            email: data.email,
+            affiliateUserId: promo.affiliate_id,
+            code: promo.code,
+            visitorId: data.visitorId,
+          });
+        } else {
+          // Kod sahibi bir affiliate ise, kullanıcıyı ona KALICI olarak bağla.
+          // Bu alan komisyonun kime gideceğini belirler; yazma service role ile
+          // yapılır (profiles.referred_by istemciye kapalıdır).
+          await supabaseAdmin
+            .from("profiles")
+            .update({
+              promo_code: promo.code,
+              ...(promo.affiliate_id ? { referred_by: promo.affiliate_id } : {}),
+            })
+            .eq("id", userId);
+        }
         await supabaseAdmin
           .from("promo_redemptions")
           .upsert(

@@ -64,7 +64,13 @@ export type AffiliateSummary = {
   payout_eligible: boolean;
   /** Eşiğe kalan tutar. */
   payout_remaining_cents: number;
+  /** Komisyon yazan (mahsup edilmemiş) ödeme sayısı — TÜM geçmiş. */
   paid_transactions: number;
+  /**
+   * Toplamlar TAM mı? Sayfalı okuma 10.000 satırı aşarsa false olur ve
+   * rakamlar alt sınır olarak gösterilir (uydurma bir toplam yazılmaz).
+   */
+  totals_exact: boolean;
   recent: Array<{
     id: string;
     tier: string | null;
@@ -86,9 +92,9 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AffiliateSummary> => {
     const uid = context.userId;
-    const { client } = await adminOrUserClient(context);
+    const { client, isServiceRole } = await adminOrUserClient(context);
 
-    const [affiliateRes, profileRes, commissionsRes, ownedCodeRes] = await Promise.all([
+    const [affiliateRes, profileRes, commissionsRes, ownedCodeRes, totals] = await Promise.all([
       client
         .from("affiliates")
         .select("user_id, status, commission_rate_pct, verified_by, verified_at, created_at")
@@ -108,17 +114,14 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      readAffiliateTotals(client, isServiceRole, uid),
     ]);
 
     const row = affiliateRes.data as AffiliateStatusRow | null;
     const commissions = (commissionsRes.data ?? []) as AffiliateSummary["recent"];
 
-    let pendingCents = 0;
-    let paidCents = 0;
-    for (const c of commissions) {
-      if (c.status === "paid") paidCents += c.commission_cents ?? 0;
-      else if (c.status !== "reversed") pendingCents += c.commission_cents ?? 0;
-    }
+    const pendingCents = totals.pendingCents;
+    const paidCents = totals.paidCents;
     const eligibility = payoutEligibility(pendingCents);
     const ownedCode = (ownedCodeRes.data as { code?: string | null } | null)?.code ?? null;
 
@@ -135,7 +138,8 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       min_payout_cents: MIN_PAYOUT_CENTS,
       payout_eligible: eligibility.eligible,
       payout_remaining_cents: eligibility.remainingCents,
-      paid_transactions: commissions.filter((c) => c.status !== "reversed").length,
+      paid_transactions: totals.commissionedCount,
+      totals_exact: totals.exact,
       recent: commissions.slice(0, 10).map((c) => ({
         id: c.id,
         tier: c.tier ?? null,
@@ -146,6 +150,99 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       })),
     };
   });
+
+/**
+ * Affiliate'in TÜM geçmişe ait komisyon toplamları.
+ *
+ * ÖLÇÜLEN HATA: panel toplamları yalnız en yeni 50 komisyon satırından
+ * hesaplanıyordu (`limit(50)`). Aylık yinelenen komisyonda bu sınır kısa sürede
+ * aşıldığı için "Birikmiş" ve "Ödenen" rakamları EKSİK görünüyor, $75'lik ödeme
+ * eşiği de yanlış değerlendiriliyordu (affiliate ödemeye hazır olduğu hâlde
+ * panel "hazır değil" diyordu). Toplamlar artık veritabanında toplanır.
+ *
+ * İki yol:
+ *   1. Servis rolü varsa `affiliate_payout_summary()` — tek gruplu sorgu.
+ *   2. Yoksa RLS'li istemciyle sayfalı okuma (kullanıcı yalnız kendi satırlarını
+ *      görür) — 10.000 satıra kadar tam; üstünde `exact: false` döner ve panel
+ *      rakamı "alt sınır" olarak işaretler.
+ */
+type AffiliateTotals = {
+  pendingCents: number;
+  paidCents: number;
+  /** Ödeme yazılmış (paid) satır sayısı. */
+  paidCount: number;
+  /** Mahsup edilmemiş (komisyon yazan) satır sayısı. */
+  commissionedCount: number;
+  exact: boolean;
+};
+
+const TOTALS_PAGE_SIZE = 1000;
+const TOTALS_MAX_PAGES = 10;
+
+async function readAffiliateTotals(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  isServiceRole: boolean,
+  uid: string,
+): Promise<AffiliateTotals> {
+  if (isServiceRole) {
+    const { data, error } = await client.rpc("affiliate_payout_summary");
+    if (!error) {
+      const rows = (data ?? []) as Array<{
+        affiliate_id: string;
+        pending_cents: number | string | null;
+        pending_count: number | string | null;
+        paid_cents: number | string | null;
+        paid_count: number | string | null;
+      }>;
+      const mine = rows.find((r) => r.affiliate_id === uid);
+      const pending = Number(mine?.pending_cents ?? 0);
+      const paid = Number(mine?.paid_cents ?? 0);
+      return {
+        pendingCents: Number.isFinite(pending) ? pending : 0,
+        paidCents: Number.isFinite(paid) ? paid : 0,
+        paidCount: Number(mine?.paid_count ?? 0),
+        commissionedCount: Number(mine?.pending_count ?? 0) + Number(mine?.paid_count ?? 0),
+        exact: true,
+      };
+    }
+    // Migration uygulanmamışsa sayfalı yola düş (panel çalışmaya devam eder).
+    console.warn(`[affiliate] payout özeti okunamadı, sayfalı toplama geçiliyor: ${error.message}`);
+  }
+
+  let pendingCents = 0;
+  let paidCents = 0;
+  let paidCount = 0;
+  let commissionedCount = 0;
+  for (let page = 0; page < TOTALS_MAX_PAGES; page++) {
+    const { data, error } = await client
+      .from("affiliate_commissions")
+      .select("commission_cents, status")
+      .eq("affiliate_id", uid)
+      .order("created_at", { ascending: false })
+      .range(page * TOTALS_PAGE_SIZE, page * TOTALS_PAGE_SIZE + TOTALS_PAGE_SIZE - 1);
+    if (error) break;
+    const rows = (data ?? []) as Array<{
+      commission_cents: number | null;
+      status: string | null;
+    }>;
+    for (const r of rows) {
+      const cents = r.commission_cents ?? 0;
+      if (r.status === "reversed") continue;
+      commissionedCount += 1;
+      if (r.status === "paid") {
+        paidCents += cents;
+        paidCount += 1;
+      } else {
+        pendingCents += cents;
+      }
+    }
+    if (rows.length < TOTALS_PAGE_SIZE) {
+      return { pendingCents, paidCents, paidCount, commissionedCount, exact: true };
+    }
+  }
+  return { pendingCents, paidCents, paidCount, commissionedCount, exact: false };
+}
 
 /**
  * Affiliate programına başvur. Idempotent: daha önce başvurmuşsa mevcut

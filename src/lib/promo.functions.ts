@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   buildAdminPromoUsers,
+  promoClaimDecision,
   summarizePromoByCode,
   type AdminPromoUser,
   type PromoCodeStat,
@@ -10,6 +11,9 @@ import {
   type PromoRedemptionRow,
   type PromoTransactionRow,
 } from "@/lib/promo-attribution";
+import { REFERRAL_CLAIM_WINDOW_MS, type ReferralClaimCode } from "@/lib/referral-rules";
+import { adminOrUserClient, missingServiceRoleError } from "@/lib/service-client";
+import { isValidAffiliateCode } from "@/lib/affiliate";
 
 async function assertAdmin(context: { supabase: any; userId: string; claims: any }) {
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -133,6 +137,141 @@ export const validatePromoCode = createServerFn({ method: "POST" })
       return { valid: false, discount_pct: 0, reason: "Kod kullanım limitine ulaştı." };
     }
     return { valid: true, discount_pct: row.discount_pct };
+  });
+
+/**
+ * KAYIT SONRASI KOD SAHİPLENME — `?promo=KOD` linkiyle gelen kullanıcının
+ * hesabı, kayıt formu görülmeden açılmış olsa bile koda bağlanır.
+ *
+ * NEDEN GEREKLİ (ölçülen atıf kaybı): kod yalnız kayıt formundaki
+ * `promoCode` alanından yakalanıyordu. Google ile veya doğrudan OTP akışıyla
+ * hesap açan kullanıcı formu hiç görmediği için affiliate'in paylaştığı kod
+ * kayboluyor, influencer o müşteriden HİÇ komisyon alamıyordu. Ayrıca `?promo=`
+ * URL'de kaldığı için sayfa değişince de kayboluyordu; artık localStorage'da
+ * saklanır (bkz. `__root.tsx`) ve burada bir kez sahiplenilir.
+ *
+ * KURALLAR (saf karar: `promoClaimDecision`):
+ *   • Kod yalnız hesabın İLK 30 GÜNÜ içinde bağlanır.
+ *   • Hesaba zaten BAŞKA bir kod bağlıysa atıf değiştirilmez (sonradan
+ *     "kod yazdırıp komisyon kaçırma" yolu kapalı).
+ *   • Referral (`referred_by`) yalnız boşsa yazılır; böylece davet programı
+ *     ile affiliate kodu birbirini Ezmez.
+ *   • Kendi kodunu kullanmak reddedilir.
+ */
+export type PromoClaimResult = {
+  ok: boolean;
+  code: ReferralClaimCode;
+  reason?: string;
+  /** Kod bir affiliate'e bağlı mı? (komisyon üretir) */
+  affiliate?: boolean;
+};
+
+export const claimPromoCode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ code: z.string().trim().min(3).max(32) }).parse(i),
+  )
+  .handler(async ({ data, context }): Promise<PromoClaimResult> => {
+    const code = String(data.code ?? "")
+      .trim()
+      .toUpperCase();
+    if (!isValidAffiliateCode(code)) {
+      return { ok: false, code: "not_found", reason: "Kod geçersiz." };
+    }
+
+    const { rateLimit } = await import("@/lib/api-guard.server");
+    const limited = await rateLimit(`promo:claim:${context.userId}`, 10, 600);
+    if (limited) {
+      return { ok: false, code: "insert_failed", reason: "Çok fazla deneme, biraz sonra dene." };
+    }
+
+    // `profiles.referred_by` yazımı istemciye kapalıdır (komisyon güvenliği):
+    // bu yüzden işlem servis rolüyle yapılır — başka kullanıcının satırına
+    // dokunulduğu için RLS'li istemciyle mümkün değildir.
+    const { client: admin, isServiceRole } = await adminOrUserClient(context);
+    if (!isServiceRole) throw missingServiceRoleError();
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id, promo_code, referred_by, created_at")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (!profile) {
+      // Yeni kayıtta profil satırı (DB trigger) gecikebilir → geçici hata.
+      return { ok: false, code: "profile_missing", reason: "Profil hazırlanıyor, tekrar dene." };
+    }
+    const row = profile as {
+      promo_code?: string | null;
+      referred_by?: string | null;
+      created_at?: string | null;
+    };
+
+    const decision = promoClaimDecision({
+      existingPromoCode: row.promo_code,
+      code,
+      accountAgeMs: row.created_at ? Date.now() - new Date(row.created_at).getTime() : null,
+      windowMs: REFERRAL_CLAIM_WINDOW_MS,
+    });
+    if (!decision.ok) {
+      const reasons: Record<typeof decision.code, string> = {
+        already_used: "Hesabına zaten bir promosyon kodu bağlı.",
+        window_closed: "Kod yalnızca hesabın ilk 30 günü içinde bağlanabilir.",
+        not_found: "Kod bulunamadı.",
+      };
+      return { ok: false, code: decision.code, reason: reasons[decision.code] };
+    }
+
+    const { data: promoRow } = await admin
+      .from("promo_codes")
+      .select("id, code, active, expires_at, max_redemptions, times_redeemed, affiliate_id")
+      .eq("code", code)
+      .maybeSingle();
+    if (!promoRow || !promoRow.active) {
+      return { ok: false, code: "not_found", reason: "Kod bulunamadı ya da pasif." };
+    }
+    if (promoRow.expires_at && new Date(promoRow.expires_at) < new Date()) {
+      return { ok: false, code: "not_found", reason: "Kodun süresi dolmuş." };
+    }
+    if (promoRow.max_redemptions != null && promoRow.times_redeemed >= promoRow.max_redemptions) {
+      return { ok: false, code: "not_found", reason: "Kod kullanım limitine ulaştı." };
+    }
+
+    const affiliateId = (promoRow.affiliate_id as string | null) ?? null;
+    if (affiliateId && affiliateId === context.userId) {
+      return { ok: false, code: "self", reason: "Kendi affiliate kodunu kullanamazsın." };
+    }
+
+    // Kod zaten bağlıysa yazım yok (idempotent başarı).
+    if (decision.idempotent) {
+      return { ok: true, code: "ok", reason: "Kod zaten hesabına bağlı.", affiliate: !!affiliateId };
+    }
+
+    try {
+      await admin
+        .from("profiles")
+        .update({
+          promo_code: code,
+          ...(affiliateId && !row.referred_by ? { referred_by: affiliateId } : {}),
+        })
+        .eq("id", context.userId);
+      await admin.from("promo_redemptions").upsert(
+        {
+          promo_code_id: promoRow.id,
+          code,
+          user_id: context.userId,
+        },
+        { onConflict: "user_id" },
+      );
+      await admin
+        .from("promo_codes")
+        .update({ times_redeemed: (promoRow.times_redeemed ?? 0) + 1 })
+        .eq("id", promoRow.id);
+    } catch (e) {
+      console.warn("[promo] claim write failed", e);
+      return { ok: false, code: "insert_failed", reason: "Kod kaydedilemedi, tekrar dene." };
+    }
+
+    return { ok: true, code: "ok", affiliate: !!affiliateId };
   });
 
 /** Kayıt sırasında girilen promosyon kodunu ödeme ekranında otomatik uygulamak için. */

@@ -117,6 +117,35 @@ export function isValidAffiliateCode(code: string): boolean {
 }
 
 /**
+ * KENDİ KENDİNİ REFERANS KORUMASI (saf karar).
+ *
+ * RİSK: bir affiliate, kendi affiliate koduyla İKİNCİ bir hesap açıp o
+ * hesaptan abonelik alırsa, %30 komisyonu kendine ödemiş olur — yani
+ * abonelik fiilen %30 indirimli hâle gelir ve program bütçesi boşa akar.
+ *
+ * ÖLÇÜLEBİLİR SİNYAL: kayıt anında cihaz parmak izi (`visitor_id`) zaten bir
+ * hesapta kayıtlıdır. Yeni kaydın parmak izi affiliate'in KENDİ hesabına
+ * çıkıyorsa bu bir self-referral'dır ve atıf yapılmaz.
+ *
+ * Neden yalnız parmak izi (IP değil): aynı ofis/ev NAT'ı arkasındaki masum
+ * kullanıcılar aynı IP'yi paylaşır; IP ile engellemek gerçek referansları da
+ * keserdi. Parmak izi aynı CİHAZI işaret eder — yanlış pozitif oranı düşük.
+ *
+ * KAPSAM SINIRI (dürüstçe): parmak izi kaydı yalnız e-posta doğrulamasından
+ * geçen kayıtlarda tutulur; farklı tarayıcı/cihaz kullanan bir kötüye kullanım
+ * bu kontrolü atlar. Bu bir caydırıcı katmandır, tam bir çözüm değildir.
+ */
+export function isSelfReferralDevice(opts: {
+  affiliateUserId?: string | null;
+  /** Yeni kaydın parmak izini taşıyan hesap(lar)ın kimlikleri. */
+  deviceUserIds?: readonly (string | null | undefined)[];
+}): boolean {
+  const affiliate = opts.affiliateUserId ?? null;
+  if (!affiliate) return false;
+  return (opts.deviceUserIds ?? []).some((id) => !!id && id === affiliate);
+}
+
+/**
  * Whether a payment event should produce a commission record.
  * Refunds / failed payments carry no gross amount, so they map to false and
  * the ledger simply never sees a negative commission.

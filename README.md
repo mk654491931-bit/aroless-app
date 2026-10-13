@@ -502,6 +502,42 @@ ağaç kurar).
   tek satırlık uyarı basar (`[env] Eksik zorunlu değişken(ler): ...`).
 - `.env` asla depoya girmez; `.env.example` güncel şablon olarak tutulur.
 
+### Affiliate programı (%30 yinelenen komisyon)
+
+Zincir: **kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**.
+
+1. **Kod**: Admin → Affiliate Programı ekranında hesap görevlendirilir (başvuru
+   beklenmez) ve o affiliate'e ÖZEL bir promo kodu bağlanır
+   (`promo_codes.affiliate_id`). Kod **indirim taşımaz** (`discount_pct = 0`):
+   indirimler tek kaynaktan — Paddle panelinden — yönetilir, böylece "hangi indirim
+   uygulandı" sorusunun tek yanıtı olur. Admin isterse Paddle'da aynı metinle bir
+   indirim kodu da tanımlar; müşteri onu Paddle ödeme ekranındaki kod alanında girer
+   (`showAddDiscounts: true`).
+2. **Kayıt**: influencer'ın linki `https://<site>/auth?promo=KOD` biçimindedir. Kod
+   URL'de yoksa `aroless.promo` localStorage anahtarından okunur (`__root.tsx`) —
+   landing'e uğrayan ya da Google ile hesap açan kullanıcıda atıf böylece kaybolmaz.
+   `claimPromoCode` kodu hesap açıldıktan sonra bağlar; kural: kod yalnız hesabın ilk
+   30 gününde ve hesaba başka kod bağlı değilken sahiplenilir.
+3. **Komisyon**: her başarılı `transaction.completed` olayında
+   `process_paddle_event()` komisyon satırı yazar (varsayılan **%30**;
+   `affiliates.commission_rate_pct` ile değiştirilebilir). Komisyon **ödenen tutar**
+   üzerinden hesaplanır: indirimli alışverişte komisyon da düşer, %100 indirimli
+   (0 tutarlı) alışverişte komisyon doğmaz. Yinelenen (her fatura dönemi) ödemelerde
+   de yazılır; `transaction_id` UNIQUE olduğu için aynı ödeme İKİ KEZ komisyon
+   üretmez. İade/chargeback (`process_paddle_refund()`) satırı `reversed` yapar.
+4. **Ödeme (Wise/IBAN) — manuel**: eşik **$75** (`MIN_PAYOUT_CENTS`); altındaki
+   bakiye devreder. Admin "Ödendi işaretle" dediğinde satırlar `PAY-...` referansıyla
+   `paid` olur; affiliate paneli birikmiş/ödenmiş toplamı ve eşiğe kalan tutarı
+   gösterir. Toplamlar `affiliate_payout_summary()` ile veritabanında hesaplanır
+   (panelde liste sınırı yoktur).
+
+Koruma: aynı cihazdan (`visitor_id`) kendi affiliate koduyla ikinci hesap açılırsa
+atıf yazılmaz ve adminlere bildirim düşer, böylece %30'un kendine ödenmesi engellenir.
+Kapsam sınırı: cihaz parmak izi yalnız e-posta doğrulamasından geçen kayıtlarda tutulur.
+
+İlgili migration'lar: `20260908000000_affiliate_commissions.sql`,
+`20261007000000_affiliate_payouts.sql`, `20261008000000_affiliate_codes_no_discount.sql`.
+
 ### Supabase Auth adresleri
 
 **Authentication → URL Configuration** altında hem yerel hem canlı adresler ekli olmalı:

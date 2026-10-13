@@ -27,7 +27,7 @@ import {
   verifyEmailSignup,
 } from "@/lib/signup.functions";
 import { claimReferral } from "@/lib/referral.functions";
-import { removeBrandedItem, setBrandedItem } from "@/lib/brand-storage";
+import { getBrandedItem, removeBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 import { SignupLegalConsent } from "@/components/legal/signup-legal-consent";
 import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
@@ -194,11 +194,19 @@ function AuthPage() {
   // klavye odağını sıfırlıyordu; bu da bölümün açılıp kapanmasına yol açıyordu.
   const [shaking, setShaking] = useState(false);
   // Influencer linkiyle (`?promo=KOD`) gelen kullanıcı için kodu ön-doldur.
-  const [promoCode, setPromoCode] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : (new URLSearchParams(window.location.search).get("promo")?.trim().toUpperCase() ?? ""),
-  );
+  //
+  // URL'de kod yoksa `__root.tsx`in sakladığı koda düşülür: kullanıcı önce
+  // landing sayfasına gelip sonra /auth'a geçtiğinde (kod yalnızca URL'de
+  // kaldığı sürece) affiliate atfı kaybolurdu.
+  const [promoCode, setPromoCode] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const fromUrl = new URLSearchParams(window.location.search)
+      .get("promo")
+      ?.trim()
+      .toUpperCase();
+    if (fromUrl) return fromUrl;
+    return (getBrandedItem("aroless.promo") ?? "").trim().toUpperCase();
+  });
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState(false);
   // Şifre sıfırlama (recovery) akışı: e-postadaki bağlantı bir recovery
@@ -965,8 +973,15 @@ function AuthPage() {
                             className="inp w-full bg-transparent py-3 pr-4 text-sm font-mono uppercase placeholder:font-sans placeholder:normal-case"
                           />
                         </div>
+                        {/* DÜRÜST METİN: uygulama kodu checkout'a indirim olarak
+                            GÖNDERMEZ (indirimler tek kaynaktan — Paddle
+                            panelinden — yönetilir). Kodun işlevi atıf/sayım ve
+                            affiliate komisyonudur; indirim taşıyan kodlar Paddle
+                            ödeme ekranında girilir. Eski "otomatik uygulanır"
+                            ifadesi ölçülmemiş bir vaatti. */}
                         <p className="text-[11px] text-muted-foreground">
-                          Discount will be applied automatically at checkout.
+                          Kod hesabına bağlanır ve komisyon atfı için kullanılır. İndirim taşıyan
+                          kodları Paddle ödeme ekranındaki kod alanına girebilirsin.
                         </p>
                         <SignupLegalConsent value={consent} onChange={setConsent} />
                       </>

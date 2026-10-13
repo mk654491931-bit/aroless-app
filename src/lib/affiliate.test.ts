@@ -9,6 +9,7 @@ import {
   computeCommissionCents,
   isCommissionStatus,
   isEligibleAffiliate,
+  isSelfReferralDevice,
   isPayoutMethod,
   isValidAffiliateCode,
   payoutEligibility,
@@ -146,5 +147,34 @@ describe("affiliate kodu — admin yazar, indirim taşımaz", () => {
     expect(isValidAffiliateCode("AYSE 20")).toBe(false); // iç boşluk
     expect(isValidAffiliateCode("AYŞE20")).toBe(false); // ş kod şemasında yok
     expect(isValidAffiliateCode("AYSE%20")).toBe(false);
+  });
+});
+
+describe("isSelfReferralDevice — kendi kendini komisyon koruması", () => {
+  const AFFILIATE = "aff-1";
+
+  it("aynı cihazdan kendi koduyla açılan ikinci hesabı yakalar", () => {
+    // Kayıt cihazı affiliate'in kendi hesabında kayıtlı → komisyon yazılMAMALI.
+    expect(
+      isSelfReferralDevice({
+        affiliateUserId: AFFILIATE,
+        deviceUserIds: ["other-user", AFFILIATE],
+      }),
+    ).toBe(true);
+  });
+
+  it("farklı cihazdan gelen meşru referansı ENGELLEMEZ", () => {
+    expect(
+      isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: ["musteri-1"] }),
+    ).toBe(false);
+    expect(isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: [] })).toBe(false);
+  });
+
+  it("kodun sahibi yoksa ya da cihaz kaydı yoksa engelleme yapmaz", () => {
+    expect(isSelfReferralDevice({ affiliateUserId: null, deviceUserIds: [AFFILIATE] })).toBe(false);
+    expect(isSelfReferralDevice({ affiliateUserId: AFFILIATE })).toBe(false);
+    expect(
+      isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: [null, undefined] }),
+    ).toBe(false);
   });
 });

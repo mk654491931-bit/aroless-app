@@ -38,6 +38,7 @@ import { CookieBanner } from "@/components/cookie-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { useAuth } from "@/hooks/use-auth";
+import { isValidAffiliateCode } from "@/lib/affiliate";
 import { PricingModal } from "@/components/pricing-modal";
 
 function NotFoundComponent() {
@@ -239,13 +240,26 @@ function RootComponent() {
       void mod;
     } catch {}
     try {
-      const ref = new URLSearchParams(window.location.search).get("ref");
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get("ref");
       if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
         const v = ref.toUpperCase();
         window.localStorage.setItem("aroless.ref", v);
         try {
           window.localStorage.removeItem("velora.ref");
         } catch {}
+      }
+
+      // Affiliate/promosyon kodu (?promo=KOD).
+      //
+      // NEDEN SAKLANIR: `?promo=` yalnız kayıt FORMUNDA okunuyordu. Kullanıcı
+      // önce landing sayfasına gelip sonra kaydolursa, Google ile hesap açarsa
+      // ya da sekmeyi yenilerse kod URL'den kayboluyor ve affiliate'in atfı
+      // (dolayısıyla %30 komisyonu) sessizce yok oluyordu. Kod artık burada
+      // saklanır; hesap açıldıktan sonra `claimPromoCode` ile bağlanır.
+      const promo = params.get("promo");
+      if (promo && isValidAffiliateCode(promo)) {
+        window.localStorage.setItem("aroless.promo", promo.trim().toUpperCase());
       }
     } catch {
       /* yoksay */

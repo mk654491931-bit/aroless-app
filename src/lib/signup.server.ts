@@ -1,6 +1,81 @@
 /** Sunucu tarafı: OTP üretimi/doğrulaması ve Resend ile e-posta gönderimi. */
 
+import { isSelfReferralDevice } from "@/lib/affiliate";
 import { maskEmail } from "@/lib/log-redact";
+
+type AdminClient = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
+
+/**
+ * AFFILIATE SELF-REFERRAL KONTROLÜ — kayıt anında.
+ *
+ * Bir affiliate kendi koduyla İKİNCİ hesap açıp abone olursa %30 komisyonu
+ * kendine ödenmiş olur; yani sistem ona kalıcı bir indirim verir. Kontrol:
+ * kaydın cihaz parmak izi (`visitor_id`) affiliate'in KENDİ hesabında kayıtlı mı?
+ *
+ * HATA DAVRANIŞI: kontrol yapılamazsa (tablo/izin/DB hatası) kayıt ENGELLENMEZ,
+ * yalnız uyarı loglanır ve atıf normal akışta devam eder. Güvenlik kontrolü
+ * hiçbir koşulda meşru bir kaydı düşürmemelidir.
+ */
+export async function isSelfReferralSignup(
+  admin: AdminClient,
+  args: { affiliateUserId: string | null; visitorId?: string | null },
+): Promise<boolean> {
+  if (!args.affiliateUserId || !args.visitorId) return false;
+  try {
+    const { data } = await admin
+      .from("device_fingerprints")
+      .select("user_id")
+      .eq("visitor_id", args.visitorId)
+      .limit(10);
+    return isSelfReferralDevice({
+      affiliateUserId: args.affiliateUserId,
+      deviceUserIds: ((data ?? []) as Array<{ user_id: string | null }>).map((r) => r.user_id),
+    });
+  } catch (e) {
+    console.warn("[affiliate] self-referral kontrolü yapılamadı:", e);
+    return false;
+  }
+}
+
+/**
+ * Engellenen self-referral için adminlere kayıt düşer (sessiz engelleme yok).
+ * Affiliate ayrıca askıya alınmaz: karar insana bırakılır, yalnız kanıt üretilir.
+ */
+export async function notifySelfReferralBlocked(
+  admin: AdminClient,
+  args: {
+    userId: string;
+    email: string | null;
+    affiliateUserId: string;
+    code: string;
+    visitorId?: string | null;
+  },
+): Promise<void> {
+  try {
+    const { data: admins } = await admin.from("user_roles").select("user_id").eq("role", "admin");
+    const adminIds = [...new Set((admins ?? []).map((a: { user_id: string }) => a.user_id))];
+    if (adminIds.length === 0) return;
+    await admin.from("notifications").insert(
+      adminIds.map((id) => ({
+        user_id: id,
+        type: "affiliate_self_referral",
+        title: "Affiliate komisyonu engellendi (aynı cihaz)",
+        body:
+          `${args.email ?? args.userId} “${args.code}” koduyla kaydoldu ama cihaz parmak izi ` +
+          `affiliate'in kendi hesabına çıkıyor; komisyon atfı yazılmadı.`,
+        data: {
+          suspect_user_id: args.userId,
+          suspect_email: args.email,
+          affiliate_user_id: args.affiliateUserId,
+          code: args.code,
+          visitor_id: args.visitorId ?? null,
+        },
+      })),
+    );
+  } catch (e) {
+    console.warn("[affiliate] self-referral uyarısı yazılamadı:", e);
+  }
+}
 
 export function generateOtp(): string {
   const bytes = new Uint32Array(1);

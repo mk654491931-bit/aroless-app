@@ -260,6 +260,51 @@ export type MyPromoPerformance = {
   own_tier: string;
 };
 
+/**
+ * KAYIT SONRASI KOD SAHİPLENME kararı (saf — DB/React yok).
+ *
+ * NEDEN GEREKLİ (ölçülen atıf kaybı): kod bugüne kadar YALNIZ kayıt formundan
+ * yakalanıyordu (`?promo=KOD` → signup alanı). Google/OTP dışı akışlarda,
+ * kullanıcı formu görmeden hesaplandığında ya da kod sekmede kaybolduğunda
+ * atıf tamamen kayboluyordu: affiliate paylaştığı kodla gelen müşteriden hiç
+ * komisyon alamıyordu. `?promo=` artık localStorage'da saklanır ve hesap
+ * açıldıktan SONRA bu kararla bir kez sahiplenilir.
+ *
+ * SINIRLAR (kasten): kod yalnız hesabın ilk 30 gününde ve kullanıcının zaten
+ * başka bir promo kodu YOKKEN sahiplenilebilir. Böylece "eski müşteriye sonradan
+ * kod yazdırıp komisyon kaçırma" kapısı açılmaz.
+ */
+export type PromoClaimDecision =
+  | { ok: true; idempotent: boolean }
+  | { ok: false; code: "already_used" | "window_closed" | "not_found" };
+
+export function promoClaimDecision(args: {
+  /** Kullanıcının profilinde kayıtlı kod (varsa). */
+  existingPromoCode?: string | null;
+  /** Sahiplenilmek istenen kod (normalize edilir). */
+  code?: string | null;
+  /** Hesabın yaşı (ms) — bilinmiyorsa null (pencere kapalı sayılır). */
+  accountAgeMs?: number | null;
+  /** Pencere süresi (ms); varsayılan 30 gün `referral-rules`ten gelir. */
+  windowMs?: number;
+}): PromoClaimDecision {
+  const code = normalizeCode(args.code);
+  if (!code) return { ok: false, code: "not_found" };
+
+  const existing = normalizeCode(args.existingPromoCode);
+  // Aynı kod zaten bağlıysa yeniden yazmak zararsızdır (kalıcı başarı).
+  if (existing && existing === code) return { ok: true, idempotent: true };
+  // Farklı bir kod bağlıysa atıf DEĞİŞTİRİLMEZ.
+  if (existing) return { ok: false, code: "already_used" };
+
+  const windowMs = args.windowMs ?? 30 * 24 * 60 * 60 * 1000;
+  const age = args.accountAgeMs;
+  if (typeof age !== "number" || !Number.isFinite(age) || age >= windowMs) {
+    return { ok: false, code: "window_closed" };
+  }
+  return { ok: true, idempotent: false };
+}
+
 export function myPromoPerformance(
   users: AdminPromoUser[],
   code: string | null | undefined,

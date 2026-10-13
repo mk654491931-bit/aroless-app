@@ -74,16 +74,19 @@ export function AffiliatePanel() {
   });
 
   const data: AffiliateSummary | undefined = q.data;
-  // Paylaşılacak link: öncelikle affiliate'in SAHİP olduğu promo kodu
-  // (kodla gelen kullanıcı komisyon üretir), yoksa davet koduna düşer.
-  const link =
-    typeof window === "undefined"
-      ? ""
-      : data?.promo_code
-        ? `${window.location.origin}/auth?promo=${data.promo_code}`
-        : data?.referral_code
-          ? `${window.location.origin}/auth?ref=${data.referral_code}`
-          : "";
+  // Paylaşılacak link İKİ FARKLI PROGRAMDIR ve karıştırılmamalıdır:
+  //   • `/auth?promo=KOD` → admin'in verdiği affiliate kodu. Sınırsız kayıt,
+  //     %30 yinelenen komisyon (kod `promo_codes.affiliate_id` ile eşlenir).
+  //   • `/auth?ref=KOD`   → davet programı. En fazla 2 arkadaş + 1 kredi
+  //     (`claimReferral` → referrer_limit) ve ORANSAL komisyon garantisi yok.
+  // Ölçülen tuzak: affiliate kodu henüz tanımlanmamışken panel davet linkini
+  // "affiliate linkin" gibi gösteriyordu; influencer 3. kullanıcıda sessizce
+  // komisyon kaybediyordu. Artık ikisi AYRI etiketlenir.
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const affiliateLink = data?.promo_code ? `${origin}/auth?promo=${data.promo_code}` : "";
+  const inviteLink =
+    !affiliateLink && data?.referral_code ? `${origin}/auth?ref=${data.referral_code}` : "";
+  const link = affiliateLink || inviteLink;
   const status = data?.status ?? null;
   const meta = status ? STATUS_META[status] : null;
   const money = (cents: number | undefined) =>
@@ -177,7 +180,10 @@ export function AffiliatePanel() {
 
           {status === "verified" && (
             <>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {affiliateLink ? "Affiliate linkin" : "Davet linkin"}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm break-all flex-1 min-w-[200px]">
                   {link || "—"}
                 </code>
@@ -188,6 +194,22 @@ export function AffiliatePanel() {
                   {copied ? <Check size={14} /> : <Copy size={14} />} Kopyala
                 </button>
               </div>
+
+              {/* Kod atanmadan önce ne paylaşabileceği DÜRÜSTÇE söylenir. */}
+              {!affiliateLink && inviteLink && (
+                <p className="mt-2 rounded-xl border border-[oklch(0.72_0.15_70)]/30 bg-[oklch(0.72_0.15_70)]/10 p-3 text-xs text-[oklch(0.85_0.1_70)]">
+                  Sana özel <b>affiliate kodun henüz tanımlanmadı</b> — yönetici kodunu tanımladığında
+                  burada görünür. O zamana kadar {link} paylaşabilirsin: bu davet programıdır
+                  (en fazla 2 arkadaş · 1 kredi) ve %{data?.commission_rate_pct ?? DEFAULT_COMMISSION_RATE_PCT}{" "}
+                  komisyon yalnız <b>affiliate koduyla</b> gelen aboneliklerde işler.
+                </p>
+              )}
+              {!link && (
+                <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-muted-foreground">
+                  Paylaşılacak link henüz oluşmadı. Yönetici sana özel affiliate kodunu tanımladığında
+                  burada görünecek.
+                </p>
+              )}
 
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
@@ -204,11 +226,18 @@ export function AffiliatePanel() {
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CalendarClock size={13} /> Ödenen dönem
+                    <CalendarClock size={13} /> Komisyonlu ödeme
                   </div>
                   <div className="text-2xl font-bold">{data?.paid_transactions ?? 0}</div>
                 </div>
               </div>
+
+              {data?.totals_exact === false && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Not: komisyon geçmişin çok uzun olduğu için yukarıdaki toplamlar alt sınırdır;
+                  ödeme eşiği yönetici ekranındaki kesin toplamla değerlendirilir.
+                </p>
+              )}
 
               {/* ÖDEME EŞİĞİ NOTU — ödemeler birikmiş kazanç $75'i geçince yapılır. */}
               <div
