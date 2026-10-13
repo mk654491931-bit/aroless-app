@@ -131,6 +131,12 @@ export function AdminAffiliates() {
       toast.success(
         `${money(res.paid_cents)} ödendi olarak işaretlendi (${res.paid_count} işlem · ${res.reference})`,
       );
+      // Bildirim gönderilemediyse admin bunu BİLMELİ: affiliate ödemeyi yalnız
+      // e-postadan öğreniyor olabilir ve sessiz kalırsak kişi parasını almamış
+      // sanır. Ödeme kaydı yine geçerlidir; uyarı yalnız bildirimle ilgilidir.
+      if (!res.notified) {
+        toast.warning("Ödeme bildirimi e-postası gönderilemedi — e-posta servisi kurulu mu?");
+      }
       setOpenFor(null);
       setReference("");
       refresh();

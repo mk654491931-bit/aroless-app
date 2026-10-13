@@ -1172,6 +1172,8 @@ export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
       paid_cents: number;
       paid_count: number;
       reference: string;
+      /** "Ödemen yapıldı" bildirimi gönderildi mi? (gönderilemediyse admin uyarılır) */
+      notified: boolean;
     }> => {
       await assertAdmin(context);
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -1242,11 +1244,62 @@ export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
         paid_cents: number;
         paid_count: number;
       } | null;
+      const paidCents = Number(row?.paid_cents ?? 0);
+      const paidCount = Number(row?.paid_count ?? 0);
+
+      // ÖDEME BİLDİRİMİ — "para gerçekten gönderildi mi?" sorusu programın en
+      // kritik güven anıdır; affiliate panele bakmadığı sürece bunu göremez.
+      //
+      // SIRA ÖNEMLİ: e-posta, RPC başarılı olduktan SONRA gönderilir ve hatası
+      // yukarı fırlatılmaz. Bildirimi kaydın ön koşulu yapmak, kayıtlı bir
+      // ödemeyi e-posta servisi yüzünden "başarısız" gösterirdi; burada para
+      // kaydı esastır, bildirim onun ardından gelen bir yan etkidir.
+      let notified = false;
+      try {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id", data.userId)
+          .maybeSingle();
+        const to = ((profile as { email?: string | null } | null)?.email ?? "").trim();
+        if (!to) {
+          console.warn("[affiliate] ödeme bildirimi atlandı: profil e-postası yok");
+        } else {
+          // Beklemede kalan birikim: ödemenin "tamamı" olmadığını affiliate
+          // kendi görebilsin (aksi hâlde sonraki ödeme sürpriz olur).
+          let heldCents: number | undefined;
+          try {
+            const { data: summary } = await supabaseAdmin.rpc("affiliate_payout_summary");
+            const summaryRow = ((summary ?? []) as Array<Record<string, unknown>>).find(
+              (r) => r["affiliate_id"] === data.userId,
+            );
+            if (summaryRow) heldCents = Number(summaryRow["held_cents"] ?? 0);
+          } catch {
+            /* bakiye okunamazsa bildirim yine gider (tutar ve referans esas) */
+          }
+          const { sendAffiliatePayoutEmail } = await import("@/lib/email-service");
+          const outcome = await sendAffiliatePayoutEmail(to, {
+            paidCents,
+            paidCount,
+            method: data.method,
+            reference,
+            ...(heldCents === undefined ? {} : { heldCents }),
+          });
+          notified = outcome.sent;
+          if (!outcome.sent) {
+            console.warn(`[affiliate] ödeme bildirimi gönderilemedi: ${outcome.reason}`);
+          }
+        }
+      } catch (e) {
+        console.error("[affiliate] ödeme bildirimi hatası", e);
+      }
+
       return {
         ok: true,
-        paid_cents: Number(row?.paid_cents ?? 0),
-        paid_count: Number(row?.paid_count ?? 0),
+        paid_cents: paidCents,
+        paid_count: paidCount,
         reference,
+        notified,
       };
     },
   );

@@ -35,6 +35,9 @@ const signupServer = read("./signup.server.ts");
 const affiliateFns = read("./affiliate.functions.ts");
 const paddleCheckout = read("./paddle-checkout.ts");
 const affiliatePanel = read("../components/affiliate-panel.tsx");
+const adminAffiliates = read("../components/admin-affiliates.tsx");
+const emailService = read("./email-service.ts");
+const emailTemplates = read("./email-templates.ts");
 const pricingModal = read("../components/pricing-modal.tsx");
 const pricingCard = read("../components/pricing-card.tsx");
 
@@ -89,9 +92,7 @@ describe("self-referral koruması", () => {
   });
 
   it("kontrol hatası kaydı ENGELLEMEZ (meşru kayıt düşmez)", () => {
-    expect(signupServer).toMatch(
-      /self-referral kontrolü yapılamadı[\s\S]{0,120}?return false/,
-    );
+    expect(signupServer).toMatch(/self-referral kontrolü yapılamadı[\s\S]{0,120}?return false/);
   });
 });
 
@@ -135,5 +136,57 @@ describe("affiliate paneli ve toplamlar", () => {
   it("affiliate kodu yokken davet linki AYRI etiketlenir (2 kişi sınırı gizlenmez)", () => {
     expect(affiliatePanel).toMatch(/affiliate kodun henüz tanımlanmadı/);
     expect(affiliatePanel).toMatch(/en fazla 2 arkadaş/);
+  });
+});
+
+describe("ödeme bildirimi (para gönderildiğinde)", () => {
+  it("ödeme kaydından SONRA, aynı akışta bildirim tetiklenir", () => {
+    const rpc = affiliateFns.indexOf('rpc("admin_mark_affiliate_paid"');
+    const mail = affiliateFns.indexOf("sendAffiliatePayoutEmail");
+    expect(rpc).toBeGreaterThan(-1);
+    expect(mail).toBeGreaterThan(-1);
+    // Sıra: önce RPC (para kaydı), sonra bildirim. Tersi olsaydı başarısız bir
+    // kayıt için "ödemen yapıldı" e-postası giderdi.
+    expect(mail).toBeGreaterThan(rpc);
+  });
+
+  it("alıcı adresi profilden okunur (kime gittiği tahmin edilmez)", () => {
+    expect(affiliateFns).toMatch(
+      /from\("profiles"\)[\s\S]{0,200}?select\("email"\)[\s\S]{0,2500}?sendAffiliatePayoutEmail/,
+    );
+  });
+
+  it("e-posta hatası ödeme kaydını GERİ ALMAZ (bildirim yan etkidir)", () => {
+    // Bildirim try/catch içinde ve catch'ten sonra handler normal yolla döner.
+    expect(affiliateFns).toMatch(
+      /try \{[\s\S]{0,1200}?sendAffiliatePayoutEmail[\s\S]{0,1400}?\} catch \(e\) \{[\s\S]{0,200}?ödeme bildirimi hatası[\s\S]{0,200}?return \{/,
+    );
+    // E-posta sonucu hata fırlatarak handler'ı düşüremez.
+    expect(affiliateFns).not.toMatch(/throw new Error\(outcome\.reason/);
+  });
+
+  it("bildirim gönderilemezse admin SESSİZ kalmaz (ödeme kaydı geçerli kalır)", () => {
+    expect(affiliateFns).toMatch(/notified: boolean/);
+    expect(affiliateFns).toMatch(/notified,/);
+    expect(adminAffiliates).toMatch(/res\.notified/);
+    expect(adminAffiliates).toMatch(/toast\.warning\(/);
+  });
+
+  it("gönderim yolu asla fırlatmayan sarmalayıcıdan geçer", () => {
+    expect(emailService).toMatch(
+      /export async function sendAffiliatePayoutEmail[\s\S]{0,800}?trySendEmail\(/,
+    );
+  });
+
+  it("şablon tutar + referans + bekleme kuralını taşır, ödeme TARİHİ vaat etmez", () => {
+    expect(emailTemplates).toMatch(/export function affiliatePayoutEmail\(/);
+    const tpl = emailTemplates.slice(
+      emailTemplates.indexOf("export function affiliatePayoutEmail("),
+    );
+    const body = tpl.slice(0, tpl.indexOf("/** Kayıt sonrası hoş geldiniz"));
+    expect(body).toMatch(/Transfer referansı/);
+    expect(body).toMatch(/PAYOUT_HOLD_DAYS/);
+    expect(body).toMatch(/legal\/affiliate-program-sartlari/);
+    expect(body).not.toMatch(/tarihinde ödene/i);
   });
 });

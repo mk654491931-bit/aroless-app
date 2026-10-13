@@ -14,8 +14,10 @@
 import {
   APP_URL,
   affiliateCommissionEmail,
+  affiliatePayoutEmail,
   otpEmail,
   passwordResetEmail,
+  payoutMethodLabel,
   verificationEmail,
   welcomeEmail,
 } from "@/lib/email-templates";
@@ -417,6 +419,27 @@ export async function sendAffiliateCommissionEmail(
     subject,
     html,
     text: `Affiliate komisyonun: $${(args.commissionCents / 100).toFixed(2)} (${args.tier ?? "abonelik"}). Panel: ${APP_URL}/settings`,
+  });
+}
+
+/**
+ * Affiliate'e "ödemen yapıldı" bildirimi.
+ *
+ * ADMIN ÖDEME KAYDINDAN çağrılır; asla fırlatmaz. Bildirim gönderilemese bile
+ * ödeme kaydı geçerli kalır — para kaydı ile e-posta arasındaki ilişkiyi
+ * "bildirim gönderildi" koşuluna bağlamak, kayıtlı bir ödemeyi geri alırdı.
+ * Çağıran taraf bu yüzden hatayı loglar ve devam eder.
+ */
+export async function sendAffiliatePayoutEmail(
+  to: string,
+  args: Parameters<typeof affiliatePayoutEmail>[0],
+): Promise<SendEmailResult> {
+  const { subject, html } = affiliatePayoutEmail(args);
+  return trySendEmail({
+    to,
+    subject,
+    html,
+    text: `Affiliate ödemen yapıldı: $${(args.paidCents / 100).toFixed(2)} (${payoutMethodLabel(args.method)}). Referans: ${args.reference}. Panel: ${APP_URL}/settings`,
   });
 }
 

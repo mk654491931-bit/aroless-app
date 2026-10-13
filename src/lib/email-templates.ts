@@ -3,6 +3,7 @@
  * Saf HTML (inline stil) döner; e-posta istemcileri CSS dosyası desteklemez.
  */
 
+import { COMMISSION_MAX_MONTHS } from "./affiliate";
 import { PAYOUT_HOLD_DAYS } from "./affiliate-payout";
 
 const BRAND = "#7aa2ff";
@@ -100,7 +101,100 @@ export function affiliateCommissionEmail(args: {
           <li>Beklemede (ödemeden önce ${PAYOUT_HOLD_DAYS} gün geçmeli): <b>${usd(held)}</b></li>
         </ul>
         ${progress}
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">
+          Komisyon her müşteri için <b style="color:${TEXT};">en fazla ${COMMISSION_MAX_MONTHS} ay</b> yazılır (müşteri kaç ay ücretli kaldıysa o kadar).
+          <a href="${APP_URL}/legal/affiliate-program-sartlari" style="color:${BRAND};">Program şartları</a>
+        </p>
         ${button(`${APP_URL}/settings`, "Affiliate panelini aç")}`,
+    }),
+  };
+}
+
+/**
+ * HTML kaçışı — şablona admin/kullanıcı kaynaklı metin girdiğinde (ödeme
+ * referansı, promo kodu) tek bir `<` karakterinin e-postanın geri kalanını
+ * bozmasını engeller. Kaçışsız bırakılan bir dekont no, mailin gövdesini
+ * kırıp "ödeme yapıldı" bilgisini görünmez kılabilir.
+ */
+function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Ödeme yönteminin insan okunur adı (e-posta ve panel aynı metni kullanır). */
+export function payoutMethodLabel(method: string | null | undefined): string {
+  switch (method) {
+    case "wise":
+      return "Wise";
+    case "iban":
+      return "Banka havalesi (IBAN)";
+    default:
+      return "Manuel transfer";
+  }
+}
+
+/**
+ * AFFILIATE ÖDEME BİLDİRİMİ — "ödemen yapıldı".
+ *
+ * NEDEN VAR: ödeme yapıldığında affiliate bunu yalnız panele girip bakarsa
+ * görüyordu. Ödemenin sessizce yapılması, programın en kritik güven anını
+ * ("para gerçekten geldi mi?") belirsiz bırakır; influencer panele bakmadığı
+ * için ödeme yapılmamış sanır ve paylaşmayı bırakır.
+ *
+ * REFERANS ZORUNLU İÇERİK: transfer tek başına hesapta görünür ama hangi
+ * ödemeye ait olduğu anlaşılmaz. Dekont/referans numarası, affiliate'in banka
+ * ekstresiyle eşleştirme yapabilmesi için gönderilir.
+ *
+ * TARİH VAADİ YOK: transfer bankaya göre gecikir; bu yüzden "şu tarihte
+ * hesabında" gibi ölçülmemiş bir söz verilmez, yalnız "gönderildi" denir.
+ */
+export function affiliatePayoutEmail(args: {
+  /** Ödenmiş komisyon toplamı (minor units). */
+  paidCents: number;
+  /** Kaç komisyon satırı ödendi. */
+  paidCount: number;
+  /** wise | iban | other (kayıt neyse). */
+  method: string | null | undefined;
+  /** Transfer dekont/referans numarası — eşleştirme için. */
+  reference: string;
+  /** Ödeme sonrası hâlâ beklemede olan (30 günü dolmamış) birikim. */
+  heldCents?: number;
+}) {
+  const method = payoutMethodLabel(args.method);
+  const reference = esc(args.reference);
+  const held = args.heldCents ?? 0;
+
+  const heldBlock =
+    held > 0
+      ? `<p style="margin:16px 0 0;color:${MUTED};">Ödeme dışında kalan bekleyen tutar: <b style="color:${TEXT};">${usd(held)}</b>.<br />Beklemedeki komisyonlar ödenmeden önce ${PAYOUT_HOLD_DAYS} gün bekler; süre dolduğunda bir sonraki ödemeye eklenir.</p>`
+      : `<p style="margin:16px 0 0;color:${MUTED};">Şu an beklemede başka birikim yok. Yeni komisyonlar panelde birikmeye devam eder ve ödenmeden önce ${PAYOUT_HOLD_DAYS} gün bekler.</p>`;
+
+  return {
+    subject: `Affiliate ödemen yapıldı: ${usd(args.paidCents)}`,
+    html: shell({
+      title: "Affiliate ödemen yapıldı",
+      preview: `${usd(args.paidCents)} transfer edildi · referans ${reference}`,
+      body: `<h1 style="margin:0 0 10px;font-size:22px;font-weight:600;color:#fff;">Ödemen yapıldı</h1>
+        <p style="margin:0;color:${MUTED};">Birikmiş affiliate komisyonun ödendi olarak işlendi ve transfer gönderildi.</p>
+        <div style="margin:22px 0 8px;padding:18px;border-radius:14px;background:rgba(122,162,255,0.10);border:1px solid rgba(122,162,255,0.28);text-align:center;">
+          <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:${MUTED};">Ödenen tutar</div>
+          <div style="margin-top:8px;font-size:30px;font-weight:700;color:${BRAND};">${usd(args.paidCents)}</div>
+          <div style="margin-top:6px;font-size:12px;color:${MUTED};">${method} · ${args.paidCount} komisyon kaydı</div>
+        </div>
+        <div style="margin:12px 0 0;padding:14px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);text-align:center;">
+          <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:${MUTED};">Transfer referansı</div>
+          <div style="margin-top:6px;font-size:16px;font-weight:700;letter-spacing:1px;color:${TEXT};word-break:break-all;">${reference}</div>
+        </div>
+        <p style="margin:14px 0 0;color:${MUTED};">Bankanda/ekstrelerinde bu referansı arayarak transferi eşleştirebilirsin. Tutarın hesabına geçmesi bankaya göre birkaç iş günü sürebilir.</p>
+        ${heldBlock}
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">
+          Komisyon geliri kendi gelirindir; vergi, mükellefiyet ve beyan yükümlülüğü sana aittir.
+          <a href="${APP_URL}/legal/affiliate-program-sartlari" style="color:${BRAND};">Program şartları</a>
+        </p>
+        ${button(`${APP_URL}/settings`, "Kazanç geçmişini aç")}`,
     }),
   };
 }
