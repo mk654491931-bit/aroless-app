@@ -37,6 +37,10 @@ const READY: PreflightEnv = {
   // anahtarsız ücretsiz katmanda 429 riski yüksektir.
   JINA_API_KEY_1: "j1",
   JINA_API_KEY_2: "j2",
+  // YEDEK OKUMA (Jina engellediğinde ürün satırı kaybolmasın) ve ücretsiz
+  // katalog API'si. İkisi de isteğe bağlıdır; tam kurulumda tanımlıdır.
+  FIRECRAWL_API_KEY: "fc",
+  BESTBUY_API_KEY: "bb",
 };
 
 const byId = (checks: { id: string }[], id: string) =>

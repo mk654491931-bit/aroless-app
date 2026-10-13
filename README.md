@@ -412,6 +412,11 @@ HOT_PRODUCTS_WAIT_MS
 # Ürün okuyucu (Jina Reader) — her anahtar 10M token, yük paylaşılır
 JINA_API_KEY_1
 JINA_API_KEY_2
+# Yedek okuma (Jina kota/engel verirse ürün satırı kaybolmasın) — ücretsiz katman
+FIRECRAWL_API_KEY        # firecrawl.dev · 1.000 kredi/ay ücretsiz
+SCRAPINGBEE_API_KEY      # scrapingbee.com · 1.000 kredi ücretsiz
+# Ücretsiz katalog API'si (ABD/Kanada): gerçek fiyat + GERÇEK puan + görsel
+BESTBUY_API_KEY          # developer.bestbuy.com · ücretsiz anahtar
 #   (isteğe bağlı ayarlar)
 # JINA_KEY_TOKEN_BUDGET  → anahtar başına bütçe (varsayılan 10000000)
 # DISCOVERY_READER_PAGES → arama başına HB sayfası (varsayılan 2, 1..6)
@@ -454,6 +459,13 @@ Yani bir TR araması ≈ **57K token** (2 HB sayfası + n11), bir global arama
 - Sayfa başına ürün görseli ölçümü: HB 37 kartın 12'sinde görsel taşır; geri
   kalanı görsel kapısında elenir. Bu kayıp `/health` → `reader.sources`
   altında `droppedNoImage` olarak görünür (sessiz kaybolmaz).
+
+ÜLKE-KAYNAK MATRİSİ (rapor P0-4): her okuyucu yalnız ANLAMLI olduğu ülkede koşar —
+`tr-reader` (Hepsiburada+n11) TR'de, `otto-reader` DE/AT/CH'de, `flipkart-reader`
+IN'de, `rakuten-reader` JP'de, `newegg-reader` US/CA/GB/AU/NZ/IE'de; AliExpress
+ülkeden bağımsızdır. Arama başına ölçülen maliyet: TR ≈74K · DE ≈33K · IN ≈40K ·
+JP ≈33K · US ≈57K token. Ülke seçimi bu yüzden doğrudan bütçe demektir; tablo
+`/health` → `reader.plan` altında ülke ülke görünür.
 
 Canlı kanıt: `/health` yanıtındaki `reader` bloğu kaç anahtar tanımlı olduğunu,
 anahtar başına okuma/token sayacını, bütçenin yüzde kaçının harcandığını ve

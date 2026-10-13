@@ -428,6 +428,283 @@ export function parseNewegg(md: string): GlobalReaderRow[] {
   return out;
 }
 
+/* ══════════════════════════════ GENEL PARA BİRİMİ (P0-2) ══════════════════════
+ *
+ * NEDEN: ayrıştırıcılar yalnız `parseTry` (TL) ve `parseUsd` ($) biliyordu.
+ * Global ölçekte her ülkenin KENDİ biçimi var ve tek yanlış varsayım fiyatı
+ * uydurur:
+ *   • DE  „ab 27,99 €“   → virgül ONDALIK (27.99)
+ *   • US  „$1,299.00“    → nokta ONDALIK
+ *   • IN  „₹1,299“ / „₹12,34,567“ → Hint gruplaması (binlik ayırıcı)
+ *   • JP  „4,180 円“      → binlik ayırıcı, ondalık YOK
+ *   • PL  „1 299,00 zł“   → boşluk gruplama + virgül ondalık
+ * Bu yüzden sayı çözümü TEK bir yerde (burada) ve ayırıcının ANLAMINI konumdan
+ * çıkarır; hiçbir ülkeye özel varsayım yapmaz.
+ */
+
+/**
+ * Sembol → ISO kodu.
+ *
+ * SIRA ÖNEMLİ: `R$` `$`dan, `zł` tek başına `ł`den ÖNCE denenir (aksi hâlde
+ * BRL `$` = USD, PLN tek harfe düşerdi). `TL` de burada: TR sayfaları tutarı
+ * hem `₺` hem `TL` ile yazar (eski hat `parseTry` ile aynı sonucu vermeli).
+ */
+export const CURRENCY_BY_SYMBOL: Readonly<Record<string, string>> = {
+  "R$": "BRL",
+  "zł": "PLN",
+  "TL": "TRY",
+  "₺": "TRY",
+  "€": "EUR",
+  "£": "GBP",
+  "¥": "JPY",
+  "円": "JPY",
+  "₹": "INR",
+  "₩": "KRW",
+  "$": "USD",
+};
+
+const MONEY_SYMBOLS = Object.keys(CURRENCY_BY_SYMBOL);
+
+/** Sayı ayırıcılarının ANLAMINI konumdan çıkarır; bilinmeyeni `null` yapar. */
+export function parseAmount(raw: string): number | null {
+  const cleaned = String(raw ?? "")
+    .replace(/[\s\u00A0\u202F]/g, "")
+    .replace(/[^\d.,]/g, "");
+  if (!cleaned) return null;
+  const separators = (cleaned.match(/[.,]/g) ?? []).length;
+  const lastDot = cleaned.lastIndexOf(".");
+  const lastComma = cleaned.lastIndexOf(",");
+  let normalized: string;
+  if (separators === 0) {
+    normalized = cleaned;
+  } else if (lastDot >= 0 && lastComma >= 0) {
+    // İKİ ayırıcı varsa SONUNCUSU ondalıktır (uluslararası kural).
+    normalized =
+      lastComma > lastDot
+        ? cleaned.replace(/\./g, "").replace(",", ".")
+        : cleaned.replace(/,/g, "");
+  } else {
+    const separator = lastDot >= 0 ? "." : ",";
+    const parts = cleaned.split(separator);
+    const tail = parts[parts.length - 1] ?? "";
+    // Tek ayırıcı + 1-2 hane = ondalık („27,99“) · 3+ hane/çoklu ayırıcı = binlik
+    // („4,180“ JPY, „12,34,567“ INR, „1.299“ TR). Yanlış tarafa düşmek fiyatı
+    // 100 katına çıkarırdı, bu yüzden kural açıkça burada.
+    if (parts.length === 2 && tail.length > 0 && tail.length <= 2) {
+      normalized = separator === "." ? cleaned : cleaned.replace(",", ".");
+    } else {
+      normalized = parts.join("");
+    }
+  }
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value <= 0 || value >= 100_000_000) return null;
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Metinden ÖLÇÜLMÜŞ tutar + para birimi. Sembol sayının önünde de arkasında da
+ * olabilir (`€ 27,99` / `27,99 €`). Bulunamazsa `null` — tahmin YOK.
+ */
+export function parseMoney(text: string): { amount: number; currency: string } | null {
+  const src = String(text ?? "");
+  let best: { at: number; amount: number; currency: string } | null = null;
+  for (const symbol of MONEY_SYMBOLS) {
+    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const after = new RegExp(`${escaped}\\s*([0-9][0-9.,\\u00A0 ]{0,15})`);
+    const before = new RegExp(`([0-9][0-9.,\\u00A0 ]{0,15})\\s*${escaped}`);
+    const mAfter = after.exec(src);
+    const mBefore = before.exec(src);
+    const candidates: { match: RegExpExecArray; at: number }[] = [];
+    if (mAfter) candidates.push({ match: mAfter, at: mAfter.index });
+    if (mBefore) candidates.push({ match: mBefore, at: mBefore.index });
+    for (const { match, at } of candidates) {
+      const amount = parseAmount(match[1]);
+      const currency = CURRENCY_BY_SYMBOL[symbol];
+      if (amount === null || !currency) continue;
+      // METİNDEKİ EN ERKEN tutar kazanır: Flipkart'ta „₹579 ₹809“ yazıyor ve
+      // güncel fiyat İLK olandır; sembol tablosu sırasına göre seçmek yanlış
+      // tutarı (liste fiyatını) fiyat sayardı.
+      if (!best || at < best.at) best = { at, amount, currency };
+    }
+  }
+  return best ? { amount: best.amount, currency: best.currency } : null;
+}
+
+/* ══════════════ YEREL PAZARYERİ SATIRI (DE / IN / JP) (P0-1) ══════════════════
+ *
+ * NEDEN AYRI TİP: `ReaderRow` (TL) ve `GlobalReaderRow` (USD) alan adlarıyla
+ * para birimini söyler; DE/IN/JP satırlarının fiyatı EUR/INR/JPY'dir. Aynı alana
+ * yazmak „65,00“ rakamını USD gibi okuturdu (uydurma kur).
+ *
+ * ÖLÇÜM (2026-10-12, gerçek Jina gövdeleri, `X-Engine: direct`):
+ *   • Otto    65.330 karakter / 115 ürün linki / 30 fiyat  → okunur
+ *   • Flipkart 91.000 karakter / 45 ürün linki / 85 fiyat  → okunur
+ *   • Rakuten 62.432 karakter / 45 ürün linki / 156 fiyat  → okunur
+ * (Trendyol, Amazon, Walmart, eBay, Etsy, Argos, Cdiscount, Mercado Livre,
+ *  Allegro, Bol aynı ölçümde 82-1.428 karakter döndü: engelli.)
+ */
+export interface LocalReaderRow {
+  title: string;
+  url: string;
+  imageUrl: string;
+  /** Ölçülen YEREL fiyat. `null` = listede fiyat bulunamadı (uydurulmaz). */
+  price: number | null;
+  /** Ölçülen fiyatın ISO para birimi (EUR / INR / JPY). */
+  currency: string;
+  /** Puan DEĞERİ listede sayı olarak varsa; yoksa `null` (yıldızlar görsel). */
+  rating: number | null;
+  /** Değerlendirme SAYISI (varsa). */
+  ratingCount: number | null;
+  site: "Otto" | "Flipkart" | "Rakuten";
+}
+
+/**
+ * OTTO (DE) arama sayfası (Jina Markdown).
+ *
+ * Ölçülen kart düzeni (tek ürün = ardışık satır bloğu):
+ *   `[](https://www.otto.de/p/<slug>-S08AV0LJ/)`
+ *   `![Image 6: Vinsun Isolierflasche …](https://i.otto.de/i/otto/…?$responsive_ft2$)`
+ *   `Vinsun Isolierflasche …`   ← görünür başlık
+ *   `(24)`                       ← değerlendirme SAYISI
+ *   `ab 27,99 €`                  ← „ab“ = en düşük varyant fiyatı
+ * Başlık görselin `alt` metnindedir (link metni BOŞTUR — ölçüldü). Puan DEĞERİ
+ * listede sayı olarak yoktur: `rating` `null` kalır (yıldızlar görseldir).
+ */
+export function parseOtto(md: string): LocalReaderRow[] {
+  const out: LocalReaderRow[] = [];
+  const seen = new Set<string>();
+  const lines = String(md ?? "").split("\n");
+  const cardLink = /\]\((https:\/\/www\.otto\.de\/p\/[^)\s"]+)\)/;
+  for (let i = 0; i < lines.length; i += 1) {
+    const link = cardLink.exec(lines[i]);
+    if (!link || !lines[i].trimStart().startsWith("[")) continue;
+    const url = link[1];
+    if (seen.has(url)) continue;
+    const body: string[] = [lines[i]];
+    for (let j = i + 1; j < Math.min(lines.length, i + 18); j += 1) {
+      if (cardLink.test(lines[j])) break;
+      body.push(lines[j]);
+    }
+    const text = body.join("\n");
+    const img = /!\[Image \d+:\s*([^\]]{6,240})\]\((https:\/\/i\.otto\.de\/[^)\s]+)\)/.exec(text);
+    const title = cleanTitle(img?.[1] ?? "");
+    if (title.length < 6) continue;
+    const price = /(?:ab\s*)?([0-9][0-9.,]*)\s*€/.exec(text);
+    const count = /\((\d{1,6})\)/.exec(text);
+    seen.add(url);
+    out.push({
+      title,
+      url,
+      imageUrl: img?.[2] ?? "",
+      price: price ? parseAmount(price[1]) : null,
+      currency: "EUR",
+      rating: null,
+      ratingCount: count ? Number(count[1]) : null,
+      site: "Otto",
+    });
+  }
+  return out;
+}
+
+/**
+ * FLIPKART (IN) arama sayfası (Jina Markdown).
+ *
+ * Ölçülen kart düzeni (tek satırda kart başlığı, ardından ayrı satırlarda meta):
+ *   `[![Image 4: cello Lifestyle …](https://rukminim2.flixcart.com/image/…)]
+ *     (https://www.flipkart.com/<slug>/p/itmd7cfe73d848b1?pid=…)`
+ *   `4.2![Image 5](blob:…)`  ← puan
+ *   `(59,871)`                ← değerlendirme sayısı
+ *   `[₹579 ₹809 28% off](url)` ← BAŞTAKİ ₹ GÜNCEL fiyat, sonraki liste fiyatı
+ *
+ * DÜRÜSTLÜK: yalnız teklif fiyatı (ilk `₹`) alınır; liste/indirim tutarı fiyat
+ * sayılmaz. Görsel `blob:` adresleri (tarayıcı içi) ATILIR.
+ */
+export function parseFlipkart(md: string): LocalReaderRow[] {
+  const out: LocalReaderRow[] = [];
+  const seen = new Set<string>();
+  const lines = String(md ?? "").split("\n");
+  const card =
+    /\[\s*!\[Image \d+:\s*([^\]]{6,240})\]\((https:\/\/rukminim[0-9]*\.flixcart\.com\/[^)\s]+)\)\]\((https:\/\/www\.flipkart\.com\/[^)\s"]+\/p\/itm[A-Za-z0-9]+[^)\s"]*)\)/;
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = card.exec(lines[i]);
+    if (!match) continue;
+    const url = match[3].split("?")[0];
+    if (seen.has(url)) continue;
+    const title = cleanTitle(match[1]).replace(/[.…]+$/, "").trim();
+    if (title.length < 6) continue;
+    const body: string[] = [];
+    for (let j = i + 1; j < Math.min(lines.length, i + 22); j += 1) {
+      if (card.test(lines[j])) break;
+      body.push(lines[j]);
+    }
+    const text = body.join("\n");
+    const offer = /\[₹\s?([0-9][0-9,]*)/.exec(text);
+    const rating = /(?:^|\n)\s*([0-5]\.[0-9])\s*(?:!|\[Image)/.exec(text);
+    const count = /\(([0-9][0-9,]{0,12})\)/.exec(text);
+    seen.add(url);
+    out.push({
+      title,
+      url,
+      imageUrl: match[2],
+      price: offer ? parseAmount(offer[1]) : null,
+      currency: "INR",
+      rating: rating ? Math.min(5, Number(rating[1])) : null,
+      ratingCount: count ? Number(count[1].replace(/,/g, "")) : null,
+      site: "Flipkart",
+    });
+  }
+  return out;
+}
+
+/**
+ * RAKUTEN ICHIBA (JP) arama sayfası (Jina Markdown).
+ *
+ * Ölçülen kart düzeni:
+ *   `[![Image 13: TERMOS サーモス …](https://tshop.r10s.jp/…)](https://item.rakuten.co.jp/<shop>/<item>/)`
+ *   … (kısa boşluk) …
+ *   `## [TERMOS サーモス …](https://item.rakuten.co.jp/<shop>/<item>/ "TERMOS …")`
+ *   `4,180 円`
+ *
+ * DÜRÜSTLÜK: `もっと見る`/お気に入り satırları metin sayılır ama fiyat olarak
+ * OKUNMAZ (`円` aranır). Puan listede sayı olarak gelmediği için `null` kalır.
+ * Aynı ürün `item.rakuten.co.jp/<shop>/<item>` adresiyle tekilleştirilir.
+ */
+export function parseRakuten(md: string): LocalReaderRow[] {
+  const out: LocalReaderRow[] = [];
+  const seen = new Set<string>();
+  const lines = String(md ?? "").split("\n");
+  const card =
+    /\[\s*!\[Image \d+:\s*([^\]]{4,240})\]\((https:\/\/tshop\.r10s\.jp\/[^)\s]+)\)\]\((https:\/\/item\.rakuten\.co\.jp\/[^)\s"]+)\)/;
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = card.exec(lines[i]);
+    if (!match) continue;
+    const url = match[3];
+    if (seen.has(url)) continue;
+    const title = cleanTitle(match[1]);
+    if (title.length < 4) continue;
+    const body: string[] = [];
+    for (let j = i + 1; j < Math.min(lines.length, i + 30); j += 1) {
+      if (card.test(lines[j])) break;
+      body.push(lines[j]);
+    }
+    const text = body.join("\n");
+    const price = /([0-9][0-9,]*)\s*円/.exec(text);
+    const ratingCount = /([0-9][0-9,]*)\s*件のレビュー/.exec(text);
+    seen.add(url);
+    out.push({
+      title,
+      url,
+      imageUrl: match[2],
+      price: price ? parseAmount(price[1]) : null,
+      currency: "JPY",
+      rating: null,
+      ratingCount: ratingCount ? Number(ratingCount[1].replace(/,/g, "")) : null,
+      site: "Rakuten",
+    });
+  }
+  return out;
+}
+
 /* ------------------------------------------------- OKUMA GÜVENİLİRLİĞİ VE KOTA */
 
 /**
@@ -722,6 +999,10 @@ export function readerHealth(now: number = Date.now()): {
   searchesLeftEstimated: number;
   /** Anahtarsız (ücretsiz katman) okumalar — anahtar yanlış adla eklenmişse buradan anlaşılır. */
   anonymous: { reads: number; failed: number; tokensEstimated: number };
+  /** Jina engellediğinde devreye giren alternatif okuma sağlayıcıları. */
+  alternates: { id: AltProvider; configured: boolean; reads: number; failed: number }[];
+  /** Ülke başına arama maliyeti (ölçülmüş sayfa boyutlarından). */
+  plan: { country: string; tokensPerSearch: number; sources: string[] }[];
   perKey: { slot: number; ok: number; failed: number; tokensEstimated: number; cooling: boolean }[];
   sources: Record<string, SourceStat>;
 } {
@@ -770,6 +1051,19 @@ export function readerHealth(now: number = Date.now()): {
       failed: anonymous.failed,
       tokensEstimated: Math.round(anonymous.chars / CHARS_PER_TOKEN),
     },
+    alternates: (["firecrawl", "scrapingbee"] as const).map((id) => ({
+      id,
+      configured: altReaderKeys().some((entry) => entry.id === id),
+      reads: altStats[id].reads,
+      failed: altStats[id].failed,
+    })),
+    // ÜLKE-KAYNAK MATRİSİ: "bu ülkede bir arama kaç token?" — kotayı ülkeye göre
+    // planlamanın tek kaynağı (rapor P0-4).
+    plan: GLOBAL_SEARCH_COUNTRIES.map((country) => ({
+      country,
+      tokensPerSearch: readerTokensPerSearch(country),
+      sources: readerPlanFor(country).map((source) => source.id),
+    })),
     perKey,
     sources: Object.fromEntries(sourceStats),
   };
@@ -783,6 +1077,8 @@ export function resetReaderHealth(): void {
   anonymous.reads = 0;
   anonymous.failed = 0;
   anonymous.chars = 0;
+  altStats.firecrawl = { reads: 0, failed: 0 };
+  altStats.scrapingbee = { reads: 0, failed: 0 };
   jinaCursor = 0;
 }
 
@@ -806,6 +1102,104 @@ class ReaderBlockedError extends ReaderHttpError {
   constructor() {
     super(403);
   }
+}
+
+/* ══════════════ ALTERNATİF OKUMA SAĞLAYICILARI (ücretsiz katman) ══════════════
+ *
+ * NEDEN (rapor P1-8 / P2-13): bütün ürün okuması Jina'ya bağlıydı; kotası dolarsa
+ * ya da bir site Jina üzerinden engellenirse hat ürün satırı üretemez. Bu blok
+ * ikinci ve üçüncü bir OKUMA yolunu devreye alır — ikisi de ücretsiz katmanı olan
+ * servisler ve ANAHTAR YOKSA hiç çağrılmaz (davranış değişmez):
+ *   • Firecrawl   → `POST https://api.firecrawl.dev/v2/scrape` (markdown)
+ *   • ScrapingBee → `GET  https://app.scrapingbee.com/api/v1/?url=…&return_page_markdown=true`
+ *
+ * SIRA: önce Jina (anahtarlı, sonra anahtarsız) → sonra bu sağlayıcılar. Böylece
+ * ücretsiz kota ilk sırada harcanır; ağır yol yalnız GEREKTİĞİNDE çalışır.
+ */
+export type AltProvider = "firecrawl" | "scrapingbee";
+
+const ALT_KEY_NAMES: Readonly<Record<AltProvider, readonly string[]>> = {
+  firecrawl: ["FIRECRAWL_API_KEY", "FIRECRAWL_KEY"],
+  scrapingbee: ["SCRAPINGBEE_API_KEY", "SCRAPING_BEE_API_KEY"],
+};
+
+const altStats: Record<AltProvider, { reads: number; failed: number }> = {
+  firecrawl: { reads: 0, failed: 0 },
+  scrapingbee: { reads: 0, failed: 0 },
+};
+
+/** Hangi alternatif sağlayıcılar TANIMLI (anahtar değeri dışarı verilmez). */
+export function altReaderKeys(
+  env: Record<string, string | undefined> = process.env,
+): { id: AltProvider; key: string }[] {
+  const out: { id: AltProvider; key: string }[] = [];
+  for (const id of ["firecrawl", "scrapingbee"] as const) {
+    for (const name of ALT_KEY_NAMES[id]) {
+      const value = (env[name] ?? "").trim();
+      if (value) {
+        out.push({ id, key: value });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+async function viaFirecrawl(url: string, key: string, timeoutMs: number): Promise<string> {
+  const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: false }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new ReaderHttpError(res.status);
+  const json = (await res.json().catch(() => null)) as {
+    data?: { markdown?: unknown; content?: unknown };
+    markdown?: unknown;
+  } | null;
+  const markdown = json?.data?.markdown ?? json?.markdown ?? json?.data?.content;
+  if (typeof markdown !== "string" || looksBlocked(markdown)) throw new ReaderBlockedError();
+  return markdown;
+}
+
+async function viaScrapingBee(url: string, key: string, timeoutMs: number): Promise<string> {
+  const target = new URL("https://app.scrapingbee.com/api/v1/");
+  target.searchParams.set("api_key", key);
+  target.searchParams.set("url", url);
+  target.searchParams.set("return_page_markdown", "true");
+  const res = await fetch(target.toString(), { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new ReaderHttpError(res.status);
+  const text = await res.text();
+  if (looksBlocked(text)) throw new ReaderBlockedError();
+  return text;
+}
+
+/**
+ * SON SAVUNMA: alternatif sağlayıcılarla okuma. Anahtar yoksa `null` döner ve
+ * HİÇ AĞ ÇAĞRISI yapılmaz — davranış eski hâline döner.
+ */
+async function readViaAlternates(
+  url: string,
+  timeoutMs: number,
+): Promise<{ text: string; provider: AltProvider } | null> {
+  for (const { id, key } of altReaderKeys()) {
+    try {
+      const text =
+        id === "firecrawl"
+          ? await viaFirecrawl(url, key, timeoutMs)
+          : await viaScrapingBee(url, key, timeoutMs);
+      altStats[id].reads += 1;
+      circuitRecord(url, true);
+      console.warn(`[discovery] ${hostOf(url)} Jina'dan okunamadı; ${id} ile okundu`);
+      return { text, provider: id };
+    } catch (err) {
+      altStats[id].failed += 1;
+      console.warn(
+        `[discovery] ${id} okuması başarısız: ${String(err instanceof Error ? err.message : err).slice(0, 80)}`,
+      );
+    }
+  }
+  return null;
 }
 
 /**
@@ -891,12 +1285,19 @@ export async function readPage(
   if (keys.length > 0 && sawAuthFailure) {
     try {
       const text = await fetchRead(url, timeoutMs, engine, "");
+      noteKeyResult(-1, true, null, text.length);
       circuitRecord(url, true);
       return text;
     } catch (err) {
       lastError = err;
+      noteKeyResult(-1, false, statusOf(err));
     }
   }
+  // SON SAVUNMA 2: alternatif sağlayıcı (Firecrawl/ScrapingBee). ÜRÜN SATIRI
+  // KAYBETMEMEK için: buraya düşen istek "kaynak bozuk" değil, "Jina bu sayfayı
+  // ver(e)medi" demektir ve o sayfanın satırları sessizce yok olurdu.
+  const alternate = await readViaAlternates(url, timeoutMs);
+  if (alternate) return alternate.text;
   circuitRecord(url, false);
   throw lastError instanceof Error ? lastError : new Error("reader failed");
 }
@@ -1282,3 +1683,197 @@ export async function scrapeNewegg(niche: string): Promise<RawProduct[]> {
     await cacheSet(key, "newegg-reader:v1", products, CACHE_TTL_MS).catch(() => {});
   return products;
 }
+
+/* ══════════════ YEREL GLOBAL OKUYUCULAR (Otto / Flipkart / Rakuten) ══════════
+ *
+ * NEDEN (ölçülen gerçek, 2026-10-12, hepsi Jina `direct` motoru):
+ *   • Otto (DE)     65.330 karakter / 115 ürün linki / 30 fiyat  → okunabilir
+ *   • Flipkart (IN) 91.000 karakter /  45 ürün linki / 85 fiyat  → okunabilir
+ *   • Rakuten (JP)  62.432 karakter /  45 ürün linki / 156 fiyat → okunabilir
+ * Buna karşılık Amazon (US/DE), Walmart, eBay, Etsy, Trendyol, Argos, Cdiscount,
+ * Mercado Livre, Allegro ve Bol AYNI ölçümde 82-1.428 karakter döndürdü: engelli.
+ * Yani "global" hedefinde bugün okunabilen üç pazar yeri bunlardır ve her biri
+ * ÜLKE KAPISIYLA çağrılır (Fransa aramasında Otto okumak kotayı boşa harcar).
+ *
+ * SAYFA BAŞINA TOKEN (ölçülen karakter/4): Otto ~16.300 · Flipkart ~22.800 ·
+ * Rakuten ~15.600. Her sitede TEK sayfa okunur — çok sayfa yerine çok ülke.
+ */
+export type LocalSite = "otto" | "flipkart" | "rakuten";
+
+type LocalSiteConfig = {
+  label: LocalReaderRow["site"];
+  source: string;
+  /** Bu okumanın ANLAMLI olduğu ülkeler (ISO). */
+  countries: readonly string[];
+  /** Ölçülen arama başına token (karakter/4). */
+  tokensPerSearch: number;
+  pageUrl: (encodedNiche: string) => string;
+  parse: (markdown: string) => LocalReaderRow[];
+};
+
+export const LOCAL_SITES: Readonly<Record<LocalSite, LocalSiteConfig>> = {
+  otto: {
+    label: "Otto",
+    source: "otto-reader",
+    countries: ["DE", "AT", "CH"],
+    tokensPerSearch: 16_300,
+    pageUrl: (q) => `https://www.otto.de/suche/${q}/`,
+    parse: parseOtto,
+  },
+  flipkart: {
+    label: "Flipkart",
+    source: "flipkart-reader",
+    countries: ["IN"],
+    tokensPerSearch: 22_800,
+    pageUrl: (q) => `https://www.flipkart.com/search?q=${q}`,
+    parse: parseFlipkart,
+  },
+  rakuten: {
+    label: "Rakuten",
+    source: "rakuten-reader",
+    countries: ["JP"],
+    tokensPerSearch: 15_600,
+    pageUrl: (q) => `https://search.rakuten.co.jp/search/mall/${q}/`,
+    parse: parseRakuten,
+  },
+};
+
+/**
+ * Bir yerel pazaryerini okur ve ÖLÇÜLMÜŞ alanları ham ürün satırına çevirir.
+ *
+ * KURALLAR (diğer okuyucularla aynı): fiyatsız/görselsiz satır havuza girmez,
+ * sebep sayılır; fiyat GERÇEK kurla USD'ye çevrilir (`toUsd`); kur alınamazsa
+ * `priceUsd` `null` olur ve satır bu yüzden düşer (uydurma kur YOK).
+ */
+export async function scrapeLocalMarketplace(
+  site: LocalSite,
+  niche: string,
+): Promise<RawProduct[]> {
+  const config = LOCAL_SITES[site];
+  const q = String(niche ?? "")
+    .trim()
+    .slice(0, 80);
+  if (!q) return [];
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const key = await cacheKey(`${config.source}:v1`, [q.toLocaleLowerCase("tr-TR")]);
+  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
+  if (hit && hit.length) return hit;
+
+  const url = config.pageUrl(encodeURIComponent(q));
+  const settled = await readPageWithEscalation(url, PER_SITE_TIMEOUT_MS)
+    .then(({ text }) => config.parse(text))
+    .catch((err) => {
+      console.warn(`[discovery] ${config.source} okunamadı: ${String(err).slice(0, 100)}`);
+      return [] as LocalReaderRow[];
+    });
+  noteSourcePage(config.label, settled.length);
+  if (settled.length === 0) {
+    console.warn(`[discovery] ${config.source} boş sayfa: ${url.slice(0, 70)}`);
+  }
+
+  const { toUsd } = await import("./fx-rates.server");
+  const stamp = priceStamp();
+  const products: RawProduct[] = [];
+  for (const row of settled) {
+    if (row.price === null) {
+      noteSourceDrop(config.label, "no_price");
+      continue;
+    }
+    if (!row.imageUrl) {
+      noteSourceDrop(config.label, "no_image");
+      continue;
+    }
+    const usd = await toUsd(row.price, row.currency);
+    if (usd === null) {
+      // Kur alınamadı: fiyatı USD sanmak uydurma olurdu, satır havuza girmez.
+      noteSourceDrop(config.label, "no_price");
+      continue;
+    }
+    noteSourceKept(config.label, 1);
+    products.push({
+      title: row.title,
+      brand: "",
+      seller: config.label,
+      priceUsd: usd,
+      rating: row.rating,
+      ratingCount: row.ratingCount,
+      inStock: true,
+      source: config.source,
+      url: row.url,
+      imageUrl: row.imageUrl,
+      salesVolume: null,
+      notes: [
+        config.label,
+        `${row.price.toLocaleString("tr-TR")} ${row.currency}` + ` ≈ $${usd}`,
+        row.rating !== null ? `puan ${row.rating}/5` : "",
+        row.ratingCount !== null && row.ratingCount > 0
+          ? `${row.ratingCount.toLocaleString("tr-TR")} değerlendirme`
+          : "",
+        stamp,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+  }
+  if (products.length) {
+    await cacheSet(key, `${config.source}:v1`, products, CACHE_TTL_MS).catch(() => {});
+  }
+  return products;
+}
+
+/* ══════════════ ÜLKE-KAYNAK MATRİSİ VE TOKEN BÜTÇESİ (P0-4) ══════════════
+ *
+ * NEDEN: "global site" demek her aramada TÜM okuyucuları koşmak değildir. Ölçülen
+ * sayfa boyutlarıyla arama maliyeti şöyle: TR 57K · US 57K (AE+Newegg) ·
+ * DE 33K (AE+Otto) · IN 40K (AE+Flipkart) · JP 33K (AE+Rakuten) token. Yani
+ * ülkeye göre okuma yapmak, aynı bütçeyle 2-3 KAT fazla arama demektir.
+ * Bu tablo hem kaynak seçimini kapılar hem de /health'te bütçeyi görünür kılar.
+ */
+export const READER_SOURCES: readonly {
+  id: string;
+  label: string;
+  /** `*` = ülkeden bağımsız. */
+  countries: readonly string[];
+  /** Ölçülen arama başına token. */
+  tokensPerSearch: number;
+}[] = [
+  { id: "tr-reader", label: "Hepsiburada + n11", countries: ["TR"], tokensPerSearch: 57_000 },
+  { id: "aliexpress-reader", label: "AliExpress", countries: ["*"], tokensPerSearch: 17_000 },
+  {
+    id: "newegg-reader",
+    label: "Newegg",
+    countries: ["US", "CA", "GB", "AU", "NZ", "IE"],
+    tokensPerSearch: 40_000,
+  },
+  { id: "otto-reader", label: "Otto", countries: ["DE", "AT", "CH"], tokensPerSearch: 16_300 },
+  { id: "flipkart-reader", label: "Flipkart", countries: ["IN"], tokensPerSearch: 22_800 },
+  { id: "rakuten-reader", label: "Rakuten", countries: ["JP"], tokensPerSearch: 15_600 },
+];
+
+/** Ülke kodunu normalize eder (boş/„global“ → ""). */
+export function normalizeCountry(country: string): string {
+  return String(country ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+/** Bu ülke için KOŞACAK okuyucular. Ülke bilinmiyorsa yalnız `*` kaynakları. */
+export function readerPlanFor(country: string): {
+  id: string;
+  label: string;
+  tokensPerSearch: number;
+}[] {
+  const code = normalizeCountry(country);
+  return READER_SOURCES.filter((source) =>
+    code ? source.countries.includes("*") || source.countries.includes(code) : source.countries.includes("*"),
+  ).map(({ id, label, tokensPerSearch }) => ({ id, label, tokensPerSearch }));
+}
+
+/** Bu ülkedeki bir aramanın TAHMİNİ token maliyeti (ölçülmüş sayfa boyutlarından). */
+export function readerTokensPerSearch(country: string): number {
+  return readerPlanFor(country).reduce((total, source) => total + source.tokensPerSearch, 0);
+}
+
+/** `GLOBAL` seçildiğinde (ülke kodları dışı) koşan kaynakların ortak zemini. */
+export const GLOBAL_SEARCH_COUNTRIES = ["US", "TR", "DE", "IN", "JP", "GB", "FR", "BR"] as const;

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jinaEnvKeys } from "./ai-keys.server";
 import {
   CHARS_PER_TOKEN,
+  altReaderKeys,
   DEFAULT_KEY_TOKEN_BUDGET,
   DEFAULT_TR_PAGES,
   KEY_COOLDOWN_MS,
@@ -280,6 +281,79 @@ describe("readPageWithEscalation — motor yükseltmesi", () => {
     const { engine } = await readPageWithEscalation("https://www.n11.com/arama?q=x", 5_000);
     expect(engine).toBe("direct");
     expect(engines).toEqual(["direct"]);
+  });
+});
+
+describe("alternatif okuma sağlayıcıları — Jina düşerse ürün satırı kaybolmasın", () => {
+  const jinaBlocked = () =>
+    ({ ok: true, status: 200, text: async () => "Attention Required! | Cloudflare" }) as unknown as Response;
+
+  it("anahtar YOKKEN hiçbir alternatif sağlayıcı çağrılmaz (davranış değişmez)", async () => {
+    clearJinaEnv();
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return jinaBlocked();
+    });
+    await expect(readPage("https://www.n11.com/arama?q=x", 5_000)).rejects.toThrow();
+    expect(calls.every((u) => u.startsWith("https://r.jina.ai/"))).toBe(true);
+    expect(calls.length).toBe(1);
+  });
+
+  it("Firecrawl anahtarı varsa engellenen sayfa ONDAN okunur ve kanıtı sayılır", async () => {
+    clearJinaEnv();
+    process.env.FIRECRAWL_API_KEY = "fc-test";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push(String(url));
+      if (String(url).includes("firecrawl")) {
+        // Sözleşme: POST /v2/scrape → { success, data: { markdown } }
+        expect(init?.method).toBe("POST");
+        expect(String((init?.headers as Record<string, string>)?.Authorization)).toBe("Bearer fc-test");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { markdown: "- ürün kartı ".repeat(400) } }),
+        } as unknown as Response;
+      }
+      return jinaBlocked();
+    });
+
+    const text = await readPage("https://www.n11.com/arama?q=x", 5_000);
+    expect(text).toContain("ürün kartı");
+    expect(calls[0]?.startsWith("https://r.jina.ai/")).toBe(true);
+    const fc = calls.find((u) => u.includes("firecrawl"));
+    expect(fc).toContain("api.firecrawl.dev/v2/scrape");
+    const alt = readerHealth().alternates.find((a) => a.id === "firecrawl");
+    expect(alt).toMatchObject({ configured: true, reads: 1, failed: 0 });
+    delete process.env.FIRECRAWL_API_KEY;
+  });
+
+  it("Jina ve alternatifler birlikte düşerse hata yükselir (sessiz boş liste yok)", async () => {
+    clearJinaEnv();
+    process.env.SCRAPINGBEE_API_KEY = "sb-test";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      if (String(url).includes("scrapingbee")) {
+        return { ok: false, status: 500, text: async () => "" } as unknown as Response;
+      }
+      return jinaBlocked();
+    });
+
+    await expect(readPage("https://www.n11.com/arama?q=x", 5_000)).rejects.toThrow();
+    expect(calls.some((u) => u.includes("scrapingbee"))).toBe(true);
+    const alt = readerHealth().alternates.find((a) => a.id === "scrapingbee");
+    expect(alt).toMatchObject({ configured: true, failed: 1 });
+    delete process.env.SCRAPINGBEE_API_KEY;
+  });
+
+  it("anahtar adı varyantları okunur (FIRECRAWL_KEY / SCRAPING_BEE_API_KEY)", () => {
+    expect(altReaderKeys({ FIRECRAWL_KEY: "a" }).map((k) => k.id)).toEqual(["firecrawl"]);
+    expect(altReaderKeys({ SCRAPING_BEE_API_KEY: "b" }).map((k) => k.id)).toEqual([
+      "scrapingbee",
+    ]);
+    expect(altReaderKeys({})).toEqual([]);
   });
 });
 

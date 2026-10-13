@@ -403,7 +403,9 @@ export async function runScrapeFilterStep(
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
-  const { buildShortlist, salvageShortlist } = await import("./product-discovery-shortlist.server");
+  const { buildShortlist, imageFillCapFor, salvageShortlist } = await import(
+    "./product-discovery-shortlist.server"
+  );
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
   const { products: raw, reports } = await runSources(niche, undefined, {
@@ -465,12 +467,26 @@ export async function runScrapeFilterStep(
     context: { nicheMomentumPct, nicheEngagement },
     perSource,
   } as const;
-  let built = buildShortlist(raw, { ...shortlistOptions, requireImage });
+  // GÖRSEL KITLIĞI DOLDURUCUSU (rapor P0-3): görsel kapısı açık kalır ama
+  // fotoğraflı satır hedefi doldurmazsa listenin en çok %20'si görselsiz
+  // satırlarla doldurulur. Ölçüm: HB sayfası 37 kart / 12 görselli → kapı tek
+  // başına ürün kaybını %68'e çıkarıyordu; kart görselsiz ürünü dürüstçe
+  // "görsel doğrulanamadı" diye gösterip görseli ürünün kendi sayfasından
+  // doğrulamaya çalışır.
+  let built = buildShortlist(raw, {
+    ...shortlistOptions,
+    requireImage,
+    imageFillCap: requireImage ? imageFillCapFor(topN) : 0,
+  });
   // Kapı listeyi boşalttıysa (ölçüm yanıltıcıysa) ürün kaybetmek yerine
   // kapıyı bırakırız: boş sonuç kullanıcıya yanlış bilgi verir, eksik görsel
   // yalnızca dürüst bir "doğrulanamadı" etiketi gösterir.
   if (requireImage && built.survivors.length === 0 && raw.length > 0) {
-    built = buildShortlist(raw, { ...shortlistOptions, requireImage: false });
+    built = buildShortlist(raw, {
+      ...shortlistOptions,
+      requireImage: false,
+      imageFillCap: imageFillCapFor(topN),
+    });
   }
   const stats = built.stats;
   let products = built.products;
@@ -500,6 +516,11 @@ export async function runScrapeFilterStep(
 
   const notes: string[] = [
     `Görsel kapısı: ${requireImage ? "açık" : "kapalı"} (havuzda ${imagedCount} fotoğraflı satır).`,
+    // Dürüstlük: listeye görselsiz satır girdiyse SÖYLENİR — aksi hâlde "kartta
+    // fotoğraf neden yok" sorusu kaynağı görünmeyen bir arızaya dönüşürdü.
+    stats.admittedMissingImage > 0
+      ? `Görsel kıtlığı: ${stats.admittedMissingImage} satır görselsiz alındı (görsel ürünün kendi sayfasından doğrulanmaya çalışılır).`
+      : "",
     `İlk aşama (saf kod): ${stats.inputCount} ham satır → ${survivors.length} ürün ` +
       `(${Buffer.byteLength(JSON.stringify(products), "utf8")} bayt, 7 alan).`,
     // HUNI + ELEME DÖKÜMÜ (§25): "hangi aşamada kaç ürün elendi" sayıyla görünür.
@@ -564,7 +585,9 @@ export async function runScrapeFilterStep(
     consensus: [],
     stats,
     next: survivors.length > 0 ? "gemini_shortlist" : "",
-    notes,
+    // Boş not satırları atılır: "görsel kıtlığı yoksa" boş dize üretiyor ve
+    // panelde boş satır olarak görünürdü.
+    notes: notes.filter(Boolean),
   };
 }
 

@@ -2007,6 +2007,14 @@ export const trReaderSource: ProductSource = {
 };
 
 /**
+ * Newegg'in ANLAMLI olduğu ülkeler — `product-discovery-reader.server.ts`
+ * içindeki `READER_SOURCES.newegg-reader` listesiyle AYNI olmak zorundadır
+ * (`reader-source-matrix.test.ts` bu eşitliği kilitler; iki yerde ayrı tutmak
+ * sessizce kapsam kaybettirebilirdi).
+ */
+const NEWEGG_COUNTRIES: readonly string[] = ["US", "CA", "GB", "AU", "NZ", "IE"];
+
+/**
  * ÜCRETSİZ GLOBAL PAZARYERİ OKUYUCU (AliExpress, Jina Reader üzerinden).
  *
  * NEDEN BU KADAR ÖNEMLİ (ölçülen gerçek, 2026-10-12, niş = "air fryer"/US):
@@ -2049,9 +2057,171 @@ export const neweggReaderSource: ProductSource = {
     return scrapeNewegg(niche);
   },
   async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
-    if (String(country).toUpperCase() === "TR") return [];
+    // ÜLKE KAPISI (rapor P0-4, ölçüm 2026-10-12): Newegg bir ABD perakendecisidir
+    // ve okuma ~40K token/arama harcar. Eskiden yalnız TR kapatılıydı; Almanya
+    // aramasında da koşuyordu. Artık liste AÇIK: katalog yalnız bu ülkelerde
+    // anlamlıdır, diğerlerinde bütçe yerel kaynağa kalır.
+    const code = String(country ?? "")
+      .trim()
+      .toUpperCase();
+    if (code && !NEWEGG_COUNTRIES.includes(code)) return [];
     const { scrapeNewegg } = await import("./product-discovery-reader.server");
     return scrapeNewegg(niche);
+  },
+};
+
+/* ══════════════════ YENİ YEREL OKUYUCULAR (rapor P0-1 / P0-4) ══════════════════
+ *
+ * ÖLÇÜM (2026-10-12, Jina `direct` motoru, niş `thermos`):
+ *   Otto (DE)     65.330 karakter / ürün linki 115 / fiyat 30   → okunur
+ *   Flipkart (IN) 91.000 karakter / ürün linki  45 / fiyat 85   → okunur
+ *   Rakuten (JP)  62.432 karakter / ürün linki  45 / fiyat 156  → okunur
+ * Amazon (US/DE), Walmart, eBay, Etsy, Trendyol, Argos, Cdiscount, Mercado Livre,
+ * Allegro ve Bol aynı ölçümde 82-1.428 karakter döndürdü: engelli → bu yüzden
+ * ÜRETİM kaynağı olarak eklenmedi, yalnız alternatif okuma yolu (Firecrawl /
+ * ScrapingBee) ile denenebilir.
+ *
+ * ÜLKE KAPISI ZORUNLU: bu üç site kendi ülkelerinin kataloğudur. Kapı listeleri
+ * `LOCAL_SITES` (okuyucu modülü) ile AYNI olmak zorundadır; `reader-source-matrix`
+ * testi eşitliği kilitler.
+ */
+const LOCAL_COUNTRY_GATES: Readonly<Record<"otto" | "flipkart" | "rakuten", readonly string[]>> = {
+  otto: ["DE", "AT", "CH"],
+  flipkart: ["IN"],
+  rakuten: ["JP"],
+};
+
+/** Tek bir yerel pazaryerini (Otto/Flipkart/Rakuten) ülke kapısıyla bağlar. */
+function localReaderSource(site: "otto" | "flipkart" | "rakuten"): ProductSource {
+  const countries = LOCAL_COUNTRY_GATES[site];
+  return {
+    name: `${site}-reader`,
+    timeoutMs: 9_500,
+    async scrape(niche: string): Promise<RawProduct[]> {
+      const { scrapeLocalMarketplace } = await import("./product-discovery-reader.server");
+      return scrapeLocalMarketplace(site, niche);
+    },
+    async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+      const code = String(country ?? "")
+        .trim()
+        .toUpperCase();
+      if (!countries.includes(code)) return [];
+      const { scrapeLocalMarketplace } = await import("./product-discovery-reader.server");
+      return scrapeLocalMarketplace(site, niche);
+    },
+  };
+}
+
+/** Almanya/Avusturya/İsviçre — gerçek € fiyatı, puan sayısı ve ürün görseli. */
+export const ottoReaderSource: ProductSource = localReaderSource("otto");
+/** Hindistan — gerçek ₹ fiyatı, puan ve görsel. */
+export const flipkartReaderSource: ProductSource = localReaderSource("flipkart");
+/** Japonya — gerçek ¥ fiyatı ve görsel. */
+export const rakutenReaderSource: ProductSource = localReaderSource("rakuten");
+
+/* ══════════════ BEST BUY PRODUCTS API (ücretsiz anahtar, rapor P1-8) ══════════
+ *
+ * NEDEN: engellenen pazar yerlerinin (Amazon/Walmart) yerini tutamaz ama ABD
+ * nişlerinde ÖLÇÜLMÜŞ kalite verir: ad, indirimli fiyat, liste fiyatı, GERÇEK
+ * kullanıcı puanı, değerlendirme sayısı, ürün görseli ve ürün adresi — hepsi tek
+ * istekte. Anahtar ücretsiz ve self-servis; ANAHTAR YOKSA hiç ağ çağrısı
+ * yapılmaz (hat anahtarsız aynen çalışır).
+ *
+ * Sözleşme: `https://api.bestbuy.com/v1/products(search="…")?format=json&show=…&apiKey=…`
+ */
+export const BESTBUY_COUNTRIES: readonly string[] = ["US", "CA"];
+
+export function bestBuyKey(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["BESTBUY_API_KEY", "BEST_BUY_API_KEY"]) {
+    const value = (env[name] ?? "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+/**
+ * Best Buy yanıtını ölçülmüş alanlara indirger (SAF — testte fixture ile çağrılır).
+ *
+ * DÜRÜSTLÜK: `salePrice` yoksa `regularPrice` kullanılır ve notta belirtilir;
+ * ikisi de yoksa satır havuza girmez (fiyatsız ürün "kazanan" olamaz). Puan 0 ise
+ * `null` yazılır — "0 puan" ölçüm değil, "hiç değerlendirme yok" demektir.
+ */
+export function parseBestBuyProducts(json: unknown): RawProduct[] {
+  const record = (json ?? {}) as { products?: unknown };
+  const rows = Array.isArray(record.products) ? record.products : [];
+  const out: RawProduct[] = [];
+  for (const raw of rows) {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    const title = String(p["name"] ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (title.length < 6) continue;
+    const sale = Number(p["salePrice"]);
+    const regular = Number(p["regularPrice"]);
+    const price = Number.isFinite(sale) && sale > 0 ? sale : Number.isFinite(regular) && regular > 0 ? regular : null;
+    if (price === null) continue;
+    const url = String(p["url"] ?? "").trim();
+    if (!url) continue;
+    const ratingRaw = Number(p["customerReviewAverage"]);
+    const countRaw = Number(p["customerReviewCount"]);
+    out.push({
+      title: title.slice(0, 160),
+      brand: String(p["manufacturer"] ?? "").trim(),
+      seller: "Best Buy",
+      priceUsd: price,
+      rating: Number.isFinite(ratingRaw) && ratingRaw > 0 ? Math.min(5, ratingRaw) : null,
+      ratingCount: Number.isFinite(countRaw) && countRaw > 0 ? countRaw : null,
+      inStock: true,
+      source: "bestbuy-api",
+      url,
+      imageUrl: String(p["image"] ?? "").trim(),
+      salesVolume: null,
+      notes: [
+        "Best Buy",
+        `$${price}`,
+        sale > 0 && Number.isFinite(regular) && regular > sale ? `liste $${regular}` : "",
+        Number.isFinite(ratingRaw) && ratingRaw > 0 ? `puan ${Math.round(ratingRaw * 10) / 10}/5` : "",
+        Number.isFinite(countRaw) && countRaw > 0 ? `${countRaw} değerlendirme` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+  }
+  return out;
+}
+
+/** Best Buy arama (anahtar yoksa `[]` — ağ çağrısı yapılmaz). */
+async function bestBuySearch(niche: string): Promise<RawProduct[]> {
+  const key = bestBuyKey();
+  if (!key) return [];
+  const q = String(niche ?? "")
+    .trim()
+    .slice(0, 80);
+  if (!q) return [];
+  const show =
+    "name,salePrice,regularPrice,customerReviewAverage,customerReviewCount,image,url,manufacturer";
+  const url =
+    `https://api.bestbuy.com/v1/products(search=${encodeURIComponent(q)})` +
+    `?format=json&show=${show}&pageSize=40&apiKey=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  if (!res.ok) return [];
+  return parseBestBuyProducts(await res.json().catch(() => null));
+}
+
+/** ABD/Kanada katalogu — ücretsiz anahtarla ölçülmüş fiyat + puan + görsel. */
+export const bestBuySource: ProductSource = {
+  name: "bestbuy-api",
+  timeoutMs: 9_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return bestBuySearch(niche);
+  },
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    const code = String(country ?? "")
+      .trim()
+      .toUpperCase();
+    if (code && !BESTBUY_COUNTRIES.includes(code)) return [];
+    return bestBuySearch(niche);
   },
 };
 
@@ -2060,8 +2230,16 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   trReaderSource,
   // ÜCRETSİZ gerçek GLOBAL ürün satırları (fiyat + satış adedi + görsel + link).
   aliExpressReaderSource,
-  // ÜCRETSİZ İKİNCİ global kaynak: marka + değerlendirme sayısı (TR'de kapalı).
+  // ÜCRETSİZ İKİNCİ global kaynak: marka + değerlendirme sayısı (yalnız ABD/CA/GB/AU/NZ/IE).
   neweggReaderSource,
+  // ÜLKEYE ÖZEL yerel pazaryerleri (ölçülmüş: okunabiliyorlar — bkz. yukarı).
+  // Her biri yalnız kendi ülkesinde koşar; başka ülkede 0 ağ çağrısı yapar.
+  ottoReaderSource,
+  flipkartReaderSource,
+  rakutenReaderSource,
+  // ÜCRETSİZ API (anahtarla): gerçek fiyat + GERÇEK kullanıcı puanı + görsel.
+  // Anahtar yoksa hiç çağrılmaz.
+  bestBuySource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,

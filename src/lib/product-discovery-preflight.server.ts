@@ -152,6 +152,31 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         "(her anahtar 10M token). Birden fazla anahtar arasında yük paylaşılır ve kota dolan anahtar soğumaya alınır.",
     },
     {
+      id: "reader_fallback",
+      label: "Yedek okuma sağlayıcısı (Firecrawl / ScrapingBee, isteğe bağlı)",
+      ok: set(env, "FIRECRAWL_API_KEY") || set(env, "SCRAPINGBEE_API_KEY"),
+      optional: true,
+      detail:
+        set(env, "FIRECRAWL_API_KEY") || set(env, "SCRAPINGBEE_API_KEY")
+          ? "tanımlı — Jina bir sayfayı veremediğinde (kota/engel) ürün satırı yedek okuyucudan gelir"
+          : "Yok: Jina engellediğinde o sayfanın ürün satırları atlanır (hat yine çalışır).",
+      fix:
+        "İsteğe bağlı — firecrawl.dev'den ücretsiz anahtar (1.000 kredi/ay) → FIRECRAWL_API_KEY, " +
+        "ya da scrapingbee.com (ücretsiz 1.000 kredi) → SCRAPINGBEE_API_KEY.",
+    },
+    {
+      id: "bestbuy",
+      label: "Best Buy katalog API'si (isteğe bağlı, ABD/CA)",
+      ok: set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY"),
+      optional: true,
+      detail:
+        set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")
+          ? "tanımlı — ABD nişlerinde gerçek fiyat + GERÇEK kullanıcı puanı + ürün görseli ekler"
+          : "Yok: ABD nişleri yalnız okuyucularla beslenir (Newegg + AliExpress).",
+      fix:
+        "İsteğe bağlı — developer.bestbuy.com'dan ücretsiz anahtar al, BESTBUY_API_KEY olarak ekle.",
+    },
+    {
       id: "evren",
       label: "EVREN ulusal YZ platformu (isteğe bağlı)",
       ok: evren.ready,

@@ -131,6 +131,16 @@ export type ShortlistStats = FilterStats & {
   rejectedPrice: number;
   /** Görsel URL'si olmayan satır. */
   rejectedMissingImage: number;
+  /**
+   * GÖRSELSİZ olduğu halde listeye ALINAN satır (görsel kıtlığı doldurucusu).
+   *
+   * NEDEN SAYILIR: ölçülen olgu — Hepsiburada sayfası 37 kart döndürüyor ama
+   * yalnız 12'sinde ürün görseli var; kapı bunların ~%68'ini düşürüyor. Görselsiz
+   * satırı vitrine koymak dürüsttür (kart "görsel doğrulanamadı" der ve görsel
+   * ürünün kendi sayfasından doğrulanmaya çalışılır) — ama KAÇ satırın böyle
+   * geldiği görünmezse "liste neden görselsiz?" sorusu cevapsız kalır.
+   */
+  admittedMissingImage: number;
   /** Marj tabanının altında kalan satır. */
   rejectedMargin: number;
   /** Ön skor tabanının altında kalan satır. */
@@ -152,6 +162,12 @@ export type ShortlistOptions = {
   minPreScore?: number;
   /** Görsel URL'si olmayan satırı ele. Varsayılan: evet. */
   requireImage?: boolean;
+  /**
+   * GÖRSEL KITLIĞI DOLDURUCUSU (rapor P0-3): görsel kapısı açıkken bile,
+   * fotoğraflı satır hedefin altında kalırsa `imageFillCap` kadar görselsiz satır
+   * listeye alınır. Varsayılan 0 = eski davranış (hiç görselsiz satır girmez).
+   */
+  imageFillCap?: number;
   /** Ham bayt bütçesi. */
   maxBytes?: number;
   /** Talep bağlamı — `filterAndPreRank` ile aynı. */
@@ -196,15 +212,22 @@ function shortlistId(p: NormalizedProduct): string {
  * patlatmamalıdır. Bu, kaydedilmemiş ham veriyle çalışmanın tek dürüst
  * yoludur — hatalı satırı at, geri kalanını işle.
  */
-function cleanRawRows(
+export function cleanRawRows(
   raw: readonly RawProduct[],
   requireImage: boolean,
   stats: Pick<
     ShortlistStats,
-    "rejectedInvalid" | "rejectedNotInStock" | "rejectedPrice" | "rejectedMissingImage"
+    | "rejectedInvalid"
+    | "rejectedNotInStock"
+    | "rejectedPrice"
+    | "rejectedMissingImage"
+    | "admittedMissingImage"
   >,
+  /** Görsel kıtlığı doldurucusunun üst sınırı (0 = kapalı). */
+  imageFillCap = 0,
 ): RawProduct[] {
   const clean: RawProduct[] = [];
+  const imageless: RawProduct[] = [];
   for (const row of raw) {
     const parsed = RawProductSchema.safeParse(row);
     if (!parsed.success) {
@@ -257,9 +280,22 @@ function cleanRawRows(
     // "görseli ne?" diye sorulduğunda cevap üretmek zorunda kalır.
     if (requireImage && parsed.data.imageUrl.trim() === "") {
       stats.rejectedMissingImage++;
+      // ELENMEZ, YEDEĞE alınır: fotoğraflı satır hedefi doldurmazsa bu satırlar
+      // listenin sonuna eklenir (aşağıdaki doldurucu). Ölçülen karşılığı: HB'nin
+      // 37 kartının 25'i görselsiz; hepsini atmak ürün kaybını %68'e çıkarıyordu.
+      imageless.push(parsed.data);
       continue;
     }
     clean.push(parsed.data);
+  }
+  // GÖRSEL KITLIĞI DOLDURUCUSU (rapor P0-3): yalnız `imageFillCap` kadar ve
+  // yalnız fotoğraflı satır yerine YETMEDİĞİNDE. Sıra korunur (kaynak sırası).
+  if (requireImage && imageFillCap > 0 && imageless.length > 0) {
+    const take = Math.min(imageFillCap, imageless.length);
+    for (const row of imageless.slice(0, take)) {
+      clean.push(row);
+      stats.admittedMissingImage++;
+    }
   }
   return clean;
 }
@@ -318,6 +354,20 @@ export function preferProductRows(rows: readonly RawProduct[], niche = ""): RawP
   return strong.length ? strong : products;
 }
 
+/**
+ * Görsel kıtlığı doldurucusunun politika tavanı: listenin en çok %20'si.
+ *
+ * NEDEN %20 ve neden tavan: doldurucunun amacı "liste boş kalmasın" değil,
+ * "kapı ürün kaybını kırpsın". Ölçülen havuzda (HB sayfası 37 kart / 12 görselli)
+ * sınırsız doldurucu, modelin gördüğü listenin yarısını görselsiz ürünle
+ * doldururdu; %20 hem 75'lik listede 15 satırlık gerçek bir kazanç sağlar hem de
+ * görselli ürünleri öne koyan sıralamayı bozmaz. Vitrin zaten görselsiz kartta
+ * "görsel doğrulanamadı" der (kart görseli ürünün KENDİ sayfasından doğrulanır).
+ */
+export function imageFillCapFor(limit: number): number {
+  return Math.max(1, Math.floor(Math.max(0, limit) * 0.2));
+}
+
 export function buildShortlist(
   raw: readonly RawProduct[],
   options: ShortlistOptions = {},
@@ -327,6 +377,7 @@ export function buildShortlist(
   const minPreScore = options.minPreScore ?? DEFAULT_MIN_PRE_SCORE;
   const maxBytes = options.maxBytes ?? LLM_SHORTLIST_MAX_BYTES;
   const requireImage = options.requireImage ?? true;
+  const imageFillCap = Math.max(0, Math.min(options.imageFillCap ?? 0, limit));
 
   const stats = {
     inputCount: raw.length,
@@ -334,6 +385,7 @@ export function buildShortlist(
     rejectedNotInStock: 0,
     rejectedPrice: 0,
     rejectedMissingImage: 0,
+    admittedMissingImage: 0,
     rejectedMargin: 0,
     rejectedScore: 0,
     truncatedForBudget: 0,
@@ -349,7 +401,10 @@ export function buildShortlist(
   };
 
   // 1) Temizle.
-  const clean = preferProductRows(cleanRawRows(raw, requireImage, stats), options.niche ?? "");
+  const clean = preferProductRows(
+    cleanRawRows(raw, requireImage, stats, imageFillCap),
+    options.niche ?? "",
+  );
 
   // 2) Puanla + süz + sırala. Üst sınırı `limit` verilir: 75'ten fazlası
   //    hiçbir zaman üretilmez, token bütçesi zaten burada kesiliyor.
