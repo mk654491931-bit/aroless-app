@@ -67,33 +67,59 @@ export type Database = {
       };
       affiliates: {
         Row: {
+          // 20261014000000_affiliate_program_v2.sql — başvuru detayları,
+          // şart kabulü ve yapılandırılmış ödeme bilgisi.
+          audience: string | null;
+          channels: string | null;
           commission_rate_pct: number;
           created_at: string;
+          payout_account_holder: string | null;
+          payout_iban: string | null;
           payout_method: string | null;
           payout_note: string | null;
+          payout_tax_id: string | null;
+          payout_wise_email: string | null;
+          social_handle: string | null;
           status: string;
+          terms_accepted_at: string | null;
           updated_at: string;
           user_id: string;
           verified_at: string | null;
           verified_by: string | null;
         };
         Insert: {
+          audience?: string | null;
+          channels?: string | null;
           commission_rate_pct?: number;
           created_at?: string;
+          payout_account_holder?: string | null;
+          payout_iban?: string | null;
           payout_method?: string | null;
           payout_note?: string | null;
+          payout_tax_id?: string | null;
+          payout_wise_email?: string | null;
+          social_handle?: string | null;
           status?: string;
+          terms_accepted_at?: string | null;
           updated_at?: string;
           user_id: string;
           verified_at?: string | null;
           verified_by?: string | null;
         };
         Update: {
+          audience?: string | null;
+          channels?: string | null;
           commission_rate_pct?: number;
           created_at?: string;
+          payout_account_holder?: string | null;
+          payout_iban?: string | null;
           payout_method?: string | null;
           payout_note?: string | null;
+          payout_tax_id?: string | null;
+          payout_wise_email?: string | null;
+          social_handle?: string | null;
           status?: string;
+          terms_accepted_at?: string | null;
           updated_at?: string;
           user_id?: string;
           verified_at?: string | null;
@@ -1213,9 +1239,15 @@ export type Database = {
         Args: never;
         Returns: {
           affiliate_id: string;
+          held_cents: number;
+          held_count: number;
           last_paid_at: string | null;
+          oldest_held_at: string | null;
+          oldest_payable_at: string | null;
           paid_cents: number;
           paid_count: number;
+          payable_cents: number;
+          payable_count: number;
           pending_cents: number;
           pending_count: number;
           reversed_cents: number;
@@ -1232,7 +1264,17 @@ export type Database = {
         };
         Returns: string;
       };
-      apply_for_affiliate: { Args: never; Returns: string };
+      // İki aşırı yükleme tek tipe sığdırılır: 4 argümanlı yeni sürüm ve
+      // 0 argümanlı eski sürüm. Eski çağrı `{}` gönderir (aşağıya bak).
+      apply_for_affiliate: {
+        Args: {
+          _audience?: string | null;
+          _channels?: string | null;
+          _social_handle?: string | null;
+          _terms_accepted?: boolean;
+        };
+        Returns: string;
+      };
       apply_subscription_credits: {
         Args: {
           _credits: number;
@@ -1292,6 +1334,28 @@ export type Database = {
         Returns: boolean;
       };
       is_admin_email: { Args: { _email: string }; Returns: boolean };
+      record_affiliate_commission: {
+        Args: {
+          _affiliate_id: string;
+          _amount_cents: number;
+          _source: string;
+          _subscription_id: string | null;
+          _tier: string;
+          _transaction_id: string;
+          _user_id: string;
+        };
+        Returns: string;
+      };
+      set_my_affiliate_payout: {
+        Args: {
+          _account_holder: string | null;
+          _iban: string | null;
+          _method: string;
+          _tax_id: string | null;
+          _wise_email: string | null;
+        };
+        Returns: string;
+      };
       verify_affiliate: {
         Args: {
           _admin_id: string;

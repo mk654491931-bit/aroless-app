@@ -22,6 +22,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { COMMISSION_MAX_MONTHS } from "./affiliate";
 
 /** Adı bilerek bozuk bırakılan, yeniden adlandırılmaması gereken dosya. */
 const LEGACY_MALFORMED = "20260827_100000_harden_admin_and_security.sql";
@@ -118,5 +119,50 @@ describe("supabase/migrations yeniden calistirilabilirligi", () => {
         /DROP POLICY IF EXISTS "admins_read_rate_limits"[\s\S]*CREATE POLICY "admins_read_rate_limits"/,
       );
     }
+  });
+});
+
+/**
+ * KOMİSYON PENCERESİ (12 AY) REGRESYON TESTİ.
+ *
+ * Ölçülen risk: komisyon satırını İKİ AYRI yol yazar
+ * (`process_paddle_event()` ve `record_affiliate_commission()`). Sınır yalnız
+ * birine gömülürse affiliate 12. aydan sonra da komisyon kazanmaya devam eder ve
+ * bu, gerçek para çıkışı olarak geri alınamaz. Bu test sınırın TEK yerde
+ * (BEFORE INSERT bekçisinde) durduğunu, mahsup edilen ayı saymadığını ve SQL
+ * sayısının `src/lib/affiliate.ts` (`COMMISSION_MAX_MONTHS`) ile AYNI olduğunu
+ * kilitler.
+ */
+describe("affiliate komisyon penceresi (max 12 ay)", () => {
+  const capFile = filenames.find((name) => name.includes("affiliate_commission_cap"));
+
+  it("pencere migration'i vardir ve adi gecerlidir", () => {
+    expect(capFile).toBeDefined();
+    expect(/^\d{14}_.+\.sql$/.test(capFile!)).toBe(true);
+  });
+
+  it("bekci TRIGGER'dir (komisyon yazan her yolu kapsar) ve yeniden calistirilabilir", () => {
+    const sql = readMigration(capFile!);
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.enforce_affiliate_commission_cap\(\)/);
+    expect(sql).toMatch(/BEFORE INSERT ON public\.affiliate_commissions/);
+    // Yeniden çalıştırma: trigger önce düşürülür (yoksa ikinci push patlar).
+    expect(sql).toMatch(
+      /DROP TRIGGER IF EXISTS enforce_affiliate_commission_cap ON public\.affiliate_commissions;[\s\S]*CREATE TRIGGER enforce_affiliate_commission_cap/,
+    );
+    // Mahsup edilen (iade) ay pencereyi tüketmez: gelir üretmemiştir.
+    expect(sql).toMatch(/status <> 'reversed'/);
+    // Pencere dolduğunda satır YAZILMAZ ve durum ayrı raporlanır.
+    expect(sql).toContain("RETURN NULL");
+    expect(sql).toContain("'cap_reached'");
+  });
+
+  it("SQL siniri TS sabitiyle AYNI (ayrisma sessizce yasanmaz)", () => {
+    const sql = readMigration(capFile!);
+    const literals = [...sql.matchAll(/_max_months\s+integer\s*:=\s*(\d+)\s*;/g)].map((m) =>
+      Number(m[1]),
+    );
+    // Hem trigger hem `record_affiliate_commission()` aynı sayıyı taşımalı.
+    expect(literals.length).toBeGreaterThanOrEqual(2);
+    for (const value of literals) expect(value).toBe(COMMISSION_MAX_MONTHS);
   });
 });

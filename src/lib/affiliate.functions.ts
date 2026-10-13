@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  COMMISSION_MAX_MONTHS,
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_PAYOUT_CENTS,
   isAffiliateStatus,
@@ -12,6 +13,20 @@ import {
   type CommissionStatus,
   type PayoutMethod,
 } from "@/lib/affiliate";
+import {
+  buildPayoutRunCsv,
+  isValidIban,
+  maskIban,
+  nextPayoutUnlockAt,
+  PAYOUT_HOLD_DAYS,
+  payoutProfileState,
+  payoutRunSummary,
+  splitCommissionsByHold,
+  type CommissionRow,
+  type PayoutProfile,
+  type PayoutProfileState,
+  type PayoutRunRow,
+} from "@/lib/affiliate-payout";
 import {
   buildAdminPromoUsers,
   myPromoPerformance,
@@ -25,6 +40,13 @@ import { adminOrUserClient, missingServiceRoleError } from "@/lib/service-client
 function forbidden(): Error & { statusCode: number } {
   const err = new Error("Forbidden") as Error & { statusCode: number };
   err.statusCode = 403;
+  return err;
+}
+
+/** 4xx (validation/admission) hatası — sunucu hatası değil, kullanıcı girdisi. */
+function badRequest(message: string, statusCode = 400): Error & { statusCode: number } {
+  const err = new Error(message) as Error & { statusCode: number };
+  err.statusCode = statusCode;
   return err;
 }
 
@@ -52,18 +74,40 @@ export type AffiliateSummary = {
   referral_code: string;
   /** Affiliate'in SAHİP olduğu promo kodu (varsa) — paylaşacağı kod. */
   promo_code: string | null;
-  /** Toplam kazanç (pending + paid; reversed hariç). */
+  /** Toplam kazanç (ödenmemiş + ödenmiş; mahsup hariç). */
   earned_cents: number;
-  /** Henüz ödenmemiş birikim. */
+  /** Ödenmemiş TOPLAM birikim (ödenebilir + beklemede). */
   pending_cents: number;
+  /** Bekleme süresi (30 gün) dolmuş, ödenmeye hazır birikim. */
+  payable_cents: number;
+  /** Henüz bekleme süresi dolmamış birikim (ödeme yapılmaz). */
+  held_cents: number;
+  /** Beklemedeki bakiyenin ödenebilir olacağı tarih (yoksa null). */
+  next_unlock_at: string | null;
   /** Şimdiye kadar ödenmiş toplam. */
   paid_cents: number;
+  /**
+   * KOMİSYON PENCERESİ: bir müşteri için komisyon en fazla bu kadar ay yazılır
+   * (`COMMISSION_MAX_MONTHS`, ürün kararı: 12). Müşteri kaç ay ücretli kaldıysa
+   * o kadar; 12 ay dolunca yeni komisyon doğmaz.
+   */
+  commission_max_months: number;
   /** Ödeme eşiği (varsayılan $75). */
   min_payout_cents: number;
-  /** pending >= eşik mi? (ödemeye hazır) */
+  /** ÖDENEBİLİR birikim >= eşik mi? (ödemeye hazır) */
   payout_eligible: boolean;
-  /** Eşiğe kalan tutar. */
+  /** Eşiğe kalan tutar (ödenebilir bakiyeye göre). */
   payout_remaining_cents: number;
+  /** Kayıtlı ödeme bilgisi (maskeli) — affiliate kendi bilgisini doğrular. */
+  payout: {
+    method: PayoutMethod | null;
+    account_holder: string | null;
+    iban_masked: string | null;
+    wise_email: string | null;
+    tax_id_set: boolean;
+    ready: boolean;
+    missing: string[];
+  };
   /** Komisyon yazan (mahsup edilmemiş) ödeme sayısı — TÜM geçmiş. */
   paid_transactions: number;
   /**
@@ -97,7 +141,10 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
     const [affiliateRes, profileRes, commissionsRes, ownedCodeRes, totals] = await Promise.all([
       client
         .from("affiliates")
-        .select("user_id, status, commission_rate_pct, verified_by, verified_at, created_at")
+        .select(
+          "user_id, status, commission_rate_pct, verified_by, verified_at, created_at, " +
+            "payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
+        )
         .eq("user_id", uid)
         .maybeSingle(),
       client.from("profiles").select("referral_code").eq("id", uid).maybeSingle(),
@@ -122,8 +169,24 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
 
     const pendingCents = totals.pendingCents;
     const paidCents = totals.paidCents;
-    const eligibility = payoutEligibility(pendingCents);
+    // EŞİK ÖDENEBİLİR bakiyeye göre değerlendirilir: bekleme süresindeki para
+    // ödenemez, dolayısıyla "hazır" göstergesi yanıltıcı olmamalıdır.
+    const eligibility = payoutEligibility(totals.payableCents);
     const ownedCode = (ownedCodeRes.data as { code?: string | null } | null)?.code ?? null;
+
+    const payoutRow = (row ?? {}) as unknown as Record<string, unknown>;
+    const profileInput: PayoutProfile = {
+      method: (payoutRow["payout_method"] as string | null) ?? null,
+      accountHolder: (payoutRow["payout_account_holder"] as string | null) ?? null,
+      iban: (payoutRow["payout_iban"] as string | null) ?? null,
+      wiseEmail: (payoutRow["payout_wise_email"] as string | null) ?? null,
+      taxId: (payoutRow["payout_tax_id"] as string | null) ?? null,
+    };
+    const payoutState = payoutProfileState(profileInput);
+    const nextUnlockAt = nextPayoutUnlockAt({
+      oldestHeldAt: totals.oldestHeldAt,
+      heldCents: totals.heldCents,
+    });
 
     return {
       applied: !!row,
@@ -134,10 +197,23 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
       promo_code: ownedCode ? ownedCode.toUpperCase() : null,
       earned_cents: pendingCents + paidCents,
       pending_cents: pendingCents,
+      payable_cents: totals.payableCents,
+      held_cents: totals.heldCents,
+      next_unlock_at: nextUnlockAt,
       paid_cents: paidCents,
+      commission_max_months: COMMISSION_MAX_MONTHS,
       min_payout_cents: MIN_PAYOUT_CENTS,
       payout_eligible: eligibility.eligible,
       payout_remaining_cents: eligibility.remainingCents,
+      payout: {
+        method: isPayoutMethod(profileInput.method) ? profileInput.method : null,
+        account_holder: profileInput.accountHolder ?? null,
+        iban_masked: isPayoutMethod(profileInput.method) ? maskIban(profileInput.iban) : null,
+        wise_email: profileInput.wiseEmail ?? null,
+        tax_id_set: Boolean(profileInput.taxId),
+        ready: payoutState.ready,
+        missing: payoutState.missing,
+      },
       paid_transactions: totals.commissionedCount,
       totals_exact: totals.exact,
       recent: commissions.slice(0, 10).map((c) => ({
@@ -167,12 +243,19 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
  *      rakamı "alt sınır" olarak işaretler.
  */
 type AffiliateTotals = {
+  /** Ödenmemiş toplam (ödenebilir + beklemede). */
   pendingCents: number;
+  /** Bekleme süresi dolmuş birikim. */
+  payableCents: number;
+  /** Bekleme süresindeki birikim. */
+  heldCents: number;
   paidCents: number;
   /** Ödeme yazılmış (paid) satır sayısı. */
   paidCount: number;
   /** Mahsup edilmemiş (komisyon yazan) satır sayısı. */
   commissionedCount: number;
+  /** Beklemedeki en eski komisyonun tarihi (yoksa null). */
+  oldestHeldAt: string | null;
   exact: boolean;
 };
 
@@ -188,70 +271,93 @@ async function readAffiliateTotals(
   if (isServiceRole) {
     const { data, error } = await client.rpc("affiliate_payout_summary");
     if (!error) {
-      const rows = (data ?? []) as Array<{
-        affiliate_id: string;
-        pending_cents: number | string | null;
-        pending_count: number | string | null;
-        paid_cents: number | string | null;
-        paid_count: number | string | null;
-      }>;
+      const rows = (data ?? []) as Array<Record<string, unknown> & { affiliate_id: string }>;
       const mine = rows.find((r) => r.affiliate_id === uid);
-      const pending = Number(mine?.pending_cents ?? 0);
-      const paid = Number(mine?.paid_cents ?? 0);
-      return {
-        pendingCents: Number.isFinite(pending) ? pending : 0,
-        paidCents: Number.isFinite(paid) ? paid : 0,
-        paidCount: Number(mine?.paid_count ?? 0),
-        commissionedCount: Number(mine?.pending_count ?? 0) + Number(mine?.paid_count ?? 0),
-        exact: true,
-      };
+      // v2 özet (bekleme süresi ayrımı) uygulanmamışsa alanlar `undefined`
+      // gelir; o durumda ÖDENEBİLİR kabul etmek yerine sayfalı hesaba düşülür
+      // (yanlış "ödemeye hazır" göstergesi güven kaybı yaratır).
+      if (mine && mine["payable_cents"] !== undefined) {
+        const num = (key: string) => Number(mine[key] ?? 0);
+        const pending = num("pending_cents");
+        const payable = num("payable_cents");
+        const held = num("held_cents");
+        return {
+          pendingCents: Number.isFinite(pending) ? pending : 0,
+          payableCents: Number.isFinite(payable) ? payable : 0,
+          heldCents: Number.isFinite(held) ? held : 0,
+          paidCents: num("paid_cents"),
+          paidCount: num("paid_count"),
+          commissionedCount: num("pending_count") + num("paid_count"),
+          oldestHeldAt: (mine["oldest_held_at"] as string | null) ?? null,
+          exact: true,
+        };
+      }
     }
     // Migration uygulanmamışsa sayfalı yola düş (panel çalışmaya devam eder).
-    console.warn(`[affiliate] payout özeti okunamadı, sayfalı toplama geçiliyor: ${error.message}`);
+    if (error) {
+      console.warn(
+        `[affiliate] payout özeti okunamadı, sayfalı toplama geçiliyor: ${error.message}`,
+      );
+    }
   }
 
-  let pendingCents = 0;
-  let paidCents = 0;
-  let paidCount = 0;
-  let commissionedCount = 0;
+  const collected: CommissionRow[] = [];
+  let complete = false;
   for (let page = 0; page < TOTALS_MAX_PAGES; page++) {
     const { data, error } = await client
       .from("affiliate_commissions")
-      .select("commission_cents, status")
+      .select("commission_cents, status, created_at")
       .eq("affiliate_id", uid)
       .order("created_at", { ascending: false })
       .range(page * TOTALS_PAGE_SIZE, page * TOTALS_PAGE_SIZE + TOTALS_PAGE_SIZE - 1);
     if (error) break;
-    const rows = (data ?? []) as Array<{
-      commission_cents: number | null;
-      status: string | null;
-    }>;
-    for (const r of rows) {
-      const cents = r.commission_cents ?? 0;
-      if (r.status === "reversed") continue;
-      commissionedCount += 1;
-      if (r.status === "paid") {
-        paidCents += cents;
-        paidCount += 1;
-      } else {
-        pendingCents += cents;
-      }
-    }
+    const rows = (data ?? []) as CommissionRow[];
+    collected.push(...rows);
     if (rows.length < TOTALS_PAGE_SIZE) {
-      return { pendingCents, paidCents, paidCount, commissionedCount, exact: true };
+      complete = true;
+      break;
     }
   }
-  return { pendingCents, paidCents, paidCount, commissionedCount, exact: false };
+
+  // Bekleme süresi ayrımı TEK kural dosyasından gelir (SQL ile aynı 30 gün).
+  const split = splitCommissionsByHold(collected);
+  return {
+    pendingCents: split.payableCents + split.heldCents,
+    payableCents: split.payableCents,
+    heldCents: split.heldCents,
+    paidCents: split.paidCents,
+    paidCount: split.paidCount,
+    commissionedCount: split.payableCount + split.heldCount + split.paidCount,
+    oldestHeldAt: split.oldestHeldAt,
+    exact: complete,
+  };
 }
 
 /**
  * Affiliate programına başvur. Idempotent: daha önce başvurmuşsa mevcut
  * durumunu döner, asla durumunu değiştirmez (yalnızca admin onaylayabilir).
  */
+/**
+ * Başvuru formu girdisi.
+ *
+ * `termsAccepted` ZORUNLUDUR: komisyon oranı, ödeme takvimi (30 gün bekleme) ve
+ * iade mahsubu kurallarının kabul edildiği kanıtlanmadan başvuru kaydedilmez.
+ * Kitle/kanal bilgisi adminin başvuruyu DEĞERLENDİREBİLMESİ için istenir (kodsuz
+ * hesaba kod vermek yerine kimin kime ulaştığı görülür).
+ */
+const ApplyInput = z.object({
+  audience: z.string().trim().max(300).optional().default(""),
+  channels: z.string().trim().max(300).optional().default(""),
+  socialHandle: z.string().trim().max(160).optional().default(""),
+  termsAccepted: z.boolean(),
+});
+
 export const applyForAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => ApplyInput.parse(i ?? {}))
   .handler(
     async ({
+      data,
       context,
     }): Promise<{ ok: boolean; status: AffiliateStatus | null; reason?: string }> => {
       const { rateLimit } = await import("@/lib/api-guard.server");
@@ -266,7 +372,21 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
         };
       }
 
+      if (!data.termsAccepted) {
+        return {
+          ok: false,
+          status: null,
+          reason: "Başvurmak için affiliate program şartlarını kabul etmelisin.",
+        };
+      }
+
       const { client, isServiceRole } = await adminOrUserClient(context);
+
+      const details = {
+        audience: data.audience || null,
+        channels: data.channels || null,
+        social_handle: data.socialHandle || null,
+      };
 
       const { data: existing, error: existingError } = await client
         .from("affiliates")
@@ -277,6 +397,14 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
         return { ok: false, status: null, reason: "Başvuru durumu okunamadı, tekrar dene." };
       if (existing) {
         const status = isAffiliateStatus(existing.status) ? existing.status : null;
+        // Bekleyen başvuruda beyan güncellenebilir; onaylı/askı satıra dokunulmaz.
+        if (status === "pending" && isServiceRole) {
+          await client
+            .from("affiliates")
+            .update({ ...details, terms_accepted_at: new Date().toISOString() })
+            .eq("user_id", context.userId)
+            .eq("status", "pending");
+        }
         return { ok: true, status };
       }
 
@@ -285,20 +413,142 @@ export const applyForAffiliate = createServerFn({ method: "POST" })
           user_id: context.userId,
           status: "pending",
           commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
+          ...details,
+          terms_accepted_at: new Date().toISOString(),
         });
-        if (error)
-          return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
-        return { ok: true, status: "pending" };
+        if (!error) return { ok: true, status: "pending" };
+        // Migration uygulanmadıysa yeni kolonlar yoktur: başvuruyu KAYBETMEK
+        // yerine temel alanlarla yaz (kullanıcı beyanını sonra tamamlayabilir).
+        if (/column|schema cache/i.test(error.message)) {
+          const { error: minimal } = await client.from("affiliates").insert({
+            user_id: context.userId,
+            status: "pending",
+            commission_rate_pct: DEFAULT_COMMISSION_RATE_PCT,
+          });
+          if (!minimal) return { ok: true, status: "pending" };
+        }
+        return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
       }
 
       // Servis rolü anahtarı yok: SECURITY DEFINER apply_for_affiliate() kendi
       // başvurusunu kullanıcı oturumuyla oluşturur (durum/oran sunucuda sabit).
-      const { data: status, error: rpcError } = await context.supabase.rpc("apply_for_affiliate");
-      if (rpcError || !isAffiliateStatus(status))
+      // Yeni arite yoksa eski sıfır argümanlı sürüme düşülür.
+      const modern = await context.supabase.rpc("apply_for_affiliate", {
+        _audience: details.audience,
+        _channels: details.channels,
+        _social_handle: details.social_handle,
+        _terms_accepted: true,
+      });
+      if (!modern.error && modern.data === "terms_required")
+        return {
+          ok: false,
+          status: null,
+          reason: "Başvurmak için affiliate program şartlarını kabul etmelisin.",
+        };
+      if (!modern.error && isAffiliateStatus(modern.data)) return { ok: true, status: modern.data };
+
+      const legacy = await context.supabase.rpc("apply_for_affiliate", {});
+      if (legacy.error || !isAffiliateStatus(legacy.data))
         return { ok: false, status: null, reason: "Başvuru kaydedilemedi, tekrar dene." };
-      return { ok: true, status };
+      return { ok: true, status: legacy.data };
     },
   );
+
+/* ------------------------------------------------------------------ */
+/* Affiliate: KENDİ ödeme bilgisini gir/güncelle                        */
+/* ------------------------------------------------------------------ */
+
+const MyPayoutInput = z.object({
+  method: z.enum(["wise", "iban", "other"]),
+  accountHolder: z.string().trim().min(1, "Hesap sahibi adı gerekli.").max(160),
+  iban: z.string().trim().max(64).nullable().optional().default(null),
+  wiseEmail: z.string().trim().max(200).nullable().optional().default(null),
+  taxId: z.string().trim().max(64).nullable().optional().default(null),
+});
+
+/**
+ * Affiliate KENDİ ödeme bilgisini kaydeder.
+ *
+ * NEDEN ayrı bir yol: `affiliates` tablosunda authenticated kullanıcı için
+ * UPDATE politikası YOKTUR (IBAN/vergi no kişisel veri). İki yol vardır:
+ *   1. Servis rolü varsa doğrudan güncelleme (RLS'in ötesinden).
+ *   2. Yoksa `set_my_affiliate_payout()` SECURITY DEFINER RPC'si — yalnız
+ *      çağıranın (auth.uid()) satırını güncelleyebilir.
+ *
+ * IBAN KAYDETMEDEN ÖNCE mod-97 ile doğrulanır: yanlış yazım yalnız bankada
+ * reddedilir, sistemde geçerli görünür ve affiliate ödeme beklerken admin
+ * "gönderdim" sanır. Eksik alanlar (ör. Wise e-postası) ENGELLENMEZ; kayıt
+ * kısmi olabilir ve panel eksikleri açıkça söyler.
+ */
+export const updateMyPayoutProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => MyPayoutInput.parse(i))
+  .handler(async ({ data, context }): Promise<{ ok: true; state: PayoutProfileState }> => {
+    if (data.iban && !isValidIban(data.iban)) {
+      throw badRequest("IBAN geçersiz (mod-97 kontrolü başarısız). Kontrol edip tekrar dene.");
+    }
+
+    const state = payoutProfileState({
+      method: data.method,
+      accountHolder: data.accountHolder,
+      iban: data.iban,
+      wiseEmail: data.wiseEmail,
+      taxId: data.taxId,
+    });
+
+    const { client, isServiceRole } = await adminOrUserClient(context);
+
+    if (isServiceRole) {
+      const { data: existing, error: readError } = await client
+        .from("affiliates")
+        .select("user_id")
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (readError) throw new Error(readError.message);
+      if (!existing) {
+        throw badRequest("Önce affiliate başvurusu yapmalısın.", 409);
+      }
+      const { error } = await client
+        .from("affiliates")
+        .update({
+          payout_method: data.method,
+          payout_account_holder: data.accountHolder,
+          payout_iban: data.iban ? data.iban.replace(/\s+/g, "").toUpperCase() : null,
+          payout_wise_email: data.wiseEmail,
+          payout_tax_id: data.taxId,
+        })
+        .eq("user_id", context.userId);
+      if (error) throw new Error(error.message);
+      return { ok: true, state };
+    }
+
+    // Servis rolü yok: SECURITY DEFINER RPC (yalnız kendi satırı).
+    const { data: result, error } = await context.supabase.rpc("set_my_affiliate_payout", {
+      _method: data.method,
+      _account_holder: data.accountHolder,
+      _iban: data.iban,
+      _wise_email: data.wiseEmail,
+      _tax_id: data.taxId,
+    });
+    if (error) {
+      // Migration uygulanmadıysa özellik sessizce çalışmıyor gibi görünmesin.
+      if (/function|schema cache/i.test(error.message)) {
+        throw badRequest(
+          "Ödeme bilgisi kaydı bu kurulumda etkin değil (migration uygulanmamış). Yöneticiye bildir.",
+          503,
+        );
+      }
+      throw new Error(error.message);
+    }
+    const code = String(result);
+    if (code === "unauthorized") throw forbidden();
+    if (code === "no_application") throw badRequest("Önce affiliate başvurusu yapmalısın.", 409);
+    if (code === "revoked")
+      throw badRequest("Askıya alınmış hesap ödeme bilgisi güncelleyemez.", 409);
+    if (code === "invalid_method") throw badRequest("Geçerli bir ödeme yöntemi seç.");
+    if (code !== "ok") throw badRequest("Ödeme bilgisi kaydedilemedi, tekrar dene.", 400);
+    return { ok: true, state };
+  });
 
 /* ------------------------------------------------------------------ */
 /* Affiliate hesabı performansı: admin'in görevlendirdiği hesaplar     */
@@ -634,15 +884,37 @@ export type AdminAffiliatePayout = {
   commission_rate_pct: number;
   payout_method: PayoutMethod | null;
   payout_note: string | null;
+  /** Yapılandırılmış ödeme bilgisi (IBAN ekranda gösterilmez, maskelenir). */
+  payout_account_holder: string | null;
+  payout_iban_masked: string | null;
+  payout_iban_valid: boolean;
+  payout_wise_email: string | null;
+  payout_tax_id_set: boolean;
+  /** Ödeme için eksik alanlar (boşsa ödeme yapılabilir). */
+  payout_missing: string[];
+  /** Başvuruda beyan edilen kitle/kanallar (adminin değerlendirmesi için). */
+  audience: string | null;
+  channels: string | null;
+  social_handle: string | null;
+  terms_accepted_at: string | null;
+  /** Ödenmemiş TOPLAM birikim (ödenebilir + beklemede). */
   pending_cents: number;
   pending_count: number;
+  /** Bekleme süresi (30 gün) dolmuş, ödenebilir birikim. */
+  payable_cents: number;
+  payable_count: number;
+  /** Bekleme süresindeki birikim (henüz ödenmez). */
+  held_cents: number;
+  held_count: number;
+  /** Ödenebilir birikimin en eski komisyon tarihi. */
+  oldest_payable_at: string | null;
   paid_cents: number;
   paid_count: number;
   reversed_cents: number;
   last_paid_at: string | null;
-  /** pending >= ödeme eşiği ($75) */
+  /** ÖDENEBİLİR birikim >= ödeme eşiği ($75) */
   eligible: boolean;
-  /** Eşiğe kalan tutar. */
+  /** Eşiğe kalan tutar (ödenebilir bakiyeye göre). */
   remaining_cents: number;
   /** Affiliate'e bağlı promo kodları. */
   promo_codes: string[];
@@ -662,34 +934,35 @@ export const adminListAffiliatePayouts = createServerFn({ method: "GET" })
     const [affRes, summaryRes, promoRes] = await Promise.all([
       supabaseAdmin
         .from("affiliates")
-        .select("user_id, status, commission_rate_pct, payout_method, payout_note")
+        .select(
+          "user_id, status, commission_rate_pct, payout_method, payout_note, " +
+            "payout_account_holder, payout_iban, payout_wise_email, payout_tax_id, " +
+            "audience, channels, social_handle, terms_accepted_at",
+        )
         .order("created_at", { ascending: false })
         .limit(500),
       supabaseAdmin.rpc("affiliate_payout_summary"),
       supabaseAdmin.from("promo_codes").select("code, affiliate_id").limit(500),
     ]);
 
-    const affiliates = (affRes.data ?? []) as Array<{
-      user_id: string;
-      status: string;
-      commission_rate_pct: number;
-      payout_method: string | null;
-      payout_note: string | null;
-    }>;
+    // Seçim dizesi iki parçadan birleştirildiği için PostgREST tip çözümleyicisi
+    // satır tipini çıkaramaz (GenericStringError[]); gerçek satır şeklini biz
+    // bildiğimiz için `unknown` üzerinden daraltılır.
+    const affiliates = (affRes.data ?? []) as unknown as Array<
+      Record<string, unknown> & { user_id: string }
+    >;
     if (affiliates.length === 0) return [];
 
-    const summaries = new Map(
-      (
-        (summaryRes.data ?? []) as Array<{
-          affiliate_id: string;
-          pending_cents: number;
-          pending_count: number;
-          paid_cents: number;
-          paid_count: number;
-          reversed_cents: number;
-          last_paid_at: string | null;
-        }>
-      ).map((s) => [s.affiliate_id, s]),
+    const summaries = new Map<string, Record<string, unknown>>(
+      ((summaryRes.data ?? []) as Array<Record<string, unknown> & { affiliate_id: string }>).map(
+        (s) => [s.affiliate_id, s],
+      ),
+    );
+    // v2 özet (bekleme süresi) uygulanmadıysa ödenebilir/ beklemede alanları
+    // yoktur; o durumda tüm birikim "beklemede" kabul edilir. Yanlışlıkla
+    // "ödemeye hazır" göstermek, ödeme reddiyle sonuçlanacağı için yeğlenmez.
+    const summaryHasHold = ((summaryRes.data ?? []) as unknown[]).some(
+      (row) => (row as Record<string, unknown>)?.payable_cents !== undefined,
     );
 
     const codesByAffiliate = new Map<string, string[]>();
@@ -719,28 +992,162 @@ export const adminListAffiliatePayouts = createServerFn({ method: "GET" })
 
     return affiliates
       .map((a) => {
-        const s = summaries.get(a.user_id);
-        const pending = Number(s?.pending_cents ?? 0);
-        const eligibility = payoutEligibility(pending);
+        const s = summaries.get(a.user_id) ?? {};
+        const num = (key: string) => Number(s[key] ?? 0);
+        const pending = num("pending_cents");
+        const payable = summaryHasHold ? num("payable_cents") : 0;
+        const held = summaryHasHold ? num("held_cents") : pending;
+        // Eşik ÖDENEBİLİR bakiyeye göre (beklemedeki para ödenemez).
+        const eligibility = payoutEligibility(payable);
+
+        const payoutInput: PayoutProfile = {
+          method: (a["payout_method"] as string | null) ?? null,
+          accountHolder: (a["payout_account_holder"] as string | null) ?? null,
+          iban: (a["payout_iban"] as string | null) ?? null,
+          wiseEmail: (a["payout_wise_email"] as string | null) ?? null,
+          taxId: (a["payout_tax_id"] as string | null) ?? null,
+        };
+        const payoutState = payoutProfileState(payoutInput);
+
         return {
           user_id: a.user_id,
           email: emailById.get(a.user_id) ?? null,
-          status: a.status,
-          commission_rate_pct: a.commission_rate_pct,
-          payout_method: isPayoutMethod(a.payout_method) ? a.payout_method : null,
-          payout_note: a.payout_note,
+          status: String(a["status"] ?? "pending"),
+          commission_rate_pct: Number(a["commission_rate_pct"] ?? DEFAULT_COMMISSION_RATE_PCT),
+          payout_method: isPayoutMethod(payoutInput.method) ? payoutInput.method : null,
+          payout_note: (a["payout_note"] as string | null) ?? null,
+          payout_account_holder: payoutInput.accountHolder ?? null,
+          payout_iban_masked: payoutInput.iban ? maskIban(payoutInput.iban) : null,
+          payout_iban_valid: payoutInput.iban ? isValidIban(payoutInput.iban) : false,
+          payout_wise_email: payoutInput.wiseEmail ?? null,
+          payout_tax_id_set: Boolean(payoutInput.taxId),
+          payout_missing: payoutState.missing,
+          audience: (a["audience"] as string | null) ?? null,
+          channels: (a["channels"] as string | null) ?? null,
+          social_handle: (a["social_handle"] as string | null) ?? null,
+          terms_accepted_at: (a["terms_accepted_at"] as string | null) ?? null,
           pending_cents: pending,
-          pending_count: Number(s?.pending_count ?? 0),
-          paid_cents: Number(s?.paid_cents ?? 0),
-          paid_count: Number(s?.paid_count ?? 0),
-          reversed_cents: Number(s?.reversed_cents ?? 0),
-          last_paid_at: s?.last_paid_at ?? null,
+          pending_count: num("pending_count"),
+          payable_cents: payable,
+          payable_count: num("payable_count"),
+          held_cents: held,
+          held_count: summaryHasHold ? num("held_count") : num("pending_count"),
+          oldest_payable_at: (s["oldest_payable_at"] as string | null) ?? null,
+          paid_cents: num("paid_cents"),
+          paid_count: num("paid_count"),
+          reversed_cents: num("reversed_cents"),
+          last_paid_at: (s["last_paid_at"] as string | null) ?? null,
           eligible: eligibility.eligible,
           remaining_cents: eligibility.remainingCents,
           promo_codes: codesByAffiliate.get(a.user_id) ?? [],
         };
       })
-      .sort((x, y) => y.pending_cents - x.pending_cents);
+      .sort((x, y) => y.payable_cents - x.payable_cents || y.pending_cents - x.pending_cents);
+  });
+
+export type AffiliatePayoutCsvExport = {
+  csv: string;
+  generatedAt: string;
+  affiliates: number;
+  totalCents: number;
+  blockedCount: number;
+};
+
+/**
+ * Admin: manuel ödeme listesi (CSV).
+ *
+ * NEDEN: Wise/IBAN ödemeleri tek tek elle yapılamaz; bankaya/panel'e tek seferde
+ * girilecek liste gerekir. Liste ÖDENEBİLİR (bekleme süresi dolmuş) bakiyesi
+ * eşiği geçen affiliate'leri içerir; eşik altındaki bakiye devreder.
+ *
+ * GÜVENLİK: IBAN/vergi no yalnız admin'e (assertAdmin) döner ve bu yanıt
+ * ekranda gösterilmez — dosya olarak indirilir.
+ */
+export const adminExportAffiliatePayoutCsv = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AffiliatePayoutCsvExport> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const generatedAt = new Date().toISOString();
+
+    const [affRes, summaryRes] = await Promise.all([
+      supabaseAdmin
+        .from("affiliates")
+        .select(
+          "user_id, payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
+        )
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabaseAdmin.rpc("affiliate_payout_summary"),
+    ]);
+
+    const affiliates = (affRes.data ?? []) as unknown as Array<
+      Record<string, unknown> & { user_id: string }
+    >;
+    if (affiliates.length === 0) {
+      return {
+        csv: buildPayoutRunCsv([], { generatedAt }),
+        generatedAt,
+        ...payoutRunSummary([]),
+      };
+    }
+
+    const summaries = new Map<string, Record<string, unknown>>(
+      ((summaryRes.data ?? []) as Array<Record<string, unknown> & { affiliate_id: string }>).map(
+        (s) => [s.affiliate_id, s],
+      ),
+    );
+    // Migration uygulanmamışsa ödenebilir/ beklemede alanları yoktur: o hâlde
+    // ödenebilir varsaymak yerine hiçbir satırı ödenebilir saymayız.
+    const summaryHasHold = ((summaryRes.data ?? []) as unknown[]).some(
+      (row) => (row as Record<string, unknown>)?.payable_cents !== undefined,
+    );
+
+    const emailsRes = await supabaseAdmin
+      .from("profiles")
+      .select("id, email")
+      .in(
+        "id",
+        affiliates.map((a) => a.user_id),
+      );
+    const emailById = new Map(
+      ((emailsRes.data ?? []) as Array<{ id: string; email: string | null }>).map((p) => [
+        p.id,
+        p.email,
+      ]),
+    );
+
+    const rows: PayoutRunRow[] = affiliates.map((a) => {
+      const s = summaries.get(a.user_id) ?? {};
+      const num = (key: string) => Number(s[key] ?? 0);
+      const profile: PayoutProfile = {
+        method: (a["payout_method"] as string | null) ?? null,
+        accountHolder: (a["payout_account_holder"] as string | null) ?? null,
+        iban: (a["payout_iban"] as string | null) ?? null,
+        wiseEmail: (a["payout_wise_email"] as string | null) ?? null,
+        taxId: (a["payout_tax_id"] as string | null) ?? null,
+      };
+      return {
+        email: emailById.get(a.user_id) ?? null,
+        method: profile.method ?? null,
+        accountHolder: profile.accountHolder ?? null,
+        iban: profile.iban ?? null,
+        wiseEmail: profile.wiseEmail ?? null,
+        taxId: profile.taxId ?? null,
+        payableCents: summaryHasHold ? num("payable_cents") : 0,
+        payableCount: summaryHasHold ? num("payable_count") : 0,
+        oldestPayableAt: (s["oldest_payable_at"] as string | null) ?? null,
+        missing: payoutProfileState(profile).missing,
+      };
+    });
+
+    const summary = payoutRunSummary(rows);
+    return {
+      csv: buildPayoutRunCsv(rows, { generatedAt }),
+      generatedAt,
+      ...summary,
+    };
   });
 
 const MarkPaidInput = z.object({
@@ -769,6 +1176,33 @@ export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
       await assertAdmin(context);
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+      // ÖN KOŞUL: ödeme bilgisi kayıtlı olmalı. IBAN/Wise hedefi olmadan
+      // "ödendi işaretle" demek, kaydı tutarsız bırakır (para nereye gitti?).
+      const { data: affiliateRow, error: readError } = await supabaseAdmin
+        .from("affiliates")
+        .select(
+          "payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
+        )
+        .eq("user_id", data.userId)
+        .maybeSingle();
+      if (readError) throw new Error(readError.message);
+      if (!affiliateRow) throw forbidden();
+
+      const payoutState = payoutProfileState({
+        method: (affiliateRow.payout_method as string | null) ?? data.method,
+        accountHolder: (affiliateRow.payout_account_holder as string | null) ?? null,
+        iban: (affiliateRow.payout_iban as string | null) ?? null,
+        wiseEmail: (affiliateRow.payout_wise_email as string | null) ?? null,
+        taxId: (affiliateRow.payout_tax_id as string | null) ?? null,
+      });
+      if (!payoutState.ready) {
+        const missingError = new Error(
+          `Önce ödeme bilgisini kaydet — eksik: ${payoutState.missing.join(", ")}.`,
+        ) as Error & { statusCode: number };
+        missingError.statusCode = 409;
+        throw missingError;
+      }
+
       // Referans verilmediyse partiyi tek bir dekont no ile etiketle.
       const reference =
         data.reference?.trim() ||
@@ -784,9 +1218,19 @@ export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
         _reference: reference,
       });
       if (error) {
+        if (/hold_not_elapsed/i.test(error.message)) {
+          // Toplam birikim yeterli ama komisyonlar henüz 30 günlük bekleme
+          // süresini doldurmadı: iade riski kapanmadan ödeme yapılmaz.
+          const err = new Error(
+            `Bekleme süresi dolmadı: komisyonlar ödemeden önce ${PAYOUT_HOLD_DAYS} gün bekler. ` +
+              `Panelde "beklemede" görünen tutar süresi dolunca ödenebilir olur.`,
+          ) as Error & { statusCode: number };
+          err.statusCode = 409;
+          throw err;
+        }
         if (/below_threshold/i.test(error.message)) {
           const err = new Error(
-            `Ödeme eşiği: birikmiş komisyon en az $${MIN_PAYOUT_CENTS / 100} olmalı.`,
+            `Ödeme eşiği: ödenebilir komisyon en az $${MIN_PAYOUT_CENTS / 100} olmalı.`,
           ) as Error & { statusCode: number };
           err.statusCode = 409;
           throw err;
@@ -834,20 +1278,99 @@ export const adminReverseCommission = createServerFn({ method: "POST" })
 const PayoutDetailsInput = z.object({
   userId: z.string().uuid(),
   method: z.enum(["wise", "iban", "other"]).nullable(),
-  note: z.string().trim().max(500).nullable(),
+  /**
+   * Alanlar İSTEĞE BAĞLIdır ve `undefined` "DOKUNMA" demektir.
+   *
+   * NEDEN: admin bir satırı açıp yalnız Wise e-postasını düzeltseydi, boş
+   * gönderilen IBAN silinirdi. Ödeme verisini sessizce silmek, para nereye
+   * gitti sorusunu yanıtsız bırakır; bu yüzden yalnız GÖNDERİLEN alan yazılır.
+   */
+  note: z.string().trim().max(500).nullable().optional(),
+  accountHolder: z.string().trim().max(160).nullable().optional(),
+  iban: z.string().trim().max(64).nullable().optional(),
+  wiseEmail: z.string().trim().max(200).nullable().optional(),
+  taxId: z.string().trim().max(64).nullable().optional(),
 });
 
-/** Admin: influencer'ın ödeme bilgisini (yöntem + not/IBAN) kaydeder. */
+/**
+ * Admin: influencer'ın ödeme bilgisini kaydeder.
+ *
+ * DOĞRULAMA: IBAN mod-97 ile kontrol edilir. Yanlış yazılmış bir IBAN bankada
+ * reddedilir ama sistemde geçerli görünür; bu yüzden kaydetmeden ÖNCE reddedilir
+ * ve admin'e hangi alanın bozuk olduğu söylenir.
+ */
 export const adminUpdateAffiliatePayout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => PayoutDetailsInput.parse(i))
-  .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("affiliates")
-      .update({ payout_method: data.method, payout_note: data.note })
-      .eq("user_id", data.userId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ ok: true; state: { ready: boolean; missing: string[] } }> => {
+      await assertAdmin(context);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      if (data.iban && !isValidIban(data.iban)) {
+        const err = new Error(
+          "IBAN geçersiz (mod-97 kontrolü başarısız). Kontrol edip tekrar dene.",
+        ) as Error & {
+          statusCode: number;
+        };
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Yalnız GÖNDERİLEN alanlar yazılır (`undefined` → dokunma).
+      const patch: Record<string, unknown> = { payout_method: data.method };
+      if (data.note !== undefined) patch.payout_note = data.note;
+      if (data.accountHolder !== undefined) patch.payout_account_holder = data.accountHolder;
+      if (data.iban !== undefined)
+        patch.payout_iban = data.iban ? data.iban.replace(/\s+/g, "").toUpperCase() : null;
+      if (data.wiseEmail !== undefined) patch.payout_wise_email = data.wiseEmail;
+      if (data.taxId !== undefined) patch.payout_tax_id = data.taxId;
+
+      const { error } = await supabaseAdmin
+        .from("affiliates")
+        .update(patch as never)
+        .eq("user_id", data.userId);
+      if (error) {
+        // Migration uygulanmadıysa yeni kolonlar yoktur: eski davranışa düş.
+        if (/column|schema cache/i.test(error.message)) {
+          const { error: fallback } = await supabaseAdmin
+            .from("affiliates")
+            .update({ payout_method: data.method, payout_note: data.note ?? null } as never)
+            .eq("user_id", data.userId);
+          if (fallback) throw new Error(fallback.message);
+          return {
+            ok: true,
+            state: payoutProfileState({
+              method: data.method,
+              note: data.note ?? null,
+            } as PayoutProfile),
+          };
+        }
+        throw new Error(error.message);
+      }
+
+      // Kaydettikten SONRA güncel durumu oku: gönderilmeyen alanların gerçek
+      // değeri ancak böyle bilinir (aksi hâlde "hazır" yanlış hesaplanır).
+      const { data: after } = await supabaseAdmin
+        .from("affiliates")
+        .select(
+          "payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
+        )
+        .eq("user_id", data.userId)
+        .maybeSingle();
+      const saved = (after ?? {}) as unknown as Record<string, unknown>;
+      return {
+        ok: true,
+        state: payoutProfileState({
+          method: (saved["payout_method"] as string | null) ?? data.method,
+          accountHolder: (saved["payout_account_holder"] as string | null) ?? null,
+          iban: (saved["payout_iban"] as string | null) ?? null,
+          wiseEmail: (saved["payout_wise_email"] as string | null) ?? null,
+          taxId: (saved["payout_tax_id"] as string | null) ?? null,
+        }),
+      };
+    },
+  );

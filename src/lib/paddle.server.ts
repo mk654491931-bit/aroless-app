@@ -470,6 +470,34 @@ export async function resolvePaddleCustomerEmail(customerId: string): Promise<st
   }
 }
 
+/**
+ * UYGULANAN İNDİRİMİN KODUNU okur (yalnız indirim kimliğinden).
+ *
+ * NEDEN GEREKLİ (ölçülen atıf boşluğu): müşteri affiliate kodunu YALNIZ Paddle
+ * ödeme ekranında girmiş olabilir — kayıt sırasında hiç kullanmamışsa
+ * `profiles.promo_code`/`referred_by` boştur ve influencer o ödemeden HİÇ
+ * komisyon alamaz. Webhook yalnız `discount_id` taşır; kodu okumak için
+ * Paddle'ın indirim kaydı sorulur (`code` alanı). "dsc_" kimliği olmayan ya da
+ * okunamayan değerler için null döner: atıf yapılmaz ama ödeme akışı BOZULMAZ.
+ */
+export async function resolveDiscountCode(discountId: string | null): Promise<string | null> {
+  if (!discountId || !/^dsc_/.test(discountId)) return null;
+  try {
+    const paddle = getPaddleClient();
+    const discount = await paddle.discounts.get(discountId);
+    const code = String(discount?.code ?? "")
+      .trim()
+      .toUpperCase();
+    return code || null;
+  } catch (error) {
+    console.warn(
+      "[Paddle] İndirim kodu okunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Webhook event → database command mapping                             */
 /* ------------------------------------------------------------------ */

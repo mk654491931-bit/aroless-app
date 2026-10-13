@@ -504,7 +504,21 @@ ağaç kurar).
 
 ### Affiliate programı (%30 yinelenen komisyon)
 
-Zincir: **kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**.
+Zincir: **başvuru → kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**.
+
+> **Bekleme süresi (hold):** bir komisyon ödenebilir hâle gelmeden önce **30 gün**
+> bekler (iade/chargeback penceresi). Kural tek kaynaktan yönetilir:
+> `src/lib/affiliate-payout.ts` (`PAYOUT_HOLD_DAYS`) + SQL tarafı
+> (`20261014000000_affiliate_program_v2.sql`). İkisi birlikte değiştirilir.
+>
+> **Komisyon penceresi:** komisyon, müşteri **ücretli kaldığı sürece** her
+> yenilemede yazılır — ama bir müşteri için **en fazla 12 ay**. Müşteri erken
+> bırakırsa yalnız ücretli kaldığı ayların komisyonu doğar; 12 ay dolunca yeni
+> komisyon yazılmaz (iade ile düşülen ay pencereyi tüketmez). Sayı tek kaynaktan:
+> `src/lib/affiliate.ts` (`COMMISSION_MAX_MONTHS`) + SQL bekçisi
+> (`20261015000000_affiliate_commission_cap.sql` → `enforce_affiliate_commission_cap`
+> trigger'ı ve `record_affiliate_commission()` içindeki `_max_months`).
+> Ayrışmayı `supabase-migrations.test.ts` testi engeller.
 
 1. **Kod**: Admin → Affiliate Programı ekranında hesap görevlendirilir (başvuru
    beklenmez) ve o affiliate'e ÖZEL bir promo kodu bağlanır
@@ -522,6 +536,10 @@ Zincir: **kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**
    landing'e uğrayan ya da Google ile hesap açan kullanıcıda atıf böylece kaybolmaz.
    `claimPromoCode` kodu hesap açıldıktan sonra bağlar; kural: kod yalnız hesabın ilk
    30 gününde ve hesaba başka kod bağlı değilken sahiplenilir.
+**Başvuru**: kullanıcı Ayarlar → Affiliate panelinden **kitle/kanal beyanı ve program
+şartlarını kabul ederek** başvurur (`apply_for_affiliate()` / sunucu doğrulaması;
+şart kabulü olmadan kayıt oluşmaz). Admin, başvuruyu görevlendirme formundan da
+onaylayabilir.
 3. **Komisyon**: her başarılı `transaction.completed` olayında
    `process_paddle_event()` komisyon satırı yazar (varsayılan **%30**;
    `affiliates.commission_rate_pct` ile değiştirilebilir). Komisyon **ödenen tutar**
@@ -529,18 +547,36 @@ Zincir: **kod → kayıt → ödeme → komisyon → manuel ödeme (Wise/IBAN)**
    (0 tutarlı) alışverişte komisyon doğmaz. Yinelenen (her fatura dönemi) ödemelerde
    de yazılır; `transaction_id` UNIQUE olduğu için aynı ödeme İKİ KEZ komisyon
    üretmez. İade/chargeback (`process_paddle_refund()`) satırı `reversed` yapar.
+   Kullanıcı kodu YALNIZ Paddle ödeme ekranında girdiyse (kayıtta kullanmadıysa)
+   atıf Paddle'ın indirim kaydından çözülüp `record_affiliate_commission()` ile
+   yazılır ve `profiles.referred_by` bağlanır — böylece YENİLEME ödemeleri de aynı
+   affiliate'e sayılır. Yeni yazılan komisyon için affiliate'e **bilgilendirme
+   e-postası** gider (tekrar/iade/pencere-dolumu için gönderilmez).
+   **Pencere:** her müşteri için en fazla 12 aylık ödeme komisyon üretir
+   (`COMMISSION_MAX_MONTHS`); pencere dolduğunda satır yazılmaz ve webhook
+   `cap_reached` durumunu ayrıca loglar — bu bir hata değildir.
 4. **Ödeme (Wise/IBAN) — manuel**: eşik **$75** (`MIN_PAYOUT_CENTS`); altındaki
-   bakiye devreder. Admin "Ödendi işaretle" dediğinde satırlar `PAY-...` referansıyla
-   `paid` olur; affiliate paneli birikmiş/ödenmiş toplamı ve eşiğe kalan tutarı
-   gösterir. Toplamlar `affiliate_payout_summary()` ile veritabanında hesaplanır
-   (panelde liste sınırı yoktur).
+   bakiye devreder. Eşik **ödenebilir** (bekleme süresi dolmuş) bakiyeye göre
+   değerlendirilir; beklemedeki tutar ödenemez. Ödeme yapılmadan önce affiliate'in
+   **yapılandırılmış ödeme bilgisi** (yöntem + hesap sahibi + IBAN/Wise e-postası)
+   kayıtlı olmalıdır; IBAN **mod-97** ile doğrulanır ve eksikse "Ödendi işaretle"
+   reddeder. Vergi no alanı **opsiyoneldir**: şirket olmayan (şahıs) affiliate boş
+   bırakır ve bu ödemeyi ENGELLEMEZ — alan yalnız bazı ülkelerde banka/Wise'ın
+   istediği bilgi için CSV'ye taşınır. Admin "Ödendi işaretle" dediğinde satırlar `PAY-...` referansıyla
+   `paid` olur; affiliate paneli birikmiş/ödenebilir/beklemede/ödenmiş toplamlarını
+   ve sonraki ödeme tarihini gösterir. Toplamlar `affiliate_payout_summary()` ile
+   veritabanında hesaplanır (panelde liste sınırı yoktur). Bankaya toplu girmek için
+   admin panelindeki **“Ödeme listesini indir (CSV)”** düğmesi kullanılır.
 
 Koruma: aynı cihazdan (`visitor_id`) kendi affiliate koduyla ikinci hesap açılırsa
 atıf yazılmaz ve adminlere bildirim düşer, böylece %30'un kendine ödenmesi engellenir.
 Kapsam sınırı: cihaz parmak izi yalnız e-posta doğrulamasından geçen kayıtlarda tutulur.
 
 İlgili migration'lar: `20260908000000_affiliate_commissions.sql`,
-`20261007000000_affiliate_payouts.sql`, `20261008000000_affiliate_codes_no_discount.sql`.
+`20261007000000_affiliate_payouts.sql`, `20261008000000_affiliate_codes_no_discount.sql`,
+`20261014000000_affiliate_program_v2.sql` (bekleme süresi, yapılandırılmış ödeme
+bilgisi, başvuru detayları + şart kabulü, indirim kodu → affiliate atfı),
+`20261015000000_affiliate_commission_cap.sql` (12 aylık komisyon penceresi).
 
 ### Supabase Auth adresleri
 

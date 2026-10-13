@@ -2,16 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   AFFILIATE_CODE_DISCOUNT_PCT,
   AFFILIATE_CODE_PATTERN,
+  COMMISSION_MAX_MONTHS,
   DEFAULT_COMMISSION_RATE_PCT,
   MIN_COMMISSION_GROSS_CENTS,
   MIN_PAYOUT_CENTS,
   clampCommissionRate,
+  commissionMonthsRemaining,
   computeCommissionCents,
   isCommissionStatus,
   isEligibleAffiliate,
   isSelfReferralDevice,
   isPayoutMethod,
   isValidAffiliateCode,
+  isWithinCommissionWindow,
   paddlePrefillDiscountCode,
   payoutEligibility,
   shouldEarnCommission,
@@ -60,6 +63,37 @@ describe("affiliate commission math", () => {
     expect(clampCommissionRate(-10)).toBe(0);
     expect(clampCommissionRate(Number.NaN)).toBe(DEFAULT_COMMISSION_RATE_PCT);
     expect(clampCommissionRate(29.4)).toBe(29.4);
+  });
+});
+
+describe("komisyon penceresi — bir müşteri için en fazla 12 ay", () => {
+  it("pencere 12 ay (ürün kararı: 30% × en fazla 12 ay)", () => {
+    expect(COMMISSION_MAX_MONTHS).toBe(12);
+  });
+
+  it("12 aya kadar komisyon yazmaya izin verir", () => {
+    for (let paid = 0; paid <= 11; paid += 1) {
+      expect(isWithinCommissionWindow(paid), `${paid}. ay`).toBe(true);
+    }
+    expect(isWithinCommissionWindow(12)).toBe(false);
+    expect(isWithinCommissionWindow(13)).toBe(false);
+  });
+
+  it("müşteri kaç ay ücretli kaldıysa o kadar ay kazanç bırakır", () => {
+    // 4 ay ücretli kalan müşteri → pencere 8 ay daha AÇIK kalır (komisyon 4 ay yazıldı).
+    expect(commissionMonthsRemaining(4)).toBe(8);
+    expect(isWithinCommissionWindow(4)).toBe(true);
+    // 12 aylık penceresi dolu müşteri → yeni komisyon yok.
+    expect(commissionMonthsRemaining(12)).toBe(0);
+  });
+
+  it("geçersiz ay sayısını affiliate LEHİNE olmayacak şekilde yorumlar", () => {
+    expect(commissionMonthsRemaining(Number.NaN)).toBe(COMMISSION_MAX_MONTHS);
+    expect(commissionMonthsRemaining(-5)).toBe(COMMISSION_MAX_MONTHS);
+    expect(commissionMonthsRemaining(2.9)).toBe(10); // tam ay sayılır
+    // Sınır değeri verilirse o kullanılır (oran/müşteri bazlı özel pencere).
+    expect(commissionMonthsRemaining(3, 6)).toBe(3);
+    expect(commissionMonthsRemaining(3, Number.NaN)).toBe(9);
   });
 });
 
@@ -186,9 +220,9 @@ describe("isSelfReferralDevice — kendi kendini komisyon koruması", () => {
   });
 
   it("farklı cihazdan gelen meşru referansı ENGELLEMEZ", () => {
-    expect(
-      isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: ["musteri-1"] }),
-    ).toBe(false);
+    expect(isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: ["musteri-1"] })).toBe(
+      false,
+    );
     expect(isSelfReferralDevice({ affiliateUserId: AFFILIATE, deviceUserIds: [] })).toBe(false);
   });
 

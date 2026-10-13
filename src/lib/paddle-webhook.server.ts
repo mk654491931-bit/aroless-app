@@ -50,9 +50,13 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     planForAsset,
     resolvePaddleEntitlement,
     resolvePaddleCustomerEmail,
+    resolveDiscountCode,
     refundSignal,
     SUBSCRIPTION_CREDIT_GRANTS,
   } = await import("@/lib/paddle.server");
+  // Saf modül (sunucu bağımlılığı yok): istemci değerlendirmesinde sorun çıkarmaz.
+  const { shouldNotifyCommission } = await import("@/lib/affiliate-payout");
+  const { MIN_PAYOUT_CENTS } = await import("@/lib/affiliate");
 
   try {
     // 1. Configuration guard — fail loudly (Paddle retries with backoff).
@@ -391,6 +395,35 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
       }
     }
 
+    // 10. AFFİLİATE KOMİSYONU + BİLDİRİM.
+    //
+    //     İKİ YOL BİRDİR ve çakışmazlar:
+    //       a) Profil atfı: kullanıcı kodu kayıtta (veya giriş sonrası
+    //          `claimPromoCode` ile) bağladıysa komisyon `process_paddle_event`
+    //          içinde yazılır. Bu satır varsa aşağıda YALNIZ bildirim yapılır.
+    //       b) İndirim kodu atfı: kullanıcı kodu YALNIZ Paddle ödeme ekranında
+    //          girmişse profil boştur; uygulanan indirimin KODU Paddle'dan okunur,
+    //          koda bağlı affiliate komisyonu `record_affiliate_commission` ile
+    //          yazılır ve tekrar `referred_by` bağlanır (yenilemeler de sayılsın).
+    //
+    //     Her iki yolda da aynı işlem için EN FAZLA BİR komisyon satırı ve EN
+    //     FAZLA BİR e-posta çıkar (`transaction_id` UNIQUE + `duplicate` kontrolü).
+    if (result !== "duplicate" && command.tier && command.tier !== "Free") {
+      await attributeAndNotifyCommissions({
+        supabaseAdmin,
+        userId,
+        transactionId: command.transactionId,
+        subscriptionId: command.paddleSubscriptionId,
+        tier: command.tier,
+        amountCents: command.amountCents,
+        discountId,
+        eventType: event.eventType,
+        resolveDiscountCode,
+        shouldNotifyCommission,
+        minPayoutCents: MIN_PAYOUT_CENTS,
+      });
+    }
+
     console.log(
       `[Paddle Webhook] ✓ ${event.eventType} (${event.eventId}) → ${result ?? "ok"} ` +
         `for user ${userId} · plan=${command.tier ?? "-"} · ` +
@@ -406,4 +439,201 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
 
 function text(payload: string, status: number) {
   return new Response(payload, { status });
+}
+
+/**
+ * Affiliate komisyonu + bildirim — webhook'un son adımı.
+ *
+ * Profil atfı ile yazılmış satır varsa doğrudan bildirime geçer; yoksa indirim
+ * kodunu çözüp komisyonu yazar. HİÇBİR HATA ödeme akışını düşürmez: bu adım
+ * yalnızca influencer tarafını ilgilendirir, bu yüzden tümü try/catch içindedir
+ * ve başarısızlık loglanır.
+ */
+async function attributeAndNotifyCommissions(args: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: any;
+  userId: string;
+  transactionId: string | null;
+  subscriptionId: string | null;
+  tier: string;
+  amountCents: number | null;
+  discountId: string | null;
+  eventType: string;
+  resolveDiscountCode: (discountId: string | null) => Promise<string | null>;
+  shouldNotifyCommission: (o: {
+    result: string | null | undefined;
+    status?: string | null;
+    eventType?: string | null;
+  }) => boolean;
+  minPayoutCents: number;
+}): Promise<void> {
+  const { supabaseAdmin } = args;
+  if (!args.transactionId) return;
+
+  /** Bildirim kararı TEK yerde: yalnız yeni yazılmış `pending` satır için. */
+  const notifyIfNew = async (commission: CommissionRowForNotice, result: string): Promise<void> => {
+    if (
+      !args.shouldNotifyCommission({
+        result,
+        status: commission.status,
+        eventType: args.eventType,
+      })
+    ) {
+      return;
+    }
+    await notifyCommission(supabaseAdmin, commission, args.minPayoutCents);
+  };
+
+  try {
+    // a) Profil atfıyla yazılmış komisyon (kayıtta/`claimPromoCode` ile kod bağlı).
+    const commission = await readCommission(supabaseAdmin, args.transactionId);
+    if (commission) {
+      await notifyIfNew(commission, "ok");
+      return;
+    }
+
+    // Profil atfı yok → indirim kodundan affiliate çöz.
+    const code = await args.resolveDiscountCode(args.discountId);
+    if (!code) return;
+
+    const { data: promo } = await supabaseAdmin
+      .from("promo_codes")
+      .select("code, affiliate_id")
+      .eq("code", code)
+      .maybeSingle();
+    const affiliateId = (promo as { affiliate_id?: string | null } | null)?.affiliate_id ?? null;
+    if (!affiliateId) return;
+
+    const { data: recorded, error } = await supabaseAdmin.rpc("record_affiliate_commission", {
+      _affiliate_id: affiliateId,
+      _user_id: args.userId,
+      _subscription_id: args.subscriptionId,
+      _tier: args.tier,
+      _amount_cents: args.amountCents ?? 0,
+      _transaction_id: args.transactionId,
+      _source: `discount:${code}`,
+    });
+
+    if (error) {
+      // Migration uygulanmamışsa ödeme akışı bozulmamalı (yalnız log).
+      console.warn(
+        `[Paddle Webhook] record_affiliate_commission çağrılamadı (${code}): ${error.message}`,
+      );
+      return;
+    }
+
+    // PENCERE DOLMASI bir hata DEĞİLDİR (müşteri 12 ayı tamamladı): satır
+    // yazılmaz, bildirim gönderilmez, ödeme akışı etkilenmez. Ayrı loglanır ki
+    // "komisyon neden yazılmadı" sorusu loglardan yanıtlanabilsin.
+    if (String(recorded) === "cap_reached") {
+      console.log(`[Paddle Webhook] komisyon penceresi doldu, yeni komisyon yok (kod “${code}”)`);
+      return;
+    }
+
+    console.log(
+      `[Paddle Webhook] indirim kodu “${code}” → affiliate komisyonu (${String(recorded)})`,
+    );
+
+    const written = await readCommission(supabaseAdmin, args.transactionId);
+    if (written) await notifyIfNew(written, String(recorded));
+  } catch (e) {
+    console.error("[Paddle Webhook] affiliate komisyon adımı hatası:", e);
+  }
+}
+
+type CommissionRowForNotice = {
+  affiliate_id: string;
+  commission_cents: number;
+  gross_amount_cents: number;
+  tier: string | null;
+  status: string;
+};
+
+/** İşlem için yazılmış komisyon satırını okur (yoksa null). */
+async function readCommission(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: any,
+  transactionId: string,
+): Promise<CommissionRowForNotice | null> {
+  const { data, error } = await supabaseAdmin
+    .from("affiliate_commissions")
+    .select("affiliate_id, commission_cents, gross_amount_cents, tier, status")
+    .eq("transaction_id", transactionId)
+    .maybeSingle();
+  if (error) {
+    console.warn(`[Paddle Webhook] komisyon satırı okunamadı: ${error.message}`);
+    return null;
+  }
+  return (data as CommissionRowForNotice | null) ?? null;
+}
+
+/**
+ * Affiliate'e komisyon bildirimi gönderir.
+ *
+ * ZAMAN BÜTÇESİ: e-posta gönderimi kısa bir yarışla sınırlanır. Paddle 2xx
+ * beklemediğinde olayı yeniden gönderdiği için webhook yanıtı e-posta yüzünden
+ * gecikmemelidir; bütçe aşılırsa gönderim arka planda kalır ve durum loglanır.
+ */
+async function notifyCommission(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: any,
+  commission: CommissionRowForNotice,
+  minPayoutCents: number,
+): Promise<void> {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", commission.affiliate_id)
+      .maybeSingle();
+    const email = (profile as { email?: string | null } | null)?.email ?? null;
+    if (!email || !email.includes("@")) return;
+
+    const { data: ownedCode } = await supabaseAdmin
+      .from("promo_codes")
+      .select("code")
+      .eq("affiliate_id", commission.affiliate_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Bakiye bilgisi (bekleme süresiyle birlikte) varsa eklenir; okunamazsa
+    // e-posta yine gönderilir (bilgi eksik kalır, bildirim kaybolmaz).
+    let payableCents: number | undefined;
+    let heldCents: number | undefined;
+    try {
+      const { data: summary } = await supabaseAdmin.rpc("affiliate_payout_summary");
+      const row = ((summary ?? []) as Array<Record<string, unknown>>).find(
+        (r) => r["affiliate_id"] === commission.affiliate_id,
+      );
+      if (row) {
+        payableCents = Number(row["payable_cents"] ?? 0);
+        heldCents = Number(row["held_cents"] ?? 0);
+      }
+    } catch {
+      /* özet okunamazsa e-posta yine gider */
+    }
+
+    const { sendAffiliateCommissionEmail } = await import("@/lib/email-service");
+    const send = sendAffiliateCommissionEmail(email, {
+      commissionCents: commission.commission_cents,
+      grossCents: commission.gross_amount_cents,
+      tier: commission.tier,
+      promoCode: (ownedCode as { code?: string | null } | null)?.code ?? null,
+      ...(payableCents === undefined ? {} : { payableCents }),
+      ...(heldCents === undefined ? {} : { heldCents }),
+      minPayoutCents,
+    });
+    const outcome = await Promise.race([
+      send,
+      new Promise<{ sent: boolean; reason?: string }>((resolve) =>
+        setTimeout(() => resolve({ sent: false, reason: "webhook_time_budget" }), 4_000),
+      ),
+    ]);
+    if (!outcome.sent) {
+      console.warn(`[Paddle Webhook] komisyon bildirimi gönderilemedi: ${outcome.reason}`);
+    }
+  } catch (e) {
+    console.error("[Paddle Webhook] komisyon bildirimi hatası:", e);
+  }
 }

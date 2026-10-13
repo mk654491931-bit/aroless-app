@@ -6,15 +6,18 @@ import {
   Banknote,
   Check,
   Copy,
+  Download,
   Loader2,
   Megaphone,
   ShieldCheck,
   ShieldX,
   Ticket,
+  TriangleAlert,
   UserPlus,
   Wallet,
 } from "lucide-react";
 import {
+  adminExportAffiliatePayoutCsv,
   adminListAffiliatePayouts,
   adminMarkAffiliatePaid,
   adminSetAffiliateStatus,
@@ -47,8 +50,8 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   },
 };
 
-const money = (cents: number) =>
-  `$${(cents / 100).toLocaleString(undefined, {
+const money = (cents: number | null | undefined) =>
+  `$${((cents ?? 0) / 100).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -62,6 +65,7 @@ export function AdminAffiliates() {
   const listPayoutsFn = useServerFn(adminListAffiliatePayouts);
   const markPaidFn = useServerFn(adminMarkAffiliatePaid);
   const saveDetailsFn = useServerFn(adminUpdateAffiliatePayout);
+  const exportCsvFn = useServerFn(adminExportAffiliatePayoutCsv);
   const createCodeFn = useServerFn(createPromoCode);
 
   const [email, setEmail] = useState("");
@@ -70,6 +74,11 @@ export function AdminAffiliates() {
   const [method, setMethod] = useState<PayoutMethod>("wise");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
+  // Yapılandırılmış ödeme alanları — ödeme talimatı bunlardan çıkar.
+  const [accountHolder, setAccountHolder] = useState("");
+  const [iban, setIban] = useState("");
+  const [wiseEmail, setWiseEmail] = useState("");
+  const [taxId, setTaxId] = useState("");
   // Kod ELLE yazılır: hangi affiliate'e hangi kodu verdiğini admin belirler.
   const [codeFor, setCodeFor] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState("");
@@ -175,11 +184,55 @@ export function AdminAffiliates() {
   };
 
   const saveDetails = useMutation({
-    mutationFn: (v: { userId: string; method: PayoutMethod; note: string }) =>
-      saveDetailsFn({ data: { userId: v.userId, method: v.method, note: v.note || null } }),
-    onSuccess: () => {
-      toast.success("Ödeme bilgisi kaydedildi");
+    mutationFn: (v: {
+      userId: string;
+      method: PayoutMethod;
+      note: string;
+      accountHolder: string;
+      iban: string;
+      wiseEmail: string;
+      taxId: string;
+    }) =>
+      saveDetailsFn({
+        data: {
+          userId: v.userId,
+          method: v.method,
+          // Boş alanlar gönderilmez → sunucu mevcut değeri KORUR (sessiz silme yok).
+          note: v.note.trim() ? v.note : undefined,
+          accountHolder: v.accountHolder.trim() ? v.accountHolder : undefined,
+          iban: v.iban.trim() ? v.iban : undefined,
+          wiseEmail: v.wiseEmail.trim() ? v.wiseEmail : undefined,
+          taxId: v.taxId.trim() ? v.taxId : undefined,
+        },
+      }),
+    onSuccess: (res) => {
+      toast.success(
+        res.state.ready
+          ? "Ödeme bilgisi kaydedildi — ödeme yapılabilir."
+          : `Kaydedildi — eksik: ${res.state.missing.join(", ")}. Ödeme bundan önce yapılamaz.`,
+      );
       refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const exportPayouts = useMutation({
+    mutationFn: () => exportCsvFn(),
+    onSuccess: (res) => {
+      if (typeof window === "undefined") return;
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `aroless-affiliate-payouts-${res.generatedAt.slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        res.affiliates === 0
+          ? "Ödeme listesi boş — ödenebilir bakiye eşiği geçen affiliate yok."
+          : `${res.affiliates} affiliate · ${money(res.totalCents)} listelendi` +
+              (res.blockedCount > 0 ? ` (${res.blockedCount} satırda eksik ödeme bilgisi)` : ""),
+      );
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -193,6 +246,12 @@ export function AdminAffiliates() {
     setMethod(r.payout_method ?? "wise");
     setReference("");
     setNote(r.payout_note ?? "");
+    setAccountHolder(r.payout_account_holder ?? "");
+    // IBAN maskeli geldiği için kayıtlı hâli tekrar yazılmaz; admin gerekirse yeni
+    // IBAN girer. Boş bırakmak mevcut değeri SİLER (kaydet ile).
+    setIban("");
+    setWiseEmail(r.payout_wise_email ?? "");
+    setTaxId("");
   };
 
   const totalPending = rows.reduce((s, r) => s + r.pending_cents, 0);
@@ -222,8 +281,21 @@ export function AdminAffiliates() {
           <b className="text-foreground">{money(MIN_PAYOUT_CENTS)}</b>
         </span>
         <span className="text-muted-foreground">
-          Birikmiş kazanç eşiği geçtiğinde Wise/IBAN ile ödeyip “Ödendi işaretle”ye bas.
+          Ödenebilir bakiye eşiği geçtiğinde Wise/IBAN ile ödeyip “Ödendi işaretle”ye bas.
         </span>
+        <button
+          type="button"
+          onClick={() => exportPayouts.mutate()}
+          disabled={exportPayouts.isPending}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium hover:bg-white/10 disabled:opacity-50"
+        >
+          {exportPayouts.isPending ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Download size={13} />
+          )}
+          Ödeme listesini indir (CSV)
+        </button>
       </div>
 
       {/* Görevlendirme: başvuru beklenmeden herhangi bir hesabı affiliate yap. */}
@@ -366,13 +438,31 @@ export function AdminAffiliates() {
                     method={method}
                     reference={reference}
                     note={note}
+                    accountHolder={accountHolder}
+                    iban={iban}
+                    wiseEmail={wiseEmail}
+                    taxId={taxId}
                     saving={saveDetails.isPending}
                     paying={markPaid.isPending}
                     setMethod={setMethod}
                     setReference={setReference}
                     setNote={setNote}
+                    setAccountHolder={setAccountHolder}
+                    setIban={setIban}
+                    setWiseEmail={setWiseEmail}
+                    setTaxId={setTaxId}
                     onToggle={() => openRow(r)}
-                    onSaveDetails={() => saveDetails.mutate({ userId: r.user_id, method, note })}
+                    onSaveDetails={() =>
+                      saveDetails.mutate({
+                        userId: r.user_id,
+                        method,
+                        note,
+                        accountHolder,
+                        iban,
+                        wiseEmail,
+                        taxId,
+                      })
+                    }
                     onMarkPaid={() => markPaid.mutate({ userId: r.user_id, method, reference })}
                     onApprove={() => setStatus.mutate({ userId: r.user_id, status: "verified" })}
                     onSuspend={() => setStatus.mutate({ userId: r.user_id, status: "revoked" })}
@@ -412,12 +502,20 @@ type RowProps = {
   method: PayoutMethod;
   reference: string;
   note: string;
+  accountHolder: string;
+  iban: string;
+  wiseEmail: string;
+  taxId: string;
   saving: boolean;
   paying: boolean;
   busy: boolean;
   setMethod: (m: PayoutMethod) => void;
   setReference: (v: string) => void;
   setNote: (v: string) => void;
+  setAccountHolder: (v: string) => void;
+  setIban: (v: string) => void;
+  setWiseEmail: (v: string) => void;
+  setTaxId: (v: string) => void;
   onToggle: () => void;
   onSaveDetails: () => void;
   onMarkPaid: () => void;
@@ -440,12 +538,20 @@ function FragmentRow({
   method,
   reference,
   note,
+  accountHolder,
+  iban,
+  wiseEmail,
+  taxId,
   saving,
   paying,
   busy,
   setMethod,
   setReference,
   setNote,
+  setAccountHolder,
+  setIban,
+  setWiseEmail,
+  setTaxId,
   onToggle,
   onSaveDetails,
   onMarkPaid,
@@ -458,6 +564,8 @@ function FragmentRow({
   onGiveCode,
   issuing,
 }: RowProps) {
+  // Eski/eksik kayıtlarda alan bulunmayabilir; erişimden önce normalize edilir.
+  const missing = row.payout_missing ?? [];
   return (
     <>
       <tr className="border-t border-white/5 hover:bg-white/[0.02]">
@@ -489,6 +597,14 @@ function FragmentRow({
         <td className="px-5 py-3 text-right">
           <div className="font-semibold">{money(row.pending_cents)}</div>
           <div className="text-[10px] text-muted-foreground">{row.pending_count} işlem</div>
+          <div className="text-[10px] text-[oklch(0.8_0.15_150)]">
+            ödenebilir {money(row.payable_cents)}
+          </div>
+          {row.held_cents > 0 && (
+            <div className="text-[10px] text-muted-foreground">
+              beklemede {money(row.held_cents)}
+            </div>
+          )}
         </td>
         <td className="px-5 py-3 text-right">
           <div className="text-muted-foreground">{money(row.paid_cents)}</div>
@@ -545,35 +661,75 @@ function FragmentRow({
       {open && (
         <tr className="border-t border-white/5 bg-white/[0.03]">
           <td colSpan={7} className="px-5 py-4">
-            {/* ÖDEME EŞİĞİ NOTU */}
+            {/* ÖDEME EŞİĞİ + BEKLEME SÜRESİ NOTU */}
             <div
               className={`mb-3 flex flex-wrap items-center gap-2 rounded-lg border p-2.5 text-xs ${
-                row.eligible
+                row.eligible && missing.length === 0
                   ? "border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 text-[oklch(0.85_0.12_150)]"
                   : "border-white/10 bg-white/[0.02] text-muted-foreground"
               }`}
             >
-              {row.eligible ? (
+              {row.eligible && missing.length === 0 ? (
                 <>
                   <ShieldCheck size={13} />
                   <span>
-                    Ödemeye hazır: birikmiş <b>{money(row.pending_cents)}</b> eşiği (
+                    Ödemeye hazır: <b>ödenebilir</b> {money(row.payable_cents)} eşiği (
                     {money(MIN_PAYOUT_CENTS)}) geçti. Wise/IBAN ile gönderdikten sonra işaretle.
+                  </span>
+                </>
+              ) : !row.eligible ? (
+                <>
+                  <Banknote size={13} />
+                  <span>
+                    Ödeme eşiği <b className="text-foreground">{money(MIN_PAYOUT_CENTS)}</b>:
+                    ödenebilir bakiye {money(row.payable_cents)} —{" "}
+                    <b className="text-foreground">{money(row.remaining_cents)}</b> daha birikmeli.
                   </span>
                 </>
               ) : (
                 <>
-                  <Banknote size={13} />
+                  <TriangleAlert size={13} className="text-[oklch(0.82_0.15_70)]" />
                   <span>
-                    Ödeme eşiği <b className="text-foreground">{money(MIN_PAYOUT_CENTS)}</b>: ödeme
-                    için <b className="text-foreground">{money(row.remaining_cents)}</b> daha
-                    birikmeli. Bakiye devreder.
+                    Eşik geçildi ama <b>ödeme bilgisi eksik</b>:{" "}
+                    <b className="text-foreground">{missing.join(", ")}</b>. Ödeme bilgisini
+                    tamamla.
                   </span>
                 </>
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            {/* BEKLEME SÜRESİ + BAŞVURU BEYANI */}
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-white/10 bg-white/[0.02] p-2.5 text-xs text-muted-foreground">
+              <span>
+                Ödenebilir: <b className="text-foreground">{money(row.payable_cents)}</b> (
+                {row.payable_count ?? 0} işlem)
+              </span>
+              <span>
+                Beklemede (30 gün): <b className="text-foreground">{money(row.held_cents)}</b> (
+                {row.held_count ?? 0} işlem)
+              </span>
+              <span>
+                Komisyon penceresi: her müşteri için{" "}
+                <b className="text-foreground">en fazla 12 ay</b>
+              </span>
+              {row.oldest_payable_at && (
+                <span>
+                  En eski ödenebilir: {new Date(row.oldest_payable_at).toLocaleDateString()}
+                </span>
+              )}
+              {(row.audience || row.channels || row.social_handle) && (
+                <span className="basis-full">
+                  Başvuru: {row.audience ?? "—"}
+                  {row.channels ? <> · kanallar: {row.channels}</> : null}
+                  {row.social_handle ? <> · {row.social_handle}</> : null}
+                  {row.terms_accepted_at ? (
+                    <> · şartlar kabul: {new Date(row.terms_accepted_at).toLocaleDateString()}</>
+                  ) : null}
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="text-xs">
                 <span className="mb-1 block text-muted-foreground">Ödeme yöntemi</span>
                 <select
@@ -587,6 +743,58 @@ function FragmentRow({
                 </select>
               </label>
               <label className="text-xs">
+                <span className="mb-1 block text-muted-foreground">Hesap sahibi adı</span>
+                <input
+                  value={accountHolder}
+                  onChange={(e) => setAccountHolder(e.target.value)}
+                  maxLength={160}
+                  placeholder="Ad Soyad"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block text-muted-foreground">
+                  IBAN{" "}
+                  {row.payout_iban_masked ? (
+                    <code className="font-mono text-[10px]">({row.payout_iban_masked})</code>
+                  ) : null}
+                </span>
+                <input
+                  value={iban}
+                  onChange={(e) => setIban(e.target.value)}
+                  maxLength={64}
+                  placeholder={row.payout_iban_masked ? "Değiştirmek için yeni IBAN gir" : "TR.."}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
+                {row.payout_iban_masked && !row.payout_iban_valid ? (
+                  <span className="mt-1 block text-[oklch(0.82_0.15_70)]">
+                    Kayıtlı IBAN doğrulanamadı (mod-97).
+                  </span>
+                ) : null}
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block text-muted-foreground">Wise e-postası</span>
+                <input
+                  type="email"
+                  value={wiseEmail}
+                  onChange={(e) => setWiseEmail(e.target.value)}
+                  maxLength={200}
+                  placeholder="influencer@ornek.com"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block text-muted-foreground">
+                  Vergi no (opsiyonel — şirket değilse boş)
+                </span>
+                <input
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  maxLength={64}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
+                />
+              </label>
+              <label className="text-xs">
                 <span className="mb-1 block text-muted-foreground">
                   Ödeme referansı (opsiyonel)
                 </span>
@@ -597,14 +805,12 @@ function FragmentRow({
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
                 />
               </label>
-              <label className="text-xs">
-                <span className="mb-1 block text-muted-foreground">
-                  Ödeme bilgisi (IBAN / Wise e-posta)
-                </span>
+              <label className="text-xs lg:col-span-3">
+                <span className="mb-1 block text-muted-foreground">Not (opsiyonel)</span>
                 <input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="TR.. / influencer@ornek.com"
+                  placeholder="Ödeme koordinasyonu notu"
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
                 />
               </label>
@@ -620,11 +826,11 @@ function FragmentRow({
               </button>
               <button
                 onClick={onMarkPaid}
-                disabled={paying || !row.eligible}
+                disabled={paying || !row.eligible || missing.length > 0}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
                 {paying ? <Loader2 size={13} className="animate-spin" /> : <Banknote size={13} />}
-                {money(row.pending_cents)} ödendi işaretle
+                {money(row.payable_cents)} ödendi işaretle
               </button>
               <button
                 onClick={onToggle}

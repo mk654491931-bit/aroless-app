@@ -16,6 +16,54 @@ export const DEFAULT_COMMISSION_RATE_PCT = 30;
 export const MIN_COMMISSION_GROSS_CENTS = 100; // $1.00
 
 /**
+ * KOMİSYON PENCERESİ — bir müşteri için komisyon EN FAZLA kaç aylık ödeme
+ * üzerinden yazılır.
+ *
+ * KURAL (ürün kararı): affiliate, getirdiği müşteri ÜCRETLİ KALDIĞI SÜRECE aylık
+ * %30 komisyon kazanır — ama en fazla 12 ay. Müşteri 4. ayda bırakırsa komisyon
+ * yalnız 4 ay için ödenmiş olur; 12 ay sonrasında yeni komisyon doğmaz.
+ *
+ * NEDEN SINIR: süresiz yinelenen komisyon, tek bir müşteri için sınırsız ve
+ * öngörülemeyen bir yükümlülük yaratır. 12 ay, geri kazanım (CAC) mantığıyla
+ * uyumludur ve affiliate'e önceden açıklanabilir bir taahhüttür.
+ *
+ * TEK KAYNAK: SQL tarafı AYNI sayıyı taşır — `affiliate_commission_cap`
+ * migration'ı (`enforce_affiliate_commission_cap()` içinde `_max_months`).
+ * İkisinin ayrışması `supabase-migrations.test.ts` ile engellenir; sayı
+ * değişirse iki dosya BİRLİKTE güncellenir.
+ */
+export const COMMISSION_MAX_MONTHS = 12;
+
+/**
+ * Bir müşteri için komisyon penceresi hâlâ açık mı?
+ *
+ * `priorMonths` = o müşteri için DAHA ÖNCE yazılmış komisyon ayı sayısı.
+ * Mahsup edilmiş (iade/chargeback) satırlar SAYILMAZ: o ay gelir üretmemiştir,
+ * dolayısıyla affiliate'in 12 ayını tüketmemelidir.
+ */
+export function isWithinCommissionWindow(
+  priorMonths: number,
+  maxMonths: number = COMMISSION_MAX_MONTHS,
+): boolean {
+  return commissionMonthsRemaining(priorMonths, maxMonths) > 0;
+}
+
+/**
+ * Komisyon penceresinde kalan ay sayısı (0 = pencere doldu, yeni komisyon yok).
+ * Geçersiz/negatif girdiler güvenli tarafa yuvarlanır: eksik bilgi affiliate'e
+ * ek ay kazandırmaz.
+ */
+export function commissionMonthsRemaining(
+  priorMonths: number,
+  maxMonths: number = COMMISSION_MAX_MONTHS,
+): number {
+  const written = Number.isFinite(priorMonths) ? Math.max(0, Math.floor(priorMonths)) : 0;
+  const cap =
+    Number.isFinite(maxMonths) && maxMonths > 0 ? Math.floor(maxMonths) : COMMISSION_MAX_MONTHS;
+  return Math.max(0, cap - written);
+}
+
+/**
  * ÖDEME EŞİĞİ: bir affiliate'e manuel ödeme (Wise/IBAN) yapılabilmesi için
  * birikmiş (pending) komisyonun ulaşması gereken alt sınır (minor units).
  *

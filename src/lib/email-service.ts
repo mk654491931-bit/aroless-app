@@ -12,6 +12,8 @@
  */
 
 import {
+  APP_URL,
+  affiliateCommissionEmail,
   otpEmail,
   passwordResetEmail,
   verificationEmail,
@@ -395,6 +397,26 @@ export async function sendWelcomeEmail(to: string, publicId: string): Promise<Se
     subject,
     html,
     text: `Aroless'e hoş geldiniz. Kimliğiniz: ${publicId}`,
+  });
+}
+
+/**
+ * Affiliate'e "komisyon kazandın" bildirimi.
+ *
+ * WEBHOOK'TAN ÇAĞRILIR: bu yüzden asla fırlatmaz ve çağıran taraf bunu kısa bir
+ * zaman bütçesiyle (`Promise.race`) bekler — e-posta yavaşlığı ödemeyi
+ * geciktirmemeli (Paddle 2xx beklemediğinde olayı yeniden gönderir).
+ */
+export async function sendAffiliateCommissionEmail(
+  to: string,
+  args: Parameters<typeof affiliateCommissionEmail>[0],
+): Promise<SendEmailResult> {
+  const { subject, html } = affiliateCommissionEmail(args);
+  return trySendEmail({
+    to,
+    subject,
+    html,
+    text: `Affiliate komisyonun: $${(args.commissionCents / 100).toFixed(2)} (${args.tier ?? "abonelik"}). Panel: ${APP_URL}/settings`,
   });
 }
 

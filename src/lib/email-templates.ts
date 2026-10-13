@@ -3,6 +3,8 @@
  * Saf HTML (inline stil) döner; e-posta istemcileri CSS dosyası desteklemez.
  */
 
+import { PAYOUT_HOLD_DAYS } from "./affiliate-payout";
+
 const BRAND = "#7aa2ff";
 const BG = "#0b0f1a";
 const CARD = "#111827";
@@ -42,6 +44,65 @@ function idBadge(publicId: string): string {
     <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:${MUTED};">Aroless Kimliğiniz</div>
     <div style="margin-top:8px;font-size:30px;font-weight:700;letter-spacing:8px;color:${BRAND};">${publicId}</div>
   </div>`;
+}
+
+const usd = (cents: number) =>
+  `$${(Math.max(0, Math.round(cents)) / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+/**
+ * AFFILIATE KOMİSYON BİLDİRİMİ — "komisyon kazandın".
+ *
+ * NEDEN VAR: komisyon yazıldığında influencer yalnız paneli açarsa görüyordu;
+ * sürekli panele bakmayan kişi programı ölü sanır ve paylaşmayı bırakır. E-posta
+ * kazanç, plan, birikim ve ödeme eşiği durumunu özetler; ödeme tarihi vaat
+ * ETMEZ (ödemeler manuel ve bekleme süresine bağlıdır — ölçülmemiş söz vermiyoruz).
+ */
+export function affiliateCommissionEmail(args: {
+  commissionCents: number;
+  grossCents: number;
+  tier: string | null;
+  promoCode: string | null;
+  /** Ödenebilir birikim (bekleme süresi dolmuş). */
+  payableCents?: number;
+  /** Beklemedeki (30 gün dolmamış) birikim. */
+  heldCents?: number;
+  minPayoutCents?: number;
+}) {
+  const code = args.promoCode ? args.promoCode : null;
+  const payable = args.payableCents ?? 0;
+  const held = args.heldCents ?? 0;
+  const min = args.minPayoutCents ?? 7500;
+  const remaining = Math.max(0, min - payable);
+
+  const progress =
+    payable >= min
+      ? `<p style="margin:0;color:${TEXT};"><b>Ödeme eşiğini geçtin.</b> Ödeme, yönetici tarafından Wise/IBAN ile yapılır ve transfer referansı paneline işlenir.</p>`
+      : `<p style="margin:0;color:${MUTED};">Ödeme eşiği <b style="color:${TEXT};">${usd(min)}</b>. Ödenebilir bakiyene <b style="color:${TEXT};">${usd(remaining)}</b> daha eklendiğinde ödeme yapılır.</p>`;
+
+  return {
+    subject: `Affiliate komisyonun: ${usd(args.commissionCents)}`,
+    html: shell({
+      title: "Affiliate komisyonu",
+      preview: `${args.tier ?? "Abonelik"} ödemesinden ${usd(args.commissionCents)} komisyon`,
+      body: `<h1 style="margin:0 0 10px;font-size:22px;font-weight:600;color:#fff;">Komisyon kazandın</h1>
+        <p style="margin:0;color:${MUTED};">${code ? `“${code}” kodunla` : "Affiliate kodunla"} gelen bir abonelik ödemesi işlendi.</p>
+        <div style="margin:22px 0;padding:18px;border-radius:14px;background:rgba(122,162,255,0.10);border:1px solid rgba(122,162,255,0.28);text-align:center;">
+          <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:${MUTED};">Komisyon</div>
+          <div style="margin-top:8px;font-size:30px;font-weight:700;color:${BRAND};">${usd(args.commissionCents)}</div>
+          <div style="margin-top:6px;font-size:12px;color:${MUTED};">${args.tier ?? "Abonelik"} · ödenen tutar ${usd(args.grossCents)}</div>
+        </div>
+        <p style="margin:0 0 6px;color:${MUTED};">Bakiye durumu:</p>
+        <ul style="margin:0 0 16px;padding-left:18px;color:${TEXT};">
+          <li>Ödenebilir (bekleme süresi dolmuş): <b>${usd(payable)}</b></li>
+          <li>Beklemede (ödemeden önce ${PAYOUT_HOLD_DAYS} gün geçmeli): <b>${usd(held)}</b></li>
+        </ul>
+        ${progress}
+        ${button(`${APP_URL}/settings`, "Affiliate panelini aç")}`,
+    }),
+  };
 }
 
 /** Kayıt sonrası hoş geldiniz + 8 haneli kimlik. */
