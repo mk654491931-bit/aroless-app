@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle, ExternalLink, FileText, Shield } from "lucide-react";
+import { CheckCircle, Coins, ExternalLink, FileText, Shield } from "lucide-react";
 import { openCookiePreferences } from "@/components/cookie-banner";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
@@ -17,6 +17,15 @@ export function SiteFooter() {
           <p className="mt-4 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <CheckCircle className="h-3.5 w-3.5 text-[var(--profit,var(--primary))]" />
             KVKK uyumlu veri işleme
+          </p>
+          {/* Affiliate tanıtım sayfasına site genelinde giriş noktası. */}
+          <p className="mt-3">
+            <Link
+              to="/affiliate"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--brand,var(--primary))] transition-colors hover:text-foreground"
+            >
+              <Coins className="h-3.5 w-3.5" /> Affiliate programı
+            </Link>
           </p>
         </div>
 
@@ -50,6 +59,15 @@ export function SiteFooter() {
                 className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <FileText className="h-3.5 w-3.5" /> Veri İşleme Sözleşmesi (DPA)
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "affiliate-program-sartlari" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <FileText className="h-3.5 w-3.5" /> Affiliate Program Şartları
               </Link>
             </li>
             <li>

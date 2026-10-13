@@ -404,7 +404,7 @@ export const AFFILIATE_TERMS: LegalDoc = {
         "Sahte hesap, bot trafiği, tıklama yönlendirme hilesi veya kazandığı trafiği yapay olarak şişirme yasaktır.",
         "Aroless adına garanti, kesin kazanç veya resmî temsil iddiası içeren yanıltıcı tanıtım yapılamaz.",
         "Marka adı ve logolar yalnız program kapsamında ve izin verilen biçimde kullanılabilir; spam/e-posta bombardımanı yasaktır.",
-        "Kurallara aykırılık hâlinde doğmuş ama ödenmemiş komisyonlar ödenmez.",
+        "Aroless, kurallara aykırılık hâlinde doğmuş ama henüz ödenmemiş komisyonların ödenmesini durdurabilir; ödenmiş komisyonlar için geri talep hakkı saklıdır. Ödemenin durdurulup durdurulmayacağı, ihlâlin ağırlığına göre Aroless'in takdirindedir.",
       ],
     },
     {

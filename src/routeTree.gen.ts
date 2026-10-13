@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AffiliateRouteImport } from './routes/affiliate'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
@@ -69,6 +70,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AffiliateRoute = AffiliateRouteImport.update({
+  id: '/affiliate',
+  path: '/affiliate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -324,6 +330,7 @@ const ApiPublicWebhookPaddleRoute = ApiPublicWebhookPaddleRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/affiliate': typeof AffiliateRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -377,6 +384,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/affiliate': typeof AffiliateRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -431,6 +439,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/affiliate': typeof AffiliateRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -486,6 +495,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/affiliate'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/affiliate'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -592,6 +603,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/affiliate'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -646,6 +658,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AffiliateRoute: typeof AffiliateRoute
   AuditRoute: typeof AuditRoute
   AuthRoute: typeof AuthRouteWithChildren
   CommandCenterRoute: typeof CommandCenterRoute
@@ -710,6 +723,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/affiliate': {
+      id: '/affiliate'
+      path: '/affiliate'
+      fullPath: '/affiliate'
+      preLoaderRoute: typeof AffiliateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -1071,6 +1091,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AffiliateRoute: AffiliateRoute,
   AuditRoute: AuditRoute,
   AuthRoute: AuthRouteWithChildren,
   CommandCenterRoute: CommandCenterRoute,
