@@ -36,6 +36,9 @@ const SOURCES = [
   readNormalized("../../components/marketing-landing.tsx"),
   readNormalized("../../components/affiliate-program-page.tsx"),
   readNormalized("../../components/landing/sections.tsx"),
+  // Public araç merkezi (/tools) — sayfa metinleri + araç kataloğu.
+  readNormalized("../../components/tools-showcase-page.tsx"),
+  readNormalized("../../lib/tools-catalog.ts"),
 ];
 
 const keys = Object.keys(PUBLIC_COPY);
@@ -82,6 +85,8 @@ describe("PUBLIC_COPY", () => {
       "Affiliate programını gör",
       "Başvuru için giriş yap",
       "Gerçek fiyatlar için /pricing →",
+      "Tüm AI araçlarını tek panelde çalıştır.",
+      "Modülü aç",
     ];
     for (const lang of LANGS) {
       const dict = extrasFor(lang);
@@ -94,7 +99,9 @@ describe("PUBLIC_COPY", () => {
   });
 
   it("Türkçe hariç her dilde çeviri kaynaktan farklı (kopyala-yapıştır değil)", () => {
-    const identical = keys.filter((key) => PUBLIC_COPY[key].en === key && /[çğıöşüÇĞİÖŞÜ]/.test(key));
+    const identical = keys.filter(
+      (key) => PUBLIC_COPY[key].en === key && /[çğıöşüÇĞİÖŞÜ]/.test(key),
+    );
     expect(identical).toEqual([]);
   });
 });

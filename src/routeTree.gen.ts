@@ -39,6 +39,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as HotIdRouteImport } from './routes/hot.$id'
 import { Route as LegalIndexRouteImport } from './routes/legal/index'
 import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
+import { Route as ToolsIndexRouteImport } from './routes/tools/index'
 import { Route as ToolsFinanceRouteImport } from './routes/tools/finance'
 import { Route as ToolsGrowthRouteImport } from './routes/tools/growth'
 import { Route as ToolsListingRouteImport } from './routes/tools/listing'
@@ -212,6 +213,11 @@ const LegalSlugRoute = LegalSlugRouteImport.update({
   path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToolsIndexRoute = ToolsIndexRouteImport.update({
+  id: '/tools/',
+  path: '/tools/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ToolsFinanceRoute = ToolsFinanceRouteImport.update({
   id: '/tools/finance',
   path: '/tools/finance',
@@ -362,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
@@ -416,6 +423,7 @@ export interface FileRoutesByTo {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal': typeof LegalIndexRoute
+  '/tools': typeof ToolsIndexRoute
   '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
@@ -471,6 +479,7 @@ export interface FileRoutesById {
   '/tools/listing': typeof ToolsListingRoute
   '/tools/sourcing': typeof ToolsSourcingRoute
   '/legal/': typeof LegalIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/api/cron/radar-refresh': typeof ApiCronRadarRefreshRoute
   '/api/product-discovery/preflight': typeof ApiProductDiscoveryPreflightRoute
   '/api/product-discovery/start': typeof ApiProductDiscoveryStartRoute
@@ -527,6 +536,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/tools/'
     | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
@@ -581,6 +591,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal'
+    | '/tools'
     | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
@@ -635,6 +646,7 @@ export interface FileRouteTypes {
     | '/tools/listing'
     | '/tools/sourcing'
     | '/legal/'
+    | '/tools/'
     | '/api/cron/radar-refresh'
     | '/api/product-discovery/preflight'
     | '/api/product-discovery/start'
@@ -689,6 +701,7 @@ export interface RootRouteChildren {
   ToolsListingRoute: typeof ToolsListingRoute
   ToolsSourcingRoute: typeof ToolsSourcingRoute
   LegalIndexRoute: typeof LegalIndexRoute
+  ToolsIndexRoute: typeof ToolsIndexRoute
   ApiCronRadarRefreshRoute: typeof ApiCronRadarRefreshRoute
   ApiProductDiscoveryPreflightRoute: typeof ApiProductDiscoveryPreflightRoute
   ApiProductDiscoveryStartRoute: typeof ApiProductDiscoveryStartRoute
@@ -921,6 +934,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tools/': {
+      id: '/tools/'
+      path: '/tools'
+      fullPath: '/tools/'
+      preLoaderRoute: typeof ToolsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tools/finance': {
       id: '/tools/finance'
       path: '/tools/finance'
@@ -1122,6 +1142,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsListingRoute: ToolsListingRoute,
   ToolsSourcingRoute: ToolsSourcingRoute,
   LegalIndexRoute: LegalIndexRoute,
+  ToolsIndexRoute: ToolsIndexRoute,
   ApiCronRadarRefreshRoute: ApiCronRadarRefreshRoute,
   ApiProductDiscoveryPreflightRoute: ApiProductDiscoveryPreflightRoute,
   ApiProductDiscoveryStartRoute: ApiProductDiscoveryStartRoute,

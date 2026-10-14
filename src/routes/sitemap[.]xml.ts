@@ -20,6 +20,7 @@ export const Route = createFileRoute("/sitemap.xml")({
           // route'lar sitemap'e girmez (crawler için değersiz).
           { path: "/", changefreq: "weekly", priority: "1.0" },
           { path: "/pricing", changefreq: "monthly", priority: "0.9" },
+          { path: "/tools", changefreq: "monthly", priority: "0.8" },
           { path: "/affiliate", changefreq: "monthly", priority: "0.6" },
           { path: "/legal", changefreq: "yearly", priority: "0.3" },
           ...LEGAL_DOCS.map((d) => ({

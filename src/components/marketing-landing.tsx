@@ -281,6 +281,9 @@ export function MarketingLanding() {
             <a href="#faq" className="transition hover:text-slate-100">
               FAQ
             </a>
+            <Link to="/tools" className="transition hover:text-slate-100">
+              Araçlar
+            </Link>
             <Link to="/affiliate" className="transition hover:text-slate-100">
               Affiliate
             </Link>
@@ -485,8 +488,8 @@ export function MarketingLanding() {
               Motoru kurmadan dene. Kayıt yok, ağ yok.
             </h2>
             <p className="mt-3 text-slate-400">
-              Bir kategori seç ve çok adımlı hattı çalıştır. Tüm veri yerelde hazır olduğu için
-              demo anında ve tamamen deterministik çalışır.
+              Bir kategori seç ve çok adımlı hattı çalıştır. Tüm veri yerelde hazır olduğu için demo
+              anında ve tamamen deterministik çalışır.
             </p>
           </div>
           <div className="mt-10">
@@ -504,8 +507,8 @@ export function MarketingLanding() {
               Uçtan uca izlenebilen bir hat
             </h2>
             <p className="mt-3 text-slate-400">
-              Veri toplama → kaynak doğrulama → puanlama → konsey raporu. Her adım deterministik
-              ve tekrarlanabilir.
+              Veri toplama → kaynak doğrulama → puanlama → konsey raporu. Her adım deterministik ve
+              tekrarlanabilir.
             </p>
           </div>
 
@@ -563,8 +566,10 @@ export function MarketingLanding() {
         <section id="metrics" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/88">
             <div className="border-b border-white/10 px-6 py-5 text-center">
-              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">              Simülasyon referansları
-            </h2>
+              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                {" "}
+                Simülasyon referansları
+              </h2>
               <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
                 Aşağıdaki değerler ürünün nasıl ölçtüğünü göstermek için yerel demo verisiyle
                 üretilir; gerçek sonuçlar kullanılan veri kaynağına göre değişir.
@@ -764,8 +769,8 @@ export function MarketingLanding() {
                 İlk analizini dakikalar içinde al.
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400 sm:text-base">
-                Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya
-                da kredi kartı gerekmez.
+                Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya da
+                kredi kartı gerekmez.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                 <Link
@@ -789,7 +794,11 @@ export function MarketingLanding() {
                 </a>
               </div>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-xs text-slate-500">
-                {["Kredi kartı gerekmez", "Kayıt anında hoş geldin kredisi", "İstediğin zaman iptal"].map((t) => (
+                {[
+                  "Kredi kartı gerekmez",
+                  "Kayıt anında hoş geldin kredisi",
+                  "İstediğin zaman iptal",
+                ].map((t) => (
                   <span key={t} className="inline-flex items-center gap-1.5">
                     <Check size={13} className="text-emerald-400" /> {t}
                   </span>
@@ -820,6 +829,9 @@ export function MarketingLanding() {
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <Link to="/auth" className="hover:text-slate-200">
               Sign in
+            </Link>
+            <Link to="/tools" className="hover:text-slate-200">
+              Araçlar
             </Link>
             <Link to="/affiliate" className="hover:text-slate-200">
               Affiliate

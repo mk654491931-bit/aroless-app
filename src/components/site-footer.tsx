@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle, Coins, ExternalLink, FileText, Shield } from "lucide-react";
+import { CheckCircle, Coins, ExternalLink, FileText, Shield, Wrench } from "lucide-react";
 import { openCookiePreferences } from "@/components/cookie-banner";
 import { AI_DISCLAIMER_TR } from "@/lib/ai-guidance";
 
@@ -18,13 +18,19 @@ export function SiteFooter() {
             <CheckCircle className="h-3.5 w-3.5 text-[var(--profit,var(--primary))]" />
             KVKK uyumlu veri işleme
           </p>
-          {/* Affiliate tanıtım sayfasına site genelinde giriş noktası. */}
-          <p className="mt-3">
+          {/* Affiliate ve araç merkezi sayfalarına site genelinde giriş noktası. */}
+          <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link
               to="/affiliate"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--brand,var(--primary))] transition-colors hover:text-foreground"
             >
               <Coins className="h-3.5 w-3.5" /> Affiliate programı
+            </Link>
+            <Link
+              to="/tools"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--brand,var(--primary))] transition-colors hover:text-foreground"
+            >
+              <Wrench className="h-3.5 w-3.5" /> Araç merkezi
             </Link>
           </p>
         </div>
