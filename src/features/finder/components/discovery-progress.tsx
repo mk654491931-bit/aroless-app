@@ -53,7 +53,7 @@ export function DiscoveryProgress({
   const done = status === "completed";
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+    <div className="space-y-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#0c0f18] to-[#07090f] p-5 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)]">
       <div className="flex items-center gap-2">
         {done ? (
           <CheckCircle2 className="size-4 text-emerald-500" />
@@ -69,9 +69,9 @@ export function DiscoveryProgress({
       </div>
 
       {/* İlerleme çubuğu — yüzde sunucunun kendi kaydından gelir. */}
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-primary transition-all duration-500"
+          className="h-full rounded-full bg-gradient-to-r from-zinc-100 via-white to-zinc-400 transition-all duration-500"
           style={{ width: `${Math.max(2, Math.min(100, progress))}%` }}
         />
       </div>

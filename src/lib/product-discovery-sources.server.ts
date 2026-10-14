@@ -114,6 +114,36 @@ const NOT_A_BRAND = new Set([
   "cheap",
   "sale",
   "deals",
+  "trendyol",
+  "hepsiburada",
+  "n11",
+  "gittigidiyor",
+  "ciceksepeti",
+  "çiçeksepeti",
+  "product",
+  "original",
+  "orijinal",
+  "premium",
+  "official",
+  "store",
+  "mağaza",
+  "magaza",
+  "shop",
+  "mini",
+  "pro",
+  "plus",
+  "set",
+  "kit",
+  "pack",
+  "bundle",
+  "lot",
+  "piece",
+  "adet",
+  "yeni",
+  "indirimli",
+  "kargo",
+  "ücretsiz",
+  "ucretsiz",
 ]);
 
 export function brandFromTitle(title: string): string {
@@ -122,7 +152,7 @@ export function brandFromTitle(title: string): string {
       .trim()
       .split(/\s+/)[0] ?? "";
   const cleaned = first.replace(/[^\p{L}\p{N}\-&'.]/gu, "");
-  if (cleaned.length < 2 || cleaned.length > 24) return "";
+  if (cleaned.length < 3 || cleaned.length > 24) return "";
   if (/\d/.test(cleaned)) return "";
   if (!/^\p{Lu}/u.test(cleaned)) return "";
   if (NOT_A_BRAND.has(cleaned.toLowerCase())) return "";

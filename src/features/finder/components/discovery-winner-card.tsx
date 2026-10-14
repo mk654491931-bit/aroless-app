@@ -15,9 +15,27 @@
 // bilgidir; sayı uydurmak bu kartın var oluş sebebini çürütürdü.
 // ============================================================================
 
-import { AlertTriangle, ExternalLink, ShieldCheck, TrendingUp } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ExternalLink, ShieldCheck, TrendingUp } from "lucide-react";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
+
+/** Kanıt seviyesi — güven + bütünlükten türetilir, asla puanı ezmez. */
+export function evidenceLevel(w: Pick<DiscoveryWinner, "confidenceScore" | "dataCompleteness" | "votes">): {
+  label: string;
+  cls: string;
+} {
+  if (w.confidenceScore >= 70 && w.dataCompleteness >= 4)
+    return {
+      label: "Güçlü kanıt",
+      cls: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+    };
+  if (w.confidenceScore >= 50 && w.dataCompleteness >= 3)
+    return {
+      label: "Kısmi kanıt",
+      cls: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+    };
+  return { label: "Zayıf kanıt — dikkat", cls: "border-red-400/30 bg-red-400/10 text-red-300" };
+}
 
 /** Konseydeki ajan sayısı — payda sabittir. */
 const TOTAL_AGENTS = 14;
@@ -77,79 +95,99 @@ export function DiscoveryWinnerCard({
   const missing =
     MEASURABLE_FIELDS - Math.max(0, Math.min(MEASURABLE_FIELDS, winner.dataCompleteness));
 
+  const rankStyle = rank === 1 ? "bg-amber-300 text-black border-amber-200 shadow-[0_0_18px_-4px_rgba(252,211,77,0.7)]" : rank === 2 ? "bg-zinc-200 text-black border-white" : rank === 3 ? "bg-amber-700 text-white border-amber-600" : "bg-white/10 text-white border-white/20";
   return (
-    <article className="rounded-xl border border-border bg-card p-5 space-y-4">
+    <article className="group space-y-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#0c0f18] to-[#07090f] p-5 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] transition-colors hover:border-white/25">
+      <div aria-hidden className="-mx-5 -mt-5 h-1 bg-gradient-to-r from-white/60 via-white/10 to-transparent" />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${evidenceLevel(winner).cls}`}>
+          <BadgeCheck className="size-3" /> {evidenceLevel(winner).label}
+        </span>
+        <span className="text-[10px] text-zinc-500">
+          {winner.dataCompleteness}/5 alan doğrulandı · {winner.sources.length} kaynak
+        </span>
+        {winner.confidenceScore < 40 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300">
+            <AlertTriangle className="size-3" /> Puan yüksek olsa bile kanıt az — temkinli test et
+          </span>
+        )}
+      </div>
       <header className="flex items-start gap-3">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary tabular-nums">
+        <span className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-black tabular-nums ${rankStyle}`}>
           {rank}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold leading-tight">{winner.name || "İsimsiz ürün"}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <h3 className="font-bold leading-tight text-white">{winner.name || "İsimsiz ürün"}</h3>
+          <p className="mt-1 text-xs text-zinc-500">
             {[winner.brand, winner.seller, winner.category, winner.sources.join(", ")]
               .filter(Boolean)
               .join(" · ") || "Kaynak bilgisi yok"}
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <div className={`text-2xl font-bold tabular-nums ${scoreTone(winner.councilScore)}`}>
+        <div className="shrink-0 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-right">
+          <div className={`text-2xl font-black tabular-nums ${scoreTone(winner.councilScore)}`}>
             {winner.councilScore}
           </div>
-          <div className="text-[10px] text-muted-foreground">konsey puanı</div>
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500">konsey puanı</div>
         </div>
       </header>
 
       {/* GÜVEN — councilScore'ın ALTINDA ve AYRI. Eşitlik bozucusu budur. */}
-      <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
-        <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Güven</span>
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/50 px-3 py-2">
+        <ShieldCheck className="size-3.5 shrink-0 text-emerald-300" />
+        <span className="text-xs text-zinc-400">Güven</span>
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-primary/70"
+            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-white"
             style={{ width: `${Math.max(2, Math.min(100, winner.confidenceScore))}%` }}
           />
         </div>
-        <span className="text-xs font-medium tabular-nums">{winner.confidenceScore}</span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs font-bold text-white tabular-nums">{winner.confidenceScore}</span>
+        <span className="text-[10px] text-zinc-500">
           ({winner.votes}/{TOTAL_AGENTS} oy)
         </span>
       </div>
 
       {/* Ölçülen ticari veri — yoksa "—". */}
-      <dl className="grid grid-cols-4 gap-2 text-center">
-        <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Fiyat</dt>
-          <dd className="text-sm font-semibold tabular-nums">{fmtPrice(winner.priceUsd)}</dd>
+      <dl className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] py-2.5">
+          <dt className="text-[10px] uppercase tracking-wider text-zinc-500">Fiyat</dt>
+          <dd className="mt-0.5 text-sm font-bold text-white tabular-nums">{fmtPrice(winner.priceUsd)}</dd>
         </div>
         {/* Tedarik fiyatı ÖLÇÜLDÜYSE gösterilir. Boş kalmasının sebebi artık
             "kaynak yok" değil, bu ürüne alakalı toptan teklif bulunamaması —
             o durumda 0 yazmak yerine "—" yazılır. */}
-        <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Tedarik</dt>
-          <dd className="text-sm font-semibold tabular-nums">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] py-2.5">
+          <dt className="text-[10px] uppercase tracking-wider text-zinc-500">Tedarik</dt>
+          <dd className="mt-0.5 text-sm font-bold text-white tabular-nums">
             {winner.supplier?.supplierPriceUsd != null
               ? fmtPrice(winner.supplier.supplierPriceUsd)
               : "—"}
           </dd>
         </div>
-        <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Puan</dt>
-          <dd className="text-sm font-semibold tabular-nums">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] py-2.5">
+          <dt className="text-[10px] uppercase tracking-wider text-zinc-500">Puan</dt>
+          <dd className="mt-0.5 text-sm font-bold text-white tabular-nums">
             {typeof winner.rating === "number" ? `${winner.rating.toFixed(1)}/5` : "—"}
           </dd>
         </div>
-        <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Ön skor</dt>
-          <dd className="text-sm font-semibold tabular-nums">{fmt(winner.preScore)}</dd>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] py-2.5">
+          <dt className="text-[10px] uppercase tracking-wider text-zinc-500">Ön skor</dt>
+          <dd className="mt-0.5 text-sm font-bold text-white tabular-nums">{fmt(winner.preScore)}</dd>
         </div>
       </dl>
+      {winner.supplier?.supplierPriceUsd == null && (
+        <p className="-mt-2 text-[10px] leading-relaxed text-zinc-600">
+          Bu ürüne alakalı toptan teklif bulunamadı — marj bu yüzden brüt/boş görünüyor, site bozuk değil.
+        </p>
+      )}
 
       {/* Deterministic ön sinyaller — 14 ajanın ortak zemini. */}
       <div className="flex flex-wrap gap-1.5">
         {(Object.keys(SIGNAL_LABELS) as (keyof typeof SIGNAL_LABELS)[]).map((key) => (
           <span
             key={key}
-            className={`rounded-md border border-border px-2 py-0.5 text-[10px] ${scoreTone(
+            className={`rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-medium ${scoreTone(
               winner.signals[key],
             )}`}
             title={`${SIGNAL_LABELS[key]} sinyali`}
@@ -163,25 +201,26 @@ export function DiscoveryWinnerCard({
           ölçülmüş özeti (trend · marj/fiyat · rekabet). Ajan gerekçelerinden
           ayrıdır: bunlar kurator ölçütlerinin insan dili karşılığıdır. */}
       {reason && (
-        <p className="rounded-lg bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground/80">Neden seçildi: </span>
+        <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-300">
+          <span className="font-bold text-white">Neden seçildi: </span>
           {reason}
         </p>
       )}
 
       {/* Ajan gerekçeleri — konsensüs tek başına "neden?" sorusunu yanıtlamaz. */}
       {winner.evidence.length > 0 && (
-        <ul className="space-y-1 border-t border-border pt-3">
+        <ul className="space-y-1.5 border-t border-white/10 pt-3">
           {winner.evidence.slice(0, 3).map((e, i) => (
-            <li key={i} className="text-[11px] text-muted-foreground leading-relaxed">
+            <li key={i} className="flex gap-2 text-[11px] text-zinc-400 leading-relaxed">
+              <span className="mt-1.5 size-1 shrink-0 rounded-full bg-zinc-500" />
               {e}
             </li>
           ))}
         </ul>
       )}
 
-      <footer className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[11px]">
-        <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
+      <footer className="flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[11px]">
+        <div className="flex flex-wrap items-center gap-3 text-zinc-500">
           <span title="Ajanların oy uyumu: yüksek = birlikte karar verdiler">
             <TrendingUp className="mr-1 inline size-3" />
             uyum {fmt(winner.agreement)}
@@ -201,7 +240,7 @@ export function DiscoveryWinnerCard({
             href={winner.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary hover:underline"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white px-3 py-1.5 text-[11px] font-bold text-black transition hover:bg-zinc-200"
           >
             Kaynağa git <ExternalLink className="size-3" />
           </a>
