@@ -30,10 +30,17 @@ import {
 import {
   buildAdminPromoUsers,
   myPromoPerformance,
+  summarizePromoByCode,
   type PromoProfileRow,
   type PromoRedemptionRow,
   type PromoTransactionRow,
 } from "@/lib/promo-attribution";
+import { loadPromoAttribution } from "@/lib/promo.functions";
+import {
+  buildAffiliateCodeReport,
+  type AffiliateBalance,
+  type AffiliateCodeReport,
+} from "@/lib/affiliate-code-report";
 import { adminOrUserClient, missingServiceRoleError } from "@/lib/service-client";
 
 /** 403 (not 500) for RBAC denials — TanStack Start serializes statusCode. */
@@ -1043,6 +1050,119 @@ export const adminListAffiliatePayouts = createServerFn({ method: "GET" })
         };
       })
       .sort((x, y) => y.payable_cents - x.payable_cents || y.pending_cents - x.pending_cents);
+  });
+
+/**
+ * Admin: KOD BAZLI RAPOR — hangi affiliate kodu kaç abonelik getirdi ve o
+ * hesapta ne kadar ÖDENEBİLİR bakiye birikti (tek ekran).
+ *
+ * NEDEN TEK UÇ: abonelik sayısı `promo_redemptions`tan (KOD bazlı), bakiye ise
+ * `affiliate_commissions` özetinden (HESAP bazlı) gelir. İki tabloyu ayrı
+ * ekranlarda göstermek, "kodu çok çalışan ama parası az" ile "parası çok ama
+ * kodu yok" durumlarını gizler. Bu uç ikisini tek satır listesinde birleştirir;
+ * bakiyenin çift sayılmaması `buildAffiliateCodeReport` içinde kilitlidir.
+ */
+export const adminAffiliateCodeReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AffiliateCodeReport> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [codesRes, affRes, summaryRes, attribution] = await Promise.all([
+      supabaseAdmin.from("promo_codes").select("code, affiliate_id").limit(500),
+      supabaseAdmin
+        .from("affiliates")
+        .select(
+          "user_id, status, commission_rate_pct, payout_method, payout_account_holder, " +
+            "payout_iban, payout_wise_email, payout_tax_id",
+        )
+        .limit(500),
+      supabaseAdmin.rpc("affiliate_payout_summary"),
+      loadPromoAttribution(),
+    ]);
+
+    const codes = (codesRes.data ?? []) as Array<{ code: string; affiliate_id: string | null }>;
+    const affiliates = (affRes.data ?? []) as unknown as Array<
+      Record<string, unknown> & { user_id: string }
+    >;
+
+    // v2 özeti (bekleme süresi) uygulanmadıysa ödenebilir/beklemede alanları
+    // yoktur; o durumda tüm birikim "beklemede" sayılır — yanlışlıkla "ödemeye
+    // hazır" göstermek, ödeme reddiyle sonuçlanacağı için yeğlenmez.
+    const summaryHasHold = ((summaryRes.data ?? []) as unknown[]).some(
+      (row) => (row as Record<string, unknown>)?.payable_cents !== undefined,
+    );
+    const summaries = new Map<string, Record<string, unknown>>(
+      ((summaryRes.data ?? []) as Array<Record<string, unknown> & { affiliate_id: string }>).map(
+        (s) => [String(s.affiliate_id), s],
+      ),
+    );
+
+    const codesByAffiliate = new Map<string, string[]>();
+    for (const row of codes) {
+      if (!row.affiliate_id) continue;
+      const list = codesByAffiliate.get(row.affiliate_id) ?? [];
+      list.push(String(row.code ?? ""));
+      codesByAffiliate.set(row.affiliate_id, list);
+    }
+
+    const emailsRes = affiliates.length
+      ? await supabaseAdmin
+          .from("profiles")
+          .select("id, email")
+          .in(
+            "id",
+            affiliates.map((a) => a.user_id),
+          )
+      : { data: [] as Array<{ id: string; email: string | null }> };
+    const emailById = new Map(
+      ((emailsRes.data ?? []) as Array<{ id: string; email: string | null }>).map((p) => [
+        p.id,
+        p.email,
+      ]),
+    );
+
+    const balances: AffiliateBalance[] = affiliates.map((a) => {
+      const s = summaries.get(a.user_id) ?? {};
+      const count = (key: string) => Number(s[key] ?? 0);
+      const pending = count("pending_cents");
+      const payable = summaryHasHold ? count("payable_cents") : 0;
+      const eligibility = payoutEligibility(payable);
+      const payoutState = payoutProfileState({
+        method: (a["payout_method"] as string | null) ?? null,
+        accountHolder: (a["payout_account_holder"] as string | null) ?? null,
+        iban: (a["payout_iban"] as string | null) ?? null,
+        wiseEmail: (a["payout_wise_email"] as string | null) ?? null,
+        taxId: (a["payout_tax_id"] as string | null) ?? null,
+      });
+      return {
+        user_id: a.user_id,
+        email: emailById.get(a.user_id) ?? null,
+        status: String(a["status"] ?? "pending"),
+        commission_rate_pct: Number(a["commission_rate_pct"] ?? DEFAULT_COMMISSION_RATE_PCT),
+        payable_cents: payable,
+        held_cents: summaryHasHold ? count("held_cents") : pending,
+        paid_cents: count("paid_cents"),
+        eligible: eligibility.eligible,
+        remaining_cents: eligibility.remainingCents,
+        payout_missing: payoutState.missing,
+        codes: codesByAffiliate.get(a.user_id) ?? [],
+      };
+    });
+
+    const allCodes = codes.map((c) => String(c.code ?? ""));
+    return buildAffiliateCodeReport({
+      // Kod bazlı atıf özeti: `purchases` = ödeme yapan kullanıcı = ABONELİK.
+      stats: summarizePromoByCode(attribution.users, { allCodes }).map((s) => ({
+        code: s.code,
+        signups: s.signups,
+        subscriptions: s.purchases,
+        revenue_cents: s.revenue_cents,
+        by_tier: s.by_tier,
+      })),
+      affiliates: balances,
+      allCodes,
+    });
   });
 
 export type AffiliatePayoutCsvExport = {

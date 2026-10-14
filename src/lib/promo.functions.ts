@@ -168,9 +168,7 @@ export type PromoClaimResult = {
 
 export const claimPromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
-    z.object({ code: z.string().trim().min(3).max(32) }).parse(i),
-  )
+  .inputValidator((i: unknown) => z.object({ code: z.string().trim().min(3).max(32) }).parse(i))
   .handler(async ({ data, context }): Promise<PromoClaimResult> => {
     const code = String(data.code ?? "")
       .trim()
@@ -243,7 +241,12 @@ export const claimPromoCode = createServerFn({ method: "POST" })
 
     // Kod zaten bağlıysa yazım yok (idempotent başarı).
     if (decision.idempotent) {
-      return { ok: true, code: "ok", reason: "Kod zaten hesabına bağlı.", affiliate: !!affiliateId };
+      return {
+        ok: true,
+        code: "ok",
+        reason: "Kod zaten hesabına bağlı.",
+        affiliate: !!affiliateId,
+      };
     }
 
     try {
@@ -299,8 +302,14 @@ export const getMyPromoCode = createServerFn({ method: "GET" })
 
 export type { PromoCodeStat, AdminPromoUser } from "@/lib/promo-attribution";
 
-/** Admin panelde kullanılan ortak ham veri seti: redemptions + profil + ödemeler. */
-async function loadPromoAttribution() {
+/**
+ * Admin panelde kullanılan ortak ham veri seti: redemptions + profil + ödemeler.
+ *
+ * İhracat (export) sebebi: affiliate KOD RAPORU da aynı atıf verisinden
+ * beslenmek zorundadır — kendi sorgusunu yazsaydı iki ekran zamanla ayrışır ve
+ * "aynı kod iki farklı sayı" gösterirdi.
+ */
+export async function loadPromoAttribution() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: redemptions } = await supabaseAdmin
     .from("promo_redemptions")

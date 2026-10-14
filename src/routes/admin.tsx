@@ -27,6 +27,7 @@ import { AdminTickets } from "@/components/admin-tickets";
 import { AdminFreeCredits } from "@/components/admin-free-credits";
 import { AdminAbuseAlerts } from "@/components/admin-abuse-alerts";
 import { AdminAffiliates } from "@/components/admin-affiliates";
+import { AdminAffiliateCodeReport } from "@/components/admin-affiliate-code-report";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -179,6 +180,8 @@ function AdminPage() {
         <AdminTickets />
         <AdminAbuseAlerts />
         <AdminFreeCredits />
+        {/* Kod performansı ile ödenecek para aynı ekranda: rapor, ödeme panelinin üstünde. */}
+        <AdminAffiliateCodeReport />
         <AdminAffiliates />
 
         <section className="glass rounded-2xl overflow-hidden">
