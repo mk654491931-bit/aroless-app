@@ -10,11 +10,14 @@ import {
   Layers,
   LineChart,
   Lock,
+  Megaphone,
   Network,
   Rocket,
   Search,
   ShieldCheck,
   Sparkles,
+  Users,
+  Wallet,
   Workflow,
   Zap,
 } from "lucide-react";
@@ -97,6 +100,41 @@ const METRICS = [
     note: "Simülasyon senaryosu",
   },
 ];
+
+/**
+ * Affiliate programı — landing'de görünür olmalı.
+ *
+ * NEDEN BURADA: program uçtan uca kodluydu ama landing sayfasında tek bir
+ * işaret yoktu; ziyaretçi affiliate sayfasının varlığını ancak footer'dan
+ * görebiliyordu. Metinler kampanyanın GERÇEK kurallarıdır (%30 oran, bir
+ * müşteri için en fazla 12 ay, 30 gün bekleme, $75 eşiği) ve affiliate /
+ * ödeme kaydı ekranlarındaki sayılarla aynı kaynaktan gelir.
+ */
+const AFFILIATE_STEPS = [
+  {
+    icon: Users,
+    title: "1 · Başvur",
+    text: "Kitleni ve kanallarını beyan et, şartları kabul et; başvurun admin onayına düşer.",
+  },
+  {
+    icon: BadgeCheck,
+    title: "2 · Kodunu al",
+    text: "Onaydan sonra hesabına özel affiliate kodu tanımlanır; paylaşacağın link /auth?promo=KOD biçimindedir.",
+  },
+  {
+    icon: Megaphone,
+    title: "3 · Paylaş, komisyon biriksin",
+    text: "Kodunla gelen müşteri aboneliğini sürdürdükçe her yenileme ödemesinden komisyon yazılır.",
+  },
+  {
+    icon: Wallet,
+    title: "4 · Ödemeni al",
+    text: "Ödenebilir bakiyen $75'i geçince Wise veya IBAN ile ödeme yapılır; her komisyon 30 gün bekletilir.",
+  },
+];
+
+/** Affiliate kuralları — affiliate sayfası ve ödeme kaydıyla aynı sayılar. */
+const AFFILIATE_RULES = ["%30 oran", "En fazla 12 ay", "30 gün bekleme", "$75 eşiği"];
 
 /* What we do — animated capability cards (hover-follow spotlight) */
 const WHAT_WE_DO = [
@@ -243,6 +281,9 @@ export function MarketingLanding() {
             <a href="#faq" className="transition hover:text-slate-100">
               FAQ
             </a>
+            <Link to="/affiliate" className="transition hover:text-slate-100">
+              Affiliate
+            </Link>
             <Link to="/pricing" className="transition hover:text-slate-100">
               Pricing
             </Link>
@@ -273,12 +314,15 @@ export function MarketingLanding() {
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
                 <Sparkles size={12} /> E-ticaret satıcıları için yapay zekâ
               </div>
-              <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl xl:text-6xl">
-                Piyasa sinyallerini{" "}
-                <span className="bg-gradient-to-r from-indigo-300 via-white to-emerald-300 bg-clip-text text-transparent">
-                  kârlı ürün kararlarına
-                </span>{" "}
-                çevir.
+              {/*
+                Başlık TEK metin düğümü olarak yazılır (renk geçişi h1'in
+                tamamına uygulanır). Sebep: başlık parçalara bölünürse
+                sözlük çevirisi parça parça uygulanır ve cümle sırası dile göre
+                bozulur ("Market signals profitable product decisions into.").
+                Tek düğüm, diller arası doğru cümleyi garanti eder.
+              */}
+              <h1 className="mt-5 bg-gradient-to-r from-indigo-300 via-white to-emerald-300 bg-clip-text text-4xl font-extrabold leading-[1.08] tracking-tight text-transparent sm:text-5xl xl:text-6xl">
+                Piyasa sinyallerini kârlı ürün kararlarına çevir.
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
                 Aroless; Ürün Bulucu, Trend Radar, mağaza denetimi, finans motoru ve 14'lü AI
@@ -634,6 +678,67 @@ export function MarketingLanding() {
           </p>
         </section>
 
+        {/* ── Affiliate programı ─────────────────────────────────── */}
+        <section id="affiliate" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+              <Megaphone size={12} /> Affiliate programı
+            </span>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+              Aroless'u paylaş, aylık komisyon kazan.
+            </h2>
+            <p className="mt-3 text-slate-400">
+              Getirdiğin müşteri ücretli kaldığı sürece her yenilemeden %30 komisyon — bir müşteri
+              için en fazla 12 ay.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {AFFILIATE_STEPS.map((step) => (
+              <div
+                key={step.title}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/88 p-6 transition duration-300 hover:-translate-y-1 hover:border-emerald-400/30"
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-14 -top-14 size-36 rounded-full bg-emerald-500/0 blur-3xl transition duration-500 group-hover:bg-emerald-500/10"
+                />
+                <div className="grid size-10 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10">
+                  <step.icon size={18} className="text-emerald-300" />
+                </div>
+                <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">{step.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {AFFILIATE_RULES.map((rule) => (
+              <span
+                key={rule}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300"
+              >
+                {rule}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col items-center gap-3 text-center">
+            <Link to="/affiliate" className="sweep-frame group rounded-xl">
+              <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-emerald-500 to-emerald-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
+                Affiliate programını gör
+                <ArrowRight
+                  size={16}
+                  className="transition-transform group-hover:translate-x-0.5"
+                />
+              </span>
+            </Link>
+            <p className="max-w-xl text-[11px] text-slate-500">
+              Affiliate kodu indirim vermez; indirimler Paddle panelinden yönetilir.
+            </p>
+          </div>
+        </section>
+
         {/* ── FAQ ────────────────────────────────────────────────── */}
         <div id="faq" className="scroll-mt-24">
           <FaqSection
@@ -715,6 +820,9 @@ export function MarketingLanding() {
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <Link to="/auth" className="hover:text-slate-200">
               Sign in
+            </Link>
+            <Link to="/affiliate" className="hover:text-slate-200">
+              Affiliate
             </Link>
             <Link to="/pricing" className="hover:text-slate-200">
               Pricing

@@ -1,3 +1,5 @@
+import { PUBLIC_COPY, type PublicCopyLang } from "./public-copy";
+
 /** Hand-maintained strings coming from shared UI primitives (shadcn). */
 export const EXTRAS: Record<string, Record<string, string>> = {
   "Toggle Sidebar": {
@@ -76,10 +78,30 @@ export const EXTRAS: Record<string, Record<string, string>> = {
   },
 };
 
+/**
+ * Elle yazılan çevirileri seçili dil için tek sözlükte birleştirir.
+ *
+ * İKİ KATMAN:
+ *   1. `EXTRAS` — shadcn/UI primitiflerinden gelen ortak metinler (sağlayıcı
+ *      kitaplıkların yazdığı varsayılanlar; kaynak koda dokunulamaz).
+ *   2. `PUBLIC_COPY` — landing ve /affiliate gibi public pazarlama sayfalarının
+ *      metinleri. Bu sayfalar sonradan yazıldığı ve `dict-*` sözlükleri yalnız
+ *      uygulama ekranlarını kapsadığı için, dil değiştirildiğinde bu yüzey
+ *      çevrilmeden kalıyordu; katman bu boşluğu kapatır.
+ *
+ * `runtime` bunu `{ ...dict, ...extrasFor(lang) }` biçiminde uygular; yani
+ * buradaki kayıtlar ilgili dilin sözlüğünü geçersiz kılar ve o dilde eksik olan
+ * anahtarları tamamlar.
+ */
 export function extrasFor(lang: string): Record<string, string> {
+  const code = (lang ?? "").slice(0, 2);
   const out: Record<string, string> = {};
   for (const [src, map] of Object.entries(EXTRAS)) {
-    const v = map[lang];
+    const v = map[code];
+    if (v) out[src] = v;
+  }
+  for (const [src, map] of Object.entries(PUBLIC_COPY)) {
+    const v = map[code as PublicCopyLang];
     if (v) out[src] = v;
   }
   return out;
