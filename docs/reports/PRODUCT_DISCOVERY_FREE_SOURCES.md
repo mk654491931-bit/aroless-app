@@ -99,6 +99,89 @@ Yorum: aday havuzu %55-63 büyüdü ve **her yeni satır gerçek fiyat taşıyor
 (fiyatlı satır sayısı aday sayısına eşit). Kaynak ~1,0-1,4 sn'de dönüyor;
 kaynak hata verirse `ok:false` raporlanır ve hat düşmez (fail-soft sözleşmesi).
 
+## 5c. İkinci tedarik kaynağı: `made-in-china` (anahtarsız) — 2026-10-16
+
+### Ölçülen boşluk (eski durum)
+
+Tek tedarik kaynağı AliExpress'ti ve üç yuvayı **hiç** ölçemiyordu:
+
+| Yuva | Neden ölçülemiyordu | Neden önemli |
+| --- | --- | --- |
+| **MOQ** (minimum sipariş) | Perakende kartı MOQ taşımaz | “Bu ürünü bugün atabilir miyim?” sorusunun cevabı |
+| **Tedarikçi kimliği** | Kart mağaza adını yalnız SPONSORLU kartlarda veriyor (ölçüldü: 60 kartın 10'u) | Kimden alınacağı bilinmiyor |
+| **FOB fiyat bandı** | Perakende kartta tek fiyat var | Toptan ilanda fiyat miktar kademesine göre ARALIK yazılır |
+
+### Çalışan yol ve ölçüm
+
+`https://www.made-in-china.com/productdirectory.do?word=<terim>&subaction=hunt&style=b&mode=and&code=0&order=0&isOpenCorrection=1`
+→ HTTP 200, ~1,1-1,35 MB, **0,4-1,4 sn**. Aynı gün ölçülüp ÇALIŞMAYAN yollar:
+`m.made-in-china.com` (mobil arama kart şeması farklı), `products-search/hot-china-products`
+(şema sürümden sürüme değişiyor).
+
+| Niş | Teklif | FOB fiyatlı | FOB aralığı | MOQ | Tedarikçi adı | medyan FOB | medyan MOQ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| air fryer | 37 | 37 (%100) | 23 | 22 | 22 | $22,20 | 1.000 |
+| led desk lamp | 30 | 30 (%100) | 23 | 30 | 30 | $8,00 | 80 |
+| pet water fountain | 30 | 30 (%100) | 21 | 30 | 30 | $12,99 | 100 |
+| cat scratching board | 41 | 41 (%100) | 27 | 30 | 30 | $2,50 | 5 |
+| yoga mat | 24 | 22 (%92) | 19 | 24 | 24 | $4,99 | 100 |
+
+Yani tedarikçi adı kapsamı AliExpress'in 10/60'ından **22-30/30**'a, MOQ kapsamı
+0'dan **%80-100**'e çıktı.
+
+### İki kart şeması AYNI ayrıştırıcıda
+
+| Şema | İşaret | Ölçüldü |
+| --- | --- | --- |
+| A | `<div class="list-node">` + `<h2 class="product-name" title=…>` + `<span class="price_hint"> (MOQ)` | Arama sonuç listesi (30 kart) |
+| B | `<a class="prod-item">` + `<a class="prod-name" title=…>` | Sayfa içi vitrin şeridi |
+
+Ölçülen iki ayrıştırma hatası ve düzeltmeleri:
+
+1. **Tek şemaya bağlanmak kaynağı tümden susturdu.** İlk sürüm `prod-item`
+   sınırında bölüyordu; `led desk lamp`/`wireless earbuds` sorgularında **0 kart**
+   döndü çünkü sayfa şema A ile gelmişti. Artık iki sınır da taranır; ayrıca iç
+   kap `list-node-content` dışlanır (`\b` sınırı onu da yakalıyordu ve 2 kartlık
+   sayfa 3 blok üretiyordu, yani kartlar ortadan bölünüyordu).
+2. **6 KB blok sınırı kartın KUYRUĞUNU kesiyordu.** `list-node` kartı ~37 KB;
+   kesme yüzünden 30 kartın yalnız **12**'sinde tedarikçi adı okunuyordu. Sınır
+   60 KB'a alındı → **30/30** (aynı sayfa, üç ardışık koşuda doğrulandı).
+
+### MOQ neden yalnız `(MOQ)` ipucuyla kabul edilir
+
+Aynı sayfa “`50000pieces/Year`” gibi **yıllık kapasite** yazar. O sayıyı minimum
+sipariş sanmak kullanıcıya yanlış sermaye rakamı gösterirdi. Ayrıştırıcı MOQ'yu
+yalnız arkasında `<span class="price_hint"> (MOQ)` ipucu olan satırdan okur;
+yoksa `null` kalır (0 yazılmaz).
+
+## 5d. Lansman kapısı — ölçülen kanıttan “atılabilir mi?” kararı
+
+`src/lib/launch-readiness.ts` (saf fonksiyon) beş kapıyı ölçer; ölçülmemiş kapı
+`unknown`dır ve **asla `pass` sayılmaz**:
+
+| Kapı | Ölçüm | Politika eşiği |
+| --- | --- | --- |
+| Tedarik | Eşleşen toptan teklif | — |
+| İlk sipariş | MOQ × FOB (aralıkta KONSERVATİF üst uç) | ≤ $1.500 |
+| Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
+| Brüt marj | Ölçülen toptan − perakende | ≥ %40 (kargo/komisyon öncesi) |
+| Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
+
+`launchable` = hiç `fail` yok **ve** tedarik **ve** marj ölçülmüş **ve** ≥3 kapı
+geçmiş. Canlı ölçüm (`MIC_LIVE=1 npx vitest run mic-supplier.live`):
+
+| Niş | Karar | Ölçülen sebep |
+| --- | --- | --- |
+| air fryer | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $117,6 |
+| led desk lamp | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $81,6 |
+| pet water fountain | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $160 |
+| yoga mat | ❌ Atılamaz | MOQ 1.000 × $3,93 = $3.930 · fiyat $14,97 |
+
+Karar sunucuda üretilir (kohort rekabet sayısı yalnız orada bilinir), ürünle
+birlikte taşınır (`launch`, `cohortCompetitors`) ve kartta kapı kapı gösterilir.
+Sıralamaya **ek** bir bonus olarak girer (`WINNER_LAUNCH_BONUS = 6`): mevcut
+ağırlıklar (`0.85/0.10/0.05`) değiştirilmedi, bonus kanıtı olmayan üründe 0'dır.
+
 ## 6. Doğrulama
 
 ```sh
@@ -107,10 +190,18 @@ npx vitest run                                  # 132 dosya / 1800 test
 PRODUCT_DISCOVERY_E2E_LIVE=1 \
   PRODUCT_DISCOVERY_E2E_NICHES="air fryer,robot vacuum" \
   npx vitest run src/lib/product-discovery.e2e.live.test.ts
+MIC_LIVE=1 MIC_LIVE_NICHES="air fryer,yoga mat" \
+  npx vitest run src/lib/mic-supplier.live.test.ts   # toptan kaynak + lansman kararı
 ```
 
 Yeni testler: `src/lib/product-brand.test.ts`, `src/lib/product-catalog.test.ts`,
 `src/lib/product-discovery-deal-feed.test.ts` (10 test: fiyat/görsel/satıcı/oy
 ölçümü, puan `null` dürüstlüğü, niş ve ABD süzgeçleri),
 `src/lib/product-discovery-dealfeed-ab.live.test.ts` (canlı A/B ölçümü),
-`src/lib/reader-source-matrix.test.ts` (Best Buy kategori alanı eklendi).
+`src/lib/reader-source-matrix.test.ts` (Best Buy kategori alanı eklendi),
+`src/lib/mic-supplier.test.ts` (12 test: iki kart şeması, MOQ'nun yıllık
+kapasiteyle karışmaması, tekilleştirme, boş nişte ağa çıkmama),
+`src/lib/launch-readiness.test.ts` (13 test: eşikler, konservatif FOB ucu,
+“ölçülmeyen kapı pass/fail olmaz” sözleşmesi),
+`src/lib/product-discovery-launch.wiring.test.ts` (11 test: kaynağın hatta bağlı
+olduğu + kararın zod katmanlarından düşmediği).

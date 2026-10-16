@@ -39,6 +39,11 @@ import {
   describeShortlistQuality,
   productIdOf,
 } from "./discovery-core";
+// `supplier-economics` SAF bir modüldür (ağ/AI/DB yok) — başlık eşleştirmesi
+// yalnız onun ölçekleriyle yapılabilir, ikinci bir benzerlik fonksiyonu yazmak
+// iki farklı "benzer" tanımı üretirdi.
+import { productTitleMatch } from "./supplier-economics";
+import { assessLaunch } from "./launch-readiness";
 
 /**
  * ADIM 1'in üst sınırı: 75 aday.
@@ -69,6 +74,26 @@ export const DISCOVERY_FINAL_N = 5;
  * belirleyebilmelidir.
  */
 export const WINNER_SCORE_WEIGHTS = { council: 0.85, confidence: 0.1, evidence: 0.05 } as const;
+
+/**
+ * KOHORT BENZERLİK EŞİĞİ — `cohortCompetitorCounts` için (bkz. tanımı).
+ *
+ * 2/3 ölçek: üç ayırt edici kelimenin en az ikisi paylaşılırsa "aynı ürün".
+ * Tek kelime (1/3) paylaşımı çok geniş bir rekabet tanımı üretir; üçü de
+ * isteyen (1,0) yaklaşım ise farklı mağaza başlıklarını kaçırır.
+ */
+export const COHORT_COMPETITOR_MATCH = 0.66;
+
+/**
+ * ATILABİLİRLİK BONUSU — lansman kapılarını geçen ürünün sıralama avantajı.
+ *
+ * NEDEN AĞIRLIKLAR DEĞİŞTİRİLMEDİ: `council`/`confidence`/`evidence` ağırlıkları
+ * 1,0'a tamamlanır ve mevcut testler o puanı kilitler. Bonus bu yüzden AYRI ve
+ * EK bir terimdir; kanıtı olmayan üründe (veya eski kayıtlarda) 0'dır — yani
+ * davranış eskisiyle birebir aynı kalır, ürün "atılamaz" denen ürünün önüne
+ * yalnız gerçekten atılabilir olan geçer.
+ */
+export const WINNER_LAUNCH_BONUS = 6;
 
 /** Bu oyun altındaki aday, kanıtı da zayıfsa "kazanan" olarak sunulmaz. */
 export const WINNER_MIN_COUNCIL_SCORE = 22;
@@ -350,6 +375,12 @@ async function attachSupplierEconomics(
   matchedNiche: number;
   withMargin: number;
   medianUsd: number | null;
+  /** MIC kaynağından gelen teklif sayısı (0 = kaynak sessiz/alakasız). */
+  micOffers: number;
+  /** Kaç ürün MOQ (minimum sipariş) kanıtı kazandı. */
+  withMoq: number;
+  /** Çalışan/çalışmayan kaynak dökümü (şeffaflık). */
+  sources: string[];
 }> {
   const empty = {
     offers: 0,
@@ -358,9 +389,13 @@ async function attachSupplierEconomics(
     matchedNiche: 0,
     withMargin: 0,
     medianUsd: null,
+    micOffers: 0,
+    withMoq: 0,
+    sources: [] as string[],
   };
   if (!survivors.length) return empty;
   const { fetchSupplierOffers } = await import("./aliexpress-supplier.server");
+  const { fetchMicOffers } = await import("./mic-supplier.server");
   const { buildEconomics, supplierMatchKind } = await import("./supplier-economics");
   // NİŞ İFADELERİ (TR + İngilizce çevirisi) — niş seviyesi yedeği için.
   //
@@ -373,23 +408,53 @@ async function attachSupplierEconomics(
     (q): q is string => Boolean(q && q.trim()),
   );
 
-  let offers;
-  try {
-    offers = await fetchSupplierOffers(niche, { country });
-  } catch (error) {
-    console.log(
-      `[discovery] tedarik kaynağı başarısız: ${
-        error instanceof Error ? error.message.slice(0, 80) : "bilinmeyen"
-      }`,
-    );
-    return empty;
+  // İKİ KAYNAK PARALEL ve FAIL-SOFT. MIC, AliExpress'in ölçemediği üç yuvayı
+  // getirir (MOQ, tedarikçi adı, FOB bandı) — biri düşerse diğeri tek başına
+  // eskisi gibi çalışır; kanıt uydurulmaz.
+  const [aeResult, micResult] = await Promise.allSettled([
+    fetchSupplierOffers(niche, { country }),
+    fetchMicOffers(niche),
+  ]);
+  const sources: string[] = [];
+  const aeOffers = aeResult.status === "fulfilled" ? aeResult.value : [];
+  const micOffers = micResult.status === "fulfilled" ? micResult.value : [];
+  if (aeResult.status === "fulfilled") {
+    sources.push(`aliexpress ${aeOffers.length} teklif`);
+  } else {
+    sources.push(`aliexpress HATA (${aeResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`);
   }
-  if (!offers.length) return empty;
+  if (micResult.status === "fulfilled") {
+    sources.push(`made-in-china ${micOffers.length} teklif`);
+  } else {
+    sources.push(`made-in-china HATA (${micResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`);
+  }
+
+  // MIC teklifi bizim teklif sözleşmesine çevrilir: ölçmediği alanlar
+  // `null`'dur (`sold`, `rating`, `discountPct`) — uydurulmaz.
+  const offers = [
+    ...aeOffers,
+    ...micOffers.map((o) => ({
+      title: o.title,
+      unitPriceUsd: o.unitPriceUsd,
+      unitPriceHighUsd: o.unitPriceHighUsd,
+      listPriceUsd: null,
+      discountPct: null,
+      sold: null,
+      rating: null,
+      store: o.store,
+      shipFrom: o.shipFrom,
+      url: o.url,
+      moqUnits: o.moqUnits,
+      moqUnit: o.moqUnit,
+    })),
+  ];
+  if (!offers.length) return { ...empty, sources };
 
   let matched = 0;
   let matchedProduct = 0;
   let matchedNiche = 0;
   let withMargin = 0;
+  let withMoq = 0;
   const prices: number[] = [];
   for (let i = 0; i < survivors.length; i++) {
     const row = survivors[i];
@@ -404,6 +469,7 @@ async function attachSupplierEconomics(
     matched++;
     if (supplierMatchKind(supplier) === "product") matchedProduct++;
     else matchedNiche++;
+    if (typeof supplier.moqUnits === "number") withMoq++;
     if (supplier.supplierPriceUsd !== null) prices.push(supplier.supplierPriceUsd);
     if (margin.grossMarginPct !== null) withMargin++;
     (survivors[i] as NormalizedProduct) = {
@@ -421,7 +487,34 @@ async function attachSupplierEconomics(
     matchedNiche,
     withMargin,
     medianUsd: prices.length ? prices[Math.floor(prices.length / 2)] : null,
+    micOffers: micOffers.length,
+    withMoq,
+    sources,
   };
+}
+
+/**
+ * KOHORT RAKİP SAYISI — "aynı havuzda bu ürünün kaç benzeri var?".
+ *
+ * NEDEN BURADA ÖLÇÜLEBİLİYOR: `winner-criteria.ts` rekabet kriterini bilinçli
+ * olarak dışarıda bırakmıştı çünkü kohort verisi kısa listede taşınmıyordu.
+ * Hat bu veriyi ZATEN elinde tutuyor (`survivors`); eksik olan, üründen ürüne
+ * sayılması ve ürünle birlikte taşınmasıydı.
+ *
+ * ÖLÇÜM TANIMI: başlığın AYIRT EDİCİ kelimelerinin en az 2/3'ünü paylaşan
+ * DİĞER satırlar. Eşik `productTitleMatch`in kendi ölçeğinde 0,66'dır; bu,
+ * "kedi tırmalama tahtası" ile "kedi ağacı"yı eşleştirmez ama aynı ürünün
+ * iki farklı mağazadaki ilanını eşleştirir.
+ */
+export function cohortCompetitorCounts(names: readonly string[]): number[] {
+  return names.map((name, i) => {
+    let count = 0;
+    for (let j = 0; j < names.length; j++) {
+      if (i === j) continue;
+      if (productTitleMatch(name, names[j]) >= COHORT_COMPETITOR_MATCH) count += 1;
+    }
+    return count;
+  });
 }
 
 export async function runScrapeFilterStep(
@@ -632,6 +725,32 @@ export async function runScrapeFilterStep(
   //    teklif ÜRETİR; retail satırlarıyla eşleştirilmesi gerekir.
   const supplierStats = await attachSupplierEconomics(survivors, niche, country);
 
+  // 4b) ATILABİLİRLİK KARARI — "bu ürün GERÇEKTEN atılabilir mi?".
+  //
+  // Üç ölçüm burada birleşir: MOQ × FOB = ilk sipariş sermayesi, ölçülen brüt
+  // marj ve KOHORT rakibi sayısı. Karar ürünle birlikte taşınır (`launch`) ki
+  // hem sıralama hem arayüz aynı ölçüme baksın; ölçülmeyen kapı "unknown"dur
+  // ve asla `pass` sayılmaz (bkz. `launch-readiness.ts` sözleşmesi).
+  const competitorCounts = cohortCompetitorCounts(survivors.map((row) => row.name));
+  for (let i = 0; i < survivors.length; i++) {
+    const row = survivors[i];
+    const launch = assessLaunch({
+      priceUsd: row.priceUsd,
+      grossMarginPct: row.grossMarginPct ?? null,
+      supplierPriceUsd: row.supplier?.supplierPriceUsd ?? null,
+      supplierPriceHighUsd: row.supplier?.supplierPriceHighUsd ?? null,
+      moqUnits: row.supplier?.moqUnits ?? null,
+      moqUnit: row.supplier?.moqUnit ?? "",
+      cohortCompetitors: competitorCounts[i],
+    });
+    (survivors[i] as NormalizedProduct) = {
+      ...row,
+      cohortCompetitors: competitorCounts[i],
+      launch,
+    };
+  }
+  const launchable = survivors.filter((row) => row.launch?.launchable === true);
+
   const notes: string[] = [
     `Görsel kapısı: ${requireImage ? "açık" : "kapalı"} (havuzda ${imagedCount} fotoğraflı satır).`,
     // ÖLÇÜLEN ZENGİNLEŞTİRME: marka/kategori kaç satırda ÖLÇÜLDÜ? Bu satır
@@ -680,7 +799,7 @@ export async function runScrapeFilterStep(
         `${supplierStats.matchedNiche} aynı niş; ${supplierStats.offers} teklif tarandı, ` +
         `medyan birim fiyat ` +
         `${supplierStats.medianUsd === null ? "ölçülmedi" : `$${supplierStats.medianUsd}`}); ` +
-        `brüt marj ${supplierStats.withMargin} üründe hesaplandı.`,
+        `brüt marj ${supplierStats.withMargin} üründe, MOQ ${supplierStats.withMoq} üründe hesaplandı.`,
     );
   } else if (survivors.length > 0) {
     notes.push(
@@ -688,6 +807,27 @@ export async function runScrapeFilterStep(
         `ürünlerle alakalı eşleşmedi — Supplier/Marj alanları boş kalıyor (uydurulmadı).`,
     );
   }
+  if (supplierStats.sources.length) {
+    notes.push(`Tedarik kaynakları: ${supplierStats.sources.join(" · ")}.`);
+  }
+  // Notları önce değişkenlere almak, iç içe şablon dizesi girintisini önler
+  // (okunabilirlik: not metni tek yerde kurulur).
+  const atilabilirOrnek = launchable
+    .slice(0, 3)
+    .map((row) => row.name.slice(0, 40))
+    .join(" · ");
+  const engelOrnek =
+    survivors
+      .flatMap((row) => row.launch?.blockers ?? [])
+      .slice(0, 3)
+      .join(" · ") || "kanıt eksik (tedarik/MOQ/marj ölçülmedi)";
+  notes.push(
+    launchable.length > 0
+      ? `Lansman kapısı: ${launchable.length}/${survivors.length} ürün "atılabilir" ` +
+          `(tedarik + marj + ilk sipariş sermayesi ölçüldü): ${atilabilirOrnek}` +
+          `${launchable.length > 3 ? " …" : ""}.`
+      : `Lansman kapısı: hiçbir aday tüm kapılardan geçemedi. Engeller: ${engelOrnek}.`,
+  );
   if (rescued > 0) {
     notes.push(
       `Kalite kapıları ${stats.inputCount} satırın tamamını elemişti; ${rescued} aday ` +
@@ -1111,16 +1251,21 @@ export async function runDeepAnalysisStep(
  */
 export function winnerQualityScore(
   row: { councilScore: number; confidenceScore?: number },
-  product?: { dataCompleteness?: number } | null,
+  product?: { dataCompleteness?: number; launch?: { launchable?: boolean } | null } | null,
 ): number {
   const council = Math.max(0, Math.min(100, row.councilScore ?? 0));
   const confidence = Math.max(0, Math.min(100, row.confidenceScore ?? 0));
   const completeness = Math.max(0, Math.min(5, Number(product?.dataCompleteness ?? 0)));
   const evidence = (completeness / 5) * 100;
-  return (
+  // ATILABİLİRLİK EK TERİMİ: kapıları geçen ürün, eşit oyda ve eşit kanıtta
+  // öne geçer. Ölçüm yoksa 0'dır — sıralama eskisiyle birebir aynı kalır.
+  const launchBonus = product?.launch?.launchable === true ? WINNER_LAUNCH_BONUS : 0;
+  return Math.min(
+    100,
     council * WINNER_SCORE_WEIGHTS.council +
-    confidence * WINNER_SCORE_WEIGHTS.confidence +
-    evidence * WINNER_SCORE_WEIGHTS.evidence
+      confidence * WINNER_SCORE_WEIGHTS.confidence +
+      evidence * WINNER_SCORE_WEIGHTS.evidence +
+      launchBonus,
   );
 }
 

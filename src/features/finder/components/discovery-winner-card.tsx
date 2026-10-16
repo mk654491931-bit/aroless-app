@@ -15,7 +15,7 @@
 // bilgidir; sayı uydurmak bu kartın var oluş sebebini çürütürdü.
 // ============================================================================
 
-import { AlertTriangle, ExternalLink, ShieldCheck, TrendingUp } from "lucide-react";
+import { AlertTriangle, ExternalLink, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 
@@ -104,6 +104,11 @@ export function DiscoveryWinnerCard({
   const missing =
     MEASURABLE_FIELDS - Math.max(0, Math.min(MEASURABLE_FIELDS, winner.dataCompleteness));
   const demand = demandCell(winner);
+  // LANSMAN KARARI — sunucuda ölçülen kanıttan üretilir, kartta yeniden
+  // hesaplanmaz (kohort rekabet sayısı yalnız sunucuda bilinir). Karar yoksa
+  // (eski kayıt) hiç gösterilmez: "—" bile yazmak karar varmış gibi okunurdu.
+  const launch = winner.launch ?? null;
+  const moq = winner.supplier?.moqUnits ?? null;
 
   return (
     <article className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -170,6 +175,58 @@ export function DiscoveryWinnerCard({
           <dd className="text-sm font-semibold tabular-nums">{fmt(winner.preScore)}</dd>
         </div>
       </dl>
+
+      {/* LANSMAN KAPISI — "bu ürünü bugün atabilir miyim?" sorusunun,
+          ÖLÇÜLMÜŞ üç yuvaya (MOQ × FOB, brüt marj, kohort rakibi) dayanan
+          cevabı. Kapı durumları renkle ayrılır; ölçülmemiş kapı soluk kalır
+          (bilinmeyen ≠ kötü). */}
+      {launch && (
+        <div
+          className={`rounded-lg border px-3 py-2 ${
+            launch.launchable
+              ? "border-emerald-500/30 bg-emerald-500/5"
+              : launch.failed > 0
+                ? "border-rose-500/30 bg-rose-500/5"
+                : "border-border bg-muted/30"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Rocket
+              className={`size-3.5 shrink-0 ${
+                launch.launchable ? "text-emerald-500" : "text-muted-foreground"
+              }`}
+            />
+            <span className="text-xs font-medium">
+              {launch.launchable ? "Atılabilir" : launch.failed > 0 ? "Engelli" : "Kanıt eksik"}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {launch.passed}/{launch.gates.length} kapı
+              {launch.firstOrderUsd !== null
+                ? ` · ilk sipariş ${fmtPrice(launch.firstOrderUsd)}`
+                : ""}
+              {moq !== null ? ` · MOQ ${moq.toLocaleString("tr-TR")}` : ""}
+            </span>
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {launch.gates.map((gate) => (
+              <span
+                key={gate.id}
+                title={`${gate.label}: ${gate.value} — ${gate.detail}`}
+                className={`rounded-md border px-2 py-0.5 text-[10px] ${
+                  gate.state === "pass"
+                    ? "border-emerald-500/30 text-emerald-600"
+                    : gate.state === "fail"
+                      ? "border-rose-500/30 text-rose-500"
+                      : "border-dashed border-border text-muted-foreground"
+                }`}
+              >
+                {gate.label}
+                <span className="ml-1 opacity-70">{gate.value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Deterministic ön sinyaller — 14 ajanın ortak zemini. */}
       <div className="flex flex-wrap gap-1.5">

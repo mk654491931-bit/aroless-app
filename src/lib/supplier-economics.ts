@@ -40,6 +40,17 @@ export type SupplierOfferLike = {
   store: string;
   shipFrom: string;
   url: string;
+  /**
+   * FOB ARALIĞININ ÜST UCU (varsa). Toptan ilanlarda fiyat miktar kademesine
+   * göre aralık olarak yazılır (`US$13.00-15.00`); aralığı tek sayıya indirmek
+   * sipariş adedine bağlı bir gerçeği "tek fiyat" gibi sunmak olurdu.
+   * Aralık yoksa `null`/`undefined`.
+   */
+  unitPriceHighUsd?: number | null;
+  /** Ölçülen minimum sipariş adedi (MOQ). `null`/`undefined` = sayfada yok. */
+  moqUnits?: number | null;
+  /** MOQ birimi ("pieces", "sets"…). Boş olabilir. */
+  moqUnit?: string;
 };
 
 /** Bir perakende adayın eşleştirme için gereken yüzü. */
@@ -300,6 +311,23 @@ export const SupplierEvidenceSchema = z.object({
    * kullanıcı kanıtını kaybederdi.
    */
   matchKind: z.enum(["product", "niche"]).optional().catch(undefined),
+  /**
+   * FOB ARALIĞININ ÜST UCU — ölçüldüyse dolu, yoksa `null`.
+   *
+   * NEDEN AYRI ALAN: toptan ilanlarda fiyat "US$13.00-15.00" gibi aralıktır ve
+   * alt uç en yüksek miktar kademesine aittir. Tek uç göstermek ya iyimser
+   * (alt) ya da haksız (üst) bir maliyet sunardı; ikisi birlikte taşınır.
+   */
+  supplierPriceHighUsd: z.number().nullable().optional().catch(null),
+  /**
+   * ÖLÇÜLEN minimum sipariş adedi + birimi. `null` = sayfada yok.
+   *
+   * `optional()` BİLEREK (`matchKind` ile aynı gerekçe): alan eklenmeden ÖNCE
+   * yazılmış kayıtlar bu alanı taşımaz ve zod zorunlu alanla eski kayıtların
+   * `supplier` kanıtını tümden düşürürdü.
+   */
+  moqUnits: z.number().int().min(1).nullable().optional().catch(null),
+  moqUnit: z.string().optional().catch(""),
 });
 
 /**
@@ -476,13 +504,26 @@ function buildEvidenceFromPool(
     supplierPriceUsd: money2(median(prices)),
     supplierLowUsd: money2(percentile(prices, 0.25)),
     supplierHighUsd: money2(percentile(prices, 0.75)),
+    // FOB aralığının üst ucu ve MOQ YALNIZ eşleşen tekliften alınır: havuzun
+    // medyanı aralık bilgisi de sipariş eşiği de taşımaz (havuz çok teklifli,
+    // MOQ ise teklife özeldir). Ölçülmediyse `null` kalır — 0 uydurulmaz.
+    supplierPriceHighUsd: money2(measuredMoney(bestOffer.unitPriceHighUsd)),
+    moqUnits:
+      typeof bestOffer.moqUnits === "number" && bestOffer.moqUnits > 0
+        ? Math.floor(bestOffer.moqUnits)
+        : null,
+    moqUnit: String(bestOffer.moqUnit ?? "").trim(),
     listPriceUsd: money2(median(lists)),
     discountPct: discounts.length
       ? Math.round(discounts.reduce((a, b) => a + b, 0) / discounts.length)
       : null,
     soldTotal: solds.length ? solds.reduce((a, b) => a + b, 0) : null,
-    store: topSold?.store ?? "",
-    shipFrom: topSold?.shipFrom ?? bestOffer.shipFrom,
+    // MAĞAZA/KARGO: en çok satan teklif önce, ölçüm YOKSA eşleşen teklifin
+    // kendi değeri. `??` yeterli DEĞİLDİ: AliExpress'te satış adedi olup mağaza
+    // adı boş olan kartlar var (ölçüldü: 60 kartın 10'u) ve o durumda `store`
+    // `""` döner, birleşik havuzdaki MIC tedarikçi adı kullanılmadan kaybolurdu.
+    store: topSold?.store || bestOffer.store || "",
+    shipFrom: topSold?.shipFrom || bestOffer.shipFrom,
     url: bestOffer.url,
   };
 }

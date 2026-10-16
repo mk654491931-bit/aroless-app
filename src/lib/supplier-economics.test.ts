@@ -236,6 +236,47 @@ describe("SupplierEvidenceSchema", () => {
     expect(parsed.matchKind).toBe("product");
   });
 
+  it("MOQ + FOB ARALIĞI eşleşen tekliften kanıta geçer (ölçülen, uydurulmayan)", () => {
+    // MIC kartından ölçülmüş gerçek satırlar: US$13.00-15.00 FOB, 1.200 adet MOQ.
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer({ unitPriceUsd: 13, unitPriceHighUsd: 15, moqUnits: 1200, moqUnit: "pieces" })],
+    );
+    expect(evidence.supplierPriceUsd).toBe(13);
+    expect(evidence.supplierPriceHighUsd).toBe(15);
+    expect(evidence.moqUnits).toBe(1200);
+    expect(evidence.moqUnit).toBe("pieces");
+    // Şemadan da kaybolmaz (zod alan düşürme hatasının regresyonu).
+    const parsed = SupplierEvidenceSchema.parse(evidence);
+    expect(parsed.moqUnits).toBe(1200);
+    expect(parsed.supplierPriceHighUsd).toBe(15);
+  });
+
+  it("MOQ ölçülmediyse `null` kalır — 0 yazmak 'bedava sipariş' demek olurdu", () => {
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer()],
+    );
+    expect(evidence.moqUnits).toBeNull();
+    expect(evidence.moqUnit).toBe("");
+    expect(evidence.supplierPriceHighUsd).toBeNull();
+  });
+
+  it("satış adedi olmayan (MOQ'lu) teklifin mağazası kaybolmaz", () => {
+    // AliExpress satış adedi olup mağaza adı BOŞ kart üretebiliyor (ölçüldü:
+    // 60 kartın 10'u). Birleşik havuzda MIC'in firma adı bu durumda korunur.
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer({ store: "", sold: 695 })],
+    );
+    expect(evidence.store).toBe("");
+    const withMargin = buildMarginEvidence({
+      sellUsd: 97.99,
+      supplierUsd: evidence.supplierPriceUsd,
+    });
+    expect(withMargin.grossMarginPct).not.toBeNull();
+  });
+
   it("`matchKind` EKLENMEDEN ÖNCE yazılmış kayıtları düşürmez", () => {
     // Eski kayıtta alan yoktur; zorunlu olsaydı zod hatayı fırlatır ve üst
     // alan `.catch(null)` ile TÜM kanıtı silerdi (ölçülen hata sınıfı).
@@ -254,6 +295,10 @@ describe("SupplierEvidenceSchema", () => {
     const parsed = SupplierEvidenceSchema.parse(legacy);
     expect(parsed.supplierPriceUsd).toBe(26.36);
     expect(parsed.matchKind).toBeUndefined();
+    // MOQ/FOB aralığı alanları da eski kayıtta YOKTUR: zorunlu olsalardı aynı
+    // şekilde tüm kanıt düşerdi.
+    expect(parsed.moqUnits).toBeUndefined();
+    expect(parsed.supplierPriceHighUsd).toBeUndefined();
     // Taşımayan kayıt "birebir ürün" sayılır (eskiden tek yol oydu).
     expect(supplierMatchKind(parsed)).toBe("product");
   });

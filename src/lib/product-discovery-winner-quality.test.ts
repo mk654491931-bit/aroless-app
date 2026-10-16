@@ -20,11 +20,15 @@ import { describe, expect, it } from "vitest";
 import { filterAndPreRank, normalizeRaw } from "./product-discovery-filter.server";
 import {
   buildTopProducts,
+  cohortCompetitorCounts,
+  COHORT_COMPETITOR_MATCH,
   isWinnerWorthy,
   MIN_DELIVERED_WINNERS,
   runFinalRankStep,
+  WINNER_LAUNCH_BONUS,
   winnerQualityScore,
 } from "./product-discovery-pipeline.server";
+import { assessLaunch } from "./launch-readiness";
 import { buildAgentPrompt } from "./product-discovery-council-ai.server";
 import {
   deterministicVotes,
@@ -251,6 +255,86 @@ describe("nihai kalite sıralaması ve kapısı", () => {
     expect(result.consensus.length).toBeGreaterThanOrEqual(1);
     expect(result.consensus.length).toBe(MIN_DELIVERED_WINNERS);
     expect(result.notes.join(" ")).toContain("geri alındı");
+  });
+});
+
+/* ------------------------------------------- 5b. Atılabilirlik kararı (kohort) */
+
+describe("kohort rakibi ölçümü ve atılabilirlik bonusu", () => {
+  it("aynı ürünün farklı mağazadaki ilanlarını rakip sayar", () => {
+    const counts = cohortCompetitorCounts([
+      "Ninja AF101 Air Fryer 4 Qt",
+      "Ninja Air Fryer 4 Qt AF101",
+      "Samsung Galaxy Buds2 Pro",
+    ]);
+    // İlk ikisi ayırt edici kelimeleri (air fryer 4 qt) paylaşır; üçüncü tekil.
+    expect(counts[0]).toBe(1);
+    expect(counts[1]).toBe(1);
+    expect(counts[2]).toBe(0);
+  });
+
+  it("farklı ürünleri rakip SAYMAZ (ayırt edici kelime eşiği 2/3)", () => {
+    const counts = cohortCompetitorCounts([
+      "Cat Scratching Board Corrugated",
+      "Cat Tree Tower Sisal",
+      "Dog Crate Divider Panel",
+    ]);
+    expect(counts).toEqual([0, 0, 0]);
+    expect(COHORT_COMPETITOR_MATCH).toBeGreaterThan(0.5);
+  });
+
+  it("ölçülmüş rakip sayısı ATILABİLİRLİK kararına girer", () => {
+    const crowded = cohortCompetitorCounts(
+      Array.from({ length: 20 }, () => "LED Desk Lamp Clip On"),
+    );
+    const launch = assessLaunch({
+      priceUsd: 39.9,
+      grossMarginPct: 55,
+      supplierPriceUsd: 12,
+      moqUnits: 10,
+      cohortCompetitors: crowded[0],
+    });
+    expect(launch.gates.find((g) => g.id === "competition")!.state).toBe("fail");
+    expect(launch.launchable).toBe(false);
+  });
+
+  it("atılabilir ürün eşit oy ve eşit kanıtta ÖNE geçer", () => {
+    const launch = assessLaunch({
+      priceUsd: 59.9,
+      grossMarginPct: 60,
+      supplierPriceUsd: 22,
+      moqUnits: 30,
+      cohortCompetitors: 1,
+    });
+    expect(launch.launchable).toBe(true);
+    const base = winnerQualityScore(row("a", 70), { dataCompleteness: 5 });
+    const withLaunch = winnerQualityScore(row("a", 70), { dataCompleteness: 5, launch });
+    expect(withLaunch).toBeGreaterThan(base);
+  });
+
+  it("karar YOKSA veya atılamazsa puan DEĞİŞMEZ (eski kayıtların sıralaması bozulmaz)", () => {
+    const base = winnerQualityScore(row("a", 70), { dataCompleteness: 5 });
+    expect(winnerQualityScore(row("a", 70), { dataCompleteness: 5, launch: null })).toBe(base);
+    const blocked = assessLaunch({
+      priceUsd: 59.9,
+      grossMarginPct: 60,
+      supplierPriceUsd: 22,
+      moqUnits: 5000,
+      cohortCompetitors: 1,
+    });
+    expect(winnerQualityScore(row("a", 70), { dataCompleteness: 5, launch: blocked })).toBe(base);
+    expect(WINNER_LAUNCH_BONUS).toBeGreaterThan(0);
+  });
+
+  it("bonus puan tavanı aşmaz (100'de kalır)", () => {
+    const launch = assessLaunch({
+      priceUsd: 59.9,
+      grossMarginPct: 60,
+      supplierPriceUsd: 22,
+      moqUnits: 30,
+      cohortCompetitors: 1,
+    });
+    expect(winnerQualityScore(row("a", 100, 100), { dataCompleteness: 5, launch })).toBe(100);
   });
 });
 

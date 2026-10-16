@@ -46,6 +46,7 @@ import {
   runDiscoveryChain,
 } from "@/lib/product-discovery-runner.server";
 import { discoverySliceMs } from "@/lib/product-discovery-slices.server";
+import { LaunchReadinessSchema } from "@/lib/launch-readiness";
 import { ConsensusSchema, TopProductSchema, type TopProduct } from "@/lib/product-discovery.types";
 import { SupplierEvidenceSchema } from "@/lib/supplier-economics";
 
@@ -120,6 +121,20 @@ export const DiscoveryWinnerSchema = z.object({
   grossMarginPct: z.number().nullish().catch(null),
   // Kargo + komisyon için kalan pay (USD).
   feeBudgetUsd: z.number().nullish().catch(null),
+  // AYNI HAVUZDA ÖLÇÜLEN BENZER RAKİP SAYISI (kohort) — rekabet kapısının
+  // girdisi. Şemada tanımlanmazsa karar katmanına ulaşamaz (bu dosyadaki
+  // `salesVolume` notuyla aynı sebep).
+  cohortCompetitors: z
+    .number()
+    .int()
+    .min(0)
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
+  // LANSMAN KARARI — ölçülen tedarik/marj/MOQ kanıtından türetilir. Eski
+  // kayıtlarda yoktur; `null` kalır ve kart "karar yok" der (0/isim uydurmaz).
+  launch: LaunchReadinessSchema.nullish().catch(null),
   notes: z.string().catch(""),
   preScore: z.number().catch(0),
   dataCompleteness: z.number().catch(0),

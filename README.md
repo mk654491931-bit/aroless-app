@@ -303,11 +303,65 @@ API'si → 200 ama `query` yok sayılıyor (224 sabit proje, film/yardım ağır
 (ürün katkısı ~0) · Open Products/Beauty Facts → 200 ama `brands` çoğu kayıtta
 boş.
 
-Yeni anahtar gerekmez. İsteğe bağlı ayar:
+**Ücretsiz kaynak eklendi: `made-in-china` (anahtarsız toptan katalog).**
+Zincirin ölçemediği üç yuvayı kapatır: **MOQ** (minimum sipariş), **tedarikçi
+firma adı** ve **FOB fiyat bandı**. AliExpress kaynağı bunların hiçbirini
+veremiyordu (ölçüldü: 60 kartın yalnız 10'unda mağaza adı var, MOQ hiç yok).
+Kaynak `aliexpress` ile **paralel** çalışır ve aynı aylık kota kovasını paylaşır
+(`SUPPLIER_MONTHLY_LIMIT`); biri hata verirse diğeri eskisi gibi çalışmaya devam
+eder (fail-soft).
+
+Canlı ölçüm (2026-10-16, anahtar YOK, istek başına ~1,2 MB / 0,4-1,4 sn):
+
+| Niş | Teklif | FOB fiyatlı | FOB aralığı | MOQ ölçüldü | Tedarikçi adı |
+| --- | --- | --- | --- | --- | --- |
+| air fryer | 37 | 37 (%100) | 23 | 22 | 22 |
+| led desk lamp | 30 | 30 (%100) | 23 | 30 | 30 |
+| pet water fountain | 30 | 30 (%100) | 21 | 30 | 30 |
+| cat scratching board | 41 | 41 (%100) | 27 | 30 | 30 |
+| yoga mat | 24 | 22 (%92) | 19 | 24 | 24 |
+
+#### Lansman kapısı: “bu ürün gerçekten atılabilir mi?”
+
+Ölçülen tedarik kanıtı artık bir KARARA dönüşür (`src/lib/launch-readiness.ts`,
+saf fonksiyon). Beş kapı vardır ve her biri ya ölçülmüştür ya `unknown`dır —
+**ölçülmemiş bir kapı asla `pass` sayılmaz**:
+
+| Kapı | Ölçüm | Eşik (POLİTİKA, ölçüm değil) |
+| --- | --- | --- |
+| Tedarik | Eşleşen toptan teklif var mı | — |
+| İlk sipariş | **MOQ × FOB** (aralıkta konservatif ÜST uç) | ≤ $1.500 |
+| Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
+| Brüt marj | Ölçülen toptan − perakende aritmetiği | ≥ %40 (kargo/komisyon öncesi) |
+| Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
+
+`Atılabilir` denmesi için üç şart birlikte gerekir: hiçbir kapı `fail` olmayacak,
+**tedarik ve marj ÖLÇÜLMÜŞ olacak**, en az üç kapı geçecek. Ürün kartında kapı
+kapı yeşil/kırmızı/kesik-çizgi olarak görünür; sunucuda hesaplanır (kohort
+rekabet sayısı yalnız orada bilinir) ve karar ürünle birlikte taşınır.
+Sıralamada da **eşit oy ve eşit kanıtta atılabilir ürün öne geçer**
+(`WINNER_LAUNCH_BONUS`, mevcut ağırlıklar değiştirilmedi; kanıtı olmayan üründe
+bonus 0'dır, yani eski kayıtların sırası bozulmaz).
+
+Canlı ölçüm (`MIC_LIVE=1 npx vitest run mic-supplier.live`):
+
+| Niş | Karar | Ölçülen sebep |
+| --- | --- | --- |
+| air fryer | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $117,6 |
+| led desk lamp | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $81,6 |
+| pet water fountain | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $160 |
+| yoga mat | ❌ Atılamaz | MOQ 1.000 × $3,93 = $3.930 > $1.500 · fiyat $14,97 < $15 |
+
+Yoga mat örneği, kapının neden gerekli olduğunun kanıtıdır: marj iyi olsa bile
+1.000 adetlik MOQ ile test siparişi verilemez ve $14,97 satış fiyatı trafik
+maliyetini kaldırmaz — eski şema bu ürünü “yüksek marj” diye öne çıkarıyordu.
+
+Anahtar gerekmez. İsteğe bağlı ayarlar:
 
 ```text
 CATALOG_DAILY_LIMIT=16      # günlük katalog araması (ücretsiz plan tavanı 20)
 DEAL_FEED_DAILY_LIMIT=60    # günlük deal akışı okuması (nezakat bütçesi)
+SUPPLIER_MONTHLY_LIMIT=400  # aliexpress + made-in-china ortak aylık kazıma bütçesi
 BESTBUY_API_KEY=            # ücretsiz anahtar: kategori + GERÇEK puan + değerlendirme sayısı
 ```
 

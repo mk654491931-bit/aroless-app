@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 
+import { LaunchReadinessSchema } from "./launch-readiness";
 import { SupplierEvidenceSchema } from "./supplier-economics";
 
 /* ------------------------------------------------------------- Raw product */
@@ -214,6 +215,25 @@ export const NormalizedProductSchema = z.object({
   grossMarginPct: z.number().nullish(),
   /** Kargo + komisyon için kalan pay (USD). `null` = ölçülmedi. */
   feeBudgetUsd: z.number().nullish(),
+  /**
+   * AYNI HAVUZDA ÖLÇÜLEN BENZER RAKİP SATIR SAYISI.
+   *
+   * Ölçüm hattın kendi kohortundan gelir (`cohortCompetitorCounts`): başlığın
+   * ayırt edici kelimelerinin en az 2/3'ünü paylaşan diğer adaylar. Rekabet
+   * ancak böyle ÖLÇÜLEBİLİR oldu; canlı pazar taraması varsayımı değildir.
+   *
+   * `nullish()`: alanı taşımayan eski kayıtlar da okunabilir kalmalı.
+   */
+  cohortCompetitors: z.number().int().min(0).nullish(),
+  /**
+   * LANSMAN KARARI — "bu ürün GERÇEKTEN atılabilir mi?"
+   *
+   * Ölçülen üç yuvadan türetilir: MOQ × FOB (ilk sipariş sermayesi), brüt marj,
+   * kohort rakibi sayısı. Ölçülmeyen kapı `unknown`dır ve `pass` sayılmaz
+   * (bkz. `launch-readiness.ts`). `nullish()`: karar eklenmeden önce yazılmış
+   * kayıtlar bu alanı taşımaz.
+   */
+  launch: LaunchReadinessSchema.nullish(),
 });
 
 export type NormalizedProduct = z.infer<typeof NormalizedProductSchema>;
