@@ -136,35 +136,37 @@ html.perf-lite * {
 
 :root {
   --radius: 0.75rem;
-  /* Corporate dark: near-black base + restrained blue system */
-  --background: #05070d;
-  --foreground: oklch(0.95 0.004 250);
-  --surface: #0a1020;
-  --card: oklch(0.14 0.025 260 / 0.78);
-  --card-foreground: oklch(0.95 0.004 250);
-  --popover: #0a1020;
-  --popover-foreground: oklch(0.95 0.004 250);
-  --primary: oklch(0.62 0.17 255);  /* royal blue — primary actions */
-  --primary-foreground: oklch(0.98 0.004 250);
-  --secondary: oklch(0.19 0.028 255);
-  --secondary-foreground: oklch(0.93 0.004 250);
-  --muted: oklch(0.18 0.025 255);
-  --muted-foreground: oklch(0.68 0.025 250);
-  --accent: oklch(0.22 0.045 250);
-  --accent-foreground: oklch(0.95 0.004 250);
-  --destructive: oklch(0.55 0.18 25);
-  --destructive-foreground: oklch(0.96 0.004 250);
-  --border: oklch(1 0 0 / 9%);
+  /* Aroless Pro — saf siyah zemin + nötr gri yüzeyler + TEK vurgu rengi.
+     Eski lacivert "bloom" tabanı kaldırıldı: siyah, maviye çalan siyah değil,
+     gerçek siyah. Vurgu rengi yalnızca eylem/aktif durum için kullanılır. */
+  --background: #050505;
+  --foreground: oklch(0.97 0 0);
+  --surface: #0b0b0c;
+  --card: oklch(0.16 0 0 / 0.9);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: #0b0b0c;
+  --popover-foreground: oklch(0.97 0 0);
+  --primary: oklch(0.97 0 0);      /* beyaz buton / siyah metin — premium sade */
+  --primary-foreground: oklch(0.13 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.19 0 0);
+  --muted-foreground: oklch(0.72 0.004 265);
+  --accent: oklch(0.24 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.58 0.19 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.62 0.17 255);
-  --brand: oklch(0.62 0.17 255);   /* corporate blue */
-  --brand-2: oklch(0.58 0.16 262); /* deeper navy-blue accent */
+  --ring: oklch(0.66 0.16 257);
+  --brand: oklch(0.66 0.16 257);   /* nötr sistemin tek vurgu rengi */
+  --brand-2: oklch(0.6 0.14 262);
   /* Semantic accents — muted, corporate */
-  --accent-active: oklch(0.75 0.13 205); /* soft cyan — active UI only */
+  --accent-active: oklch(0.72 0.11 235);
 
-  --profit: oklch(0.7 0.14 155);  /* restrained green */
-  --warning: oklch(0.75 0.14 78);  /* restrained amber */
-  --ai: oklch(0.64 0.16 255);     /* blue-family, not purple */
+  --profit: oklch(0.72 0.15 155);  /* restrained green */
+  --warning: oklch(0.78 0.14 78);  /* restrained amber */
+  --ai: oklch(0.66 0.15 257);      /* blue-family, not purple */
 }
 
 /* ---------- Light (gündüz) teması ---------- */
@@ -227,18 +229,16 @@ html.light [class*="text-white/"] {
   }
   body {
     font-family: var(--font-sans);
-    background-image:
-      radial-gradient(
-        1200px 620px at 10% -12%,
-        color-mix(in oklab, var(--brand) 22%, transparent),
-        transparent 62%
-      ),
-      radial-gradient(
-        1000px 520px at 100% 0%,
-        color-mix(in oklab, var(--brand-2) 18%, transparent),
-        transparent 62%
-      );
+    /* Siyah zemin + tek, çok düşük yoğunluklu üst kenar ışığı. Sayfanın
+       arkasındaki iki büyük mavi radial "bloom" kaldırıldı. */
+    background-color: var(--background);
+    background-image: radial-gradient(
+      1400px 380px at 50% -160px,
+      oklch(1 0 0 / 0.045),
+      transparent 72%
+    );
     background-attachment: scroll;
+    background-repeat: no-repeat;
     min-height: 100vh;
   }
 
@@ -3172,4 +3172,118 @@ html.light .custom-cursor-ring {
   .velora-letter.velora-shine {
     animation-duration: 0.01s !important;
   }
+}
+
+/* ============================================================================
+   AROLESS PRO — düz siyah, nötr yüzeyler, dekor gürültüsü kapalı
+   ----------------------------------------------------------------------------
+   Kullanıcı geri bildirimi: arayüz profesyonel durmuyordu. Sorun renk değil
+   YOĞUNLUKTU — neon glow, parçacık alanları, sahte dizüstü kasası, tahıl
+   (grain) dokusu, tahrik edilen haleler ve aynı anda oynayan onlarca animasyon.
+
+   Bu katman görünümü tek bir siyah/gri ölçeğine indirir. Hiçbir işlev, veri,
+   metin veya rota kaldırılmaz; yalnızca dekoratif katmanlar ve parlama kapanır.
+   ========================================================================= */
+
+/* 1) Dekoratif sahne katmanları kapanır — içerik siyahın üzerinde durur. */
+.amb-layer,
+.ambient-drift,
+.ambient-halo,
+.finder-hero-halo,
+.field-particles,
+.light-wave::before,
+.laptop-base,
+.laptop-shell::after,
+.cta-sweep::after,
+.grain::before,
+.grain::after,
+.auth-beam,
+.hero-orb,
+.ent-orb {
+  display: none !important;
+}
+
+/* 2) Sahte dizüstü kasası → düz yüzey (çerçeve + alt gövde + turuncu ışıma). */
+.laptop-shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 3) Yapışkan başlık: bulanıklık yok, düz siyah yüzey + ince kenar. */
+.glass {
+  background: oklch(0.06 0 0 / 0.96) !important;
+  backdrop-filter: none !important;
+  border-color: oklch(1 0 0 / 0.07) !important;
+}
+
+/* 4) Kartlar: nötr siyah + hairline kenar; parlama/parlaklık katmanı yok. */
+.premium-card,
+.live-card {
+  background: linear-gradient(180deg, oklch(1 0 0 / 0.035), oklch(1 0 0 / 0.012)) !important;
+  border: 1px solid oklch(1 0 0 / 0.08) !important;
+  backdrop-filter: none !important;
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.035),
+    0 24px 60px -46px oklch(0 0 0 / 0.95) !important;
+}
+.premium-card::before,
+.premium-card::after,
+.glass::before,
+.glass::after,
+.live-card::before,
+.live-card::after,
+.card-shimmer::before {
+  display: none !important;
+  background: none !important;
+}
+
+/* 5) Buton/rozet süsleri sakinleşir: morfolama ve kalp atışı yok. */
+.morph-pill,
+.heartbeat,
+.press,
+.biometric {
+  animation: none !important;
+  transform: none !important;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease !important;
+}
+.morph-pill::before,
+.morph-pill::after {
+  display: none !important;
+}
+.morph-pill:hover {
+  transform: none !important;
+}
+.glow,
+.elite-glow {
+  box-shadow: none !important;
+}
+
+/* 6) Arama formu: sayfanın tek "kahraman" nesnesi — glow yerine hairline. */
+.finder-form {
+  background: oklch(0.125 0 0 / 0.94) !important;
+  border: 1px solid oklch(1 0 0 / 0.09) !important;
+  box-shadow: 0 30px 80px -60px oklch(0 0 0 / 1) !important;
+}
+.finder-advanced-panel {
+  background: oklch(0.105 0 0 / 0.92) !important;
+  backdrop-filter: none !important;
+}
+.finder-advanced-panel,
+.finder-primary-grid > * {
+  border-color: oklch(1 0 0 / 0.08) !important;
+}
+
+/* 7) Siyah tema üzerinde okunabilirlik için hairline yardımcıları. */
+.pro-rule {
+  height: 1px;
+  background: oklch(1 0 0 / 0.08);
+}
+.pro-stat {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }

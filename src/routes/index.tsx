@@ -96,7 +96,6 @@ import { DataSourcesButton } from "@/components/header-extras";
 import { HYBRID_DEFAULT_MIN_SCORE } from "@/lib/consensus-types";
 import { Globe, Gauge, Swords, Cpu, ChevronDown } from "lucide-react";
 import { CompareTray, CompareModal } from "@/components/compare-tray";
-import { AmbientBackdrop, BiometricButton } from "@/components/premium-fx";
 import { ENGINES, engineLabel, type EngineId, type MarketplaceId } from "@/lib/engines";
 import { EtaBadge } from "@/components/eta-badge";
 import { FinderMemoryBar, useRecentSearches, usePersistentState } from "@/components/finder-extras";
@@ -125,7 +124,6 @@ import { FINDER_EXAMPLE_NICHES, type Tab } from "@/features/finder/constants";
 import { useFinderSearch } from "@/features/finder/hooks/use-finder-search";
 import { TabSwitcher } from "@/features/finder/components/tab-switcher";
 import { FxBadge } from "@/features/finder/components/fx-badge";
-import { RotatingSlogan } from "@/features/finder/components/rotating-slogan";
 import { ResultsToolbar } from "@/features/finder/components/results-toolbar";
 import { ProductCard } from "@/features/finder/components/product-card";
 import { SeoTab, CreativeTab, LibraryTab } from "@/features/finder/components/finder-tabs";
@@ -544,9 +542,9 @@ function Dashboard() {
   return (
     <CurrencyProvider country={targetCountry}>
       <div className="relative min-h-screen">
-        <AmbientBackdrop />
-        {/* GlobalRippleLayer kaldırıldı: her tıklamada sayfa üzerinde dalga
-            animasyonu üretiyordu. Sakin görünümde bu tür süsleme istenmiyor. */}
+        {/* AmbientBackdrop kaldırıldı: renkli blob/aurora/prçacık katmanları
+            siyah temada gürültü üretiyordu. Aynı sakinlik GlobalRippleLayer için
+            de geçerli — dekoratif süsleme yok. */}
         <HotTicker />
         {/* AKICILIK: sabit başlıkta `backdrop-blur-xl` YOK. Yapışkan bir
             yüzeyin arkası kaydırma boyunca sürekli değiştiği için blur her
@@ -702,7 +700,7 @@ function Dashboard() {
               ]}
             />
           </div>
-          <div className="laptop-shell grain px-3 py-6 md:px-8 md:py-10">
+          <div className="px-0 py-6 md:py-8">
             <TabSwitcher
               tabDefs={tabDefs}
               tab={tab}
@@ -712,31 +710,25 @@ function Dashboard() {
             <div key={tab} className="surface-morph">
               {tab === "finder" && (
                 <>
-                  <div className="relative text-center mb-10">
-                    <div className="finder-hero-halo pointer-events-none absolute inset-x-0 -top-16 mx-auto h-56 w-[min(680px,90%)] rounded-full bg-[radial-gradient(closest-side,oklch(0.68_0.20_265/0.28),transparent)] blur-2xl md:animate-float-slow motion-reduce:animate-none" />
-                    <div className="relative animate-rise-in">
-                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
-                        {t("ui.live_research")}
-                      </span>
-                      <h1 className="mt-5 text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05]">
-                        {t("hero_1")} <span className="text-aurora">{t("hero_2")}</span>
-                      </h1>
-                      <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-                        {t("ui.hero_sub2")}
-                      </p>
-                      <RotatingSlogan />
-                      <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                        {[t("ui.f1"), t("ui.f2"), t("ui.f3"), t("ui.f4")].map((f) => (
-                          <span
-                            key={f}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur"
-                          >
-                            <ShieldCheck size={11} className="text-emerald-400" /> {f}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="mb-8 max-w-3xl">
+                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {t("ui.live_research")}
+                    </span>
+                    <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+                      {t("hero_1")} <span className="text-brand">{t("hero_2")}</span>
+                    </h1>
+                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-base">
+                      {t("ui.hero_sub2")}
+                    </p>
+                    <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+                      {[t("ui.f1"), t("ui.f2"), t("ui.f3"), t("ui.f4")].map((f) => (
+                        <span key={f} className="inline-flex items-center gap-1.5">
+                          <ShieldCheck size={11} className="text-emerald-400" /> {f}
+                        </span>
+                      ))}
+                    </p>
+                    <div className="pro-rule mt-6" />
                   </div>
 
                   <form
@@ -745,12 +737,10 @@ function Dashboard() {
                   >
                     <div className="grid gap-3">
                       <div className="flex items-center gap-2">
-                        <div
-                          className={`light-wave relative flex-1 ${nicheFocus ? "is-focused" : ""}`}
-                        >
+                        <div className="relative flex-1">
                           <Search
                             size={16}
-                            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]"
+                            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
                           />
                           <input
                             ref={nicheInputRef}
@@ -759,7 +749,7 @@ function Dashboard() {
                             onFocus={() => setNicheFocus(true)}
                             onBlur={() => setNicheFocus(false)}
                             placeholder={t("niche_placeholder")}
-                            className="relative z-10 w-full rounded-lg bg-white/5 pl-9 pr-16 py-2.5 text-sm outline-none border-0"
+                            className={`relative z-10 w-full rounded-lg border bg-white/[0.03] pl-9 pr-16 py-3 text-sm outline-none transition-colors ${nicheFocus ? "border-[var(--brand)]" : "border-white/10"}`}
                           />
                           {niche ? (
                             <button
@@ -778,18 +768,7 @@ function Dashboard() {
                               /
                             </kbd>
                           )}
-                          {nicheFocus && (
-                            <span aria-hidden className="field-particles">
-                              {[12, 28, 44, 60, 76, 90].map((l, i) => (
-                                <i
-                                  key={l}
-                                  style={{ left: `${l}%`, animationDelay: `${i * 0.18}s` }}
-                                />
-                              ))}
-                            </span>
-                          )}
                         </div>
-                        <BiometricButton active={nicheFocus} />
                       </div>
                     </div>
 
@@ -1128,7 +1107,7 @@ function Dashboard() {
                         type="submit"
                         disabled={searching}
                         aria-busy={searching}
-                        className="cta-sweep press relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_-14px_color-mix(in_oklab,var(--brand)_90%,transparent)] glow transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_-14px_color-mix(in_oklab,var(--brand)_95%,transparent)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                        className="relative flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[color-mix(in_oklab,var(--brand)_88%,white)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                       >
                         {searching ? (
                           <>
@@ -1148,7 +1127,7 @@ function Dashboard() {
                       type="button"
                       onClick={jumpToSearch}
                       aria-label="Arama alanına dön"
-                      className={`jump-search press fixed z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white shadow-[0_18px_40px_-14px_color-mix(in_oklab,var(--brand)_95%,transparent)] lg:hidden ${compareProducts.length > 0 ? "with-tray" : ""}`}
+                      className={`jump-search press fixed z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/12 bg-[var(--brand)] text-white lg:hidden ${compareProducts.length > 0 ? "with-tray" : ""}`}
                     >
                       <Search size={18} />
                     </button>
@@ -1188,34 +1167,19 @@ function Dashboard() {
                         }}
                         className="flex flex-col sm:flex-row gap-2"
                       >
-                        <div className="flex flex-1 items-center gap-2">
-                          <div
-                            className={`light-wave relative flex-1 ${validatorFocus ? "is-focused" : ""}`}
-                          >
-                            <Search
-                              size={16}
-                              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--accent-active)]"
-                            />
-                            <input
-                              value={validatorQuery}
-                              onChange={(e) => setValidatorQuery(e.target.value)}
-                              onFocus={() => setValidatorFocus(true)}
-                              onBlur={() => setValidatorFocus(false)}
-                              placeholder={t("ui.validate_placeholder")}
-                              className="relative z-10 w-full rounded-lg bg-white/5 pl-9 pr-24 py-2.5 text-sm outline-none border-0"
-                            />
-                            {validatorFocus && (
-                              <span aria-hidden className="field-particles">
-                                {[14, 32, 50, 68, 86].map((l, i) => (
-                                  <i
-                                    key={l}
-                                    style={{ left: `${l}%`, animationDelay: `${i * 0.2}s` }}
-                                  />
-                                ))}
-                              </span>
-                            )}
-                          </div>
-                          <BiometricButton active={validatorFocus} />
+                        <div className="relative flex-1">
+                          <Search
+                            size={16}
+                            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
+                          />
+                          <input
+                            value={validatorQuery}
+                            onChange={(e) => setValidatorQuery(e.target.value)}
+                            onFocus={() => setValidatorFocus(true)}
+                            onBlur={() => setValidatorFocus(false)}
+                            placeholder={t("ui.validate_placeholder")}
+                            className={`relative z-10 w-full rounded-lg border bg-white/[0.03] pl-9 pr-24 py-2.5 text-sm outline-none transition-colors ${validatorFocus ? "border-[var(--brand)]" : "border-white/10"}`}
+                          />
                         </div>
                         <button
                           type="submit"
@@ -1558,7 +1522,6 @@ function Dashboard() {
               )}
             </div>
           </div>
-          <div className="laptop-base" />
         </main>
 
         <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
