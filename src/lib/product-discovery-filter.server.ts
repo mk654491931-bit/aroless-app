@@ -31,6 +31,8 @@ import {
   type ParsedRawProduct,
   type RawProduct,
 } from "./product-discovery.types";
+import { brandFromTitle } from "./product-brand";
+import { isNonProductSource } from "./product-discovery-query";
 
 /** Minimum kabul edilebilir puan (5 üzerinden). */
 export const MIN_RATING = 3.5;
@@ -48,8 +50,24 @@ export const MIN_COMMERCE_POOL = 5;
  */
 export type EvidenceShape = Pick<
   ParsedRawProduct,
-  "priceUsd" | "brand" | "seller" | "url" | "notes" | "rating" | "ratingCount" | "inStock"
->;
+  | "priceUsd"
+  | "brand"
+  | "seller"
+  | "url"
+  | "notes"
+  | "rating"
+  | "ratingCount"
+  | "inStock"
+  | "imageUrl"
+  | "salesVolume"
+  | "viewed90d"
+> & {
+  /**
+   * Marka bağımsız bir kaynaktan mı ÖLÇÜLDÜ (yoksa başlıktan mı çıkarıldı)?
+   * `undefined` = ham satır (kaynağın verdiği marka ölçümdür) → `true` sayılır.
+   */
+  brandMeasured?: boolean;
+};
 
 /**
  * ÇEKİRDEK KANIT YUVALARI (5).
@@ -64,17 +82,44 @@ export type EvidenceShape = Pick<
  *
  * Yeni model: kanıt, o alanı DOLDURAN kaynaktan gelir. Beş çekirdek yuva
  * (price, brand, seller, url, demand) birlikte 0-5 ölçeğini verir. `rating`,
- * `ratingCount` ve `stock` yalnızca ARTIRAN bonuslardır: boş olmaları kanıt
+ * `stock` ve `image` yalnızca ARTIRAN bonuslardır: boş olmaları kanıt
  * eksikliği sayılmaz, çünkü kaynakların çoğu onları hiç vermez.
+ *
+ * `ratingCount` BONUS LİSTESİNDEN ÇIKARILDI: aynı sayı hem `demand` çekirdek
+ * yuvasını dolduruyor hem bonus sayılıyordu, yani TEK bir ölçüm iki kanıt gibi
+ * görünüyordu. Tek sayı, tek yuva.
+ *
+ * İKİ YUVA DÜZELTİLDİ (2026-10-15, ölçülmüş yanlış beyan):
+ *   • `demand` eskiden `/\d/.test(notes)` idi — notes içinde HERHANGİ bir rakam
+ *     (fiyat metni, tarih damgası) "ölçülmüş talep" sayılıyordu. Bu, aynı
+ *     kavramı iki modülde iki farklı tanımlıyordu: `discovery-quality`
+ *     "serbest metin ölçüm değildir" derken burada fiyat metni talep kanıtı
+ *     oluyordu. Artık yalnız ÖLÇÜLMÜŞ sayısal talep alanları sayılır:
+ *     satış adedi, 90 günlük görüntülenme ya da değerlendirme sayısı.
+ *   • `image` artık çekirdek bir BONUS yuvasıdır: kazıma görseli ZORUNLU
+ *     tutuyor (`requireImage`) ve 75/75 satır görselli geliyor, yani "ürün
+ *     görseli ölçüldü" bilgisi bütünlük puanına girmelidir. Eskiden girmediği
+ *     için vitrinin en görünür kanıtı skorlanmıyordu.
  */
 const EVIDENCE_SLOTS = [
   ["price", (p: EvidenceShape) => p.priceUsd !== null],
-  ["brand", (p: EvidenceShape) => p.brand.trim() !== ""],
+  // MARKA YUVASI: yalnız BAĞIMSIZ ölçüm sayılır. Başlıktan çıkarılan marka
+  // (brandMeasured=false) bu yuvayı DOLDURMAZ — başlık zaten sayılıyor ve
+  // aynı metinden ikinci bir yuva türetmek "ölçtük" iddiasını şişirirdi.
+  [
+    "brand",
+    (p: EvidenceShape) => p.brand.trim() !== "" && (p.brandMeasured ?? true),
+  ],
   ["seller", (p: EvidenceShape) => p.seller.trim() !== ""],
   ["url", (p: EvidenceShape) => p.url.trim() !== ""],
-  // ÖLÇÜLMÜŞ talep: `notes` içinde sayısal bir sinyal (puan, yorum, yıldız,
-  // momentum, fiyat aralığı) var mı? Söylem değil, ölçüm arıyoruz.
-  ["demand", (p: EvidenceShape) => /\d/.test(p.notes)],
+  // ÖLÇÜLMÜŞ talep: SAYISAL talep alanlarından biri gerçekten ölçüldü mü?
+  [
+    "demand",
+    (p: EvidenceShape) =>
+      (typeof p.salesVolume === "number" && p.salesVolume > 0) ||
+      (typeof p.viewed90d === "number" && p.viewed90d > 0) ||
+      (typeof p.ratingCount === "number" && p.ratingCount > 0),
+  ],
 ] as const satisfies readonly (readonly [string, (p: EvidenceShape) => boolean])[];
 
 /**
@@ -84,8 +129,8 @@ const EVIDENCE_SLOTS = [
  */
 const BONUS_SLOTS = [
   ["rating", (p: EvidenceShape) => p.rating !== null],
-  ["ratingCount", (p: EvidenceShape) => p.ratingCount !== null],
   ["stock", (p: EvidenceShape) => p.inStock !== null],
+  ["image", (p: EvidenceShape) => String(p.imageUrl ?? "").trim() !== ""],
 ] as const satisfies readonly (readonly [string, (p: EvidenceShape) => boolean])[];
 
 /**
@@ -136,12 +181,32 @@ export function evidencePenalty(dataCompleteness: number): number {
 /** Kaynak satırlarını normalize eder ve parmak izi üretir. */
 export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   const parsed = RawProductSchema.parse(raw);
-  // Dolu yuva sayısı = veri bütünlüğü puanı (0-5).
-  const { dataCompleteness, missingFields: missing } = evidenceCompleteness(parsed);
+  // MARKA — kaynak vermediyse BAŞLIKTAN ölçülür (`brandFromTitle`).
+  //
+  // ÖLÇÜLEN BOŞLUK (2026-10-15): 75/75 adayda marka boştu; sebebi pazaryeri
+  // LİSTE sayfalarının marka alanı sunmaması. Marka `productModelKey`in
+  // girdisidir: markasız üründe anahtar hiç üretilmez, aynı ürünün iki mağaza
+  // yazımı iki AYRI ürün sayılır ve nihai 5'lik listeye iki kez girebilir.
+  // Çıkarım UYDURMA DEĞİLDİR: yalnız yapısal olarak marka olduğu anlaşılan
+  // öbek döner, aksi hâlde `""` kalır (bkz. `product-brand.ts`).
+  const declaredBrand = parsed.brand.trim();
+  const brand = declaredBrand || brandFromTitle(parsed.title);
+  // MARKA ÖLÇÜLDÜ MÜ: kaynağın/kataloğun verdiği marka ölçümdür
+  // (`brandMeasured: true`), başlıktan çıkarılan marka TÜREVDİR (false) ve
+  // kanıt yuvasını doldurmaz — kartta yine gösterilir.
+  const brandMeasured = declaredBrand !== "" && parsed.brandMeasured;
+  // Dolu yuva sayısı = veri bütünlüğü puanı (0-5). Marka yuvası yalnız
+  // BAĞIMSIZ ölçümle dolar (`brandMeasured`).
+  const { dataCompleteness, missingFields: missing } = evidenceCompleteness({
+    ...parsed,
+    brand,
+    brandMeasured,
+  });
 
   return {
     name: parsed.title.slice(0, 180),
-    brand: parsed.brand.slice(0, 60),
+    brand: brand.slice(0, 60),
+    brandMeasured,
     seller: parsed.seller.slice(0, 60),
     // Kategori artık daima ölçülen alandan gelir. Önceden bilerek `""` idi:
     // hiçbir kaynak vermediği için ölü bir alandı ve kısa listede her ürün
@@ -341,11 +406,29 @@ export function applyHardFilter(
     perSource,
   };
 
-  // 1) Kaynak süzgeci: yalnız gerçek kazınmış satırlar kalır. AI satırları
-  //    (varsa) burada elenir — modelin uydurduğu ürün sonuca sızmaz.
+  // 1) Kaynak süzgeci: yalnız gerçek kazınmış ÜRÜN satırları kalır.
+  //
+  // İki ayrı eleme, ikisi de "aday havuzu" içindir (satırlar kanıt olarak
+  // yaşamaya devam eder — talep sinyalleri `notes`ten okunur):
+  //   a) `source !== "scraped"` → modelin uydurduğu satır sonuca sızmaz.
+  //   b) ÜRÜN OLMAYAN kaynak (Wikipedia, GitHub, Hacker News, Reddit arşivi,
+  //      haber, trend, Wikidata) → ansiklopedi maddesi/repo/haber "ürün" diye
+  //      listelenmez.
+  //
+  // (b) ÖLÇÜLEN GEREKÇE (2026-10-15, canlı "air fryer"/US): 120 ham satırın
+  // 31'i bu kaynaklardan geliyordu (hackernews 8, github 8, web-reviews 11,
+  // wikipedia 2, wikidata 1, google-news 1) ve aşağıdaki ticari kanıt kapısı
+  // bunları yalnız "havuzda ≥5 ticari satır varsa" eliyordu. Fiyat/puan
+  // taşıyan bir Wikipedia satırı (ör. bir fiyatın haber metnine gömülmesi)
+  // kapıyı ATLAYIP ürün kartı olabiliyordu. Artık kaynak düzeyinde kesin:
+  // bu kaynaklar CANDIDATE üretmez.
   const bySource: NormalizedProduct[] = [];
   for (const p of products) {
     if (p.source !== "scraped") {
+      stats.rejectedBySource++;
+      continue;
+    }
+    if (p.sources.some((name) => isNonProductSource(name))) {
       stats.rejectedBySource++;
       continue;
     }
@@ -508,6 +591,8 @@ export function mergeDuplicates(a: NormalizedProduct, b: NormalizedProduct): Nor
     signals: base.signals,
     // Birleşik alanlar spread SONRASINA yazılır; ters sırada `richest` onları
     // ezerdi ve "iki kaynakta görüldü" kanıtı kaybolurdu.
+    // Marka kanıtı İKİ satırdan birinde bağımsız ölçüldüyse ölçülmüş sayılır.
+    brandMeasured: Boolean(richest.brandMeasured || other.brandMeasured),
     sources: Array.from(new Set([...a.sources, ...b.sources])),
     notes: Array.from(new Set([a.notes, b.notes].filter(Boolean)))
       .join(" · ")

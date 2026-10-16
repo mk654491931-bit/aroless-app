@@ -15,7 +15,11 @@ import {
   emptySupplierEvidence,
   keyTokens,
   matchSupplierOffer,
+  nicheHitFloor,
+  nicheKeyTokens,
+  nicheMatch,
   productTitleMatch,
+  supplierMatchKind,
   SupplierEvidenceSchema,
   SUPPLIER_MIN_RELEVANCE,
   type SupplierOfferLike,
@@ -92,6 +96,99 @@ describe("buildSupplierEvidence", () => {
   });
 });
 
+describe("NİŞ seviyesi tedarik yedeği — çok dilli başlıklarda '—' kalmasın", () => {
+  /** Canlı AliExpress kartlarından alınan GERÇEK İngilizce teklifler. */
+  const englishOffers = [
+    offer({ title: "Air Fryer 6L Large Capacity Oil-free Electric Oven", unitPriceUsd: 42.5 }),
+    offer({ title: "Household Air Fryer 5.5L Digital Touch Screen Fryer Oven", unitPriceUsd: 35.2 }),
+    offer({ title: "Wireless Bluetooth Speaker 40W", unitPriceUsd: 12 }),
+  ];
+
+  it("Türkçe başlıkta birebir eşleşme yok ama niş bandı ÖLÇÜLÜR", () => {
+    const candidate = { name: "Bosch MAF240B0 Serie 2 Air Fryer Sıcak Hava Fritözü 4,5 L", priceUsd: 123.45 };
+    // Yedek KAPALIYKEN (eski davranış) kanıt boş kalır — bu, ölçülen bugünkü hâl.
+    expect(buildSupplierEvidence(candidate, englishOffers)).toEqual(emptySupplierEvidence());
+
+    // Niş ifadeleri verildiğinde bant gerçek tekliflerden kurulur.
+    const evidence = buildSupplierEvidence(candidate, englishOffers, {
+      nicheQueries: ["air fryer"],
+    });
+    expect(evidence.samples).toBe(2);
+    expect(evidence.supplierPriceUsd).toBeCloseTo(38.85, 2);
+    // Kanıtın gücü SAKLANMAZ: bu bir niş bandıdır, birebir ürün fiyatı değil.
+    expect(supplierMatchKind(evidence)).toBe("niche");
+    // Alakasız hoparlör teklifi banda KARIMAZ.
+    // p25 doğrusal interpolasyon: 35.2 + (42.5−35.2)×0.25 = 37.03
+    expect(evidence.supplierLowUsd).toBeCloseTo(37.03, 2);
+  });
+
+  it("niş eşleşmesi marjı da hesaplanabilir kılar (marj '—' kalmasın)", () => {
+    const { supplier, margin } = buildEconomics(
+      { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 123.45 },
+      englishOffers,
+      { nicheQueries: ["air fryer"] },
+    );
+    expect(supplier.supplierPriceUsd).not.toBeNull();
+    expect(margin.grossMarginPct).toBeGreaterThan(0);
+    expect(margin.netMarginPct).toBeNull();
+  });
+
+  it("niş ifadesi verilmezse DAVRANIŞ DEĞİŞMEZ (uydurma yok)", () => {
+    expect(
+      buildEconomics({ name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 123.45 }, englishOffers),
+    ).toEqual({
+      supplier: emptySupplierEvidence(),
+      margin: emptyMarginEvidence(),
+    });
+  });
+
+  it("birebir ürün eşleşmesi bulunduğunda tür 'product' kalır", () => {
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer()],
+      { nicheQueries: ["cat tree"] },
+    );
+    expect(supplierMatchKind(evidence)).toBe("product");
+  });
+});
+
+describe("nicheKeyTokens / nicheMatch", () => {
+  it("niş ifadesinin jenerik olmayan kelimelerini alır, tekrarları birleştirir", () => {
+    // Türkçe harfler ASCII'ye indirilir; noktasız ı AKSİ hâlde kelimeyi
+    // bölerdi ve niş anahtarı kaybolurdu.
+    expect(nicheKeyTokens(["Sıcak Hava Fritözü", "air fryer", "air fryer 5l"]).sort()).toEqual([
+      "air",
+      "fritozu",
+      "fryer",
+      "hava",
+      "sicak",
+    ]);
+  });
+
+  it("kısa kelimeleri (2 harf) atlar", () => {
+    expect(nicheKeyTokens(["led tv"])).toEqual(["led"]);
+  });
+
+  it("isabet oranını ölçer ve niş dışı teklifi 0 verir", () => {
+    expect(nicheMatch("Air Fryer 6L Oil-free", ["air", "fryer"])).toBe(1);
+    expect(nicheMatch("Wireless Bluetooth Speaker", ["air", "fryer"])).toBe(0);
+    expect(nicheMatch("Steel Air Compressor", ["air", "fryer"])).toBeCloseTo(0.5, 5);
+  });
+
+  it("6+ harfli kelimelerde ilk 6 harf toleransı vardır (vacuum ↔ vacuums)", () => {
+    expect(nicheMatch("Robot Vacuums 4000Pa", ["vacuum"])).toBe(1);
+    // 5 harfli kelimede tolerans YOKTUR: sahte eşleşme üretmemek için.
+    expect(nicheMatch("Air Fryers 6L", ["fryer"])).toBe(0);
+  });
+
+  it("eşik: 3 anahtarda 2, 2 anahtarda 1, tek anahtarda 1 isabet", () => {
+    expect(nicheHitFloor(1)).toBe(1);
+    expect(nicheHitFloor(2)).toBe(1);
+    expect(nicheHitFloor(3)).toBe(2);
+    expect(nicheHitFloor(4)).toBe(2);
+  });
+});
+
 describe("buildMarginEvidence", () => {
   it("iki ÖLÇÜMDEN brüt marj ve kargoya kalan pay hesaplar", () => {
     const margin = buildMarginEvidence({ sellUsd: 97.99, supplierUsd: 26.36 });
@@ -136,6 +233,29 @@ describe("SupplierEvidenceSchema", () => {
     expect(parsed.supplierPriceUsd).toBe(evidence.supplierPriceUsd);
     expect(parsed.samples).toBe(evidence.samples);
     expect(parsed.shipFrom).toBe("US");
+    expect(parsed.matchKind).toBe("product");
+  });
+
+  it("`matchKind` EKLENMEDEN ÖNCE yazılmış kayıtları düşürmez", () => {
+    // Eski kayıtta alan yoktur; zorunlu olsaydı zod hatayı fırlatır ve üst
+    // alan `.catch(null)` ile TÜM kanıtı silerdi (ölçülen hata sınıfı).
+    const legacy = {
+      samples: 2,
+      supplierPriceUsd: 26.36,
+      supplierLowUsd: 21.94,
+      supplierHighUsd: 35.38,
+      listPriceUsd: 80.52,
+      discountPct: 67,
+      soldTotal: 695,
+      store: "PETRAEL Local Store",
+      shipFrom: "US",
+      url: "https://www.aliexpress.com/item/3256809985321027.html",
+    };
+    const parsed = SupplierEvidenceSchema.parse(legacy);
+    expect(parsed.supplierPriceUsd).toBe(26.36);
+    expect(parsed.matchKind).toBeUndefined();
+    // Taşımayan kayıt "birebir ürün" sayılır (eskiden tek yol oydu).
+    expect(supplierMatchKind(parsed)).toBe("product");
   });
 });
 

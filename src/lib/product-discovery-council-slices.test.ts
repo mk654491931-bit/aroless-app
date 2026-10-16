@@ -24,6 +24,8 @@ import type { NormalizedProduct } from "./product-discovery.types";
 const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
   name: "Ninja Air Fryer Pro 8QT",
   brand: "Ninja",
+  // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+  brandMeasured: true,
   seller: "Walmart",
   category: "",
   priceUsd: 129.99,

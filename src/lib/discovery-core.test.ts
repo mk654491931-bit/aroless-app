@@ -30,6 +30,8 @@ import { productFingerprint, type NormalizedProduct } from "./product-discovery.
 const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
   name: "Air Fryer 5.5L",
   brand: "Acme",
+  // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+  brandMeasured: true,
   seller: "shop",
   category: "",
   priceUsd: 59.9,

@@ -246,6 +246,46 @@ PRODUCT_DISCOVERY_E2E_LIVE=1 PRODUCT_DISCOVERY_E2E_NICHES="air fryer,robot vacuu
 Bu, “zaman aşımına uğradı” belirtisinin **hattan değil, hatta ulaşan istekten /
 kuyruktan** kaynaklandığını gösterir: boru hattı saniyeler içinde bitiyor.
 
+#### Ürün kalitesi: ölçüleni yaz, ölçülmeyeni `null` bırak
+
+Ürün bulucunun ilk aşaması dört katmana ayrılır ve **hiçbiri değer uydurmaz**:
+
+| Katman | Dosya | Ne yapar |
+| --- | --- | --- |
+| Kaynak kapısı | `product-discovery-filter.server.ts` | Ürün SATMAYAN kaynaklar (Wikipedia, GitHub, Hacker News, Reddit arşivi, haber, trend, Wikidata) aday havuzuna hiç girmez; satırlar talep bağlamı olarak yaşamaya devam eder |
+| Marka çıkarımı | `product-brand.ts` | Marka kaynak alanında yoksa **başlığın kendisinden yapısal olarak** çıkarılır (`Brand: X`, model kodu öncesi öbek, `by X`). Jenerik/ürün cinsi/milliyet/pazaryeri sözcükleri marka sayılmaz — anlaşılmıyorsa `""` kalır |
+| Katalog zenginleştirmesi | `product-catalog.server.ts` | Anahtarsız ücretsiz ürün kataloğu (UPCitemdb): marka · model · GTIN · kategori · kayıtlı fiyat. Yalnız eşleşme eşiğini geçen kayıtlar kullanılır ve **yalnız boş alanlar** doldurulur |
+| Kanıt bütünlüğü | `evidenceCompleteness` | 5 çekirdek yuva (fiyat · marka · satıcı · url · talep) + bonuslar. `notes` içindeki rakam talep kanıtı SAYILMAZ; talep yalnız sayısal alanlardan gelir |
+
+İki kural, ölçülmüş iki hatayı kapatır:
+
+1. **Türev, kanıt değildir.** Başlıktan çıkarılan marka kartta GÖSTERİLİR ama
+   `brandMeasured: false` taşır ve bütünlük yuvasını doldurmaz; katalog/kaynak
+   markası (`brandMeasured: true`) doldurur.
+2. **Yanlış marka, marka yokluğundan kötüdür.** Katalog eşleşmesi kimlik çapası
+   ister (model kodu, GTIN ya da KAYDIN markası başlıkta). Çapa yoksa benzerlik
+   yarıya iner ve eşik (`CATALOG_MIN_MATCH = 0.6`) aşılamaz — aksi hâlde
+   `Air Fryer 5.5L` gibi jenerik bir başlık başka bir ürünün markasını alıyordu.
+
+Ölçülen etki (canlı, 2026-10-15, `runScrapeFilterStep`):
+
+| Niş | Ham → aday | Marka | Kategori | Görsel | Fiyat | Satış |
+| --- | --- | --- | --- | --- | --- | --- |
+| air fryer / US | 53 → 21 | 6-12 (ölçülmüş 0-5) | 0-4 | 21/21 | 21/21 | 14/21 |
+| robot vacuum / US | 44 → 10 | 7 | 0 | 10/10 | 10/10 | 7/10 |
+
+Dürüst sınırlar (bunlar eksik değil, **ölçülmüş** sınırlardır): puan ve
+ değerlendirme sayısı kaynaklarda yok (Bing Shopping bu ağdan kart döndürmüyor,
+ `ratingCount` yalnız TR okuyucusunda var); katalog ücretsiz planı sorgu başına 5
+ kayıt döndürüyor, bu yüzden katalog katkısı nişe göre 0-4 satırdır; marka
+ boşluğu gerçek ilanların marka alanını yayınlamamasındandır.
+
+Yeni anahtar gerekmez. İsteğe bağlı ayar:
+
+```text
+CATALOG_DAILY_LIMIT=16   # günlük katalog araması (ücretsiz plan tavanı 20)
+```
+
 #### Zincir süresi nerede harcanyor?
 
 `[discovery] adım bitti: <adım> <ms> · durum=… · ürün=… · oy=…` satırı
@@ -323,6 +363,7 @@ taşarsa süreç `JavaScript heap out of memory` ile açıkça ölür.
 | Upstash Redis | günlük komut kotası | AI/ürün önbelleği (kalıcı SWR katmanı) |
 | Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu, `ai_cache` (araç sonuçları dahil) |
 | AI sağlayıcı havuzu | Sağlayıcı başına ücretsiz kota (`*_API_KEY_1..8` ile dağıtılır) | **En dar kaynak** → araç önbelleği burayı korur |
+| UPCitemdb (`/prod/trial`, anahtarsız) | günde 100 istek / en fazla **20 arama**; **patlama: 2 arama / 30 sn** (ölçüldü: 3. istek `429`) | Ürün kataloğu zenginleştirmesi (marka · model · GTIN · kategori). Koşu başına en fazla **2 sorgu**, yanıt 24 saat önbellekte, günlük kova `CATALOG_DAILY_LIMIT` (varsayılan 16) |
 
 > **Modal.com / kiralık GPU gerekmez:** hat GPU'ya değil dış AI API'lerine bağlıdır
 > (I/O-bound). 300 sn'lik duvar hesaplamadan değil platformun fonksiyon süresinden

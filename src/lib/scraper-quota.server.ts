@@ -131,6 +131,65 @@ export async function allowSupplierCredit(): Promise<boolean | null> {
   }
 }
 
+/* --------------------------------------------- Ürün kataloğu (UPCitemdb) */
+
+/**
+ * ÜRÜN KATALOĞU ARAMASI — GÜNLÜK kova.
+ *
+ * ÖLÇÜLEN SINIR (2026-10-15, UPCitemdb ücretsiz planı): günde toplam 100 istek
+ * ve bunun en fazla 20'si ARAMA olabilir (kalanı barkod sorgusu). Aylık bir
+ * kovaya koymak yanlış olurdu: 20 arama/gün × 30 = 600 arama, yani bir günde
+ * 20 aramayı tüketen bir kullanıcı ertesi gün hakkını kaybederdi.
+ *
+ * VARSAYILAN 16, TAVANI 20: ücretsiz planın tamamını harcamamak için bilinçli
+ * bir pay bırakılır (aynı ilke `serpMonthlyLimit`te de var). `CATALOG_DAILY_LIMIT`
+ * ile artırılabilir.
+ *
+ * FAIL-OPEN: sayaç okunamazsa arama yapılır (kotayı korumak için ürün
+ * göstermemek daha kötüdür).
+ */
+function catalogDailyLimit(): number {
+  const raw = Number(process.env.CATALOG_DAILY_LIMIT ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.min(20, Math.floor(raw)) : 16;
+}
+
+/** Gün kovası: `catalog-searches-2026-10-15`. UTC gün sınırı. */
+function dayBucket(prefix: string): string {
+  return `${prefix}-${new Date().toISOString().slice(0, 10)}`;
+}
+
+/** Ürün kataloğu araması yapmadan önce günlük bütçede yer var mı? */
+export async function allowCatalogCredit(): Promise<boolean | null> {
+  const bucket = dayBucket("catalog-searches");
+  const windowSeconds = 3 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: catalogDailyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[catalog] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[catalog] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
+/** Katalog kotası tükendiğinde kullanıcıya gösterilecek dürüst mesaj. */
+export function catalogQuotaMessage(): string {
+  return (
+    `Ürün kataloğu kotası günde ${catalogDailyLimit()} aramayla sınırlı ve bugün doldu; ` +
+    `bu arama marka/model zenginleştirmesi olmadan yapıldı.`
+  );
+}
+
 /** SerpAPI araması yapmadan önce bütçede yer var mı? */
 export async function allowSerpApiCredit(): Promise<boolean | null> {
   const bucket = `serpapi-searches-${new Date().toISOString().slice(0, 7)}`;

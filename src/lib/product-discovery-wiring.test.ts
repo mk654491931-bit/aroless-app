@@ -92,6 +92,8 @@ describe("Gemini kısa listesi", () => {
 const winnerProduct = (name: string): NormalizedProduct => ({
   name,
   brand: "Acme",
+  // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+  brandMeasured: true,
   seller: "shop",
   category: "",
   priceUsd: 59.9,
@@ -208,6 +210,9 @@ describe("toWinningProducts — dürüst eşleme", () => {
     rating: 4.6,
     ratingCount: 210,
     inStock: true,
+    // ÖLÇÜLMÜŞ TALEP SİNYALLERİ — sözleşmede zorunlu (`null` = ölçülmedi).
+    salesVolume: null,
+    viewed90d: null,
     sources: ["itunes"],
     url: "https://example.test/p",
     notes: "4.6 puan · 210 kullanıcı puanı",

@@ -353,6 +353,7 @@ export function isGameNiche(niche: string): boolean {
 /** Bir kaynağın ürün OLMAYAN satır üretip üretmediği — bilinen liste. */
 export const NON_PRODUCT_SOURCES = new Set([
   "wikipedia-demand",
+  "wikipedia-pageviews",
   "wikidata",
   "hackernews",
   "reddit-archive",
@@ -361,6 +362,19 @@ export const NON_PRODUCT_SOURCES = new Set([
   "google-news",
   "web-reviews",
 ]);
+
+/**
+ * Bu kaynak ÜRÜN SATMAZ — yalnız talep/bağlam sinyali ölçer.
+ *
+ * NEDEN FONKSİYON: kaynak adı iki yerde birden farklı yazılabiliyor
+ * (`wikipedia-demand` kaynağı, `wikipedia-pageviews` kaynağı) ve isim
+ * eşleştirmesi tek yerde tutulmalı. ÖLÇÜLEN BOŞLUK (2026-10-15):
+ * `wikipedia-pageviews` bu listede YOKTU, yani gerçek görüntülenme kaynağı
+ * "ürün" adayı olarak havuza girebiliyordu.
+ */
+export function isNonProductSource(source: string): boolean {
+  return NON_PRODUCT_SOURCES.has(String(source ?? "").trim());
+}
 
 /**
  * KATALOĞU TAMAMEN DİJİTAL LİSANS olan kaynaklar — hiçbir zaman satılabilir

@@ -78,11 +78,16 @@ export function toWinningProducts(
       measured: {
         rating: row.rating ?? null,
         ratingCount: row.ratingCount ?? null,
-        // Ölçümlü keşif hattı bu İKİ alanı KAZIMAZ (`DiscoveryWinner` şemasında
-        // yoktur), o yüzden `null` kalır — kriterlerde "ölçülmedi" sayılır ve
-        // puanlamaya katılmaz (bkz. `winner-criteria.ts` `measuredCount`).
-        salesVolume: null,
-        viewed90d: null,
+        // ÖLÇÜLMÜŞ TALEP SİNYALLERİ ARTIK TAŞINIYOR.
+        //
+        // Ölçülen kayıp (2026-10-14): bu iki alan kaynaklarda ölçülüyor
+        // (AliExpress "N sold" → satış, Bing Shopping "N görüntülenme" →
+        // görüntülenme) ama burada SABİT `null` yazılıyordu, üstüne
+        // `DiscoveryWinnerSchema` de alanı taşımıyordu. Sonuç: 294 satışı
+        // ölçülmüş bir ürünün kartında talep kanıtı "—" görünüyordu. Artık
+        // satırda ölçülen değer AYNEN taşınır; ölçülmemişse `null` kalır.
+        salesVolume: row.salesVolume ?? null,
+        viewed90d: row.viewed90d ?? null,
       },
       // ÖLÇÜLMÜŞ kaynak adresi. Doğrulanmış görsel yalnız ürünün KENDİ
       // sayfasından bulunabilir; kazımada adres yoksa görsel de doğrulanamaz

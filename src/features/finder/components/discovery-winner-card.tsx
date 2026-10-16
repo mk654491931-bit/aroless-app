@@ -57,6 +57,33 @@ function fmtPrice(value: number | null | undefined): string {
   return typeof value === "number" && Number.isFinite(value) ? `$${value.toFixed(2)}` : "—";
 }
 
+/**
+ * TALEP HÜCRESİ — "—" yerine ÖLÇÜLMÜŞ bir sayı koyar.
+ *
+ * ÖLÇÜLEN BOŞLUK (2026-10-15, canlı "air fryer"/US): 21 adayın yalnız 3'ünde
+ * puan vardı, hiçbirinde değerlendirme sayısı yoktu; kart sürekli "Puan —"
+ * gösteriyordu. Oysa AYNI satırlarda 14 üründe ÖLÇÜLMÜŞ satış adedi
+ * ("294 sold") vardı ve arayüze taşınıyordu. Hücre artık sırayla en somut
+ * ölçümü gösterir ve ETİKETİNİ de değiştirir — "Puan 294" denmez.
+ *
+ * Hiçbiri ölçülmediyse "—" kalır: 0 yazmak "ölçtük ve sıfır bulduk" demek
+ * olurdu (dürüstlük kuralı).
+ */
+function demandCell(winner: DiscoveryWinner): { label: string; value: string } {
+  if (typeof winner.rating === "number") {
+    return { label: "Puan", value: `${winner.rating.toFixed(1)}/5` };
+  }
+  const sales = winner.salesVolume ?? null;
+  if (sales !== null && sales > 0) {
+    return { label: "Satış adedi", value: sales.toLocaleString("tr-TR") };
+  }
+  const views = winner.viewed90d ?? null;
+  if (views !== null && views > 0) {
+    return { label: "Görüntülenme", value: views.toLocaleString("tr-TR") };
+  }
+  return { label: "Puan", value: "—" };
+}
+
 export function DiscoveryWinnerCard({
   winner,
   rank,
@@ -76,6 +103,7 @@ export function DiscoveryWinnerCard({
   // gibi saçma bir metin üretmemelidir.
   const missing =
     MEASURABLE_FIELDS - Math.max(0, Math.min(MEASURABLE_FIELDS, winner.dataCompleteness));
+  const demand = demandCell(winner);
 
   return (
     <article className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -132,11 +160,10 @@ export function DiscoveryWinnerCard({
               : "—"}
           </dd>
         </div>
+        {/* TALEP: puan → satış adedi → görüntülenme (ölçülen ilk sayı kazanır). */}
         <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Puan</dt>
-          <dd className="text-sm font-semibold tabular-nums">
-            {typeof winner.rating === "number" ? `${winner.rating.toFixed(1)}/5` : "—"}
-          </dd>
+          <dt className="text-[10px] text-muted-foreground">{demand.label}</dt>
+          <dd className="text-sm font-semibold tabular-nums">{demand.value}</dd>
         </div>
         <div className="rounded-lg bg-muted/30 py-2">
           <dt className="text-[10px] text-muted-foreground">Ön skor</dt>

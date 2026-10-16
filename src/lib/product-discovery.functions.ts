@@ -77,6 +77,36 @@ export const DiscoveryWinnerSchema = z.object({
   rating: z.number().nullable().catch(null),
   ratingCount: z.number().nullable().catch(null),
   inStock: z.boolean().nullable().catch(null),
+  /**
+   * ÖLÇÜLMÜŞ TALEP SİNYALLERİ — kazıma satırından AYNEN gelir.
+   *
+   * NEDEN EKLENDİ (ölçülen kayıp, 2026-10-14): bu iki alan kaynaklarda
+   * ÖLÇÜLÜYOR (AliExpress kartı "N sold" → `salesVolume`, Bing Shopping kartı
+   * "N görüntülenme" → `viewed90d`), `filter` + `council` katmanlarında
+   * taşınıyor, `final` adımının ürün kaydında duruyor — ama ŞEMADA OLMADIĞI
+   * İÇİN zod onları OKURKEN DÜŞÜRÜYORDU (`imageUrl` de aynı sebeple düşüyordu).
+   * Ölçülen sonuç: ölçülmüş 294 satışı olan bir ürün kartında "Satış" kanıtı
+   * "—" görünüyor, talep kanıtı puanlamaya girmiyordu.
+   *
+   * `nullish()` BİLEREK: alanları taşımayan ESKİ kayıtlar da parse edilebilir
+   * kalmalı; zorunlu alan olsaydı tüm `products` dizisi düşerdi.
+   */
+  salesVolume: z
+    .number()
+    .int()
+    .min(0)
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
+  viewed90d: z
+    .number()
+    .int()
+    .min(0)
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
   sources: z.array(z.string()).catch([]),
   url: z.string().catch(""),
   // Ölçülen ürün görseli (kaynak JSON-LD/Steam/Bing kartı). Eksik olabilir;

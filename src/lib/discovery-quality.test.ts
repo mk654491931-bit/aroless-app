@@ -72,6 +72,8 @@ describe("productIdOf — normalize üründen kimlik", () => {
   const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
     name: "Air Fryer 5.5L",
     brand: "Acme",
+    // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+    brandMeasured: true,
     seller: "shop",
     category: "",
     priceUsd: 59.9,
@@ -176,6 +178,7 @@ describe("dataCompletenessScore — yalnız ÖLÇÜLMÜŞ alan ödüllendirilir"
     const result = productCompleteness({
       name: "Air Fryer",
       brand: "Acme",
+      brandMeasured: true,
       seller: "s",
       category: "",
       priceUsd: 59.9,

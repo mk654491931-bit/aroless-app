@@ -32,6 +32,8 @@ function candidate(index: number, fingerprint = ""): NormalizedProduct {
   return {
     name: `Air Fryer ${index}`,
     brand: "Acme",
+    // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+    brandMeasured: true,
     seller: "shop",
     category: "",
     priceUsd: 59.9,

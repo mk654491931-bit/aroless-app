@@ -42,6 +42,7 @@ import {
   measuredMarginPct,
   measuredMoney,
 } from "@/lib/economics-evidence";
+import { supplierMatchKind } from "@/lib/supplier-economics";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
@@ -89,6 +90,10 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
   const feeBudget = p.fee_budget_usd ?? null;
   const supplierPrice = measuredMoney(p.supplier_price_usd);
   if (!s || (supplierPrice === null && gross === null)) return null;
+  // KANITIN GÜCÜ: birebir ürün eşleşmesi mi, yoksa aynı nişteki global band mı?
+  // Ayrımı KAPATMAK yanıltıcı olurdu: niş bandı ürünün kendi toptan fiyatı
+  // değildir ve panel bunu söylemek zorundadır (bkz. `supplier-economics.ts`).
+  const nicheMatch = supplierMatchKind(s) === "niche";
 
   const band =
     s.supplierLowUsd !== null && s.supplierHighUsd !== null && s.supplierHighUsd > s.supplierLowUsd
@@ -98,7 +103,10 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
   return (
     <div className="mt-3 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.08] to-violet-500/[0.05] px-3 py-2.5 text-[11px]">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300 font-semibold mb-2">
-        <Package size={11} /> Tedarik kanıtı — ölçülen toptan fiyat
+        <Package size={11} />{" "}
+        {nicheMatch
+          ? "Tedarik kanıtı — aynı nişteki global toptan fiyat bandı"
+          : "Tedarik kanıtı — ölçülen toptan fiyat"}
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -177,6 +185,8 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
       </div>
 
       <div className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground leading-relaxed">
+        {nicheMatch &&
+          "Birebir ürün eşleşmesi bulunamadı: bant AYNI NİŞTEKİ karşılaştırılabilir tekliflerden ölçüldü, bu ürünün kendi toptan fiyatı değildir. "}
         {gross !== null
           ? "Satış − toptan = brüt marj. Net marj ölçülmedi: kargo, gümrük ve platform komisyonu bu kaynakta YOK, tahmin edilmedi."
           : "Perakende fiyat ölçülmediği için marj hesaplanamadı."}

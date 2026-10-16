@@ -38,6 +38,7 @@ import {
 } from "./product-discovery-consensus";
 import { TOTAL_AGENTS, runCouncilOnProducts } from "./product-discovery-council.server";
 import { buildStepBody, stepEndpoint, DISCOVERY_STEPS } from "./product-discovery-qstash.server";
+import { parseDiscoveryResult } from "./product-discovery.functions";
 
 /** Test ürünü fabrikası — varsayılanlar "ölçülmüş ama zayıf" bir ürün verir. */
 const raw = (over: Partial<RawProduct> = {}): RawProduct => ({
@@ -245,18 +246,17 @@ describe("deterministic hard filter", () => {
     const { survivors, stats } = filterAndPreRank(
       [
         raw({ title: "Air Fryer 5.5L", source: "ebay-market" }),
-        raw({
-          title: "air fryer 5.5 l",
-          source: "reddit-archive",
-          preScoreHint: undefined,
-        } as never),
+        // İKİ KAYNAK DA ÜRÜN SATAN kaynak olmalı: ürün olmayan kaynak
+        // (reddit-archive, github, web-reviews…) kaynak kapısında elenir ve
+        // tekilleştirmeye hiç ulaşmaz — o ayrı bir testin konusu.
+        raw({ title: "air fryer 5.5 l", source: "aliexpress-reader" }),
       ],
       { nicheMomentumPct: null, nicheEngagement: 0 },
     );
     expect(stats.rejectedByDuplicate).toBe(1);
     expect(survivors).toHaveLength(1);
     // Kanıt gücü artar: iki kaynağın adı da korunur.
-    expect(survivors[0]!.sources.sort()).toEqual(["ebay-market", "reddit-archive"]);
+    expect(survivors[0]!.sources.sort()).toEqual(["aliexpress-reader", "ebay-market"]);
   });
 
   it("her eleme gerekçesiyle SAYILIR (input = toplam red)", () => {
@@ -292,10 +292,15 @@ describe("deterministic hard filter", () => {
     expect(survivors).toHaveLength(0);
   });
 
-  it("ticari alanı olmayan AMA talep kanıtı taşıyan ürünü KORUR", () => {
-    // Hacker News/Reddit/GitHub satış yapmaz; `notes` içindeki ölçülmüş
-    // puan/yorum talep kanıtıdır ve sayılmalıdır. Yoksa 14 ajanın talep
-    // uzmanları (CMO/trend_hunter) hiçbir zaman kanıtla çalışamaz.
+  it("ÜRÜN OLMAYAN kaynak (github/web-reviews/reddit…) aday havuzuna HİÇ girmez", () => {
+    // ÖLÇÜLEN GERÇEK (2026-10-15, canlı "air fryer"/US): 120 ham satırın 31'i
+    // bu kaynaklardan geliyordu (hackernews 8, github 8, web-reviews 11,
+    // wikipedia 2, wikidata 1, google-news 1) ve fiyat taşıyan bir satır
+    // ticari kanıt kapısını ATLAYIP ürün kartı olabiliyordu.
+    //
+    // Bu satırlar KAYBOLMAZ: talep sinyalleri (`notes`teki momentum/etkileşim)
+    // hatta ham havuzdan okunur ve 14 ajanın talep uzmanlarını besler.
+    // Yalnız "ürün" diye LİSTELENMEZLER.
     const { survivors, stats } = filterAndPreRank(
       [
         raw({
@@ -307,7 +312,24 @@ describe("deterministic hard filter", () => {
           source: "reddit-archive",
           notes: "842↑ 310yorum",
         }),
+        raw({
+          title: "awesome-vacuum — robot süpürge kontrolcüsü",
+          priceUsd: 12.5,
+          source: "github",
+        }),
+        raw({ title: "Robot süpürge rehberi", source: "web-reviews", rating: 4.6, ratingCount: 300 }),
       ],
+      { nicheMomentumPct: 5, nicheEngagement: 100 },
+    );
+    expect(survivors).toHaveLength(0);
+    expect(stats.rejectedBySource).toBe(3);
+  });
+
+  it("ticari alanı olmayan ama ÖLÇÜLMÜŞ talep kanıtı taşıyan ÜRÜN satırını KORUR", () => {
+    // Fiyatı olmayan ama puan/puan sayısı ölçülmüş bir PAZARYERİ satırı
+    // elenmez: `null` fiyat "ölçülmedi"dir, "ucuz" ya da "değersiz" değil.
+    const { survivors, stats } = filterAndPreRank(
+      [raw({ title: "Robot süpürge X1", priceUsd: null, source: "aliexpress-reader" })],
       { nicheMomentumPct: 5, nicheEngagement: 100 },
     );
     expect(stats.rejectedByCompleteness).toBe(0);
@@ -513,6 +535,47 @@ describe("14-agent consensus & confidence", () => {
 });
 
 /* ==================================================== 5. Durum makinesi */
+
+/**
+ * ÖLÇÜLMÜŞ TALEP SİNYALLERİ KAYBOLMAZ.
+ *
+ * Ölçülen hata (2026-10-14): kaynaklar satış adedini (AliExpress "N sold") ve
+ * 90 günlük görüntülenmeyi (Bing Shopping) ÖLÇÜYOR, hat bunları `final`
+ * adımına kadar taşıyor, ama `DiscoveryWinnerSchema` bu iki alanı
+ * tanımadığı için zod OKURKEN DÜŞÜRÜYORDU. Sonuç: 294 satışı ölçülmüş bir
+ * ürünün kartında talep kanıtı "—" görünüyordu. Bu blok o düşüşü kilitler.
+ */
+describe("parseDiscoveryResult — ölçülmüş talep sinyalleri", () => {
+  const signals = { demand: 70, competition: 40, margin: 55, rating: 80, availability: 50 };
+
+  it("satış adedi ve 90 günlük görüntülenme kayıttan arayüze AKTARILIR", () => {
+    const parsed = parseDiscoveryResult({
+      products: [
+        { name: "Air Fryer 6L", salesVolume: 294, viewed90d: 690, signals, priceUsd: 40.66 },
+      ],
+    });
+    expect(parsed.products).toHaveLength(1);
+    expect(parsed.products[0].salesVolume).toBe(294);
+    expect(parsed.products[0].viewed90d).toBe(690);
+  });
+
+  it("alanları taşımayan ESKİ kayıtlar null olur, kayıt DÜŞMEZ", () => {
+    const parsed = parseDiscoveryResult({
+      products: [{ name: "Air Fryer 6L", signals, priceUsd: 40.66 }],
+    });
+    expect(parsed.products).toHaveLength(1);
+    expect(parsed.products[0].salesVolume).toBeNull();
+    expect(parsed.products[0].viewed90d).toBeNull();
+  });
+
+  it("ölçülmüş 0 korunur (sıfır 'ölçtük ve sıfır bulduk' demektir)", () => {
+    const parsed = parseDiscoveryResult({
+      products: [{ name: "Air Fryer 6L", salesVolume: 0, viewed90d: 0, signals }],
+    });
+    expect(parsed.products[0].salesVolume).toBe(0);
+    expect(parsed.products[0].viewed90d).toBe(0);
+  });
+});
 
 describe("job status state machine", () => {
   it("7 durum tanımlıdır", () => {
@@ -737,14 +800,37 @@ describe("kanıt modeli (evidence slots)", () => {
         inStock: null,
       }),
     );
-    // price + brand + url + demand = 4; bonusların hiçbiri dolu değil.
-    expect(p.dataCompleteness).toBe(4);
-    for (const bonus of ["rating", "ratingCount", "stock"]) {
+    // price + brand + url = 3; `notes` metni talep kanıtı DEĞİLDİR (aşağıdaki
+    // teste bakınız) ve bonusların hiçbiri dolu değil.
+    expect(p.dataCompleteness).toBe(3);
+    expect(p.missingFields).toContain("demand");
+    for (const bonus of ["rating", "stock"]) {
       expect(p.missingFields).not.toContain(bonus);
     }
   });
 
-  it("notes içindeki sayısal sinyal talep kanıtı sayılır", () => {
+  it("başlıktan ÇIKARILAN marka kanıt yuvasını doldurmaz (türev ≠ ölçüm)", () => {
+    // Ölçülen boşluk (2026-10-15): 75/75 adayda marka alanı boştu (pazaryeri
+    // liste sayfaları marka sunmuyor). Marka artık başlıktan çıkarılıyor ve
+    // kartta GÖSTERİLİYOR, ama bu bir türevdir: aynı metinden ikinci bir kanıt
+    // yuvası üretmek `dataCompleteness`i şişirir.
+    const p = normalizeRaw(
+      raw({ brand: "", priceUsd: null, url: "", rating: null, ratingCount: null, inStock: null }),
+    );
+    expect(p.brand).not.toBe(""); // çıkarım çalıştı (kartta görünür)
+    expect(p.brandMeasured).toBe(false);
+    expect(p.missingFields).toContain("brand");
+
+    // Aynı marka KATALOGDAN geldiğinde (bağımsız ölçüm) yuva DOLAR.
+    const measured = normalizeRaw(raw({ brand: "Cosori", brandMeasured: true }));
+    expect(measured.brandMeasured).toBe(true);
+    expect(measured.missingFields).not.toContain("brand");
+  });
+
+  it("notes içindeki sayı (fiyat metni, tarih) talep kanıtı SAYILMAZ", () => {
+    // Ölçülen yanlış beyan: `notes` içindeki HERHANGİ bir rakam (katalog kayıtlı
+    // fiyat, tarih damgası) "ölçülmüş talep" sayılıyordu ve aynı kavram iki
+    // modülde iki farklı tanımlanıyordu. Talep yalnız SAYISAL alanlardan gelir.
     const base = {
       priceUsd: null,
       brand: "",
@@ -757,9 +843,14 @@ describe("kanıt modeli (evidence slots)", () => {
     const without = normalizeRaw(
       raw({ ...base, url: "https://x.test/3", notes: "tartışma sürüyor" }),
     );
-    expect(withNumber.dataCompleteness).toBe(2); // url + demand
-    expect(without.dataCompleteness).toBe(1); // yalnız url
-    expect(without.missingFields).toContain("demand");
+    expect(withNumber.dataCompleteness).toBe(1); // yalnız url
+    expect(without.dataCompleteness).toBe(1);
+    expect(withNumber.missingFields).toContain("demand");
+
+    // Ölçülmüş sayısının kendisi (ratingCount/salesVolume/viewed90d) kanıttır.
+    const counted = normalizeRaw(raw({ ...base, url: "https://x.test/3", ratingCount: 842 }));
+    expect(counted.dataCompleteness).toBe(2); // url + demand
+    expect(counted.missingFields).not.toContain("demand");
   });
 
   it("yalnız boşluktan gelen marka kanıt sayılmaz", () => {

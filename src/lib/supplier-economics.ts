@@ -67,6 +67,88 @@ export type MarginEvidence = {
 export const SUPPLIER_MIN_RELEVANCE = 0.5;
 
 /**
+ * NİŞ SEVİYESİ eşleşmesinin sabit alakalılığı (birebir ürün eşleşmesi DEĞİL).
+ *
+ * NEDEN VAR (ölçülen kayıp, 2026-10-14): tedarik teklifleri AliExpress'ten
+ * İNGİLİZCE başlıklarla gelir. Türkçe perakende başlıkları ("Bosch MAF240B0
+ * Serie 2 Air Fryer Sıcak Hava Fritözü") ile karşılaştırıldığında ürünün
+ * AYIRT EDİCİ kelimeleri (fritözü, hazneli, litrelik) hiçbir teklifte geçmez:
+ * canlı ölçüm, `hava fritözü`/TR koşusunda **5/5 üründe tedarik hücresi "—"**
+ * ve buna bağlı olarak marjın da boş kalmasıydı — halbuki aynı teklif havuzu
+ * 60 fiyatlı kart içeriyordu ve niş çevirisi (`englishProductQuery`) "air
+ * fryer"dir.
+ *
+ * Bu yüzden birebir ürün eşleşmesi yoksa teklif havuzu NİŞ seviyesinde
+ * denenir. Bu daha zayıf bir kanıttır ve `matchKind` alanı bunu AÇIKÇA
+ * taşır; arayüz de "birebir ürün" yerine "aynı nişteki global fiyat bandı"
+ * diye etiketler. Uydurma yok: bant yine ÖLÇÜLMÜŞ teklif fiyatlarından kurulur.
+ */
+export const SUPPLIER_NICHE_RELEVANCE = 0.6;
+
+/** Teklifin bu nişe ait sayılabileceği en az kelime isabeti. */
+export function nicheHitFloor(tokenCount: number): number {
+  return Math.max(1, Math.ceil(tokenCount / 2));
+}
+
+/**
+ * Niş ifadelerinden (TR + İngilizce çevirisi) AYIRT EDİCİ anahtar kelimeler.
+ *
+ * `keyTokens` ile aynı süzgeci kullanır (kısa kelimeler ve jenerik kelimeler
+ * atılır) ama SONDAN 3 kelime sınırı YOKTUR: niş ifadesinin tamamı zaten
+ * ürünün kendisidir.
+ */
+export function nicheKeyTokens(queries: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const query of queries) {
+    for (const token of foldTurkish(String(query ?? ""))
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)) {
+      if (token.length >= 3 && !GENERIC_WORDS.has(token)) out.add(token);
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Türkçe harfleri ASCII karşılığına indirir.
+ *
+ * NEDEN GEREKLİ: NFKD normalizasyonu "ö/ü/ş/ğ/ç" harflerini ayırır ama
+ * NOKTA SIZ i (ı) ve noktalı büyük İ ayrışmaz. Onlar süzgeçte tümden
+ * silindiği için "sıcak" → "s cak" olur ve niş anahtarı kaybolurdu — yani
+ * Türkçe nişlerde niş seviyesi yedek sessizce çalışmazdı.
+ */
+function foldTurkish(value: string): string {
+  return value
+    .replace(/[ıİ]/g, "i")
+    .replace(/[şŞ]/g, "s")
+    .replace(/[ğĞ]/g, "g")
+    .replace(/[çÇ]/g, "c")
+    .replace(/[öÖ]/g, "o")
+    .replace(/[üÜ]/g, "u");
+}
+
+/** Teklif başlığı bu niş anahtarlarının kaçını taşıyor (0-1). */
+export function nicheMatch(offerTitle: string, nicheTokens: readonly string[]): number {
+  if (!nicheTokens.length) return 0;
+  const haystack = new Set(
+    foldTurkish(String(offerTitle ?? ""))
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+  const hit = nicheTokens.filter((k) => tokenHit(haystack, k)).length;
+  return hit / nicheTokens.length;
+}
+
+/**
  * AYIRT EDİCİ olmayan kelimeler — “büyük”, “set”, “iç mekân” gibi her üründe
  * bulunan kelimeler eşleştirmede SAYILMAZ.
  *
@@ -203,6 +285,21 @@ export const SupplierEvidenceSchema = z.object({
   store: z.string(),
   shipFrom: z.string(),
   url: z.string(),
+  /**
+   * EŞLEŞMENİN TÜRÜ — kanıtın gücünü taşıyan alan.
+   *
+   *  • `"product"` — teklif başlığı ÜRÜNÜN kendi ayırt edici kelimelerini taşır
+   *    (birebir/çok yakın eşleşme).
+   *  • `"niche"` — birebir ürün eşleşmesi YOK; teklif AYNI NİŞTEN seçildi
+   *    (çok dilli başlıklarda tek çalışan yol). Bant yine ölçülmüş teklif
+   *    fiyatlarından kurulur ama "bu ürünün toptan fiyatı" diye sunulmaz.
+   *
+   * `optional()` BİLEREK: bu alan eklenmeden ÖNCE yazılmış kayıtlar
+   * `matchKind` taşımaz. Zorunlu olsaydı zod eski kayıtların `supplier`
+   * kanıtını tümden düşürür (üst alan `.catch(null)` ile null olurdu) ve
+   * kullanıcı kanıtını kaybederdi.
+   */
+  matchKind: z.enum(["product", "niche"]).optional().catch(undefined),
 });
 
 /**
@@ -228,6 +325,14 @@ export function emptySupplierEvidence(): SupplierEvidence {
     shipFrom: "",
     url: "",
   };
+}
+
+/**
+ * Kanıtın eşleşme türü — alanı taşımayan eski kayıtlar `"product"` sayılır.
+ * (Eski kayıtlarda kanıt yalnız birebir eşleşmeyle üretilebiliyordu.)
+ */
+export function supplierMatchKind(evidence: SupplierEvidence | null | undefined): "product" | "niche" {
+  return evidence?.matchKind === "niche" ? "niche" : "product";
 }
 
 /** Boş marj kanıtı. */
@@ -293,9 +398,31 @@ export function matchSupplierOffer(
 export function buildSupplierEvidence(
   candidate: SupplierCandidateLike,
   offers: readonly SupplierOfferLike[],
+  /**
+   * NİŞ SEVİYESİ YEDEĞİ (opsiyonel): niş ifadeleri (TR + İngilizce çevirisi).
+   * Verilmezse davranış eskisiyle BİREBİR aynıdır — birebir eşleşme yoksa
+   * kanıt boş kalır, uydurulmaz.
+   */
+  opts: { nicheQueries?: readonly string[] } = {},
 ): SupplierEvidence {
   const best = matchSupplierOffer(candidate, offers);
-  if (!best) return emptySupplierEvidence();
+
+  // BİREBİR ürün eşleşmesi yoksa NİŞ seviyesinde ara (çok dilli başlıklarda
+  // tek çalışan yol). Eşleşme türü kanıta YAZILIR ki arayüz gücünü saklamasın.
+  if (!best) {
+    const tokens = nicheKeyTokens(opts.nicheQueries ?? []);
+    const nicheOffers = tokens.length
+      ? offers.filter(
+          (offer) =>
+            measuredMoney(offer.unitPriceUsd) !== null &&
+            nicheMatch(offer.title, tokens) >= nicheHitFloor(tokens.length) / tokens.length,
+        )
+      : [];
+    if (!nicheOffers.length) return emptySupplierEvidence();
+    // En çok satan teklif mağaza/kargo bilgisini taşır; niş havuzunda ilk
+    // fiyatlı teklif yeterlidir (havuzun tamamı aynı nişten seçildi).
+    return withMatchKind(buildEvidenceFromPool(nicheOffers, nicheOffers[0]), "niche");
+  }
 
   // Bant yalnız EN ALAKALI tekliflerden kurulur. “>= best” yerine TAM EŞİTLİK
   // aranır: yarım eşleşen ürünler (aynı nişten farklı boy/çeşit) bandı
@@ -306,7 +433,29 @@ export function buildSupplierEvidence(
       measuredMoney(offer.unitPriceUsd) !== null &&
       productTitleMatch(candidate.name, offer.title) === best.relevance,
   );
-  const pool = aligned.length ? aligned : [best.offer];
+  return withMatchKind(
+    buildEvidenceFromPool(aligned.length ? aligned : [best.offer], best.offer),
+    "product",
+  );
+}
+
+/** Kanıt nesnesine eşleşme türünü yazar (tek yerden). */
+function withMatchKind(
+  evidence: SupplierEvidence,
+  matchKind: "product" | "niche",
+): SupplierEvidence {
+  return { ...evidence, matchKind };
+}
+
+/**
+ * ÖLÇÜLMÜŞ teklif havuzundan kanıtı kurar (bant + satış + mağaza).
+ * Havuzun nasıl seçildiği (birebir ürün / niş) bu fonksiyonun DIŞINDA kalır:
+ * böylece iki yol da aynı aritmetiği kullanır ve bant hiçbir yolda uydurulmaz.
+ */
+function buildEvidenceFromPool(
+  pool: readonly SupplierOfferLike[],
+  bestOffer: SupplierOfferLike,
+): SupplierEvidence {
   const prices = pool
     .map((o) => measuredMoney(o.unitPriceUsd))
     .filter((n): n is number => n !== null);
@@ -333,8 +482,8 @@ export function buildSupplierEvidence(
       : null,
     soldTotal: solds.length ? solds.reduce((a, b) => a + b, 0) : null,
     store: topSold?.store ?? "",
-    shipFrom: topSold?.shipFrom ?? best.offer.shipFrom,
-    url: best.offer.url,
+    shipFrom: topSold?.shipFrom ?? bestOffer.shipFrom,
+    url: bestOffer.url,
   };
 }
 
@@ -363,8 +512,10 @@ export function buildMarginEvidence(input: {
 export function buildEconomics(
   candidate: SupplierCandidateLike,
   offers: readonly SupplierOfferLike[],
+  /** Niş seviyesi yedeği için niş ifadeleri (bkz. `buildSupplierEvidence`). */
+  opts: { nicheQueries?: readonly string[] } = {},
 ): { supplier: SupplierEvidence; margin: MarginEvidence } {
-  const supplier = buildSupplierEvidence(candidate, offers);
+  const supplier = buildSupplierEvidence(candidate, offers, opts);
   return {
     supplier,
     margin: buildMarginEvidence({

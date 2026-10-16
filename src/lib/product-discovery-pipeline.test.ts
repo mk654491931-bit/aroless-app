@@ -56,6 +56,8 @@ const fullProduct = (over: Partial<NormalizedProduct> = {}): NormalizedProduct =
   const base: NormalizedProduct = {
     name: "Air Fryer 5.5L",
     brand: "Acme",
+    // Marka kaynaktan geldi → ÖLÇÜM (türev çıkarım olsaydı `false` olurdu).
+    brandMeasured: true,
     seller: "shop",
     category: "",
     priceUsd: 59.9,

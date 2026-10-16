@@ -34,8 +34,25 @@ import { completenessPenalty } from "./product-discovery-consensus";
 import type { RawProduct } from "./product-discovery.types";
 import type { DiscoveryWinner } from "./product-discovery.functions";
 
-/** `githubSource` ve `webReviewSource`'un ürettiği satırların sadeleştirilmiş hâli. */
-function githubRow(overrides: Partial<RawProduct> = {}): RawProduct {
+/** Pazaryeri/katalog kaynağının ürettiği satırların sadeleştirilmiş hâli. */
+function productRow(overrides: Partial<RawProduct> = {}): RawProduct {
+  return {
+    title: "LED masa lambası Pro 12W",
+    brand: "",
+    seller: "",
+    priceUsd: null,
+    rating: null,
+    ratingCount: null,
+    inStock: null,
+    source: "marketplace-price",
+    url: "https://example.com/led-masa-lambasi-pro",
+    notes: "",
+    ...overrides,
+  };
+}
+
+/** `githubSource` ve `webReviewSource`'un ürettiği TALEP satırlarının hâli. */
+function demandRow(overrides: Partial<RawProduct> = {}): RawProduct {
   return {
     title: "awesome-led-desk-lamp — LED masa lambası kontrolörü",
     brand: "",
@@ -52,8 +69,8 @@ function githubRow(overrides: Partial<RawProduct> = {}): RawProduct {
 }
 
 describe("buildShortlist — fiyat kapısı", () => {
-  it("fiyatı olmayan ama kanıt taşıyan github satırını eler (regresyon)", () => {
-    const { products, stats } = buildShortlist([githubRow()], { requireImage: false });
+  it("fiyatı olmayan ama kanıt taşıyan PAZARYERİ satırını korur (regresyon)", () => {
+    const { products, stats } = buildShortlist([productRow()], { requireImage: false });
 
     // Canlı hatta tam olarak bu oluyordu: satır şemaya uyuyor, talep sinyali
     // var, ama fiyatı null → elendi → boş liste → kullanıcı parasını ödedi.
@@ -61,19 +78,16 @@ describe("buildShortlist — fiyat kapısı", () => {
     expect(products).toHaveLength(1);
     expect(products[0]?.price).toBeNull();
     // Kanıt alanları korunur — model bunları görebilmeli.
-    expect(products[0]?.title).toContain("awesome-led-desk-lamp");
+    expect(products[0]?.title).toContain("LED masa lambası");
     expect(stats.rejectedPrice).toBe(0);
   });
 
-  it("snippet'te $ olmayan web-reviews satırını hayatta bırakır (regresyon)", () => {
+  it("snippet'te $ olmayan PAZARYERİ satırını hayatta bırakır (regresyon)", () => {
     // `priceFromText` snippet'te `$` bulamaz → priceUsd null. Bu NORMAL yoldur.
     const { products, stats } = buildShortlist(
       [
-        githubRow({
-          title: "LED masa lambası en iyi 10 model 2026",
-          source: "web-reviews",
+        productRow({
           seller: "Example",
-          url: "https://example.com/led-masa-lambasi",
           notes: "example.com · 4.8 puan",
           rating: 4.8,
           ratingCount: 312,
@@ -88,9 +102,26 @@ describe("buildShortlist — fiyat kapısı", () => {
     expect(stats.rejectedPrice).toBe(0);
   });
 
+  it("ÜRÜN OLMAYAN kaynağın satırı fiyat/puan taşısa bile ÜRÜN olarak listelenmez", () => {
+    // ÖLÇÜLEN GERÇEK (2026-10-15): 120 ham satırın 31'i github/hackernews/
+    // web-reviews/wikipedia kaynaklarından geliyordu ve ticari kanıt kapısı
+    // bunları yalnız "havuzda ≥5 ticari satır varsa" eliyordu; fiyat taşıyan
+    // bir haber/GitHub satırı kapıyı ATLAYIP ürün kartı olabiliyordu.
+    const { products, stats } = buildShortlist(
+      [
+        demandRow({ priceUsd: 12.5, source: "web-reviews", rating: 4.8, ratingCount: 312 }),
+        demandRow({ priceUsd: 9, source: "google-news" }),
+      ],
+      { requireImage: false },
+    );
+
+    expect(products).toHaveLength(0);
+    expect(stats.rejectedBySource).toBe(2);
+  });
+
   it("GEÇERSİZ fiyatı (0) yine de eler", () => {
     // Kapı gevşetilirken bu korunmalı: 0 fiyat ölçülen değer değil, bozuk veri.
-    const { products, stats } = buildShortlist([githubRow({ priceUsd: 0 })], {
+    const { products, stats } = buildShortlist([productRow({ priceUsd: 0 })], {
       requireImage: false,
     });
 
@@ -99,10 +130,9 @@ describe("buildShortlist — fiyat kapısı", () => {
   });
 
   it("fiyatı geçerli olan satırı olduğu gibi korur", () => {
-    const { products } = buildShortlist(
-      [githubRow({ priceUsd: 249.99, source: "marketplace-price" })],
-      { requireImage: false },
-    );
+    const { products } = buildShortlist([productRow({ priceUsd: 249.99 })], {
+      requireImage: false,
+    });
 
     expect(products).toHaveLength(1);
     expect(products[0]?.price).toBe(249.99);
@@ -134,6 +164,10 @@ describe("null fiyat — zincirin geri kalanı", () => {
       rating: null,
       ratingCount: null,
       inStock: null,
+      // ÖLÇÜLMÜŞ TALEP SİNYALLERİ: sözleşmede ZORUNLUDUR (`number | null`,
+      // optional değil) — `null` "ölçülmedi" demektir, 0 değil.
+      salesVolume: null,
+      viewed90d: null,
       sources: ["github"],
       url: "https://github.com/example/awesome-led-desk-lamp",
       notes: "120 yıldız",

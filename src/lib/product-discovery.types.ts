@@ -28,6 +28,21 @@ export const RawProductSchema = z.object({
   title: z.string().min(1),
   /** Marka adı (boş olabilir — uydurulmaz). */
   brand: z.string().default(""),
+  /**
+   * MARKA BAĞIMSIZ KAYNAKTAN MI ÖLÇÜLDÜ?
+   *
+   * VARSAYILAN `true`: kaynağın kendi `brand` alanı bir ÖLÇÜMDÜR (kaynak onu
+   * sayfadan/JSON'dan okudu). `false` YALNIZ iki durumda yazılır:
+   *   • başlıktan çıkarım (`product-brand.ts`) — TÜREV, ölçüm değil;
+   *   • marka boş — yuva zaten doldurulmaz.
+   *
+   * NEDEN ŞEMADA (ölçülen hata): ürün kataloğu (UPCitemdb) eşleşmesi markayı
+   * BAĞIMSIZ bir veri kümesinden getirir ve bu gerçek bir ölçümdür; ama
+   * `normalizeRaw` yalnız "alan dolu mu?" sorusunu sorduğu için başlıktan
+   * çıkarılmış marka da tam puan alıyordu. Ayrım taşınmazsa "ölçtük" iddiası
+   * şişer (bkz. `product-discovery-filter.server.ts` EVIDENCE_SLOTS).
+   */
+  brandMeasured: z.boolean().default(true),
   /** Satıcı / mağaza adı. */
   seller: z.string().default(""),
   /** Fiyat (USD). `null` = fiyat bilgisi yok. */
@@ -130,6 +145,21 @@ export const NormalizedProductSchema = z.object({
   imageUrl: z.string().default(""),
   /** Satış adedi (ölçüldüyse). `null` = ölçülmedi. */
   salesVolume: z.number().int().min(0).nullable().default(null),
+
+  /**
+   * MARKA ÖLÇÜLDÜ MÜ, yoksa başlıktan mı ÇIKARILDI?
+   *
+   * NEDEN AYRI ALAN (2026-10-15): pazaryeri liste sayfaları marka alanı
+   * sunmuyor (ölçüm: 75/75 adayda marka boştu; AliExpress kart şemasında
+   * `brand` yok). Marka artık başlıktan yapısal olarak çıkarılıyor
+   * (`product-brand.ts`) ve bu KANIT DEĞİL, TÜREVDİR: başlık zaten
+   * "ölçülmüş" sayılıyor, aynı metinden ikinci bir kanıt yuvası türetmek
+   * `dataCompleteness` puanını şişirir ve "ölçtük" iddiasını sulandırırdı.
+   * Bu yüzden `true` YALNIZ marka bağımsız bir kaynaktan (kaynak alanı ya da
+   * ürün kataloğu eşleşmesi) geldiğinde yazılır; başlıktan çıkarımda `false`
+   * kalır ve marka yuvası EKSİK sayılır — kart yine markayı GÖSTERİR.
+   */
+  brandMeasured: z.boolean().default(false),
 
   /**
    * Tekilleştirme anahtarı: normalize başlık + marka + satıcı.

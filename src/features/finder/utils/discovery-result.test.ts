@@ -12,13 +12,92 @@ import {
   describeDiscoveryFailure,
   discoverySetupNotice,
   hintsForFailure,
+  toWinningProducts,
   type SetupReport,
 } from "./discovery-result";
+import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 import {
   isDiscoveryPipelineActive,
   setDiscoveryPipelineActive,
   subscribeDiscoveryPipeline,
 } from "./discovery-progress-store";
+
+/**
+ * ÖLÇÜLMÜŞ TALEP SİNYALLERİ KARTA TAŞINIR.
+ *
+ * Ölçülen hata (2026-10-14): bu dönüştürücü `measured.salesVolume` ve
+ * `measured.viewed90d` alanlarını SABİT `null` yazıyordu. Kaynak satış adedini
+ * ve görüntülenmeyi ölçmesine rağmen kart "—" gösteriyor, üstelik talep
+ * kanıtı puanlamaya girmiyordu (`winner-criteria.ts`).
+ */
+describe("toWinningProducts — ölçülmüş talep sinyalleri", () => {
+  const signals = { demand: 62, competition: 40, margin: 50, rating: 78, availability: 50 };
+  const row = (over: Partial<DiscoveryWinner> = {}): DiscoveryWinner =>
+    ({
+      name: "Air Fryer 6L Large Capacity",
+      brand: "",
+      seller: "aliexpress-reader",
+      category: "",
+      priceUsd: 40.66,
+      rating: 4.9,
+      ratingCount: null,
+      inStock: true,
+      sources: ["aliexpress-reader"],
+      url: "https://www.aliexpress.com/item/100.html",
+      imageUrl: "https://ae.example/img.jpg",
+      supplier: null,
+      grossMarginPct: null,
+      feeBudgetUsd: null,
+      notes: "aliexpress-reader · $40.66",
+      preScore: 70,
+      dataCompleteness: 5,
+      fingerprint: "air fryer|6l",
+      signals,
+      councilScore: 71,
+      confidenceScore: 64,
+      votes: 14,
+      agreement: 1,
+      evidence: [],
+      salesVolume: 294,
+      viewed90d: 690,
+      ...over,
+    }) as DiscoveryWinner;
+
+  it("satış ve görüntülenme ÖLÇÜLDÜYSE karta aynen geçer", () => {
+    const [product] = toWinningProducts([row()]);
+    expect(product.measured?.salesVolume).toBe(294);
+    expect(product.measured?.viewed90d).toBe(690);
+  });
+
+  it("ölçülmemişse null KALIR — 0 uydurulmaz", () => {
+    const [product] = toWinningProducts([row({ salesVolume: null, viewed90d: null })]);
+    expect(product.measured?.salesVolume).toBeNull();
+    expect(product.measured?.viewed90d).toBeNull();
+  });
+
+  it("tedarik kanıtı ve brüt marj aynen taşınır (Supplier/Marj hücresi)", () => {
+    const evidence = {
+      samples: 3,
+      supplierPriceUsd: 17.52,
+      supplierLowUsd: 14.1,
+      supplierHighUsd: 26.36,
+      listPriceUsd: 80.52,
+      discountPct: 67,
+      soldTotal: 695,
+      store: "PETRAEL Local Store",
+      shipFrom: "CN",
+      url: "https://www.aliexpress.com/item/3256809985321027.html",
+      matchKind: "niche" as const,
+    };
+    const [product] = toWinningProducts([
+      row({ supplier: evidence, grossMarginPct: 56.9, feeBudgetUsd: 23.14 }),
+    ]);
+    expect(product.supplier_price_usd).toBe("17.52");
+    expect(product.supplier_evidence?.matchKind).toBe("niche");
+    expect(product.gross_margin_pct).toBe(56.9);
+    expect(product.fee_budget_usd).toBe(23.14);
+  });
+});
 
 describe("describeDiscoveryFailure", () => {
   it("migration uygulanmamışsa kolon hatasını tanır", () => {

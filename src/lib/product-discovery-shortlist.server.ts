@@ -51,6 +51,7 @@ import {
 } from "./product-discovery.types";
 import {
   DIGITAL_ONLY_SOURCES,
+  isNonProductSource,
   isSellableProductRow,
   isStrongProductMatch,
   looksLikeMediaRelease,
@@ -510,6 +511,15 @@ export function salvageShortlist(
   const context = options.context ?? { nicheMomentumPct: null, nicheEngagement: 0 };
 
   const rows: RawProduct[] = [];
+  // ÜRÜN OLMAYAN kaynaklar (Wikipedia, GitHub, Hacker News, Reddit arşivi,
+  // haber, trend) burada AYRI tutulur ve ancak gerçek ürün satırı HİÇ yoksa
+  // kullanılır. NEDEN: kurtarma yolu "kapıları açmak" değildir — kaynak
+  // kapısı (`applyHardFilter`) açıkken bu kaynaklar aday olamıyor, ama
+  // kurtarma onları geri getirirse ölçülen hata (2026-10-15: 120 ham satırın
+  // 31'i ürün değildi ve listenin EN ÜSTÜNE çıkıyordu) tam olarak burada
+  // tekrar doğar. Boş ekran hiçbir zaman doğru cevap değildir; o yüzden
+  // ürün yoksa talep satırları dürüst etiketle sunulmaya devam eder.
+  const fallbackRows: RawProduct[] = [];
   for (const row of raw) {
     const parsed = RawProductSchema.safeParse(row);
     if (!parsed.success) continue;
@@ -521,19 +531,29 @@ export function salvageShortlist(
     ) {
       continue;
     }
-    // KANIT KURALI: hiçbir yuva dolu değilse bu satır "ölçülmüş ürün" değildir.
+    // KANIT KURALI: hiçbir ÖLÇÜLMÜŞ yuva dolu değilse bu satır "ölçülmüş
+    // ürün" değildir. `notes` içindeki rakam artık kanıt SAYILMAZ (fiyat
+    // metni/tarih damgası talep kanıtı değildir; bkz. filter `EVIDENCE_SLOTS`
+    // ve `evidenceCompleteness`) — yalnız sayısal talep alanları sayılır.
     const hasEvidence =
       parsed.data.priceUsd !== null ||
       parsed.data.brand.trim() !== "" ||
       parsed.data.seller.trim() !== "" ||
       parsed.data.url.trim() !== "" ||
-      /\d/.test(parsed.data.notes);
+      parsed.data.imageUrl.trim() !== "" ||
+      (parsed.data.salesVolume ?? 0) > 0 ||
+      (parsed.data.viewed90d ?? 0) > 0 ||
+      (parsed.data.ratingCount ?? 0) > 0;
     if (!hasEvidence) continue;
+    if (isNonProductSource(parsed.data.source)) {
+      fallbackRows.push(parsed.data);
+      continue;
+    }
     rows.push(parsed.data);
   }
 
   const scored = scoreDeterministically(
-    rows.map((row) => normalizeRaw(row)),
+    (rows.length ? rows : fallbackRows).map((row) => normalizeRaw(row)),
     context,
   );
   // Tekilleştirme normal yolla AYNI kuraldır (parmak izi); en dolu temsilci

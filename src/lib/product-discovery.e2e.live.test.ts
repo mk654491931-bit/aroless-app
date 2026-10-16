@@ -44,7 +44,10 @@ const NICHES = (process.env.PRODUCT_DISCOVERY_E2E_NICHES ?? "air fryer,robot vac
 
 describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
   for (const niche of NICHES) {
-    it(`"${niche}": kazıma → 75 → 25 → 14 ajan → 5 ürün`, async () => {
+    // CANLI AĞ testi: varsayılan 5 sn'lik vitest zaman aşımı gerçek kaynak
+    // taramasına YETMEZ (ölçülen: "air fryer" 6,4 sn). Zaman aşımı bütçesi
+    // hattın kendi sözüyle aynı büyüklükte seçilir (`DISCOVERY_END_TO_END_MS`).
+    it(`"${niche}": kazıma → 75 → 25 → 14 ajan → 5 ürün`, { timeout: 150_000 }, async () => {
       const t0 = Date.now();
 
       // ---- ADIM 1-2: kazıma + deterministik filtre → en iyi 75 -------------
@@ -72,6 +75,31 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
           `fiyat:${stats?.rejectedByPrice ?? 0} dup:${stats?.rejectedByDuplicate ?? 0} ` +
           `eksik:${stats?.rejectedByCompleteness ?? 0})`,
       );
+
+      // ÖLÇÜLEN DOLULUK (null/"—" avı): hangi alan kaç adayda GERÇEKTEN
+      // ölçüldü? Marka iki katmandan gelebilir:
+      //   • başlıktan çıkarım (`brandMeasured: false`, türev — kartta görünür)
+      //   • kaynak/katalog ölçümü (`brandMeasured: true`, kanıt yuvası)
+      // İkisini AYRI yazmak, "marka doldu" iddiasının hangi kanıta dayandığını
+      // görünür kılar.
+      const rows = scrape.products;
+      const filled = (predicate: (p: NormalizedProduct) => boolean) =>
+        rows.filter(predicate).length;
+      console.log(
+        `[E2E] "${niche}" · doluluk ${rows.length} aday · ` +
+          `marka ${filled((p) => p.brand.trim() !== "")} ` +
+          `(ölçülmüş ${filled((p) => p.brandMeasured)}) · ` +
+          `kategori ${filled((p) => p.category.trim() !== "")} · ` +
+          `görsel ${filled((p) => p.imageUrl.trim() !== "")} · ` +
+          `fiyat ${filled((p) => p.priceUsd !== null)} · ` +
+          `puan ${filled((p) => p.rating !== null)} · ` +
+          `değerlendirme sayısı ${filled((p) => p.ratingCount !== null)} · ` +
+          `satış ${filled((p) => (p.salesVolume ?? 0) > 0)}`,
+      );
+
+      // Adım NOTLARI ölçümün kanıtıdır: katalog zenginleştirmesi, eleme
+      // dökümü (§25) ve çalışmayan kaynaklar burada adıyla görünür.
+      console.log(`[E2E] "${niche}" · notlar: ${scrape.notes.join(" | ")}`);
 
       expect(scrape.ok).toBe(true);
       expect(scrape.products.length).toBeGreaterThan(0);
@@ -145,7 +173,7 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
      * ortamda Gemini'nin kendisi çağrılamaz; ama hat O ZAMAN NE YAPAR sorusu
      * cevapsız kalmasın diye kanıtlanır.
      */
-    it(`"${niche}": Gemini dalı 75 → 25 → 14 ajan → 5 ürün`, async () => {
+    it(`"${niche}": Gemini dalı 75 → 25 → 14 ajan → 5 ürün`, { timeout: 150_000 }, async () => {
       const scrape = await runScrapeFilterStep(niche, "US", "General", DISCOVERY_TOP_N);
       expect(scrape.products.length).toBeGreaterThan(0);
 
@@ -171,7 +199,10 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
       // Gemini yolu gerçekten kullanıldı (yedek DEĞİL).
       expect(shortlist.notes.join(" ")).toContain("Gemini");
       expect(shortlist.notes.join(" ")).not.toContain("Gemini çağrısı yapılmadı");
-      expect(shortlist.products.length).toBe(GEMINI_SHORTLIST_SIZE);
+      // SÖZLEŞME: liste 25'i AŞMAZ ve havuz 25'ten küçükse SAYI DOLDURULMAZ
+      // ("sayıyı doldurmak için sahte ürün eklenmez"). Ölçülen havuz 21 aday
+      // olduğunda eski sabit `toBe(25)` beklentisi yanlış olurdu.
+      expect(shortlist.products.length).toBe(Math.min(scrape.products.length, GEMINI_SHORTLIST_SIZE));
 
       // Model az seçse bile huni 25'te kalıyor (yedekleme).
       const partial = await runGeminiShortlistStep(
@@ -180,12 +211,16 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
         GEMINI_SHORTLIST_SIZE,
         async (rows) => rows.slice(0, 3),
       );
-      expect(partial.products.length).toBe(GEMINI_SHORTLIST_SIZE);
+      // Model az seçtiğinde de liste 25'e YAPILMAZ; havuz kadar (en çok 25)
+      // doldurulur — "sayıyı doldurmak için sahte ürün eklenmez".
+      expect(partial.products.length).toBe(Math.min(scrape.products.length, GEMINI_SHORTLIST_SIZE));
       expect(partial.notes.join(" ")).toContain("3 seçim modelden");
 
       // Ve bu dal da nihai listeyi dolduruyor.
       const deep = await runDeepAnalysisStep(shortlist.products, niche, runCouncilOnProducts);
-      expect(deep.consensus).toHaveLength(GEMINI_SHORTLIST_SIZE);
+      // Konsey HER adayı oylar: beklenen sayı havuzun kendisidir (25 DEĞİL —
+      // havuz 25'ten küçükse liste doldurulmaz).
+      expect(deep.consensus).toHaveLength(shortlist.products.length);
       const byId = new Map<string, NormalizedProduct>(
         deep.products.map((p) => [String(p.fingerprint ?? ""), p]),
       );

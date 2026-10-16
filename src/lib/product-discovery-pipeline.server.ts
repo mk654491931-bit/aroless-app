@@ -30,6 +30,7 @@ import {
   type Consensus,
   type NormalizedProduct,
   type ProductDiscoveryStatus,
+  type RawProduct,
   type TopProduct,
 } from "./product-discovery.types";
 import {
@@ -343,13 +344,34 @@ async function attachSupplierEconomics(
 ): Promise<{
   offers: number;
   matched: number;
+  /** Birebir ürün eşleşmesiyle kanıt bulanlar. */
+  matchedProduct: number;
+  /** Birebir eşleşme yokken NİŞ seviyesinde kanıt bulanlar (daha zayıf kanıt). */
+  matchedNiche: number;
   withMargin: number;
   medianUsd: number | null;
 }> {
-  const empty = { offers: 0, matched: 0, withMargin: 0, medianUsd: null };
+  const empty = {
+    offers: 0,
+    matched: 0,
+    matchedProduct: 0,
+    matchedNiche: 0,
+    withMargin: 0,
+    medianUsd: null,
+  };
   if (!survivors.length) return empty;
   const { fetchSupplierOffers } = await import("./aliexpress-supplier.server");
-  const { buildEconomics } = await import("./supplier-economics");
+  const { buildEconomics, supplierMatchKind } = await import("./supplier-economics");
+  // NİŞ İFADELERİ (TR + İngilizce çevirisi) — niş seviyesi yedeği için.
+  //
+  // NEDEN: tedarik teklifleri İngilizce gelir; Türkçe ürün başlıklarında
+  // ürünün ayırt edici kelimeleri hiçbir teklifte geçmediği için eşleşme
+  // 0 oluyordu ve TR koşularında 5/5 üründe Supplier/Marj "—" kalıyordu
+  // (ölçüm 2026-10-14). İngilizce niş anahtarları bu kopukluğu kapatır.
+  const { productQueryVariants, englishProductQuery } = await import("./product-discovery-query");
+  const nicheQueries = [englishProductQuery(niche), ...productQueryVariants(niche, 2)].filter(
+    (q): q is string => Boolean(q && q.trim()),
+  );
 
   let offers;
   try {
@@ -365,13 +387,19 @@ async function attachSupplierEconomics(
   if (!offers.length) return empty;
 
   let matched = 0;
+  let matchedProduct = 0;
+  let matchedNiche = 0;
   let withMargin = 0;
   const prices: number[] = [];
   for (let i = 0; i < survivors.length; i++) {
     const row = survivors[i];
-    const { supplier, margin } = buildEconomics({ name: row.name, priceUsd: row.priceUsd }, offers);
+    const { supplier, margin } = buildEconomics({ name: row.name, priceUsd: row.priceUsd }, offers, {
+      nicheQueries,
+    });
     if (supplier.samples === 0) continue;
     matched++;
+    if (supplierMatchKind(supplier) === "product") matchedProduct++;
+    else matchedNiche++;
     if (supplier.supplierPriceUsd !== null) prices.push(supplier.supplierPriceUsd);
     if (margin.grossMarginPct !== null) withMargin++;
     (survivors[i] as NormalizedProduct) = {
@@ -385,6 +413,8 @@ async function attachSupplierEconomics(
   return {
     offers: offers.length,
     matched,
+    matchedProduct,
+    matchedNiche,
     withMargin,
     medianUsd: prices.length ? prices[Math.floor(prices.length / 2)] : null,
   };
@@ -408,13 +438,97 @@ export async function runScrapeFilterStep(
   );
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
-  const { products: raw, reports } = await runSources(niche, undefined, {
+  const { products: rawPool, reports } = await runSources(niche, undefined, {
     capMs: opts.sourceCapMs,
     // GLOBAL SaaS: kaynaklar hedef ülkenin YEREL pazaryerine bakar
     // (bkz. `MARKETPLACES_BY_COUNTRY`). Ülke boşsa kaynaklar kendi
     // varsayılanına döner — eski davranış korunur.
     country,
   });
+
+  // 1b) MARKA ÖLÇÜMÜ (kaynaktan) + KATALOG ZENGİNLEŞTİRMESİ (ücretsiz).
+  //
+  // ÖLÇÜLEN BOŞLUK (2026-10-15, canlı "air fryer"/US): 120 ham satır → 75
+  // aday ve **0/75 üründe marka**; kategori de boş. Sebep: pazaryeri LİSTE
+  // sayfaları marka alanı sunmuyor (AliExpress kart şeması ölçüldü: `brand`
+  // YOK). Marka üç yerde kritik: `productModelKey` anahtarı, `dataCompleteness`
+  // "brand" yuvası ve 14 ajanın marka okuyan oyları.
+  //
+  // İki katman, ikisi de UYDURMAZ:
+  //   1. Ücretsiz ürün kataloğu (UPCitemdb) — marka/model/GTIN/kategori.
+  //      Kota günlük kovayla korunur; hata/kota durumunda hat DÜŞMEZ.
+  //   2. Başlıktan yapısal çıkarım (`brandFromTitle`) — `normalizeRaw` içinde,
+  //      HER ZAMAN çalışır ve `brandMeasured: false` yazar (türev ≠ ölçüm).
+  //
+  // SIRA ÖNEMLİ (ölçülen hata): başlıktan çıkarım ENRICHMENT'TAN ÖNCE
+  // yapılırsa `row.brand` önceden dolar ve zenginleştirme onu "kaynaktan
+  // ölçülmüş marka" sanıp `brandMeasured: true` yazar — türev bir çıkarım
+  // kanıt yuvasına dönüşür. Bu yüzden başlık çıkarımı BURADA YAPILMAZ;
+  // yalnız katalog (gerçek ölçüm) alanı doldurur.
+  // SORGU SEÇİMİ MARKA AĞIRLIKLI (ölçülen verim farkı, 2026-10-15): niş
+  // sorgusu (`s=air fryer`) 5 kayıt döndürdü ama markaları adaylarla
+  // örtüşmedi → 0 eşleşme. Marka sorgusu (`s=Ninja air fryer`) ise dönen her
+  // kaydı adayın markasıyla hizalar ve kimlik çapası kazandırır. En sıkin
+  // markalar seçilir: iki sorguluk patlama bütçesi en çok satıra harcanır.
+  let raw: RawProduct[] = [...rawPool];
+  let catalog = {
+    enriched: 0,
+    brands: 0,
+    categories: 0,
+    confirmed: 0,
+    records: 0,
+    queries: [] as string[],
+  };
+  try {
+    const {
+      CATALOG_MAX_SEARCHES_PER_RUN,
+      catalogQueriesForRun,
+      enrichRowsWithCatalog,
+      fetchCatalogRecordsForQueries,
+    } = await import("./product-catalog.server");
+    const { brandFromTitle: brandOfTitle, plausibleBrand } = await import("./product-brand");
+    const { productQueryVariants: kindVariants } = await import("./product-discovery-query");
+    const kindQuery = kindVariants(niche)[0] ?? String(niche ?? "").trim();
+    const brandCounts = new Map<string, number>();
+    for (const row of rawPool) {
+      const brand =
+        String(row.brand ?? "").trim() || brandOfTitle(String(row.title ?? ""));
+      // MAKULLÜK SÜZGECİ (ölçüldü: "Deli 9.5QT" → katalog sorgusu boşa
+      // gitti ve patlama bütçesinin ikisi de heba oldu). Makul olmayan ad
+      // sorguya DÖNÜŞMEZ.
+      if (!brand || !plausibleBrand(brand)) continue;
+      brandCounts.set(brand, (brandCounts.get(brand) ?? 0) + 1);
+    }
+    // SIRA ölçülen sıklıktır: iki sorguluk patlama bütçesi en çok satırı
+    // doğrulayacak markaya harcanır. Tek satırda görülen marka ELENMEZ
+    // (canlı ölçüm: "air fryer" nişinde marka başına 1 satır düşüyor, hepsi
+    // elenince katalog sorgusu niş sorgusuna düşüyor ve 0 eşleşme veriyordu).
+    const topBrands = [...brandCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([brand]) => brand)
+      .slice(0, CATALOG_MAX_SEARCHES_PER_RUN);
+    const { records, queries } = await fetchCatalogRecordsForQueries(
+      catalogQueriesForRun(topBrands, kindQuery, CATALOG_MAX_SEARCHES_PER_RUN),
+    );
+    if (records.length) {
+      const result = enrichRowsWithCatalog(raw, records);
+      raw = result.rows;
+      catalog = {
+        enriched: result.enriched,
+        brands: result.brands,
+        categories: result.categories,
+        confirmed: result.confirmed,
+        records: records.length,
+        queries,
+      };
+    } else {
+      catalog = { ...catalog, queries };
+    }
+  } catch (e) {
+    // Fail-soft: zenginleştirme çalışmazsa satırlar başlıktan çıkarılmış
+    // markayla devam eder; hiçbir alan uydurulmaz.
+    console.log(`[discovery] katalog zenginleştirmesi atlandı: ${(e as Error).message.slice(0, 90)}`);
+  }
 
   // 2) Niş bağlamı (talep sinyalleri) — kaynaklardan türetilir, AI DEĞİL.
   //    Wikipedia momentum satırın `notes`inde taşınır; burada parse edilir.
@@ -516,6 +630,15 @@ export async function runScrapeFilterStep(
 
   const notes: string[] = [
     `Görsel kapısı: ${requireImage ? "açık" : "kapalı"} (havuzda ${imagedCount} fotoğraflı satır).`,
+    // ÖLÇÜLEN ZENGİNLEŞTİRME: marka/kategori kaç satırda ÖLÇÜLDÜ? Bu satır
+    // olmadan "marka neden hâlâ boş" sorusu görünmez bir arızaya dönüşür.
+    catalog.records > 0
+      ? `Katalog zenginleştirmesi: ${catalog.queries.length} sorgu ` +
+        `(${catalog.queries.join(" · ")}) → ${catalog.records} kayıt · ` +
+        `${catalog.enriched} satır eşleşti (+${catalog.brands} marka, ` +
+        `+${catalog.categories} kategori) · ${catalog.confirmed} marka katalogla DOĞRULANDI.`
+      : `Katalog zenginleştirmesi: kayıt gelmedi (kota/patlama sınırı/ağ) — ` +
+        `${catalog.queries.length ? `${catalog.queries.length} sorgu denendi; ` : ""}marka başlıktan ölçüldü.`,
     // Dürüstlük: listeye görselsiz satır girdiyse SÖYLENİR — aksi hâlde "kartta
     // fotoğraf neden yok" sorusu kaynağı görünmeyen bir arızaya dönüşürdü.
     stats.admittedMissingImage > 0
@@ -548,8 +671,10 @@ export async function runScrapeFilterStep(
   ];
   if (supplierStats.matched > 0) {
     notes.push(
-      `Tedarik kanıtı: ${supplierStats.matched}/${survivors.length} ürüne alakalı toptan ` +
-        `teklif eşleşti (${supplierStats.offers} teklif tarandı, medyan birim fiyat ` +
+      `Tedarik kanıtı: ${supplierStats.matched}/${survivors.length} ürüne toptan ` +
+        `teklif eşleşti (${supplierStats.matchedProduct} birebir ürün, ` +
+        `${supplierStats.matchedNiche} aynı niş; ${supplierStats.offers} teklif tarandı, ` +
+        `medyan birim fiyat ` +
         `${supplierStats.medianUsd === null ? "ölçülmedi" : `$${supplierStats.medianUsd}`}); ` +
         `brüt marj ${supplierStats.withMargin} üründe hesaplandı.`,
     );
