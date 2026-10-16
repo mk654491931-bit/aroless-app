@@ -255,6 +255,7 @@ kuyruktan** kaynaklandığını gösterir: boru hattı saniyeler içinde bitiyor
 | Kaynak kapısı | `product-discovery-filter.server.ts` | Ürün SATMAYAN kaynaklar (Wikipedia, GitHub, Hacker News, Reddit arşivi, haber, trend, Wikidata) aday havuzuna hiç girmez; satırlar talep bağlamı olarak yaşamaya devam eder |
 | Marka çıkarımı | `product-brand.ts` | Marka kaynak alanında yoksa **başlığın kendisinden yapısal olarak** çıkarılır (`Brand: X`, model kodu öncesi öbek, `by X`). Jenerik/ürün cinsi/milliyet/pazaryeri sözcükleri marka sayılmaz — anlaşılmıyorsa `""` kalır |
 | Katalog zenginleştirmesi | `product-catalog.server.ts` | Anahtarsız ücretsiz ürün kataloğu (UPCitemdb): marka · model · GTIN · kategori · kayıtlı fiyat. Yalnız eşleşme eşiğini geçen kayıtlar kullanılır ve **yalnız boş alanlar** doldurulur |
+| Deal akışı | `product-discovery-sources.server.ts` (`deal-feed`) | Anahtarsız ABD indirim akışı (Slickdeals arama RSS'i): gerçek fiyat · satıcı · ürün görseli · topluluk oyu. Nişle eşleşmeyen veya fiyatı okunamayan öğe havuza **girmez**; puan/değerlendirme RSS'te olmadığı için `null` kalır |
 | Kanıt bütünlüğü | `evidenceCompleteness` | 5 çekirdek yuva (fiyat · marka · satıcı · url · talep) + bonuslar. `notes` içindeki rakam talep kanıtı SAYILMAZ; talep yalnız sayısal alanlardan gelir |
 
 İki kural, ölçülmüş iki hatayı kapatır:
@@ -275,15 +276,39 @@ kuyruktan** kaynaklandığını gösterir: boru hattı saniyeler içinde bitiyor
 | robot vacuum / US | 44 → 10 | 7 | 0 | 10/10 | 10/10 | 7/10 |
 
 Dürüst sınırlar (bunlar eksik değil, **ölçülmüş** sınırlardır): puan ve
- değerlendirme sayısı kaynaklarda yok (Bing Shopping bu ağdan kart döndürmüyor,
- `ratingCount` yalnız TR okuyucusunda var); katalog ücretsiz planı sorgu başına 5
- kayıt döndürüyor, bu yüzden katalog katkısı nişe göre 0-4 satırdır; marka
- boşluğu gerçek ilanların marka alanını yayınlamamasındandır.
+ değerlendirme sayısı anahtarsız kaynaklarda yok (Bing Shopping bu ağdan kart
+ döndürmüyor, `ratingCount` yalnız TR okuyucusunda var) — Best Buy ücretsiz
+ anahtarıyla açılır; katalog ücretsiz planı sorgu başına 5 kayıt döndürüyor, bu
+ yüzden katalog katkısı nişe göre 0-4 satırdır; marka boşluğu gerçek ilanların
+ marka alanını yayınlamamasındandır.
+
+**Ücretsiz kaynak eklendi: `deal-feed` (anahtarsız).** Aynı ağ koşusunda kaynak
+VAR/YOK çalıştırılarak ölçüldü (`PRODUCT_DISCOVERY_AB=1`, ülke US, 9 sn dilim,
+2026-10-16):
+
+| Niş | Aday (YOK → VAR) | Fiyatlı satır | Markalı satır | ≥4/5 kanıt |
+| --- | --- | --- | --- | --- |
+| air fryer | 22 → **34** (+55%) | 22 → 34 | 5 → 8 | 21 → 33 |
+| robot vacuum | 19 → **31** (+63%) | 19 → 31 | 11 → 15 | 16 → 26 |
+
+Ayrıca `bestbuy-api` artık **kategori** de getiriyor (`categoryPath.name`):
+ölçülen kategori boşluğu (0-4 satır) ücretsiz anahtar girildiğinde bu kaynaktan
+kapanır — anahtar yokken hiç ağ çağrısı yapılmaz.
+
+ÖLÇÜLÜP **REDDEDİLEN** ücretsiz kaynaklar (ölçmeden eklemek "çalışıyor"
+iddiası olurdu): `api.mercadolibre.com` → 403 (anahtar) · Target RedSky → 435
+(PerimeterX) · dealnews RSS → 404 · bensbargains RSS → 403 · Indiegogo proje
+API'si → 200 ama `query` yok sayılıyor (224 sabit proje, film/yardım ağırlıklı)
+· Stack Exchange (300/gün anahtarsız) → 200 ama tüketici nişleri başlıkta yok
+(ürün katkısı ~0) · Open Products/Beauty Facts → 200 ama `brands` çoğu kayıtta
+boş.
 
 Yeni anahtar gerekmez. İsteğe bağlı ayar:
 
 ```text
-CATALOG_DAILY_LIMIT=16   # günlük katalog araması (ücretsiz plan tavanı 20)
+CATALOG_DAILY_LIMIT=16      # günlük katalog araması (ücretsiz plan tavanı 20)
+DEAL_FEED_DAILY_LIMIT=60    # günlük deal akışı okuması (nezakat bütçesi)
+BESTBUY_API_KEY=            # ücretsiz anahtar: kategori + GERÇEK puan + değerlendirme sayısı
 ```
 
 #### Zincir süresi nerede harcanyor?
@@ -364,6 +389,8 @@ taşarsa süreç `JavaScript heap out of memory` ile açıkça ölür.
 | Supabase | ücretsiz proje | Kimlik, veritabanı, `search_jobs` kuyruğu, `ai_cache` (araç sonuçları dahil) |
 | AI sağlayıcı havuzu | Sağlayıcı başına ücretsiz kota (`*_API_KEY_1..8` ile dağıtılır) | **En dar kaynak** → araç önbelleği burayı korur |
 | UPCitemdb (`/prod/trial`, anahtarsız) | günde 100 istek / en fazla **20 arama**; **patlama: 2 arama / 30 sn** (ölçüldü: 3. istek `429`) | Ürün kataloğu zenginleştirmesi (marka · model · GTIN · kategori). Koşu başına en fazla **2 sorgu**, yanıt 24 saat önbellekte, günlük kova `CATALOG_DAILY_LIMIT` (varsayılan 16) |
+| Best Buy API (ücretsiz anahtar: `BESTBUY_API_KEY`) | yayınlanan profil: anahtar başına günde 50.000 çağrı | ABD/CA: marka · **kategori** · GERÇEK kullanıcı puanı + değerlendirme sayısı · görsel · fiyat. Anahtar yoksa **0 ağ çağrısı** |
+| Slickdeals arama RSS'i (anahtarsız) | yayınlanmış sayı YOK → günde `DEAL_FEED_DAILY_LIMIT` (varsayılan 60) nezakat bütçesi, günlük kovada | ABD indirim akışı: gerçek fiyat · satıcı · görsel · topluluk oyu; ölçüldü ~1,0-1,4 sn, aday havuzunu **%55-63** büyütüyor |
 
 > **Modal.com / kiralık GPU gerekmez:** hat GPU'ya değil dış AI API'lerine bağlıdır
 > (I/O-bound). 300 sn'lik duvar hesaplamadan değil platformun fonksiyon süresinden

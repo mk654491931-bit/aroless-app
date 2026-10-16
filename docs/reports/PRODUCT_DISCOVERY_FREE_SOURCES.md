@@ -76,6 +76,28 @@ olurdu. Kartlar `—` gösterir ve gerekçe `missingFields` ile taşınır.
 | Google Books | — | `429` (eklenmedi) |
 | Open Food Facts | ücretsiz | Bu koşuda `503`; kaynak fail-soft, hat düşmez |
 | Wikipedia görüntülenme | anahtarsız | 300-560 ms, gerçek sayı; talep bağlamı için kullanılır |
+| **Slickdeals arama RSS'i** (`deal-feed`) | yayınlanmış sayı yok → günde 60 okuma (nezakat bütçesi) | HTTP 200, ~69 KB, 25 öğe, ~600 ms; anahtar/bot duvarı YOK |
+| **Best Buy API** (ücretsiz anahtar) | günde ~50.000 çağrı | Anahtar yokken 0 ağ çağrısı; ABD/CA'da kategori + GERÇEK puan + değerlendirme sayısı |
+| Stack Exchange | anahtarsız 300 istek/gün | API 200 ama tüketici nişleri başlıkta yok → ürün katkısı ölçülemedi, eklenmedi |
+| Indiegogo proje API'si | anahtarsız | 200 ama `query` parametresi yok sayılıyor (224 sabit proje) → eklenmedi |
+| Target RedSky | — | `435` PerimeterX bot duvarı (eklenmedi) |
+| dealnews RSS / bensbargains RSS | — | `404` / `403` (eklenmedi) |
+| Open Products/Beauty Facts | anahtarsız | 200 ama `brands` çoğu kayıtta boş → marka boşluğunu kapatmıyor (eklenmedi) |
+
+## 5b. `deal-feed` kaynağının ÖLÇÜLEN katkısı (2026-10-16)
+
+Aynı ağ koşusunda kaynak VAR / YOK çalıştırıldı (`PRODUCT_DISCOVERY_AB=1`,
+ülke US, 9 sn dilim). Ölçüm canlı test olarak repoda durur:
+`src/lib/product-discovery-dealfeed-ab.live.test.ts`.
+
+| Niş | Ham satır | Aday | Fiyatlı | Markalı | ≥4/5 kanıt |
+| --- | --- | --- | --- | --- | --- |
+| air fryer | 51 → 64 | 22 → **34** | 22 → 34 | 5 → 8 | 21 → 33 |
+| robot vacuum | 44 → 68 | 19 → **31** | 19 → 31 | 11 → 15 | 16 → 26 |
+
+Yorum: aday havuzu %55-63 büyüdü ve **her yeni satır gerçek fiyat taşıyor**
+(fiyatlı satır sayısı aday sayısına eşit). Kaynak ~1,0-1,4 sn'de dönüyor;
+kaynak hata verirse `ok:false` raporlanır ve hat düşmez (fail-soft sözleşmesi).
 
 ## 6. Doğrulama
 
@@ -87,4 +109,8 @@ PRODUCT_DISCOVERY_E2E_LIVE=1 \
   npx vitest run src/lib/product-discovery.e2e.live.test.ts
 ```
 
-Yeni testler: `src/lib/product-brand.test.ts`, `src/lib/product-catalog.test.ts`.
+Yeni testler: `src/lib/product-brand.test.ts`, `src/lib/product-catalog.test.ts`,
+`src/lib/product-discovery-deal-feed.test.ts` (10 test: fiyat/görsel/satıcı/oy
+ölçümü, puan `null` dürüstlüğü, niş ve ABD süzgeçleri),
+`src/lib/product-discovery-dealfeed-ab.live.test.ts` (canlı A/B ölçümü),
+`src/lib/reader-source-matrix.test.ts` (Best Buy kategori alanı eklendi).

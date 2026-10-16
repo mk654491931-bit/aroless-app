@@ -21,6 +21,7 @@ import {
   fetchHackerNewsStories,
   REDDIT_SUBS,
 } from "./shared-niche-scrapers.server";
+import { allowDealFeedRequest } from "./scraper-quota.server";
 
 /** Bir scraping kaynağının sözleşmesi. Yeni kaynak = bu arayüzü uygulamak. */
 export interface ProductSource {
@@ -2188,15 +2189,31 @@ export function parseBestBuyProducts(json: unknown): RawProduct[] {
     if (title.length < 6) continue;
     const sale = Number(p["salePrice"]);
     const regular = Number(p["regularPrice"]);
-    const price = Number.isFinite(sale) && sale > 0 ? sale : Number.isFinite(regular) && regular > 0 ? regular : null;
+    const price =
+      Number.isFinite(sale) && sale > 0
+        ? sale
+        : Number.isFinite(regular) && regular > 0
+          ? regular
+          : null;
     if (price === null) continue;
     const url = String(p["url"] ?? "").trim();
     if (!url) continue;
     const ratingRaw = Number(p["customerReviewAverage"]);
     const countRaw = Number(p["customerReviewCount"]);
+    // KATEGORİ (ölçülen boşluk): hattın "kategori" yuvası 0-4/21 doluydu çünkü
+    // pazaryeri liste sayfaları kategori yayınlamıyor. Best Buy'ın
+    // `categoryPath` alanı GERÇEK katalog yoludur; en SON (en özel) düğüm
+    // kategori olarak yazılır, tam yol notta kalır.
+    const pathNodes = Array.isArray(p["categoryPath"])
+      ? (p["categoryPath"] as unknown[])
+          .map((node) => String((node as Record<string, unknown>)?.["name"] ?? "").trim())
+          .filter(Boolean)
+      : [];
+    const category = pathNodes.length ? pathNodes[pathNodes.length - 1] : "";
     out.push({
       title: title.slice(0, 160),
       brand: String(p["manufacturer"] ?? "").trim(),
+      category,
       seller: "Best Buy",
       priceUsd: price,
       rating: Number.isFinite(ratingRaw) && ratingRaw > 0 ? Math.min(5, ratingRaw) : null,
@@ -2210,7 +2227,10 @@ export function parseBestBuyProducts(json: unknown): RawProduct[] {
         "Best Buy",
         `$${price}`,
         sale > 0 && Number.isFinite(regular) && regular > sale ? `liste $${regular}` : "",
-        Number.isFinite(ratingRaw) && ratingRaw > 0 ? `puan ${Math.round(ratingRaw * 10) / 10}/5` : "",
+        pathNodes.length ? pathNodes.join(" > ") : "",
+        Number.isFinite(ratingRaw) && ratingRaw > 0
+          ? `puan ${Math.round(ratingRaw * 10) / 10}/5`
+          : "",
         Number.isFinite(countRaw) && countRaw > 0 ? `${countRaw} değerlendirme` : "",
       ]
         .filter(Boolean)
@@ -2230,7 +2250,7 @@ async function bestBuySearch(niche: string): Promise<RawProduct[]> {
     .slice(0, 80);
   if (!q) return [];
   const show =
-    "name,salePrice,regularPrice,customerReviewAverage,customerReviewCount,image,url,manufacturer";
+    "name,salePrice,regularPrice,customerReviewAverage,customerReviewCount,image,url,manufacturer,categoryPath.name";
   const url =
     `https://api.bestbuy.com/v1/products(search=${encodeURIComponent(q)})` +
     `?format=json&show=${show}&pageSize=40&apiKey=${encodeURIComponent(key)}`;
@@ -2255,6 +2275,150 @@ export const bestBuySource: ProductSource = {
   },
 };
 
+/* ------------------------------------- 13. Deal akışı (Slickdeals RSS · $0) */
+
+/** RSS öğesinden ilk `<tag>…</tag>` içeriği (CDATA soyulur, varlık çözülür). */
+function rssText(item: string, tag: string): string {
+  const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i").exec(String(item ?? ""));
+  const raw = (m?.[1] ?? "")
+    .replace(/^\s*<!\[CDATA\[/, "")
+    .replace(/\]\]>\s*$/, "")
+    .trim();
+  return decode(raw);
+}
+
+/** Metindeki İLK `$` tutarı — ölçüm; yoksa `null` (0 DEĞİL). */
+export function firstUsdAmount(text: string): number | null {
+  const m = /\$\s?([0-9][0-9,]*(?:\.\d{1,2})?)/.exec(String(text ?? ""));
+  if (!m) return null;
+  const value = Number(String(m[1]).replace(/,/g, ""));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * SLICKDEALS ARAMA RSS'İ (anahtarsız) → GERÇEK indirimli ürün satırları.
+ *
+ * ÖLÇÜLDÜ (2026-10-16, bu ağdan):
+ *   `newsearch.php?q=<niş>&searcharea=deals&searchin=first&rss=1`
+ *   → HTTP 200, ~69 KB, 25 öğe, ~600 ms. Anahtar YOK, bot koruması YOK.
+ *   Öğe başına ölçülen alanlar: başlık (fiyatlı), fiyat (`$54.98`), satıcı
+ *   (`[amazon.com]`), indirim yüzdesi (`40% off`), ürün görseli (300x300 CDN
+ *   thumbnail), TOPLULUK OYU (`Thumb Score: +N`) ve ilan adresi.
+ *   NİŞ UYGUNLUĞU ölçüldü: "robot vacuum" aramasında Roborock/Lefant/Dreame
+ *   gibi GERÇEK markalı ürünler döndü.
+ *
+ * NEDEN AYRI KAYNAK: pazaryeri okuyucuları (AliExpress/Newegg/OTTO/…) LİSTE
+ * sayfası okur ve "şu an satılıyor" kanıtı taşır; deal akışı ise "indirime
+ * girdi ve topluluk oy verdi" kanıtı taşır — ikisi farklı soruya cevap verir
+ * ve ikisi de gerçek fiyat getirir.
+ *
+ * ÖLÇÜLEN VE REDDEDİLENLER (kaynak eklemek "çalışıyor" iddiasıdır; bu yüzden
+ * ölçülmeden eklenmez):
+ *   • api.mercadolibre.com sites search → **403** (anahtar istiyor).
+ *   • Target RedSky plp_search_v2 → **435** (PerimeterX bot duvarı).
+ *   • dealnews.com/rss/search → **404**; bensbargains.com/rss.xml → **403**.
+ *   • Indiegogo genel proje API'si → 200 ama `query` parametresi YOK SAYILIYOR
+ *     (224 sabit proje) ve kitle fonlaması içerikleri film/yardım ağırlıklı:
+ *     ürün nişlerinde ~0 eşleşme, o yüzden eklenmedi.
+ *   • Stack Exchange (anahtarsız 300/gün) → API 200 ama Stack Overflow'da
+ *     "air fryer" gibi tüketici nişleri BAŞLIKTA yok; niş süzgecinden geçen
+ *     satır ~0. Talep ölçümüne katkısı ölçülemedi → eklenmedi.
+ *   • Open Products Facts / Open Beauty Facts arama ucu → 200 ama marka alanı
+ *     çoğu kayıtta BOŞ (ölçüldü: `brands: ""`), yani marka boşluğunu
+ *     kapatmıyor → eklenmedi.
+ *
+ * DÜRÜSTLÜK: puan ve değerlendirme sayısı RSS'te YOK → `null` kalır (0 yazmak
+ * "ölçtük ve sıfır bulduk" demek olurdu). Fiyatı okunamayan öğe havuza
+ * girmez, nişle eşleşmeyen öğe de girmez (arama gevşek eşleşiyor: "air
+ * fryer" aramasında "food storage container set" de döndü — ölçüldü).
+ */
+export function parseDealFeed(xml: string, niche = ""): RawProduct[] {
+  const items = String(xml ?? "")
+    .split(/<item[\s>]/i)
+    .slice(1);
+  const out: RawProduct[] = [];
+  for (const item of items) {
+    const rawTitle = rssText(item, "title").replace(/\s+/g, " ").trim();
+    if (rawTitle.length < 8) continue;
+    const link = rssText(item, "link");
+    if (!/^https?:\/\//i.test(link)) continue;
+    const description = rssText(item, "description");
+    // Fiyat başlıkta yoksa snippet'te aranır; ikisinde de yoksa satır atlanır.
+    const price = firstUsdAmount(rawTitle) ?? firstUsdAmount(description);
+    if (price === null) continue;
+    // Ürün adı: fiyat/kargo kuyruğu temizlenir ("… - $54.98", "… $17.99 + Free Shipping").
+    const name = rawTitle
+      .replace(/\s*[-–—]?\s*\$\s?[0-9][0-9,]*(?:\.\d{1,2})?[\s\S]*$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const title = (name.length >= 8 ? name : rawTitle).slice(0, 160);
+    if (!matchesNiche(title, niche)) continue;
+    const seller = /\[([a-z0-9.-]+\.[a-z]{2,})\]/i.exec(description)?.[1]?.trim() ?? "";
+    const discount = /(\d{1,2})\s*%\s*off/i.exec(description)?.[1] ?? "";
+    const thumbs = /Thumb Score:\s*\+?(-?\d+)/i.exec(item)?.[1] ?? "";
+    out.push({
+      title,
+      brand: "",
+      seller: seller || "Slickdeals",
+      priceUsd: price,
+      rating: null,
+      ratingCount: null,
+      inStock: null,
+      source: "deal-feed",
+      url: link,
+      imageUrl: imageFromShoppingCard(item),
+      notes: [
+        "Slickdeals indirim akışı",
+        seller ? `satıcı ${seller}` : "",
+        discount ? `%${discount} indirim` : "",
+        thumbs ? `topluluk oyu +${thumbs}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+/**
+ * Deal akışı araması. ABD pazarıdır: başka ülkede **0 ağ çağrısı** yapılır
+ * (her pazaryeri okuyucusunun uyduğu kural) ve günlük nezakat bütçesi dolar.
+ */
+async function dealFeedSearch(niche: string, country: string): Promise<RawProduct[]> {
+  const code = String(country ?? "")
+    .trim()
+    .toUpperCase();
+  if (code && code !== "US") return [];
+  const q = String(niche ?? "")
+    .trim()
+    .slice(0, 80);
+  if (!q) return [];
+  if ((await allowDealFeedRequest()) === false) return [];
+  const url =
+    `https://slickdeals.net/newsearch.php?q=${encodeURIComponent(q)}` +
+    `&searcharea=deals&searchin=first&rss=1`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(4_000),
+    headers: { "user-agent": UA, accept: "application/rss+xml,application/xml,text/xml" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return parseDealFeed(await res.text(), q);
+}
+
+/** Ücretsiz ABD deal akışı — gerçek fiyat + görsel + topluluk oyu (anahtarsız). */
+export const dealFeedSource: ProductSource = {
+  name: "deal-feed",
+  timeoutMs: 4_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return dealFeedSearch(niche, "");
+  },
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    return dealFeedSearch(niche, country);
+  },
+};
+
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ gerçek TR ürün satırları (Hepsiburada + n11; fiyat + puan + görsel).
   trReaderSource,
@@ -2270,6 +2434,9 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ API (anahtarla): gerçek fiyat + GERÇEK kullanıcı puanı + görsel.
   // Anahtar yoksa hiç çağrılmaz.
   bestBuySource,
+  // ÜCRETSİZ anahtarsız ABD deal akışı: gerçek fiyat + görsel + topluluk oyu.
+  // Yalnız ABD'de koşar; başka ülkede 0 ağ çağrısı yapar.
+  dealFeedSource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,

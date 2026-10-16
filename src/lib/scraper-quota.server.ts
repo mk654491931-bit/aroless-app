@@ -92,6 +92,48 @@ function serpMonthlyLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 80;
 }
 
+/* -------------------------------------------------- Anahtarsız deal akışı */
+
+/**
+ * DEAL AKIŞI (Slickdeals arama RSS'i) — anahtarsız, ama SINIRSIZ DEĞİL.
+ *
+ * Servis yayınlanmış bir sayı vermiyor; bu yüzden "ölçülmüş bir tavan" değil,
+ * bilinçli bir NEZAKET bütçesi: aynı niş için günde en fazla birkaç okuma,
+ * hepsi günlük kovada sayılır. Amaç, ücretsiz/korumasız bir ucun hattı
+ * kapatmasını (429/403 → kaynak ölür) engellemek.
+ *
+ * FAIL-OPEN: sayaç okunamazsa okuma yapılır — kotayı korumak için ürün
+ * göstermemek daha kötüdür.
+ */
+function dealFeedDailyLimit(): number {
+  const raw = Number(process.env.DEAL_FEED_DAILY_LIMIT ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 60;
+}
+
+/** Deal akışı okuması yapmadan önce günlük bütçede yer var mı? */
+export async function allowDealFeedRequest(): Promise<boolean | null> {
+  const bucket = dayBucket("deal-feed-reads");
+  const windowSeconds = 3 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: dealFeedDailyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[deals] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[deals] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
 /* ------------------------------------------------- Anahtarsız tedarik kotası */
 
 /**

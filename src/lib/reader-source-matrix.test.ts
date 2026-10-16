@@ -93,6 +93,8 @@ describe("parseBestBuyProducts — ücretsiz API yanıtı ölçülmüş alana in
         image: "https://pisces.bbystatic.com/image2/BestBuy_US/images/products/x.jpg",
         url: "https://www.bestbuy.com/site/insignia-microwave/123.p?skuId=123",
         manufacturer: "Insignia",
+        // GERÇEK katalog yolu: pazaryeri listelerinin yayınlamadığı alan.
+        categoryPath: [{ name: "Appliances" }, { name: "Microwaves" }],
       },
       // Fiyatı olmayan satır havuza GİRMEZ (fiyatsız ürün kazanan olamaz).
       { name: "Fiyatsız ürün", url: "https://www.bestbuy.com/site/x/1.p" },
@@ -122,7 +124,15 @@ describe("parseBestBuyProducts — ücretsiz API yanıtı ölçülmüş alana in
     expect(rows[0]?.notes).toContain("liste $79.99");
   });
 
-  it("puan 0 ise `null` yazılır (\"0 puan\" ölçüm değil) ve regularPrice yedek olur", () => {
+  it("kategori EN ÖZEL düğümden yazılır, tam yol notta kalır", () => {
+    const rows = parseBestBuyProducts(fixture);
+    expect(rows[0]?.category).toBe("Microwaves");
+    expect(rows[0]?.notes).toContain("Appliances > Microwaves");
+    // Kategori yoksa `""` kalır — uydurulmaz.
+    expect(rows[1]?.category).toBe("");
+  });
+
+  it('puan 0 ise `null` yazılır ("0 puan" ölçüm değil) ve regularPrice yedek olur', () => {
     const rows = parseBestBuyProducts(fixture);
     expect(rows[1]?.priceUsd).toBe(199.99);
     expect(rows[1]?.rating).toBeNull();
