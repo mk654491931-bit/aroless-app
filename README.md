@@ -646,6 +646,38 @@ Kapsam sınırı: cihaz parmak izi yalnız e-posta doğrulamasından geçen kay�
 bilgisi, başvuru detayları + şart kabulü, indirim kodu → affiliate atfı),
 `20261015000000_affiliate_commission_cap.sql` (12 aylık komisyon penceresi).
 
+### Abonelik kredisi idempotansı (Paddle)
+
+Ölçülen hata (gerçek Postgres 18'de `process_paddle_event` çağrılarak üretildi):
+kredi **koşulsuz** ekleniyordu (`credits = credits + _search_credits`) ve
+tekilleştirme yalnız `event_id` bazındaydı. Paddle aynı ödeme için birden çok olay
+gönderir (`transaction.completed` + `transaction.updated`, her biri KENDİ
+`event_id`siyle); uygulama katmanındaki “bu işlem kayıtlı mı?” kontrolü ÖNCE
+OKU–SONRA YAZ olduğu için aynı anda gelen iki teslimatı kapatmıyor ve kredi İKİ KEZ
+eklenebiliyordu. Kredi paranın karşılığıdır; iki kat vermek geri alınamaz.
+
+Çözüm tek yerdedir ve veritabanındadır: kredi `credit_ledger` üzerinden
+`ref_key = 'paddle:<işlem kimliği>'` ile **tek seferlik** talep edilir
+(`ON CONFLICT (ref_key) … DO NOTHING RETURNING id`); satır yazılamadıysa kredi
+artmaz. Karar tekil indekse dayanır, okuma yarışına değil. Her abonelik kredisi
+ayrıca deftere düşer (`reason = 'paddle'`, işlem/olay/plan/tutar ile) — “bu
+krediler nereden geldi?” sorusu artık sorgulanabilir.
+
+| Durum | Ölçülen sonuç |
+| --- | --- |
+| Aynı işlem, iki farklı olay (sıralı) | kredi **BİR** kez; tek `paddle:<işlem>` satırı |
+| Aynı işlem, olaylar **eşzamanlı** | kredi **BİR** kez; iki çağrı da `ok` |
+| `transaction.updated` önce, `completed` sonra | kredi **kaybolmaz** (anahtar işlem kimliğidir, olay sırası değil) |
+| Aynı olay kimliği tekrar | `duplicate` (eski davranış korunur) |
+| Yenileme (yeni işlem kimliği) | kredi verilir |
+| `credit_ledger` yoksa (göç uygulanmamış) | eski davranış: kredi yine eklenir |
+
+Uygulama: `20261016000000_paddle_credit_idempotency.sql` (`npx supabase db push`).
+Göç uygulanana kadar koruma uygulama katmanındaki kontrolde kalır; göç GEÇMİŞTE
+çift eklenmiş kredileri geriye dönük düzeltmez, yalnız sonraki olayları korur.
+Regresyon testi: `src/lib/paddle-credit-idempotency.test.ts` (etkin SQL tanımını ve
+çağrı imzası uyumunu kilitler).
+
 ### Supabase Auth adresleri
 
 **Authentication → URL Configuration** altında hem yerel hem canlı adresler ekli olmalı:
