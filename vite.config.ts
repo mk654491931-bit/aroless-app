@@ -11,6 +11,16 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 const isSandbox =
   process.env["LOVABLE_SANDBOX"] === "1" || !!process.env["DEV_SERVER__PROJECT_PATH"];
 
+// Hosted/isolated sandbox'lar (Freebuff) dinlenecek portu PORT ile enjekte eder.
+// Sabit 8080 yazmak iki arıza üretiyordu: (1) enjekte edilen port yok sayılıyordu,
+// (2) o portta bayat bir dinleyici varsa sunucu ya 8081/8082'ye sessizce kayıyor
+// ya da "Port 8080 is already in use" ile hiç açılmıyordu → "dev server failed to
+// start". Enjekte edilen port VARSA ona kesin bağlanırız (platform o portu izler
+// ve restart'ta serbest bırakır); YOKSA 8080 denenir, doluysa Vite sıradaki boş
+// porta geçer — böylece bayat bir dinleyici hiçbir zaman başlatmayı engellemez.
+const injectedDevPort = Number(process.env["PORT"] ?? process.env["DEV_SERVER_PORT"]);
+const hasInjectedDevPort = Number.isInteger(injectedDevPort) && injectedDevPort > 0;
+
 export default defineConfig(async ({ command, mode }) => {
   const plugins: PluginOption[] = [
     tailwindcss(),
@@ -114,9 +124,13 @@ export default defineConfig(async ({ command, mode }) => {
       exclude: ["@lovable.dev/cloud-auth-js"],
     },
     server: {
-      host: "::",
-      port: 8080,
-      ...(isSandbox ? { strictPort: true } : {}),
+      // Platformun izlediği port: enjekte edilmişse o, yoksa 8080.
+      host: "0.0.0.0",
+      port: hasInjectedDevPort ? injectedDevPort : 8080,
+      // Enjekte edilen portta KESİN bağlan: platform o portu izler. Port
+      // enjekte edilmemişse sabit portta ısrar etme — bayat bir dinleyici
+      // yüzünden sunucu hiç açılmazsa preview tamamen düşer.
+      strictPort: hasInjectedDevPort,
       hmr: false,
       watch: {
         ignored: [
