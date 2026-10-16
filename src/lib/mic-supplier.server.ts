@@ -1,45 +1,56 @@
 // ============================================================================
-// TEDARİK KANITI — İKİNCİ ANAHTARSIZ KAYNAK: made-in-china.com (Çin toptan).
+// TEDARİK KANITI — ANAHTARSIZ TOPTAN KAYNAK: made-in-china.com (Çin toptan).
 //
 // NEDEN VAR (ölçülen boşluk, 2026-10-16):
 //   Tek tedarik kaynağı AliExpress'ti ve üç yuvayı ASLA ölçemiyordu:
 //     1. **MOQ** (minimum sipariş adedi) — "bu ürünü gerçekten atabilir miyim?"
-//        sorusunun cevabı; AliExpress perakende kartı MOQ taşımaz.
+//        sorusunun cevabı; perakende kartı MOQ taşımaz.
 //     2. **Tedarikçi kimliği** — AliExpress kartında mağaza adı yalnız SPONSORLU
 //        kartlarda var (ölçüldü: 60 kartın 10'u).
-//     3. **FOB fiyat BANDI** — Alibaba/AliExpress kartında tek fiyat var;
-//        toptan ilanda fiyat miktara göre ARALIK olarak yazılır.
+//     3. **FOB fiyat BANDI** — toptan ilanda fiyat miktar kademesine göre ARALIK
+//        olarak yazılır; tek sayı göstermek gerçeği saklar.
 //
-// CANLI ÖLÇÜM (bu sandbox, 2026-10-16, sıcak sayfa başına tek istek):
-//   niş                 | HTTP | boyut   | süre  | kart | fiyatlı | MOQ | tedarikçi
-//   air fryer           | 200  | 1346 KB | 0.85s |  37  |   37    | 22  |   22
-//   led desk lamp       | 200  | 1189 KB | 0.42s |  30  |   30    | 30  |   29
-//   wireless earbuds    | 200  | 1139 KB | 0.85s |  25  |   25    | 25  |   25
-//   cat scratching board| 200  | 1339 KB | 0.89s |  41  |   41    | 30  |   30
-//   yoga mat            | 200  | 1191 KB | 1.24s |  24  |   22    | 24  |   23
-//   pet water fountain  | 200  | 1155 KB | 0.76s |  30  |   30    | 30  |   30
-//   → 6/6 nişte ürün döndü; MOQ %81-100, tedarikçi adı %80-100 oranında ölçüldü.
-//   Aynı gün ölçülen ve ÇALIŞMAYAN yollar: `m.made-in-china.com` (mobil arama
-//   kartları farklı şema), `products-search/hot-china-products` (kart şeması
-//   sürümden sürüme değişiyor). Seçilen URL `productdirectory.do` aramasıdır.
+// KAYNAK UYUMU (ölçüldü, 2026-10-16 — bu kaynağın yolu buna göre seçildi):
+//   `https://www.made-in-china.com/robots.txt` genel bot grubunda **`/*.do?`**
+//   yolunu YASAKLIYOR. İlk sürüm `productdirectory.do?word=…` çağırıyordu, yani
+//   sitenin kendi kuralına aykırıydı. Şu an kullanılan yol robots'a UYGUN:
+//     `https://www.made-in-china.com/products-search/hot-china-products/<Slug>.html`
+//   (sorgu dizesi yok; `/*html?*` yasağı da kapsamıyor). AliExpress'in aksine
+//   burada TANITICI bot UA'sı ile aynı veri geliyor, bu yüzden taklit yerine
+//   dürüst UA gönderilir:
+//     `Mozilla/5.0 (compatible; ArolessProductResearch/1.0; +https://aroless.app/bot)`
+//   Aynı UA ile ölçüldü (tarayıcı UA'sıyla BİREBİR aynı sonuç: 41 kart / 31 MOQ).
 //
-// İKİ KART ŞEMASI VAR (ikisi de bu dosyada ayrıştırılır — ölçüldü):
+// CANLI ÖLÇÜM (uyumlu yol, dürüst bot UA'sı, 2026-10-16):
+//   niş                 | HTTP | boyut  | süre  | kart | fiyatlı | aralık | MOQ | tedarikçi
+//   air fryer           | 200  | 817 KB | 0,8 s |  41  |   31    |   26   | 31  |   31
+//   led desk lamp       | 200  | 788 KB | 0,5 s |  30  |   30    |   24   | 30  |   30
+//   pet water fountain  | 200  | 753 KB | 0,5 s |  30  |   30    |   18   | 30  |   30
+//   yoga mat            | 200  | 759 KB | 0,8 s |  30  |   29    |   19   | 30  |   30
+//   → Uyumlu yol, yasaklı `.do` yolundan DAHA İYİ: `air fryer` için 37 kart /
+//     23 MOQ / 22 tedarikçi yerine 41 kart / 31 MOQ / 31 tedarikçi.
+//   Aynı gün ölçülüp ÇALIŞMAYAN yollar: `m.made-in-china.com` (mobil kart şeması
+//   farklı), `/products-search/find-china-products/*-1.html` (robots'ta yasaklı).
+//
+// ÜÇ KART ŞEMASI VAR (üçü de bu dosyada ayrıştırılır — ölçüldü):
 //   A) `<div class="list-node">` → `<h2 class="product-name" title="…">` +
-//      `<a class="product-detail" href="…/product/ID/Slug.html">` +
-//      `<div class="product-property">` içinde FOB aralığı ve `(MOQ)`.
-//   B) `<a class="prod-item" …>` bloğu → `<a class="prod-name" title="…">` +
-//      `<a class="prod-price" title="…">`; MOQ aynı `(MOQ)` ipucuyla gelir.
-//   Şemaya göre dallanmak yerine KART SINIRINDA bölünür ve iki düzenin ortak
-//   işaretleri (fiyat/MOQ/şirket) aranır: MIC markup'ı sık değiştiği için
-//   tek şemaya bağlanmak, o şema değiştiğinde kaynağı tümden sustururdu.
+//      `<div class="product-property">` içinde FOB aralığı ve
+//      `1,200 Pieces<span class="price_hint"> (MOQ)`.
+//   B) `<a class="prod-item">` bloğu → `<a class="prod-name" title="…">` +
+//      `<a class="prod-price">`; vitrin şeridi.
+//   C) `<div class="product-name-wrap">` → `<h2 class="product-name">` İÇİNDE
+//      `<a title="…">` + `<span class="moq-text">(MOQ)` (uyumlu yolun şeması).
+//   Şemaya göre dallanmak yerine kart SINIRINDA bölünür ve üç düzenin ortak
+//   işaretleri aranır: MIC markup'ı sık değiştiği için tek şemaya bağlanmak, o
+//   şema değiştiğinde kaynağı tümden sustururdu (ölçülen hata: yalnız B şemasına
+//   bağlı sürüm iki sorguda 0 kart döndürdü).
 //
 // DÜRÜSTLÜK KURALLARI (dosyanın tamamı geçerli — `aliexpress-supplier.server.ts`
 // ile aynı sözleşme):
 //   • Yalnız SAYFADA YAZAN sayılar okunur; yoksa `null`'dur ve arayüz "—" yazar.
 //   • Kargo ücreti, gümrük ve komisyon sayfada YOKTUR → ölçülmez, uydurulmaz.
 //   • Fiyat ARALIĞI tek sayıya indirgenmez: alt uç `unitPriceUsd`, üst uç
-//     `unitPriceHighUsd` olarak birlikte taşınır. Tek uç göstermek, sipariş
-//     adedine göre değişen FOB fiyatını "tek gerçek" gibi sunmak olurdu.
+//     `unitPriceHighUsd` olarak birlikte taşınır.
 //   • MOQ, ARKASINDA `(MOQ)` ipucu olmadan kabul EDİLMEZ: aynı sayfa
 //     "50000pieces/Year" gibi YILLIK KAPASİTE yazar; onu minimum sipariş
 //     sanmak kullanıcıya yanlış sermaye rakamı gösterirdi.
@@ -50,8 +61,14 @@
 import { measuredMoney } from "./economics-evidence";
 import { englishProductQuery, productQueryVariants } from "./product-discovery-query";
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
+/**
+ * TANITICI bot User-Agent.
+ *
+ * Tarayıcı taklidi YAPILMAZ: bu kaynakta dürüst UA ile aynı veri geliyor
+ * (ölçüldü), dolayısıyla kimliği gizlemenin bir faydası yok — ve sitenin
+ * kurallarına uymak için tanıtıcı olmak doğru olan.
+ */
+const UA = "Mozilla/5.0 (compatible; ArolessProductResearch/1.0; +https://aroless.app/bot)";
 
 /** Toptan teklif önbelleği: 24 saat (AliExpress kaynağıyla aynı politika). */
 const MIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -60,9 +77,9 @@ const MIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
  * Tek kart bloğunun azami uzunluğu.
  *
  * ÖLÇÜLEN HATA (2026-10-16, canlı "air fryer"): kart bloğu 6 KB'da kesiliyordu ve
- * list-node kartları ~37 KB olduğu için KARTIN KUYRUĞU (FOB + MOQ + tedarikçi
+ * `list-node` kartları ~37 KB olduğu için KARTIN KUYRUĞU (FOB + MOQ + tedarikçi
  * firma bağlantısı) kesiliyordu. Ölçülen sonuç: 30 gerçek kartın yalnız 12'sinde
- * tedarikçi adı okunabiliyordu; sınır kaldırıldıktan sonra 29/30.
+ * tedarikçi adı okunabiliyordu; sınır kaldırıldıktan sonra 30/30.
  * Sınır yine de vardır: sonsuz/bozuk bir gövdede belleği korumak için.
  */
 const MAX_CARD_CHARS = 60_000;
@@ -110,95 +127,170 @@ const absoluteUrl = (value: string): string => {
 };
 
 /**
- * Kart sınırlarını bulur: `list-node` (şema A) ve `prod-item` (şema B).
+ * ANA KART ŞEMASINI SEÇER — "bu sayfada asıl ürün listesi hangi işaretle geliyor?".
  *
- * ÖLÇÜLEN SEBEP: ilk sürüm yalnız `prod-item` sınırında bölüyordu ve
- * `led desk lamp`/`wireless earbuds` sorgularında **0 kart** döndürdü — sayfa
- * şema A (`list-node`) ile gelmişti. Her iki sınır da taranır.
+ * NEDEN SEÇİM ŞART (ölçülen iki hatanın ikisi de buradan çıktı):
+ *   1. TÜM işaretler tek listede toplanırsa bir kartın İÇİNDEKİ vitrin şeridi
+ *      (`prod-item`) bloğu ortadan böler ve kartın kuyruğu (MOQ + tedarikçi)
+ *      kaybolur. Ölçülen sonuç: 30 kartın yalnız 12'sinde tedarikçi adı.
+ *   2. Şemalar KARIŞTIRILIRSA bloklar örtüşür ve başlık YANLIŞ karta bağlanır
+ *      (ölçülen hata: vitrin bloğu, kendisinden sonra gelen kartın başlığını
+ *      aldı). Blokları yalnız TEK şema üretirse örtüşme imkânsız olur.
+ *
+ * SIRA ÖLÇÜME DAYANIR: `product-name-wrap` (şema C, uyumlu yol) ve `list-node`
+ * (şema A) asıl listeyi taşır; `prod-item` ise her ölçülen sayfada VİTRİN
+ * şeridiydi (fiyatsız, MOQ'suz görsel bağlantılar; ölçüldü: 41 kartın 10'u).
+ * Bu yüzden yalnız hiçbiri yoksa `prod-item` şemasına düşülür.
+ */
+function primaryCardKind(html: string): "product-name-wrap" | "list-node" | "prod-item" | null {
+  for (const kind of ["product-name-wrap", "list-node", "prod-item"] as const) {
+    if (new RegExp(`class="${kind}(?![-\\w])`).test(html)) return kind;
+  }
+  return null;
+}
+
+/**
+ * Kart SINIRLARI — seçilen şemanın işaretleri arasında bölünür.
  */
 export function micCardBlocks(html: string): string[] {
-  const marks: number[] = [];
-  // `list-node` sınırı İÇ KAP `list-node-content` ile KARIŞTIRILMAMALI:
-  // `\b` ikisini de yakalar (`-` kelime sınırıdır) ve ölçüldü: 2 kartlık sayfa
-  // 3 blok üretiyordu, yani kartlar ORTADAN bölünüyordu.
-  const re = /class="(?:list-node|prod-item)(?![-\w])/g;
+  const kind = primaryCardKind(html);
+  if (!kind) return [];
+  const positions: number[] = [];
+  const re = new RegExp(`class="${kind}(?![-\\w])`, "g");
   let match: RegExpExecArray | null;
-  while ((match = re.exec(html)) !== null) marks.push(match.index);
-  return marks.map((start, i) =>
-    html.slice(
-      start,
-      i + 1 < marks.length
-        ? Math.min(marks[i + 1], start + MAX_CARD_CHARS)
-        : start + MAX_CARD_CHARS,
-    ),
-  );
+  while ((match = re.exec(html)) !== null) positions.push(match.index);
+  return positions.map((start, i) => {
+    const next = positions[i + 1];
+    const end =
+      next === undefined ? start + MAX_CARD_CHARS : Math.min(next, start + MAX_CARD_CHARS);
+    return html.slice(start, end);
+  });
+}
+
+/**
+ * Kart bloğundan başlığı okur.
+ *
+ * ÜÇ ŞEMANIN deseni de denenir ve **EN ERKEN KONUMDAKİ** eşleşme kazanır.
+ * SABİT ÖNCELİK DEĞİL (ölçülen hata): blok, bir sonraki FARKLI şema kartını da
+ * içerebiliyor; sabit öncelikte (ör. "önce şema A deseni") şema C kartının
+ * başlığı, kendisinden SONRA gelen şema A kartının başlığıyla değişiyordu.
+ */
+function titleOf(block: string): string {
+  const patterns = [
+    /class="product-name"[^>]*title="([^"]+)"/, // şema A
+    /class="prod-name[^"]*"[^>]*title="([^"]+)"/, // şema B
+    /class="product-name"[^>]*>[\s\S]{0,160}?<a[^>]*title="([^"]+)"/, // şema C
+  ];
+  let best: { at: number; title: string } | null = null;
+  for (const re of patterns) {
+    const match = re.exec(block);
+    if (!match) continue;
+    if (!best || match.index < best.at) best = { at: match.index, title: stripTags(match[1]) };
+  }
+  if (best && best.title) return best.title;
+  // Son çare: kartın görsel `alt` metni (aynı ürünü taşır).
+  const alt = /class="prod-img[^"]*"[^>]*alt="([^"]*)"/.exec(block);
+  return alt ? stripTags(alt[1]) : "";
+}
+
+/**
+ * MOQ'yu okur. İKİ düzen vardır ve ikisi de `(MOQ)` ipucuyla BİTMEK ZORUNDADIR:
+ *   A/B: `1,200 Pieces<span class="price_hint"> (MOQ)`
+ *   C  : `<span>1,000 Pieces</span> <span class="moq-text">(MOQ)`
+ */
+function moqOf(block: string): { units: number; unit: string } | null {
+  const match =
+    />([\d,]+)\s*([A-Za-z]+)\s*<span class="price_hint">\s*\(MOQ\)/.exec(block) ??
+    /<span>\s*([\d,]+)\s*([A-Za-z]+)\s*<\/span>[\s\S]{0,40}?<span class="moq-text">\s*\(MOQ\)/.exec(
+      block,
+    );
+  if (!match) return null;
+  const units = Number(match[1].replace(/,/g, ""));
+  if (!Number.isFinite(units) || units < 1 || units > 10_000_000) return null;
+  return { units, unit: match[2].toLowerCase() };
+}
+
+/**
+ * Tedarikçi firma adını okur.
+ *
+ * SINIF ADI İKİ YAZIMLA GELİYOR (ölçüldü): sitenin kendi yazım hatası olan
+ * `compnay-name` (şema A/B/C kartlarının firma bağlantısı) ve `company-name`
+ * (vitrin kutusu). Ayrıca sınıf değeri her zaman bu adla BAŞLAMIYOR
+ * (`class="fc1 company-name J-focus-faw"`), o yüzden ad, sınıf listesinin
+ * İÇİNDE aranır.
+ */
+function storeOf(block: string): string {
+  const anchor =
+    /<a[^>]*class="[^"]*\b(?:compnay-name|company-name)\b[^"]*"[^>]*>([\s\S]{0,200}?)<\/a>/.exec(
+      block,
+    );
+  // Metin `<span>Firma A.Ş.</span>` içinde olabilir; `title` de yedek kaynaktır
+  // (ölçülen örnek: `title="Foshan Oushine Technology Co., Ltd."`).
+  const name = anchor
+    ? stripTags(anchor[1])
+    : stripTags(
+        /title="([^"]{2,120})"[^>]*class="[^"]*\b(?:compnay-name|company-name)\b/.exec(
+          block,
+        )?.[1] ?? "",
+      );
+  // Çok uzun/gürültülü ad boş bırakılır: kırpılmış bir "ad" göstermek yanlış
+  // tedarikçiyi tanıtmak olurdu.
+  return name.length > 0 && name.length <= 120 ? name : "";
+}
+
+/** Bir teklifin KAÇ yuvası ölçüldü — tamlık karşılaştırması için. */
+function measuredFields(offer: MicOffer): number {
+  return [offer.unitPriceUsd, offer.unitPriceHighUsd, offer.moqUnits, offer.store || null].filter(
+    (value) => value !== null && value !== "",
+  ).length;
 }
 
 /**
  * Ham HTML → `MicOffer[]`. SAF fonksiyon (ağ YOK) — bu yüzden test edilebilir.
  *
- * Kart, ürün ADI veya ürün BAĞLANTISI taşımıyorsa ATLANIR; yarım karttan
- * "teklif" üretmek eşleştirmeye sahte kanıt sokardı.
+ * Aynı ürün birden çok kartta görünürse (vitrin şeridi + arama listesi), DAHA
+ * ÇOK YUVASI ÖLÇÜLMÜŞ olan kart kazanır. NEDEN: kart blokları şemaya göre
+ * bölündüğü için zayıf bir blok ilk gelirse, tekilleştirme "ilk gelen kazanır"
+ * olsaydı FOB'suz/ MOQ'suz sürüm kanıt sayılırdı — ölçülmüş veri kaybolurdu.
  */
 export function extractMicOffers(html: string): MicOffer[] {
-  // Uzunluk eşiği DEĞİL, kart işareti aranır: kaydırılmış/daraltılmış bir gövde
-  // (test fixture'ı gibi) de ayrıştırılabilmeli, ama HTML olmayan kısa metin
-  // üzerinde regex avına çıkılmamalı. Kart yoksa döngü zaten boş döner.
+  // Uzunluk eşiği DEĞİL, kart işareti aranır: daraltılmış bir gövde (test
+  // fixture'ı gibi) de ayrıştırılabilmeli, ama HTML olmayan kısa metin üzerinde
+  // regex avına çıkılmamalı. Kart yoksa döngü zaten boş döner.
   if (!html || html.length < 200) return [];
-  const offers: MicOffer[] = [];
-  const seen = new Set<string>();
 
+  const best = new Map<string, MicOffer>();
   for (const block of micCardBlocks(html)) {
-    const titleMatch =
-      /class="product-name"[^>]*title="([^"]+)"/.exec(block) ??
-      /class="prod-name[^"]*"[^>]*title="([^"]+)"/.exec(block);
-    let title = titleMatch ? stripTags(titleMatch[1]) : "";
-    if (!title) {
-      // Son çare: kartın görsel `alt` metni (şema A'da başlık `title`
-      // özniteliğinde de olur; şema değişirse alt metin aynı ürünü taşır).
-      const alt = /class="prod-img"[^>]*alt="([^"]*)"/.exec(block);
-      title = alt ? stripTags(alt[1]) : "";
-    }
-
+    const title = titleOf(block);
     const href = /href="([^"]*\/product\/[^"]+\.html)"/.exec(block);
     const url = href ? absoluteUrl(href[1]) : "";
+    // Ürün adı veya bağlantısı yoksa kart ATLANIR; yarım karttan "teklif"
+    // üretmek eşleştirmeye sahte kanıt sokardı.
     if (!title || !url) continue;
-    if (seen.has(url)) continue;
-    seen.add(url);
 
     const price =
       /<strong class="price">US\$<span>([\d.,]+)<\/span>(?:-<span>([\d.,]+)<\/span>)?/.exec(block);
-    // MOQ: sayının ARKASINDA `(MOQ)` ipucu ŞART (yıllık kapasite satırı aynı
-    // biçimde yazılıyor: "50000pieces/Year").
-    const moq = />([\d,]+)\s*([A-Za-z]+)\s*<span class="price_hint">\s*\(MOQ\)/.exec(block);
-    const store = /class="compnay-name[^"]*"[^>]*>([\s\S]{0,200}?)<\/a>/.exec(block);
-    const img = /class="prod-img"[^>]*(?:src|lazy-src|data-original)="([^"]*)"/.exec(block);
+    const moq = moqOf(block);
+    const image =
+      /class="prod-img[^"]*"[^>]*(?:src|lazy-src|data-src|data-original)="([^"]*)"/.exec(block);
 
-    const moqUnits = moq ? Number(moq[1].replace(/,/g, "")) : null;
-    const storeName = store ? stripTags(store[1]) : "";
-    const imageUrl = img ? absoluteUrl(img[1]) : "";
-
-    offers.push({
+    const offer: MicOffer = {
       title,
       unitPriceUsd: price ? measuredMoney(price[1]) : null,
       unitPriceHighUsd: price ? measuredMoney(price[2]) : null,
-      // Şağma denetimi: 1..10.000.000 dışındaki "MOQ" bir yazım hatasıdır ve
-      // sermaye hesabını çöpe çevirirdi; okunamamış sayılır.
-      moqUnits:
-        moqUnits !== null && Number.isFinite(moqUnits) && moqUnits >= 1 && moqUnits <= 10_000_000
-          ? moqUnits
-          : null,
-      moqUnit: moq ? moq[2].toLowerCase() : "",
-      // Şirket adı çok uzun/gürültülü geldiyse boş bırakılır: kırpılmış bir
-      // "ad" göstermek yanlış tedarikçiyi tanıtmak olurdu.
-      store: storeName.length > 0 && storeName.length <= 120 ? storeName : "",
+      moqUnits: moq ? moq.units : null,
+      moqUnit: moq ? moq.unit : "",
+      store: storeOf(block),
       shipFrom: "",
       url,
-      imageUrl,
-    });
+      imageUrl: image ? absoluteUrl(image[1]) : "",
+    };
+
+    const previous = best.get(url);
+    if (!previous || measuredFields(offer) > measuredFields(previous)) best.set(url, offer);
   }
 
-  return offers;
+  return [...best.values()];
 }
 
 /* ------------------------------------------------------------------- Ağ katmanı */
@@ -210,11 +302,22 @@ export function micSearchQuery(niche: string): string {
   return base.replace(/\s+/g, " ").slice(0, 80);
 }
 
+/**
+ * Uyumlu arama yolu: `products-search/hot-china-products/<Slug>.html`.
+ *
+ * Sorgu dizesi YOKTUR ve bu bilinçlidir: robots.txt `/*.do?` ile `/*html?*`
+ * yollarını yasaklar. Slug ölçülen biçimdedir (kelimeler `_` ile birleşir):
+ * `air_fryer.html`, `led_desk_lamp.html`.
+ */
 export function micSearchUrl(niche: string): string {
-  const word = micSearchQuery(niche);
-  if (!word) return "";
-  const encoded = encodeURIComponent(word).replace(/%20/g, "+");
-  return `https://www.made-in-china.com/productdirectory.do?word=${encoded}&subaction=hunt&style=b&mode=and&code=0&order=0&isOpenCorrection=1`;
+  const slug = micSearchQuery(niche)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!slug) return "";
+  return `https://www.made-in-china.com/products-search/hot-china-products/${slug}.html`;
 }
 
 /**
@@ -232,7 +335,7 @@ export async function fetchMicOffers(
   if (!url) return [];
 
   const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
-  const key = await cacheKey("mic-supplier-offers-v1", [niche]);
+  const key = await cacheKey("mic-supplier-offers-v2", [niche]);
   const hit = await cacheGet<MicOffer[]>(key);
   if (hit) return hit;
 
@@ -253,6 +356,6 @@ export async function fetchMicOffers(
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const offers = extractMicOffers(await res.text());
-  if (offers.length) await cacheSet(key, "mic-supplier-offers-v1", offers, MIC_CACHE_TTL_MS);
+  if (offers.length) await cacheSet(key, "mic-supplier-offers-v2", offers, MIC_CACHE_TTL_MS);
   return offers;
 }

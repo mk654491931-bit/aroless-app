@@ -52,6 +52,13 @@ describe("MIC kaynağı hatta BAĞLI (ölü kaynak değil)", () => {
     // Ölçümden gelen girdiler: MOQ/FOB marj ve fiyatla birlikte verilir.
     expect(src).toContain("moqUnits: row.supplier?.moqUnits ?? null");
     expect(src).toContain("supplierPriceHighUsd: row.supplier?.supplierPriceHighUsd ?? null");
+    // KANITIN TÜRÜ de karara girer: niş bandı (proxy) "atılabilir" sayılamaz.
+    // Bağlanmazsa `supplierMatchKind` yine ölü export olurdu.
+    expect(src).toContain(
+      "supplierMatchKind: row.supplier ? supplierMatchKind(row.supplier) : null",
+    );
+    // Proxy sayısı nota yazılır: karar düşüşünün SEBEBİ görünmez kalmamalı.
+    expect(src).toContain("Tedarik proxy'si:");
   });
 
   it("kart kararı gösterir (sunucuda üretilen kararı yeniden hesaplamaz)", async () => {

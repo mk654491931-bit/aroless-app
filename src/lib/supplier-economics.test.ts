@@ -64,6 +64,68 @@ describe("matchSupplierOffer", () => {
     ]);
     expect(hit).toBeNull();
   });
+
+  it("EŞİT alakalılıkta BAŞLATILABİLİR teklifi seçer (düşük MOQ, kaynak sırası değil)", () => {
+    // Ölçülen sorun: aynı nişte MOQ 10 olan teklif varken MOQ 1.000 olan teklif
+    // kanıta yazılıyordu, yani "ilk sipariş 26.360 dolar" görünüyordu.
+    const expensive = offer({ unitPriceUsd: 26.36, moqUnits: 1000, url: "https://x/1.html" });
+    const startable = offer({ unitPriceUsd: 26.36, moqUnits: 10, url: "https://x/2.html" });
+    const hit = matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+      expensive,
+      startable,
+    ]);
+    expect(hit?.offer.url).toBe("https://x/2.html");
+    // İlk sipariş sermayesi en küçük olan kazanır.
+    const mid = offer({ unitPriceUsd: 26.36, moqUnits: 50, url: "https://x/3.html" });
+    expect(
+      matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+        startable,
+        mid,
+      ])?.offer.url,
+    ).toBe("https://x/2.html");
+    expect(
+      matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+        mid,
+        startable,
+      ])?.offer.url,
+    ).toBe("https://x/2.html");
+  });
+
+  it("MOQ'su BİLİNMEYEN teklif, KANITLI yüksek MOQ'dan iyidir (kanıt yok ≠ kanıt kötü)", () => {
+    const unknownMoq = offer({
+      unitPriceUsd: 26.36,
+      moqUnits: null,
+      url: "https://x/unknown.html",
+    });
+    const highMoq = offer({ unitPriceUsd: 26.36, moqUnits: 5000, url: "https://x/high.html" });
+    expect(
+      matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+        highMoq,
+        unknownMoq,
+      ])?.offer.url,
+    ).toBe("https://x/unknown.html");
+  });
+
+  it("alakalılık FARKLIYSA başlatılabilirlik onu EZMEZ (önce eşleşme kalitesi)", () => {
+    const exact = offer({
+      title: "Cat Tree with Scratching Post Tall Tower",
+      unitPriceUsd: 26.36,
+      moqUnits: 1000,
+      url: "https://x/exact.html",
+    });
+    const partial = offer({
+      title: "Cat Scratching Post",
+      unitPriceUsd: 20,
+      moqUnits: 1,
+      url: "https://x/partial.html",
+    });
+    const hit = matchSupplierOffer({ name: "Cat Tree with Scratching Post", priceUsd: 97.99 }, [
+      partial,
+      exact,
+    ]);
+    expect(hit!.relevance).toBeGreaterThan(SUPPLIER_MIN_RELEVANCE);
+    expect(hit?.offer.url).toBe("https://x/exact.html");
+  });
 });
 
 describe("buildSupplierEvidence", () => {
@@ -100,12 +162,18 @@ describe("NİŞ seviyesi tedarik yedeği — çok dilli başlıklarda '—' kalm
   /** Canlı AliExpress kartlarından alınan GERÇEK İngilizce teklifler. */
   const englishOffers = [
     offer({ title: "Air Fryer 6L Large Capacity Oil-free Electric Oven", unitPriceUsd: 42.5 }),
-    offer({ title: "Household Air Fryer 5.5L Digital Touch Screen Fryer Oven", unitPriceUsd: 35.2 }),
+    offer({
+      title: "Household Air Fryer 5.5L Digital Touch Screen Fryer Oven",
+      unitPriceUsd: 35.2,
+    }),
     offer({ title: "Wireless Bluetooth Speaker 40W", unitPriceUsd: 12 }),
   ];
 
   it("Türkçe başlıkta birebir eşleşme yok ama niş bandı ÖLÇÜLÜR", () => {
-    const candidate = { name: "Bosch MAF240B0 Serie 2 Air Fryer Sıcak Hava Fritözü 4,5 L", priceUsd: 123.45 };
+    const candidate = {
+      name: "Bosch MAF240B0 Serie 2 Air Fryer Sıcak Hava Fritözü 4,5 L",
+      priceUsd: 123.45,
+    };
     // Yedek KAPALIYKEN (eski davranış) kanıt boş kalır — bu, ölçülen bugünkü hâl.
     expect(buildSupplierEvidence(candidate, englishOffers)).toEqual(emptySupplierEvidence());
 
@@ -133,9 +201,76 @@ describe("NİŞ seviyesi tedarik yedeği — çok dilli başlıklarda '—' kalm
     expect(margin.netMarginPct).toBeNull();
   });
 
+  it("niş havuzunda MOQ/aralık HAVUZUN İLK teklifinden değil, EN BAŞLATILABİLİR tekliften alınır", () => {
+    // ÖLÇÜLEN HATA: eski kod `nicheOffers[0]`i seçiyordu — yani kaynak
+    // sırasına göre rastgele bir teklifi. Aynı nişte MOQ 10 olan tedarikçi
+    // masadayken kanıta MOQ 1.000 yazılabiliyor, "ilk sipariş sermayesi" bu
+    // ürünün değil o rastgele teklifin rakamı oluyordu.
+    const offers = [
+      offer({
+        title: "Air Fryer 6L Large Capacity Oil-free Electric Oven",
+        unitPriceUsd: 40,
+        unitPriceHighUsd: 42,
+        moqUnits: 1000,
+        moqUnit: "pieces",
+        store: "Buyuk MOQ Ltd.",
+        sold: 12,
+      }),
+      offer({
+        title: "Household Air Fryer 5.5L Digital Touch Screen Fryer Oven",
+        unitPriceUsd: 41,
+        unitPriceHighUsd: 43,
+        moqUnits: 10,
+        moqUnit: "pieces",
+        store: "Kucuk MOQ Ltd.",
+        sold: 4200,
+      }),
+    ];
+    const evidence = buildSupplierEvidence(
+      { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 129.9 },
+      offers,
+      { nicheQueries: ["air fryer"] },
+    );
+    expect(supplierMatchKind(evidence)).toBe("niche");
+    expect(evidence.moqUnits).toBe(10);
+    expect(evidence.store).toBe("Kucuk MOQ Ltd.");
+    // Bant YİNE havuzun tamamından kurulur (medyan değişmez).
+    expect(evidence.samples).toBe(2);
+    expect(evidence.supplierPriceUsd).toBe(40.5);
+  });
+
+  it("tüm niş teklifleri tavanın üstündeyse en DÜŞÜK ilk sipariş sermayesi seçilir", () => {
+    const offers = [
+      offer({
+        title: "Air Fryer 6L Large Capacity Electric Oven",
+        unitPriceUsd: 30,
+        moqUnits: 900, // 27.000 $
+        store: "Cok Pahali Ltd.",
+        sold: 5,
+      }),
+      offer({
+        title: "Household Air Fryer 5.5L Digital Fryer Oven",
+        unitPriceUsd: 60,
+        moqUnits: 100, // 6.000 $ — daha küçük ilk sipariş
+        store: "Daha Az Pahali Ltd.",
+        sold: 3100,
+      }),
+    ];
+    const evidence = buildSupplierEvidence(
+      { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 199 },
+      offers,
+      { nicheQueries: ["air fryer"] },
+    );
+    expect(evidence.store).toBe("Daha Az Pahali Ltd.");
+    expect(evidence.moqUnits).toBe(100);
+  });
+
   it("niş ifadesi verilmezse DAVRANIŞ DEĞİŞMEZ (uydurma yok)", () => {
     expect(
-      buildEconomics({ name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 123.45 }, englishOffers),
+      buildEconomics(
+        { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 123.45 },
+        englishOffers,
+      ),
     ).toEqual({
       supplier: emptySupplierEvidence(),
       margin: emptyMarginEvidence(),

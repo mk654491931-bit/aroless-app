@@ -74,8 +74,17 @@ export type MarginEvidence = {
   netMarginPct: null;
 };
 
-/** Eşleştirme için gereken minimum alakalılık skoru. */
-export const SUPPLIER_MIN_RELEVANCE = 0.5;
+/**
+ * Eşleştirme için gereken minimum alakalılık skoru — **0,66** (2/3).
+ *
+ * ÖLÇÜLEN GEREKÇE (2026-10-16, canlı uçtan uca "air fryer"): havuz MIC ile
+ * birlikte İKİ KATINA çıktıktan sonra (aliexpress 60 + made-in-china 30 teklif)
+ * 0,5 eşiği 30/30 adayı "eşleşti" gösterdi ve kanıta $28,09 satış fiyatlı bir
+ * ürüne **$170,85 tedarik**, $43,87 ürüne $49,27 tedarik yazdı. Yani havuz
+ * büyüyünce yanlış eşleşme olasılığı da büyüdü; eşik 2/3'e çekildi. Kısa
+ * (2 anahtarlı) başlıklarda 1/2 artık GEÇMEZ — eski eşikte geçiyordu.
+ */
+export const SUPPLIER_MIN_RELEVANCE = 0.66;
 
 /**
  * NİŞ SEVİYESİ eşleşmesinin sabit alakalılığı (birebir ürün eşleşmesi DEĞİL).
@@ -359,7 +368,9 @@ export function emptySupplierEvidence(): SupplierEvidence {
  * Kanıtın eşleşme türü — alanı taşımayan eski kayıtlar `"product"` sayılır.
  * (Eski kayıtlarda kanıt yalnız birebir eşleşmeyle üretilebiliyordu.)
  */
-export function supplierMatchKind(evidence: SupplierEvidence | null | undefined): "product" | "niche" {
+export function supplierMatchKind(
+  evidence: SupplierEvidence | null | undefined,
+): "product" | "niche" {
   return evidence?.matchKind === "niche" ? "niche" : "product";
 }
 
@@ -403,6 +414,64 @@ const money2 = (value: number | null): number | null =>
  * altı teklifler KULLANILMAZ; yanlış teklifle marj hesaplamak, marj
  * ölçülmüş gibi göstermekten daha kötüdür.
  */
+/**
+ * EŞİT ALAKALILIKTA "BAŞLATILABİLİRLİK" SIRASI — ölçülen ilk sipariş sermayesi.
+ *
+ * NEDEN VAR (ölçülen sorun, 2026-10-16): toptan havuzda aynı ürün için birden
+ * çok teklif bulunuyor ve eski kod İLK geleni (kaynak sırasına göre) seçiyordu.
+ * Ölçülen sonuç: aynı nişte MOQ 10 olan bir tedarikçi varken MOQ 1.000 olan
+ * teklif kanıta yazılabiliyordu — yani "ilk sipariş 10.300 dolar" diyordu, oysa
+ * ölçülmüş 10 adetlik teklif de masadaydı. Aynı marj bandında, BAŞLATILABİLİR
+ * tedarikçiyi göstermek "gerçekten atılabilecek ürün" sorusunun cevabıdır.
+ *
+ * ÜÇ KADEME (küçük → büyük): bilinen ve tavanın altında · MOQ bilinmiyor ·
+ * bilinen ve tavanın üstünde. MOQ'suz teklif (perakende/perakende-benzeri)
+ * "minimum sipariş kanıtı yok" demektir; bu, KANITLI yüksek MOQ'dan iyidir.
+ */
+const STARTABLE_TIER_MAX_USD = 1_500;
+
+function firstOrderUsd(offer: SupplierOfferLike): number | null {
+  const unit = measuredMoney(offer.unitPriceUsd);
+  const moq = typeof offer.moqUnits === "number" && offer.moqUnits > 0 ? offer.moqUnits : null;
+  if (unit === null || moq === null) return null;
+  return unit * moq;
+}
+
+function startableTier(offer: SupplierOfferLike): number {
+  const first = firstOrderUsd(offer);
+  if (first === null) return 1; // MOQ kanıtı yok
+  return first <= STARTABLE_TIER_MAX_USD ? 0 : 2;
+}
+
+/** `true` = `a`, `b`'den DAHA başlatılabilir. */
+function moreStartable(a: SupplierOfferLike, b: SupplierOfferLike): boolean {
+  const tierA = startableTier(a);
+  const tierB = startableTier(b);
+  if (tierA !== tierB) return tierA < tierB;
+  const firstA = firstOrderUsd(a);
+  const firstB = firstOrderUsd(b);
+  if (firstA === null || firstB === null) return false;
+  return firstA < firstB;
+}
+
+/**
+ * FİYAT AKIL KONTROLÜ — alış fiyatı satış fiyatının ÜSTÜNDEyse bu teklif
+ * "tedarik seçeneği" DEĞİLDİR.
+ *
+ * NEDEN ÖLÇÜM (canlı hata, 2026-10-16): $28,09'luk bir air fryer adayına
+ * $170,85 "tedarik" yazıldı çünkü başlık benzerliği eşiği geçmişti. Marj
+ * hesabı `null` döndürdüğü için sayı UYDURULMADI, ama kanıt hücresi yine de
+ * yanıltıcıydı: 170 dolar verip 28 dolara satmak bir toptan kanıtı değil,
+ * YANLIŞ EŞLEŞME imzasıdır. İki ÖLÇÜLMÜŞ sayı karşılaştırıldığı için bu bir
+ * varsayım değil, ölçümün kendi tutarlılık kapısıdır.
+ */
+function priceSane(candidate: SupplierCandidateLike, offer: SupplierOfferLike): boolean {
+  const retail = measuredMoney(candidate.priceUsd);
+  const unit = measuredMoney(offer.unitPriceUsd);
+  if (retail === null || unit === null) return true; // karşılaştıracak ölçüm yok
+  return unit < retail;
+}
+
 export function matchSupplierOffer(
   candidate: SupplierCandidateLike,
   offers: readonly SupplierOfferLike[],
@@ -410,9 +479,17 @@ export function matchSupplierOffer(
   let best: { offer: SupplierOfferLike; relevance: number } | null = null;
   for (const offer of offers) {
     if (measuredMoney(offer.unitPriceUsd) === null) continue;
+    if (!priceSane(candidate, offer)) continue;
     const relevance = productTitleMatch(candidate.name, offer.title);
     if (relevance < SUPPLIER_MIN_RELEVANCE) continue;
-    if (!best || relevance > best.relevance) best = { offer, relevance };
+    if (!best || relevance > best.relevance) {
+      best = { offer, relevance };
+      continue;
+    }
+    // EŞİT alakalılıkta kaynak sırası DEĞİL, başlatılabilirlik kazanır.
+    if (relevance === best.relevance && moreStartable(offer, best.offer)) {
+      best = { offer, relevance };
+    }
   }
   return best;
 }
@@ -443,13 +520,24 @@ export function buildSupplierEvidence(
       ? offers.filter(
           (offer) =>
             measuredMoney(offer.unitPriceUsd) !== null &&
+            priceSane(candidate, offer) &&
             nicheMatch(offer.title, tokens) >= nicheHitFloor(tokens.length) / tokens.length,
         )
       : [];
     if (!nicheOffers.length) return emptySupplierEvidence();
-    // En çok satan teklif mağaza/kargo bilgisini taşır; niş havuzunda ilk
-    // fiyatlı teklif yeterlidir (havuzun tamamı aynı nişten seçildi).
-    return withMatchKind(buildEvidenceFromPool(nicheOffers, nicheOffers[0]), "niche");
+    // NİŞ HAVUZUNDA "EN BAŞLATILABİLİR" TEKLİF SEÇİLİR — havuzun İLK teklifi
+    // DEĞİL.
+    //
+    // NEDEN ÖLÇÜM: MOQ ve FOB ARALIĞI teklife ÖZEL alanlardır (havuz medyanı
+    // bunları taşımaz) ve eski kod bunları `nicheOffers[0]`ten — yani kaynak
+    // sırasına göre rastgele bir tekliften — alıyordu. Ölçülen sonuç: aynı
+    // nişte MOQ 10 olan tedarikçi masadayken kanıta MOQ 50/1.000 yazılabiliyor,
+    // "ilk sipariş sermayesi" bu ürünün değil o rastgele teklifin rakamı
+    // oluyordu. Seçim artık deterministiktir ve kural birebir eşleşmeyle
+    // AYNIdır (`moreStartable`): bilinen ve tavanın altında → MOQ bilinmiyor →
+    // tavanın üstünde.
+    const nicheBest = nicheOffers.reduce((a, b) => (moreStartable(b, a) ? b : a));
+    return withMatchKind(buildEvidenceFromPool(nicheOffers, nicheBest), "niche");
   }
 
   // Bant yalnız EN ALAKALI tekliflerden kurulur. “>= best” yerine TAM EŞİTLİK

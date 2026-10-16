@@ -34,6 +34,27 @@ const SCHEMA_A_CARD = `
  </div></div>
 </div>`;
 
+/**
+ * ŞEMA C — uyumlu yolun şeması: `<div class="product-name-wrap">` + başlık
+ * `<a title=…>` İÇİNDE + `<span class="moq-text">(MOQ)` + `company-name`.
+ */
+const SCHEMA_C_CARD = `
+<div class="product-name-wrap ">
+ <h2 class="product-name" data-prod-tag="">
+  <a title="Hot Sale Home 60 Min Timer 5L Auto off Visual Glass Healthy 1300W Digital Air Fryer" href="https://oushine-tech.en.made-in-china.com/product/GTaReMsjAKVo/China-Hot-Sale-Home-60-Min-Timer-5L-Digital-Air-Fryer.html" target="_blank" ads-data="t:1,a:1,p:2">Hot Sale Home 60 Min Timer 5L Auto off Visual Glass Healthy 1300W Digital <strong>Air</strong> <strong>Fryer</strong></a>
+ </h2>
+</div>
+<div class="product-property">
+ <div class="ellipsis attr-item J-faketitle price-new"><span class="attribute"><strong class="price">US$<span>24.00</span>-<span>27.00</span></strong></span></div>
+ <div class="ellipsis attr-item J-faketitle moq-new"><span class="attribute"><span>1,000 Pieces</span> </span> <span class="moq-text">(MOQ)</span></div>
+</div>
+<div class="company-info">
+ <div class="company-name ellipsis">
+  <a href="https://oushine-tech.en.made-in-china.com" title="Foshan Oushine Technology Co., Ltd." target="_blank" ads-data="t:1,a:1,p:2" class="compnay-name"><span>Foshan Oushine Technology Co., Ltd.</span></a>
+  <i class="ob-icon icon-right"></i>
+ </div>
+</div>`;
+
 /** ŞEMA B — `<a class="prod-item">` + `<a class="prod-name">` + `prod-img`. */
 const SCHEMA_B_CARD = `
 <a class="prod-item J-focus-faw" rel="nofollow" href="//yuecheng2026.en.made-in-china.com/product/TuiUelIDsgWY/China-Smart-Dual-Function-Air-Fryer-Oven.html" target="_blank">
@@ -102,6 +123,36 @@ describe("extractMicOffers — toptan kart ayrıştırma (ağ YOK)", () => {
     expect(offer.shipFrom).toBe("");
   });
 
+  it("ŞEMA C (uyumlu yol) kartını okur: başlık `<a title>`, MOQ `moq-text`, firma `company-name`", () => {
+    const offers = extractMicOffers(page(SCHEMA_C_CARD));
+    expect(offers).toHaveLength(1);
+    const [offer] = offers;
+    expect(offer.title).toBe(
+      "Hot Sale Home 60 Min Timer 5L Auto off Visual Glass Healthy 1300W Digital Air Fryer",
+    );
+    expect(offer.unitPriceUsd).toBe(24);
+    expect(offer.unitPriceHighUsd).toBe(27);
+    expect(offer.moqUnits).toBe(1000);
+    expect(offer.moqUnit).toBe("pieces");
+    expect(offer.store).toBe("Foshan Oushine Technology Co., Ltd.");
+  });
+
+  it("aynı ürün iki kartta görünürse DAHA ÇOK YUVASI ÖLÇÜLMÜŞ kart kazanır", () => {
+    // Önce ZAYIF kart (MOQ ve firma yok) gelir; "ilk gelen kazanır" kuralı
+    // ölçülmüş MOQ/firmayı kaybettirirdi.
+    const poorCard = SCHEMA_C_CARD.replace(
+      /<div class="ellipsis attr-item J-faketitle moq-new">[\s\S]*?<\/div>/,
+      "",
+    ).replace(
+      /<div class="company-info">[\s\S]*?<\/div>\n<\/div>/,
+      '<div class="company-info"></div>',
+    );
+    const offers = extractMicOffers(page(poorCard, SCHEMA_C_CARD));
+    expect(offers).toHaveLength(1);
+    expect(offers[0].moqUnits).toBe(1000);
+    expect(offers[0].store).toBe("Foshan Oushine Technology Co., Ltd.");
+  });
+
   it("ŞEMA B kartını (prod-item/prod-name) da okur — eski sürüm burada 0 kart veriyordu", () => {
     const offers = extractMicOffers(page(SCHEMA_B_CARD));
     expect(offers).toHaveLength(1);
@@ -116,10 +167,18 @@ describe("extractMicOffers — toptan kart ayrıştırma (ağ YOK)", () => {
     expect(offer.imageUrl.startsWith("https://image.made-in-china.com/")).toBe(true);
   });
 
-  it("iki şema AYNI sayfada birlikte geldiğinde ikisini de döndürür", () => {
+  it("sayfada asıl liste şeması seçilir, vitrin şeridi ayrı kart SAYILMAZ", () => {
+    // Vitrin (`prod-item`) kartı listenin ARASINA girerse eski sürüm blokları
+    // ortadan bölüyordu; şimdi ana şema (burada A) tek başına kullanılır.
     const offers = extractMicOffers(page(SCHEMA_A_CARD, SCHEMA_B_CARD, NO_MOQ_CARD));
-    expect(offers).toHaveLength(3);
-    expect(offers.map((o) => o.unitPriceUsd)).toEqual([23.5, 18, 0.89]);
+    expect(offers).toHaveLength(2);
+    expect(offers.map((o) => o.title).join(" | ")).toContain("Sewing Machine");
+    expect(offers.map((o) => o.title).join(" | ")).toContain("Corrugated Cat Toy");
+    // Şema C varsa o DAHA ÖNDE gelir (uyumlu yolun şeması).
+    const withSchemaC = extractMicOffers(page(SCHEMA_A_CARD, SCHEMA_C_CARD, NO_MOQ_CARD));
+    expect(withSchemaC).toHaveLength(1);
+    expect(withSchemaC[0].title).toContain("Hot Sale Home 60 Min Timer");
+    expect(withSchemaC[0].moqUnits).toBe(1000);
   });
 
   it("MOQ ipucu yoksa `null` kalır — YILLIK KAPASİTE minimum sipariş sanılmaz", () => {
@@ -146,31 +205,52 @@ describe("extractMicOffers — toptan kart ayrıştırma (ağ YOK)", () => {
     expect(extractMicOffers("<html>kısa</html>")).toEqual([]);
   });
 
-  it("kart Sınırlari iki şemada da bulunur (bölme mantığı)", () => {
-    expect(micCardBlocks(page(SCHEMA_A_CARD, SCHEMA_B_CARD))).toHaveLength(2);
+  it("bölme mantığı: ana şemanın kart sayısı kadar blok üretir", () => {
+    // Liste şeması (A) varsa yalnız o bölünür; vitrin (`prod-item`) ayrı kart
+    // sayılmaz — ölçülen sebep: blokları ortadan bölüyordu.
+    expect(micCardBlocks(page(SCHEMA_A_CARD, SCHEMA_B_CARD))).toHaveLength(1);
+    expect(micCardBlocks(page(SCHEMA_A_CARD, NO_MOQ_CARD))).toHaveLength(2);
+    // Ana liste yoksa `prod-item` şemasına düşülür (eski sürümün tek yolu).
+    expect(micCardBlocks(page(SCHEMA_B_CARD))).toHaveLength(1);
+    expect(micCardBlocks(page("<html>kart yok</html>"))).toEqual([]);
   });
 });
 
-describe("micSearchUrl — kaynak adresi kilitli", () => {
-  it("ölçülen çalışan URL biçimini üretir (HTTP 200 / ~1,2 MB)", () => {
-    const url = micSearchUrl("air fryer");
-    expect(url).toBe(
-      "https://www.made-in-china.com/productdirectory.do?word=air+fryer&subaction=hunt&style=b&mode=and&code=0&order=0&isOpenCorrection=1",
+describe("micSearchUrl — kaynak adresi kilitli (robots.txt uyumu)", () => {
+  it("robots-uyumlu yolu üretir (sorgu dizesi YOK)", () => {
+    expect(micSearchUrl("air fryer")).toBe(
+      "https://www.made-in-china.com/products-search/hot-china-products/air_fryer.html",
     );
+    expect(micSearchUrl("led desk lamp")).toBe(
+      "https://www.made-in-china.com/products-search/hot-china-products/led_desk_lamp.html",
+    );
+  });
+
+  it("YASAKLI yollara geri dönmez (robots.txt: `/*.do?` ve `/*html?*` disallow)", () => {
+    // Regresyon bekçisi: ilk sürüm `productdirectory.do?word=…` çağırıyordu ve
+    // bu, sitenin kendi kuralına aykırıydı. Ölçülen robots satırları:
+    //   Disallow: /*.do$   ·   Disallow: /*.do?   ·   Disallow: /*html?*
+    for (const niche of ["air fryer", "led desk lamp", "masa lambası"]) {
+      const url = micSearchUrl(niche);
+      expect(url).not.toContain(".do");
+      expect(url).not.toContain("?");
+      expect(url.startsWith("https://www.made-in-china.com/products-search/")).toBe(true);
+    }
   });
 
   it("Türkçe niş sözlükteki karşılığıyla aranır (kaynak İngilizce arama yapar)", () => {
     expect(micSearchQuery("masa lambası")).toBe("desk lamp");
-    expect(micSearchUrl("masa lambası")).toContain("word=desk+lamp");
+    expect(micSearchUrl("masa lambası")).toContain("desk_lamp.html");
   });
 
   it("sözlükte olmayan Türkçe nişte de geçerli BİR adres üretir (patlamaz, boş sonuç fail-soft)", () => {
     const url = micSearchUrl("hava fritözü");
-    expect(url).toContain("word=hava+fritozu");
-    expect(url.startsWith("https://www.made-in-china.com/productdirectory.do?")).toBe(true);
+    expect(url).toContain("hava_fritozu.html");
+    expect(url.startsWith("https://www.made-in-china.com/products-search/")).toBe(true);
   });
 
   it("boş nişte adres ÜRETİLMEZ (boş sorguyla ağa gidilmez)", () => {
     expect(micSearchUrl("")).toBe("");
+    expect(micSearchUrl("   ")).toBe("");
   });
 });

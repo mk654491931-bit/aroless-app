@@ -303,58 +303,91 @@ API'si → 200 ama `query` yok sayılıyor (224 sabit proje, film/yardım ağır
 (ürün katkısı ~0) · Open Products/Beauty Facts → 200 ama `brands` çoğu kayıtta
 boş.
 
-**Ücretsiz kaynak eklendi: `made-in-china` (anahtarsız toptan katalog).**
-Zincirin ölçemediği üç yuvayı kapatır: **MOQ** (minimum sipariş), **tedarikçi
-firma adı** ve **FOB fiyat bandı**. AliExpress kaynağı bunların hiçbirini
-veremiyordu (ölçüldü: 60 kartın yalnız 10'unda mağaza adı var, MOQ hiç yok).
-Kaynak `aliexpress` ile **paralel** çalışır ve aynı aylık kota kovasını paylaşır
-(`SUPPLIER_MONTHLY_LIMIT`); biri hata verirse diğeri eskisi gibi çalışmaya devam
-eder (fail-soft).
+**Ücretsiz kaynak: `made-in-china` (anahtarsız toptan katalog, `robots.txt`'e
+UYUMLU yol).** Zincirin ölçemediği üç yuvayı kapatır: **MOQ** (minimum sipariş),
+**tedarikçi firma adı** ve **FOB fiyat bandı**. AliExpress kaynağı bunların
+hiçbirini veremiyordu (ölçüldü: 60 kartın yalnız 10'unda mağaza adı var, MOQ hiç
+yok). Kaynak `aliexpress` ile **paralel** çalışır ve aynı aylık kota kovasını
+paylaşır (`SUPPLIER_MONTHLY_LIMIT`); biri hata verirse diğeri eskisi gibi
+çalışmaya devam eder (fail-soft).
 
-Canlı ölçüm (2026-10-16, anahtar YOK, istek başına ~1,2 MB / 0,4-1,4 sn):
+**YOL DEĞİŞİKLİĞİ — uyum + ölçüm (2026-10-16).** Eski adres
+`productdirectory.do?word=…` idi ve `made-in-china.com/robots.txt` bu yolu
+`Disallow: /*.do?` ile yasaklıyor. Artık kazınan yol
+`products-search/hot-china-products`tır (izinli). İki yol AYNI gün
+karşılaştırıldı ve **izinli yol daha zengin** çıktı (air fryer: izinli 41 kart,
+bunların 31'i fiyatlı+MOQ'lu+tedarikçi adlı; yasaklı 37 kart, 37'si fiyatlı ama
+yalnız 23'ünde MOQ ve 22'sinde tedarikçi adı). Ayrıca **dürüst bot User-Agent**
+(`... (+https://<domain>; bot@<domain>)`) aynı içeriği döndürdü — kimliği
+gizlemeye gerek yok, ve kaynak artık kullanım koşullarına uygun yoldan okunur.
 
-| Niş | Teklif | FOB fiyatlı | FOB aralığı | MOQ ölçüldü | Tedarikçi adı |
-| --- | --- | --- | --- | --- | --- |
-| air fryer | 37 | 37 (%100) | 23 | 22 | 22 |
-| led desk lamp | 30 | 30 (%100) | 23 | 30 | 30 |
-| pet water fountain | 30 | 30 (%100) | 21 | 30 | 30 |
-| cat scratching board | 41 | 41 (%100) | 27 | 30 | 30 |
-| yoga mat | 24 | 22 (%92) | 19 | 24 | 24 |
+Canlı ölçüm (2026-10-16, anahtar YOK, izinli yol, istek başına ~1,2 MB / 0,6-0,9 sn):
+
+| Niş | Teklif | FOB fiyatlı | FOB aralığı | MOQ ölçüldü | Tedarikçi adı | medyan FOB | medyan MOQ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| air fryer | 30 | 30 (%100) | 23 | 30 | 30 | $20,37 | 500 |
+| led desk lamp | 30 | 30 (%100) | 22 | 30 | 30 | $7,34 | 100 |
+| pet water fountain | 30 | 30 (%100) | 14 | 30 | 30 | $15,23 | 100 |
+| yoga mat | 30 | 29 (%97) | 26 | 30 | 30 | $4,99 | 100 |
 
 #### Lansman kapısı: “bu ürün gerçekten atılabilir mi?”
 
 Ölçülen tedarik kanıtı artık bir KARARA dönüşür (`src/lib/launch-readiness.ts`,
-saf fonksiyon). Beş kapı vardır ve her biri ya ölçülmüştür ya `unknown`dır —
+saf fonksiyon). **Yedi kapı** vardır ve her biri ya ölçülmüştür ya `unknown`dır —
 **ölçülmemiş bir kapı asla `pass` sayılmaz**:
 
 | Kapı | Ölçüm | Eşik (POLİTİKA, ölçüm değil) |
 | --- | --- | --- |
-| Tedarik | Eşleşen toptan teklif var mı | — |
+| Tedarik | **Birebir** ürün teklifi var mı (niş bandı ≠ birebir) | — |
 | İlk sipariş | **MOQ × FOB** (aralıkta konservatif ÜST uç) | ≤ $1.500 |
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
-| Brüt marj | Ölçülen toptan − perakende aritmetiği | ≥ %40 (kargo/komisyon öncesi) |
+| Brüt marj | Ölçülen toptan − perakende aritmetiği | ≥ **%60** (kargo/komisyon öncesi) |
+| Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (Meta medyan CPA ≈ $38,99) |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
+| Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü taraması (VETO yönlü) | kelime yok |
+
+Eşiklerin gerekçesi ölçüm + kaynak araştırmasıdır: %60 brüt marj, toptan
+ekonomisinin yaygın "iniş maliyetinin 2,5-3 katı satış fiyatı" kuralıdır (3 kat
+= %67); %40 tabanı reklam + kargo + komisyon sonrası pay bırakmıyordu.
+$35 katkı tabanı, ölçülmüş medyan CPA'nın ($38,99) altında bırakılmış güvenli
+marjdır. Mevzuat/IP kapısı **yalnız veto yönünde** çalışır: kelime bulunmazsa bu
+"hukuki temizlik" DEMEK DEĞİLDİR (kapı detayı bunu açıkça söyler).
 
 `Atılabilir` denmesi için üç şart birlikte gerekir: hiçbir kapı `fail` olmayacak,
-**tedarik ve marj ÖLÇÜLMÜŞ olacak**, en az üç kapı geçecek. Ürün kartında kapı
-kapı yeşil/kırmızı/kesik-çizgi olarak görünür; sunucuda hesaplanır (kohort
-rekabet sayısı yalnız orada bilinir) ve karar ürünle birlikte taşınır.
-Sıralamada da **eşit oy ve eşit kanıtta atılabilir ürün öne geçer**
+**tedarik · fiyat · marj · reklam bütçesi ÖLÇÜLMÜŞ olacak** ve hepsi geçecek.
+Ürün kartında kapı kapı yeşil/kırmızı/kesik-çizgi olarak görünür; sunucuda
+hesaplanır (kohort rekabet sayısı yalnız orada bilinir) ve karar ürünle birlikte
+taşınır. Sıralamada da **eşit oy ve eşit kanıtta atılabilir ürün öne geçer**
 (`WINNER_LAUNCH_BONUS`, mevcut ağırlıklar değiştirilmedi; kanıtı olmayan üründe
 bonus 0'dır, yani eski kayıtların sırası bozulmaz).
 
-Canlı ölçüm (`MIC_LIVE=1 npx vitest run mic-supplier.live`):
+**NİŞ BANDI (PROXY) ATILABİLİR SAYILMAZ.** Birebir ürün teklifi bulunamazsa
+kanıt aynı nişten ölçülen fiyat bandından kurulur; bu bir **proxy**'dir ve
+`supplierMatchKind` alanı onu açıkça taşır. Kaynak araştırması bir kategori/niş
+medyanının ürünün maliyeti yerine sessizce konmasını hatalı buluyor
+("do not silently substitute its median for the item's cost"); ölçüm de bunu
+doğruladı — canlı uçtan uca koşuda 30 adayın 12'si yalnız niş bandıyla
+fiyatlanmıştı ve eski kod bunları da "atılabilir" sayıyordu. Artık tedarik kapısı
+proxy'de `unknown`dır (değer "… çevresi (niş bandı)"), ilk sipariş kapısı MOQ'nun
+bu ürüne ait olmadığını yazar ve adım notuna **`Tedarik proxy'si: N aday…`**
+satırı düşer. Proxy seçimi de düzeltildi: niş havuzunda MOQ/FOB aralığı havuzun
+İLK teklifinden değil, **en başlatılabilir** teklifinden alınır.
+
+Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run mic-supplier.live`,
+perakende = 3 × medyan FOB varsayımıyla):
 
 | Niş | Karar | Ölçülen sebep |
 | --- | --- | --- |
-| air fryer | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $117,6 |
-| led desk lamp | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $81,6 |
-| pet water fountain | ✅ Atılabilir | 4/5 kapı, ilk sipariş ≈ $160 |
-| yoga mat | ❌ Atılamaz | MOQ 1.000 × $3,93 = $3.930 > $1.500 · fiyat $14,97 < $15 |
+| air fryer | ❌ Atılamaz | Reklam bütçesi: katkı $22,31 < $35 |
+| led desk lamp | ❌ Atılamaz | Reklam bütçesi: katkı $20,03 < $35 |
+| pet water fountain | ✅ Atılabilir | 5/7 kapı, ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
+| yoga mat | ❌ Atılamaz | Satış fiyatı $14,97 < $15 · katkı $9,97 < $35 |
 
 Yoga mat örneği, kapının neden gerekli olduğunun kanıtıdır: marj iyi olsa bile
-1.000 adetlik MOQ ile test siparişi verilemez ve $14,97 satış fiyatı trafik
-maliyetini kaldırmaz — eski şema bu ürünü “yüksek marj” diye öne çıkarıyordu.
+$14,97 satış fiyatı trafik maliyetini kaldırmaz — eski şema bu ürünü “yüksek
+marj” diye öne çıkarıyordu. Uçtan uca canlı koşuda (air fryer) kararın etkisi
+sayıyla görünür: kapı devreye girmeden önce 4/30 aday "atılabilir"di (12'si
+proxy), şimdi **2/30** ve proxy'ler sayıldı.
 
 Anahtar gerekmez. İsteğe bağlı ayarlar:
 

@@ -42,7 +42,7 @@ import {
 // `supplier-economics` SAF bir modüldür (ağ/AI/DB yok) — başlık eşleştirmesi
 // yalnız onun ölçekleriyle yapılabilir, ikinci bir benzerlik fonksiyonu yazmak
 // iki farklı "benzer" tanımı üretirdi.
-import { productTitleMatch } from "./supplier-economics";
+import { productTitleMatch, supplierMatchKind } from "./supplier-economics";
 import { assessLaunch } from "./launch-readiness";
 
 /**
@@ -735,6 +735,8 @@ export async function runScrapeFilterStep(
   for (let i = 0; i < survivors.length; i++) {
     const row = survivors[i];
     const launch = assessLaunch({
+      // Başlık, mevzuat/IP vetosu için taranır (ölçülen metin, uydurma değil).
+      name: row.name,
       priceUsd: row.priceUsd,
       grossMarginPct: row.grossMarginPct ?? null,
       supplierPriceUsd: row.supplier?.supplierPriceUsd ?? null,
@@ -742,6 +744,9 @@ export async function runScrapeFilterStep(
       moqUnits: row.supplier?.moqUnits ?? null,
       moqUnit: row.supplier?.moqUnit ?? "",
       cohortCompetitors: competitorCounts[i],
+      // KANITIN TÜRÜ karara girer: niş bandı (proxy) "atılabilir" SAYILMAZ
+      // (bkz. `launch-readiness.ts` → `supplierMatchKind`).
+      supplierMatchKind: row.supplier ? supplierMatchKind(row.supplier) : null,
     });
     (survivors[i] as NormalizedProduct) = {
       ...row,
@@ -821,13 +826,26 @@ export async function runScrapeFilterStep(
       .flatMap((row) => row.launch?.blockers ?? [])
       .slice(0, 3)
       .join(" · ") || "kanıt eksik (tedarik/MOQ/marj ölçülmedi)";
+  // ÖLÇÜLÜP YAZILAN KAPILAR: not, hangi üç ölçümün kurala girdiğini ADIYLA
+  // söyler. Eski metin "ilk sipariş sermayesi ölçüldü" diyordu; oysa karar
+  // kuralı MOQ'u hiç aramaz ve canlı koşuda örneklerde "İlk sipariş=unknown"
+  // idi — yani not, ölçülmemiş bir alanı ölçülmüş gibi gösteriyordu.
   notes.push(
     launchable.length > 0
       ? `Lansman kapısı: ${launchable.length}/${survivors.length} ürün "atılabilir" ` +
-          `(tedarik + marj + ilk sipariş sermayesi ölçüldü): ${atilabilirOrnek}` +
+          `(BİREBİR tedarik + fiyat + marj + reklam bütçesi ölçüldü ve hiçbir kapı engellemedi): ${atilabilirOrnek}` +
           `${launchable.length > 3 ? " …" : ""}.`
       : `Lansman kapısı: hiçbir aday tüm kapılardan geçemedi. Engeller: ${engelOrnek}.`,
   );
+  // PROXY SAYACI: niş bandıyla fiyatlanan adaylar "atılabilir" SAYILMAZ ve bu
+  // sebep görünmez kalırsa kullanıcı "neden lansman sayısı düştü" diye sorar.
+  if (supplierStats.matchedNiche > 0) {
+    notes.push(
+      `Tedarik proxy'si: ${supplierStats.matchedNiche} aday yalnız NİŞ bandıyla ` +
+        `fiyatlandı (bu ürünün kendi toptan teklifi yok) — bunlar lansman ` +
+        `kararında "atılabilir" SAYILMAZ; tedarikçiden bu ürüne ait FOB fiyatı istenmeli.`,
+    );
+  }
   if (rescued > 0) {
     notes.push(
       `Kalite kapıları ${stats.inputCount} satırın tamamını elemişti; ${rescued} aday ` +

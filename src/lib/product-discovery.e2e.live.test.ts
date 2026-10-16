@@ -34,6 +34,7 @@ import {
   runGeminiShortlistStep,
   runScrapeFilterStep,
 } from "./product-discovery-pipeline.server";
+import type { LaunchGate } from "./launch-readiness";
 import type { NormalizedProduct } from "./product-discovery.types";
 
 const LIVE = process.env.PRODUCT_DISCOVERY_E2E_LIVE === "1";
@@ -97,6 +98,47 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
           `satış ${filled((p) => (p.salesVolume ?? 0) > 0)}`,
       );
 
+      // TEDARİK + LANSMAN KAPISI — yeni katmanın CANLI kanıtı.
+      //
+      // Bu blok olmadan "hat MOQ/FOB ölçüyor ve atılabilirlik kararı üretiyor"
+      // iddiası testlerde kalır, ÇALIŞAN HATTA görünmezdi (bu dosyanın varlık
+      // sebebiyle aynı sınıf hata: ölü export).
+      const withSupplier = rows.filter((p) => (p.supplier?.samples ?? 0) > 0).length;
+      const withMoq = rows.filter((p) => typeof p.supplier?.moqUnits === "number").length;
+      const launchable = rows.filter((p) => p.launch?.launchable === true);
+      const blocked = rows.filter((p) => (p.launch?.failed ?? 0) > 0);
+      const firstOrders = rows
+        .map((p) => p.launch?.firstOrderUsd ?? null)
+        .filter((v): v is number => typeof v === "number")
+        .sort((a, b) => a - b);
+      console.log(
+        `[E2E] "${niche}" · tedarik ${withSupplier}/${rows.length} · MOQ ${withMoq} · ` +
+          `ilk sipariş medyan $${firstOrders.length ? firstOrders[Math.floor(firstOrders.length / 2)] : "—"} · ` +
+          `ATILABİLİR ${launchable.length} · engelli ${blocked.length}`,
+      );
+      for (const p of rows.slice(0, 3)) {
+        // Kapı tipi AÇIKÇA yazılır: `rows` öğeleri gevşek tipli geldiğinde
+        // `.map((g) => …)` parametresi `any` olur ve `tsc` bunu hata sayar.
+        const gates: LaunchGate[] = p.launch?.gates ?? [];
+        console.log(
+          `   kapı: ${gates.map((g) => `${g.label}=${g.state}`).join(" ")} · ${p.name.slice(0, 44)}`,
+        );
+      }
+      if (launchable.length) {
+        console.log(
+          `   atılabilir örnek: ${launchable
+            .slice(0, 2)
+            .map((p) => `${p.name.slice(0, 34)} (${p.launch?.summary ?? ""})`)
+            .join(" · ")}`,
+        );
+      }
+      // SÖZLEŞME: karar HER adayda taşınır (ölçüm yoksa da `unknown` kapılarla).
+      for (const p of rows) {
+        expect(p.launch).toBeTruthy();
+        expect(p.launch!.gates).toHaveLength(7);
+        expect(typeof p.cohortCompetitors).toBe("number");
+      }
+
       // Adım NOTLARI ölçümün kanıtıdır: katalog zenginleştirmesi, eleme
       // dökümü (§25) ve çalışmayan kaynaklar burada adıyla görünür.
       console.log(`[E2E] "${niche}" · notlar: ${scrape.notes.join(" | ")}`);
@@ -143,8 +185,17 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
         console.log(
           `   ${Math.round(p.councilScore)}/100 güven${Math.round(p.confidenceScore)} · ` +
             `${p.dataCompleteness}/5 · ${p.priceUsd !== null ? `$${p.priceUsd}` : "fiyat yok"} · ` +
-            `${p.rating !== null ? `${p.rating}★ (${p.ratingCount ?? 0})` : "puan yok"} · ${p.name.slice(0, 54)}`,
+            `${p.rating !== null ? `${p.rating}★ (${p.ratingCount ?? 0})` : "puan yok"} · ` +
+            `${p.supplier?.supplierPriceUsd != null ? `tedarik $${p.supplier.supplierPriceUsd}` : "tedarik —"} · ` +
+            `${typeof p.supplier?.moqUnits === "number" ? `MOQ ${p.supplier.moqUnits}` : "MOQ —"} · ` +
+            `${p.launch?.launchable ? "ATILABİLİR" : (p.launch?.failed ?? 0) > 0 ? "ENGEL" : "kanıt eksik"} · ` +
+            `${p.name.slice(0, 48)}`,
         );
+      }
+      // Nihai liste kararı da taşır (arayüzün okuduğu yol).
+      for (const p of ranked.products) {
+        expect(p.launch).toBeTruthy();
+        expect(p.launch!.gates).toHaveLength(7);
       }
 
       expect(ranked.ok).toBe(true);
@@ -202,7 +253,9 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
       // SÖZLEŞME: liste 25'i AŞMAZ ve havuz 25'ten küçükse SAYI DOLDURULMAZ
       // ("sayıyı doldurmak için sahte ürün eklenmez"). Ölçülen havuz 21 aday
       // olduğunda eski sabit `toBe(25)` beklentisi yanlış olurdu.
-      expect(shortlist.products.length).toBe(Math.min(scrape.products.length, GEMINI_SHORTLIST_SIZE));
+      expect(shortlist.products.length).toBe(
+        Math.min(scrape.products.length, GEMINI_SHORTLIST_SIZE),
+      );
 
       // Model az seçse bile huni 25'te kalıyor (yedekleme).
       const partial = await runGeminiShortlistStep(

@@ -63,6 +63,7 @@ bütünlüğü 72-76/100.
 | Kategori | 0-4/21 | Kategori yalnız kategori alanını yayınlayan kaynaklardan gelir; uydurma kategori yazılmaz |
 | Değerlendirme sayısı | 0/21 | Bing Shopping bu ağdan kart döndürmüyor (`no shopping cards`); AliExpress kartı yalnız puan verir |
 | Puan | 3/21 | Kaynakların çoğu puani sayı olarak yayınlamıyor (yıldızlar görsel) |
+| Talep (yorum/satış) | anahtarsız kaynak YOK | Ek kaynak araştırması yapıldı: UPCitemdb şemasında puan/değerlendirme/satış alanı **yok** (yalnız kimlik + fiyat); Reddit `search.json` anahtarsız **403**; Google Trends anahtarsız uç noktası yok (API limited alpha); Keepa kategori/BSR verisini ücretli anahtarla verir; Amazon ürün sayfası "bought in past month" metnini HTML'de taşısa da bu bir sayfa kazımasıdır (kalıcı alan garantisi yok, `/product-reviews/` robots.txt'te kapalı) — bu yüzden **eklenmedi**. Best Buy ücretsiz anahtarı gerçek `customerReviewCount/customerReviewAverage` verir; anahtar girilmediği sürece bu yuva boş kalır |
 
 Bu alanlar için **hile yapılmadı**: 0 yazmak "ölçtük ve sıfır bulduk" demek
 olurdu. Kartlar `—` gösterir ve gerekçe `missingFields` ile taşınır.
@@ -113,21 +114,55 @@ Tek tedarik kaynağı AliExpress'ti ve üç yuvayı **hiç** ölçemiyordu:
 
 ### Çalışan yol ve ölçüm
 
-`https://www.made-in-china.com/productdirectory.do?word=<terim>&subaction=hunt&style=b&mode=and&code=0&order=0&isOpenCorrection=1`
-→ HTTP 200, ~1,1-1,35 MB, **0,4-1,4 sn**. Aynı gün ölçülüp ÇALIŞMAYAN yollar:
-`m.made-in-china.com` (mobil arama kart şeması farklı), `products-search/hot-china-products`
-(şema sürümden sürüme değişiyor).
+`https://www.made-in-china.com/products-search/hot-china-products/<terim>.html`
+→ HTTP 200, ~1,1-1,35 MB, **0,57-0,87 sn**. Aynı gün ölçülüp ÇALIŞMAYAN yol:
+`m.made-in-china.com` (mobil arama kart şeması farklı).
+
+**YOL DEĞİŞİKLİĞİNİN SEBEBİ ÖLÇÜLDÜ — VE YASAKLI YOL DEĞİŞTİRİLMEDEN ÖNCE
+KULLANILIYORDU.** `made-in-china.com/robots.txt` şu satırları yayınlıyor:
+
+```text
+User-agent: *
+User-agent: AdsBot-Google
+User-agent: AdsBot-Google-Mobile
+Disallow: /*.do$
+Disallow: /*.do?
+…
+User-agent: *
+Disallow: /*html?*
+```
+
+(İki ayrı `User-agent: *` grubu vardır; ikisi de bizi bağlar.) Bir üçüncü grup
+`/products-search/hot-china-products/*` yolunu **yalnız Baiduspider** için
+kapatır — bot adımız Baiduspider olmadığı için o kural bizi bağlamaz; ayrıca
+AI botları grubu `/products-search/` yolunu açıkça `Allow` ediyor. Kullanılan
+adreste **sorgu dizesi yoktur** ve bu bilinçlidir: `/*html?*` kuralı
+`.html?…` biçimini yasaklıyor, `…<Slug>.html`i değil.
+
+Eski adres `productdirectory.do?word=…` idi, yani **robots.txt'in açıkça
+kapatmadığı bir yol kullanılıyordu**. İki yol aynı gün yan yana ölçüldü:
+
+| Ölçüm (air fryer, aynı gün) | `productdirectory.do?` (yasaklı) | `products-search/hot-china-products` (izinli) |
+| --- | --- | --- |
+| Kart | 37 | **41** |
+| FOB fiyatlı | 37 | **41 (%100)** |
+| MOQ ölçülen | 23 | **31** |
+| Tedarikçi adı | 22 | **31** |
+
+İzinli yol YASAKLI yoldan daha zengin çıktı, yani uyumlu davranmak burada bir
+kayıp değil kazanç. Ayrıca **dürüst bot User-Agent**
+(`<ürün> (+https://<domain>; bot@<domain>)`) aynı içeriği döndürdü: kimliği
+gizlemek gerekmiyor.
 
 | Niş | Teklif | FOB fiyatlı | FOB aralığı | MOQ | Tedarikçi adı | medyan FOB | medyan MOQ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| air fryer | 37 | 37 (%100) | 23 | 22 | 22 | $22,20 | 1.000 |
-| led desk lamp | 30 | 30 (%100) | 23 | 30 | 30 | $8,00 | 80 |
-| pet water fountain | 30 | 30 (%100) | 21 | 30 | 30 | $12,99 | 100 |
-| cat scratching board | 41 | 41 (%100) | 27 | 30 | 30 | $2,50 | 5 |
-| yoga mat | 24 | 22 (%92) | 19 | 24 | 24 | $4,99 | 100 |
+| air fryer | 30 | 30 (%100) | 23 | 30 | 30 | $20,37 | 500 |
+| led desk lamp | 30 | 30 (%100) | 22 | 30 | 30 | $7,34 | 100 |
+| pet water fountain | 30 | 30 (%100) | 14 | 30 | 30 | $15,23 | 100 |
+| yoga mat | 30 | 29 (%97) | 26 | 30 | 30 | $4,99 | 100 |
 
-Yani tedarikçi adı kapsamı AliExpress'in 10/60'ından **22-30/30**'a, MOQ kapsamı
-0'dan **%80-100**'e çıktı.
+Yani tedarikçi adı kapsamı AliExpress'in 10/60'ından **30/30**'a, MOQ kapsamı
+0'dan **%97-100**'e çıktı.
 
 ### İki kart şeması AYNI ayrıştırıcıda
 
@@ -156,26 +191,58 @@ yoksa `null` kalır (0 yazılmaz).
 
 ## 5d. Lansman kapısı — ölçülen kanıttan “atılabilir mi?” kararı
 
-`src/lib/launch-readiness.ts` (saf fonksiyon) beş kapıyı ölçer; ölçülmemiş kapı
-`unknown`dır ve **asla `pass` sayılmaz**:
+`src/lib/launch-readiness.ts` (saf fonksiyon) **yedi** kapıyı ölçer; ölçülmemiş
+kapı `unknown`dır ve **asla `pass` sayılmaz**:
 
 | Kapı | Ölçüm | Politika eşiği |
 | --- | --- | --- |
-| Tedarik | Eşleşen toptan teklif | — |
+| Tedarik | **Birebir** ürün teklifi (niş bandı birebir SAYILMAZ) | — |
 | İlk sipariş | MOQ × FOB (aralıkta KONSERVATİF üst uç) | ≤ $1.500 |
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
-| Brüt marj | Ölçülen toptan − perakende | ≥ %40 (kargo/komisyon öncesi) |
+| Brüt marj | Ölçülen toptan − perakende | ≥ **%60** (kargo/komisyon öncesi) |
+| Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (ölçülen medyan CPA $38,99) |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
+| Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü (VETO yönlü) | kelime yok |
 
-`launchable` = hiç `fail` yok **ve** tedarik **ve** marj ölçülmüş **ve** ≥3 kapı
-geçmiş. Canlı ölçüm (`MIC_LIVE=1 npx vitest run mic-supplier.live`):
+`launchable` = hiç `fail` yok **ve** tedarik · fiyat · marj · reklam bütçesi
+ÖLÇÜLMÜŞ ve geçmiş. Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run
+mic-supplier.live`, perakende = 3 × medyan FOB varsayımı):
 
 | Niş | Karar | Ölçülen sebep |
 | --- | --- | --- |
-| air fryer | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $117,6 |
-| led desk lamp | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $81,6 |
-| pet water fountain | ✅ Atılabilir | 4/5 kapı · ilk sipariş ≈ $160 |
-| yoga mat | ❌ Atılamaz | MOQ 1.000 × $3,93 = $3.930 · fiyat $14,97 |
+| air fryer | ❌ Atılamaz | katkı $22,31 < $35 |
+| led desk lamp | ❌ Atılamaz | katkı $20,03 < $35 |
+| pet water fountain | ✅ Atılabilir | 5/7 kapı · ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
+| yoga mat | ❌ Atılamaz | fiyat $14,97 < $15 · katkı $9,97 < $35 |
+
+### 5e. ÖLÇÜLÜP DÜZELTİLEN karar hatası: niş bandı (proxy) “atılabilir” sayılıyordu
+
+Uçtan uca canlı koşuda (air fryer, 2026-10-16) ölçülen tablo: 30 adayın 29'u
+tedarik kanıtı buldu, ama bunların **12'si yalnız niş bandıyla** fiyatlanmıştı
+(yani bu ürünün kendi toptan teklifi YOK) ve eski kod onları da "atılabilir"
+sayıyordu → **4/30**. Araştırma bunu açıkça hatalı buluyor: bir kategori/niş
+medyanı ürünün maliyeti yerine konmaz; go/no-go kararı ürünün KENDİ teklifini
+ister (AutoDS sourcing dokümanı "benzer (aynı değil)" sonuçları için karşılaştırma
+ister; Alibaba RFQ akışı tam da bu yüzden vardır).
+
+Düzeltme üç parçalı ve hepsi ölçülebilir:
+
+1. `launch-readiness.ts` girdisine `supplierMatchKind` eklendi; `"niche"`
+   geldiğinde **tedarik kapısı `unknown`** olur (değer "… çevresi (niş bandı)",
+   detay "bu bir PROXY'dir") ve `launchable` olamaz.
+2. İlk sipariş kapısı proxy'de açıkça yazar: "MOQ ve fiyat aynı nişteki bir
+   tedarikçiden ölçüldü — bu ürünün kendi teklifi değil."
+3. Niş havuzunda MOQ/FOB aralığı artık havuzun İLK teklifinden değil **en
+   başlatılabilir** teklifinden alınır (deterministik; MOQ teklife özel bir alan,
+   havuz medyanı onu taşımaz). Ölçülen etki: adım notunda MOQ ölçülen ürün sayısı
+   5 → **19**.
+
+Canlı yeniden ölçüm (aynı niş, aynı gün): "atılabilir" **4/30 → 2/30**; notlarda
+`Tedarik proxy'si: 12 aday yalnız NİŞ bandıyla fiyatlandı … "atılabilir"
+SAYILMAZ` satırı görünür. Ayrıca notu yanlış olan bir cümle düzeltildi: eski
+metin "ilk sipariş sermayesi ölçüldü" diyordu ama karar kuralı MOQ'u hiç aramaz
+(ölçülen örneklerde kapı `unknown`du) — yeni metin hangi dört ölçümün karara
+girdiğini adıyla yazıyor.
 
 Karar sunucuda üretilir (kohort rekabet sayısı yalnız orada bilinir), ürünle
 birlikte taşınır (`launch`, `cohortCompetitors`) ve kartta kapı kapı gösterilir.
@@ -186,13 +253,18 @@ ağırlıklar (`0.85/0.10/0.05`) değiştirilmedi, bonus kanıtı olmayan ürün
 
 ```sh
 npx tsc --noEmit
-npx vitest run                                  # 132 dosya / 1800 test
+npx vitest run                                  # 137 dosya / 1887 test
 PRODUCT_DISCOVERY_E2E_LIVE=1 \
   PRODUCT_DISCOVERY_E2E_NICHES="air fryer,robot vacuum" \
   npx vitest run src/lib/product-discovery.e2e.live.test.ts
 MIC_LIVE=1 MIC_LIVE_NICHES="air fryer,yoga mat" \
   npx vitest run src/lib/mic-supplier.live.test.ts   # toptan kaynak + lansman kararı
 ```
+
+> Not: tam proje `npx tsc --noEmit` bu sandbox'ın 180 sn'lik komut tavanını
+> aşıyor. Bu turda düzenlenen dosyalar dar bir geçici tsconfig ile ayrıca
+> doğrulandı (`tsc -p tsconfig.check.json` → 0 hata); tam proje tip kontrolü
+> platformun kendi `tsc -b --noEmit` adımında koşar.
 
 Yeni testler: `src/lib/product-brand.test.ts`, `src/lib/product-catalog.test.ts`,
 `src/lib/product-discovery-deal-feed.test.ts` (10 test: fiyat/görsel/satıcı/oy
@@ -201,7 +273,11 @@ Yeni testler: `src/lib/product-brand.test.ts`, `src/lib/product-catalog.test.ts`
 `src/lib/reader-source-matrix.test.ts` (Best Buy kategori alanı eklendi),
 `src/lib/mic-supplier.test.ts` (12 test: iki kart şeması, MOQ'nun yıllık
 kapasiteyle karışmaması, tekilleştirme, boş nişte ağa çıkmama),
-`src/lib/launch-readiness.test.ts` (13 test: eşikler, konservatif FOB ucu,
-“ölçülmeyen kapı pass/fail olmaz” sözleşmesi),
+`src/lib/launch-readiness.test.ts` (25 test: eşikler, konservatif FOB ucu, mevzuat
+vetosu, **niş-proxy'nin "atılabilir" sayılmaması** ve “ölçülmeyen kapı pass/fail
+olmaz” sözleşmesi),
+`src/lib/supplier-economics.test.ts` (37 test: eşleştirme eşiği, fiyat akıl
+kontrolü, başlatılabilir tedarikçi seçimi, **niş havuzunda MOQ'nun en
+başlatılabilir tekliften alınması**, eski kayıt uyumluluğu),
 `src/lib/product-discovery-launch.wiring.test.ts` (11 test: kaynağın hatta bağlı
-olduğu + kararın zod katmanlarından düşmediği).
+olduğu, kararın zod katmanlarından düşmediği, `supplierMatchKind`ın bağlandığı).
