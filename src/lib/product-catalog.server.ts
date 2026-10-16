@@ -332,7 +332,9 @@ export function catalogMatchScore(
   const a = tokens(title);
   const b = new Set(tokens(record.title));
   if (!a.length || !b.size) return 0;
-  const hit = a.filter((t) => b.has(t) || (t.length >= 6 && [...b].some((w) => w.startsWith(t.slice(0, 6)))));
+  const hit = a.filter(
+    (t) => b.has(t) || (t.length >= 6 && [...b].some((w) => w.startsWith(t.slice(0, 6)))),
+  );
   let score = hit.length / Math.min(a.length, 6);
 
   // 3) KİMLİK ÇAPASI: kaydın markası BAŞLIKTA geçiyor mu? Geçiyorsa güven

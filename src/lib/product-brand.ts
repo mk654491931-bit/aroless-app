@@ -330,11 +330,11 @@ const PRODUCT_KIND_WORDS = new Set([
 ]);
 
 /** Marka adayında kabul edilen harfler: harf, rakam, `&`, `'`, `.`, `-`. */
-const BRAND_TOKEN_RE = /^[\p{L}\p{N}][\p{L}\p{N}&.'’\-]*$/u;
+const BRAND_TOKEN_RE = /^[\p{L}\p{N}][\p{L}\p{N}&.'’-]*$/u;
 
 /** Açık etiketli marka: "Brand: X", "Marka : X", "Marque - X". */
 const LABELLED_BRAND_RE =
-  /\b(?:brand|marka|marque|marca|märke|marke)\s*[:\-]\s*([\p{L}\p{N}][\p{L}\p{N}&.'’\- ]{1,38})/iu;
+  /\b(?:brand|marka|marque|marca|märke|marke)\s*[:-]\s*([\p{L}\p{N}][\p{L}\p{N}&.'’ -]{1,38})/iu;
 
 /**
  * "by X" işaretçisi — KÜÇÜK harfli "by" aranır.
@@ -343,7 +343,8 @@ const LABELLED_BRAND_RE =
  * başlığın kendisidir ("By Chef 5-in-1…"), marka işaretçisi değildir.
  * Gerçek kullanım "... Air Fryer by Ninja" biçimindedir.
  */
-const BY_BRAND_RE = /\bby\s+([\p{Lu}][\p{L}\p{N}&.'’\-]{1,20}(?:\s+[\p{Lu}][\p{L}\p{N}&.'’\-]{1,20})?)/gu;
+const BY_BRAND_RE =
+  /\bby\s+([\p{Lu}][\p{L}\p{N}&.'’-]{1,20}(?:\s+[\p{Lu}][\p{L}\p{N}&.'’-]{1,20})?)/gu;
 
 /** Model kodu (harfle başlar): "Q7", "CM5418", "L10S", "AF100". */
 const MODEL_CODE_RE = /^[A-Z]{1,5}\d{1,6}[A-Z]{0,2}$/;
@@ -411,7 +412,9 @@ function acceptableBrand(candidate: string): string {
  * @returns Marka ya da `""` (bilinmiyor — UYDURULMAZ).
  */
 export function brandFromTitle(title: string, known: readonly string[] = []): string {
-  const text = String(title ?? "").replace(/\s+/g, " ").trim();
+  const text = String(title ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!text || text.length < 3) return "";
 
   // 1) Açık etiket — en güçlü kanıt.

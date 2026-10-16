@@ -393,9 +393,13 @@ async function attachSupplierEconomics(
   const prices: number[] = [];
   for (let i = 0; i < survivors.length; i++) {
     const row = survivors[i];
-    const { supplier, margin } = buildEconomics({ name: row.name, priceUsd: row.priceUsd }, offers, {
-      nicheQueries,
-    });
+    const { supplier, margin } = buildEconomics(
+      { name: row.name, priceUsd: row.priceUsd },
+      offers,
+      {
+        nicheQueries,
+      },
+    );
     if (supplier.samples === 0) continue;
     matched++;
     if (supplierMatchKind(supplier) === "product") matchedProduct++;
@@ -433,9 +437,8 @@ export async function runScrapeFilterStep(
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
   const { runSources } = await import("./product-discovery-sources.server");
-  const { buildShortlist, imageFillCapFor, salvageShortlist } = await import(
-    "./product-discovery-shortlist.server"
-  );
+  const { buildShortlist, imageFillCapFor, salvageShortlist } =
+    await import("./product-discovery-shortlist.server");
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
   const { products: rawPool, reports } = await runSources(niche, undefined, {
@@ -491,8 +494,7 @@ export async function runScrapeFilterStep(
     const kindQuery = kindVariants(niche)[0] ?? String(niche ?? "").trim();
     const brandCounts = new Map<string, number>();
     for (const row of rawPool) {
-      const brand =
-        String(row.brand ?? "").trim() || brandOfTitle(String(row.title ?? ""));
+      const brand = String(row.brand ?? "").trim() || brandOfTitle(String(row.title ?? ""));
       // MAKULLÜK SÜZGECİ (ölçüldü: "Deli 9.5QT" → katalog sorgusu boşa
       // gitti ve patlama bütçesinin ikisi de heba oldu). Makul olmayan ad
       // sorguya DÖNÜŞMEZ.
@@ -527,7 +529,9 @@ export async function runScrapeFilterStep(
   } catch (e) {
     // Fail-soft: zenginleştirme çalışmazsa satırlar başlıktan çıkarılmış
     // markayla devam eder; hiçbir alan uydurulmaz.
-    console.log(`[discovery] katalog zenginleştirmesi atlandı: ${(e as Error).message.slice(0, 90)}`);
+    console.log(
+      `[discovery] katalog zenginleştirmesi atlandı: ${(e as Error).message.slice(0, 90)}`,
+    );
   }
 
   // 2) Niş bağlamı (talep sinyalleri) — kaynaklardan türetilir, AI DEĞİL.
