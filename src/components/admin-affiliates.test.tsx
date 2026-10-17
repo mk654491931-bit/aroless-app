@@ -5,8 +5,11 @@
 // kodlarını gösteriyor mu, "kod atanmadı" durumu var mı, kodu oluşturan kutu ve
 // indirim alanı çiziliyor mu. (Tıklama akışı mutasyon gerektirir; burada
 // güvence altına alınan şey panelin doğru veriyle çökmeden kurulması.)
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { initReactI18next } from "react-i18next";
+
+import i18n, { RESOURCES } from "@/lib/i18n";
 
 const state = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
@@ -34,6 +37,22 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { AdminAffiliates } from "./admin-affiliates";
+
+// Ödeme hücresi metinleri `t()`ten gelir; test gerçek Türkçe sözlükle render eder.
+beforeAll(async () => {
+  if (!i18n.isInitialized) {
+    await i18n.use(initReactI18next).init({
+      resources: RESOURCES,
+      lng: "tr",
+      fallbackLng: "en",
+      ns: ["common"],
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  } else {
+    await i18n.changeLanguage("tr");
+  }
+});
 
 const html = () => renderToStaticMarkup(<AdminAffiliates />);
 

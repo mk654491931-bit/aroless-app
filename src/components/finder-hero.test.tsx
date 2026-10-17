@@ -30,8 +30,8 @@ describe("FinderHero", () => {
   it("canlı araştırma rozetini ve kurumsal kimlik satırını basar", () => {
     const out = html();
     expect(out).toContain("[ui.live_research]");
-    expect(out).toContain("[common.app_name]");
-    expect(out).toContain("[common.tagline]");
+    expect(out).toContain("[app_name]");
+    expect(out).toContain("[tagline]");
   });
 
   it("dört güven çipini de basar", () => {

@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createFileRoute } from "@tanstack/react-router";
 import { Sparkles, Trophy } from "lucide-react";
 
@@ -250,6 +251,7 @@ function DiscoveryResults({
   /** `top_products` sözleşmesi — gerekçe metni buradan gelir. */
   topProducts: TopProduct[];
 }): React.JSX.Element {
+  const { t } = useTranslation();
   // Uzlaşma tablosu parmak izine göre eşlenir; kart yalnızca kazanana bakar
   // ama "güven skoru neden bu?" sorusunu yanıtlamak için konsensüs gerekir.
   const consensusById = useMemo(
@@ -276,11 +278,12 @@ function DiscoveryResults({
     () => products.reduce((max, p) => Math.max(max, p.votes ?? 0), 0),
     [products],
   );
+  // Metin dile bağlı: sayı ÖLÇÜLÜR, cümle sözlükten gelir.
   const councilLabel = !withConsensus
-    ? "Kazananlar ölçülmüş veriyle sıralandı"
+    ? t("finder.council_ranked")
     : measuredVotes > 0
-      ? `${measuredVotes} ajan oyladı · ölçülmüş kanıt üzerinde`
-      : "Konsey oyu · ölçülmüş kanıt üzerinde";
+      ? t("finder.council_measured", { votes: measuredVotes })
+      : t("finder.council_votes");
 
   // `top_products` sözleşmesini kartlara bağlar. Sunucu `id` alanına önce
   // ürün kimliğini, sonra parmak izini yazar; kartın elimizdeki en güvenilir
@@ -328,26 +331,30 @@ function DiscoveryResults({
         </div>
         <aside className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground space-y-2">
-            <p className="text-sm font-medium text-foreground">Nasıl sıralandı?</p>
+            <p className="text-sm font-medium text-foreground">{t("finder.how_ranked_title")}</p>
             <p>
-              Her ürün gerçek kaynaklardan ölçüldü, sert filtrelerden geçti ve konsey ajanlarının
-              oyuyla değerlendirildi
-              {measuredVotes > 0
-                ? ` (bu koşuda ölçülen katılım: ${measuredVotes}/${TOTAL_AGENTS} rol)`
-                : ""}
-              . Konsey puanı ile <em>güven skoru</em> ayrıdır: yüksek puan az kanıtla da gelebilir,
-              güven skoru o puanın ne kadar savunulabilir olduğunu söyler.
+              {t("finder.how_ranked_before", {
+                participation:
+                  measuredVotes > 0
+                    ? t("finder.participation", {
+                        votes: measuredVotes,
+                        total: TOTAL_AGENTS,
+                      })
+                    : "",
+              })}
+              <em>{t("finder.how_ranked_confidence")}</em>
+              {t("finder.how_ranked_after")}
             </p>
             {withConsensus && (
               <p>
-                Ajanların oy uyumu{" "}
+                {t("finder.vote_agreement")}{" "}
                 {Math.round(
                   (consensus.reduce((a, c) => a + c.disagreement, 0) /
                     Math.max(1, consensus.length)) *
                     -1 +
                     100,
                 )}
-                /100 (yüksek = birlikte karar).
+                {t("finder.vote_agreement_tail")}
               </p>
             )}
           </div>

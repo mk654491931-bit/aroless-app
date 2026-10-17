@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Coins,
   LayoutDashboard,
@@ -61,6 +62,7 @@ function affiliateMoney(cents: number): string {
  * Rendered above every in-app page (except the finder home and auth).
  */
 export function AppTopbar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -347,10 +349,13 @@ export function AppTopbar() {
             <Link
               to="/affiliate-panel"
               className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 px-2.5 py-1 text-[11px] font-medium text-[oklch(0.85_0.12_150)] transition hover:bg-[oklch(0.75_0.19_150)]/20"
-              title={`Affiliate paneli — ödenmemiş ${affiliateMoney(affiliateUnpaid)}, ödenen ${affiliateMoney(affiliate.paidCents)}`}
+              title={t("affiliate.badge_title", {
+                unpaid: affiliateMoney(affiliateUnpaid),
+                paid: affiliateMoney(affiliate.paidCents),
+              })}
             >
               <Handshake size={13} />
-              <span className="hidden lg:inline">Affiliate</span>
+              <span className="hidden sm:inline">{t("affiliate.badge")}</span>
               {affiliateUnpaid > 0 && (
                 <span className="font-semibold tabular-nums">
                   {affiliateMoney(affiliateUnpaid)}

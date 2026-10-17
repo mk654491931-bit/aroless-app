@@ -1,6 +1,25 @@
 // Unit tests for the language helpers that keep every switcher in sync.
 import { describe, expect, it } from "vitest";
-import { LANGUAGES, findLanguage, isSupportedLang, normalizeLang } from "./i18n";
+import { LANGUAGES, RESOURCES, findLanguage, isSupportedLang, normalizeLang } from "./i18n";
+
+/** Bir bölümün tüm anahtar yollarını düzleştirir ("affiliate.badge" gibi). */
+function keyPaths(node: unknown, prefix = ""): string[] {
+  if (!node || typeof node !== "object") return prefix ? [prefix] : [];
+  return Object.entries(node as Record<string, unknown>)
+    .flatMap(([key, value]) => keyPaths(value, prefix ? `${prefix}.${key}` : key))
+    .sort();
+}
+
+/** Metindeki {{placeholder}} adlarını (sırasız) döndürür. */
+function placeholders(value: string): string[] {
+  return [...value.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
+}
+
+function at(node: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, part) => {
+    return acc && typeof acc === "object" ? (acc as Record<string, unknown>)[part] : undefined;
+  }, node);
+}
 
 describe("normalizeLang", () => {
   it("keeps a supported two-letter code", () => {
@@ -59,5 +78,56 @@ describe("findLanguage", () => {
     const codes = LANGUAGES.map((l) => l.code);
     expect(codes).toEqual(["en", "tr", "es", "de", "fr", "ar"]);
     expect(new Set(codes).size).toBe(codes.length);
+  });
+});
+
+describe("çeviri kaynakları — yeni eklenen ekranlar her dilde TAM", () => {
+  const langs = Object.keys(RESOURCES) as Array<keyof typeof RESOURCES>;
+  // Bu iki bölüm ürünün yeni ekranlarını besler (affiliate ödeme akışı +
+  // bulucu sonuç metinleri). Biri çevrilmeden eklenirse ekran sabit Türkçe
+  // kalır — bu test o sessiz gerilemeyi yakalar.
+  const SECTIONS: Array<{ key: "affiliate" | "finder"; min: number }> = [
+    { key: "affiliate", min: 40 },
+    { key: "finder", min: 10 },
+  ];
+
+  it("her dil aynı anahtar kümesini taşır (eksik anahtar yok)", () => {
+    for (const section of SECTIONS) {
+      const reference = keyPaths(at(RESOURCES.en, `common.${section.key}`));
+      expect(reference.length, `${section.key} boş olamaz`).toBeGreaterThan(section.min);
+      for (const lng of langs) {
+        expect(
+          keyPaths(at(RESOURCES[lng], `common.${section.key}`)),
+          `${lng}.${section.key}`,
+        ).toEqual(reference);
+      }
+    }
+  });
+
+  it("hiçbir dizede değer boş değil", () => {
+    for (const lng of langs) {
+      for (const section of SECTIONS) {
+        for (const key of keyPaths(at(RESOURCES[lng], `common.${section}`))) {
+          const value = at(RESOURCES[lng], `common.${section}.${key}`);
+          expect(typeof value, `${lng}.${section}.${key}`).toBe("string");
+          expect(String(value).trim().length, `${lng}.${section}.${key}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("interpolasyon yer tutucuları dilde kaybolmaz ({{amount}} gibi)", () => {
+    for (const section of SECTIONS) {
+      for (const key of keyPaths(at(RESOURCES.en, `common.${section}`))) {
+        const expected = placeholders(String(at(RESOURCES.en, `common.${section}.${key}`)));
+        if (expected.length === 0) continue;
+        for (const lng of langs) {
+          expect(
+            placeholders(String(at(RESOURCES[lng], `common.${section}.${key}`))),
+            `${lng}.${section}.${key}`,
+          ).toEqual(expected);
+        }
+      }
+    }
   });
 });

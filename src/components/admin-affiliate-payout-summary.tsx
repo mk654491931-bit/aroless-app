@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Banknote, Download, Handshake, Loader2, ScrollText, Wallet } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   adminExportAffiliatePayoutCsv,
   adminListAffiliatePayouts,
@@ -18,20 +19,22 @@ import { MIN_PAYOUT_CENTS } from "@/lib/affiliate";
  *
  * DÜRÜSTLÜK: hiçbir sayı tahmin edilmez; hepsi ölçülmüş toplamlardır. Ödeme
  * eşiğinin altındaki bakiyeler "ödemeye hazır" SAYILMAZ (devreder).
+ * METİNLER ÇEVİRİDEN GELİR: dil değişince özet de yeni dilde çizilir.
  */
-const money = (cents: number | null | undefined) =>
-  `$${((cents ?? 0) / 100).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-
 export function AdminAffiliatePayoutSummary(): React.JSX.Element {
+  const { t, i18n } = useTranslation();
   const listFn = useServerFn(adminListAffiliatePayouts);
   const csvFn = useServerFn(adminExportAffiliatePayoutCsv);
   const q = useQuery({
     queryKey: ["admin-affiliate-payouts"],
     queryFn: () => listFn(),
   });
+
+  const money = (cents: number | null | undefined) =>
+    `$${((cents ?? 0) / 100).toLocaleString(i18n.language || "en", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   const exportCsv = useMutation({
     mutationFn: () => csvFn(),
@@ -60,62 +63,65 @@ export function AdminAffiliatePayoutSummary(): React.JSX.Element {
 
   return (
     <section className="glass overflow-hidden rounded-2xl">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-        <h2 className="flex items-center gap-2 font-semibold">
-          <Handshake size={16} className="text-[oklch(0.75_0.19_150)]" /> Affiliate Kazanç & Ödeme
-          Durumu
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/10 px-4 py-4 sm:px-5">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold sm:text-base">
+          <Handshake size={16} className="shrink-0 text-[oklch(0.75_0.19_150)]" />
+          <span className="min-w-0">{t("affiliate.admin_title")}</span>
         </h2>
-        <span className="text-xs text-muted-foreground">
-          {verified} onaylı hesap · {readyRows.length} ödemeye hazır
+        <span className="text-[11px] text-muted-foreground sm:text-xs">
+          {t("affiliate.admin_counts", { verified, ready: readyRows.length })}
         </span>
       </div>
 
-      <div className="grid gap-3 p-5 sm:grid-cols-3">
+      <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
         <Kpi
           icon={<Wallet size={14} />}
-          label="Ödenmemiş (borç)"
+          label={t("affiliate.admin_owed")}
           value={q.isLoading ? "…" : money(owedCents)}
-          hint={`${rows.reduce((s, r) => s + r.pending_count, 0)} komisyon`}
+          hint={t("affiliate.commissions", {
+            count: rows.reduce((s, r) => s + r.pending_count, 0),
+          })}
         />
         <Kpi
           icon={<Banknote size={14} />}
-          label="Ödemeye hazır"
+          label={t("affiliate.admin_ready")}
           value={q.isLoading ? "…" : money(readyCents)}
-          hint={`eşik ${money(MIN_PAYOUT_CENTS)} · bekleme süresi dolmuş`}
+          hint={t("affiliate.admin_ready_hint", { min: money(MIN_PAYOUT_CENTS) })}
           tone="ready"
         />
         <Kpi
           icon={<ScrollText size={14} />}
-          label="Ödenen (toplam)"
+          label={t("affiliate.admin_paid")}
           value={q.isLoading ? "…" : money(paidCents)}
-          hint={`${rows.reduce((s, r) => s + r.paid_count, 0)} işaretli ödeme`}
+          hint={t("affiliate.admin_paid_hint", {
+            count: rows.reduce((s, r) => s + r.paid_count, 0),
+          })}
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-white/10 bg-white/[0.02] px-5 py-3">
+      <div className="flex flex-col gap-2 border-t border-white/10 bg-white/[0.02] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
         <button
           type="button"
           onClick={jumpToDetail}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white/90"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90 sm:w-auto sm:py-1.5"
         >
-          <Handshake size={13} /> Kim ne kadar kazandı / ödendi mi? (ödeme ekranı)
+          <Handshake size={13} className="shrink-0" /> {t("affiliate.admin_jump")}
         </button>
         <button
           type="button"
           onClick={() => exportCsv.mutate()}
           disabled={exportCsv.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium hover:bg-white/10 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium hover:bg-white/10 disabled:opacity-50 sm:w-auto sm:py-1.5"
         >
           {exportCsv.isPending ? (
             <Loader2 size={13} className="animate-spin" />
           ) : (
             <Download size={13} />
           )}
-          Ödeme listesini indir (CSV)
+          {t("affiliate.admin_csv")}
         </button>
-        <span className="text-[11px] text-muted-foreground">
-          Ödeme Wise/IBAN ile manuel yapılır; yaptıktan sonra satırdaki “Ödendi işaretle” ile
-          kaydedilir ve affiliate kendi panelinde tarih + referansı görür.
+        <span className="text-[11px] leading-relaxed text-muted-foreground">
+          {t("affiliate.admin_note")}
         </span>
       </div>
     </section>
@@ -137,17 +143,17 @@ function Kpi({
 }): React.JSX.Element {
   return (
     <div
-      className={`rounded-xl border p-4 ${
+      className={`min-w-0 rounded-xl border p-4 ${
         tone === "ready"
           ? "border-[oklch(0.75_0.19_150)]/30 bg-[oklch(0.75_0.19_150)]/10"
           : "border-white/10 bg-white/[0.03]"
       }`}
     >
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {icon} {label}
+        {icon} <span className="truncate">{label}</span>
       </div>
       <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
-      {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
+      {hint && <div className="text-[10px] leading-relaxed text-muted-foreground">{hint}</div>}
     </div>
   );
 }

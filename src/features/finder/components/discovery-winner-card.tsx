@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { AlertTriangle, ExternalLink, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 
@@ -98,6 +99,7 @@ export function DiscoveryWinnerCard({
    */
   reason?: string;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   // `dataCompleteness` sunucu tarafında zod ile sınırlanır ama sütun ham
   // JSON'dan geldiği için burada da kelepçelenir: negatif "3 alan ölçülemedi"
   // gibi saçma bir metin üretmemelidir.
@@ -128,10 +130,7 @@ export function DiscoveryWinnerCard({
           data-testid="quality-gate-rescued"
         >
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          <span>
-            Bu kayıt kalite eşiğini ({winner.councilScore}/100) geçmedi; sonuç listesi boş kalmasın
-            diye gösteriliyor. Kesin karar için diğer kazananlarla karşılaştırın.
-          </span>
+          <span>{t("finder.rescued_note", { score: winner.councilScore })}</span>
         </p>
       )}
       <header className="flex items-start gap-3">

@@ -487,32 +487,40 @@ export function AffiliatePanel() {
                 </p>
               )}
 
+              {/* Mobilde 2×2: tutarlar 24px'te hücreyi taşırıyordu, bu yüzden
+                  küçük ekranda 20px ve sıkı satır aralığı kullanılır. */}
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Coins size={13} /> Birikmiş (ödenmemiş)
+                <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-start gap-1.5 text-xs leading-tight text-muted-foreground">
+                    <Coins size={13} className="mt-0.5 shrink-0" /> Birikmiş (ödenmemiş)
                   </div>
-                  <div className="text-2xl font-bold">{money(data?.pending_cents)}</div>
+                  <div className="text-xl font-bold tabular-nums sm:text-2xl">
+                    {money(data?.pending_cents)}
+                  </div>
                 </div>
-                <div className="rounded-xl border border-[oklch(0.75_0.19_150)]/30 bg-[oklch(0.75_0.19_150)]/10 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <BadgeCheck size={13} /> Ödenebilir
+                <div className="min-w-0 rounded-xl border border-[oklch(0.75_0.19_150)]/30 bg-[oklch(0.75_0.19_150)]/10 p-3">
+                  <div className="flex items-start gap-1.5 text-xs leading-tight text-muted-foreground">
+                    <BadgeCheck size={13} className="mt-0.5 shrink-0" /> Ödenebilir
                   </div>
-                  <div className="text-2xl font-bold text-[oklch(0.8_0.15_150)]">
+                  <div className="text-xl font-bold tabular-nums text-[oklch(0.8_0.15_150)] sm:text-2xl">
                     {money(data?.payable_cents)}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CalendarClock size={13} /> Beklemede
+                <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-start gap-1.5 text-xs leading-tight text-muted-foreground">
+                    <CalendarClock size={13} className="mt-0.5 shrink-0" /> Beklemede
                   </div>
-                  <div className="text-2xl font-bold">{money(data?.held_cents)}</div>
+                  <div className="text-xl font-bold tabular-nums sm:text-2xl">
+                    {money(data?.held_cents)}
+                  </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Check size={13} /> Ödenen toplam
+                <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-start gap-1.5 text-xs leading-tight text-muted-foreground">
+                    <Check size={13} className="mt-0.5 shrink-0" /> Ödenen toplam
                   </div>
-                  <div className="text-2xl font-bold">{money(data?.paid_cents)}</div>
+                  <div className="text-xl font-bold tabular-nums sm:text-2xl">
+                    {money(data?.paid_cents)}
+                  </div>
                 </div>
               </div>
 

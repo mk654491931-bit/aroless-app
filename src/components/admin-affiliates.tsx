@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -572,6 +573,7 @@ function FragmentRow({
   onGiveCode,
   issuing,
 }: RowProps) {
+  const { t, i18n } = useTranslation();
   // Eski/eksik kayıtlarda alan bulunmayabilir; erişimden önce normalize edilir.
   const missing = row.payout_missing ?? [];
   return (
@@ -623,15 +625,19 @@ function FragmentRow({
               kendi panelinde gördüğü kayıtla aynı ölçüm). */}
           {row.paid_cents > 0 ? (
             <div className="text-[10px] text-muted-foreground">
-              {row.paid_count} komisyon
+              {t("affiliate.commissions", { count: row.paid_count })}
               {row.last_paid_at
-                ? ` · son ödeme ${new Date(row.last_paid_at).toLocaleDateString("tr-TR", {
-                    dateStyle: "medium",
-                  })}`
-                : " · tarih kaydı yok"}
+                ? t("affiliate.row_last_paid", {
+                    date: new Date(row.last_paid_at).toLocaleDateString(i18n.language, {
+                      dateStyle: "medium",
+                    }),
+                  })
+                : t("affiliate.row_no_date")}
             </div>
           ) : (
-            <div className="text-[10px] text-[oklch(0.82_0.15_70)]">henüz ödeme yapılmadı</div>
+            <div className="text-[10px] text-[oklch(0.82_0.15_70)]">
+              {t("affiliate.row_never_paid")}
+            </div>
           )}
           {row.reversed_cents > 0 && (
             <div className="text-[10px] text-[oklch(0.72_0.19_25)]">

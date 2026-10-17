@@ -33,21 +33,22 @@ export function FinderHero(): React.JSX.Element {
       <div className="stagger-in">
         {/* Editoryal üst satır: canlı araştırma rozeti + kurumsal kimlik yazısı */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            <span aria-hidden className="size-1.5 rounded-full bg-emerald-400" />
-            {t("ui.live_research")}
+          {/* Mobilde harf aralığı daraltılır: uzun dillerde (tr/de) rozet taşmaz. */}
+          <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-card/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:px-3 sm:tracking-[0.22em]">
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-emerald-400" />
+            <span className="min-w-0">{t("ui.live_research")}</span>
           </span>
           <span className="hidden items-center gap-2 text-[10px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70 md:inline-flex">
-            {t("common.app_name")}
+            {t("app_name")}
             <span aria-hidden className="h-px w-5 bg-border" />
-            {t("common.tagline")}
+            {t("tagline")}
           </span>
         </div>
 
         {/* Başlık: solda ince marka çizgisi, iki satır net hiyerarşi */}
         <div className="mt-6 flex items-stretch gap-3.5 md:mt-7 md:gap-5">
           <span aria-hidden className="finder-hero-bar" />
-          <h1 className="min-w-0 text-balance text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[2.4rem] md:text-[3rem]">
+          <h1 className="min-w-0 wrap-break-word text-balance text-[1.75rem] font-semibold leading-[1.1] tracking-[-0.02em] sm:text-[2.4rem] sm:leading-[1.08] md:text-[3rem]">
             <span className="block text-foreground">{t("hero_1")}</span>
             <span className="finder-hero-phrase block pb-1">{t("hero_2")}</span>
           </h1>

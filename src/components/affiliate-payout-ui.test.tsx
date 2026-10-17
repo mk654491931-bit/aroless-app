@@ -8,8 +8,11 @@
 //      sorularının cevabını görür — bekleme sebebi tutar/tarihle birlikte.
 //   3. Admin panelinde "kim ne kadar kazandı, ne kadarı ödendi?" tek özetten
 //      okunur ve ödeme listesi indirilebilir.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { initReactI18next } from "react-i18next";
+
+import i18n, { RESOURCES } from "@/lib/i18n";
 
 import type { AffiliateSummary } from "@/lib/affiliate.functions";
 import type { AdminAffiliatePayout } from "@/lib/affiliate.functions";
@@ -35,7 +38,35 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { AffiliatePayoutHistory } from "./affiliate-payout-history";
 import { AdminAffiliatePayoutSummary } from "./admin-affiliate-payout-summary";
 
+// Metinlerin gerçekten sözlükten geldiğini görmek için i18n'i Türkçe kurarız:
+// bileşenler `t()` kullanır, anahtar dönerse test yanlış şeyi doğrulamış olur.
+beforeAll(async () => {
+  if (!i18n.isInitialized) {
+    await i18n.use(initReactI18next).init({
+      resources: RESOURCES,
+      lng: "tr",
+      fallbackLng: "en",
+      ns: ["common"],
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  } else {
+    await i18n.changeLanguage("tr");
+  }
+});
+
 const html = (node: React.ReactElement) => renderToStaticMarkup(node);
+
+/** Tam ödeme profili — testler yalnız ilgilendikleri alanı değiştirir. */
+const PAYOUT_PROFILE_READY = {
+  method: "wise" as const,
+  account_holder: "Ayşe Yılmaz",
+  iban_masked: null,
+  wise_email: "ayse@ornek.com",
+  tax_id_set: false,
+  ready: true,
+  missing: [] as string[],
+};
 
 /** Ölçülmüş bir affiliate özeti kurar; testler yalnız ilgilendiği alanı değiştirir. */
 function summary(overrides: Partial<AffiliateSummary> = {}): AffiliateSummary {
@@ -119,6 +150,8 @@ describe('AffiliatePayoutHistory — "hesabıma para atıldı mı?"', () => {
             ref: "PAY-20261001-ALICE",
             paidAt: "2026-10-01T09:00:00.000Z",
             cents: 8_250,
+            count: 2,
+            method: "wise",
           },
         })}
       />,
@@ -137,7 +170,7 @@ describe('AffiliatePayoutHistory — "hesabıma para atıldı mı?"', () => {
           pending_cents: 3_000,
           payable_cents: 3_000,
           payout_remaining_cents: 4_500,
-          payout: { ready: true, missing: [] },
+          payout: { ...PAYOUT_PROFILE_READY },
         })}
       />,
     );
@@ -153,7 +186,7 @@ describe('AffiliatePayoutHistory — "hesabıma para atıldı mı?"', () => {
           pending_cents: 5_000,
           held_cents: 5_000,
           next_unlock_at: "2026-11-05T00:00:00.000Z",
-          payout: { ready: true, missing: [] },
+          payout: { ...PAYOUT_PROFILE_READY },
         })}
       />,
     );
@@ -167,7 +200,7 @@ describe('AffiliatePayoutHistory — "hesabıma para atıldı mı?"', () => {
         summary={summary({
           pending_cents: 9_000,
           payable_cents: 9_000,
-          payout: { ready: false, missing: ["IBAN"] },
+          payout: { ...PAYOUT_PROFILE_READY, ready: false, missing: ["IBAN"] },
         })}
       />,
     );
@@ -180,6 +213,34 @@ describe('AffiliatePayoutHistory — "hesabıma para atıldı mı?"', () => {
   it("okuma sınırına takılırsa listenin EKSİK olduğunu söyler", () => {
     const out = html(<AffiliatePayoutHistory summary={summary({ payouts_truncated: true })} />);
     expect(out).toContain("sınırlı");
+  });
+
+  it("dil değişince metinler yeni dilde çizilir (sabit Türkçe metin yok)", async () => {
+    const view = summary({
+      paid_cents: 8_250,
+      paid_any: true,
+      payouts: [
+        {
+          ref: "PAY-GLOBAL-1",
+          paidAt: "2026-10-01T09:00:00.000Z",
+          cents: 8_250,
+          count: 2,
+          method: "wise",
+        },
+      ],
+    });
+
+    await i18n.changeLanguage("tr");
+    expect(html(<AffiliatePayoutHistory summary={view} />)).toContain("Hesabına para gönderildi");
+
+    await i18n.changeLanguage("de");
+    const de = html(<AffiliatePayoutHistory summary={view} />);
+    expect(de).toContain("Geld wurde auf dein Konto überwiesen");
+    expect(de).toContain("Auszahlungsverlauf (1)");
+    expect(de).not.toContain("Hesabına para gönderildi");
+
+    // Dosyadaki diğer testler Türkçe beklentiyle çalışır: dili geri al.
+    await i18n.changeLanguage("tr");
   });
 });
 

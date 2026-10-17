@@ -5,6 +5,9 @@
 // durumlarda içerik ürettiğini sabitler ve render çökmesini yakalar.
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { initReactI18next } from "react-i18next";
+
+import i18n, { RESOURCES } from "@/lib/i18n";
 
 const state = vi.hoisted(() => ({
   referral: {
@@ -77,6 +80,23 @@ import { ReferralPanel } from "./referral-panel";
 import { SupportPanel } from "./support-panel";
 
 const html = (node: React.ReactElement) => renderToStaticMarkup(node);
+
+// Affiliate paneli metinleri `t()`ten okur; testte gerçek Türkçe sözlükle
+// render edilir ki "anahtar döndü" durumu yanlışlıkla geçmesin.
+beforeAll(async () => {
+  if (!i18n.isInitialized) {
+    await i18n.use(initReactI18next).init({
+      resources: RESOURCES,
+      lng: "tr",
+      fallbackLng: "en",
+      ns: ["common"],
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  } else {
+    await i18n.changeLanguage("tr");
+  }
+});
 
 // Paneller davet linkini `window.location.origin` ile kuruyor; node ortamında
 // window yok. Davet linkinin gerçekten koddan üretildiğini doğrulayabilmek için

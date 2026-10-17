@@ -117,6 +117,86 @@ const en = {
       enter_niche: "Enter a niche or product idea",
       select_platform: "Select at least one sales platform",
     },
+    // Affiliate ekranları — yeni eklenen her metin buradan gelir; sabit Türkçe
+    // metin gömülmez, dil değişince tüm panel yeniden çizilir.
+    affiliate: {
+      panel_title: "Affiliate panel",
+      panel_subtitle: "Earnings · payout status · transfer history",
+      payout_details: "Payment details",
+      back_to_dashboard: "Back to dashboard",
+      apply_cta: "Apply to the affiliate program",
+      status_pending_title: "Your affiliate application is under review",
+      status_pending_body:
+        "Once an admin reviews your application you start earning commission; your earnings and payouts show up in this panel.",
+      status_revoked_title: "Your affiliate account is suspended",
+      status_revoked_body:
+        "No new commission is recorded for a suspended account. You can contact an admin about amounts you earned and were paid before.",
+      status_none_title: "This account is not registered as an affiliate",
+      status_none_body:
+        "This panel only appears for accounts an admin has registered as affiliates. Apply to the program to get started.",
+      badge: "Affiliate",
+      badge_title: "Affiliate panel — unpaid {{unpaid}}, paid {{paid}}",
+      status_paid: "Money has been sent to your account",
+      status_not_paid: "No money has been sent to your account yet",
+      detail_missing: "Complete the following to receive a payout: {{missing}}.",
+      detail_missing_generic: "Add your payout details; a transfer cannot be made without them.",
+      detail_hold: "The held {{amount}} is paid once the 30-day refund window closes.",
+      detail_hold_when: " The first amount becomes payable on {{date}}.",
+      detail_threshold:
+        "Payout threshold {{min}}: {{remaining}} more must accumulate before a payout is made.",
+      detail_ready:
+        "{{amount}} is ready and queued for payout — it moves to history when an admin marks the transfer.",
+      last_payout: "Last payout:",
+      reference: "ref",
+      total_earned: "Total earned",
+      transferred: "Transferred to you",
+      unpaid: "Not paid yet",
+      commissions: "{{count}} commissions",
+      payable_hint: "payable {{amount}}",
+      history_title: "Payout history ({{count}})",
+      history_empty:
+        "No money has been sent to you yet. The commission you earn accumulates; once the payout threshold and hold period are met an admin makes the transfer and it appears here with date and amount.",
+      history_truncated:
+        "Note: your payout history is long, so the list is limited to the last 200 commissions — totals are unaffected; ask an admin about missing rows.",
+      col_date: "Date",
+      col_reference: "Reference",
+      col_method: "Method",
+      col_commissions: "Commissions",
+      col_amount: "Amount",
+      no_reference: "no reference",
+      method_iban: "IBAN / bank transfer",
+      method_other: "Other",
+      admin_title: "Affiliate earnings & payouts",
+      admin_counts: "{{verified}} verified accounts · {{ready}} ready to pay",
+      admin_owed: "Unpaid (owed)",
+      admin_ready: "Ready to pay",
+      admin_ready_hint: "threshold {{min}} · hold elapsed",
+      admin_paid: "Paid (total)",
+      admin_paid_hint: "{{count}} marked payouts",
+      admin_jump: "Who earned what / was it paid? (payout screen)",
+      admin_csv: "Download payout list (CSV)",
+      admin_note:
+        "Payouts are made manually via Wise/IBAN; after sending, mark the row as “Paid” and the affiliate sees the date + reference in their panel.",
+      row_last_paid: " · last payout {{date}}",
+      row_no_date: " · no date recorded",
+      row_never_paid: "no payout yet",
+    },
+    finder: {
+      rescued_note:
+        "This record did not pass the quality threshold ({{score}}/100); it is shown so the results list is not empty. Compare it with the other winners before deciding.",
+      council_measured: "{{votes}} agents voted · on measured evidence",
+      council_votes: "Council votes · on measured evidence",
+      council_ranked: "Winners ranked by measured data",
+      how_ranked_title: "How was this ranked?",
+      how_ranked_before:
+        "Every product was measured from real sources, passed hard filters and was evaluated by the council agents{{participation}}. The council score and the ",
+      how_ranked_confidence: "confidence score",
+      how_ranked_after:
+        " are separate: a high score can come with thin evidence, and the confidence score tells you how defensible that score is.",
+      participation: " (measured participation in this run: {{votes}}/{{total}} roles)",
+      vote_agreement: "Agreement among agents",
+      vote_agreement_tail: "/100 (high = decided together).",
+    },
     report: {
       executive_summary: "Executive Summary",
       target_audience: "Target Audience Insights",
@@ -276,6 +356,84 @@ const tr = {
       enter_niche: "Bir niş veya ürün fikri gir",
       select_platform: "En az bir satış platformu seç",
     },
+    // Affiliate ekranları — tüm metin buradan gelir (dil değişince panel yeniden çizilir).
+    affiliate: {
+      panel_title: "Affiliate Paneli",
+      panel_subtitle: "Kazanç · ödeme durumu · transfer geçmişi",
+      payout_details: "Ödeme bilgisi",
+      back_to_dashboard: "Panele dön",
+      apply_cta: "Affiliate programına başvur",
+      status_pending_title: "Affiliate başvurun incelemede",
+      status_pending_body:
+        "Yönetici başvurunu değerlendirdikten sonra komisyon kazanmaya başlarsın; kazancın ve ödemelerin bu panelde görünür.",
+      status_revoked_title: "Affiliate hesabın askıya alınmış",
+      status_revoked_body:
+        "Askıya alınmış hesapta yeni komisyon yazılmaz. Daha önce kazandığın ve ödenmiş tutarlar için yöneticiye yazabilirsin.",
+      status_none_title: "Bu hesap affiliate olarak tanımlanmamış",
+      status_none_body:
+        "Panel yalnızca yönetici tarafından affiliate olarak tanımlanan hesaplarda görünür. Programa başvurarak başlayabilirsin.",
+      badge: "Affiliate",
+      badge_title: "Affiliate paneli — ödenmemiş {{unpaid}}, ödenen {{paid}}",
+      status_paid: "Hesabına para gönderildi",
+      status_not_paid: "Henüz hesabına para gönderilmedi",
+      detail_missing: "Ödeme yapılabilmesi için şunları tamamla: {{missing}}.",
+      detail_missing_generic: "Ödeme bilgilerini tamamla; eksik bilgiyle transfer yapılamaz.",
+      detail_hold: "Beklemedeki {{amount}} iade penceresi (30 gün) kapanınca ödenir.",
+      detail_hold_when: " İlk tutar {{date}} tarihinde ödenebilir olur.",
+      detail_threshold: "Ödeme eşiği {{min}}: {{remaining}} daha birikince ödenir.",
+      detail_ready:
+        "{{amount}} ödemeye hazır ve ödeme listesinde — yönetici transferi işaretlediğinde geçmişe düşer.",
+      last_payout: "En son ödeme:",
+      reference: "referans",
+      total_earned: "Toplam kazanç",
+      transferred: "Hesabına aktarılan",
+      unpaid: "Henüz ödenmedi",
+      commissions: "{{count}} komisyon",
+      payable_hint: "ödenebilir {{amount}}",
+      history_title: "Ödeme geçmişi ({{count}})",
+      history_empty:
+        "Henüz hesabına para gönderilmedi. Kazandığın komisyonlar birikiyor; ödeme eşiği ve bekleme süresi dolduğunda yönetici transferi yapar ve burada tarih + tutar olarak görünür.",
+      history_truncated:
+        "Not: ödeme geçmişin çok uzun olduğu için liste son 200 komisyonla sınırlı — toplam rakamlar etkilenmez, eksik satırlar için yöneticiye başvurabilirsin.",
+      col_date: "Tarih",
+      col_reference: "Referans",
+      col_method: "Yöntem",
+      col_commissions: "Komisyon",
+      col_amount: "Tutar",
+      no_reference: "referans yok",
+      method_iban: "IBAN / havale",
+      method_other: "Diğer",
+      admin_title: "Affiliate Kazanç & Ödeme Durumu",
+      admin_counts: "{{verified}} onaylı hesap · {{ready}} ödemeye hazır",
+      admin_owed: "Ödenmemiş (borç)",
+      admin_ready: "Ödemeye hazır",
+      admin_ready_hint: "eşik {{min}} · bekleme süresi dolmuş",
+      admin_paid: "Ödenen (toplam)",
+      admin_paid_hint: "{{count}} işaretli ödeme",
+      admin_jump: "Kim ne kadar kazandı / ödendi mi? (ödeme ekranı)",
+      admin_csv: "Ödeme listesini indir (CSV)",
+      admin_note:
+        "Ödeme Wise/IBAN ile manuel yapılır; yaptıktan sonra satırdaki “Ödendi işaretle” ile kaydedilir ve affiliate kendi panelinde tarih + referansı görür.",
+      row_last_paid: " · son ödeme {{date}}",
+      row_no_date: " · tarih kaydı yok",
+      row_never_paid: "henüz ödeme yapılmadı",
+    },
+    finder: {
+      rescued_note:
+        "Bu kayıt kalite eşiğini ({{score}}/100) geçmedi; sonuç listesi boş kalmasın diye gösteriliyor. Kesin karar için diğer kazananlarla karşılaştırın.",
+      council_measured: "{{votes}} ajan oyladı · ölçülmüş kanıt üzerinde",
+      council_votes: "Konsey oyu · ölçülmüş kanıt üzerinde",
+      council_ranked: "Kazananlar ölçülmüş veriyle sıralandı",
+      how_ranked_title: "Nasıl sıralandı?",
+      how_ranked_before:
+        "Her ürün gerçek kaynaklardan ölçüldü, sert filtrelerden geçti ve konsey ajanlarının oyuyla değerlendirildi{{participation}}. Konsey puanı ile ",
+      how_ranked_confidence: "güven skoru",
+      how_ranked_after:
+        " ayrıdır: yüksek puan az kanıtla da gelebilir, güven skoru o puanın ne kadar savunulabilir olduğunu söyler.",
+      participation: " (bu koşuda ölçülen katılım: {{votes}}/{{total}} rol)",
+      vote_agreement: "Ajanların oy uyumu",
+      vote_agreement_tail: "/100 (yüksek = birlikte karar).",
+    },
     report: {
       executive_summary: "Yönetici Özeti",
       target_audience: "Hedef Kitle Analizi",
@@ -376,6 +534,84 @@ const es = {
     settings_close: "Cerrar idioma y apariencia",
     drag_hint: "Arrastra para mover",
     drag_aria: "Mover panel de ajustes",
+    affiliate: {
+      panel_title: "Panel de afiliado",
+      panel_subtitle: "Ganancias · estado de pago · historial de transferencias",
+      payout_details: "Datos de pago",
+      back_to_dashboard: "Volver al panel",
+      apply_cta: "Solicitar el programa de afiliados",
+      status_pending_title: "Tu solicitud de afiliado está en revisión",
+      status_pending_body:
+        "Cuando un administrador revise tu solicitud empezarás a ganar comisión; tus ganancias y pagos aparecen en este panel.",
+      status_revoked_title: "Tu cuenta de afiliado está suspendida",
+      status_revoked_body:
+        "En una cuenta suspendida no se registra comisión nueva. Puedes escribir a un administrador sobre los importes que ganaste y se te pagaron antes.",
+      status_none_title: "Esta cuenta no está registrada como afiliado",
+      status_none_body:
+        "Este panel solo aparece en cuentas que un administrador ha registrado como afiliados. Solicita el programa para empezar.",
+      badge: "Afiliado",
+      badge_title: "Panel de afiliado — sin pagar {{unpaid}}, pagado {{paid}}",
+      status_paid: "Se ha enviado dinero a tu cuenta",
+      status_not_paid: "Aún no se ha enviado dinero a tu cuenta",
+      detail_missing: "Completa lo siguiente para recibir un pago: {{missing}}.",
+      detail_missing_generic: "Añade tus datos de pago; sin ellos no se puede transferir.",
+      detail_hold:
+        "Los {{amount}} en espera se pagan cuando cierra la ventana de reembolso de 30 días.",
+      detail_hold_when: " El primer importe estará disponible el {{date}}.",
+      detail_threshold: "Umbral de pago {{min}}: faltan {{remaining}} para que se haga un pago.",
+      detail_ready:
+        "{{amount}} está listo y en la lista de pagos — pasa al historial cuando un administrador marca la transferencia.",
+      last_payout: "Último pago:",
+      reference: "ref.",
+      total_earned: "Total ganado",
+      transferred: "Transferido a tu cuenta",
+      unpaid: "Aún sin pagar",
+      commissions: "{{count}} comisiones",
+      payable_hint: "disponible {{amount}}",
+      history_title: "Historial de pagos ({{count}})",
+      history_empty:
+        "Aún no se te ha enviado dinero. La comisión que ganas se acumula; cuando se alcanzan el umbral y el periodo de espera, un administrador hace la transferencia y aparece aquí con fecha e importe.",
+      history_truncated:
+        "Nota: tu historial es largo, así que la lista se limita a las últimas 200 comisiones — los totales no cambian; consulta al administrador por las filas que faltan.",
+      col_date: "Fecha",
+      col_reference: "Referencia",
+      col_method: "Método",
+      col_commissions: "Comisiones",
+      col_amount: "Importe",
+      no_reference: "sin referencia",
+      method_iban: "IBAN / transferencia bancaria",
+      method_other: "Otro",
+      admin_title: "Ganancias y pagos de afiliados",
+      admin_counts: "{{verified}} cuentas verificadas · {{ready}} listas para pagar",
+      admin_owed: "Sin pagar (adeudado)",
+      admin_ready: "Listo para pagar",
+      admin_ready_hint: "umbral {{min}} · espera cumplida",
+      admin_paid: "Pagado (total)",
+      admin_paid_hint: "{{count}} pagos marcados",
+      admin_jump: "¿Quién ganó cuánto / se pagó? (pantalla de pagos)",
+      admin_csv: "Descargar lista de pagos (CSV)",
+      admin_note:
+        "Los pagos se hacen manualmente por Wise/IBAN; tras enviarlos, marca la fila como “Pagado” y el afiliado verá la fecha y la referencia en su panel.",
+      row_last_paid: " · último pago {{date}}",
+      row_no_date: " · sin fecha registrada",
+      row_never_paid: "aún sin pago",
+    },
+    finder: {
+      rescued_note:
+        "Este registro no superó el umbral de calidad ({{score}}/100); se muestra para que la lista de resultados no quede vacía. Compáralo con los demás ganadores antes de decidir.",
+      council_measured: "{{votes}} agentes votaron · sobre evidencia medida",
+      council_votes: "Votos del consejo · sobre evidencia medida",
+      council_ranked: "Ganadores ordenados por datos medidos",
+      how_ranked_title: "¿Cómo se ordenó esto?",
+      how_ranked_before:
+        "Cada producto se midió en fuentes reales, pasó filtros estrictos y fue evaluado por los agentes del consejo{{participation}}. La puntuación del consejo y la ",
+      how_ranked_confidence: "puntuación de confianza",
+      how_ranked_after:
+        " son distintas: una puntuación alta puede venir con poca evidencia, y la confianza indica cuánto se sostiene esa puntuación.",
+      participation: " (participación medida en esta ejecución: {{votes}}/{{total}} roles)",
+      vote_agreement: "Acuerdo entre agentes",
+      vote_agreement_tail: "/100 (alto = decidieron juntos).",
+    },
     pipeline: {
       title: "Pipeline de análisis IA",
       s1: "Conectando con nodos globales de e-commerce...",
@@ -453,6 +689,86 @@ const de = {
     settings_close: "Sprache & Darstellung schließen",
     drag_hint: "Zum Verschieben ziehen",
     drag_aria: "Einstellungen verschieben",
+    affiliate: {
+      panel_title: "Affiliate-Panel",
+      panel_subtitle: "Einnahmen · Auszahlungsstatus · Überweisungsverlauf",
+      payout_details: "Zahlungsdaten",
+      back_to_dashboard: "Zurück zum Dashboard",
+      apply_cta: "Für das Affiliate-Programm bewerben",
+      status_pending_title: "Deine Affiliate-Bewerbung wird geprüft",
+      status_pending_body:
+        "Sobald ein Admin deine Bewerbung geprüft hat, verdienst du Provision; deine Einnahmen und Auszahlungen erscheinen in diesem Panel.",
+      status_revoked_title: "Dein Affiliate-Konto ist gesperrt",
+      status_revoked_body:
+        "Bei einem gesperrten Konto wird keine neue Provision erfasst. Zu früher verdienten und ausgezahlten Beträgen kannst du einen Admin kontaktieren.",
+      status_none_title: "Dieses Konto ist nicht als Affiliate registriert",
+      status_none_body:
+        "Dieses Panel erscheint nur bei Konten, die ein Admin als Affiliate registriert hat. Bewirb dich im Programm, um zu starten.",
+      badge: "Affiliate",
+      badge_title: "Affiliate-Panel — unbezahlt {{unpaid}}, bezahlt {{paid}}",
+      status_paid: "Geld wurde auf dein Konto überwiesen",
+      status_not_paid: "Es wurde noch kein Geld auf dein Konto überwiesen",
+      detail_missing: "Vervollständige Folgendes, um eine Auszahlung zu erhalten: {{missing}}.",
+      detail_missing_generic:
+        "Ergänze deine Zahlungsdaten; ohne sie ist keine Überweisung möglich.",
+      detail_hold:
+        "Die zurückgehaltenen {{amount}} werden ausgezahlt, sobald das 30-Tage-Rückgabefenster schließt.",
+      detail_hold_when: " Der erste Betrag wird am {{date}} auszahlbar.",
+      detail_threshold:
+        "Auszahlungsschwelle {{min}}: es fehlen noch {{remaining}}, bis ausgezahlt wird.",
+      detail_ready:
+        "{{amount}} ist bereit und in der Auszahlungsliste — es wandert in den Verlauf, sobald ein Admin die Überweisung markiert.",
+      last_payout: "Letzte Auszahlung:",
+      reference: "Ref.",
+      total_earned: "Gesamt verdient",
+      transferred: "Auf dein Konto überwiesen",
+      unpaid: "Noch nicht ausgezahlt",
+      commissions: "{{count}} Provisionen",
+      payable_hint: "auszahlbar {{amount}}",
+      history_title: "Auszahlungsverlauf ({{count}})",
+      history_empty:
+        "Es wurde noch kein Geld an dich überwiesen. Verdiente Provisionen sammeln sich; sobald Schwelle und Wartezeit erfüllt sind, überweist ein Admin und es erscheint hier mit Datum und Betrag.",
+      history_truncated:
+        "Hinweis: Dein Auszahlungsverlauf ist lang, daher ist die Liste auf die letzten 200 Provisionen begrenzt — die Summen bleiben unverändert; frage einen Admin nach fehlenden Zeilen.",
+      col_date: "Datum",
+      col_reference: "Referenz",
+      col_method: "Methode",
+      col_commissions: "Provisionen",
+      col_amount: "Betrag",
+      no_reference: "keine Referenz",
+      method_iban: "IBAN / Banküberweisung",
+      method_other: "Sonstige",
+      admin_title: "Affiliate-Einnahmen & Auszahlungen",
+      admin_counts: "{{verified}} verifizierte Konten · {{ready}} auszahlungsbereit",
+      admin_owed: "Unbezahlt (offen)",
+      admin_ready: "Auszahlungsbereit",
+      admin_ready_hint: "Schwelle {{min}} · Wartezeit vorbei",
+      admin_paid: "Ausgezahlt (gesamt)",
+      admin_paid_hint: "{{count}} markierte Auszahlungen",
+      admin_jump: "Wer hat wie viel verdient / wurde es gezahlt? (Auszahlungsansicht)",
+      admin_csv: "Auszahlungsliste herunterladen (CSV)",
+      admin_note:
+        "Auszahlungen erfolgen manuell per Wise/IBAN; markiere danach die Zeile als „Bezahlt“, dann sieht der Affiliate Datum und Referenz in seinem Panel.",
+      row_last_paid: " · letzte Auszahlung {{date}}",
+      row_no_date: " · kein Datum erfasst",
+      row_never_paid: "noch keine Auszahlung",
+    },
+    finder: {
+      rescued_note:
+        "Dieser Eintrag hat die Qualitätsschwelle ({{score}}/100) nicht bestanden; er wird gezeigt, damit die Ergebnisliste nicht leer bleibt. Vergleiche ihn vor der Entscheidung mit den anderen Gewinnern.",
+      council_measured: "{{votes}} Agenten stimmten ab · auf gemessenen Belegen",
+      council_votes: "Rat-Stimmen · auf gemessenen Belegen",
+      council_ranked: "Gewinner nach gemessenen Daten sortiert",
+      how_ranked_title: "Wie wurde das sortiert?",
+      how_ranked_before:
+        "Jedes Produkt wurde aus echten Quellen gemessen, durch harte Filter geprüft und von den Rat-Agenten bewertet{{participation}}. Der Rat-Score und der ",
+      how_ranked_confidence: "Konfidenz-Score",
+      how_ranked_after:
+        " sind getrennt: ein hoher Score kann mit dünnen Belegen kommen, und der Konfidenz-Score sagt, wie belastbar er ist.",
+      participation: " (gemessene Teilnahme in diesem Lauf: {{votes}}/{{total}} Rollen)",
+      vote_agreement: "Übereinstimmung der Agenten",
+      vote_agreement_tail: "/100 (hoch = gemeinsam entschieden).",
+    },
     pipeline: {
       title: "KI-Analyse-Pipeline",
       s1: "Verbinde mit globalen E-Commerce-Knoten...",
@@ -529,6 +845,86 @@ const fr = {
     settings_close: "Fermer langue et apparence",
     drag_hint: "Glisser pour déplacer",
     drag_aria: "Déplacer le panneau de réglages",
+    affiliate: {
+      panel_title: "Panneau d'affiliation",
+      panel_subtitle: "Gains · état des paiements · historique des virements",
+      payout_details: "Coordonnées de paiement",
+      back_to_dashboard: "Retour au panneau",
+      apply_cta: "Postuler au programme d'affiliation",
+      status_pending_title: "Votre demande d'affiliation est en cours d'examen",
+      status_pending_body:
+        "Dès qu'un administrateur examine votre demande, vous commencez à gagner des commissions ; vos gains et paiements apparaissent dans ce panneau.",
+      status_revoked_title: "Votre compte d'affiliation est suspendu",
+      status_revoked_body:
+        "Aucune nouvelle commission n'est enregistrée pour un compte suspendu. Vous pouvez écrire à un administrateur au sujet des montants gagnés et versés auparavant.",
+      status_none_title: "Ce compte n'est pas enregistré comme affilié",
+      status_none_body:
+        "Ce panneau n'apparaît que pour les comptes qu'un administrateur a enregistrés comme affiliés. Postulez au programme pour commencer.",
+      badge: "Affiliation",
+      badge_title: "Panneau d'affiliation — impayé {{unpaid}}, payé {{paid}}",
+      status_paid: "De l'argent a été envoyé sur votre compte",
+      status_not_paid: "Aucun argent n'a encore été envoyé sur votre compte",
+      detail_missing: "Complétez ce qui suit pour recevoir un paiement : {{missing}}.",
+      detail_missing_generic:
+        "Ajoutez vos coordonnées de paiement ; sans elles, aucun virement n'est possible.",
+      detail_hold:
+        "Les {{amount}} en attente sont payés à la clôture de la fenêtre de remboursement de 30 jours.",
+      detail_hold_when: " Le premier montant sera payable le {{date}}.",
+      detail_threshold:
+        "Seuil de paiement {{min}} : il manque {{remaining}} pour qu'un paiement soit effectué.",
+      detail_ready:
+        "{{amount}} est prêt et dans la liste de paiement — il passe dans l'historique quand un administrateur marque le virement.",
+      last_payout: "Dernier paiement :",
+      reference: "réf.",
+      total_earned: "Total gagné",
+      transferred: "Versé sur votre compte",
+      unpaid: "Pas encore payé",
+      commissions: "{{count}} commissions",
+      payable_hint: "payable {{amount}}",
+      history_title: "Historique des paiements ({{count}})",
+      history_empty:
+        "Aucun argent ne vous a encore été envoyé. Les commissions gagnées s'accumulent ; lorsque le seuil et le délai sont atteints, un administrateur effectue le virement et il apparaît ici avec la date et le montant.",
+      history_truncated:
+        "Remarque : votre historique est long, la liste est donc limitée aux 200 dernières commissions — les totaux ne changent pas ; demandez à un administrateur pour les lignes manquantes.",
+      col_date: "Date",
+      col_reference: "Référence",
+      col_method: "Méthode",
+      col_commissions: "Commissions",
+      col_amount: "Montant",
+      no_reference: "aucune référence",
+      method_iban: "IBAN / virement bancaire",
+      method_other: "Autre",
+      admin_title: "Gains et paiements des affiliés",
+      admin_counts: "{{verified}} comptes vérifiés · {{ready}} prêts à payer",
+      admin_owed: "Impayé (dû)",
+      admin_ready: "Prêt à payer",
+      admin_ready_hint: "seuil {{min}} · délai écoulé",
+      admin_paid: "Payé (total)",
+      admin_paid_hint: "{{count}} paiements marqués",
+      admin_jump: "Qui a gagné combien / a été payé ? (écran des paiements)",
+      admin_csv: "Télécharger la liste des paiements (CSV)",
+      admin_note:
+        "Les paiements sont effectués manuellement via Wise/IBAN ; après l'envoi, marquez la ligne « Payé » et l'affilié verra la date + la référence dans son panneau.",
+      row_last_paid: " · dernier paiement {{date}}",
+      row_no_date: " · aucune date enregistrée",
+      row_never_paid: "pas encore de paiement",
+    },
+    finder: {
+      rescued_note:
+        "Cette fiche n'a pas atteint le seuil de qualité ({{score}}/100) ; elle est affichée pour que la liste de résultats ne soit pas vide. Comparez-la aux autres gagnants avant de décider.",
+      council_measured: "{{votes}} agents ont voté · sur des preuves mesurées",
+      council_votes: "Votes du conseil · sur des preuves mesurées",
+      council_ranked: "Gagnants classés selon des données mesurées",
+      how_ranked_title: "Comment ce classement est-il fait ?",
+      how_ranked_before:
+        "Chaque produit a été mesuré à partir de sources réelles, filtré durement et évalué par les agents du conseil{{participation}}. Le score du conseil et le ",
+      how_ranked_confidence: "score de confiance",
+      how_ranked_after:
+        " sont distincts : un score élevé peut reposer sur peu de preuves, et le score de confiance dit à quel point il est défendable.",
+      participation: " (participation mesurée lors de cette exécution : {{votes}}/{{total}} rôles)",
+      vote_agreement: "Accord entre les agents",
+      vote_agreement_tail: "/100 (élevé = décision commune).",
+    },
     pipeline: {
       title: "Pipeline d'analyse IA",
       s1: "Connexion aux nœuds e-commerce mondiaux...",
@@ -605,6 +1001,82 @@ const ar = {
     settings_close: "أغلق اللغة والمظهر",
     drag_hint: "اسحب للنقل",
     drag_aria: "نقل لوحة الإعدادات",
+    affiliate: {
+      panel_title: "لوحة التسويق بالعمولة",
+      panel_subtitle: "الأرباح · حالة الدفع · سجل التحويلات",
+      payout_details: "بيانات الدفع",
+      back_to_dashboard: "العودة إلى اللوحة",
+      apply_cta: "تقديم طلب للانضمام إلى برنامج العمولة",
+      status_pending_title: "طلب الانضمام قيد المراجعة",
+      status_pending_body:
+        "بعد مراجعة المشرف لطلبك تبدأ في كسب العمولة؛ تظهر أرباحك ومدفوعاتك في هذه اللوحة.",
+      status_revoked_title: "تم تعليق حساب العمولة الخاص بك",
+      status_revoked_body:
+        "لا تُسجَّل عمولة جديدة لحساب معلّق. يمكنك مراسلة المشرف بشأن المبالغ التي كسبتها واستلمتها سابقًا.",
+      status_none_title: "هذا الحساب غير مسجّل كحساب عمولة",
+      status_none_body:
+        "تظهر هذه اللوحة فقط للحسابات التي يسجّلها المشرف كحسابات عمولة. قدّم طلبًا للبرنامج للبدء.",
+      badge: "العمولة",
+      badge_title: "لوحة العمولة — غير مدفوع {{unpaid}}، مدفوع {{paid}}",
+      status_paid: "تم إرسال المال إلى حسابك",
+      status_not_paid: "لم يُرسل أي مال إلى حسابك بعد",
+      detail_missing: "أكمل ما يلي لاستلام الدفعة: {{missing}}.",
+      detail_missing_generic: "أضف بيانات الدفع؛ لا يمكن التحويل بدونها.",
+      detail_hold: "يُدفع مبلغ {{amount}} المعلّق عند انتهاء نافذة الاسترداد (30 يومًا).",
+      detail_hold_when: " يصبح المبلغ الأول قابلًا للدفع في {{date}}.",
+      detail_threshold: "حد الدفع {{min}}: يتبقى {{remaining}} ليصبح الدفع ممكنًا.",
+      detail_ready: "{{amount}} جاهز وفي قائمة الدفع — ينتقل إلى السجل عندما يعلّم المشرف التحويل.",
+      last_payout: "آخر دفعة:",
+      reference: "مرجع",
+      total_earned: "إجمالي الأرباح",
+      transferred: "المحوّل إلى حسابك",
+      unpaid: "لم يُدفع بعد",
+      commissions: "{{count}} عمولة",
+      payable_hint: "قابل للدفع {{amount}}",
+      history_title: "سجل الدفع ({{count}})",
+      history_empty:
+        "لم يُرسل إليك أي مال بعد. تتراكم العمولات التي تكسبها؛ وعند بلوغ الحد وفترة الانتظار يقوم المشرف بالتحويل ويظهر هنا بالتاريخ والمبلغ.",
+      history_truncated:
+        "ملاحظة: سجل مدفوعاتك طويل، لذلك تقتصر القائمة على آخر 200 عمولة — الإجماليات غير متأثرة؛ راسل المشرف بشأن الصفوف الناقصة.",
+      col_date: "التاريخ",
+      col_reference: "المرجع",
+      col_method: "الطريقة",
+      col_commissions: "العمولات",
+      col_amount: "المبلغ",
+      no_reference: "لا مرجع",
+      method_iban: "IBAN / تحويل بنكي",
+      method_other: "أخرى",
+      admin_title: "أرباح ومدفوعات العمولة",
+      admin_counts: "{{verified}} حساب موثّق · {{ready}} جاهز للدفع",
+      admin_owed: "غير مدفوع (مستحق)",
+      admin_ready: "جاهز للدفع",
+      admin_ready_hint: "الحد {{min}} · انتهت فترة الانتظار",
+      admin_paid: "المدفوع (الإجمالي)",
+      admin_paid_hint: "{{count}} دفعة معلّمة",
+      admin_jump: "من كسب كم / هل دُفع؟ (شاشة الدفع)",
+      admin_csv: "تنزيل قائمة الدفع (CSV)",
+      admin_note:
+        "تُجرى المدفوعات يدويًا عبر Wise/IBAN؛ بعد الإرسال علّم الصف بـ«مدفوع» وسيرى الشريك التاريخ والمرجع في لوحته.",
+      row_last_paid: " · آخر دفعة {{date}}",
+      row_no_date: " · لا تاريخ مسجّل",
+      row_never_paid: "لا دفعة بعد",
+    },
+    finder: {
+      rescued_note:
+        "لم يتجاوز هذا السجل حد الجودة ({{score}}/100)؛ يُعرض حتى لا تبقى قائمة النتائج فارغة. قارنه ببقية الفائزين قبل القرار.",
+      council_measured: "صوّت {{votes}} وكيلًا · على أدلة مقيسة",
+      council_votes: "تصويت المجلس · على أدلة مقيسة",
+      council_ranked: "ترتيب الفائزين حسب بيانات مقيسة",
+      how_ranked_title: "كيف تم الترتيب؟",
+      how_ranked_before:
+        "قيس كل منتج من مصادر حقيقية، واجتاز مرشحات صارمة، وقيّمه وكلاء المجلس{{participation}}. درجة المجلس و",
+      how_ranked_confidence: "درجة الثقة",
+      how_ranked_after:
+        " منفصلتان: قد تأتي الدرجة العالية بأدلة قليلة، ودرجة الثقة تخبرك بمدى قابلية تلك الدرجة للدفاع.",
+      participation: " (المشاركة المقيسة في هذه الجولة: {{votes}}/{{total}} دور)",
+      vote_agreement: "توافق الوكلاء",
+      vote_agreement_tail: "/100 (الأعلى = قرار مشترك).",
+    },
     pipeline: {
       title: "خط تحليل AI",
       s1: "الاتصال بعُقد التجارة الإلكترونية العالمية...",
@@ -683,6 +1155,12 @@ export function changeAppLanguage(value: unknown): LangCode {
   return code;
 }
 
+/**
+ * i18next kaynakları — testler gerçek sözlükle render edebilsin diye açıktır.
+ * Uygulama içinde doğrudan kullanılmaz; tek giriş noktası `initI18n`tir.
+ */
+export const RESOURCES = { en, tr, es, de, fr, ar };
+
 let initialized = false;
 export function initI18n() {
   if (initialized || typeof window === "undefined") return;
@@ -691,7 +1169,7 @@ export function initI18n() {
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
-      resources: { en, tr, es, de, fr, ar },
+      resources: RESOURCES,
       fallbackLng: "en",
       supportedLngs: ["en", "tr", "es", "de", "fr", "ar"],
       ns: ["common"],
