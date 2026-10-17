@@ -1,4 +1,5 @@
 import { ArolessCover } from "@/components/velora-cover";
+import { FinderHero } from "@/components/finder-hero";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -710,26 +711,9 @@ function Dashboard() {
             <div key={tab} className="surface-morph">
               {tab === "finder" && (
                 <>
-                  <div className="mb-8 max-w-3xl">
-                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      {t("ui.live_research")}
-                    </span>
-                    <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
-                      {t("hero_1")} <span className="text-brand">{t("hero_2")}</span>
-                    </h1>
-                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-base">
-                      {t("ui.hero_sub2")}
-                    </p>
-                    <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-                      {[t("ui.f1"), t("ui.f2"), t("ui.f3"), t("ui.f4")].map((f) => (
-                        <span key={f} className="inline-flex items-center gap-1.5">
-                          <ShieldCheck size={11} className="text-emerald-400" /> {f}
-                        </span>
-                      ))}
-                    </p>
-                    <div className="pro-rule mt-6" />
-                  </div>
+                  {/* Editoryal başlık bloğu — tipografi/hareket detayları ve
+                      neden kart eklenmediği `finder-hero.tsx` başlığında yazılı. */}
+                  <FinderHero />
 
                   <form
                     onSubmit={onSubmit}
