@@ -45,6 +45,9 @@ export function FinderHero(): React.JSX.Element {
       {/* Çevre ışığı: metnin ARKASINDA, çok yavaş nefes alan marka halesi.
           Dekoratif; ekran okuyucudan ve metin akışından tamamen ayrı. */}
       <span aria-hidden className="finder-hero-aura" />
+      {/* Yavaş geçen geniş ışık: aynı sahnenin ikinci, daha belirgin katmanı.
+          Dekoratif; metin akışına ve ekran okuyucuya girmez. */}
+      <span aria-hidden className="finder-hero-sweep" />
 
       {/* Giriş koreografisi: her doğrudan çocuk sırayla belirir (CSS, JS yok). */}
       <div className="stagger-in">

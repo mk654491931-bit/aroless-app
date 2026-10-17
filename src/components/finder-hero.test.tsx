@@ -55,6 +55,13 @@ describe("FinderHero", () => {
     expect(out).toMatch(/<span aria-hidden="true" class="finder-hero-aura"><\/span>/);
   });
 
+  it("yavaş geçen ikinci ışık katmanı da dekoratif ve başlığın arkasında", () => {
+    const out = html();
+    expect(out).toContain("finder-hero-sweep");
+    expect(out.indexOf("finder-hero-sweep")).toBeLessThan(out.indexOf("finder-hero-phrase"));
+    expect(out).toMatch(/<span aria-hidden="true" class="finder-hero-sweep"><\/span>/);
+  });
+
   it("canlı araştırma noktası ping katmanının kancasını taşır", () => {
     expect(html()).toContain("finder-hero-live-dot");
   });

@@ -1873,6 +1873,7 @@ html.is-scrolling .amb-scan,
 html.is-scrolling .amb-particles span,
 html.is-scrolling .finder-hero-halo,
 html.is-scrolling .finder-hero-aura,
+html.is-scrolling .finder-hero-sweep,
 html.is-scrolling .finder-hero-crest .finder-hero-flank::after,
 html.is-scrolling .finder-hero-rule::before,
 html.is-scrolling .finder-hero-live-dot::after,
@@ -3497,8 +3498,10 @@ html.light .custom-cursor-ring {
    burada yalnızca onun ETRAFINDA çalışan katmanlar vardır:
 
      1) `.finder-hero-aura` — başlığın arkasında çok yavaş nefes alan marka
-        ışığı. `filter: blur()` YOK: ışık doğrudan `radial-gradient` ile
-        üretilir, hareket yalnız `transform`+`opacity` → compositor işi.
+        ışığı, ve `.finder-hero-sweep` — 10 sn'de bir bir kez geçen geniş
+        ışık. `filter: blur()` YOK: ışık doğrudan `radial-gradient` /
+        `linear-gradient` ile üretilir, hareket yalnız `transform`+`opacity`
+        → compositor işi.
      2) crest hairline'larından ve alt çizgiden geçen tek ışık zerresi — 1px
         yüksekliğinde, yalnız `transform`+`opacity`.
      3) canlı araştırma noktasının yumuşak ping halkası ve elmasın nabzı.
@@ -3518,41 +3521,78 @@ html.light .custom-cursor-ring {
   z-index: -1;
   left: 50%;
   top: 44%;
-  width: min(104%, 64rem);
-  height: 116%;
+  width: min(112%, 68rem);
+  height: 124%;
   pointer-events: none;
   background:
     radial-gradient(
-      46% 42% at 50% 46%,
-      color-mix(in oklab, var(--color-brand) 22%, transparent),
-      transparent 74%
+      44% 40% at 50% 46%,
+      color-mix(in oklab, var(--color-brand) 34%, transparent),
+      transparent 72%
     ),
     radial-gradient(
-      38% 36% at 32% 64%,
-      color-mix(in oklab, var(--color-brand-2) 18%, transparent),
-      transparent 72%
+      36% 34% at 30% 66%,
+      color-mix(in oklab, var(--color-brand-2) 26%, transparent),
+      transparent 70%
     );
-  animation: finder-hero-aura 15s ease-in-out infinite alternate;
+  animation: finder-hero-aura 11s ease-in-out infinite alternate;
 }
-html.light .finder-hero-aura {
-  --aura-op: 0.55;
-}
+html.light  .finder-hero-aura {
+    --aura-op: 0.6;
+  }
 /* `color-mix` yoksa tarayıcı derleyicinin ürettiği yedek TAM doygun marka
    rengidir (parlak bir leke). Bu katman tamamen dekoratif olduğu için sessizce
    gizlenir — metin ve düzen etkilenmez. */
 @supports not (color: color-mix(in oklab, red, transparent)) {
-  .finder-hero-aura {
+  .finder-hero-aura,
+  .finder-hero-sweep {
     display: none;
   }
 }
 @keyframes finder-hero-aura {
   from {
-    transform: translate3d(-52%, -50%, 0) scale(0.94);
-    opacity: calc(0.34 * var(--aura-op));
+    transform: translate3d(-52%, -50%, 0) scale(0.92);
+    opacity: calc(0.5 * var(--aura-op));
   }
   to {
-    transform: translate3d(-48%, -51%, 0) scale(1.06);
-    opacity: calc(0.56 * var(--aura-op));
+    transform: translate3d(-48%, -51%, 0) scale(1.1);
+    opacity: calc(0.9 * var(--aura-op));
+  }
+}
+
+/* 1b) Yukarıdan aşağı süzülen geniş marka ışığı: bloğun üzerinden ~4 sn'de
+   bir kez geçer, sonra bekler. Yalnız `transform`+`opacity`; yumuşak kenarlar
+   gradyanın kendisinden gelir (`filter` yok). Metnin ALTINDA (z-index: -1)
+   kaldığı için okunabilirliğe dokunmaz. */
+.finder-hero-sweep {
+  position: absolute;
+  z-index: -1;
+  inset: -25% -35%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    104deg,
+    transparent 40%,
+    color-mix(in oklab, var(--color-brand) 30%, transparent) 50%,
+    transparent 60%
+  );
+  animation: finder-hero-sweep 10s cubic-bezier(0.4, 0, 0.2, 1) 1.4s infinite;
+}
+@keyframes finder-hero-sweep {
+  0% {
+    transform: translate3d(-62%, 0, 0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.7;
+  }
+  38% {
+    transform: translate3d(62%, 0, 0);
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(62%, 0, 0);
+    opacity: 0;
   }
 }
 
@@ -3577,7 +3617,7 @@ html.light .finder-hero-aura {
     color-mix(in oklab, var(--color-brand) 88%, white) 50%,
     transparent
   );
-  animation: finder-hero-glint 9.5s cubic-bezier(0.33, 0, 0.2, 1) 1.6s infinite;
+  animation: finder-hero-glint 7s cubic-bezier(0.33, 0, 0.2, 1) 1.2s infinite;
 }
 .finder-hero-crest .finder-hero-flank-rev::after {
   animation-name: finder-hero-glint-rev;
@@ -3585,8 +3625,8 @@ html.light .finder-hero-aura {
 .finder-hero-rule::before {
   width: 32%;
   animation-name: finder-hero-glint-sweep;
-  animation-duration: 13s;
-  animation-delay: 3.2s;
+  animation-duration: 8.5s;
+  animation-delay: 2.4s;
 }
 @keyframes finder-hero-glint {
   0% {
@@ -3594,7 +3634,7 @@ html.light .finder-hero-aura {
     opacity: 0;
   }
   5% {
-    opacity: 0.85;
+    opacity: 0.95;
   }
   19% {
     transform: translateX(-108%);
@@ -3611,7 +3651,7 @@ html.light .finder-hero-aura {
     opacity: 0;
   }
   5% {
-    opacity: 0.85;
+    opacity: 0.95;
   }
   19% {
     transform: translateX(266%);
@@ -3697,6 +3737,7 @@ html.light .finder-hero-aura {
 
 @media (prefers-reduced-motion: reduce) {
   .finder-hero-aura,
+  .finder-hero-sweep,
   .finder-hero-crest .finder-hero-flank::after,
   .finder-hero-rule::before,
   .finder-hero-live-dot::after,
