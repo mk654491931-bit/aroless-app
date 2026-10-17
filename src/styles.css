@@ -3289,14 +3289,16 @@ html.light .custom-cursor-ring {
 }
 
 /* ============================================================
-   Bulucu hero (ana sayfa) — kurumsal tipografi + TEK SEFERLİK giriş
+   Bulucu hero (ana sayfa) — ORTALANMIŞ kurumsal tipografi + TEK SEFERLİK giriş
    ============================================================
    NEDEN KART/GLOW YOK: bu sayfanın "kahraman nesnesi" arama formudur (bkz.
    yukarıdaki sadeleştirme katmanı: "form → sayfanın tek kahraman nesnesi").
    Başlığa ikinci bir parlak kart koymak formla yarışır ve sayfayı ağırlaştırır;
-   bu blok premium hissi tipografi, boşluk ve ince kenarlarla verir.
+   bu blok premium hissi SIMETRİ, tipografi, boşluk ve ince çizgilerle verir:
+   rozet iki hairline arasında, başlık kicker + display olarak ortada, altında
+   elmas süsü ve ortadan dışa açılan bir hairline.
 
-   MALİYET: aşağıdaki üç animasyon yalnız `transform` / `background-position`
+   MALİYET: aşağıdaki animasyonlar yalnız `transform` / `background-position`
    kullanır ve yalnız BİR KEZ koşar (sürekli döngü yok) → sayfa akıcılığı
    düşmez. `prefers-reduced-motion` altında global kural animasyonları zaten
    kapatır; gradyanın yarıda donmaması için burada sabit konuma çekilir.
@@ -3309,14 +3311,14 @@ html.light .custom-cursor-ring {
     background-position: 0% 50%;
   }
 }
-@keyframes finder-hero-bar-grow {
+@keyframes finder-hero-crest-in {
   from {
-    transform: scaleY(0.15);
     opacity: 0;
+    transform: rotate(45deg) scale(0.15);
   }
   to {
-    transform: scaleY(1);
     opacity: 1;
+    transform: rotate(45deg) scale(1);
   }
 }
 @keyframes finder-hero-rule-draw {
@@ -3353,40 +3355,76 @@ html.light .custom-cursor-ring {
   animation: finder-hero-sheen 1.7s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
 }
 
-/* Editoryal dikey marka çizgisi — bir kez yukarıdan aşağı açılır. */
-.finder-hero-bar {
-  width: 2px;
+/* Ortalanmış kompozisyonun ince çizgileri: her biri merkezden dışa açılır.
+   `--rev` sağ taraftaki aynadır (soluk uç dışarı bakar). */
+.finder-hero-flank {
+  display: block;
   flex: none;
-  border-radius: 999px;
-  transform-origin: top center;
-  background: linear-gradient(
-    180deg,
-    var(--color-brand),
-    color-mix(in oklab, var(--color-brand) 12%, transparent)
-  );
-  animation: finder-hero-bar-grow 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
-}
-
-/* Alt hairline — soldan sağa bir kez çizilir. */
-.finder-hero-rule {
   height: 1px;
+  transform-origin: right center;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-brand) 45%, transparent)
+  );
+  animation: finder-hero-rule-draw 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+.finder-hero-flank-rev {
   transform-origin: left center;
   background: linear-gradient(
     90deg,
-    color-mix(in oklab, var(--brand) 55%, transparent),
-    oklch(1 0 0 / 0.07) 46%,
-    transparent 88%
+    color-mix(in oklab, var(--color-brand) 45%, transparent),
+    transparent
+  );
+}
+
+/* Elmas süsü — başlık ile alt bölüm arasındaki tek vurgu noktası. */
+.finder-hero-diamond {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: linear-gradient(135deg, var(--color-brand), var(--color-brand-2));
+  animation: finder-hero-crest-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+/* Alt hairline — ORTADAN dışa bir kez çizilir; ortasında küçük elmas. */
+.finder-hero-rule {
+  position: relative;
+  height: 1px;
+  transform-origin: center;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--brand) 45%, transparent) 50%,
+    transparent
   );
   animation: finder-hero-rule-draw 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+}
+.finder-hero-rule::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: color-mix(in oklab, var(--brand) 75%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .finder-hero-phrase,
-  .finder-hero-bar,
+  .finder-hero-flank,
+  .finder-hero-diamond,
   .finder-hero-rule {
     animation: none !important;
     opacity: 1;
+  }
+  .finder-hero-flank,
+  .finder-hero-rule {
     transform: none;
+  }
+  .finder-hero-diamond {
+    transform: rotate(45deg);
   }
   .finder-hero-phrase {
     background-position: 0% 50%;
