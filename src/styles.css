@@ -1872,6 +1872,11 @@ html.is-scrolling .amb-beam,
 html.is-scrolling .amb-scan,
 html.is-scrolling .amb-particles span,
 html.is-scrolling .finder-hero-halo,
+html.is-scrolling .finder-hero-aura,
+html.is-scrolling .finder-hero-crest .finder-hero-flank::after,
+html.is-scrolling .finder-hero-rule::before,
+html.is-scrolling .finder-hero-live-dot::after,
+html.is-scrolling .finder-hero-diamond::after,
 html.is-scrolling .topbar-line,
 html.is-scrolling .page-hero::after,
 html.is-scrolling .card-shimmer::before,
@@ -3482,5 +3487,224 @@ html.light .custom-cursor-ring {
   }
   .finder-hero-phrase {
     background-position: 0% 50%;
+  }
+}
+
+/* ============================================================================
+   BULUCU HERO — ÇEVRE HAREKETİ (premium ama sıfıra yakın maliyet)
+   ----------------------------------------------------------------------------
+   Metin kompozisyonu (kicker · display · elmas · çipler) BİREBİR korunur;
+   burada yalnızca onun ETRAFINDA çalışan katmanlar vardır:
+
+     1) `.finder-hero-aura` — başlığın arkasında çok yavaş nefes alan marka
+        ışığı. `filter: blur()` YOK: ışık doğrudan `radial-gradient` ile
+        üretilir, hareket yalnız `transform`+`opacity` → compositor işi.
+     2) crest hairline'larından ve alt çizgiden geçen tek ışık zerresi — 1px
+        yüksekliğinde, yalnız `transform`+`opacity`.
+     3) canlı araştırma noktasının yumuşak ping halkası ve elmasın nabzı.
+
+   Maliyet sözleşmesi: hiçbiri `filter`, `box-shadow` veya layout özelliği
+   canlandırmaz; kaydırma sırasında `html.is-scrolling` hepsini duraklatır
+   (aşağıdaki duraklatma listesi), sekme arkada kalınca `html.is-hidden`
+   global kuralı devreye girer, `prefers-reduced-motion` animasyonları
+   sıfırlar. Durum katmanı gerekmez → hydration/JS maliyeti yok.
+   ========================================================================= */
+
+/* 1) Arka ışık. Boyut YÜZDE ile verilir; hero `contain: paint` olduğu için
+   taşma kırpılır ve sayfaya boyama sızmaz. */
+.finder-hero-aura {
+  --aura-op: 1;
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 44%;
+  width: min(104%, 64rem);
+  height: 116%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      46% 42% at 50% 46%,
+      color-mix(in oklab, var(--color-brand) 22%, transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      38% 36% at 32% 64%,
+      color-mix(in oklab, var(--color-brand-2) 18%, transparent),
+      transparent 72%
+    );
+  animation: finder-hero-aura 15s ease-in-out infinite alternate;
+}
+html.light .finder-hero-aura {
+  --aura-op: 0.55;
+}
+/* `color-mix` yoksa tarayıcı derleyicinin ürettiği yedek TAM doygun marka
+   rengidir (parlak bir leke). Bu katman tamamen dekoratif olduğu için sessizce
+   gizlenir — metin ve düzen etkilenmez. */
+@supports not (color: color-mix(in oklab, red, transparent)) {
+  .finder-hero-aura {
+    display: none;
+  }
+}
+@keyframes finder-hero-aura {
+  from {
+    transform: translate3d(-52%, -50%, 0) scale(0.94);
+    opacity: calc(0.34 * var(--aura-op));
+  }
+  to {
+    transform: translate3d(-48%, -51%, 0) scale(1.06);
+    opacity: calc(0.56 * var(--aura-op));
+  }
+}
+
+/* 2) Hairline üzerinde gezinen ışık zerresi. Yalnız CREST çizgilerinde ve alt
+   çizgide çalışır: üstteki rozet çizgileri sakin kalır (denge). */
+.finder-hero-flank {
+  position: relative;
+  overflow: hidden;
+}
+.finder-hero-crest .finder-hero-flank::after,
+.finder-hero-rule::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 38%;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-brand) 88%, white) 50%,
+    transparent
+  );
+  animation: finder-hero-glint 9.5s cubic-bezier(0.33, 0, 0.2, 1) 1.6s infinite;
+}
+.finder-hero-crest .finder-hero-flank-rev::after {
+  animation-name: finder-hero-glint-rev;
+}
+.finder-hero-rule::before {
+  width: 32%;
+  animation-name: finder-hero-glint-sweep;
+  animation-duration: 13s;
+  animation-delay: 3.2s;
+}
+@keyframes finder-hero-glint {
+  0% {
+    transform: translateX(266%);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.85;
+  }
+  19% {
+    transform: translateX(-108%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-108%);
+    opacity: 0;
+  }
+}
+@keyframes finder-hero-glint-rev {
+  0% {
+    transform: translateX(-108%);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.85;
+  }
+  19% {
+    transform: translateX(266%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(266%);
+    opacity: 0;
+  }
+}
+@keyframes finder-hero-glint-sweep {
+  0% {
+    transform: translateX(-108%);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.8;
+  }
+  26% {
+    transform: translateX(320%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(320%);
+    opacity: 0;
+  }
+}
+
+/* 3a) Canlı araştırma noktası: emerald noktanın çevresine yayılan tek halka.
+   Renk `background: inherit` ile noktadan alınır → tema değişse de tutarlı. */
+.finder-hero-live-dot {
+  position: relative;
+}
+.finder-hero-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: finder-hero-ping 3.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes finder-hero-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  60%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* 3b) Elmas: giriş animasyonundan SONRA devam eden çok hafif nabız.
+   Elmasın kendi `transform`ı giriş animasyonuna ait; nabız `::after`
+   katmanında yaşadığı için ikisi çakışmaz. */
+.finder-hero-diamond {
+  position: relative;
+}
+.finder-hero-diamond::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  opacity: 0;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-brand) 45%, transparent),
+    transparent 70%
+  );
+  animation: finder-hero-gem 6.5s ease-in-out infinite;
+}
+@keyframes finder-hero-gem {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finder-hero-aura,
+  .finder-hero-crest .finder-hero-flank::after,
+  .finder-hero-rule::before,
+  .finder-hero-live-dot::after,
+  .finder-hero-diamond::after {
+    animation: none !important;
+  }
+  .finder-hero-aura {
+    opacity: 0.2;
+    transform: translate3d(-50%, -50%, 0);
   }
 }

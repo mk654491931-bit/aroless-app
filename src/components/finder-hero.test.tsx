@@ -47,6 +47,18 @@ describe("FinderHero", () => {
     expect(html()).toContain("finder-hero-phrase");
   });
 
+  it("çevre ışığı katmanı var, dekoratif ve metin taşımıyor", () => {
+    const out = html();
+    expect(out).toContain("finder-hero-aura");
+    // Halo, başlık metinlerinden ÖNCE (arkasında) basılır ve aria-hidden'dır.
+    expect(out.indexOf("finder-hero-aura")).toBeLessThan(out.indexOf("finder-hero-phrase"));
+    expect(out).toMatch(/<span aria-hidden="true" class="finder-hero-aura"><\/span>/);
+  });
+
+  it("canlı araştırma noktası ping katmanının kancasını taşır", () => {
+    expect(html()).toContain("finder-hero-live-dot");
+  });
+
   it("simetrik süsler (yandaki çizgiler + elmas + ortadan açılan hairline) gizli", () => {
     const out = html();
     expect(out).toContain("finder-hero-flank");

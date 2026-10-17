@@ -14,32 +14,48 @@ import { useTranslation } from "react-i18next";
  *     satır hâlinde (üstte harf aralıklı kicker, altta marka gradyanlı display),
  *     altında elmas süsü, ortada güven çipleri ve ortadan açılan alt çizgi.
  *     Sola dayalı "rapor başlığı" hissi yerine davet eden bir merkez.
- *   • Kart/glow/aurora/parlama katmanı EKLENMEZ. Bu sayfanın tek "kahraman
- *     nesnesi" arama formudur (bkz. `styles.css` sadeleştirme katmanı);
- *     başlığa ikinci bir parlak kart koymak formla görsel olarak yarışır.
- *     Premium his TİPOGRAFİ, BOŞLUK, HARF ARALIĞI ve İNCE ÇİZGİLERLE verilir.
+ *   • METİN KOMPOZİSYONU DOKUNULMAZ: kicker, display başlık, elmas, alt çizgi
+ *     ve güven çipleri bu dosyada birebir korunur; hareket onların ETRAFINDA
+ *     yaşar, üzerine yeni bir metin/kart eklenmez.
+ *   • Kart EKLENMEZ. Bu sayfanın tek "kahraman nesnesi" arama formudur (bkz.
+ *     `styles.css` sadeleştirme katmanı); başlığa ikinci bir parlak kart koymak
+ *     formla görsel olarak yarışır. Premium his TİPOGRAFİ, BOŞLUK, HARF ARALIĞI
+ *     ve İNCE ÇİZGİLERLE verilir; çevredeki dekoratif katman arkadaki çok
+ *     yavaş nefes alan ışıktır (`finder-hero-aura`, `filter: blur()` YOK —
+ *     ışık doğrudan `radial-gradient` ile üretilir).
  *   • Metin MEVCUT ÇEVİRİ anahtarlarından gelir (`hero_1`, `hero_2`,
  *     `ui.hero_sub2`, `ui.f1..f4`, `app_name`, `tagline`): yeni bir iddia
  *     uydurulmaz, yalnız sunum değişir.
- *   • HAREKET MALİYETİ: tüm animasyonlar yalnız `transform` ve
- *     `background-position` üzerinde ve YALNIZ BİR KEZ koşar (sürekli döngü
- *     yok). Giriş sırası CSS ile verilir (`.stagger-in`), JS zamanlayıcı yok.
- *     `prefers-reduced-motion` açıkken global kural animasyonları kapatır;
- *     gradyanın yarıda donmaması için CSS'te sabit konuma çekilir.
+ *   • HAREKET MALİYETİ: giriş animasyonları yalnız `transform` ve
+ *     `background-position` üzerinde ve YALNIZ BİR KEZ koşar. Sürekli döngü
+ *     yalnız dört küçük katmanda vardır (arka ışık + hairline ışık zerresi +
+ *     canlı nokta pingi + elmas nabzı); hepsi `transform`/`opacity` ile
+ *     çalışır, layout ya da `filter` tetiklemez. Giriş sırası CSS ile verilir
+ *     (`.stagger-in`); JS zamanlayıcı/rAF döngüsü yok. Kaydırma sırasında
+ *     `html.is-scrolling`
+ *     bu katmanları duraklatır; `prefers-reduced-motion` global kuralı
+ *     animasyonları sıfırlar ve gradyan sabit konuma çekilir.
  */
 export function FinderHero(): React.JSX.Element {
   const { t } = useTranslation();
   const features = [t("ui.f1"), t("ui.f2"), t("ui.f3"), t("ui.f4")];
 
   return (
-    <section className="finder-hero relative mx-auto mb-8 max-w-3xl text-center md:mb-10">
+    <section className="finder-hero relative isolate mx-auto mb-8 max-w-3xl text-center md:mb-10">
+      {/* Çevre ışığı: metnin ARKASINDA, çok yavaş nefes alan marka halesi.
+          Dekoratif; ekran okuyucudan ve metin akışından tamamen ayrı. */}
+      <span aria-hidden className="finder-hero-aura" />
+
       {/* Giriş koreografisi: her doğrudan çocuk sırayla belirir (CSS, JS yok). */}
       <div className="stagger-in">
         {/* Üst satır: iki yanda hairline, ortada canlı araştırma rozeti. */}
         <div className="flex items-center justify-center gap-3 sm:gap-4">
           <span aria-hidden className="finder-hero-flank hidden w-8 sm:block sm:w-14" />
           <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-card/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:px-3 sm:tracking-[0.22em]">
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-emerald-400" />
+            <span
+              aria-hidden
+              className="finder-hero-live-dot size-1.5 shrink-0 rounded-full bg-emerald-400"
+            />
             <span className="min-w-0">{t("ui.live_research")}</span>
           </span>
           <span
