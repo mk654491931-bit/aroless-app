@@ -1,9 +1,11 @@
 // Affiliate ödeme kuralları (hold / IBAN / CSV) — DB'siz birim testleri.
 import { describe, expect, it } from "vitest";
+import { MIN_PAYOUT_CENTS } from "./affiliate";
 import {
   buildPayoutRunCsv,
   centsToDecimal,
   csvCell,
+  groupPayoutRuns,
   isValidIban,
   maskIban,
   nextPayoutUnlockAt,
@@ -13,10 +15,12 @@ import {
   PAYOUT_HOLD_MS,
   payoutProfileState,
   payoutReference,
+  payoutStatusView,
   payoutRunSummary,
   shouldNotifyCommission,
   splitCommissionsByHold,
   type CommissionRow,
+  type PaidCommissionRow,
 } from "./affiliate-payout";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -313,5 +317,166 @@ describe("shouldNotifyCommission — e-posta kararı", () => {
         eventType: "subscription.updated",
       }),
     ).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* ÖDEME GEÇMİŞİ — "hesabıma para atıldı mı?" sözleşmesi                */
+/* ------------------------------------------------------------------ */
+
+describe("groupPayoutRuns — ödenmiş komisyonları TRANSFER bazında gruplar", () => {
+  const paid = (over: Partial<PaidCommissionRow> = {}): PaidCommissionRow => ({
+    commission_cents: 870,
+    status: "paid",
+    paid_at: "2026-10-12T09:00:00.000Z",
+    paid_method: "wise",
+    payout_ref: "PAY-20261012-093000",
+    ...over,
+  });
+
+  it("aynı referanstaki satırları TEK partide toplar (tarih, tutar, yöntem)", () => {
+    const out = groupPayoutRuns([
+      paid({ commission_cents: 870 }),
+      paid({ commission_cents: 1300 }),
+      paid({ payout_ref: "PAY-20260901-101500", paid_at: "2026-09-01T10:15:00.000Z" }),
+    ]);
+    expect(out.runs).toHaveLength(2);
+    expect(out.runs[0].ref).toBe("PAY-20261012-093000");
+    expect(out.runs[0].cents).toBe(2170);
+    expect(out.runs[0].count).toBe(2);
+    expect(out.runs[0].method).toBe("wise");
+    // En yeni parti başta (Ağustos/Eylül ödemesi ikinci sırada).
+    expect(out.runs[1].ref).toBe("PAY-20260901-101500");
+    expect(out.paidCents).toBe(3040);
+    expect(out.paidCount).toBe(3);
+  });
+
+  it("referans yoksa parti kimliği ÖDEME ZAMANIdır (tarih uydurulmaz)", () => {
+    const out = groupPayoutRuns([
+      paid({ payout_ref: null, paid_at: "2026-10-12T09:00:00.000Z" }),
+      paid({ payout_ref: null, paid_at: "2026-10-12T09:00:00.000Z" }),
+      paid({ payout_ref: "", paid_at: "2026-10-12T09:00:00.000Z" }),
+    ]);
+    expect(out.runs).toHaveLength(1);
+    expect(out.runs[0].ref).toBe("");
+    expect(out.runs[0].count).toBe(3);
+    expect(out.runs[0].paidAt).toBe("2026-10-12T09:00:00.000Z");
+  });
+
+  it("ne referans ne tarih varsa tek 'bilinmeyen' partide toplanır", () => {
+    const out = groupPayoutRuns([
+      paid({ payout_ref: null, paid_at: null }),
+      paid({ payout_ref: null, paid_at: null }),
+    ]);
+    expect(out.runs).toHaveLength(1);
+    expect(out.runs[0].ref).toBe("");
+    expect(out.runs[0].paidAt).toBeNull();
+    expect(out.runs[0].count).toBe(2);
+  });
+
+  it("ÖDENMEMİŞ ve MAHSUP satırlar geçmişe GİRMEZ", () => {
+    const out = groupPayoutRuns([
+      paid(),
+      paid({ status: "pending", paid_at: null, payout_ref: null }),
+      paid({ status: "reversed", paid_at: null, payout_ref: null }),
+      paid({ status: null }),
+    ]);
+    expect(out.paidCount).toBe(1);
+    expect(out.paidCents).toBe(870);
+    expect(out.runs[0].count).toBe(1);
+  });
+
+  it("tarihi bilinmeyen parti en SONA düşer (geçmiş erkene çekilmez)", () => {
+    const out = groupPayoutRuns([
+      paid({ payout_ref: null, paid_at: null }),
+      paid({ payout_ref: "PAY-OLD", paid_at: "2026-01-05T08:00:00.000Z" }),
+    ]);
+    expect(out.runs.map((r) => r.ref)).toEqual(["PAY-OLD", ""]);
+  });
+
+  it("okuma sınırına takılırsa `truncated` true olur (sessiz eksik toplam yok)", () => {
+    const out = groupPayoutRuns([paid()], { truncated: true });
+    expect(out.truncated).toBe(true);
+    expect(groupPayoutRuns([paid()]).truncated).toBe(false);
+  });
+
+  it("bozuk tutar 0 sayılır ama SATIR ödeme sayısından düşmez", () => {
+    const out = groupPayoutRuns([
+      paid({ commission_cents: null }),
+      paid({ commission_cents: Number.NaN }),
+    ]);
+    expect(out.paidCents).toBe(0);
+    expect(out.paidCount).toBe(2);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* "PARA ATILDI MI?" — durum kararı (sıra testlidir)                    */
+/* ------------------------------------------------------------------ */
+
+describe("payoutStatusView — ödeme durumunu TEK cümlede ve doğru sırayla söyler", () => {
+  const base = {
+    paidAny: false,
+    paidCents: 0,
+    payableCents: 0,
+    heldCents: 0,
+    profileReady: true,
+    profileMissing: [] as string[],
+    nextUnlockAt: null as string | null,
+  };
+
+  it("ödeme yapılmışsa 'para gönderildi' der", () => {
+    const v = payoutStatusView({ ...base, paidAny: true, paidCents: 8700, payableCents: 12000 });
+    expect(v.state).toBe("paid");
+    expect(v.label).toContain("gönderildi");
+    expect(v.blocker).toBeNull();
+  });
+
+  it("hiç ödeme yoksa 'henüz gönderilmedi' der ve SEBEBİ eşikse eşiği yazar", () => {
+    const v = payoutStatusView({ ...base, payableCents: 3000 });
+    expect(v.state).toBe("not_paid");
+    expect(v.blocker).toBe("threshold");
+    expect(v.detail).toContain("45.00");
+  });
+
+  it("EN SERT ENGEL önce konuşur: ödeme bilgisi eksikken eşikten söz edilmez", () => {
+    const v = payoutStatusView({
+      ...base,
+      payableCents: 3000,
+      profileReady: false,
+      profileMissing: ["IBAN"],
+    });
+    expect(v.blocker).toBe("details");
+    expect(v.detail).toContain("IBAN");
+    expect(v.detail).not.toContain("eşiği");
+  });
+
+  it("bekleme süresi engelken tarih verilir (para var ama ödenemez)", () => {
+    const v = payoutStatusView({
+      ...base,
+      heldCents: 5000,
+      nextUnlockAt: "2026-11-01T00:00:00.000Z",
+    });
+    expect(v.blocker).toBe("hold");
+    expect(v.detail.toLowerCase()).toContain("beklemedeki 50.00$");
+    expect(v.detail).toContain("ödenebilir olur");
+  });
+
+  it("bekleme + ödenebilir bakiye eşiği geçtiyse eşik konuşulmaz (engel yok)", () => {
+    const v = payoutStatusView({ ...base, heldCents: 5000, payableCents: 9000 });
+    expect(v.blocker).toBeNull();
+    expect(v.detail).toContain("90.00");
+  });
+
+  it("beklemedeki para eşiğin üstündeyse ama ödenebilir değilse bekleme engeldir", () => {
+    const v = payoutStatusView({ ...base, heldCents: 20000, payableCents: 2000 });
+    expect(v.blocker).toBe("hold");
+  });
+
+  it("eşik varsayılanı $75'tir (uygulama geneliyle aynı)", () => {
+    expect(payoutStatusView({ ...base, payableCents: MIN_PAYOUT_CENTS }).blocker).toBeNull();
+    expect(payoutStatusView({ ...base, payableCents: MIN_PAYOUT_CENTS - 1 }).blocker).toBe(
+      "threshold",
+    );
   });
 });

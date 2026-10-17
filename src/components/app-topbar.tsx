@@ -14,6 +14,7 @@ import {
   Users,
   Wrench,
   ChevronDown,
+  Handshake,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -26,6 +27,8 @@ import { SettingsCluster } from "@/components/settings-cluster";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
+import { getMyAffiliateBadge } from "@/lib/affiliate.functions";
+import { affiliateTopbarBadge } from "@/lib/affiliate";
 import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -47,6 +50,12 @@ const TITLES: Record<string, string> = {
   "/admin": "Admin",
 };
 
+/** Kimlik doğrulanmış affiliate kazanç tutarını kısa biçimde yazar. */
+function affiliateMoney(cents: number): string {
+  const value = (cents ?? 0) / 100;
+  return value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value.toFixed(2)}`;
+}
+
 /**
  * Shared system chrome: brand, breadcrumb, credits and quick actions.
  * Rendered above every in-app page (except the finder home and auth).
@@ -58,6 +67,30 @@ export function AppTopbar() {
   const { tier, quota, isAdmin } = useEntitlements();
   const { user } = useAuth();
   const profileFn = useServerFn(getFullProfile);
+  /**
+   * AFFILIATE ROZETİ — üst menüdeki panel butonu bu hesabın admin tarafından
+   * affiliate olarak TANIMLANIP onaylandığını buradan öğrenir.
+   *
+   * NEDEN AYRI VE HAFİF UÇ: buton her sayfada çizilir; tam özet ucu beş sorgu
+   * yapar. `getMyAffiliateBadge` yalnız durumu ve iki toplamı okur, onaylı
+   * olmayan hesapta hiç okumaz. Sorgu kullanıcı yokken HİÇ çalışmaz.
+   *
+   * GÖRÜNÜRLÜK KURALI: buton yalnız `is_affiliate === true` (durum `verified`)
+   * iken görünür — "başvuru bekliyor" durumunda çıkmaz. Böylece buton, admin'in
+   * tanımladığı hesapların ayırt edici işareti olur.
+   */
+  const badgeFn = useServerFn(getMyAffiliateBadge);
+  const affiliateQ = useQuery({
+    queryKey: ["affiliate-badge", user?.id],
+    queryFn: () => badgeFn(),
+    enabled: !!user,
+    staleTime: 60_000,
+    gcTime: 600_000,
+  });
+  // Görünürlük kuralı TEK KAYNAKTAN gelir ve testlidir (`affiliateTopbarBadge`):
+  // buton yalnız admin'in affiliate olarak tanımlayıp ONAYLADIĞI hesapta çizer.
+  const affiliate = affiliateTopbarBadge(affiliateQ.data);
+  const affiliateUnpaid = affiliate.unpaidCents;
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
@@ -307,6 +340,24 @@ export function AppTopbar() {
             {isAdmin ? " · 250" : ""}
           </span>
 
+          {/* AFFILIATE PANELİ — YALNIZ admin'in affiliate olarak tanımladığı
+              hesaplarda görünür. Ödenmemiş tutar rozette yazar ki affiliate
+              panele girmeden kazancını görsün. */}
+          {affiliate.show ? (
+            <Link
+              to="/affiliate-panel"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 px-2.5 py-1 text-[11px] font-medium text-[oklch(0.85_0.12_150)] transition hover:bg-[oklch(0.75_0.19_150)]/20"
+              title={`Affiliate paneli — ödenmemiş ${affiliateMoney(affiliateUnpaid)}, ödenen ${affiliateMoney(affiliate.paidCents)}`}
+            >
+              <Handshake size={13} />
+              <span className="hidden lg:inline">Affiliate</span>
+              {affiliateUnpaid > 0 && (
+                <span className="font-semibold tabular-nums">
+                  {affiliateMoney(affiliateUnpaid)}
+                </span>
+              )}
+            </Link>
+          ) : null}
           <Link to="/notifications" className="topbar-btn" title="Notifications">
             <Bell size={14} />
           </Link>

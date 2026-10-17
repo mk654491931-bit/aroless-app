@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Shield,
   Sparkles,
+  Handshake,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { daysLeft } from "@/lib/plans";
@@ -28,6 +29,7 @@ import { AdminFreeCredits } from "@/components/admin-free-credits";
 import { AdminAbuseAlerts } from "@/components/admin-abuse-alerts";
 import { AdminAffiliates } from "@/components/admin-affiliates";
 import { AdminAffiliateCodeReport } from "@/components/admin-affiliate-code-report";
+import { AdminAffiliatePayoutSummary } from "@/components/admin-affiliate-payout-summary";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -133,12 +135,28 @@ function AdminPage() {
               </div>
             </div>
           </div>
-          <Link
-            to="/"
-            className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
-          >
-            <ArrowLeft size={14} /> Back to app
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* AFFILIATE ÖDEME BUTONU — "kim ne kadar kazandı, parası ödendi mi?"
+                sorusunu tek tıkla ölçülmüş sayılarla açan giriş. Ödeme
+                ekranındaki ayrıntılı tabloya kaydırır. */}
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById("admin-affiliates")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="flex items-center gap-1.5 rounded-lg border border-[oklch(0.75_0.19_150)]/40 bg-[oklch(0.75_0.19_150)]/10 px-3 py-1.5 text-xs font-medium hover:bg-[oklch(0.75_0.19_150)]/20"
+            >
+              <Handshake size={14} /> Affiliate ödemeleri
+            </button>
+            <Link
+              to="/"
+              className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+            >
+              <ArrowLeft size={14} /> Back to app
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -180,7 +198,10 @@ function AdminPage() {
         <AdminTickets />
         <AdminAbuseAlerts />
         <AdminFreeCredits />
-        {/* Kod performansı ile ödenecek para aynı ekranda: rapor, ödeme panelinin üstünde. */}
+        {/* Affiliate: KİM NE KADAR KAZANDI + PARASI ÖDENDİ Mİ?
+            Sıra bilinçli: (1) toplam özet + butonlar, (2) kod performansı,
+            (3) ödeme yapılan ayrıntılı tablo. */}
+        <AdminAffiliatePayoutSummary />
         <AdminAffiliateCodeReport />
         <AdminAffiliates />
 

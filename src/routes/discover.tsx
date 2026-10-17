@@ -38,6 +38,13 @@ import { DiscoveryWinnerCard } from "@/features/finder/components/discovery-winn
 import { useProductDiscovery } from "@/features/finder/hooks/use-product-discovery";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { Consensus, TopProduct } from "@/lib/product-discovery.types";
+
+/**
+ * Konseydeki ROL sayısı — payda. Oy SAYISI ölçülür, rol sayısı tasarımdır;
+ * arayüz bu yüzden "kaç oy ölçüldü"yü yazar, rol sayısını yalnız payda olarak
+ * kullanır (`12/14 rol` gibi).
+ */
+const TOTAL_AGENTS = 14;
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 
 export const Route = createFileRoute("/discover")({
@@ -251,6 +258,30 @@ function DiscoveryResults({
   );
   const withConsensus = useMemo(() => consensusById.size > 0, [consensusById]);
 
+  /**
+   * ÖLÇÜLEN OY SAYISI — "14 ajan oyladı" iddiasının yerine GEÇEN sayı.
+   *
+   * NEDEN (denetim bulgusu P0-3): başlık çipi her koşuda "14 ajan oyladı"
+   * yazıyordu. Oysa zaman bütçesi/sağlayıcı hatası altında rollerin bir kısmı
+   * deterministik yedeğe düşer ve gerçek oy sayısı 14'ten AZ olur; kullanıcı
+   * ölçülmemiş bir gerçeği okuyordu. Burada her kazananın `votes` alanı
+   * ÖLÇÜLMÜŞ oy sayısıdır ('0' = eski kayıt, hiç ölçülmemiş).
+   *
+   * En yüksek oy sayısı kullanılır: oy sayısı ürün başına düşebilir (bir ajan
+   * o ürünü göremezse), dolayısıyla azami değer konseye KAÇ ROLÜN katıldığının
+   * dürüst üst sınırıdır. Hiçbir kayıtta ölçüm yoksa 0 döner ve arayüz sayı
+   * UYDURMAZ; o durumda eski ifade kullanılır.
+   */
+  const measuredVotes = useMemo(
+    () => products.reduce((max, p) => Math.max(max, p.votes ?? 0), 0),
+    [products],
+  );
+  const councilLabel = !withConsensus
+    ? "Kazananlar ölçülmüş veriyle sıralandı"
+    : measuredVotes > 0
+      ? `${measuredVotes} ajan oyladı · ölçülmüş kanıt üzerinde`
+      : "Konsey oyu · ölçülmüş kanıt üzerinde";
+
   // `top_products` sözleşmesini kartlara bağlar. Sunucu `id` alanına önce
   // ürün kimliğini, sonra parmak izini yazar; kartın elimizdeki en güvenilir
   // eşleme anahtarı da `fingerprint`. Başlık eşlemesi yalnız BİR YEDEK yoldur.
@@ -280,9 +311,7 @@ function DiscoveryResults({
           {products.length} kazanan ürün
         </h2>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
-          {withConsensus
-            ? "14 ajan · ölçülmüş kanıt üzerinde oyladı"
-            : "Kazananlar ölçülmüş veriyle sıralandı"}
+          {councilLabel}
         </span>
       </div>
 
@@ -301,13 +330,17 @@ function DiscoveryResults({
           <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground space-y-2">
             <p className="text-sm font-medium text-foreground">Nasıl sıralandı?</p>
             <p>
-              Her ürün gerçek kaynaklardan ölçüldü, sert filtrelerden geçti ve 14 ajanın oyuyla
-              değerlendirildi. Konsey puanı ile <em>güven skoru</em> ayrıdır: yüksek puan az kanıtla
-              da gelebilir, güven skoru o puanın ne kadar savunulabilir olduğunu söyler.
+              Her ürün gerçek kaynaklardan ölçüldü, sert filtrelerden geçti ve konsey ajanlarının
+              oyuyla değerlendirildi
+              {measuredVotes > 0
+                ? ` (bu koşuda ölçülen katılım: ${measuredVotes}/${TOTAL_AGENTS} rol)`
+                : ""}
+              . Konsey puanı ile <em>güven skoru</em> ayrıdır: yüksek puan az kanıtla da gelebilir,
+              güven skoru o puanın ne kadar savunulabilir olduğunu söyler.
             </p>
             {withConsensus && (
               <p>
-                14 ajanın oy uyumu{" "}
+                Ajanların oy uyumu{" "}
                 {Math.round(
                   (consensus.reduce((a, c) => a + c.disagreement, 0) /
                     Math.max(1, consensus.length)) *

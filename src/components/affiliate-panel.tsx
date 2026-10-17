@@ -22,6 +22,7 @@ import {
   updateMyPayoutProfile,
   type AffiliateSummary,
 } from "@/lib/affiliate.functions";
+import { AffiliatePayoutHistory } from "@/components/affiliate-payout-history";
 import { DEFAULT_COMMISSION_RATE_PCT, type PayoutMethod } from "@/lib/affiliate";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -514,6 +515,10 @@ export function AffiliatePanel() {
                   <div className="text-2xl font-bold">{money(data?.paid_cents)}</div>
                 </div>
               </div>
+
+              {/* "PARA ATILDI MI?" — durum + TRANSFER geçmişi. Toplamların
+                  hemen altında: affiliate'in ilk sorusu budur. */}
+              <AffiliatePayoutHistory summary={data} />
 
               {/* BEKLEME SÜRESİ — iade penceresi kapanmadan para ödenmez. */}
               {(data?.held_cents ?? 0) > 0 && (

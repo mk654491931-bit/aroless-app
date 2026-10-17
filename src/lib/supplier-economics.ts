@@ -472,6 +472,127 @@ function priceSane(candidate: SupplierCandidateLike, offer: SupplierOfferLike): 
   return unit < retail;
 }
 
+/* ------------------------------------------------------------------ */
+/* ÖLÇÜ/SPEC ÇELİŞME KAPISI — "aynı ürün mü, sadece adı mı benziyor?"   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ÖLÇÜ KAPISI — nicel ölçüler (hacim/ağırlık/güç/uzunluk/adet) karşılaştırılır.
+ * Her ölçü türü KENDİ temel birimine çevrilir, böylece 6 Qt ile 5,5 L
+ * karşılaştırılabilir (ikisi de hacim).
+ *
+ * NEDEN VAR (ölçülen hata, 2026-10-16): `keyTokens` jenerik ve KISA kelimeleri
+ * atıyor (`qt`, `l`, `w`, `ml` üç harften kısa ya da gürültülü) ve sayılar hiç
+ * anahtar olmuyor. Canlı sonuç: “8-in-1 Air Fryer 6 Qt” adayı **5,5 L** bir
+ * teklifle, “10L Large Capacity Air Fryer” adayı 3 L bir teklifle eşleşiyor ve
+ * marj o teklifin fiyatından hesaplanıyordu. Farklı hacim = farklı ürün ve
+ * farklı maliyet; başlık benzerliği bunu göremez, ölçü görür.
+ *
+ * TOLERANS (%10): ± %10 içindeki fark aynı ölçü sayılır (yuvarlama ve pazarlama
+ * farkları: “5,5L” ↔ “5.5 l”, “1000W” ↔ “1500W” DE). %10'dan büyük fark
+ * ÇELİŞMEDİR ve teklif kullanılmaz.
+ */
+export const SPEC_CONFLICT_TOLERANCE = 0.1;
+
+/** Bir ölçü türünün temel birimi ve kabul edilen yazımları. */
+const SPEC_UNITS: ReadonlyArray<{
+  kind: "volume" | "weight" | "power" | "length" | "count";
+  /** Çarpan: değer × factor = temel birim. */
+  factor: number;
+  units: readonly string[];
+  /**
+   * Bu birim için sayının ALT sınırı. Kısa/tek harfli birimler (“w”, “g”)
+   * yanlış okumaya en açık olanlardır; örneğin “2 w” bir güç değildir.
+   * Eşik, gürültüyü keserken gerçek ölçüleri (500W, 30 g) korur.
+   */
+  min?: number;
+}> = [
+  { kind: "volume", factor: 1000, units: ["l", "lt", "ltr", "litre", "liter"] },
+  { kind: "volume", factor: 1, units: ["ml"] },
+  { kind: "volume", factor: 946.35, units: ["qt", "quart", "quarts"] },
+  { kind: "volume", factor: 3785.41, units: ["gal", "gallon", "gallons"] },
+  { kind: "weight", factor: 1000, units: ["kg", "kgs"] },
+  { kind: "weight", factor: 453.59, units: ["lb", "lbs", "pound", "pounds"] },
+  { kind: "weight", factor: 28.35, units: ["oz", "ounce", "ounces"], min: 2 },
+  // “in” BİLİNÇLİ OLARAK YOK: “2 in 1 robot vacuum” gibi yaygın yazımlar
+  // sayı+“in” olarak okunur ve yanlış ÇELİŞME üretirdi (doğru tedarikçi
+  // kaybedilir). Yalnız açık yazımlar (inch/inches/cm/mm) ölçü sayılır.
+  { kind: "length", factor: 25.4, units: ["inch", "inches", "inç", "inc"] },
+  { kind: "length", factor: 10, units: ["cm", "centimeter", "centimeters"] },
+  { kind: "length", factor: 1, units: ["mm"] },
+  { kind: "power", factor: 1, units: ["w", "watt", "watts"], min: 50 },
+  { kind: "power", factor: 1000, units: ["kw"] },
+  {
+    kind: "count",
+    factor: 1,
+    units: ["pcs", "pc", "pieces", "piece", "adet", "pack", "packs", "set", "sets"],
+    min: 1,
+  },
+];
+
+/** Aynı ölçü türünde ölçülen tüm değerler (temel birimde). */
+export type SpecMap = Partial<Record<"volume" | "weight" | "power" | "length" | "count", number[]>>;
+
+/**
+ * Başlıktan NİCEL ölçüleri okur (temel birime çevirerek).
+ *
+ * Sayı, hemen (isteğe bağlı boşlukla) birim gelirse ölçüdür; “MAF240B0” gibi
+ * harfle bitişik kodlar ve tek başına sayılar (yıl/model) SAYILMAZ — yanlış
+ * ölçü okumak yanlış REDDETME üretir ve doğru tedarikçiyi kaybettirir.
+ */
+export function specMap(title: string): SpecMap {
+  const text = foldTurkish(String(title ?? ""))
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const out: SpecMap = {};
+  for (const group of SPEC_UNITS) {
+    for (const unit of group.units) {
+      // Sınırlar: sayıdan önce HARF OLMAMALI (model kodu: “MAF240B0”),
+      // birimden sonra harf olmamalı (“5 laptops” ölçü değildir).
+      // Lookbehind yerine yakalama grubu kullanılır: eski tarayıcılarda
+      // lookbehind desteklenmez ve ölçü kapısı sessizce hiç çalışmazdı.
+      const re = new RegExp(`(?:^|[^a-z0-9])(\\d+(?:[.,]\\d+)?)\\s*${unit}(?![a-z0-9])`, "g");
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const raw = Number(m[1].replace(",", "."));
+        if (!Number.isFinite(raw) || raw <= 0) continue;
+        if (group.min !== undefined && raw < group.min) continue;
+        const value = Math.round(raw * group.factor * 100) / 100;
+        const list = out[group.kind] ?? [];
+        list.push(value);
+        out[group.kind] = list;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * İki başlık arasında ÖLÇÜ ÇELİŞMESİ var mı?
+ *
+ * Kural: yalnız İKİ başlıkta da bulunan türler karşılaştırılır. Bir tür tek
+ * tarafta varsa karar verilemez (uydurulmaz). Her tür için en yakın değer
+ * çifti kullanılır — çok paketli başlıklarda birden çok sayı olabilir.
+ */
+export function specConflict(a: string, b: string, tolerance = SPEC_CONFLICT_TOLERANCE): boolean {
+  const left = specMap(a);
+  const right = specMap(b);
+  for (const kind of Object.keys(left) as Array<keyof SpecMap>) {
+    const l = left[kind] ?? [];
+    const r = right[kind] ?? [];
+    if (!l.length || !r.length) continue;
+    const close = l.some((lv) =>
+      r.some((rv) => {
+        const base = Math.max(Math.min(lv, rv), 1e-9);
+        return Math.abs(lv - rv) / base <= tolerance;
+      }),
+    );
+    if (!close) return true;
+  }
+  return false;
+}
+
 export function matchSupplierOffer(
   candidate: SupplierCandidateLike,
   offers: readonly SupplierOfferLike[],
@@ -480,6 +601,9 @@ export function matchSupplierOffer(
   for (const offer of offers) {
     if (measuredMoney(offer.unitPriceUsd) === null) continue;
     if (!priceSane(candidate, offer)) continue;
+    // ÖLÇÜ ÇELİŞMESİ: hacim/güç/adet uyuşmuyorsa bu teklif "bu ürünün
+    // tedarikçisi" DEĞİLDİR (başlık benzerliği ne derse desin).
+    if (specConflict(candidate.name, offer.title)) continue;
     const relevance = productTitleMatch(candidate.name, offer.title);
     if (relevance < SUPPLIER_MIN_RELEVANCE) continue;
     if (!best || relevance > best.relevance) {
@@ -544,9 +668,13 @@ export function buildSupplierEvidence(
   // aranır: yarım eşleşen ürünler (aynı nişten farklı boy/çeşit) bandı
   // düşürürdü. Tam eşleşen yoksa tek en iyi teklif kullanılır ve `samples: 1`
   // ile bandın tek ölçüme dayandığı dürüstçe görünür.
+  //
+  // ÖLÇÜ ÇELİŞMESİ bandı da kirletir: 6 Qt'lik ürünün bandına 3 Qt'lik teklif
+  // girerse medyan yanlış maliyeti gösterir; bu yüzden bant da süzülür.
   const aligned = offers.filter(
     (offer) =>
       measuredMoney(offer.unitPriceUsd) !== null &&
+      !specConflict(candidate.name, offer.title) &&
       productTitleMatch(candidate.name, offer.title) === best.relevance,
   );
   return withMatchKind(

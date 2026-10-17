@@ -264,7 +264,9 @@ export function AdminAffiliates() {
   const payableCount = rows.filter((r) => r.eligible).length;
 
   return (
-    <section className="glass rounded-2xl overflow-hidden">
+    // `id` ÖZELLEŞTİRİLMİŞTİR: admin panelindeki "Kim ne kadar kazandı" butonu
+    // bu bölüme atlar (bkz. `admin-affiliate-payout-summary.tsx`).
+    <section id="admin-affiliates" className="glass rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
         <h2 className="font-semibold flex items-center gap-2">
           <Megaphone size={16} className="text-[oklch(0.62_0.17_255)]" /> Affiliate Programı
@@ -613,7 +615,24 @@ function FragmentRow({
           )}
         </td>
         <td className="px-5 py-3 text-right">
-          <div className="text-muted-foreground">{money(row.paid_cents)}</div>
+          <div className={row.paid_cents > 0 ? "font-semibold" : "text-muted-foreground"}>
+            {money(row.paid_cents)}
+          </div>
+          {/* "ÖDEME YAPILDI MI?" — tutar tek başına yetmez: admin gönderdiği
+              tarihi ve kaç komisyonu kapattığını da görmelidir (affiliate'in
+              kendi panelinde gördüğü kayıtla aynı ölçüm). */}
+          {row.paid_cents > 0 ? (
+            <div className="text-[10px] text-muted-foreground">
+              {row.paid_count} komisyon
+              {row.last_paid_at
+                ? ` · son ödeme ${new Date(row.last_paid_at).toLocaleDateString("tr-TR", {
+                    dateStyle: "medium",
+                  })}`
+                : " · tarih kaydı yok"}
+            </div>
+          ) : (
+            <div className="text-[10px] text-[oklch(0.82_0.15_70)]">henüz ödeme yapılmadı</div>
+          )}
           {row.reversed_cents > 0 && (
             <div className="text-[10px] text-[oklch(0.72_0.19_25)]">
               −{money(row.reversed_cents)} iade

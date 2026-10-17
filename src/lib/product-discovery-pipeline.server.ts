@@ -68,12 +68,26 @@ export const DISCOVERY_FINAL_N = 5;
  * Nihai SIRALAMA ağırlıkları: konsey oyu, güven ve kanıt derinliği.
  *
  * `final_score` olarak gösterilen sayı yine konsey oyudur (`councilScore`);
- * burada değişen şey SIRALAMADIR. Eşit konsey oyunda daha güvenilir ve daha
- * çok ölçülmüş kanıt taşıyan ürün öne geçer. Kanıt ağırlığı bilerek küçüktür:
- * "çok alanı dolu" tek başına iyi ürün demek değildir, ama eşitlikte kazananı
- * belirleyebilmelidir.
+ * burada değişen şey SIRALAMADIR.
+ *
+ * ÖLÇÜLEN SORUN (denetim raporu, 2026-10-16): kanıt ağırlığı 0,05 iken sıralamayı
+ * fiilen yalnız konsey oyu belirliyordu. Somut aritmetik: 10 puan daha yüksek
+ * konsey oyu 8,5 puan fark yaratırken, kanıtın 0/5'ten 5/5'e çıkması (uçtan uca
+ * 80 puanlık kanıt farkı) yalnız 4 puan ediyordu. Yani "kanıtı eksiksiz" bir
+ * ürün, "kanıtı olmayan ama bir tık daha yüksek oylanmış" ürünün gerisine
+ * düşüyordu — sonuç etiketi ise "kanıtlı kazanan"dı.
+ *
+ * YENİ AĞIRLIKLARIN OKUNUŞU (toplam 1,00):
+ *   council 0,62 → konsey hâlâ baş belirleyici (ürün KALİTESİNİ ölçen tek sinyal),
+ *                 ama artık kanıt farkı 10 puanlık bir oy farkını çevirebilir.
+ *   evidence 0,25 → 0/5 ile 5/5 arasındaki fark 25 puandır: "ölçtük" ile
+ *                 "ölçmedik" arasındaki fark sıralamada GÖRÜNÜR olur.
+ *   confidence 0,13 → güven düzeltici kalır (oy sayısı/uzlaşma kapsamı).
+ *
+ * Ağırlıklar 1,00'a tamamlanır: `winnerQualityScore` üst sınırı (100) hâlâ
+ * tam kanıtlı + tam oylu üründe elde edilir, atılabilirlik bonusu hariç.
  */
-export const WINNER_SCORE_WEIGHTS = { council: 0.85, confidence: 0.1, evidence: 0.05 } as const;
+export const WINNER_SCORE_WEIGHTS = { council: 0.62, confidence: 0.13, evidence: 0.25 } as const;
 
 /**
  * KOHORT BENZERLİK EŞİĞİ — `cohortCompetitorCounts` için (bkz. tanımı).
@@ -95,10 +109,22 @@ export const COHORT_COMPETITOR_MATCH = 0.66;
  */
 export const WINNER_LAUNCH_BONUS = 6;
 
-/** Bu oyun altındaki aday, kanıtı da zayıfsa "kazanan" olarak sunulmaz. */
-export const WINNER_MIN_COUNCIL_SCORE = 22;
+/**
+ * Kalite kapısının oy tabanı.
+ *
+ * ÖLÇÜLEN SORUN (denetim raporu, 2026-10-16): taban 22/100 iken 14 ajanın
+ * neredeyse oybirliğiyle reddettiği bir aday "kazanan ürün" başlığı altında
+ * teslim edilebiliyordu. 100 üzerinden 22, "kötü"yü değil "neredeyse hiç"i
+ * anlatır; etiket ile eşik birbirini tutmuyordu.
+ *
+ * YENİ TABAN 45: 14 ajanın uzlaşmış oyu bu bandın altındaysa ürün, kullanıcıya
+ * "kazanan" diye sunulmaz. Eşik, "ölçülmüş kanıtı olan makul bir aday"
+ * seviyesidir; altındaki satırlar (varsa) yalnız liste boş kalmasın diye
+ * gösterilir ve bu DURUM ARTIK KARTTA YAZAR (bkz. `qualityGate`).
+ */
+export const WINNER_MIN_COUNCIL_SCORE = 45;
 /** Kanıtı zayıf (<= 2/5) adayın geçmesi için gereken daha yüksek oy tabanı. */
-export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 33;
+export const WINNER_MIN_COUNCIL_SCORE_WEAK_EVIDENCE = 55;
 /**
  * Kapı ne kadar elerse elesin, en az bu kadar kazanan teslim edilir.
  *
@@ -1339,6 +1365,11 @@ export function runFinalRankStep(
   // havuzu zayıfken dördüncü sıraya zayıf bir ürün koymaktan kötüdür.
   const worthy = candidates.filter((row) => isWinnerWorthy(row, productOf(row)));
   const floor = Math.min(MIN_DELIVERED_WINNERS, candidates.length);
+  // KURTARMA KÜMESİ: kapıdan geçmeyip yalnız "liste boş kalmasın" diye gösterilen
+  // satırlar ayrıca işaretlenir. NEDEN GÖRÜNÜR: denetim raporunun P0 bulgusu,
+  // kapıdan geçmeyen bir adayın kapıdan geçmiş gibi AYNI kartla sunulmasıydı;
+  // kullanıcı, kaydın neden listede olduğunu göremiyordu.
+  const rescuedRows = new Set<Consensus>();
   let winners = worthy;
   if (winners.length < floor) {
     // Kalite kapısı çok sert kaldıysa liste boş kalmaz; en az 1 ürün her zaman
@@ -1347,9 +1378,9 @@ export function runFinalRankStep(
     // hâlde kapıdan geçen 5. sıradaki ürün, kurtarılan 1. sıradaki ürünün
     // önüne geçerdi (kapı, sıralamayı değiştirmemeli).
     const rescued = candidates.filter((row) => !worthy.includes(row));
-    winners = [...worthy, ...rescued.slice(0, floor - worthy.length)].sort(
-      (a, b) => qualityOf(b) - qualityOf(a),
-    );
+    const taken = rescued.slice(0, floor - worthy.length);
+    for (const row of taken) rescuedRows.add(row);
+    winners = [...worthy, ...taken].sort((a, b) => qualityOf(b) - qualityOf(a));
   }
   const gatedOut = candidates.length - worthy.length;
   const rescuedCount = winners.length - worthy.length;
@@ -1367,6 +1398,10 @@ export function runFinalRankStep(
             votes: row.votes,
             agreement: row.coverage,
             evidence: row.evidence.slice(0, 6),
+            // KALİTE KAPISI DURUMU — arayüz "bu kayıt neden listede?" sorusunu
+            // yanıtlar: `passed` = eşiği geçti, `rescued` = yalnız liste boş
+            // kalmasın diye gösteriliyor (kullanıcıya açıkça yazılır).
+            qualityGate: rescuedRows.has(row) ? ("rescued" as const) : ("passed" as const),
           } as unknown as NormalizedProduct;
         })
         .filter((p): p is NormalizedProduct => p !== null)
@@ -1386,7 +1421,7 @@ export function runFinalRankStep(
         ? [
             `${gatedOut} aday kalite kapısına takıldı (kanıtsız/düşük oy)` +
               (rescuedCount > 0
-                ? `; ${rescuedCount} tanesi liste boş kalmasın diye geri alındı.`
+                ? `; ${rescuedCount} tanesi liste boş kalmasın diye geri alındı ve kartta "kalite kapısı altı" olarak işaretlendi.`
                 : "."),
           ]
         : []),

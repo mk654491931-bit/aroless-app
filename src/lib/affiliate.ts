@@ -141,6 +141,48 @@ export function isEligibleAffiliate(status: unknown): boolean {
 }
 
 /**
+ * ÜST MENÜ ROZET KARARI — "bu hesapta affiliate paneli butonu görünsün mü?".
+ *
+ * NEDEN AYRI VE SAF: görünürlük kuralı ürünün açık talebi ("buton YALNIZ
+ * admin'in affiliate olarak tanımladığı hesaplarda"). Karar bileşenin içinde
+ * gömülü kalırsa, kuralı sınamak için üst menünün tamamını (router, popover,
+ * oturum) render etmek gerekir; kural burada tek cümleye indirgenir ve
+ * testlerle kilitlenir.
+ *
+ * KURAL: yalnız `is_affiliate === true` iken gösterilir. Sunucu bu alanı
+ * SADECE durumu `verified` olan hesapta true döndürür (bkz.
+ * `getMyAffiliateBadge`), yani "başvuru bekliyor" / "askıya alındı" / hiç
+ * başvurmamış hesaplarda buton çıkmaz.
+ *
+ * ÖLÇÜLMEMİŞ VERİ`null` (rozet henüz yüklenmedi veya okunamadı) → gösterilmez:
+ * bilinmeyeni göstermek, affiliate olmayan herkese buton basmak olurdu.
+ */
+export function affiliateTopbarBadge(
+  badge:
+    | {
+        is_affiliate?: boolean | null;
+        /** Ham durum: kurala GİRMEZ, yalnız çağrının tam şeklini yansıtır. */
+        status?: AffiliateStatus | null;
+        pending_cents?: number | null;
+        payable_cents?: number | null;
+        paid_cents?: number | null;
+      }
+    | null
+    | undefined,
+): { show: boolean; unpaidCents: number; paidCents: number } {
+  const show = badge?.is_affiliate === true;
+  if (!show) return { show: false, unpaidCents: 0, paidCents: 0 };
+  const unpaid = Number.isFinite(badge?.pending_cents)
+    ? Math.max(0, Math.floor(badge?.pending_cents as number))
+    : Math.max(0, Math.floor(Number(badge?.payable_cents) || 0));
+  return {
+    show: true,
+    unpaidCents: unpaid,
+    paidCents: Math.max(0, Math.floor(Number(badge?.paid_cents) || 0)),
+  };
+}
+
+/**
  * Sunucu tarafı kuralı (`createPromoCode` zod şeması: 3-32 karakter,
  * `^[A-Za-z0-9_-]+$`) ile birebir aynı. Admin kodu elle yazdığı için geçerlilik
  * istemcide de kontrol edilir; kural tek kaynak olarak burada tutulur.

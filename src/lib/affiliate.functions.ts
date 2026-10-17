@@ -15,6 +15,7 @@ import {
 } from "@/lib/affiliate";
 import {
   buildPayoutRunCsv,
+  groupPayoutRuns,
   isValidIban,
   maskIban,
   nextPayoutUnlockAt,
@@ -23,8 +24,10 @@ import {
   payoutRunSummary,
   splitCommissionsByHold,
   type CommissionRow,
+  type PaidCommissionRow,
   type PayoutProfile,
   type PayoutProfileState,
+  type PayoutRun,
   type PayoutRunRow,
 } from "@/lib/affiliate-payout";
 import {
@@ -118,6 +121,18 @@ export type AffiliateSummary = {
   /** Komisyon yazan (mahsup edilmemiş) ödeme sayısı — TÜM geçmiş. */
   paid_transactions: number;
   /**
+   * ÖDEME GEÇMİŞİ — "hesabıma para atıldı mı?" sorusunun doğrudan cevabı.
+   * Her satır bir TRANSFER partisidir (referans · tarih · tutar · yöntem),
+   * tek tek komisyon satırları değil. Yalnız `paid` durumundaki satırlar girer.
+   */
+  payouts: PayoutRun[];
+  /** En son yapılan ödeme (hiç ödeme yoksa null). */
+  last_payout: PayoutRun | null;
+  /** Ödeme geçmişi okuma sınırına takıldı mı (true ise liste EKSİKTİR). */
+  payouts_truncated: boolean;
+  /** Hiç ödeme yapılmış mı? Panel "henüz ödeme yapılmadı" diyebilsin diye. */
+  paid_any: boolean;
+  /**
    * Toplamlar TAM mı? Sayfalı okuma 10.000 satırı aşarsa false olur ve
    * rakamlar alt sınır olarak gösterilir (uydurma bir toplam yazılmaz).
    */
@@ -145,34 +160,48 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
     const uid = context.userId;
     const { client, isServiceRole } = await adminOrUserClient(context);
 
-    const [affiliateRes, profileRes, commissionsRes, ownedCodeRes, totals] = await Promise.all([
-      client
-        .from("affiliates")
-        .select(
-          "user_id, status, commission_rate_pct, verified_by, verified_at, created_at, " +
-            "payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
-        )
-        .eq("user_id", uid)
-        .maybeSingle(),
-      client.from("profiles").select("referral_code").eq("id", uid).maybeSingle(),
-      client
-        .from("affiliate_commissions")
-        .select("id, tier, gross_amount_cents, commission_cents, status, created_at")
-        .eq("affiliate_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      client
-        .from("promo_codes")
-        .select("code")
-        .eq("affiliate_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      readAffiliateTotals(client, isServiceRole, uid),
-    ]);
+    const [affiliateRes, profileRes, commissionsRes, ownedCodeRes, totals, historyRes] =
+      await Promise.all([
+        client
+          .from("affiliates")
+          .select(
+            "user_id, status, commission_rate_pct, verified_by, verified_at, created_at, " +
+              "payout_method, payout_account_holder, payout_iban, payout_wise_email, payout_tax_id",
+          )
+          .eq("user_id", uid)
+          .maybeSingle(),
+        client.from("profiles").select("referral_code").eq("id", uid).maybeSingle(),
+        client
+          .from("affiliate_commissions")
+          .select("id, tier, gross_amount_cents, commission_cents, status, created_at")
+          .eq("affiliate_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        client
+          .from("promo_codes")
+          .select("code")
+          .eq("affiliate_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        readAffiliateTotals(client, isServiceRole, uid),
+        // Ödeme GEÇMİŞİ: partiyi tanımlayan alanlar (`payout_ref`, `paid_at`,
+        // `paid_method`) yalnız `paid` satırlarda dolu olur. Sınırlı okunur ve
+        // sınıra takılırsa `truncated` ile DÜRÜSTÇE bildirilir.
+        client
+          .from("affiliate_commissions")
+          .select("commission_cents, status, paid_at, paid_method, payout_ref")
+          .eq("affiliate_id", uid)
+          .eq("status", "paid")
+          .order("paid_at", { ascending: false })
+          .limit(PAYOUT_HISTORY_LIMIT),
+      ]);
 
     const row = affiliateRes.data as AffiliateStatusRow | null;
     const commissions = (commissionsRes.data ?? []) as AffiliateSummary["recent"];
+    const paidHistory = groupPayoutRuns((historyRes.data ?? []) as PaidCommissionRow[], {
+      truncated: (historyRes.data?.length ?? 0) >= PAYOUT_HISTORY_LIMIT,
+    });
 
     const pendingCents = totals.pendingCents;
     const paidCents = totals.paidCents;
@@ -222,6 +251,10 @@ export const getMyAffiliateStatus = createServerFn({ method: "GET" })
         missing: payoutState.missing,
       },
       paid_transactions: totals.commissionedCount,
+      payouts: paidHistory.runs,
+      last_payout: paidHistory.runs[0] ?? null,
+      payouts_truncated: paidHistory.truncated,
+      paid_any: paidCents > 0,
       totals_exact: totals.exact,
       recent: commissions.slice(0, 10).map((c) => ({
         id: c.id,
@@ -268,6 +301,13 @@ type AffiliateTotals = {
 
 const TOTALS_PAGE_SIZE = 1000;
 const TOTALS_MAX_PAGES = 10;
+
+/**
+ * Ödeme geçmişinde okunacak azami satır. 200 ödenmiş komisyon, gerçekçi bir
+ * affiliate geçmişinin tamamını kapsar; daha fazlası varsa panel `truncated`
+ * bayrağıyla bunu söyler (sessiz eksik toplam gösterilmez).
+ */
+const PAYOUT_HISTORY_LIMIT = 200;
 
 async function readAffiliateTotals(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -339,6 +379,83 @@ async function readAffiliateTotals(
     exact: complete,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* ÜST MENÜ ROZETİ — "bu hesap affiliate mi?" (hafif uç)                */
+/* ------------------------------------------------------------------ */
+
+export type AffiliateBadge = {
+  /** Admin tarafından affiliate olarak TANIMLANDI ve onaylı mı? */
+  is_affiliate: boolean;
+  /** Ham durum (`pending` başvuru da rozette rozetsiz görünür). */
+  status: AffiliateStatus | null;
+  /** Ödenmemiş birikim (ödenebilir + beklemede). */
+  pending_cents: number;
+  /** Ödemeye hazır (bekleme süresi dolmuş) birikim. */
+  payable_cents: number;
+  /** Şimdiye kadar ödenmiş toplam. */
+  paid_cents: number;
+  /** Ödenebilir birikim eşiği geçti mi (artık ödenebilir)? */
+  eligible: boolean;
+  /** Eşiğe kalan tutar. */
+  remaining_cents: number;
+  min_payout_cents: number;
+};
+
+/**
+ * ÜST MENÜ için HAFİF affiliate rozeti.
+ *
+ * NEDEN AYRI UÇ: üst menü her sayfada çizilir. Tam özet ucu (`getMyAffiliateStatus`)
+ * beş sorgu + sayfalı toplam okuması yapar; her sayfa açılışında onu çağırmak
+ * gereksiz maliyettir. Bu uç yalnız İKİ şey sorar: (1) satır var mı ve durumu ne,
+ * (2) ödenmemiş/ödenmiş toplam ne kadar. Ağır sorgu yalnız affiliate paneli
+ * açıldığında koşar.
+ *
+ * DÜRÜSTLÜK: rozet, HİÇBİR durumda "affiliate" göstermez — yalnız `verified`
+ * hesapta `is_affiliate: true` döner (admin tanımlamadıysa buton çıkmaz).
+ */
+export const getMyAffiliateBadge = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AffiliateBadge> => {
+    const uid = context.userId;
+    const { client, isServiceRole } = await adminOrUserClient(context);
+
+    const { data: row } = await client
+      .from("affiliates")
+      .select("status")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    const status = (row as { status?: string } | null)?.status ?? null;
+    const normalized = isAffiliateStatus(status) ? status : null;
+
+    // Onaylı DEĞİLse toplamları hiç okumayız: buton çıkmayacak, sorgu boşa gider.
+    if (normalized !== "verified") {
+      return {
+        is_affiliate: false,
+        status: normalized,
+        pending_cents: 0,
+        payable_cents: 0,
+        paid_cents: 0,
+        eligible: false,
+        remaining_cents: MIN_PAYOUT_CENTS,
+        min_payout_cents: MIN_PAYOUT_CENTS,
+      };
+    }
+
+    const totals = await readAffiliateTotals(client, isServiceRole, uid);
+    const eligibility = payoutEligibility(totals.payableCents);
+    return {
+      is_affiliate: true,
+      status: normalized,
+      pending_cents: totals.pendingCents,
+      payable_cents: totals.payableCents,
+      paid_cents: totals.paidCents,
+      eligible: eligibility.eligible,
+      remaining_cents: eligibility.remainingCents,
+      min_payout_cents: MIN_PAYOUT_CENTS,
+    };
+  });
 
 /**
  * Affiliate programına başvur. Idempotent: daha önce başvurmuşsa mevcut

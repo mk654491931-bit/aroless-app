@@ -109,9 +109,31 @@ export function DiscoveryWinnerCard({
   // (eski kayıt) hiç gösterilmez: "—" bile yazmak karar varmış gibi okunurdu.
   const launch = winner.launch ?? null;
   const moq = winner.supplier?.moqUnits ?? null;
+  /**
+   * KALİTE KAPISI DURUMU — yalnız `rescued` iken rozet basılır.
+   *
+   * NEDEN: 14 ajanın oyu kalite eşiğinin (45/100) ALTINDA olduğu hâlde kayıt,
+   * liste boş kalmasın diye teslim edilebiliyor. Aynı kartla sunulduğunda
+   * kullanıcı onu "kazanan" sayıyordu. Rozet bu kaydın neden listede olduğunu
+   * söyler; `passed` ve `null` (eski kayıt) için hiçbir şey yazılmaz — olmayan
+   * bir uyarıyı basmak da yanıltıcı olurdu.
+   */
+  const rescued = winner.qualityGate === "rescued";
 
   return (
     <article className="rounded-xl border border-border bg-card p-5 space-y-4">
+      {rescued && (
+        <p
+          className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400"
+          data-testid="quality-gate-rescued"
+        >
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Bu kayıt kalite eşiğini ({winner.councilScore}/100) geçmedi; sonuç listesi boş kalmasın
+            diye gösteriliyor. Kesin karar için diğer kazananlarla karşılaştırın.
+          </span>
+        </p>
+      )}
       <header className="flex items-start gap-3">
         <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary tabular-nums">
           {rank}

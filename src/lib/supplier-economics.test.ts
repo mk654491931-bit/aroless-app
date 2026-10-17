@@ -19,6 +19,8 @@ import {
   nicheKeyTokens,
   nicheMatch,
   productTitleMatch,
+  specConflict,
+  specMap,
   supplierMatchKind,
   SupplierEvidenceSchema,
   SUPPLIER_MIN_RELEVANCE,
@@ -507,5 +509,78 @@ describe("hasMeasuredNetProfit — toptan fiyat ölçüldü diye net marj UYDURU
 
   it("ölçülmüş net kâr varsa kabul edilir", () => {
     expect(hasMeasuredNetProfit({ cost_breakdown: { net_profit: "71.63" } })).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* ÖLÇÜ ÇELİŞME KAPISI — "6 Qt ürün 3 Qt teklifle fiyatlanamaz"         */
+/* ------------------------------------------------------------------ */
+
+describe("specConflict / specMap — ölçü çelişmesi yakalanır, yanlış alarm üretilmez", () => {
+  it("hacim farkı (liter ↔ quart) çelişmedir — birimler çevrilerek karşılaştırılır", () => {
+    // Ölçüm notu: 6 Qt ile 5,5 L AYNI hacimdir (6 × 0,946 = 5,68 L) ve kapı
+    // bunu doğru şekilde çelişme SAYMAZ; kapı asıl olarak 10 L ↔ 3 L gibi
+    // gerçek boy farklarını yakalar.
+    expect(specConflict("8-in-1 Air Fryer 6 Qt, Premium Ceramic", "Air Fryer 3 L Oven")).toBe(true);
+    expect(specConflict("10L Large Capacity Air Fryer", "Family Air Fryer 3 L")).toBe(true);
+  });
+
+  it("6 Qt ile 5,5 L AYNI sayılır — doğru tedarikçi ölçü yüzünden kaybedilmez", () => {
+    expect(specConflict("8-in-1 Air Fryer 6 Qt", "Air Fryer 5.5L Digital Oven")).toBe(false);
+  });
+
+  it("aynı hacim farklı yazımla ÇELİŞMEZ (5,5L ↔ 5.5 l)", () => {
+    expect(specConflict("Air Fryer 5,5 L Digital", "Air Fryer 5.5L Digital Oven")).toBe(false);
+    expect(specConflict("Air Fryer 6 qt", "Air Fryer 6 Quart")).toBe(false);
+  });
+
+  it("±%10 tolerans içindeki fark çelişme sayılmaz (pazarlama yuvarlaması)", () => {
+    expect(specConflict("Air Fryer 6.0 L", "Air Fryer 6.3L")).toBe(false);
+    expect(specConflict("Air Fryer 6.0 L", "Air Fryer 7.0L")).toBe(true);
+  });
+
+  it("güç farkı çelişmedir (1000W ↔ 1500W)", () => {
+    expect(specConflict("Air Fryer 1500W Digital", "Air Fryer 2000W Oven")).toBe(true);
+    expect(specConflict("Air Fryer 1500W Digital", "Air Fryer 1500 W Oven")).toBe(false);
+  });
+
+  it("adet/paket farkı çelişmedir (2 paket teklif tekli ürünle bir tutulmaz)", () => {
+    expect(specConflict("Bamboo Organizer 1 pc", "Bamboo Organizer 4 pcs set")).toBe(true);
+  });
+
+  it("tek taraflı ölçü KARAR VERDİRMEZ (uydurma yok)", () => {
+    expect(specConflict("Air Fryer with Digital Touch", "Air Fryer 3 L Oven")).toBe(false);
+    expect(specConflict("Air Fryer 6 Qt", "Air Fryer with Digital Touch")).toBe(false);
+  });
+
+  it("hiç ölçü yoksa çelişme de yoktur", () => {
+    expect(specConflict("Cat Tree with Scratching Post", "Cat Tree Tall Climbing Tower")).toBe(
+      false,
+    );
+  });
+
+  it("yanlış okumaya açık yazımlar ölçü SAYILMAZ (2 in 1, model kodu)", () => {
+    // “2 in 1” inch olarak okunursa doğru tedarikçi kaybedilirdi.
+    expect(specMap("2 in 1 Robot Vacuum and Mop").length).toBeUndefined();
+    expect(specMap("Robot Vacuum MAF240B0").length).toBeUndefined();
+    // Gerçek ölçüler okunur.
+    expect(specMap("Air Fryer 6 Qt").volume).toBeCloseTo(5678.1, 0);
+    expect(specMap("Tower Fan 180 cm").length).toEqual([1800]);
+    expect(specMap("Air Fryer 1500W").power).toEqual([1500]);
+  });
+
+  it("MATCH KAPISI: en ALAKALI ama YANLIŞ BOY teklif elenir (marj yanlış fiyattan hesaplanmaz)", () => {
+    // İki teklif de başlık olarak tam eşleşiyor; ayıran tek şey HACİM.
+    // Kapı olmasa ucuz olan (3 L) seçilir ve 10 L'lik ürünün marjı onun
+    // fiyatından hesaplanırdı — ölçülen yanlış maliyet.
+    const offers = [
+      offer({ title: "Air Fryer 3 L Capacity Oven", unitPriceUsd: 19.9 }),
+      offer({ title: "Air Fryer 10L Large Capacity Oven", unitPriceUsd: 45.5 }),
+    ];
+    const hit = matchSupplierOffer(
+      { name: "Air Fryer 10L Large Capacity Oven", priceUsd: 129.9 },
+      offers,
+    );
+    expect(hit?.offer.unitPriceUsd).toBe(45.5);
   });
 });

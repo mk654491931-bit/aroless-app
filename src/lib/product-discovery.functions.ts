@@ -146,6 +146,23 @@ export const DiscoveryWinnerSchema = z.object({
   votes: z.number().catch(0),
   agreement: z.number().catch(0),
   evidence: z.array(z.string()).catch([]),
+  /**
+   * KALİTE KAPISI DURUMU — "bu kayıt listede neden var?"
+   *
+   * `passed`  → konsey oyu kalite eşiğini geçti (bkz. `WINNER_MIN_COUNCIL_SCORE`).
+   * `rescued` → eşiği GEÇMEDİ; yalnızca liste boş kalmasın diye gösteriliyor.
+   * Kart bunu açıkça yazar, yani kullanıcı zayıf kaydı "kazanan" sanmaz.
+   *
+   * ESKİ KAYITLAR: alan yoktu → `null` kalır ve arayüz hiçbir rozet basmaz
+   * (varsayılan `passed` yazmak, hiç ölçülmemiş bir kaydı "eşiği geçti" diye
+   * beyan etmek olurdu).
+   */
+  qualityGate: z
+    .enum(["passed", "rescued"])
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
 });
 export type DiscoveryWinner = z.infer<typeof DiscoveryWinnerSchema>;
 

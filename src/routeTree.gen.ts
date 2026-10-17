@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AffiliateRouteImport } from './routes/affiliate'
+import { Route as AffiliatePanelRouteImport } from './routes/affiliate-panel'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
@@ -76,6 +77,11 @@ const AdminRoute = AdminRouteImport.update({
 const AffiliateRoute = AffiliateRouteImport.update({
   id: '/affiliate',
   path: '/affiliate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AffiliatePanelRoute = AffiliatePanelRouteImport.update({
+  id: '/affiliate-panel',
+  path: '/affiliate-panel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -337,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/affiliate': typeof AffiliateRoute
+  '/affiliate-panel': typeof AffiliatePanelRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -392,6 +399,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/affiliate': typeof AffiliateRoute
+  '/affiliate-panel': typeof AffiliatePanelRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/affiliate': typeof AffiliateRoute
+  '/affiliate-panel': typeof AffiliatePanelRoute
   '/audit': typeof AuditRoute
   '/auth': typeof AuthRouteWithChildren
   '/command-center': typeof CommandCenterRoute
@@ -505,6 +514,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/affiliate'
+    | '/affiliate-panel'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/affiliate'
+    | '/affiliate-panel'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -615,6 +626,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/affiliate'
+    | '/affiliate-panel'
     | '/audit'
     | '/auth'
     | '/command-center'
@@ -671,6 +683,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AffiliateRoute: typeof AffiliateRoute
+  AffiliatePanelRoute: typeof AffiliatePanelRoute
   AuditRoute: typeof AuditRoute
   AuthRoute: typeof AuthRouteWithChildren
   CommandCenterRoute: typeof CommandCenterRoute
@@ -743,6 +756,13 @@ declare module '@tanstack/react-router' {
       path: '/affiliate'
       fullPath: '/affiliate'
       preLoaderRoute: typeof AffiliateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/affiliate-panel': {
+      id: '/affiliate-panel'
+      path: '/affiliate-panel'
+      fullPath: '/affiliate-panel'
+      preLoaderRoute: typeof AffiliatePanelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -1112,6 +1132,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AffiliateRoute: AffiliateRoute,
+  AffiliatePanelRoute: AffiliatePanelRoute,
   AuditRoute: AuditRoute,
   AuthRoute: AuthRouteWithChildren,
   CommandCenterRoute: CommandCenterRoute,

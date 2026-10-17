@@ -352,6 +352,215 @@ export function payoutRunSummary(
 }
 
 /* ------------------------------------------------------------------ */
+/* 3b) ÖDEME GEÇMİŞİ (payout runs) — "hesabıma para atıldı mı?"          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ödeme geçmişi için gereken satır alanları.
+ *
+ * NEDEN AYRI TİP: `splitCommissionsByHold` yalnız tutar/durum/tarih ister;
+ * geçmiş için partiyi tanımlayan `payout_ref`, yöntem ve gerçek ödeme tarihi
+ * (`paid_at`) de gerekir. Bunlar olmadan "ödendi" bilgisini tek tek satır
+ * olarak göstermek gerekirdi ki kullanıcı 40 ayrı satır görüp "bana ne kadar
+ * gönderildi?" sorusunun cevabını bulamazdı.
+ */
+export type PaidCommissionRow = {
+  commission_cents: number | null;
+  status: string | null;
+  paid_at?: string | null;
+  paid_method?: string | null;
+  payout_ref?: string | null;
+};
+
+/** Tek bir ödeme partisi (bir transferde gönderilen komisyonların toplamı). */
+export type PayoutRun = {
+  /**
+   * Parti referansı (Wise transfer no / dekont no).
+   * Boş dize = kayıtta referans YOK — uydurulmaz, arayüz bunu söyler.
+   */
+  ref: string;
+  /** Ödeme tarihi (partideki en GEÇ `paid_at`); bilinmiyorsa null. */
+  paidAt: string | null;
+  /** Partide gönderilen toplam komisyon (minor units). */
+  cents: number;
+  /** Partideki komisyon satırı sayısı. */
+  count: number;
+  /** Ödeme yöntemi (wise/iban/other) — kayıtta yoksa null. */
+  method: string | null;
+};
+
+export type PayoutHistory = {
+  runs: PayoutRun[];
+  paidCents: number;
+  paidCount: number;
+  /**
+   * Okuma sınırına takıldı mı? true ise geçmiş EKSİKTİR ve arayüz bunu
+   * söylemek zorundadır (sessiz eksik toplam, "bana az ödediler" sanısı yaratır).
+   */
+  truncated: boolean;
+};
+
+/**
+ * Ödenmiş komisyon satırlarını TRANSFER BAZINDA gruplar.
+ *
+ * KURAL (ölçülebilir, testlidir):
+ *   1. Yalnız `status === "paid"` satırlar sayılır. `pending` ödeme değildir,
+ *      `reversed` mahsuptur — ikisi de geçmişe girmez.
+ *   2. Grup anahtarı önce `payout_ref`, yoksa `paid_at`'tir: aynı partideki
+ *      satırlar `admin_mark_affiliate_paid` içinde AYNI `now()` ve AYNI
+ *      referansla yazılır, dolayısıyla ikisi de partiyi doğru temsil eder.
+ *      İkisi de boşsa satırlar TEK "bilinmeyen" partide toplanır ve arayüz
+ *      referansı olmadığını söyler (tarih uydurulmaz).
+ *   3. Partiler en YENİden eskiye sıralanır; `paidAt` bilinmeyen parti sona düşer.
+ */
+export function groupPayoutRuns(
+  rows: readonly PaidCommissionRow[],
+  opts: { truncated?: boolean } = {},
+): PayoutHistory {
+  const buckets = new Map<string, PayoutRun>();
+  let paidCents = 0;
+  let paidCount = 0;
+
+  for (const row of rows) {
+    if (row.status !== "paid") continue;
+    const cents = Number.isFinite(row.commission_cents)
+      ? Math.max(0, row.commission_cents ?? 0)
+      : 0;
+    paidCents += cents;
+    paidCount += 1;
+
+    const ref = String(row.payout_ref ?? "").trim();
+    const paidAt = row.paid_at ? String(row.paid_at) : null;
+    // Referans yoksa parti kimliği ödeme ZAMANIDIR; o da yoksa tek kova.
+    const key = ref || paidAt || "__unknown__";
+
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.cents += cents;
+      existing.count += 1;
+      // Parti tarihi = en GEÇ ödeme anı (aynı partide eşit olur; olmazsa
+      // geçmişi erkene çekmemek için en yeni an alınır).
+      if (paidAt && (!existing.paidAt || paidAt > existing.paidAt)) existing.paidAt = paidAt;
+      if (!existing.method && row.paid_method) existing.method = String(row.paid_method);
+      continue;
+    }
+
+    buckets.set(key, {
+      ref,
+      paidAt,
+      cents,
+      count: 1,
+      method: row.paid_method ? String(row.paid_method) : null,
+    });
+  }
+
+  const runs = [...buckets.values()].sort((a, b) => {
+    if (a.paidAt && b.paidAt) return a.paidAt < b.paidAt ? 1 : a.paidAt > b.paidAt ? -1 : 0;
+    if (a.paidAt) return -1;
+    if (b.paidAt) return 1;
+    return a.ref < b.ref ? 1 : -1;
+  });
+
+  return { runs, paidCents, paidCount, truncated: opts.truncated === true };
+}
+
+/* ------------------------------------------------------------------ */
+/* 3c) "PARA ATILDI MI?" — tek cümlelik dürüst durum kararı             */
+/* ------------------------------------------------------------------ */
+
+/** Ödeme beklemesinin SEBEBİ (yoksa null = bekleyen bir engel kalmadı). */
+export type PayoutBlocker = "threshold" | "hold" | "details" | null;
+
+export type PayoutStatusView = {
+  /** Hesabına şimdiye kadar para gönderildi mi? */
+  state: "paid" | "not_paid";
+  /** Kısa başlık (panel üstünde rozet/başlık olarak gösterilir). */
+  label: string;
+  /** Neden bekliyor / sıradaki adım — ölçülen sayılarla. */
+  detail: string;
+  blocker: PayoutBlocker;
+};
+
+/**
+ * AFFILIATE'İN ASIL SORUSU: "ne kadar kazandım, hesabıma para atıldı mı?"
+ *
+ * Bu fonksiyon ikinci yarıyı YANITLAR ve beklemenin SEBEBİNİ tek cümlede söyler.
+ * NEDEN SAF VE AYRI: sıra önemlidir ve yanlış sıra yanıltıcı mesaj üretir —
+ * örneğin ödeme bilgisi eksikken "eşiğe $12 kaldı" demek, affiliate'i
+ * beklemeye iter ama para HİÇ gelmez (IBAN olmadan transfer yapılamaz).
+ *
+ * SIRA (en sert engelden yumuşağa):
+ *   1. Ödeme bilgisi eksik  → para gönderilemez, affiliate'in aksiyonu gerekir.
+ *   2. Bekleme süresi       → para henüz ödenebilir değil (30 gün iade penceresi).
+ *   3. Eşik ($75)           → ödenebilir bakiye küçük; devreder.
+ *   4. Engel yok            → ödeme listesinde; admin tek tıkla işaretler.
+ */
+export function payoutStatusView(input: {
+  paidAny: boolean;
+  paidCents: number;
+  payableCents: number;
+  heldCents: number;
+  minPayoutCents?: number;
+  /** Affiliate'in ödeme bilgisi tam mı (IBAN/Wise + hesap sahibi). */
+  profileReady: boolean;
+  profileMissing?: readonly string[];
+  nextUnlockAt?: string | null;
+}): PayoutStatusView {
+  const min = Number.isFinite(input.minPayoutCents)
+    ? Math.max(0, Math.floor(input.minPayoutCents as number))
+    : MIN_PAYOUT_CENTS;
+  const paidCents = Math.max(0, Math.floor(input.paidCents || 0));
+  const payable = Math.max(0, Math.floor(input.payableCents || 0));
+  const held = Math.max(0, Math.floor(input.heldCents || 0));
+  const state: PayoutStatusView["state"] = input.paidAny && paidCents > 0 ? "paid" : "not_paid";
+  const label = state === "paid" ? "Hesabına para gönderildi" : "Henüz hesabına para gönderilmedi";
+
+  // 1) Ödeme bilgisi eksikse diğer sebepler KONUŞULMAZ: para gönderilemez.
+  if (!input.profileReady) {
+    const missing = (input.profileMissing ?? []).filter(Boolean).join(", ");
+    return {
+      state,
+      label,
+      detail: missing
+        ? `Ödeme yapılabilmesi için şunları tamamla: ${missing}.`
+        : "Ödeme bilgilerini tamamla; eksik bilgiyle transfer yapılamaz.",
+      blocker: "details",
+    };
+  }
+
+  // 2) Bekleme süresi: para var ama iade penceresi kapanmadı.
+  if (held > 0 && payable < min) {
+    const when = input.nextUnlockAt
+      ? ` İlk tutar ${new Date(input.nextUnlockAt).toLocaleDateString()} tarihinde ödenebilir olur.`
+      : "";
+    return {
+      state,
+      label,
+      detail: `Beklemedeki ${(held / 100).toFixed(2)}$ iade penceresi (30 gün) kapanınca ödenir.${when}`,
+      blocker: "hold",
+    };
+  }
+
+  // 3) Eşik: ödenebilir bakiye $75'in altında — devreder.
+  if (payable < min) {
+    return {
+      state,
+      label,
+      detail: `Ödeme eşiği ${(min / 100).toFixed(2)}$: ${((min - payable) / 100).toFixed(2)}$ daha birikince ödenir.`,
+      blocker: "threshold",
+    };
+  }
+
+  // 4) Engel kalmadı: sıradaki ödeme listesinde.
+  return {
+    state,
+    label,
+    detail: `${(payable / 100).toFixed(2)}$ ödemeye hazır ve ödeme listesinde — yönetici transferi işaretlediğinde geçmişe düşer.`,
+    blocker: null,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* 4) Komisyon bildirimi kararı                                        */
 /* ------------------------------------------------------------------ */
 
