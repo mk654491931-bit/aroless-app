@@ -26,6 +26,7 @@ import {
   extractJson,
 } from "./ai.server";
 import { callOpenRouter } from "./tools-ai.server";
+import { languageName } from "./ai-language";
 import { callHuggingFace } from "./hf.server";
 import { cached } from "./ai-cache.server";
 import { collectSignals, signalsBlock, type PipelineSignals } from "./data-pipeline.server";
@@ -211,21 +212,14 @@ function pickFor(ctx: CallContext) {
 
 const SHAPE = `Return ONLY minified JSON:
 {"score": number 1-100,
- "summary": string (2-3 Turkish sentences),
- "bullets": [string] (3-5 concrete Turkish insights, each with a number),
+ "summary": string (2-3 sentences in the OUTPUT LANGUAGE below),
+ "bullets": [string] (3-5 concrete insights in the OUTPUT LANGUAGE below, each with a number),
  "metrics": [{"label": string, "value": string}] (3-4 items)}`;
 
-const COUNCIL_LANG_NAMES: Record<string, string> = {
-  tr: "Turkish",
-  en: "English",
-  es: "Spanish",
-  de: "German",
-  fr: "French",
-  ar: "Arabic",
-};
 let activeCouncilLang = "tr";
 function langDirective(): string {
-  const name = COUNCIL_LANG_NAMES[activeCouncilLang] ?? "English";
+  // Dil adı TEK kaynaktan (lib/ai-language.ts).
+  const name = languageName(activeCouncilLang);
   return `\n\nOUTPUT LANGUAGE: write every human-readable string in ${name}. Keep numbers, currency codes, URLs and brand names unchanged.`;
 }
 

@@ -426,6 +426,8 @@ export const getDiscoveryJob = createServerFn({ method: "POST" })
 const ValidateInput = z.object({
   query: z.string().min(2).max(300),
   platforms: z.array(z.enum(PLATFORMS)).max(PLATFORMS.length).optional().default([]),
+  // Seçilen arayüz dili: rapor ve ajan karneleri bu dilde üretilir.
+  lang: z.string().max(8).optional().default("tr"),
 });
 
 export type ValidationReport = {
@@ -449,7 +451,11 @@ export const validateProduct = createServerFn({ method: "POST" })
       // Ajan hattı başarısız olursa düşülen kredi iade edilir.
       return withCreditRefund(context.userId, async () => {
         const { runMarketAgent, runConsensus } = await import("@/lib/agents.server");
-        const scan = await runMarketAgent({ query: data.query, platforms: data.platforms });
+        const scan = await runMarketAgent({
+          query: data.query,
+          platforms: data.platforms,
+          lang: data.lang,
+        });
         const candidate = scan.candidates[0];
         const productName = candidate?.name || data.query;
         const ctx = [
@@ -468,7 +474,7 @@ export const validateProduct = createServerFn({ method: "POST" })
           .filter(Boolean)
           .join("\n");
 
-        const consensus = await runConsensus({ context: ctx });
+        const consensus = await runConsensus({ context: ctx, lang: data.lang });
         return {
           report: {
             query: data.query,

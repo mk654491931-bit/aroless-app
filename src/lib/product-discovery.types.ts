@@ -424,6 +424,16 @@ export const ProductDiscoveryInputSchema = z.object({
   platform: z.string().max(40).default("General"),
   /** Kaç ürün istendi (nihai en iyi 5). */
   topN: z.number().int().min(1).max(10).default(5),
+  /**
+   * Kullanıcının seçtiği arayüz dili (2 harf).
+   *
+   * NEDEN GİRDİDE: hattın iki AI adımı (kısa liste gerekçeleri + 14 ajanın oy
+   * notları) insan tarafından OKUNAN metin üretir. Dil girdiye yazılmazsa model
+   * kendi varsayılanına düşer ve arayüz İspanyolca olsa bile sonuçlar Türkçe
+   * gelirdi. Adım yükü (`input`) hattın tamamında taşındığı için dil de kendiliğinden
+   * her adıma ulaşır.
+   */
+  lang: z.string().max(5).default("en"),
 });
 export type ProductDiscoveryInput = z.infer<typeof ProductDiscoveryInputSchema>;
 

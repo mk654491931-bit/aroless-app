@@ -473,6 +473,9 @@ export function useFinderSearch(opts: {
           country,
           platform: (vars.platforms[0] ?? "General").slice(0, 40),
           topN: 5,
+          // Seçilen arayüz dili hattın AI adımlarına taşınır: kart gerekçeleri
+          // ve konsey notları kullanıcının dilinde yazılır.
+          lang: opts.lang.slice(0, 2) || "en",
         },
       });
       if (!started.ok) {

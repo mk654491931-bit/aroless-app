@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { marginForRanking } from "@/lib/economics-evidence";
 import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { summarizeComparison } from "@/lib/compare.functions";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { creditErrorMessage } from "@/lib/credits";
 import { CompareModal } from "@/components/compare-tray";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,8 @@ export function ComparePage() {
         why_winning: f.product.why_winning,
         platform_fit: f.product.platform_fit,
       }));
-      return (await summarizeFn({ data: { products } })) as Summary;
+      // `lang`: karşılaştırma gerekçesi seçilen dilde yazılır.
+      return (await summarizeFn({ data: { products, lang: getUiLang() } })) as Summary;
     },
     onError: (e) =>
       toast.error("AI karşılaştırması başarısız", { description: creditErrorMessage(e) }),

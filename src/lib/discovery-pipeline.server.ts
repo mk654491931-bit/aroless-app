@@ -25,6 +25,10 @@ import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
 import type { Platform, Budget, WinningProduct } from "@/lib/gemini.functions";
+// Dil adı TEK kaynaktan (bkz. lib/ai-language.ts): yerinde yazılan
+// tr/en/es/de/fr/ar üçlüsü, yeni bir dil eklendiğinde burada sessizce eski
+// kalıyordu (yani istem İngilizce yazıyor, kullanıcı çeviri beklemiyordu).
+import { languageName } from "@/lib/ai-language";
 
 export const DISCOVERY_PLATFORMS = [
   "Amazon",
@@ -372,7 +376,7 @@ Brief:
       : "Global sourcing from AliExpress/Alibaba, but every demand and price claim must be validated for the target country below."
   }
 ${marketBrief}
-${deepBrief}${extra ? extra + "\n" : ""}- OUTPUT LANGUAGE: write every human-readable string in ${data.lang === "tr" ? "Turkish" : data.lang === "es" ? "Spanish" : data.lang === "de" ? "German" : data.lang === "fr" ? "French" : data.lang === "ar" ? "Arabic" : "English"} (keep URLs, numbers and product brand names as-is).
+${deepBrief}${extra ? extra + "\n" : ""}- OUTPUT LANGUAGE: write every human-readable string in ${languageName(data.lang)} (keep URLs, numbers and product brand names as-is).
 
 
 Return STRICT JSON only (a single JSON object, no prose, no markdown fences), matching:

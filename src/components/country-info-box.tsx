@@ -5,6 +5,7 @@ import { AlertTriangle, Lightbulb, Loader2, ShieldAlert, Sparkles, ThumbsUp } fr
 import { toast } from "sonner";
 import { countryByCode } from "@/lib/countries";
 import { getCountryStrategy } from "@/lib/competitor.functions";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 
 /** 🟢 Kolaylıklar / 🔴 Zorluklar / 💡 AI stratejisi — "Pazar Karnesi". */
 export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: string }) {
@@ -13,7 +14,8 @@ export function CountryInfoBox({ code, niche = "" }: { code: string; niche?: str
   const [errorMsg, setErrorMsg] = useState<string>("");
   const fn = useServerFn(getCountryStrategy);
   const mut = useMutation({
-    mutationFn: () => fn({ data: { niche, country: c.code } }),
+    // `lang`: pazar karnesindeki AI stratejisi seçilen dilde yazılır.
+    mutationFn: () => fn({ data: { niche, country: c.code, lang: getUiLang() } }),
     onSuccess: (r) => {
       setErrorMsg("");
       setStrategy(r?.strategy ?? "");

@@ -33,6 +33,7 @@ import {
   type ViralAdScriptBeat,
 } from "@/lib/viral_ads.functions";
 import { creditErrorMessage } from "@/lib/credits";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -545,6 +546,8 @@ function ViralAdModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
           channel: ad.channel,
           description: ad.source_description ?? ad.hook_script ?? "",
           product: withProduct,
+          // Üretilen reklam metni (hook/gövde/CTA) seçilen dilde çıkar.
+          uiLang: getUiLang(),
         },
       });
       setResult(out);

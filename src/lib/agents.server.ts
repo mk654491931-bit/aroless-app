@@ -17,6 +17,9 @@ import {
   extractJson,
 } from "./ai.server";
 import { CONSENSUS_MIN_AVG, type AgentVerdict, type ConsensusResult } from "./consensus-types";
+// Çıktı dili TEK kaynaktan (bkz. lib/ai-language.ts): doğrulama ajanlarının
+// yazdığı özet/madde/risk metinleri kullanıcının seçtiği dilde çıkar.
+import { outputLanguageDirective } from "./ai-language";
 export { CONSENSUS_MIN_AVG };
 export type { AgentVerdict, ConsensusResult };
 
@@ -90,6 +93,8 @@ export async function runMarketAgent(input: {
   query: string;
   platforms: string[];
   budget?: string;
+  /** Kullanıcının seçtiği dil: adaylar ve piyasa notu bu dilde yazılır. */
+  lang?: string;
 }): Promise<MarketScan> {
   const prompt = `You are AGENT 3 — the MARKET & SEARCH ENGINE of an e-commerce research system.
 Scan live market trends, marketplace listings, ad libraries and short-form social buzz.
@@ -103,7 +108,9 @@ No categories. No invented products. Use real supplier price bands (AliExpress/1
 
 Return ONLY JSON:
 { "candidates": [ { "name": string, "why_now": string (1 sentence demand signal happening right now), "price_band_usd": string, "supplier_cost_usd": string, "demand_signal": string (search/social/marketplace evidence), "channel": string (best sales channel) } ] (6-10 candidates),
-  "market_note": string (1 sentence on the overall market condition) }`;
+  "market_note": string (1 sentence on the overall market condition) }
+
+${outputLanguageDirective(input.lang, "candidate.name, why_now, demand_signal, channel, market_note")}`;
   try {
     const text = await agentCall(prompt, 0.6, true, FLASH);
     const parsed = extractJson<MarketScan>(text, { candidates: [], market_note: "" });
@@ -117,7 +124,7 @@ Return ONLY JSON:
 }
 
 /** AGENT 1 — Product Finder. Optimistic strategist defending the product. */
-export async function runFinderAgent(context: string): Promise<AgentVerdict> {
+export async function runFinderAgent(context: string, lang?: string): Promise<AgentVerdict> {
   const prompt = `You are AGENT 1 — the PRODUCT FINDER, an optimistic but evidence-driven e-commerce strategist.
 Defend why the following product is (or is not) a WINNING PRODUCT. Focus on target-audience appeal, viral hooks,
 marketing edges, differentiation and realistic upside. Be specific and numeric. Do not rubber-stamp: if the
@@ -130,7 +137,9 @@ Return ONLY JSON:
 { "score": number 1-100 (your conviction this wins),
   "decision": "APPROVED" | "REJECTED",
   "summary": string (2 sentences: your growth thesis),
-  "points": string[3-4] (concrete growth angles: hook, audience, channel, differentiation) }`;
+  "points": string[3-4] (concrete growth angles: hook, audience, channel, differentiation) }
+
+${outputLanguageDirective(lang, "summary ve points")}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const text = await agentCall(prompt, 0.8, false, FLASH);
@@ -152,6 +161,7 @@ Return ONLY JSON:
 export async function runAuditAgent(
   context: string,
   finder: AgentVerdict,
+  lang?: string,
 ): Promise<AgentVerdict & { risk_flags: string[] }> {
   const prompt = `You are AGENT 2 — the RISK & AUDIT AGENT, a ruthless e-commerce auditor.
 Cross-examine Agent 1's bullish case below. Hunt for supply-chain bottlenecks, ad saturation, margin squeeze,
@@ -169,7 +179,9 @@ Return ONLY JSON:
   "decision": "APPROVED" | "REJECTED",
   "summary": string (2 sentences: your audit verdict, directly rebutting or conceding Agent 1),
   "points": string[3-4] (the audit findings),
-  "risk_flags": string[3] (the top 3 concrete risks, short) }`;
+  "risk_flags": string[3] (the top 3 concrete risks, short) }
+
+${outputLanguageDirective(lang, "summary, points ve risk_flags")}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const text = await agentCall(prompt, 0.4, false, attempt === 0 ? PRO : FLASH);
@@ -201,6 +213,7 @@ export async function runVerifierAgent(
   context: string,
   finder: AgentVerdict,
   auditor: AgentVerdict,
+  lang?: string,
 ): Promise<AgentVerdict | null> {
   const prompt = `You are AGENT 4 — the INDEPENDENT VERIFIER of an e-commerce product research system.
 Two other agents already debated this product. You run on a different model family and must give a fresh,
@@ -216,7 +229,9 @@ Return ONLY JSON:
 { "score": number 1-100 (your independent conviction),
   "decision": "APPROVED" | "REJECTED",
   "summary": string (2 sentences: your independent verdict and which agent you side with),
-  "points": string[3] (the decisive factors) }`;
+  "points": string[3] (the decisive factors) }
+
+${outputLanguageDirective(lang, "summary ve points")}`;
   try {
     const text = await callGroq(prompt, 0.3);
     const raw = extractJson<Partial<AgentVerdict>>(text, {});
@@ -240,10 +255,12 @@ export async function runConsensus(input: {
   context: string;
   profit_margin_pct?: number;
   competition_level?: "Low" | "Medium" | "High";
+  /** Dil TÜM ajanlara geçer: karne cümleleri seçilen dilde çıkar. */
+  lang?: string;
 }): Promise<ConsensusResult> {
-  const agent1 = await runFinderAgent(input.context);
-  const audit = await runAuditAgent(input.context, agent1);
-  const agent4 = await runVerifierAgent(input.context, agent1, audit);
+  const agent1 = await runFinderAgent(input.context, input.lang);
+  const audit = await runAuditAgent(input.context, agent1, input.lang);
+  const agent4 = await runVerifierAgent(input.context, agent1, audit, input.lang);
   const scores = [agent1.score, audit.score, ...(agent4 ? [agent4.score] : [])];
   const average = Math.round(scores.reduce((s, n) => s + n, 0) / scores.length);
   const approved =

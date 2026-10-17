@@ -69,25 +69,26 @@ export const TOOL_PROVIDER: Record<ToolId, Provider> = {
   news: "gemini",
 };
 
-const LANG_NAMES: Record<string, string> = {
-  tr: "Turkish",
-  en: "English",
-  es: "Spanish",
-  de: "German",
-  fr: "French",
-  ar: "Arabic",
-};
-
-/** Appends the "answer in the user's language" directive to any built prompt. */
-export function withOutputLanguage(prompt: string, lang?: string): string {
-  const name = LANG_NAMES[(lang ?? "en").slice(0, 2)] ?? "English";
-  return `${prompt}
-
-- OUTPUT LANGUAGE: write EVERY human-readable string (headline, metrics labels, bullets, table cells, document, risks, actions, assumptions, verdict) in ${name}. Keep URLs, numbers, currency codes and brand/product names as they are.`;
-}
+// Dil eşlemesi ve direktif TEK KAYNAKTAN gelir (`lib/ai-language`): keşif hattı,
+// doğrulama ajanları ve sol bar araçları aynı metni paylaşır. Burada yeniden
+// dışa aktarılır ki mevcut çağrı noktaları ve testler değişmeden çalışsın.
+export { withOutputLanguage } from "./ai-language";
+import { withOutputLanguage as withLang } from "./ai-language";
 
 export function buildPrompt(tool: ToolId, c: Ctx): string {
-  return withOutputLanguage(buildToolPrompt(tool, c), c["uiLang"]);
+  // İSTİSNA — `supplier-negotiator`: belge TESLİME hazır bir mesajdır ve
+  // tasarımı gereği İngilizce + Basitleştirilmiş Çince yazılır (karşı taraf
+  // Çinli tedarikçi). Genel direktif "document dahil her şeyi X dilinde yaz"
+  // dediği için, bu araçta belge kapsam DIŞI bırakılır; kullanıcının okuduğu
+  // diğer alanlar (metrikler, maddeler, aksiyonlar) ise seçilen dilde kalır.
+  if (tool === "supplier-negotiator") {
+    return withLang(
+      buildToolPrompt(tool, c),
+      c["uiLang"],
+      'headline, metrics labels, bullets, risks, actions, assumptions, verdict — the "document" field must stay in English + Simplified Chinese exactly as instructed above',
+    );
+  }
+  return withLang(buildToolPrompt(tool, c), c["uiLang"]);
 }
 
 function buildToolPrompt(tool: ToolId, c: Ctx): string {

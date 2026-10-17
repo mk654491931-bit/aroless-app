@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Send, X } from "lucide-react";
 import { ArolessMark } from "@/components/velora-mark";
 import { askCopilot } from "@/lib/competitor.functions";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 
 type Msg = { role: "user" | "ai"; text: string };
 const KEY = "omni_copilot_pos";
@@ -78,6 +79,8 @@ export function DraggableCopilot({ context = "dashboard" }: { context?: string }
             .map((m) => `${m.role === "user" ? "Kullanıcı" : "Co-Pilot"}: ${m.text}`)
             .join("\n")
             .slice(0, 2000),
+          // Co-Pilot yanıtı seçilen dilde gelsin.
+          lang: getUiLang(),
         },
       }),
     onSuccess: (r) => setMsgs((m) => [...m, { role: "ai", text: r.reply }]),

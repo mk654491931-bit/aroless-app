@@ -50,10 +50,16 @@ export function FinderHero(): React.JSX.Element {
 
         {/* Başlık: kicker + marka gradyanlı display, tek h1 içinde ortalanır. */}
         <h1 className="mt-6 flex flex-col items-center gap-2.5 md:mt-7 md:gap-3">
-          <span className="text-[10px] font-medium uppercase tracking-[0.3em] text-muted-foreground sm:text-xs sm:tracking-[0.38em]">
-            {t("hero_1")}
+          {/* Kicker: iki yanında mikro çizgi taşır (başlığın üst çapası). */}
+          <span className="finder-hero-kicker">
+            <span aria-hidden className="finder-hero-kicker-rule" />
+            <span className="text-[10px] font-medium uppercase tracking-[0.3em] text-muted-foreground sm:text-xs sm:tracking-[0.38em]">
+              {t("hero_1")}
+            </span>
+            <span aria-hidden className="finder-hero-kicker-rule finder-hero-kicker-rule-rev" />
           </span>
-          <span className="finder-hero-phrase wrap-break-word text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.035em] sm:text-[2.45rem] md:text-[3.05rem]">
+          {/* `text-balance`: iki satıra kırıldığında satırlar dengeli dağılır. */}
+          <span className="finder-hero-phrase wrap-break-word text-balance text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.035em] sm:text-[2.45rem] md:text-[3.05rem]">
             {t("hero_2")}
           </span>
         </h1>
@@ -68,7 +74,7 @@ export function FinderHero(): React.JSX.Element {
           <span className="finder-hero-flank finder-hero-flank-rev w-10 sm:w-16" />
         </div>
 
-        <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground md:text-[0.95rem]">
+        <p className="mx-auto mt-5 max-w-xl text-pretty text-sm leading-relaxed text-muted-foreground md:text-[0.95rem]">
           {t("ui.hero_sub2")}
         </p>
 
@@ -77,7 +83,7 @@ export function FinderHero(): React.JSX.Element {
           {features.map((f) => (
             <li
               key={f}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[11px] text-muted-foreground"
+              className="finder-hero-chip inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[11px] text-muted-foreground"
             >
               <ShieldCheck size={11} className="shrink-0 text-emerald-400" />
               {f}

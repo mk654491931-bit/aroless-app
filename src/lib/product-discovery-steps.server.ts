@@ -244,7 +244,14 @@ export async function executeProductDiscoveryStep(args: {
         // yani hat modele TAKILI KALMAZ, yalnız gerçekten cevap verirse onu
         // kullanır (uydurma değil, dürüst yedek).
         const candidates = args.batch as NormalizedProduct[];
-        const picks = await geminiShortlistSelector(candidates, input.niche, sliceDeadline);
+        // `input.lang`: kartta okunan Türkçe/İngilizce gerekçeler kullanıcının
+        // seçtiği arayüz dilinde çıksın (bkz. lib/ai-language.ts).
+        const picks = await geminiShortlistSelector(
+          candidates,
+          input.niche,
+          sliceDeadline,
+          input.lang,
+        );
 
         if (!picks.length && !forceFinish && slice + 1 < GEMINI_MAX_SLICES) {
           console.log(
@@ -322,6 +329,7 @@ export async function executeProductDiscoveryStep(args: {
           // Zincir süresi bittiyse adım kalan rolleri deterministiğe düşürüp
           // BİTİR: yeni dilim yayınlamak 280 sn sözünü aşardı.
           force: forceFinish,
+          lang: input.lang,
         });
 
         if (council.partial) {
@@ -418,9 +426,12 @@ export async function executeProductDiscoveryStep(args: {
         // parmak izi ve `signals` (talep/marj/rekabet) YOKTUR. Consensus
         // satırlarını verseydik her ürün `id:"unknown"`, `title:"İsimsiz ürün"`
         // ve "ölçülmedi" gerekçesiyle çıkardı — yani gerekçesiz bir liste.
+        // `input.lang`: gerekçe metni (trend/marj/rekabet/kanıt) seçilen dilde
+        // kurulur — arayüz İspanyolca ise kart Türkçe gerekçe göstermez.
         const { top_products } = buildTopProducts(
           (ranked.products ?? []) as never,
           DISCOVERY_FINAL_N,
+          input.lang,
         );
 
         const job = await readDiscoveryJob(runId);

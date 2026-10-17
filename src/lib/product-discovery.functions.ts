@@ -240,6 +240,8 @@ const StartSchema = z.object({
   country: z.string().min(2).max(4).default("US"),
   platform: z.string().max(40).default("General"),
   topN: z.number().int().min(1).max(10).default(5),
+  // Seçilen arayüz dili: hattın AI adımları sonuç metinlerini bu dilde üretir.
+  lang: z.string().max(5).default("en"),
 });
 
 const StatusSchema = z.object({ runId: z.string().uuid() });

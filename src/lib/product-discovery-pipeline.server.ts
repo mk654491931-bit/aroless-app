@@ -44,6 +44,10 @@ import {
 // iki farklı "benzer" tanımı üretirdi.
 import { productTitleMatch, supplierMatchKind } from "./supplier-economics";
 import { assessLaunch } from "./launch-readiness";
+// Çıktı dili TEK kaynaktan: kullanıcı arayüzü hangi dildeyse modelin yazdığı
+// gerekçe/özet metinleri de o dilde çıkar (bkz. lib/ai-language.ts).
+import { outputLanguageDirective } from "./ai-language";
+import { reasonCopy } from "./product-discovery-reason";
 
 /**
  * ADIM 1'in üst sınırı: 75 aday.
@@ -239,7 +243,14 @@ export function buildTopProducts(
     sources?: string[];
   }[],
   limit = DISCOVERY_FINAL_N,
+  /**
+   * Kullanıcının seçtiği dil: gerekçe şablonları bu dilde kurulur (bkz.
+   * `product-discovery-reason.ts`). Varsayılan "tr" — eski çağrı noktaları ve
+   * testler aynı metni görür.
+   */
+  lang: string = "tr",
 ): TopProductsPayload {
+  const copy = reasonCopy(lang);
   const taken = ranked.slice(0, Math.max(0, Math.min(limit, DISCOVERY_FINAL_N)));
   const top_products = taken.map((p) => {
     const demand = p.signals?.demand ?? null;
@@ -253,28 +264,27 @@ export function buildTopProducts(
     // 1) TREND & VİRAL
     parts.push(
       demand === null
-        ? "Trend kanıtı yok (ölçülmedi)"
-        : `Trend gücü ${demand}/100${p.confidenceScore !== undefined ? ` · güven ${Math.round(p.confidenceScore)}` : ""}`,
+        ? copy.trendUnknown
+        : copy.trend(
+            demand,
+            p.confidenceScore !== undefined ? Math.round(p.confidenceScore) : undefined,
+          ),
     );
     // 2) KAR & FİYAT
     const price = typeof p.priceUsd === "number" && Number.isFinite(p.priceUsd) ? p.priceUsd : null;
-    parts.push(
-      margin === null
-        ? "Fiyat bandı ölçülmedi"
-        : `Marj skoru ${margin}/100${price === null ? "" : ` · fiyat $${price}`}`,
-    );
+    parts.push(margin === null ? copy.priceUnknown : copy.margin(margin, price));
     // 3) REKABET
     parts.push(
       competition === null
-        ? "Rekabet ölçülmedi"
+        ? copy.competitionUnknown
         : competition >= 60
-          ? `Rekabet düşük (${competition}/100) — doygunluk yok`
-          : `Rekabet yüksek (${competition}/100) — niş doymuş`,
+          ? copy.competitionLow(competition)
+          : copy.competitionHigh(competition),
     );
     // 4) KANIT DERİNLİĞİ — gerekçeyi "iyi görünüyor"dan "şu kadar ölçüldü"ye
     //    çevirir. Yalnız ÖLÇÜLMÜŞ sayılar yazılır; alan yoksa eklenmez.
-    if (completeness !== null) parts.push(`Kanıt ${Math.round(completeness)}/5 dolu`);
-    if (sourceCount > 1) parts.push(`${sourceCount} kaynak doğruladı`);
+    if (completeness !== null) parts.push(copy.completeness(Math.round(completeness)));
+    if (sourceCount > 1) parts.push(copy.sourcesConfirmed(sourceCount));
 
     return {
       // Sıra: kaynak kimliği → parmak izi → konsenyus `candidateId`.
@@ -287,7 +297,7 @@ export function buildTopProducts(
         (p.fingerprint ?? "").trim() ||
         (p.candidateId ?? "").trim() ||
         "unknown",
-      title: (p.title ?? p.name ?? "").trim() || "İsimsiz ürün",
+      title: (p.title ?? p.name ?? "").trim() || copy.untitled,
       final_score: score,
       selection_reason: parts.join(" · "),
     };
@@ -927,10 +937,12 @@ export async function runGeminiShortlistStep(
    * Önceden gömülüydü; bu yüzden bu adım test edilebilir değildi ve
    * istem/doğrulayıcı uyuşmazlığı gibi hatalar fark edilemedi.
    */
-  geminiSelect: (
+  geminiSelect?: (
     products: readonly NormalizedProduct[],
     niche: string,
-  ) => Promise<NormalizedProduct[]> = geminiShortlistSelector,
+  ) => Promise<NormalizedProduct[]>,
+  /** Kullanıcının seçtiği arayüz dili — modelin `reasoning` metni bu dilde çıkar. */
+  lang?: string,
 ): Promise<DiscoveryStepResult> {
   if (products.length === 0) {
     return {
@@ -945,11 +957,17 @@ export async function runGeminiShortlistStep(
   // Gemini çağrısı burada yapılır (mevcut AI yönlendiricisi üzerinden).
   // Bu dosya saf kalmaya devam eder; çağrı route katmanında enjekte edilir
   // (bağımlılık enjeksiyonu) ki testlerde sahte (mock) çağrı kullanılabilsin.
+  // Varsayılan seçici burada kurulur: dil parametresi enjekte edilen seçicinin
+  // sözleşmesini (2 argüman) bozmadan YALNIZ gerçek Gemini çağrısına geçer.
+  const selector =
+    geminiSelect ??
+    ((p: readonly NormalizedProduct[], n: string) =>
+      geminiShortlistSelector(p, n, undefined, lang));
   const {
     products: shortlist,
     via: shortlistVia,
     geminiPicks,
-  } = await selectWithGemini(products, niche, topN, geminiSelect);
+  } = await selectWithGemini(products, niche, topN, selector);
   // DÜRÜST RAPOR: not, GERÇEKTE ne olduğunu söyler. Ölçüldü (2026-09-27):
   // anahtar yokken çağrı ~30 ms'de düşüyor (yani Gemini'ye HİÇ gidilmiyor)
   // ama not "Gemini N → M aday seçti" yazıyordu. Kullanıcı ve panel modelin
@@ -1017,6 +1035,8 @@ export async function geminiShortlistSelector(
    * "300 saniyeden fazla dönüyor, sonuç yok" belirtisi).
    */
   deadlineAt?: number,
+  /** Çıktı dili: kartta okunan gerekçe seçilen dilde yazılır. */
+  lang?: string,
 ): Promise<NormalizedProduct[]> {
   const { callGemini } = await import("./ai.server");
   // Tek import yüzeyi: AI seçim doğrulaması ORTAK ÇEKİRDEKTEN gelir (kimlik
@@ -1030,7 +1050,7 @@ export async function geminiShortlistSelector(
   // kayıyordu — yani Gemini hiçbir zaman seçim yapamıyordu.
   const candidates = products.slice(0, GEMINI_SHORTLIST_SIZE);
   const roster = candidates.map((p) => ({ productId: productIdOf(p), product: p }));
-  const prompt = buildShortlistPrompt(products, niche);
+  const prompt = buildShortlistPrompt(products, niche, lang);
 
   // `grounded=false`: aday listesi SABİT ve elimizde. Google Search grounding
   // yalnız gecikmeyi artırır ve modelin JSON dışında arama metni sarmalamasına
@@ -1129,6 +1149,11 @@ export function parseLegacyIndexPicks(
 export function buildShortlistPrompt(
   products: readonly NormalizedProduct[],
   niche: string,
+  /**
+   * Kullanıcının seçtiği arayüz dili. Verilmezse İngilizce'ye düşer; modelin
+   * yazdığı `reasoning` (kart üzerinde okunan gerekçe) bu dilde üretilir.
+   */
+  lang?: string,
 ): string {
   // LİSTEDE productId YAZIYOR — sözleşme buna bağlı. İstem "productId dön"
   // diyor, doğrulayıcı da girdideki `productIdOf(p)` ile eşleştiriyor; kimlik
@@ -1169,6 +1194,7 @@ export function buildShortlistPrompt(
     `picks içinde tam olarak ${want} farklı productId olsun, en güçlüden zayıfa doğru sıralansın.`,
     "",
     roster,
+    outputLanguageDirective(lang, "reasoning"),
   ].join("\n");
 }
 

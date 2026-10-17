@@ -1,5 +1,6 @@
 // Server-only prompt builders + types for the Competitor Analysis engine.
 import { countryName } from "./countries";
+import { outputLanguageDirective } from "./ai-language";
 
 export type CompetitorSeller = {
   seller: string;
@@ -42,7 +43,16 @@ export type CompetitorReport = {
   trend_source?: string;
 };
 
-export function sellersPrompt(query: string, country: string, liveContext = "") {
+/**
+ * Çıktı dili TEK kaynaktan eklenir (bkz. `ai-language.ts`).
+ *
+ * NEDEN: bu istemler alanların içine gömülü "short Turkish" / "Turkish"
+ * yazıyordu; arayüzü İngilizce ya da Arapça kullanan bir satıcı rakip
+ * raporunu yine Türkçe okuyordu. Dil artık istemin sonunda TEK satırda
+ * belirtilir ve o dil değişince bütün alanlar (özet, fırsat, playbook) ona
+ * uyar.
+ */
+export function sellersPrompt(query: string, country: string, liveContext = "", lang?: string) {
   return `You are a competitive-intelligence analyst for e-commerce. Use live web knowledge.
 Target market: ${countryName(country)}.
 ${liveContext ? `Live scraped signals (trust these over memory):\n${liveContext}\n` : ""}
@@ -54,53 +64,61 @@ current market data (marketplace prices, review counts, BSR-style signals, ad-li
 Return ONLY JSON:
 { "avg_price_usd": number,
   "sellers": [ { "seller": string, "platform": string, "price_usd": number,
-    "price_trend": string (short Turkish, e.g. "son 30 günde %8 düştü"),
+    "price_trend": string (short, e.g. "down 8% in the last 30 days"),
     "est_monthly_sales": number, "est_stock": number, "rating": number 0-5,
     "traffic_sources": string[] (e.g. ["Meta Ads","Google Shopping","TikTok Organic"]),
-    "margin_note": string (1 short Turkish sentence on their likely margin) } ] }`;
+    "margin_note": string (1 short sentence on their likely margin) } ] }
+
+${outputLanguageDirective(lang, "price_trend, traffic_sources, margin_note")}`;
 }
 
-export function sentimentPrompt(query: string, country: string, liveContext = "") {
+export function sentimentPrompt(query: string, country: string, liveContext = "", lang?: string) {
   return `You are a review-sentiment analyst. Product/store: "${query}". Market: ${countryName(country)}.
 ${liveContext ? `Live search-interest & seller signals:\n${liveContext}\n` : ""}
 Analyse the NEGATIVE reviews competitors receive for this product and extract the recurring product
 weaknesses and customer complaints — these are our opportunity gaps.
 
 Return ONLY JSON:
-{ "sentiment_summary": string (1-2 Turkish sentences),
-  "weaknesses": [ { "complaint": string (Turkish), "frequency": string (e.g. "yorumların ~%30'u"),
-                    "opportunity": string (Turkish, how we exploit it) } ] }`;
+{  "sentiment_summary": string (1-2 sentences),
+  "weaknesses": [ { "complaint": string, "frequency": string (e.g. "~30% of reviews"),
+                    "opportunity": string (how we exploit it) } ] }
+
+${outputLanguageDirective(lang, "sentiment_summary, complaint, frequency, opportunity")}`;
 }
 
-export function strategyPrompt(query: string, country: string, context: string) {
+export function strategyPrompt(query: string, country: string, context: string, lang?: string) {
   return `You are AI 2 — the COUNTER-STRATEGY GENERATOR (logistics, VAT and pricing specialist).
 Product/store: "${query}" · Market: ${countryName(country)}
 Competitor intelligence:
 ${context}
 
-Write a concrete playbook in Turkish for OUTPERFORMING these sellers. Be numeric and specific
+Write a concrete playbook for OUTPERFORMING these sellers. Be numeric and specific
 (prices, shipping promises, VAT/customs impact, bundle ideas). No generic advice.
 
 Return ONLY JSON:
-{ "headline": string (one punchy Turkish sentence),
+{ "headline": string (one punchy sentence),
   "positioning": string (2 sentences),
   "price_advice": string (concrete price with number),
   "playbook": string[4] (concrete actions),
-  "ad_angle": string (1 Turkish ad hook) }`;
+  "ad_angle": string (1 ad hook) }
+
+${outputLanguageDirective(lang, "headline, positioning, price_advice, playbook, ad_angle")}`;
 }
 
-export function countryStrategyPrompt(niche: string, country: string) {
+export function countryStrategyPrompt(niche: string, country: string, lang?: string) {
   return `You are an e-commerce market strategist. Niche/product: "${niche || "genel e-ticaret"}".
 Target market: ${countryName(country)}.
 Give ONE actionable, specific strategy for succeeding with this niche in this exact country
-(pricing, logistics, compliance, marketing channel). Turkish, max 3 sentences.
+(pricing, logistics, compliance, marketing channel). Max 3 sentences.
 
-Return ONLY JSON: { "strategy": string }`;
+Return ONLY JSON: { "strategy": string }
+
+${outputLanguageDirective(lang, "strategy")}`;
 }
 
-export function copilotPrompt(message: string, context: string, history: string) {
+export function copilotPrompt(message: string, context: string, history: string, lang?: string) {
   return `You are the Aroless Co-Pilot — a live e-commerce mentor embedded in a SaaS dashboard
-and training sandbox. Answer in Turkish, short and concrete (max 120 words), with numbers where useful.
+and training sandbox. Answer short and concrete (max 120 words), with numbers where useful.
 If the user is making a mistake in the sandbox, warn them directly.
 
 App context: ${context || "dashboard"}
@@ -109,5 +127,7 @@ ${history || "(yok)"}
 
 User: ${message}
 
-Return ONLY JSON: { "reply": string }`;
+Return ONLY JSON: { "reply": string }
+
+${outputLanguageDirective(lang, "reply")}`;
 }

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callGemini } from "@/lib/ai.server";
+import { outputLanguageDirective } from "@/lib/ai-language";
 import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 import type { WinningProduct } from "@/lib/gemini.functions";
 
@@ -20,6 +21,8 @@ const SummarizeInput = z.object({
     )
     .min(2)
     .max(4),
+  // Seçilen arayüz dili: kazananın gerekçesi ve risk listesi bu dilde çıkar.
+  lang: z.string().max(8).optional().default("tr"),
 });
 
 export const summarizeComparison = createServerFn({ method: "POST" })
@@ -29,7 +32,7 @@ export const summarizeComparison = createServerFn({ method: "POST" })
     // Karşılaştırma gerçek bir AI turudur: düşmeden koşmaz, çökerse iade edilir.
     await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"));
     return withCreditRefund(context.userId, async () => {
-      const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}`;
+      const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}\n\n${outputLanguageDirective(data.lang, "reasoning, runner_up ve risks")}`;
       const text = await callGemini(prompt, undefined, 0.3, false);
       try {
         const json = JSON.parse(text.replace(/```json|```/g, "").trim());

@@ -3355,6 +3355,58 @@ html.light .custom-cursor-ring {
   animation: finder-hero-sheen 1.7s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
 }
 
+/* Kicker çapası: başlığın üstündeki küçük harf aralıklı satırın İKİ yanında
+   mikro çizgi. Elmas süsüyle aynı dili konuşur (merkezden dışa soluklaşan
+   hairline), böylece başlık bloğu üstten de "tutulmuş" görünür. Yeni bir
+   katman/parlama EKLEMEZ; yalnız iki hairline ve ortalanmış metin. */
+.finder-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.finder-hero-kicker-rule {
+  display: block;
+  width: 1.25rem;
+  height: 1px;
+  flex: none;
+  transform-origin: right center;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-brand) 40%, transparent)
+  );
+  animation: finder-hero-rule-draw 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+.finder-hero-kicker-rule-rev {
+  transform-origin: left center;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-brand) 40%, transparent),
+    transparent
+  );
+}
+
+/* Güven çipleri: statik duran etiketler yerine hafif dokunma geri bildirimi.
+   Yalnız `transform` + renk geçişi — düzen kaymaz (transform dışında hiçbir
+   ölçü değişmez), bu yüzden hero'nun simetrisi bozulmaz. */
+.finder-hero-chip {
+  transition:
+    transform 0.18s ease-out,
+    border-color 0.18s ease-out,
+    background-color 0.18s ease-out;
+}
+.finder-hero-chip:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--color-brand) 45%, var(--border));
+  background-color: color-mix(in oklab, var(--card) 70%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .finder-hero-chip,
+  .finder-hero-chip:hover {
+    transform: none;
+  }
+}
+
 /* Ortalanmış kompozisyonun ince çizgileri: her biri merkezden dışa açılır.
    `--rev` sağ taraftaki aynadır (soluk uç dışarı bakar). */
 .finder-hero-flank {
@@ -3415,12 +3467,14 @@ html.light .custom-cursor-ring {
   .finder-hero-phrase,
   .finder-hero-flank,
   .finder-hero-diamond,
-  .finder-hero-rule {
+  .finder-hero-rule,
+  .finder-hero-kicker-rule {
     animation: none !important;
     opacity: 1;
   }
   .finder-hero-flank,
-  .finder-hero-rule {
+  .finder-hero-rule,
+  .finder-hero-kicker-rule {
     transform: none;
   }
   .finder-hero-diamond {

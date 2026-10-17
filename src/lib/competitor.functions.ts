@@ -21,6 +21,8 @@ export type { CompetitorReport, CompetitorSeller, CompetitorWeakness, CounterStr
 const AnalyzeInput = z.object({
   query: z.string().min(2).max(300),
   country: z.string().min(2).max(8).default("GLOBAL"),
+  // Seçilen arayüz dili: rakip raporunun tüm okunur alanları bu dilde çıkar.
+  lang: z.string().max(8).optional().default("tr"),
 });
 
 /**
@@ -30,6 +32,7 @@ const AnalyzeInput = z.object({
 async function buildCompetitorReport(data: {
   query: string;
   country: string;
+  lang?: string;
 }): Promise<{ report: CompetitorReport }> {
   const country = (data.country || "GLOBAL").toUpperCase();
 
@@ -54,10 +57,10 @@ async function buildCompetitorReport(data: {
   type SentimentRaw = { sentiment_summary?: string; weaknesses?: Partial<CompetitorWeakness>[] };
   const [sellersRaw, sentimentRaw] = await Promise.all([
     // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
-    callGemini(sellersPrompt(data.query, country, liveContext), undefined, 0.4)
+    callGemini(sellersPrompt(data.query, country, liveContext, data.lang), undefined, 0.4)
       .then((t) => extractJson<SellersRaw>(t, {}))
       .catch((): SellersRaw => ({})),
-    callGroq(sentimentPrompt(data.query, country, liveContext), 0.3)
+    callGroq(sentimentPrompt(data.query, country, liveContext, data.lang), 0.3)
       .then((t) => extractJson<SentimentRaw>(t, {}))
       .catch((): SentimentRaw => ({})),
   ]);
@@ -128,7 +131,11 @@ async function buildCompetitorReport(data: {
     .join("\n")
     .slice(0, 2500);
 
-  const strategy = await callGemini(strategyPrompt(data.query, country, context), undefined, 0.6)
+  const strategy = await callGemini(
+    strategyPrompt(data.query, country, context, data.lang),
+    undefined,
+    0.6,
+  )
     .then((t) => {
       const p = extractJson<Partial<CounterStrategy>>(t, {});
       if (!p.headline && !p.positioning) return null;
@@ -174,10 +181,11 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
 const CountryStrategyInput = z.object({
   niche: z.string().max(200).default(""),
   country: z.string().min(2).max(8).default("GLOBAL"),
+  lang: z.string().max(8).optional().default("tr"),
 });
 
 /** Ülke/niş stratejisi gövdesi — kredi iadesiyle sarmalanabilsin diye ayrı. */
-async function buildCountryStrategy(niche: string, country: string): Promise<string> {
+async function buildCountryStrategy(niche: string, country: string, lang?: string): Promise<string> {
   const { hasAnyAiProvider } = await import("./ai.server");
   if (!hasAnyAiProvider()) {
     throw new Error(
@@ -191,7 +199,7 @@ async function buildCountryStrategy(niche: string, country: string): Promise<str
     ]);
   try {
     const text = await withBudget(
-      callGemini(countryStrategyPrompt(niche, country), undefined, 0.6, false),
+      callGemini(countryStrategyPrompt(niche, country, lang), undefined, 0.6, false),
     );
     const p = extractJson<{ strategy?: string }>(text, {});
     const s = String(p.strategy ?? "").trim();
@@ -215,7 +223,7 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
     // Pazar karnesi AI stratejisi tek jetonluk bir iştir; iade garantisiyle koşar.
     await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
     return withCreditRefund(ctx.userId, async () => ({
-      strategy: await buildCountryStrategy(data.niche, data.country),
+      strategy: await buildCountryStrategy(data.niche, data.country, data.lang),
     }));
   });
 
@@ -223,6 +231,7 @@ const CopilotInput = z.object({
   message: z.string().min(1).max(1000),
   context: z.string().max(600).default(""),
   history: z.string().max(2000).default(""),
+  lang: z.string().max(8).optional().default("tr"),
 });
 
 /**
@@ -238,7 +247,7 @@ export const askCopilot = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ reply: string }> => {
     try {
       const text = await callGemini(
-        copilotPrompt(data.message, data.context, data.history),
+        copilotPrompt(data.message, data.context, data.history, data.lang),
         undefined,
         0.8,
         false,

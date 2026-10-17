@@ -67,6 +67,7 @@ import { checkIsAdmin } from "@/lib/admin.functions";
 import { PricingModal } from "@/components/pricing-modal";
 import { CountryInfoBox } from "@/components/country-info-box";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { enrichProduct } from "@/lib/recommendation";
 import { CurrencyProvider } from "@/lib/currency";
 import { PLATFORM_LOGO } from "@/lib/platform-logos";
@@ -285,7 +286,9 @@ function Dashboard() {
   const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
   const validateFn = useServerFn(validateProduct);
   const validateMut = useMutation({
-    mutationFn: (query: string) => validateFn({ data: { query, platforms } }),
+    // `lang`: doğrulama raporu (piyasa notu + ajan özetleri) seçilen dilde çıkar.
+    mutationFn: (query: string) =>
+      validateFn({ data: { query, platforms, lang: getUiLang() } }),
     onSuccess: (res) => {
       setValidationReport(res.report);
       qc.invalidateQueries({ queryKey: ["profile"] });

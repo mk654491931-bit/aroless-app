@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callAiMesh, extractJson } from "@/lib/ai.server";
 import { computeViralMetrics, type ViralMetrics } from "@/lib/viral-metrics";
 import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
+import { languageName } from "@/lib/ai-language";
 
 export type ViralAdRow = {
   id: string;
@@ -91,14 +92,7 @@ const BuildAdInput = z.object({
 
 type BuildAdInputType = z.infer<typeof BuildAdInput>;
 
-const LANG_NAMES: Record<string, string> = {
-  tr: "Turkish",
-  en: "English",
-  de: "German",
-  es: "Spanish",
-  fr: "French",
-  ar: "Arabic",
-};
+
 
 /**
  * Seçilen gerçek videodan yola çıkıp satıcının çekebileceği viral reklamı üretir.
@@ -121,7 +115,9 @@ async function buildViralAdBlueprint(data: BuildAdInputType): Promise<GeneratedV
   });
   const sourceNumbers = `${data.views.toLocaleString("en-US")} views · ${data.likes.toLocaleString("en-US")} likes · ${metrics.engagement_pct}% engagement · ${metrics.views_per_hour.toLocaleString("en-US")} views/hour · ${metrics.age_hours}h old · ${data.duration_sec}s`;
 
-  const lang = LANG_NAMES[(data.uiLang ?? "en").slice(0, 2)] ?? "English";
+  // Dil adı TEK kaynaktan (lib/ai-language.ts) — burada yerel eşleme tutmak
+  // yeni bir dil eklendiğinde sessizce eksik kalıyordu.
+  const lang = languageName(data.uiLang);
   const focus = data.product.trim()
     ? `The seller's own product is: "${data.product.trim()}". Adapt the winning mechanics to THIS product, keep the same format.`
     : `No product given: keep the same product category as the reference video.`;

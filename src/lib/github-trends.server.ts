@@ -7,6 +7,9 @@
 // them without any schema changes.
 // ============================================================================
 import { callGemini, callGroq, extractJson, mapWithConcurrency } from "./ai.server";
+// Dil adı TEK kaynaktan: eski ikili (tr/en) eşleme, diğer dillerde özeti
+// İngilizce'ye düşürüyordu.
+import { languageName } from "./ai-language";
 
 export type GitHubRepoTrend = {
   full_name: string;
@@ -176,7 +179,7 @@ export async function summarizeGitHubTrends(
 
   const prompt = `You are an e-commerce trend analyst. Below are recently trending GitHub repositories related to the niche "${niche}".
 Write 1 short paragraph (max 120 words) explaining what these open-source projects reveal about emerging product opportunities, buyer pain points, or hardware/software demand in this niche.
-Write in ${lang === "tr" ? "Turkish" : "English"}.
+Write in ${languageName(lang)}.
 
 Repositories:
 ${lines}
