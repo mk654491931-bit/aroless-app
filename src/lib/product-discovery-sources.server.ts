@@ -363,8 +363,9 @@ export const githubSource: ProductSource = {
     const queries = englishThenOriginal(niche);
     for (const query of queries) {
       const q = encodeURIComponent(`${query} in:name,description,readme`);
-      // JETON İSTEĞE BAĞLI: varsa kota 60/saat → 5.000/saat'e çıkar ve 403 ile
-      // kaybedilen koşular biter; yoksa anahtarsız davranış AYNEN korunur.
+      // JETON İSTEĞE BAĞLI: resmî ARAMA kotası kimliksiz 10 istek/dk,
+      // kimlikli 30 istek/dk; jeton 403 ile kaybedilen koşuları biter.
+      // Yoksa anahtarsız davranış AYNEN korunur.
       const res = await fetch(
         `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
         { signal: AbortSignal.timeout(2_500), headers: githubApiHeaders() },

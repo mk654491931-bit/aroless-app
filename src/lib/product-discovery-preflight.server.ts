@@ -247,15 +247,17 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     {
       id: "github_token",
       label: "GitHub API jetonu (isteğe bağlı)",
-      // GitHub arama API'si jetonSUZ 60 istek/saat; ürün bulucu bir koşuda
-      // birkaç niş × varyant aradığı için 403 ile satır kaybediliyordu.
-      // Jetonla sınır 5.000 istek/saat (resmî GitHub kotası).
+      // Resmî GitHub ARAMA kotası: kimliksiz 10 istek/dk, kimlikli 30 istek/dk
+      // (docs.github.com/rest/search). Ürün bulucu bir koşuda birkaç niş ×
+      // varyant aradığı için kimliksiz koşuda 403 ile satır kaybediliyordu.
+      // NOT: 5.000 istek/saat genel REST kotasıdır, ARAMA uçları için geçerli
+      // değildir — panelde o sayıyı yazmak yanlış bir vaat olurdu.
       ok: set(env, "GITHUB_API_TOKEN") || set(env, "GH_API_TOKEN") || set(env, "GITHUB_PAT"),
       optional: true,
       detail:
         set(env, "GITHUB_API_TOKEN") || set(env, "GH_API_TOKEN") || set(env, "GITHUB_PAT")
-          ? "tanımlı — GitHub repo kanıtı 5.000 istek/saat sınırıyla okunur"
-          : "Yok: GitHub repo kanıtı anahtarsız 60 istek/saat sınırında okunur (yoğun koşuda 403 olabilir).",
+          ? "tanımlı — GitHub repo kanıtı kimlikli arama kotasıyla (30 istek/dk) okunur"
+          : "Yok: GitHub repo kanıtı kimliksiz arama kotasında (10 istek/dk) okunur; yoğun koşuda 403 olabilir.",
       fix:
         "İsteğe bağlı — github.com/settings/tokens adresinden salt-okunur (public_repo) jeton üret, GITHUB_API_TOKEN olarak ekle. Git kimliği için kullanılan GITHUB_TOKEN'dan AYRI tutulur.",
     },

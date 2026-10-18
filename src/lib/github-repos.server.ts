@@ -1,12 +1,13 @@
 // ============================================================================
 // GITHUB REPOS — nişin açık kaynak hareketi (ANAHTARSIZ çalışır, jetonla güçlenir).
 //
-// ÖLÇÜLEN DARBOĞAZ (2026-10): GitHub arama API'si kimlik doğrulamasız 60
-// istek/saat verir ve ürün bulucu TEK koşuda birkaç niş × varyant arayabilir;
-// bu yüzden 403 ile kaybedilen koşular oluyordu. Jeton eklendiğinde sınır
-// 5.000 istek/saate çıkar (resmî doküman: "rate limit for authenticated
-// requests"). Jeton YOKSA kaynak eskisi gibi anahtarsız çalışır — bu yüzden
-// jeton İSTEĞE BAĞLIDIR.
+// ÖLÇÜLEN DARBOĞAZ (2026-10): ürün bulucu TEK koşuda birkaç niş × varyant
+// arayabilir ve GitHub ARAMA uçlarının kotası çok dardır. Resmî sınırlar
+// (docs.github.com/rest/search): kimliksiz **10 istek/dk**, kimlikli **30
+// istek/dk**. (Genel REST kotası olan 5.000 istek/saat ARAMA uçları için
+// GEÇERLİ DEĞİLDİR — burada o sayıyı yazmak yanlış bir kota vaadi olurdu.)
+// Bu yüzden jeton, koşuyu 403'ten kurtaran pratik eşiktir; kaynak jeton
+// YOKSA da eskisi gibi anahtarsız çalışır — jeton İSTEĞE BAĞLIDIR.
 //
 // JETON ADI NEDEN `GITHUB_API_TOKEN`: bu repoda `GITHUB_TOKEN` git işlemleri
 // için ayrılmıştır (Freebuff/GitHub App tarafından yönetilir) ve AI/GitHub

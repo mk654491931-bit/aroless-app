@@ -314,7 +314,7 @@ anahtar yoksa kaynak 0 ms'de boş döner (ağ çağrısı yapılmaz) — yani "a
 | L0/L3 | `searchapi-shopping` + `serper-shopping` | anahtar: `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI ile AYNI Google Shopping verisi (fiyat + puan + görsel) iki ek ücretsiz kotalı yoldan; biri tükenirse arama ölmez | `parseSerperShopping` / `parseSearchApiShopping` saf test; her servis kendi aylık kovasında |
 | L3 Talep | `youtube-attention` (Data API v3) | anahtar: `YOUTUBE_API_KEY` | Niş dikkat/ilgi sinyali — `NON_PRODUCT_SOURCES` içinde, ürün kartı üretmez | 0 ms boş (anahtarsız) |
 | L3 Talep | `google-trends-keyed` (SearchAPI/SerpAPI `engine=google_trends`) | anahtar: `SEARCHAPI_KEY` / `SERPAPI_KEY` | Anahtarsız Trends ucu 429 verdiğinde **gerçek** aylık seri buradan okunur; niş momentumu Wikipedia'ya bağımlı kalmaz | `momentumFromPoints` (iki yarı, ±100 bandı, <4 nokta → `null`), `parseKeyedTrends` |
-| L3 Ekosistem | `github` kaynağı güçlendirildi: jeton desteği + ölçülen alanlar | anahtar: `GITHUB_API_TOKEN` (isteğe bağlı) | Kota 60 → 5.000 istek/saat (403 ile satır kaybı biter); `notes` artık yıldız + fork + açık konu + **son push N gün önce** + dil/etiket taşır; `archived` repo elenir | `githubApiHeaders`, `parseGithubRepos`, `daysSincePush` saf test |
+| L3 Ekosistem | `github` kaynağı güçlendirildi: jeton desteği + ölçülen alanlar | anahtar: `GITHUB_API_TOKEN` (isteğe bağlı) | Resmî ARAMA kotası kimliksiz 10 istek/dk → kimlikli 30 istek/dk (403 ile satır kaybı biter). **5.000/saat genel REST kotasıdır, arama uçlarını kapsamaz.** `notes` artık yıldız + fork + açık konu + **son push N gün önce** + dil/etiket taşır; `archived` repo elenir | `githubApiHeaders`, `parseGithubRepos`, `daysSincePush` saf test |
 | L4 Tedarik | `cj-supplier.server.ts`: `parseCjOffers`, `fetchCjOffers`, `resolveCjAccessToken`, `cjConfigured` | anahtar: `CJ_API_KEY` (jeton otomatik) | MOQ (`directMinOrderNum`), depo ülkesi, fiyat bandı — AliExpress/MIC'in ölçemediği yuvalar | `parseCjOffers` saf test + `ebay-auth.test.ts` (API Key ≠ access token, önbellek); pipeline 3. tedarik kaynağı |
 | L4 Kur | `fx-rates.server.ts` çoklu sağlayıcı + önbellek | anahtarsız | Kur gelmezse fiyat `null` kalır (tahmin yok); artık 2 sağlayıcı denenir | `product-discovery-money.test.ts` |
 | L7 AI havuzu | GitHub Models (`models.github.ai/inference`) `pool_d` yedeği | anahtar: `GITHUB_MODELS_TOKEN` | Ücretsiz günlük kota ile ek model kapasitesi; `PROVIDER_D` boşsa devreye girer | `ai-pool.test.ts`, `ai-keys.test.ts` |
@@ -335,14 +335,14 @@ yasak), Alibaba/1688/Temu/Walmart (partner onayı). "Görüntülenme ≠ satış
 | Env | Servis | Ücretsiz katman | Ne açar |
 | --- | --- | --- | --- |
 | `JINA_API_KEY_1..8` | jina.ai Reader | 10M token/anahtar | Ürün sayfası okuma (en yüksek etki) |
-| `SERPAPI_KEY` / `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI / SearchAPI / Serper | 100/ay · 100/ay · 2.500 tek seferlik | Google Shopping gerçek fiyat + puan |
+| `SERPAPI_KEY` / `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI / SearchAPI / Serper | SerpAPI **250 arama/ay** (kart yok) · SearchAPI **100 ücretsiz istek** (yenilenip yenilenmediği doğrulanmadı) · Serper ücretsiz kredi (miktar resmî sayfada doğrulanamadı) | Google Shopping gerçek fiyat + puan |
 | `SCRAPERAPI_KEY` | ScraperAPI | 1.000 kredi/ay | TR/yerel pazaryeri kazıması |
 | **`EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`** (önerilen) | eBay Browse | 5.000 çağrı/gün | Küresel pazar + aktif ilan sayısı. Jeton `client_credentials` ile otomatik alınır ve ~2 saatte yenilenir (`ebay-auth.server.ts`). Alternatif: elle `EBAY_OAUTH_TOKEN` (2 saatte ölür) |
 | `TAVILY_API_KEY` | Tavily | 1.000 kredi/ay | Web fiyat/puan satırları |
 | `CJ_API_KEY` | CJ Dropshipping | 50.000 puan/gün | MOQ + depo ülkesi + fiyat bandı. Panel API Key'i **doğrudan jeton değildir**: `getAccessToken` ile değiştirilir (süreç başına önbellekli). Alternatif: hazır `CJ_ACCESS_TOKEN` |
 | `BESTBUY_API_KEY` | Best Buy | ücretsiz anahtar | ABD katalog: fiyat + puan + GTIN |
 | `YOUTUBE_API_KEY` | YouTube Data v3 | 10.000 birim/gün | Dikkat sinyali (ürün değil) |
-| `GITHUB_API_TOKEN` (`GH_API_TOKEN`/`GITHUB_PAT` eşanlamlı) | GitHub REST | jetonlu 5.000 istek/saat (jetonsuz 60) | Niş ekosistem kanıtı: yıldız/fork/açık konu/son push — **git için kullanılan `GITHUB_TOKEN`'dan ayrı**, o otomatik tüketilmez |
+| `GITHUB_API_TOKEN` (`GH_API_TOKEN`/`GITHUB_PAT` eşanlamlı) | GitHub REST (arama) | arama kotası: jetonlu **30 istek/dk**, jetonsuz **10 istek/dk** (5.000/saat genel REST kotasıdır, aramayı kapsamaz) | Niş ekosistem kanıtı: yıldız/fork/açık konu/son push — **git için kullanılan `GITHUB_TOKEN`'dan ayrı**, o otomatik tüketilmez |
 | `FIRECRAWL_API_KEY` / `SCRAPINGBEE_API_KEY` / `SPIDER_API_KEY` / `EXA_API_KEY` | Firecrawl / ScrapingBee / Spider / Exa | 1.000/ay · 1.000 · deneme · 1.000/ay | Jina düşerse yedek okuma |
 | `GITHUB_MODELS_TOKEN` (+ `GITHUB_MODELS_MODEL`) | GitHub Models | ücretsiz günlük kota | Ek LLM kapasitesi (`pool_d`) |
 | `WOOCOMMERCE_STORES` | kendi/izinli mağaza listesi | $0 | D2C katalog satırları |

@@ -41,7 +41,7 @@ const READY: PreflightEnv = {
   // katalog API'si. İkisi de isteğe bağlıdır; tam kurulumda tanımlıdır.
   FIRECRAWL_API_KEY: "fc",
   BESTBUY_API_KEY: "bb",
-  // GitHub API jetonu: anahtarsız sınır 60 istek/saat, jetonla 5.000/saat.
+  // GitHub API jetonu: arama kotası kimliksiz 10 istek/dk, kimlikli 30 istek/dk.
   // Tam kurulumda tanımlıdır; yokluğu hatı düşürmez.
   GITHUB_API_TOKEN: "gh",
   // eBay: Browse API uygulama jetonu ister; Client ID + Secret ile jeton
