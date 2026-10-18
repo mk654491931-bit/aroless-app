@@ -1300,6 +1300,217 @@ interface WebHit {
   snippet: string;
 }
 
+/* ---------------- Brave Search API — `web-reviews`ün İLK motoru ---------------- */
+
+/**
+ * BRAVE SEARCH API — anahtarlı, resmî JSON arama motoru.
+ *
+ * NEDEN VAR (ölçülmüş gerekçe): `web-reviews` bugüne kadar anahtarsız Bing +
+ * DuckDuckGo HTML'ini kazıyordu ve DDG ardışık isteklerden sonra **202
+ * bot-guard** döndürüyor (bkz. dosyadaki ölçüm notu). Brave aynı işi resmî bir
+ * API'yle yapar, BAĞIMSIZ indekstir (Google/Bing kopyası değil) ve ÜLKE/DİL
+ * hedeflemesi vardır: `country=TR` + `search_lang=tr` ile Türkçe ürün/fiyat
+ * snippet'i okunur — Bing/DDG yolunda bu ayar yoktu.
+ *
+ * NEDEN AYRI KAYNAK DEĞİL: Tavily zaten ayrı bir ürün kaynağı (`tavily-search`).
+ * Brave'i ikinci bir paralel kaynak yapmak, aynı web satırları için iki kez
+ * ödeme yapmak olurdu. Bu yüzden Brave, MEVCUT `web-reviews` kaynağının ilk
+ * motorudur: satır sayısı artar, maliyet artmaz.
+ *
+ * MALİYET (resmî fiyat sayfası, 2026-10-18): $5 / 1.000 istek ve ayda $5
+ * ücretsiz kredi ≈ **1.000 sorgu**. Eski "2.000 sorgu/ay ücretsiz" bilgisi
+ * geçersiz. Bütçeyi korumak için üç katman var:
+ *   1. 24 saatlik kalıcı önbellek → aynı niş+ülke tekrarı **0 kredi**,
+ *   2. aylık kova `BRAVE_MONTHLY_LIMIT` (varsayılan 900: ay sonunda susmamak
+ *      için bilinçli pay),
+ *   3. niş başına TEK sorgu (çeşit denemesi yok; Bing/DDG de tek sorgu atar).
+ *
+ * ANAHTAR YOKSA: 0 ms, 0 ağ çağrısı; motor listeden çıkar, Bing/DDG eskisi
+ * gibi çalışır. Yani Brave eklemek hattı hiçbir koşulda kırmaz.
+ */
+export function braveKey(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["BRAVE_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_KEY"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+/** Brave'in kabul ettiği ülke kodları; liste dışı kod gönderilirse API 422 verir. */
+const BRAVE_COUNTRIES = new Set([
+  "AR",
+  "AU",
+  "AT",
+  "BE",
+  "BR",
+  "CA",
+  "CL",
+  "DK",
+  "FI",
+  "FR",
+  "DE",
+  "HK",
+  "IN",
+  "ID",
+  "IT",
+  "JP",
+  "KR",
+  "MY",
+  "MX",
+  "NL",
+  "NZ",
+  "NO",
+  "CN",
+  "PL",
+  "PT",
+  "PH",
+  "RU",
+  "SA",
+  "ZA",
+  "ES",
+  "SE",
+  "CH",
+  "TW",
+  "TR",
+  "GB",
+  "US",
+]);
+
+/** Ülke → `search_lang`. Yalnız İngilizce OLMAYAN diller yazılır. */
+const BRAVE_SEARCH_LANG: Record<string, string> = {
+  TR: "tr",
+  DE: "de",
+  AT: "de",
+  CH: "de",
+  FR: "fr",
+  BE: "fr",
+  ES: "es",
+  MX: "es",
+  AR: "es",
+  CL: "es",
+  IT: "it",
+  PT: "pt",
+  BR: "pt",
+  NL: "nl",
+  PL: "pl",
+  RU: "ru",
+  JP: "ja",
+  KR: "ko",
+  CN: "zh-hans",
+  TW: "zh-hant",
+  SA: "ar",
+  IN: "en",
+  ID: "id",
+  MY: "ms",
+};
+
+/**
+ * Ülke kodundan Brave parametreleri. Desteklenmeyen kod → `country` GÖNDERİLMEZ
+ * (uydurma kod 422 döndürür ve o nişin satırları kaybolurdu).
+ */
+export function braveLocale(country: string): { country: string; searchLang: string } {
+  const code = String(country ?? "")
+    .trim()
+    .toUpperCase();
+  const safe = BRAVE_COUNTRIES.has(code) ? code : "";
+  return { country: safe, searchLang: safe ? (BRAVE_SEARCH_LANG[safe] ?? "en") : "en" };
+}
+
+/** Brave `web.results` yanıtını `WebHit`e çevirir (SAF, ağsız — test edilir). */
+export function parseBraveHits(payload: unknown): WebHit[] {
+  const results = (payload as { web?: { results?: unknown } })?.web?.results;
+  if (!Array.isArray(results)) return [];
+  const out: WebHit[] = [];
+  for (const raw of results) {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const url = String(r["url"] ?? "").trim();
+    if (!/^https?:\/\//i.test(url)) continue;
+    let host = "";
+    try {
+      host = new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      continue;
+    }
+    const title = decode(String(r["title"] ?? ""))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (title.length < 4) continue;
+    // `extra_snippets` (en fazla 5 ek paragraf) fiyat/puanı snippet'te
+    // yakalama şansını artırır — bu yüzden isteniyor.
+    const extra = Array.isArray(r["extra_snippets"])
+      ? r["extra_snippets"].map((s) => String(s ?? "")).join(" ")
+      : "";
+    const snippet = decode(`${String(r["description"] ?? "")} ${extra}`)
+      .replace(/\s+/g, " ")
+      .trim();
+    out.push({
+      title: title.slice(0, 200),
+      url,
+      host,
+      snippet: `${title} ${snippet}`.slice(0, 1_200),
+    });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** Sorgu adresi ayrı fonksiyon: ülke/dil parametreleri testte sabitlenir. */
+export function braveSearchUrl(niche: string, country: string): string {
+  const locale = braveLocale(country);
+  const params = new URLSearchParams({
+    q: `${String(niche ?? "").trim().slice(0, 80)} ${REVIEW_SUFFIX}`,
+    count: "20",
+    // HTML etiketi (`<strong>`) gelmesin: snippet doğrudan fiyat/puan için okunur.
+    text_decorations: "false",
+    extra_snippets: "true",
+    search_lang: locale.searchLang,
+  });
+  if (locale.country) params.set("country", locale.country);
+  return `https://api.search.brave.com/res/v1/web/search?${params.toString()}`;
+}
+
+/** Aynı niş+ülke 24 saat içinde tekrar aranırsa kredi HARCANMAZ. */
+const BRAVE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Brave'den web sonuçları — önbellek + aylık kota + ülke/dil.
+ *
+ * Sözleşme: anahtar yoksa VEYA kota dolduysa `[]` döner ve AĞA ÇIKMAZ;
+ * çağıran (`webReviewSource`) Bing/DDG'ye düşer. Hata fırlatırsa da aynı
+ * sonuç olur (motor döngüsü hatayı yutar) — satır kaybı olmaz.
+ */
+export async function braveHits(niche: string, country: string): Promise<WebHit[]> {
+  const key = braveKey();
+  const q = String(niche ?? "").trim();
+  if (!key || !q) return [];
+
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const cacheId = await cacheKey("brave-web", [q.toLowerCase(), country.toUpperCase()]);
+  const cached = await cacheGet<WebHit[]>(cacheId);
+  if (cached) return cached;
+
+  const { allowBraveCredit } = await import("./scraper-quota.server");
+  if ((await allowBraveCredit()) === false) {
+    console.log("[discovery] brave-web: aylık kota doldu — Bing/DDG'ye düşülüyor");
+    return [];
+  }
+
+  const res = await fetch(braveSearchUrl(q, country), {
+    headers: {
+      accept: "application/json",
+      "accept-encoding": "gzip",
+      "x-subscription-token": key,
+    },
+    signal: AbortSignal.timeout(4_000),
+  });
+  if (!res.ok) throw new Error(`brave HTTP ${res.status}`);
+  const hits = parseBraveHits(await res.json().catch(() => null));
+  // YALNIZ BOŞ OLMAYAN sonuç önbelleğe yazılır (geçici hata nişi 24 saat
+  // boyunca boş göstermesin).
+  if (hits.length) await cacheSet(cacheId, "brave-web", hits, BRAVE_TTL_MS);
+  return hits;
+}
+
 /** DuckDuckGo HTML sonuçları — bot-guard 202 döndüğünde tekrar denenir. */
 async function duckduckgoHits(niche: string): Promise<WebHit[]> {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(
@@ -1405,61 +1616,80 @@ async function bingHits(niche: string): Promise<WebHit[]> {
   return hits;
 }
 
+/**
+ * Web satırlarını motor sırasıyla toplar.
+ *
+ * MOTOR SIRASI: **Brave (anahtarlıysa) → Bing → DDG.**
+ *   • Brave varsa ilk sorgu oraya gider: resmî API, bağımsız indeks, ülke/dil.
+ *   • Anahtar yoksa ya da aylık kota dolduysa `braveHits` 0 ms'de `[]` döner ve
+ *     liste eskisi gibi Bing'den başlar — yani Brave eklemek kaybı getirmez.
+ */
+async function webReviewRows(niche: string, country: string): Promise<RawProduct[]> {
+  const engines: ((n: string) => Promise<WebHit[]>)[] = [];
+  if (braveKey()) engines.push((n) => braveHits(n, country));
+  engines.push(bingHits, duckduckgoHits);
+  let hits: WebHit[] = [];
+  let enginesUsed = 0;
+  for (const engine of engines) {
+    try {
+      const found = await engine(niche);
+      if (found.length) {
+        hits = hits.concat(found);
+        enginesUsed++;
+      }
+    } catch {
+      // bu motor öldü — sıradaki denenir
+    }
+    if (hits.length >= 12) break;
+  }
+  if (!hits.length) {
+    throw new Error(
+      enginesUsed === 0 ? "no engine returned results (brave+ddg+bing)" : "no results",
+    );
+  }
+
+  const out: RawProduct[] = [];
+  const seen = new Set<string>();
+  for (const hit of hits) {
+    const key = hit.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { rating, count } = ratingFromText(hit.snippet);
+    const price = priceFromText(hit.snippet);
+    out.push({
+      title: hit.title.slice(0, 180),
+      brand: brandFromTitle(hit.title),
+      seller: hit.host.split(".")[0]?.replace(/^\w/, (m) => m.toUpperCase()) ?? "",
+      priceUsd: price,
+      rating,
+      ratingCount: count,
+      // Sayfa metninde stok ifadesi geçiyorsa bilinir, yoksa bilinmiyor.
+      inStock: /\bout of stock\b|\bsold out\b/i.test(hit.snippet)
+        ? false
+        : /in stock|available/i.test(hit.snippet)
+          ? true
+          : null,
+      source: "web-reviews",
+      url: hit.url,
+      notes: [hit.host, price ? `$${price}` : "", count ? `${count} değerlendirme` : ""]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+  }
+  return out.slice(0, 16);
+}
+
 export const webReviewSource: ProductSource = {
   name: "web-reviews",
   timeoutMs: 7_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    // SIRA ÖLÇÜMLE BELİRLENDİ: Bing önce (ölçüldü: 200, ~220 ms, 10 sonuç),
-    // DDG yedek (ölçüldü: ardışık isteklerden sonra 202 bot-guard).
-    const engines = [bingHits, duckduckgoHits];
-    let hits: WebHit[] = [];
-    let enginesUsed = 0;
-    for (const engine of engines) {
-      try {
-        const found = await engine(niche);
-        if (found.length) {
-          hits = hits.concat(found);
-          enginesUsed++;
-        }
-      } catch {
-        // bu motor öldü — sıradaki denenir
-      }
-      if (hits.length >= 12) break;
-    }
-    if (!hits.length) {
-      throw new Error(enginesUsed === 0 ? "no engine returned results (ddg+bing)" : "no results");
-    }
-
-    const out: RawProduct[] = [];
-    const seen = new Set<string>();
-    for (const hit of hits) {
-      const key = hit.url.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const { rating, count } = ratingFromText(hit.snippet);
-      const price = priceFromText(hit.snippet);
-      out.push({
-        title: hit.title.slice(0, 180),
-        brand: brandFromTitle(hit.title),
-        seller: hit.host.split(".")[0]?.replace(/^\w/, (m) => m.toUpperCase()) ?? "",
-        priceUsd: price,
-        rating,
-        ratingCount: count,
-        // Sayfa metninde stok ifadesi geçiyorsa bilinir, yoksa bilinmiyor.
-        inStock: /\bout of stock\b|\bsold out\b/i.test(hit.snippet)
-          ? false
-          : /in stock|available/i.test(hit.snippet)
-            ? true
-            : null,
-        source: "web-reviews",
-        url: hit.url,
-        notes: [hit.host, price ? `$${price}` : "", count ? `${count} değerlendirme` : ""]
-          .filter(Boolean)
-          .join(" · ")
-          .slice(0, 200),
-      });
-    }
-    return out.slice(0, 16);
+    return webReviewRows(niche, "");
+  },
+  // Ülke verildiğinde Brave `country`/`search_lang` ile yerelleşir (TR'de
+  // Türkçe snippet). Anahtar yoksa bu yol eskisiyle AYNI (Bing → DDG).
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    return webReviewRows(niche, country);
   },
 };
 

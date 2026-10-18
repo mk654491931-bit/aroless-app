@@ -165,27 +165,49 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     },
     {
       id: "reader_fallback",
-      label: "Yedek okuma sağlayıcısı (Firecrawl / ScrapingBee / Tavily / Exa / Spider / Crawl4AI, isteğe bağlı)",
-      ok:
-        set(env, "FIRECRAWL_API_KEY") ||
-        set(env, "SCRAPINGBEE_API_KEY") ||
-        set(env, "TAVILY_API_KEY") ||
-        set(env, "EXA_API_KEY") ||
-        set(env, "SPIDER_API_KEY") ||
-        set(env, "CRAWL4AI_URL"),
+      label: "Yedek okuma sağlayıcısı (Firecrawl / ScrapingBee, isteğe bağlı)",
+      // YALNIZ GERÇEKTEN BAĞLI OLAN SAĞLAYICILAR sayılır. `TAVILY_API_KEY`,
+      // `EXA_API_KEY`, `SPIDER_API_KEY` ve `CRAWL4AI_URL` bu repoda okuma yoluna
+      // BAĞLI DEĞİL (Tavily ayrı bir ürün kaynağıdır; diğer üçü hiçbir yerde
+      // okunmuyor). Burada saymak, kullanıcıya olmayan bir yedeği varmış gibi
+      // göstermek olurdu — panelin tek işi bunu engellemek.
+      ok: set(env, "FIRECRAWL_API_KEY") || set(env, "FIRECRAWL_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") || set(env, "SCRAPING_BEE_API_KEY"),
       optional: true,
       detail:
-        set(env, "FIRECRAWL_API_KEY") ||
-        set(env, "SCRAPINGBEE_API_KEY") ||
-        set(env, "TAVILY_API_KEY") ||
-        set(env, "EXA_API_KEY") ||
-        set(env, "SPIDER_API_KEY") ||
-        set(env, "CRAWL4AI_URL")
+        set(env, "FIRECRAWL_API_KEY") || set(env, "FIRECRAWL_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") || set(env, "SCRAPING_BEE_API_KEY")
           ? "tanımlı — Jina bir sayfayı veremediğinde (kota/engel) ürün satırı yedek okuyucudan gelir"
           : "Yok: Jina engellediğinde anahtarsız r.markdown.new/defuddle.md devreye girer (hat yine çalışır).",
       fix:
-        "İsteğe bağlı — firecrawl.dev (FIRECRAWL_API_KEY), scrapingbee.com (SCRAPINGBEE_API_KEY), " +
-        "tavily.com (TAVILY_API_KEY), exa.ai (EXA_API_KEY) veya spider.cloud (SPIDER_API_KEY).",
+        "İsteğe bağlı — firecrawl.dev (FIRECRAWL_API_KEY) veya scrapingbee.com (SCRAPINGBEE_API_KEY).",
+    },
+    {
+      id: "tavily_source",
+      label: "Tavily web ürün kaynağı (isteğe bağlı)",
+      ok: set(env, "TAVILY_API_KEY") || set(env, "TAVILY_KEY"),
+      optional: true,
+      detail:
+        set(env, "TAVILY_API_KEY") || set(env, "TAVILY_KEY")
+          ? "tanımlı — web'de yayınlanmış fiyat/puan satırları `tavily-search` kaynağından gelir (okuyucu yedeği DEĞİL)"
+          : "Yok: `tavily-search` kaynağı atlanır; Jina'nın yedek okuyucusu Firecrawl/ScrapingBee'dir.",
+      fix: "İsteğe bağlı — tavily.com ücretsiz anahtarını TAVILY_API_KEY olarak ekle.",
+    },
+    {
+      id: "brave_web",
+      label: "Brave web araması — `web-reviews`ün ilk motoru (isteğe bağlı)",
+      // Brave AYRI bir paralel kaynak DEĞİL: var olan `web-reviews` kaynağının
+      // ilk motoru. Bu yüzden burada "ürün satırı ikiye katlanır" demek yanlış
+      // olur; doğru cümle: kırılgan Bing/DDG kazıması yerine resmî API +
+      // ülke/dil hedeflemesi. Detay metni bunu olduğu gibi yazar.
+      ok: set(env, "BRAVE_API_KEY") || set(env, "BRAVE_SEARCH_API_KEY") || set(env, "BRAVE_KEY"),
+      optional: true,
+      detail:
+        set(env, "BRAVE_API_KEY") || set(env, "BRAVE_SEARCH_API_KEY") || set(env, "BRAVE_KEY")
+          ? "tanımlı — `web-reviews` önce Brave'i sorar: ülke/dil hedefli sonuç, 24 saat önbellek, aylık ~900 sorgu bütçesi; Bing/DDG yedek kalır"
+          : "Yok: `web-reviews` anahtarsız Bing → DuckDuckGo HTML'ini okur (DDG ardışık isteklerde 202 bot-guard dönebiliyor).",
+      fix:
+        "İsteğe bağlı — api.search.brave.com'dan anahtar al, BRAVE_API_KEY olarak ekle ($5/1.000 istek, ayda $5 ücretsiz kredi ≈ 1.000 sorgu).",
     },
     {
       id: "bestbuy",

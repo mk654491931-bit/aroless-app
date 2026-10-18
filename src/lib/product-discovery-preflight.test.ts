@@ -44,6 +44,11 @@ const READY: PreflightEnv = {
   // GitHub API jetonu: arama kotası kimliksiz 10 istek/dk, kimlikli 30 istek/dk.
   // Tam kurulumda tanımlıdır; yokluğu hatı düşürmez.
   GITHUB_API_TOKEN: "gh",
+  // Tavily: AYRI bir ürün kaynağı (`tavily-search`), okuyucu yedeği DEĞİL.
+  TAVILY_API_KEY: "tv",
+  // Brave: `web-reviews` kaynağının İLK motoru (paralel kaynak değil).
+  // Anahtarsız da hat çalışır; tam kurulumda tanımlıdır.
+  BRAVE_API_KEY: "bv",
   // eBay: Browse API uygulama jetonu ister; Client ID + Secret ile jeton
   // kendiliğinden alınır (`ebay-auth.server.ts`). İsteğe bağlıdır.
   EBAY_CLIENT_ID: "ebay-id",
@@ -104,6 +109,38 @@ describe("preflight env kontrolleri", () => {
     expect(byId(half, "bestbuy")?.ok).toBe(false);
     expect(byId(half, "bestbuy")?.optional).toBe(true);
     expect(envChecks(READY).find((c) => c.id === "bestbuy")?.ok).toBe(true);
+  });
+
+  it("okuyucu yedeği yalnız GERÇEKTEN bağlı sağlayıcıları sayar", () => {
+    // Dürüstlük kuralı: Tavily/Exa/Spider/Crawl4AI okuma yoluna bağlı değil.
+    // Yalnız Tavily anahtarı varken "yedek okuyucu var" demek yanlış olurdu.
+    const onlyTavily = envChecks({
+      ...READY,
+      FIRECRAWL_API_KEY: undefined,
+      TAVILY_API_KEY: "tv",
+      EXA_API_KEY: "ex",
+      SPIDER_API_KEY: "sp",
+      CRAWL4AI_URL: "http://crawl4ai.local",
+    });
+    expect(byId(onlyTavily, "reader_fallback")?.ok).toBe(false);
+    expect(byId(onlyTavily, "tavily_source")?.ok).toBe(true);
+    // Firecrawl varsa yedek gerçekten açılır.
+    expect(
+      byId(envChecks({ ...READY, FIRECRAWL_API_KEY: "fc" }), "reader_fallback")?.ok,
+    ).toBe(true);
+  });
+
+  it("Brave satırı AYRI bir kaynak gibi değil, web-reviews motoru olarak görünür", () => {
+    // Brave `web-reviews`ün ilk motorudur: Tavily gibi paralel bir ürün
+    // kaynağı değil. Panel bunu doğru anlatmalı ve yokluğu hatı düşürmemeli.
+    const without = envChecks({ ...READY, BRAVE_API_KEY: undefined });
+    const check = byId(without, "brave_web");
+    expect(check?.ok).toBe(false);
+    expect(check?.optional).toBe(true);
+    expect(check?.fix).toContain("BRAVE_API_KEY");
+    expect(byId(envChecks(READY), "brave_web")?.ok).toBe(true);
+    // Satır "web-reviews" diye anlatılmalı: kullanıcı ikinci bir kaynak sanmasın.
+    expect(byId(envChecks(READY), "brave_web")?.fix).toContain("BRAVE_API_KEY");
   });
 
   it("CJ anahtarı panelde görünür; yokluğu hatı düşürmez", () => {

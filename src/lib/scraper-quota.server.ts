@@ -278,6 +278,50 @@ export async function allowShoppingApiCredit(
   }
 }
 
+/* ------------------------------------------- Brave Search (web araması) kotası */
+
+/**
+ * BRAVE SEARCH API — kendi AYLIK kovası.
+ *
+ * NEDEN AYRI KOVA: Brave ölçülmüş olarak $5/1.000 istek ve ayda $5 ücretsiz
+ * krediyle çalışır (≈1.000 sorgu). Bu bütçeyi ScraperAPI/SerpAPI sayaçlarıyla
+ * paylaştırmak, birinin diğerini sessizce aç bırakması demek olurdu.
+ *
+ * VARSAYILAN 900: ücretsiz kredinin tamamını harcamamak için bilinçli pay
+ * (aynı ilke `serpMonthlyLimit`te de var). `BRAVE_MONTHLY_LIMIT` ile değişir.
+ *
+ * FAIL-OPEN: sayaç okunamazsa arama yapılır — kotayı korumak için ürün
+ * göstermemek daha kötüdür.
+ */
+function braveMonthlyLimit(): number {
+  const raw = Number(process.env.BRAVE_MONTHLY_LIMIT ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 900;
+}
+
+/** Brave araması yapmadan önce bütçede yer var mı? */
+export async function allowBraveCredit(): Promise<boolean | null> {
+  const bucket = `brave-searches-${new Date().toISOString().slice(0, 7)}`;
+  const windowSeconds = 400 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: braveMonthlyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[brave] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[brave] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
 /** SerpAPI araması yapmadan önce bütçede yer var mı? */
 export async function allowSerpApiCredit(): Promise<boolean | null> {
   const bucket = `serpapi-searches-${new Date().toISOString().slice(0, 7)}`;
