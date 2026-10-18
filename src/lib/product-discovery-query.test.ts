@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   asciiFold,
   englishProductQuery,
+  englishThenOriginal,
   isGameNiche,
   isTurkishQuery,
   looksLikeProductRow,
@@ -36,6 +37,54 @@ describe("Türkçe ek soyma", () => {
   });
 });
 
+describe("sözlük doğruluğu (yanlış çeviri = yanlış kategori)", () => {
+  it("kolye TAKIDIR — kulaklık değil", () => {
+    // ÖLÇÜLEN HATA: `kolye: "earbuds"` yüzünden kolye nişi pazaryerinde
+    // kulaklık arıyordu.
+    expect(englishProductQuery("kolye")).toBe("necklace");
+    expect(englishProductQuery("gümüş kolye")).toBe("silver necklace");
+  });
+
+  it("tel = wire (telefon değil), kayak = ski (kürek değil)", () => {
+    expect(englishProductQuery("tel örgü")).toBe("wire orgu");
+    expect(englishProductQuery("kayak gözlüğü")).toBe("ski gozlugu");
+  });
+
+  it("Türkçe karakterli anahtarlar da eşleşir (kapı → door)", () => {
+    // `kapı` anahtarı ASCII olmadığı için hiç eşleşmiyordu.
+    expect(englishProductQuery("kapı kiliti")).toContain("door");
+    expect(englishProductQuery("pencere perdesi")).toContain("window");
+  });
+
+  it("niteleyiciler çevrilir — yarım İngilizce sorgu çıkmaz", () => {
+    expect(englishProductQuery("kablosuz kulaklık")).toBe("wireless headphones");
+    expect(englishProductQuery("taşınabilir sessiz klima")).toBe("portable quiet air conditioner");
+    expect(englishProductQuery("su geçirmez çelik saat")).toBe("waterproof steel watch");
+  });
+});
+
+describe("englishThenOriginal (yurt dışı kaynak sorgu sırası)", () => {
+  it("Türkçe nişte önce İngilizce karşılığı dener", () => {
+    // EBAY_US / GitHub / anahtarlı Trends İngilizce dizinlerdir; Türkçe sorgu
+    // buralarda 0 satır döndürür ve nişin yurt dışı kanıtı hiç ölçülmez.
+    expect(englishThenOriginal("LED masa lambası")).toEqual(["led desk lamp", "LED masa lambası"]);
+    expect(englishThenOriginal("kablosuz kulaklık")).toEqual([
+      "wireless headphones",
+      "kablosuz kulaklık",
+    ]);
+  });
+
+  it("zaten İngilizce nişte TEK sorgu üretir (kota ikiye katlanmaz)", () => {
+    expect(englishThenOriginal("air fryer")).toEqual(["air fryer"]);
+    expect(englishThenOriginal("robot vacuum")).toEqual(["robot vacuum"]);
+  });
+
+  it("boş nişte boş liste döner", () => {
+    expect(englishThenOriginal("   ")).toEqual([]);
+    expect(englishThenOriginal("")).toEqual([]);
+  });
+});
+
 describe("englishProductQuery", () => {
   // ÖLÇÜLEN ÖRNEK: bu sorgu pazaryerlerinde 0 sonuç veriyordu.
   it("Türkçe ürün adını pazaryeri diline çevirir", () => {
@@ -56,10 +105,10 @@ describe("englishProductQuery", () => {
 
   it("sözlükte olmayan kelimeleri köküyle korur", () => {
     // Yanlış çeviri, yanlış ürün kümesi getirir; o yüzden bilinmeyen korunur.
-    const out = englishProductQuery("ahşap masa lambası");
+    const out = englishProductQuery("püskürtücü masa lambası");
     expect(out).toContain("desk");
     expect(out).toContain("lamp");
-    expect(out).toContain("ahsap");
+    expect(out).toContain("puskurtucu");
   });
 
   it("kelime tekrarını eler", () => {

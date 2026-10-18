@@ -431,7 +431,7 @@ async function attachSupplierEconomics(
   };
   if (!survivors.length) return empty;
   const { fetchSupplierOffers } = await import("./aliexpress-supplier.server");
-  const { cjApiKey, fetchCjOffers, fetchMicOffers } = await import("./mic-supplier.server");
+  const { cjConfigured, fetchCjOffers, fetchMicOffers } = await import("./mic-supplier.server");
   const { buildEconomics, supplierMatchKind } = await import("./supplier-economics");
   // NİŞ İFADELERİ (TR + İngilizce çevirisi) — niş seviyesi yedeği için.
   //
@@ -448,7 +448,7 @@ async function attachSupplierEconomics(
   // MIC ve CJ, AliExpress'in ölçemediği üç yuvayı getirir (MOQ, tedarikçi adı,
   // FOB/birim fiyat bandı) — biri düşerse diğeri tek başına eskisi gibi çalışır;
   // kanıt uydurulmaz. CJ anahtarı yoksa 0 ms'de boş döner.
-  const hasCj = Boolean(cjApiKey());
+  const hasCj = cjConfigured();
   const [aeResult, micResult, cjResult] = await Promise.allSettled([
     fetchSupplierOffers(niche, { country }),
     fetchMicOffers(niche),
@@ -838,6 +838,9 @@ export async function runScrapeFilterStep(
         "skor tabanı": stats.rejectedScore,
         bütünlük: stats.rejectedByCompleteness,
         kaynak: stats.rejectedBySource,
+        // Aksesuar/yedek parça (kılıf, filtre, "… for <ürün>") — nişin
+        // kendisi aksesuar kategorisiyse bu sayaç hep 0 kalır.
+        "aksesuar/parça": stats.rejectedByAccessory,
         duplicate: stats.rejectedByDuplicate,
         rating: stats.rejectedByRating,
         "bütçe kırpma": stats.truncatedForBudget,

@@ -459,6 +459,12 @@ export const FilterStatsSchema = z.object({
   rejectedByDuplicate: z.number().int().min(0).default(0),
   rejectedByCompleteness: z.number().int().min(0).default(0),
   rejectedBySource: z.number().int().min(0).default(0),
+  /**
+   * AKSESUAR/YEDEK PARÇA olduğu için elenen satır (kılıf, filtre, ekran
+   * koruyucu, "… for <ürün>"). Nişin kendisi aksesuar kategorisiyse bu sayaç
+   * hep 0 kalır (kapı kapanır).
+   */
+  rejectedByAccessory: z.number().int().min(0).default(0),
   survivors: z.number().int().min(0).default(0),
   /** Kaynak bazlı sağlık — hangi scraper çalıştı, hangisi öldü. */
   perSource: z

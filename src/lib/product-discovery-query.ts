@@ -114,13 +114,19 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   dizustu: "laptop",
   tablet: "tablet",
   saat: "watch",
-  kolye: "earbuds",
+  // DÜZELTME (2026-10-18): `kolye` "earbuds" yazıyordu. Kolye TAKIDIR;
+  // "kolye" nişi pazaryerinde kulaklık arıyor, hem doğru ürünü kaçırıyor
+  // hem alakasız satır getiriyordu.
+  kolye: "necklace",
   kulaklik: "headphones",
   hoparlor: "speaker",
   kamera: "camera",
   klipser: "trimmer",
   sarj: "charger",
   kablo: "cable",
+  // DÜZELTME (2026-10-18): `tel` "phone" yazıyordu; "tel örgü", "tel askı"
+  // gibi nişler İngilizce pazaryerinde telefon arıyordu.
+  tel: "wire",
   klavye: "keyboard",
   fare: "mouse",
   monitor: "monitor",
@@ -150,10 +156,11 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   elbise: "dress",
   gomlek: "shirt",
   pantolon: "pants",
-  saatlik: "watch",
   // spor / outdoor
   bisiklet: "bike",
-  kayak: "paddle",
+  // DÜZELTME (2026-10-18): `kayak` "paddle" (kürek) yazıyordu. Kayak kış
+  // sporudur; niş yanlış kategoriye gidiyordu.
+  kayak: "ski",
   egzersiz: "fitness",
   // ofis / okul
   kalem: "pen",
@@ -164,12 +171,13 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   // "matematik kitabı" → "matematik kitab" (sözlükteki "kitap" kaçırılıyor).
   kitab: "book",
   kitablar: "book",
-  tel: "phone",
   // gıda
   vitamin: "vitamin",
   protein: "protein",
   sakiz: "gum",
-  kahveMakinesi: "coffee maker",
+  // Anahtar ASCII ve küçük harf olmalı: `kahveMakinesi` hiç eşleşmiyordu,
+  // çünkü `asciiFold` sonucu `kahvemakinesi`.
+  kahvemakinesi: "coffee maker",
   // evde yaşam / hayvan
   kedi: "cat",
   kopek: "dog",
@@ -188,7 +196,9 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   // ev / yaşam
   tahta: "board",
   kutu: "box",
-  kapı: "door",
+  // DÜZELTME: `kapı` anahtarı Türkçe karakter taşıdığı için HİÇ eşleşmiyordu
+  // (`asciiFold("kapı")` → `kapi`).
+  kapi: "door",
   pencere: "window",
   sandalye: "chair",
   sehpa: "coffee table",
@@ -198,10 +208,71 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   hali: "rug",
   perde: "curtain",
   kilit: "lock",
-  cobanpincere: "tongs",
+  cobanpincesi: "tongs",
   bardak: "glass",
   kase: "plate",
+
+  // NİTELEYİCİLER — nişin asıl ayırt edici kelimeleri. Bunlar sözlükte
+  // olmadığında `"kablosuz kulaklık"` → `"kablosuz headphones"` gibi YARIM
+  // İngilizce sorgu çıkıyordu; pazaryeri "kablosuz" kelimesini tanımadığı
+  // için nişin tamamı yerine kulaklık geneli dönüyordu (ölçüldü: sözlük
+  // eksikliği doğrudan alakasızlık üretiyor).
+  kablosuz: "wireless",
+  kablolu: "wired",
+  sessiz: "quiet",
+  tasinabilir: "portable",
+  katlanabilir: "foldable",
+  sugecirmez: "waterproof",
+  dayanikli: "durable",
+  profesyonel: "professional",
+  ayarlanabilir: "adjustable",
+  dokunmatik: "touch",
+  usbli: "usb",
+  // malzeme / renk / boyut
+  celik: "steel",
+  // RENKLER: nişin kendisi renkle tanımlanır ("beyaz gürültü makinesi",
+  // "siyah deri cüzdan"). Çevrilmezse sorgu yarım İngilizce kalıyor.
+  siyah: "black",
+  beyaz: "white",
+  kirmizi: "red",
+  mavi: "blue",
+  yesil: "green",
+  altin: "gold",
+  gumus: "silver",
+  pembe: "pink",
+  mor: "purple",
+  gri: "gray",
+  cam: "glass",
+  ahsap: "wooden",
+  deri: "leather",
+  pamuk: "cotton",
+  plastik: "plastic",
+  organik: "organic",
+  dogal: "natural",
+  buyuk: "large",
+  kucuk: "small",
+  mini: "mini",
 };
+
+/**
+ * İKİ KELİMELİK TÜRKÇE NİTELEYİCİLER.
+ *
+ * NEDEN AYRI TABLO: Türkçede bazı sıfatlar tek kelime yazılmaz
+ * ("su geçirmez", "el yapımı"). Kelime kelime çevrilirse "su waterproof"
+ * gibi hem gereksiz hem yanlış bir sorgu çıkar; `sugecirmez` tek kelime
+ * yazıldığı için sözlükte karşılığı olmaz. Bu tablo ASCII'ye inmiş metin
+ * üzerinde cümle kalıbı olarak çalışır.
+ *
+ * KAPSAM YİNE SINIRLI: yalnız ürün aramalarında gerçekten kullanılan,
+ * ölçülebilir niteliyiciler. Genel çeviri motoru değildir.
+ */
+const PRODUCT_PHRASE_EN: ReadonlyArray<readonly [string, string]> = [
+  ["su gecirmez", "waterproof"],
+  ["el yapimi", "handmade"],
+  ["cok amacli", "multipurpose"],
+  ["paslanmaz celik", "stainless steel"],
+  ["led isik", "led light"],
+];
 
 /**
  * Sözlükteki İngilizce karşılık; yoksa ASCII'ye inmiş ÖZGÜN KELİME.
@@ -256,7 +327,17 @@ export function englishProductQuery(niche: string): string {
     .filter(Boolean);
   if (!raw.length) return "";
 
-  const translated = raw
+  // KALIPLAR ÖNCE: "su geçirmez" tek bir sıfattır; kelime kelime çevrilirse
+  // "su waterproof" gibi bozuk bir sorgu çıkar.
+  let folded = raw.map((word) => asciiFold(word)).join(" ");
+  for (const [tr, en] of PRODUCT_PHRASE_EN) {
+    // Baş/son/orta konum ayrımı yapmamak için metni boşlukla sararız.
+    folded = ` ${folded} `.split(` ${tr} `).join(` ${en} `).trim();
+  }
+
+  const translated = folded
+    .split(" ")
+    .filter(Boolean)
     .map((word) => {
       // Sözlük kelime biçiminde tutar: "masa lambası" → ["masa", "lambasi"]
       const ascii = asciiFold(word);
@@ -292,6 +373,35 @@ export function productQueryVariants(niche: string, limit = 2): string[] {
     seen.add(key);
     out.push(value);
     if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * YURT DIŞI kaynaklar için sorgu sırası: önce İngilizce karşılık, sonra özgün
+ * metin. Tekrarlar atılır.
+ *
+ * NEDEN VAR (ölçülen kayıp): eBay Browse (`EBAY_US`), GitHub araması ve anahtarlı
+ * Google Trends İngilizce dizinlerdir. `"LED masa lambası"` gibi Türkçe bir
+ * sorgu buralarda 0 sonuç döndürür — kaynak "çalıştı" görünür, satır gelmez,
+ * nişin ABD pazarındaki karşılığı hiç ölçülmez. `normalizeNiche` burada
+ * KULLANILMAZ: ASCII'ye inmiş `"masa lambasi"` de İngilizce değildir, ek bir
+ * istek harcayıp yine boş döner.
+ *
+ * Zaten İngilizce nişte liste tek elemana iner (kota iki katına çıkmaz).
+ */
+export function englishThenOriginal(niche: string): string[] {
+  const original = String(niche ?? "").trim();
+  const english = englishProductQuery(original).trim();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const candidate of [english, original]) {
+    const value = candidate.trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
   }
   return out;
 }

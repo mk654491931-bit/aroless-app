@@ -14,7 +14,11 @@ import { describe, expect, it } from "vitest";
 
 import { brandFromTitle, ratingFromText } from "./product-discovery-sources.server";
 import { GEMINI_SHORTLIST_SIZE, runFinalRankStep } from "./product-discovery-pipeline.server";
-import { parseDiscoveryResult, type DiscoveryWinner } from "./product-discovery.functions";
+import {
+  DiscoveryWinnerSchema,
+  parseDiscoveryResult,
+  type DiscoveryWinner,
+} from "./product-discovery.functions";
 import { toWinningProducts } from "@/features/finder/utils/discovery-result";
 import {
   ConsensusSchema,
@@ -102,6 +106,9 @@ const winnerProduct = (name: string): NormalizedProduct => ({
   inStock: true,
   sources: ["test"],
   url: "https://example.test/p",
+  // Barkod/model kodu ÖLÇÜLMEDİ — şemada varsayılanı boş string (kimlik uydurulmaz).
+  gtin: "",
+  mpn: "",
   notes: "4.6 puan · 210 değerlendirme",
   viewed90d: null,
   id: "sku-winner",
@@ -201,7 +208,12 @@ describe("parseDiscoveryResult", () => {
 /* --------------------------------- 5. Arayüz eşlemesi: ölçülmeyen boş kalır */
 
 describe("toWinningProducts — dürüst eşleme", () => {
-  const row = (over: Partial<DiscoveryWinner> = {}): DiscoveryWinner => ({
+  // ŞEMADAN GEÇİRİLİR: `DiscoveryWinner` çıktı tipi, `optional().catch(null)`
+  // kullanan alanlar yüzünden "zorunlu ama null olabilir"dir. Sabit bir nesne
+  // literalinde her birini elle yazmak kırılgandı (yeni alan eklenince test
+  // derlenmezdi); şema zaten her alan için güvenli varsayılan tanımlıyor.
+  const row = (over: Partial<DiscoveryWinner> = {}): DiscoveryWinner =>
+    DiscoveryWinnerSchema.parse({
     name: "Air Fryer 5.5L",
     brand: "Acme",
     seller: "shop",
@@ -222,11 +234,14 @@ describe("toWinningProducts — dürüst eşleme", () => {
     signals: { demand: 70, competition: 60, margin: 80, rating: 75, availability: 85 },
     councilScore: 84,
     confidenceScore: 88,
+    // Kohort rakip sayısı bu satırda ÖLÇÜLMEDİ → `null` (0 yazmak "ölçtük ve
+    // sıfır bulduk" demek olurdu).
+    cohortCompetitors: null,
     votes: 14,
     agreement: 0.9,
     evidence: ["talep kanıtı güçlü", "fiyat bandı sağlıklı"],
     ...over,
-  });
+    });
 
   it("ölçülen alanları taşır", () => {
     const [product] = toWinningProducts([row()]);

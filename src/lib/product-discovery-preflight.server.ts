@@ -3,6 +3,7 @@ import {
   evrenStatus,
   jinaKeyCount,
 } from "./ai-keys.server";
+import { ebayCredentialsConfigured as ebayConfigured } from "./ebay-auth.server";
 // ============================================================================
 // PRODUCT DISCOVERY — HAT ÖNCE KONTROLÜ (PREFLIGHT).
 //
@@ -189,28 +190,38 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     {
       id: "bestbuy",
       label: "Best Buy / eBay katalog API'si (isteğe bağlı)",
-      // eBay kontrolü YALNIZ gerçekten okunan değişkenlere bakar: kaynak
-      // `EBAY_OAUTH_TOKEN` (ve eşanlamlıları) ile Bearer başlığı gönderir.
-      // `EBAY_CLIENT_ID`/`SECRET` tek başına hiçbir işe yaramaz (kaynak OAuth
-      // akışını kendisi çalıştırmaz) — burada "tanımlı" göstermek, olmayan bir
-      // kaynağı yeşil göstermek olurdu.
-      ok:
-        set(env, "BESTBUY_API_KEY") ||
-        set(env, "BEST_BUY_API_KEY") ||
-        set(env, "EBAY_OAUTH_TOKEN") ||
-        set(env, "EBAY_BEARER_TOKEN") ||
-        set(env, "EBAY_ACCESS_TOKEN"),
+      // eBay artık `client_credentials` akışını KENDİSİ çalıştırıyor
+      // (`ebay-auth.server.ts`): `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET` verildiğinde
+      // jeton alınır ve ~2 saatte bir yenilenir. Elle kopyalanan Bearer jetonu
+      // (`EBAY_OAUTH_TOKEN`) hâlâ geçerli bir kısa yol olarak kabul edilir.
+      ok: ebayConfigured(env) || Boolean(set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")),
       optional: true,
-      detail:
-        set(env, "BESTBUY_API_KEY") ||
-        set(env, "BEST_BUY_API_KEY") ||
-        set(env, "EBAY_OAUTH_TOKEN") ||
-        set(env, "EBAY_BEARER_TOKEN") ||
-        set(env, "EBAY_ACCESS_TOKEN")
-          ? "tanımlı — resmî kataloglardan gerçek fiyat + kullanıcı puanı + GTIN/MPN + ürün görseli ekler"
+      detail: ebayConfigured(env)
+        ? "tanımlı — eBay Browse'tan gerçek fiyat + satıcı + ürün görseli okunur (jeton otomatik yenilenir)" +
+          (set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY") ? " · Best Buy da tanımlı" : "")
+        : Boolean(set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY"))
+          ? "tanımlı — Best Buy kataloğundan gerçek fiyat + kullanıcı puanı + GTIN/MPN + ürün görseli ekler"
           : "Yok: ABD/küresel nişler yalnız okuyucularla ve anahtarsız kataloglarla beslenir.",
       fix:
-        "İsteğe bağlı — developer.bestbuy.com (BESTBUY_API_KEY) veya developer.ebay.com'da uygulama oluşturup aldığın Bearer jetonunu EBAY_OAUTH_TOKEN olarak ekle.",
+        "İsteğe bağlı — developer.ebay.com'da uygulama oluşturup Client ID + Client Secret'ı " +
+        "EBAY_CLIENT_ID / EBAY_CLIENT_SECRET olarak ekle (jeton kendiliğinden alınır). " +
+        "Alternatif: developer.bestbuy.com → BESTBUY_API_KEY.",
+    },
+    {
+      id: "cj_supplier",
+      label: "CJ Dropshipping tedarik API'si (isteğe bağlı)",
+      // CJ API 2.0 `CJ-Access-Token` ister; panel API Key'i ile
+      // `/authentication/getAccessToken` çağrılıp jeton alınır (`resolveCjAccessToken`).
+      // Anahtar yoksa kaynak 0 ms'de boş döner; MOQ/depo/fiyat bandı yuvası boş kalır.
+      ok: Boolean(set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY") || set(env, "CJ_ACCESS_TOKEN")),
+      optional: true,
+      detail: Boolean(set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY"))
+        ? "tanımlı — CJ'den MOQ, depo ülkesi ve birim fiyat bandı okunur (günde ~1.000 arama, 50.000 puan)"
+        : set(env, "CJ_ACCESS_TOKEN")
+          ? "tanımlı — hazır access token kullanılıyor (süresi dolduğunda API Key ile değiştir)"
+          : "Yok: tedarik tarafı AliExpress + Made-in-China ile çalışır; CJ'nin MOQ/depo kanıtı eklenmez.",
+      fix:
+        "İsteğe bağlı — cjdropshipping.com → Settings → API'den API Key al, CJ_API_KEY olarak ekle (jeton otomatik alınır).",
     },
     {
       id: "google_trends_keyed",

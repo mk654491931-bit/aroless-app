@@ -44,6 +44,12 @@ const READY: PreflightEnv = {
   // GitHub API jetonu: anahtarsız sınır 60 istek/saat, jetonla 5.000/saat.
   // Tam kurulumda tanımlıdır; yokluğu hatı düşürmez.
   GITHUB_API_TOKEN: "gh",
+  // eBay: Browse API uygulama jetonu ister; Client ID + Secret ile jeton
+  // kendiliğinden alınır (`ebay-auth.server.ts`). İsteğe bağlıdır.
+  EBAY_CLIENT_ID: "ebay-id",
+  EBAY_CLIENT_SECRET: "ebay-secret",
+  // CJ Dropshipping: panel API Key'i ile `CJ-Access-Token` alınır.
+  CJ_API_KEY: "cj-key",
 };
 
 const byId = (checks: { id: string }[], id: string) =>
@@ -89,6 +95,23 @@ describe("preflight env kontrolleri", () => {
     expect(buildPreflight({ ...READY, GITHUB_API_TOKEN: undefined }, { columnsError: null, rpcError: null }).ok).toBe(
       true,
     );
+  });
+
+  it("eBay Client ID + Secret ÇİFTİ tamamsa kaynak yeşil; tek başına değil", () => {
+    // Dürüstlük kuralı: yarım kimlikle "tanımlı" demek, 401 alacak bir kaynağı
+    // yeşil göstermek olurdu.
+    const half = envChecks({ ...READY, EBAY_CLIENT_SECRET: undefined, BESTBUY_API_KEY: undefined });
+    expect(byId(half, "bestbuy")?.ok).toBe(false);
+    expect(byId(half, "bestbuy")?.optional).toBe(true);
+    expect(envChecks(READY).find((c) => c.id === "bestbuy")?.ok).toBe(true);
+  });
+
+  it("CJ anahtarı panelde görünür; yokluğu hatı düşürmez", () => {
+    const without = envChecks({ ...READY, CJ_API_KEY: undefined });
+    const check = byId(without, "cj_supplier");
+    expect(check?.ok).toBe(false);
+    expect(check?.optional).toBe(true);
+    expect(check?.fix).toContain("CJ_API_KEY");
   });
 
   it("doğrudan sağlayıcı anahtarı varsa model havuzu tanımlı sayılır", () => {

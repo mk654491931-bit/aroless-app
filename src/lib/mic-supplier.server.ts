@@ -372,11 +372,24 @@ export async function fetchMicOffers(
  *   döner. Anahtar yoksa 0 ms'de `[]` döner (ağ çağrısı yapılmaz).
  */
 export function cjApiKey(env: Record<string, string | undefined> = process.env): string {
-  for (const name of ["CJ_API_KEY", "CJ_ACCESS_TOKEN", "CJDROPSHIPPING_API_KEY"]) {
+  // YALNIZ panelden alınan API Key. `CJ_ACCESS_TOKEN` buraya GİRMEZ: o, bu
+  // anahtarla `getAccessToken` çağrısından üretilen jetonun kendisidir ve
+  // `/authentication/getAccessToken` ucuna `apiKey` diye gönderilirse 401 döner.
+  // İkisini aynı fonksiyonda toplamak "anahtar tanımlı ama veri yok" hatasının
+  // ta kendisiydi.
+  for (const name of ["CJ_API_KEY", "CJDROPSHIPPING_API_KEY"]) {
     const v = (env[name] ?? "").trim();
     if (v) return v;
   }
   return "";
+}
+
+/**
+ * CJ kaynağı KULLANILABİLİR Mİ — panel API anahtarı, hazır access token ya da
+ * ikisi birden varsa evet. Hat bunu çağırır; ağ isteği yapmaz.
+ */
+export function cjConfigured(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(cjStaticAccessToken(env) || cjApiKey(env));
 }
 
 /**
@@ -435,11 +448,87 @@ export function parseCjOffers(payload: unknown): MicOffer[] {
   return out;
 }
 
+/* ---------------- CJ jeton değişimi (`apiKey` → `CJ-Access-Token`) */
+
+/**
+ * CJ jeton önbelleği. CJ access token'ı ~180 gün geçerlidir; yine de süreç
+ * başına bir kez alınıp yeniden kullanılır (her aramada yeniden almamak için).
+ */
+let cjTokenCache: { token: string; expiresAt: number } | null = null;
+
+/** Test yardımcısı — önbelleği temizler. */
+export function resetCjTokenCache(): void {
+  cjTokenCache = null;
+}
+
+/** Kullanıcının ELLE verdiği access token (varsa değişim yapılmaz). */
+export function cjStaticAccessToken(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["CJ_ACCESS_TOKEN", "CJ_TOKEN"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+/**
+ * CJ erişim jetonu — `CJ_ACCESS_TOKEN` yoksa `CJ_API_KEY` ile DEĞİŞTİRİLİR.
+ *
+ * ÖLÇÜLEN HATA (resmî doküman, 2026-10-18): CJ API 2.0 `CJ-Access-Token`
+ * başlığı ister; panelden alınan **API Key** doğrudan kullanılamaz —
+ * `POST /authentication/getAccessToken` ile `{ apiKey }` gönderilip
+ * `data.accessToken` alınmalıdır. Eskiden kaynak API key'i doğrudan başlığa
+ * koyuyordu, yani anahtar "tanımlı" görünürken istek 401 dönüyordu.
+ *
+ * Kimlik yoksa `""` döner — ağ çağrısı yapılmaz, kaynak 0 satır döner.
+ */
+export async function resolveCjAccessToken(
+  env: Record<string, string | undefined> = process.env,
+  fetchImpl: typeof fetch = fetch,
+  now = Date.now(),
+): Promise<string> {
+  const direct = cjStaticAccessToken(env);
+  if (direct) return direct;
+  const apiKey = cjApiKey(env);
+  if (!apiKey) return "";
+  if (cjTokenCache && cjTokenCache.expiresAt > now) return cjTokenCache.token;
+  try {
+    const res = await fetchImpl(
+      "https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ apiKey }),
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!res.ok) {
+      console.log(`[cj] jeton alınamadı (HTTP ${res.status})`);
+      return "";
+    }
+    const json = (await res.json().catch(() => null)) as {
+      result?: unknown;
+      data?: { accessToken?: unknown; accessTokenExpiryDate?: unknown };
+    } | null;
+    const token = String(json?.data?.accessToken ?? "").trim();
+    if (!token) return "";
+    // Bitiş tarihi verilmişse kullan; yoksa ihtiyatlı 12 saat.
+    const expiry = Date.parse(String(json?.data?.accessTokenExpiryDate ?? ""));
+    const expiresAt = Number.isFinite(expiry)
+      ? Math.min(expiry, now + 180 * 86_400_000)
+      : now + 12 * 3_600_000;
+    cjTokenCache = { token, expiresAt };
+    return token;
+  } catch (e) {
+    console.log(`[cj] jeton isteği başarısız: ${(e as Error).message.slice(0, 80)}`);
+    return "";
+  }
+}
+
 export async function fetchCjOffers(
   niche: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<MicOffer[]> {
-  const token = cjApiKey();
+  const token = await resolveCjAccessToken();
   if (!token) return [];
   const query = micSearchQuery(niche);
   if (!query) return [];

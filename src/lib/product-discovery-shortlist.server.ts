@@ -397,6 +397,7 @@ export function buildShortlist(
     rejectedByDuplicate: 0,
     rejectedByCompleteness: 0,
     rejectedBySource: 0,
+    rejectedByAccessory: 0,
     survivors: 0,
     perSource: options.perSource ?? [],
   };
@@ -411,7 +412,9 @@ export function buildShortlist(
   //    hiçbir zaman üretilmez, token bütçesi zaten burada kesiliyor.
   const { survivors, stats: filterStats } = filterAndPreRank(
     clean,
-    options.context ?? { nicheMomentumPct: null, nicheEngagement: 0 },
+    // NİŞ bağlamı MUTLAKA taşınır: aksesuar kapısı "nişin kendisi aksesuar mı?"
+    // korumasını bu alandan okur ("phone case" araması budanmasın).
+    { ...(options.context ?? { nicheMomentumPct: null, nicheEngagement: 0 }), niche: options.niche },
     options.perSource ?? [],
     limit,
   );
@@ -421,6 +424,7 @@ export function buildShortlist(
   stats.rejectedByDuplicate = filterStats.rejectedByDuplicate;
   stats.rejectedByCompleteness = filterStats.rejectedByCompleteness;
   stats.rejectedBySource = filterStats.rejectedBySource;
+  stats.rejectedByAccessory = filterStats.rejectedByAccessory;
   stats.perSource = filterStats.perSource;
 
   // 3) Marj + ön skor tabanları, sonra SADELESTİRME.

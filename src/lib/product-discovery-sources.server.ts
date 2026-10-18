@@ -14,7 +14,12 @@
 // ============================================================================
 
 import type { RawProduct } from "./product-discovery.types";
-import { isGameNiche, normalizeNiche, productQueryVariants } from "./product-discovery-query";
+import {
+  englishThenOriginal,
+  isGameNiche,
+  normalizeNiche,
+  productQueryVariants,
+} from "./product-discovery-query";
 import {
   arcticPostUrl,
   fetchArcticPosts,
@@ -350,20 +355,29 @@ export const githubSource: ProductSource = {
   name: "github",
   timeoutMs: 3_000,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const q = encodeURIComponent(`${niche} in:name,description,readme`);
     const { githubApiHeaders, parseGithubRepos } = await import("./github-repos.server");
-    // JETON İSTEĞE BAĞLI: varsa kota 60/saat → 5.000/saat'e çıkar ve 403 ile
-    // kaybedilen koşular biter; yoksa anahtarsız davranış AYNEN korunur.
-    const res = await fetch(
-      `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
-      { signal: AbortSignal.timeout(2_500), headers: githubApiHeaders() },
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    // DİLİM KASTEN 8: yukarıdaki `hackerNewsSource` ile aynı gerekçe — repo
-    // listesi ürün değildir, nişin ekosistem büyüklüğüdür (3/5 kanıt).
-    // Ayrıştırma SAF ve testlidir: yalnız yanıtta YAZAN sayılar (yıldız, fork,
-    // açık konu, son push) `notes`a girer; `archived` repo elenir.
-    return parseGithubRepos(await res.json().catch(() => null), 8);
+    // SORGU DİLİ: GitHub araması İngilizce metinle çalışır; Türkçe niş
+    // ("LED masa lambası") 0 repo döndürüp nişin ekosistem kanıtını sessizce
+    // kaybettiriyordu. `englishThenOriginal` zaten İngilizce nişte tek sorgu üretir.
+    // İkinci sorgu YALNIZ ilki 0 satır dönerse denenir (kota ikiye katlanmaz).
+    const queries = englishThenOriginal(niche);
+    for (const query of queries) {
+      const q = encodeURIComponent(`${query} in:name,description,readme`);
+      // JETON İSTEĞE BAĞLI: varsa kota 60/saat → 5.000/saat'e çıkar ve 403 ile
+      // kaybedilen koşular biter; yoksa anahtarsız davranış AYNEN korunur.
+      const res = await fetch(
+        `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
+        { signal: AbortSignal.timeout(2_500), headers: githubApiHeaders() },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // DİLİM KASTEN 8: yukarıdaki `hackerNewsSource` ile aynı gerekçe — repo
+      // listesi ürün değildir, nişin ekosistem büyüklüğüdür (3/5 kanıt).
+      // Ayrıştırma SAF ve testlidir: yalnız yanıtta YAZAN sayılar (yıldız, fork,
+      // açık konu, son push) `notes`a girer; `archived` repo elenir.
+      const rows = parseGithubRepos(await res.json().catch(() => null), 8);
+      if (rows.length > 0) return rows;
+    }
+    return [];
   },
 };
 
@@ -2825,6 +2839,21 @@ export function ebayToken(env: Record<string, string | undefined> = process.env)
   return "";
 }
 
+/**
+ * eBay uygulama jetonu — elle verilen jeton YOKSA `client_credentials`
+ * akışıyla üretilir (önbellekli) ve ~2 saatte bir kendiliğinden yenilenir.
+ *
+ * ÖLÇÜLEN HATA (resmî doküman): Browse API uygulama jetonu ister ve o jeton
+ * Client ID + Secret ile üretilir. Eskiden yalnız ELLE alınmış Bearer kabul
+ * edildiği için panelde Client ID/Secret girildiğinde kaynak sessizce boş
+ * dönüyordu.
+ */
+async function ebayBearer(): Promise<string> {
+  const { ebayAppToken, ebayCredentialsConfigured } = await import("./ebay-auth.server");
+  if (!ebayCredentialsConfigured()) return "";
+  return ebayAppToken();
+}
+
 export function parseEbayBrowseItems(payload: unknown): RawProduct[] {
   const rec = (payload ?? {}) as { itemSummaries?: unknown; total?: unknown };
   const items = Array.isArray(rec.itemSummaries) ? rec.itemSummaries : [];
@@ -2877,21 +2906,29 @@ export const ebayBrowseSource: ProductSource = {
   name: "ebay-browse",
   timeoutMs: 6_500,
   async scrape(niche: string): Promise<RawProduct[]> {
-    const token = ebayToken();
+    // Jeton: elle verilen Bearer VEYA Client ID/Secret ile üretilen uygulama
+    // jetonu (önbellekli, ~2 saatte yenilenir).
+    const token = await ebayBearer();
     if (!token) return [];
-    const q = String(niche ?? "").trim().slice(0, 80);
-    if (!q) return [];
-    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=20`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(5_500),
-    });
-    if (!res.ok) return [];
-    return parseEbayBrowseItems(await res.json().catch(() => null));
+    // EBAY_US İngilizce dizin: Türkçe sorgu 0 ilan döndürür. Önce İngilizce
+    // karşılık, 0 satır gelirse özgün metin denenir (ikinci istek yalnız gerekirse).
+    for (const query of englishThenOriginal(niche)) {
+      const q = query.slice(0, 80);
+      if (!q) continue;
+      const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=20`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(5_500),
+      });
+      if (!res.ok) return [];
+      const rows = parseEbayBrowseItems(await res.json().catch(() => null));
+      if (rows.length > 0) return rows;
+    }
+    return [];
   },
 };
 

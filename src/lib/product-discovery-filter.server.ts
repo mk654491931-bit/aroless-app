@@ -33,6 +33,8 @@ import {
 } from "./product-discovery.types";
 import { brandFromTitle } from "./product-brand";
 import { inferProductCategory } from "./product-categories";
+import { looksLikeAccessory, shouldRejectAccessory } from "./product-accessory";
+import { cleanListingTitle } from "./product-title-clean";
 import { normalizeGtin } from "./product-identity";
 import { isNonProductSource } from "./product-discovery-query";
 
@@ -183,6 +185,14 @@ export function evidencePenalty(dataCompleteness: number): number {
 /** Kaynak satırlarını normalize eder ve parmak izi üretir. */
 export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   const parsed = RawProductSchema.parse(raw);
+  // BAŞLIK TEMİZLİĞİ — pazarlama gürültüsü atılır, ÜRÜN KİMLİĞİ korunur.
+  //
+  // ÖLÇÜLEN KAYIP: "Air Fryer 5.5L Free Shipping Hot Sale" ile "Air Fryer
+  // 5.5L" aynı ürünken `productFingerprint` TAM başlığı gömduğü için iki AYRI
+  // ürün sayılıyordu; kopya nihai listeye girebiliyor ya da iki satırın puanı
+  // bölünüp ikisi de eleniyordu. Yalnız bilinen kampanya kalıpları atılır
+  // (marka/model/ölçü ASLA) ve aşırı kısalma olursa özgün başlık korunur.
+  const cleanTitle = cleanListingTitle(parsed.title);
   // MARKA — kaynak vermediyse BAŞLIKTAN ölçülür (`brandFromTitle`).
   //
   // ÖLÇÜLEN BOŞLUK (2026-10-15): 75/75 adayda marka boştu; sebebi pazaryeri
@@ -192,7 +202,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   // Çıkarım UYDURMA DEĞİLDİR: yalnız yapısal olarak marka olduğu anlaşılan
   // öbek döner, aksi hâlde `""` kalır (bkz. `product-brand.ts`).
   const declaredBrand = parsed.brand.trim();
-  const brand = declaredBrand || brandFromTitle(parsed.title);
+  const brand = declaredBrand || brandFromTitle(cleanTitle);
   // MARKA ÖLÇÜLDÜ MÜ: kaynağın/kataloğun verdiği marka ölçümdür
   // (`brandMeasured: true`), başlıktan çıkarılan marka TÜREVDİR (false) ve
   // kanıt yuvasını doldurmaz — kartta yine gösterilir.
@@ -201,7 +211,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   // somut ürün cinsi kelimelerinden Google Product Taxonomy yolu çıkarılır.
   // Kategori `EVIDENCE_SLOTS` içinde değildir, yani bütünlük puanını şişirmez.
   const declaredCategory = parsed.category.trim();
-  const category = declaredCategory || inferProductCategory(parsed.title);
+  const category = declaredCategory || inferProductCategory(cleanTitle);
   // Dolu yuva sayısı = veri bütünlüğü puanı (0-5). Marka yuvası yalnız
   // BAĞIMSIZ ölçümle dolar (`brandMeasured`).
   const { dataCompleteness, missingFields: missing } = evidenceCompleteness({
@@ -211,7 +221,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   });
 
   return {
-    name: parsed.title.slice(0, 180),
+    name: cleanTitle.slice(0, 180),
     brand: brand.slice(0, 60),
     brandMeasured,
     seller: parsed.seller.slice(0, 60),
@@ -232,7 +242,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     gtin: normalizeGtin(parsed.gtin),
     mpn: parsed.mpn.trim().slice(0, 60),
     fingerprint: productFingerprint({
-      title: parsed.title,
+      title: cleanTitle,
       brand: parsed.brand,
       seller: parsed.seller,
     }),
@@ -337,6 +347,14 @@ export type DemandContext = {
   nicheMomentumPct: number | null;
   /** Nişe özel toplam etkileşim (upvote + yorum + yıldız). */
   nicheEngagement: number;
+  /**
+   * ARAMA NİŞİ — aksesuar kapısının "nişin kendisi aksesuar mı?" koruması.
+   *
+   * Opsiyonel: mevcut çağrılar ve testler boş bırakabilir. Niş verilmezse kapı
+   * yalnız havuz korumasıyla çalışır (fail-open), yani "phone case" araması
+   * boşalma riski taşımaz.
+   */
+  niche?: string;
 };
 
 /**
@@ -410,6 +428,15 @@ function dedupKeys(p: NormalizedProduct): string[] {
 export function applyHardFilter(
   products: readonly NormalizedProduct[],
   perSource: FilterStats["perSource"] = [],
+  /**
+   * Arama nişi — AKSESUAR KAPISI için.
+   *
+   * Neden parametre: nişin KENDİSİ aksesuar kategorisiyse ("phone case",
+   * "vacuum filter") kapı tamamen kapanmalıdır; aksi hâlde o aramaların bütün
+   * satırları elenirdi. Varsayılan boş dize = niş bilinmiyor → kapı yalnız
+   * havuz korumasıyla çalışır.
+   */
+  niche = "",
 ): { survivors: NormalizedProduct[]; stats: FilterStats } {
   const stats: FilterStats = {
     inputCount: products.length,
@@ -419,6 +446,7 @@ export function applyHardFilter(
     rejectedByDuplicate: 0,
     rejectedByCompleteness: 0,
     rejectedBySource: 0,
+    rejectedByAccessory: 0,
     survivors: 0,
     perSource,
   };
@@ -524,6 +552,34 @@ export function applyHardFilter(
     }
   }
 
+  // 5c) AKSESUAR / YEDEK PARÇA KAPISI.
+  //
+  // ÖLÇÜLEN KİRLİLİK: niş araması ("air fryer", "robot vacuum") pazaryeri
+  // listelerinde aynı kelimelerle AKSESUAR satıyor — "Silicone Case for Ninja
+  // AF101", "Replacement Filter for Q7", "Screen Protector for …". Bu satırlar
+  // fiyat + görsel + puan taşıdığı için yukarıdaki bütün kapıları GEÇİYOR ve
+  // nihai listede "kazanan ürün" gibi görünüyordu. Oysa kılıfın tedarik/marj/
+  // lansman analizi anlamsızdır; kullanıcı kılıfın takıldığı ürünü arıyor.
+  //
+  // ÜÇ KORUMA (`product-accessory.ts`):
+  //   1. nişin kendisi aksesuar kategorisiyse kapı KAPALI,
+  //   2. havuzda yeterli aksesuar-dışı ticari satır yoksa eleme YOK (fail-open),
+  //   3. yalnız yapısal kalıplar (`… for <ürün>`, `replacement`, `compatible
+  //      with`) sayılır — "for" kelimesi tek başına yetmez.
+  const hasCommercePool = (p: NormalizedProduct) =>
+    p.priceUsd !== null || (p.rating !== null && (p.ratingCount ?? 0) > 0) || (p.salesVolume ?? 0) > 0;
+  const nonAccessoryCommerce = byCompleteness.filter(
+    (p) => hasCommercePool(p) && !looksLikeAccessory(p.name),
+  ).length;
+  const byAccessory: NormalizedProduct[] = [];
+  for (const p of byCompleteness) {
+    if (shouldRejectAccessory(p.name, niche, nonAccessoryCommerce)) {
+      stats.rejectedByAccessory++;
+      continue;
+    }
+    byAccessory.push(p);
+  }
+
   // 6) Tekilleştirme. İKİ anahtar kullanılır:
   //      `f:<fingerprint>` → tam normalize başlık aynı (aynı kaynaktan iki kez)
   //      `m:<modelKey>`    → marka + model kodu aynı, BAŞLIK FARKLI
@@ -534,7 +590,7 @@ export function applyHardFilter(
   //    En yüksek puanlı temsilci kalır; aynı ürünü gören ek kaynaklar `sources`
   //    listesine eklenir (kanıt gücü artar).
   const best = new Map<string, NormalizedProduct>();
-  for (const p of byCompleteness) {
+  for (const p of byAccessory) {
     const keys = dedupKeys(p);
     const hit = keys.find((k) => best.has(k));
     if (hit === undefined) {
@@ -643,6 +699,6 @@ export function filterAndPreRank(
 ): { survivors: NormalizedProduct[]; stats: FilterStats } {
   const normalized = raw.map(normalizeRaw);
   const scored = scoreDeterministically(normalized, context);
-  const { survivors, stats } = applyHardFilter(scored, perSource);
+  const { survivors, stats } = applyHardFilter(scored, perSource, context.niche ?? "");
   return { survivors: survivors.slice(0, topN), stats };
 }
