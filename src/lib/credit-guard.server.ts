@@ -98,11 +98,26 @@ export async function refundCredit(
 export async function chargeForAi(
   deduct: () => PromiseLike<{ error: { message?: string | null } | null }>,
   amount = 1,
+  /**
+   * KULLANIM DEFTERİ (isteğe bağlı ama önerilir): verilirse düşen jeton
+   * `credit_usage_log`a yazılır ve sol bardaki "bu ay" sayaçları eksilir.
+   * Verilmezse davranış bire bir eskisi gibidir (geriye uyumlu).
+   */
+  usage?: { userId: string; feature: string },
 ): Promise<void> {
   const n = Math.max(1, Math.round(amount));
   for (let i = 0; i < n; i++) {
     const { error } = await deduct();
     if (error) throw creditDeductError(error.message);
+  }
+  if (usage) {
+    // Fail-soft: defter yazılamazsa iş DÜŞMEZ (yalnız ölçüm eksik kalır).
+    try {
+      const mod = await import("./plan-usage.server");
+      await mod.recordAiUsage({ userId: usage.userId, feature: usage.feature, credits: n });
+    } catch {
+      /* ölçüm ikincil */
+    }
   }
 }
 

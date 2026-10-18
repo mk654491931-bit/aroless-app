@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { checkIsAdmin } from "@/lib/admin.functions";
 import { ADMIN_QUOTA, tierLevel, quotaFor } from "@/lib/plans";
+import { planLabelFor } from "@/lib/plan-usage";
 
 const PAID_TIERS = ["starter", "pro", "business", "enterprise"];
 /** Ücretsiz kullanıcıya açık modül grupları. */
@@ -38,9 +39,12 @@ export function useEntitlements(): Entitlements {
     queryKey: ["profile", user?.id],
     queryFn: () => profileFn(),
     enabled: !!user,
-    staleTime: 60_000,
+    // 60 sn + "pencere odağında yenileme YOK" ölçülmüş bir belirtiydi:
+    // kullanıcı ödeme yapıp geri döndüğünde paket yazılmış olsa bile rozet
+    // bir dakika boyunca "Free" kalıyordu. Artık kısa önbellek + odakta tazeleme.
+    staleTime: 15_000,
     gcTime: 300_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
   const adminQ = useQuery({
@@ -53,8 +57,10 @@ export function useEntitlements(): Entitlements {
     retry: 1,
   });
 
-  const tier = String(
-    (profileQ.data as { subscription_tier?: string } | undefined)?.subscription_tier ?? "Free",
+  // GÖRÜNEN paket adı KANONİK: veritabanında "pro"/"enterprise"/"ultra" de
+  // yazılmış olabilir; kullanıcı her zaman "Pro"/"Business" görmeli.
+  const tier = planLabelFor(
+    (profileQ.data as { subscription_tier?: string } | undefined)?.subscription_tier,
   );
   const isAdmin = !!(adminQ.data as { isAdmin?: boolean } | undefined)?.isAdmin;
   const isPaid = PAID_TIERS.includes(tier.toLowerCase());

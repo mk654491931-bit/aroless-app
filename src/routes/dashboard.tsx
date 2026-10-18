@@ -43,6 +43,7 @@ import { listFavorites, type FavoriteRow } from "@/lib/gemini.functions";
 import { listAnalyses, getFullProfile, type AnalysisRow } from "@/lib/analysis.functions";
 import { listNotifications, type NotificationRow } from "@/lib/notifications.functions";
 import { creditBalances } from "@/lib/credits";
+import { planLabelFor } from "@/lib/plan-usage";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 export const Route = createFileRoute("/dashboard")({
@@ -162,7 +163,7 @@ function DashboardPage() {
       // finder_credits'i harcadığı için paneldeki sayı hiç değişmiyordu.
       credits: creditBalances(profile).total,
       spent: creditBalances(profile).spent,
-      tier: profile?.subscription_tier ?? "Free",
+      tier: planLabelFor(profile?.subscription_tier),
       email: profile?.email ?? null,
       memberSince: profile?.created_at
         ? new Date(profile.created_at).toLocaleDateString(undefined, {

@@ -26,6 +26,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { CursorToggle } from "@/components/cursor-toggle";
 import { SettingsCluster } from "@/components/settings-cluster";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { usePlanUsage } from "@/hooks/use-plan-usage";
+import { usePlanSync } from "@/hooks/use-plan-sync";
+import type { UsageKind } from "@/lib/plan-usage";
 import { useAuth } from "@/hooks/use-auth";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { getMyAffiliateBadge } from "@/lib/affiliate.functions";
@@ -66,8 +69,22 @@ export function AppTopbar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { tier, quota, isAdmin } = useEntitlements();
+  const { tier, quota, isAdmin, loading: entLoading } = useEntitlements();
   const { user } = useAuth();
+  /**
+   * ÖDEME SONRASI TAZELEME: ödeme yapıldıysa bekleyen işareti görüp planı
+   * Paddle'ın kendi kaydından yazdırır. Üst bar her uygulama sayfasında
+   * çizildiği için tek bağlama noktası burasıdır.
+   */
+  usePlanSync(tier, entLoading);
+  /** Bu ayın gerçek kullanımı — "limit" ile "kullanılan" aynı satırda. */
+  const usage = usePlanUsage();
+  const usageOf = (kind: UsageKind) => usage.rows.find((row) => row.kind === kind);
+  const usageLabel = (kind: UsageKind): string => {
+    const row = usageOf(kind);
+    if (!row || row.disabled) return "—";
+    return `${row.used}/${row.limit}`;
+  };
   const profileFn = useServerFn(getFullProfile);
   /**
    * AFFILIATE ROZETİ — üst menüdeki panel butonu bu hesabın admin tarafından
@@ -200,42 +217,24 @@ export function AppTopbar() {
                     <span className="text-[11px] text-white/50">Genel jetonlar</span>
                     <span className="font-mono text-[11px] text-white/70">{balances.general}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                      <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Finder
-                    </span>
-                    <span className="font-mono text-xs font-semibold">
-                      {quota.credits}
-                      <span className="font-normal text-white/40"> /ay</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                      <Wrench size={12} className="text-sky-400" /> AI Araç
-                    </span>
-                    <span className="font-mono text-xs font-semibold">
-                      {quota.toolRuns}
-                      <span className="font-normal text-white/40"> /ay</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                      <Users size={12} className="text-violet-400" /> Konsey
-                    </span>
-                    <span className="font-mono text-xs font-semibold">
-                      {quota.councilRuns}
-                      <span className="font-normal text-white/40"> /ay</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                      <Radar size={12} className="text-emerald-400" /> Radar
-                    </span>
-                    <span className="font-mono text-xs font-semibold">
-                      {quota.radarScans}
-                      <span className="font-normal text-white/40"> /ay</span>
-                    </span>
-                  </div>
+                  {(
+                    [
+                      { kind: "credits" as const, label: "Bulucu", Icon: Coins, tone: "text-[oklch(0.85_0.18_90)]" },
+                      { kind: "toolRuns" as const, label: "AI Araç", Icon: Wrench, tone: "text-sky-400" },
+                      { kind: "councilRuns" as const, label: "Konsey", Icon: Users, tone: "text-violet-400" },
+                      { kind: "radarScans" as const, label: "Radar", Icon: Radar, tone: "text-emerald-400" },
+                    ] as const
+                  ).map(({ kind, label, Icon, tone }) => (
+                    <div key={kind} className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                        <Icon size={12} className={tone} /> {label}
+                      </span>
+                      <span className="font-mono text-xs font-semibold">
+                        {usageLabel(kind)}
+                        <span className="font-normal text-white/40"> /ay</span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
                 <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-white/55">
                   {isAdmin
@@ -284,23 +283,19 @@ export function AppTopbar() {
                     <span className="text-white/45">Genel</span>
                     <span className="font-mono text-white/70">{balances.general}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Finder kotası</span>
-                    <span className="font-mono font-semibold">{quota.credits} /ay</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-white/60">AI Araç</span>
-                    <span className="font-mono font-semibold">{quota.toolRuns} /ay</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Konsey</span>
-                    <span className="font-mono font-semibold">{quota.councilRuns} /ay</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Radar</span>
-                    <span className="font-mono font-semibold">{quota.radarScans} /ay</span>
-                  </div>
+                  {(
+                    [
+                      { kind: "credits" as const, label: "Bulucu" },
+                      { kind: "toolRuns" as const, label: "AI Araç" },
+                      { kind: "councilRuns" as const, label: "Konsey" },
+                      { kind: "radarScans" as const, label: "Radar" },
+                    ] as const
+                  ).map(({ kind, label }) => (
+                    <div key={kind} className="flex justify-between">
+                      <span className="text-white/60">{label}</span>
+                      <span className="font-mono font-semibold">{usageLabel(kind)} /ay</span>
+                    </div>
+                  ))}
                 </div>
                 <Link
                   to="/pricing"
@@ -317,24 +312,24 @@ export function AppTopbar() {
             title={
               isAdmin
                 ? "Admin: her kalemde 250 jeton"
-                : `Free: Finder 2 jeton · Tool ${quota.toolRuns} · Konsey ${quota.councilRuns} · Radar ${quota.radarScans}`
+                : `Bu ay kullanılan / limit — Bulucu ${usageLabel("credits")} · Araç ${usageLabel("toolRuns")} · Konsey ${usageLabel("councilRuns")} · Radar ${usageLabel("radarScans")}`
             }
           >
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
               <Coins size={10} className="text-[oklch(0.85_0.18_90)]" />
-              {quota.credits}
+              {usageLabel("credits")}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
               <Wrench size={10} className="text-sky-400" />
-              {quota.toolRuns}
+              {usageLabel("toolRuns")}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
               <Users size={10} className="text-violet-400" />
-              {quota.councilRuns}
+              {usageLabel("councilRuns")}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
               <Radar size={10} className="text-emerald-400" />
-              {quota.radarScans}
+              {usageLabel("radarScans")}
             </span>
           </span>
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] md:inline-flex">

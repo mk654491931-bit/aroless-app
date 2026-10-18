@@ -24,10 +24,19 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { refundCredit } from "./credit-guard.server";
 import { featureCreditCost, type AiCreditFeature } from "./credit-costs";
+import { planLimitMessage, type UsageKind } from "./plan-usage";
 
 export type ChargeOutcome =
   | { ok: true; charged: number; remaining: number | null; admin: boolean }
-  | { ok: false; reason: "NO_CREDITS" | "UNAVAILABLE"; charged: number };
+  | {
+      ok: false;
+      reason: "NO_CREDITS" | "UNAVAILABLE" | "PLAN_LIMIT";
+      charged: number;
+      /** PLAN_LIMIT için: hangi aylık hak ve kaç adet. */
+      kind?: "credits" | "toolRuns" | "councilRuns" | "radarScans";
+      limit?: number;
+      tier?: string;
+    };
 
 /**
  * Tahsil edilen jetonu iade eder (iş çöktüğünde). Hata fırlatmaz.
@@ -55,22 +64,30 @@ function userClient(token: string) {
   });
 }
 
-/** Kullanıcının harcayabilir toplam jetonu (finder + genel) — RLS: kendi satırı. */
-async function spendableCredits(
+/**
+ * Kullanıcının harcayabilir toplam jetonu (finder + genel) ve paketi.
+ * RLS: yalnız kullanıcının kendi satırı okunur.
+ */
+async function profileSpend(
   client: ReturnType<typeof userClient>,
   userId: string,
-): Promise<number | null> {
+): Promise<{ total: number; tier: string } | null> {
   try {
     const { data, error } = await client
       .from("profiles")
-      .select("credits, finder_credits")
+      .select("credits, finder_credits, subscription_tier")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
     const finder = Number(data.finder_credits ?? 0);
     const general = Number(data.credits ?? 0);
     const total = (Number.isFinite(finder) ? finder : 0) + (Number.isFinite(general) ? general : 0);
-    return Math.max(0, Math.floor(total));
+    return {
+      total: Math.max(0, Math.floor(total)),
+      tier: String(
+        (data as { subscription_tier?: string | null }).subscription_tier ?? "Free",
+      ),
+    };
   } catch {
     return null;
   }
@@ -102,9 +119,43 @@ export async function chargeAiCredits(opts: {
 
   // Ön kontrol: bakiye yetmiyorsa HİÇ düşmeden reddet (kısmi düşme olmasın).
   // Bakiye okunamazsa kararı aşağıdaki gerçek düşme denemesi verir.
-  const available = await spendableCredits(client, opts.userId);
-  if (available !== null && available < amount)
+  const state = await profileSpend(client, opts.userId);
+  if (state !== null && state.total < amount)
     return { ok: false, reason: "NO_CREDITS", charged: 0 };
+
+  // ---- AYLIK PAKET LİMİTİ (ölçülen boşluk) ---------------------------------
+  // `plans.ts` dört aylık hak tanımlıyor ama bunlar hiçbir zaman tüketilmiyordu.
+  // Artık her jeton düşmesinden ÖNCE bu ayın sayacı paket limitiyle
+  // karşılaştırılır: bakiye olsa bile aylık hak dolduysa iş başlatılmaz.
+  //
+  // FAIL-OPEN: sayaç okunamazsa (tablo yok/ağ hatası) ENGELLENMEZ — kotayı
+  // korumak için müşteriyi kapıda bırakmak daha kötüdür.
+  const { usageKindForFeature, limitFor } = await import("./plan-usage");
+  const { monthUsage, isAdminUser } = await import("./plan-usage.server");
+  const { tierLevel } = await import("./plans");
+  const kind = usageKindForFeature(opts.feature);
+  const tier = state?.tier ?? "Free";
+  const level = tierLevel(tier);
+  const adminUser = level === 0 ? await isAdminUser(opts.userId) : false;
+  const limit = limitFor(level, kind, adminUser);
+  // ÜCRETSİZ PLANDA ASIL SINIR BAKİYEDİR (2 hoş geldin kredisi tek seferlik).
+  // Davet/referral ile kazanılan jetonlar aylık 2'lik kalıba sıkışmasın diye
+  // ücretsiz planda limit EN AZ bakiye kadar açılır; aksi hâlde kullanıcı
+  // kazandığı jetonu kullanamazdı — bu, "ödeme yaptım ama kullanamıyorum"
+  // şikâyetinin ters yönlü hâli olurdu.
+  const effectiveLimit =
+    level === 0 && !adminUser ? Math.max(limit, state?.total ?? 0) : limit;
+  const used = await monthUsage(opts.userId);
+  if (used !== null && used[kind] >= effectiveLimit) {
+    return {
+      ok: false,
+      reason: "PLAN_LIMIT",
+      charged: 0,
+      kind,
+      limit: effectiveLimit,
+      tier,
+    };
+  }
 
   let charged = 0;
   let remaining: number | null = null;
@@ -124,7 +175,32 @@ export async function chargeAiCredits(opts: {
     if (typeof data === "number") remaining = data;
     charged++;
   }
+
+  // KULLANIM DEFTERİ — sol bardaki "bu ay" sayaçları buradan okunur.
+  // Yazılamazsa iş DÜŞMEZ (fail-soft): defter yalnız ölçüm içindir.
+  await recordAiUsage({
+    userId: opts.userId,
+    feature: opts.feature,
+    credits: charged,
+    success: true,
+  });
+
   return { ok: true, charged, remaining, admin: false };
+}
+
+/** İşin kullanımını deftere yazar (dinamik import: istemci paketine sunucu kodu girmesin). */
+async function recordAiUsage(args: {
+  userId: string;
+  feature: string;
+  credits: number;
+  success?: boolean;
+}): Promise<void> {
+  try {
+    const usage = await import("./plan-usage.server");
+    await usage.recordAiUsage(args);
+  } catch (e) {
+    console.warn(`[usage] kayıt atlandı: ${(e as Error).message.slice(0, 80)}`);
+  }
 }
 
 /**
@@ -137,6 +213,27 @@ export function noCreditsResponse(amount: number, feature: AiCreditFeature): Res
     code: "NO_CREDITS",
     required: amount,
     feature,
+  };
+  return new Response(JSON.stringify(body), {
+    status: 402,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+/**
+ * AYLIK PAKET LİMİTİ doldu (402).
+ *
+ * NO_CREDITS'ten AYRI kod: burada bakiye vardır, tükenen şey paketin aylık
+ * hakkıdır. Ayrım önemli — arayüz "bakiye yükle" yerine "paketi yükselt"
+ * demeli ve hangi hakkın dolduğunu yazmalıdır.
+ */
+export function planLimitResponse(kind: UsageKind, limit: number, tier: string | null): Response {
+  const body = {
+    error: planLimitMessage(kind, limit, tier),
+    code: "PLAN_LIMIT",
+    kind,
+    limit,
+    tier,
   };
   return new Response(JSON.stringify(body), {
     status: 402,
@@ -175,6 +272,16 @@ export async function chargeOrRespond(opts: {
 > {
   const outcome = await chargeAiCredits(opts);
   if (outcome.ok) return { ok: true, outcome };
+  if (outcome.reason === "PLAN_LIMIT") {
+    return {
+      ok: false,
+      response: planLimitResponse(
+        outcome.kind ?? "toolRuns",
+        outcome.limit ?? 0,
+        outcome.tier ?? null,
+      ),
+    };
+  }
   if (outcome.reason === "NO_CREDITS") {
     return {
       ok: false,
@@ -211,7 +318,14 @@ const settled = new Set<string>();
 
 export type IdempotentChargeOutcome =
   | { ok: true; charged: number; remaining: number | null; alreadyCharged: boolean }
-  | { ok: false; reason: "NO_CREDITS" | "UNAVAILABLE"; charged: number };
+  | {
+      ok: false;
+      reason: "NO_CREDITS" | "UNAVAILABLE" | "PLAN_LIMIT";
+      charged: number;
+      kind?: UsageKind;
+      limit?: number;
+      tier?: string;
+    };
 
 export async function chargeOnce(opts: {
   userId: string;
@@ -236,7 +350,14 @@ export async function chargeOnce(opts: {
     if (key) settled.add(key);
     return { ...outcome, alreadyCharged: false };
   }
-  return { ok: false, reason: outcome.reason, charged: outcome.charged };
+  return {
+    ok: false,
+    reason: outcome.reason,
+    charged: outcome.charged,
+    kind: outcome.kind,
+    limit: outcome.limit,
+    tier: outcome.tier,
+  };
 }
 
 /** Test/serbest bırakma için bellek kilidini temizler. */

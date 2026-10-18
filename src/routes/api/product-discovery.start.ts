@@ -31,6 +31,7 @@ import {
   chargeOnce,
   noCreditsResponse,
   creditUnavailableResponse,
+  planLimitResponse,
   refundFeatureCredits,
 } from "@/lib/credit-charge.server";
 import { enqueueDiscoveryStep } from "@/lib/product-discovery-qstash.server";
@@ -73,6 +74,13 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           chargeKey: `discovery:${runId}`,
         });
         if (!charge.ok) {
+          if (charge.reason === "PLAN_LIMIT") {
+            return planLimitResponse(
+              charge.kind ?? "credits",
+              charge.limit ?? 0,
+              charge.tier ?? null,
+            );
+          }
           return charge.reason === "NO_CREDITS"
             ? noCreditsResponse(1, "agent-pipeline")
             : creditUnavailableResponse();

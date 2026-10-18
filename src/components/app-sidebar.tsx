@@ -12,6 +12,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
+import { usePlanUsage } from "@/hooks/use-plan-usage";
+import { planLabelFor } from "@/lib/plan-usage";
 import {
   Package,
   Coins,
@@ -238,7 +240,8 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
   const collapsed = state === "collapsed";
   const iconOnly = collapsed && !isMobile;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { isPaid, isAdmin, quota } = useEntitlements();
+  const { isPaid, isAdmin, tier } = useEntitlements();
+  const planUsage = usePlanUsage();
 
   const unlocked = isPaid || isAdmin;
   const itemLocked = (item: Item) => !unlocked && !FREE_ITEMS.includes(item.key);
@@ -305,7 +308,57 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
         )}
         {!iconOnly && (isPaid || isAdmin) && (
           <div className="px-3 pb-1 text-[10px] text-emerald-300">
-            🔓 Tüm modüller açık{isAdmin ? " · Admin" : ` · ${quota.toolRuns} araç çalıştırma / ay`}
+            🔓 Tüm modüller açık{isAdmin ? " · Admin" : ` · ${planLabelFor(tier)}`}
+          </div>
+        )}
+        {/*
+          BU AYIN KULLANIMI — ölçülen boşluğun görünen yüzü.
+          Önceden yalnız "X araç çalıştırma / ay" yazıyordu ve hiçbir şey
+          eksilmiyordu (sayaç yoktu). Artık her AI işi `credit_usage_log`a
+          yazılır ve bu satırlar o sayaçtan okunur.
+        */}
+        {!iconOnly && (
+          <div className="mx-3 mb-2 space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
+              <span>Bu ay</span>
+              <span className="normal-case tracking-normal text-white/60">
+                {planUsage.loading ? "…" : planLabelFor(tier)}
+              </span>
+            </div>
+            {planUsage.rows.map((row) => (
+              <div key={row.kind}>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-white/70">{row.label}</span>
+                  <span
+                    className={
+                      row.disabled
+                        ? "font-mono text-white/35"
+                        : row.exhausted
+                          ? "font-mono text-amber-300"
+                          : "font-mono text-white/70"
+                    }
+                    title={`${row.hint} — bu ay ${row.used}/${row.limit}`}
+                  >
+                    {row.disabled ? "—" : `${row.used}/${row.limit}`}
+                  </span>
+                </div>
+                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className={
+                      row.exhausted
+                        ? "h-full rounded-full bg-amber-400/80"
+                        : "h-full rounded-full bg-accent-active/80"
+                    }
+                    style={{ width: `${row.disabled ? 0 : row.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            {!planUsage.measured && !planUsage.loading && (
+              <p className="text-[10px] text-white/40">
+                Sayaç okunamadı — kullanım “0” değil, “bilinmiyor”.
+              </p>
+            )}
           </div>
         )}
         {GROUPS.map((g) => (

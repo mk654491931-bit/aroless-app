@@ -30,7 +30,11 @@ export const summarizeComparison = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SummarizeInput.parse(input))
   .handler(async ({ data, context }) => {
     // Karşılaştırma gerçek bir AI turudur: düşmeden koşmaz, çökerse iade edilir.
-    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"));
+    await chargeForAi(
+      () => context.supabase.rpc("deduct_product_finder_credit"),
+      1,
+      { userId: context.userId, feature: "tool:compare" },
+    );
     return withCreditRefund(context.userId, async () => {
       const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}\n\n${outputLanguageDirective(data.lang, "reasoning, runner_up ve risks")}`;
       const text = await callGemini(prompt, undefined, 0.3, false);

@@ -118,11 +118,16 @@ export function useProductDiscovery(): {
           // zaten kredi yoktur). Mesaj dürüstçe ne olduysa onu söyler.
           const reason = res && "reason" in res ? String(res.reason) : "bilinmeyen";
           const message =
-            reason === "no-credits"
-              ? "Kredi yok — yükseltme yapmadan devam edemezsin."
-              : reason === "credit-unavailable"
-                ? "Kredi servisi şu an yanıt vermiyor. Tekrar dene."
-                : "Arama başlatılamadı. Jeton iade edildi.";
+            reason === "plan-limit"
+              ? // Paket limiti: bakiye var, aylık hak bitti. Sunucunun dürüst
+                // mesajı (hangi hak/kaç adet) varsa o gösterilir.
+                (res && "message" in res && typeof res.message === "string" && res.message) ||
+                "Paketinin aylık kullanım hakkı doldu."
+              : reason === "no-credits"
+                ? "Kredi yok — yükseltme yapmadan devam edemezsin."
+                : reason === "credit-unavailable"
+                  ? "Kredi servisi şu an yanıt vermiyor. Tekrar dene."
+                  : "Arama başlatılamadı. Jeton iade edildi.";
           toast.error(message);
           setRun(EMPTY);
           return false;

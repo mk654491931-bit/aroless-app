@@ -174,7 +174,11 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
   .handler(async ({ data, context: ctx }): Promise<{ report: CompetitorReport }> => {
     // Rakip denetimi çok motorlu gerçek bir AI turudur: jeton düşmeden koşmaz,
     // iş çökerse iade edilir (yoksa anahtar havuzu karşılıksız yanar).
-    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
+    await chargeForAi(
+      () => ctx.supabase.rpc("deduct_product_finder_credit"),
+      1,
+      { userId: ctx.userId, feature: "tool:competitor-intel" },
+    );
     return withCreditRefund(ctx.userId, () => buildCompetitorReport(data));
   });
 
@@ -221,7 +225,11 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data, context: ctx }): Promise<{ strategy: string }> => {
     // Pazar karnesi AI stratejisi tek jetonluk bir iştir; iade garantisiyle koşar.
-    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
+    await chargeForAi(
+      () => ctx.supabase.rpc("deduct_product_finder_credit"),
+      1,
+      { userId: ctx.userId, feature: "tool:arbitrage-matrix" },
+    );
     return withCreditRefund(ctx.userId, async () => ({
       strategy: await buildCountryStrategy(data.niche, data.country, data.lang),
     }));

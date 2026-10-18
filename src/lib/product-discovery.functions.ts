@@ -29,6 +29,7 @@ import {
   refundFeatureCredits,
 } from "@/lib/credit-charge.server";
 import { appOrigin, DISCOVERY_MAX_BUDGET_MS } from "@/lib/discovery-jobs.server";
+import { planLimitMessage } from "@/lib/plan-usage";
 import { backgroundJobTimeoutMs, platformDurationSeconds } from "@/lib/host-runtime.server";
 import { isBackgroundJobRunning, runInBackground } from "@/lib/job-runner.server";
 import {
@@ -315,6 +316,19 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
       chargeKey: `discovery:${runId}`,
     });
     if (!charge.ok) {
+      // AYLIK PAKET LİMİTİ: bakiye vardır, tükenen şey paketin aylık hakkıdır.
+      // "Kredi yok" demek yanlış yönlendirme olurdu; hangi hak/kaç adet yazılır.
+      if (charge.reason === "PLAN_LIMIT") {
+        return {
+          ok: false,
+          reason: "plan-limit",
+          message: planLimitMessage(
+            charge.kind ?? "credits",
+            charge.limit ?? 0,
+            charge.tier ?? null,
+          ),
+        };
+      }
       // Kredi uçları 403/402 döner; arayüz bu iki durumu zaten tanıyor.
       if (charge.reason === "NO_CREDITS") {
         noCreditsResponse(1, FEATURE);

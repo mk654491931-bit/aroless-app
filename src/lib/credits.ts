@@ -80,6 +80,10 @@ export function creditErrorMessage(
   fallback = "İşlem tamamlanamadı — lütfen tekrar deneyin.",
 ): string {
   const msg = raw instanceof Error ? raw.message : String(raw ?? "");
+  // AYLIK PAKET LİMİTİ: bakiye vardır, tükenen şey paketin aylık hakkıdır.
+  // "Bakiye yetersiz" demek burada yanlış yönlendirme olurdu.
+  if (msg.includes("PLAN_LIMIT"))
+    return "Paketinin aylık kullanım hakkı doldu. Ayarlar → Abonelik bölümünden paketini yükseltebilirsin.";
   if (msg.includes("NO_CREDITS") || msg.includes("no_credits"))
     return "Jeton bakiyeniz yetersiz. Ayarlar → Abonelik bölümünden paketinizi yükseltebilirsiniz.";
   if (msg.includes("CREDIT_DEDUCT_FAILED"))

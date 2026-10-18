@@ -479,6 +479,11 @@ export function useFinderSearch(opts: {
         },
       });
       if (!started.ok) {
+        // Aylık paket limiti: bakiye var ama hak bitti → yükseltme mesajı.
+        if (started.reason === "plan-limit") {
+          const detail = "message" in started ? String(started.message ?? "") : "";
+          throw new Error(detail || "PLAN_LIMIT");
+        }
         // Kredi bittiyse düşme: kullanıcıya yükseltme gösterilir.
         if (started.reason === "no-credits" || started.reason === "credit-unavailable") {
           throw new Error(started.reason === "no-credits" ? "NO_CREDITS" : "CREDIT_UNAVAILABLE");

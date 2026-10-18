@@ -173,7 +173,11 @@ export const getRadar = createServerFn({ method: "POST" })
 
     // Fail-closed: üretim başlamadan tahsil et; sonuç boş/yedek ise iade et.
     const charged = data.refresh ? 1 : 0;
-    if (charged) await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"));
+    if (charged)
+      await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"), 1, {
+        userId: ctx.userId,
+        feature: "radar-scan",
+      });
 
     const { seeds, keywords, generatedBy } = await generateSeeds(data.country);
     if (seeds.length === 0) {

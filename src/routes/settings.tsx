@@ -10,7 +10,9 @@ import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
 import { reconcileMySubscription } from "@/lib/paddle.functions";
 import { useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
+import { clearPlanPurchasePending } from "@/lib/plan-sync";
 import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
+import { planLabelFor } from "@/lib/plan-usage";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
 import { ReferralPanel } from "@/components/referral-panel";
@@ -92,7 +94,9 @@ function SettingsPage() {
       return res.ok ? res.tier : null;
     },
     onConfirmed: () => {
+      clearPlanPurchasePending();
       void qc.invalidateQueries({ queryKey: ["profile"] });
+      void qc.invalidateQueries({ queryKey: ["plan-usage"] });
       toast.success("Aboneliğin başlatıldı!");
       // `paid=1` temizlenir: sayfa yenilenirse doğrulama tekrar tetiklenmez.
       nav({ to: "/settings", search: {} as never, replace: true });
@@ -264,7 +268,7 @@ function SettingsPage() {
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <Info label="Email" value={profQ.data?.email ?? "—"} />
-            <Info label="Plan" value={profQ.data?.subscription_tier ?? "Free"} />
+            <Info label="Plan" value={planLabelFor(profQ.data?.subscription_tier)} />
             <Info
               label={t("credits")}
               value={`${creditBalances(profQ.data).total} (${creditBreakdownLabel(creditBalances(profQ.data))})`}

@@ -7,6 +7,7 @@ import { createCheckout, reconcileMySubscription } from "@/lib/paddle.functions"
 import { getMyPromoCode } from "@/lib/promo.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
 import { isCheckoutCompleted, useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
+import { clearPlanPurchasePending, markPlanPurchasePending } from "@/lib/plan-sync";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown } from "lucide-react";
@@ -67,7 +68,10 @@ export function PricingModal({
       return res.ok ? res.tier : null;
     },
     onConfirmed: () => {
+      // Bekleyen ödeme işareti temizlenir: paket göründü, artık yoklama yok.
+      clearPlanPurchasePending();
       void qc.invalidateQueries({ queryKey: ["profile"] });
+      void qc.invalidateQueries({ queryKey: ["plan-usage"] });
       toast.success("Aboneliğin başlatıldı!", {
         description: "Paketin aktif ve kredilerin tanımlandı.",
       });
@@ -88,6 +92,10 @@ export function PricingModal({
    */
   const subscribe = useCallback(async (plan: PlanId) => {
     setLoading(plan);
+    // Kalıcı işaret: kullanıcı sekmeyi yenilese/başka sayfaya geçse bile
+    // uygulama kabuğu (AppTopbar → usePlanSync) paketi Paddle'dan tazelemeye
+    // devam eder. Önceden bu bilgi yalnız açık modalın belleğindeydi.
+    markPlanPurchasePending();
     let opened = false;
     let email: string | null | undefined;
 
