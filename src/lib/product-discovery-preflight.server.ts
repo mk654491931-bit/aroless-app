@@ -213,6 +213,42 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         "İsteğe bağlı — developer.bestbuy.com (BESTBUY_API_KEY) veya developer.ebay.com'da uygulama oluşturup aldığın Bearer jetonunu EBAY_OAUTH_TOKEN olarak ekle.",
     },
     {
+      id: "google_trends_keyed",
+      label: "Google Trends anahtarlı yedek (isteğe bağlı)",
+      // Anahtarsız Trends ucu datacenter IP'lerinde kalıcı 429 döndüğü için
+      // (bu repoda ölçüldü) aynı seriyi SearchAPI/SerpAPI'den okuyan yedek yol.
+      ok:
+        set(env, "SEARCHAPI_KEY") ||
+        set(env, "SEARCHAPI_API_KEY") ||
+        set(env, "SERPAPI_KEY") ||
+        set(env, "SERP_API_KEY"),
+      optional: true,
+      detail:
+        set(env, "SEARCHAPI_KEY") ||
+        set(env, "SEARCHAPI_API_KEY") ||
+        set(env, "SERPAPI_KEY") ||
+        set(env, "SERP_API_KEY")
+          ? "tanımlı — anahtarsız Trends 429 verdiğinde gerçek aylık seri buradan okunur"
+          : "Yok: niş momentumu anahtarsız Trends'e ve Wikipedia görüntülenmesine bağlı kalır.",
+      fix:
+        "İsteğe bağlı — SEARCHAPI_KEY veya SERPAPI_KEY ekle; jeton yoksa anahtarsız yol kullanılır.",
+    },
+    {
+      id: "github_token",
+      label: "GitHub API jetonu (isteğe bağlı)",
+      // GitHub arama API'si jetonSUZ 60 istek/saat; ürün bulucu bir koşuda
+      // birkaç niş × varyant aradığı için 403 ile satır kaybediliyordu.
+      // Jetonla sınır 5.000 istek/saat (resmî GitHub kotası).
+      ok: set(env, "GITHUB_API_TOKEN") || set(env, "GH_API_TOKEN") || set(env, "GITHUB_PAT"),
+      optional: true,
+      detail:
+        set(env, "GITHUB_API_TOKEN") || set(env, "GH_API_TOKEN") || set(env, "GITHUB_PAT")
+          ? "tanımlı — GitHub repo kanıtı 5.000 istek/saat sınırıyla okunur"
+          : "Yok: GitHub repo kanıtı anahtarsız 60 istek/saat sınırında okunur (yoğun koşuda 403 olabilir).",
+      fix:
+        "İsteğe bağlı — github.com/settings/tokens adresinden salt-okunur (public_repo) jeton üret, GITHUB_API_TOKEN olarak ekle. Git kimliği için kullanılan GITHUB_TOKEN'dan AYRI tutulur.",
+    },
+    {
       id: "evren",
       label: "EVREN ulusal YZ platformu (isteğe bağlı)",
       ok: evren.ready,

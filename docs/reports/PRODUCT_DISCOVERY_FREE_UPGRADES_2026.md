@@ -313,6 +313,8 @@ anahtar yoksa kaynak 0 ms'de boş döner (ağ çağrısı yapılmaz) — yani "a
 | L0/L3 | `tavily-search` | anahtar: `TAVILY_API_KEY` | Web'de yayınlanmış gerçek fiyat/puan satırları (1.000 kredi/ay) | `parseTavilyResults` saf test |
 | L0/L3 | `searchapi-shopping` + `serper-shopping` | anahtar: `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI ile AYNI Google Shopping verisi (fiyat + puan + görsel) iki ek ücretsiz kotalı yoldan; biri tükenirse arama ölmez | `parseSerperShopping` / `parseSearchApiShopping` saf test; her servis kendi aylık kovasında |
 | L3 Talep | `youtube-attention` (Data API v3) | anahtar: `YOUTUBE_API_KEY` | Niş dikkat/ilgi sinyali — `NON_PRODUCT_SOURCES` içinde, ürün kartı üretmez | 0 ms boş (anahtarsız) |
+| L3 Talep | `google-trends-keyed` (SearchAPI/SerpAPI `engine=google_trends`) | anahtar: `SEARCHAPI_KEY` / `SERPAPI_KEY` | Anahtarsız Trends ucu 429 verdiğinde **gerçek** aylık seri buradan okunur; niş momentumu Wikipedia'ya bağımlı kalmaz | `momentumFromPoints` (iki yarı, ±100 bandı, <4 nokta → `null`), `parseKeyedTrends` |
+| L3 Ekosistem | `github` kaynağı güçlendirildi: jeton desteği + ölçülen alanlar | anahtar: `GITHUB_API_TOKEN` (isteğe bağlı) | Kota 60 → 5.000 istek/saat (403 ile satır kaybı biter); `notes` artık yıldız + fork + açık konu + **son push N gün önce** + dil/etiket taşır; `archived` repo elenir | `githubApiHeaders`, `parseGithubRepos`, `daysSincePush` saf test |
 | L4 Tedarik | `cj-supplier.server.ts`: `parseCjOffers`, `fetchCjOffers`, `cjApiKey` | anahtar: `CJ_API_KEY` | MOQ (`directMinOrderNum`), depo ülkesi, fiyat bandı — AliExpress/MIC'in ölçemediği yuvalar | `parseCjOffers` saf test; pipeline 3. tedarik kaynağı olarak bağlandı |
 | L4 Kur | `fx-rates.server.ts` çoklu sağlayıcı + önbellek | anahtarsız | Kur gelmezse fiyat `null` kalır (tahmin yok); artık 2 sağlayıcı denenir | `product-discovery-money.test.ts` |
 | L7 AI havuzu | GitHub Models (`models.github.ai/inference`) `pool_d` yedeği | anahtar: `GITHUB_MODELS_TOKEN` | Ücretsiz günlük kota ile ek model kapasitesi; `PROVIDER_D` boşsa devreye girer | `ai-pool.test.ts`, `ai-keys.test.ts` |
@@ -338,6 +340,7 @@ yasak), Alibaba/1688/Temu/Walmart (partner onayı). "Görüntülenme ≠ satış
 | `CJ_API_KEY` | CJ Dropshipping | 50.000 puan/gün | MOQ + depo ülkesi + fiyat bandı |
 | `BESTBUY_API_KEY` | Best Buy | ücretsiz anahtar | ABD katalog: fiyat + puan + GTIN |
 | `YOUTUBE_API_KEY` | YouTube Data v3 | 10.000 birim/gün | Dikkat sinyali (ürün değil) |
+| `GITHUB_API_TOKEN` (`GH_API_TOKEN`/`GITHUB_PAT` eşanlamlı) | GitHub REST | jetonlu 5.000 istek/saat (jetonsuz 60) | Niş ekosistem kanıtı: yıldız/fork/açık konu/son push — **git için kullanılan `GITHUB_TOKEN`'dan ayrı**, o otomatik tüketilmez |
 | `FIRECRAWL_API_KEY` / `SCRAPINGBEE_API_KEY` / `SPIDER_API_KEY` / `EXA_API_KEY` | Firecrawl / ScrapingBee / Spider / Exa | 1.000/ay · 1.000 · deneme · 1.000/ay | Jina düşerse yedek okuma |
 | `GITHUB_MODELS_TOKEN` (+ `GITHUB_MODELS_MODEL`) | GitHub Models | ücretsiz günlük kota | Ek LLM kapasitesi (`pool_d`) |
 | `WOOCOMMERCE_STORES` | kendi/izinli mağaza listesi | $0 | D2C katalog satırları |

@@ -359,6 +359,10 @@ export const NON_PRODUCT_SOURCES = new Set([
   "reddit-archive",
   "github",
   "google-trends",
+  // Anahtarlı Trends yedeği (SearchAPI/SerpAPI) de ÜRÜN DEĞİL, talep
+  // ölçümüdür: listeye eklenmezse bu satırlar "ürün adayı" olarak havuza
+  // girer ve vitrini zaman serisiyle doldururdu.
+  "google-trends-keyed",
   "google-news",
   "web-reviews",
   "youtube-attention",

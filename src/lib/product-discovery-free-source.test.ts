@@ -40,6 +40,107 @@ describe("wikipediaPageviewsSource", () => {
   });
 });
 
+describe("Google Trends anahtarlı yedek (SearchAPI/SerpAPI)", () => {
+  it("momentum iki yarı karşılaştırmasından hesaplanır (aynı kural: ±100 bandı)", async () => {
+    const { momentumFromPoints } = await import("./google-trends-keyed.server");
+    // İlk yarı 20, son yarı 30 → +50%
+    expect(momentumFromPoints([20, 20, 30, 30])).toBe(50);
+    // Düşüş → negatif
+    expect(momentumFromPoints([40, 40, 20, 20])).toBe(-50);
+    // 4 noktadan az → ölçüm YOK (0 uydurulmaz)
+    expect(momentumFromPoints([10, 20, 30])).toBeNull();
+    // İlk yarı 0 → oran tanımsız
+    expect(momentumFromPoints([0, 0, 10, 10])).toBeNull();
+    // Aşırı sıçrama ±100 ile kırpılır
+    expect(momentumFromPoints([1, 1, 100, 100])).toBe(100);
+  });
+
+  it("servis yanıtını (timeline_data) okur; bozuk yanıtta seri UYDURMAZ", async () => {
+    const { parseKeyedTrends } = await import("./google-trends-keyed.server");
+    const parsed = parseKeyedTrends(
+      {
+        interest_over_time: {
+          timeline_data: [
+            { values: [{ extracted_value: 25 }] },
+            { values: [{ extracted_value: 25 }] },
+            { values: [{ extracted_value: 50 }] },
+            { values: [{ extracted_value: 50 }] },
+          ],
+        },
+      },
+      "searchapi",
+    );
+    expect(parsed).toMatchObject({ momentumPct: 100, avgIndex: 38, provider: "searchapi" });
+    expect(parseKeyedTrends({}, "serpapi")).toBeNull();
+    expect(parseKeyedTrends({ interest_over_time: { timeline_data: "bozuk" } }, "serpapi")).toBeNull();
+  });
+
+  it("anahtar yoksa ağa çıkmadan null döner; kaynak listesinde ÜRÜN DIŞI olarak kayıtlıdır", async () => {
+    const { fetchKeyedTrends, trendsKeyConfigured } = await import(
+      "./google-trends-keyed.server"
+    );
+    const { isNonProductSource } = await import("./product-discovery-query");
+    expect(trendsKeyConfigured({})).toBe(false);
+    await expect(fetchKeyedTrends("air fryer", "US")).resolves.toBeNull();
+    // Zaman serisi ÜRÜN DEĞİLDİR: aday havuzuna girmemeli.
+    expect(isNonProductSource("google-trends-keyed")).toBe(true);
+    expect(PRODUCT_SOURCES.map((s) => s.name)).toContain("google-trends-keyed");
+  });
+});
+
+describe("GitHub repo kanıtı — jetonla kota, ölçülen alanlarla kanıt", () => {
+  it("jeton varsa Authorization başlığı eklenir, yoksa anahtarsız başlık kümesi korunur", async () => {
+    const { githubApiHeaders, githubApiToken } = await import("./github-repos.server");
+    expect(githubApiToken({})).toBe("");
+    const anon = githubApiHeaders({});
+    expect(anon.authorization).toBeUndefined();
+    expect(anon.accept).toContain("github");
+
+    const auth = githubApiHeaders({ GITHUB_API_TOKEN: "test-token" });
+    expect(auth.authorization).toBe("Bearer test-token");
+    // Git kimliği için kullanılan GITHUB_TOKEN otomatik TÜKETİLMEZ.
+    expect(githubApiHeaders({ GITHUB_TOKEN: "git-token" }).authorization).toBeUndefined();
+  });
+
+  it("yalnız yanıtta yazan sayılar yazılır, archived repo elenir", async () => {
+    const { parseGithubRepos } = await import("./github-repos.server");
+    const now = Date.parse("2026-10-18T00:00:00Z");
+    const rows = parseGithubRepos(
+      {
+        items: [
+          {
+            full_name: "acme/air-fryer-ctl",
+            description: "Air fryer controller",
+            stargazers_count: 1200,
+            forks_count: 84,
+            open_issues_count: 12,
+            pushed_at: "2026-10-08T00:00:00Z",
+            html_url: "https://github.com/acme/air-fryer-ctl",
+            language: "TypeScript",
+            topics: ["iot", "kitchen"],
+          },
+          // Bakımı bitmiş repo "canlı ekosistem" kanıtı değildir.
+          { full_name: "old/legacy", archived: true, stargazers_count: 9999 },
+          // Sayılar yoksa alan uydurulmaz.
+          { full_name: "fresh/repo", html_url: "https://github.com/fresh/repo" },
+        ],
+      },
+      8,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.source).toBe("github");
+    expect(rows[0]!.notes).toContain("1.200 yıldız");
+    expect(rows[0]!.notes).toContain("84 fork");
+    expect(rows[0]!.notes).toContain("etiketler iot, kitchen");
+    expect(rows[0]!.notes).toContain("TypeScript");
+    // İkinci satırda hiçbir sayı yok → notes boş kalır (0 yazılmaz).
+    expect(rows[1]!.notes).toBe("");
+    // Tarih farkı ölçülebilir (test saatine göre 10 gün).
+    expect(rows[0]!.notes).toMatch(/son push \d+ gün önce/);
+    expect(now).toBeGreaterThan(0);
+  });
+});
+
 describe("ön kontrol — ürün kaynak anahtarları görünür", () => {
   it("SerpAPI ve ScraperAPI ön kontrolde İSTEĞE BAĞLI olarak raporlanır", async () => {
     const { envChecks } = await import("./product-discovery-preflight.server");

@@ -41,6 +41,9 @@ const READY: PreflightEnv = {
   // katalog API'si. İkisi de isteğe bağlıdır; tam kurulumda tanımlıdır.
   FIRECRAWL_API_KEY: "fc",
   BESTBUY_API_KEY: "bb",
+  // GitHub API jetonu: anahtarsız sınır 60 istek/saat, jetonla 5.000/saat.
+  // Tam kurulumda tanımlıdır; yokluğu hatı düşürmez.
+  GITHUB_API_TOKEN: "gh",
 };
 
 const byId = (checks: { id: string }[], id: string) =>
@@ -71,6 +74,21 @@ describe("preflight env kontrolleri", () => {
     const checks = envChecks({ ...READY, OPENROUTER_API_KEY: undefined });
     expect(byId(checks, "ai_models")?.ok).toBe(true);
     expect(byId(checks, "evren")?.ok).toBe(true);
+  });
+
+  it("yeni isteğe bağlı kaynaklar (GitHub jetonu, anahtarlı Trends) panelde GÖRÜNÜR ve hatı düşürmez", () => {
+    const checks = envChecks({ ...READY, GITHUB_API_TOKEN: undefined, SERPAPI_KEY: undefined });
+    const github = byId(checks, "github_token");
+    const trends = byId(checks, "google_trends_keyed");
+    expect(github?.ok).toBe(false);
+    expect(github?.optional).toBe(true);
+    expect(github?.fix).toContain("GITHUB_API_TOKEN");
+    expect(trends?.ok).toBe(false);
+    expect(trends?.optional).toBe(true);
+    // Eksik olsalar da hat hazır kalır.
+    expect(buildPreflight({ ...READY, GITHUB_API_TOKEN: undefined }, { columnsError: null, rpcError: null }).ok).toBe(
+      true,
+    );
   });
 
   it("doğrudan sağlayıcı anahtarı varsa model havuzu tanımlı sayılır", () => {

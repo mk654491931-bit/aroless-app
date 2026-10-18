@@ -351,40 +351,19 @@ export const githubSource: ProductSource = {
   timeoutMs: 3_000,
   async scrape(niche: string): Promise<RawProduct[]> {
     const q = encodeURIComponent(`${niche} in:name,description,readme`);
+    const { githubApiHeaders, parseGithubRepos } = await import("./github-repos.server");
+    // JETON İSTEĞE BAĞLI: varsa kota 60/saat → 5.000/saat'e çıkar ve 403 ile
+    // kaybedilen koşular biter; yoksa anahtarsız davranış AYNEN korunur.
+    const res = await fetch(
+      `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
+      { signal: AbortSignal.timeout(2_500), headers: githubApiHeaders() },
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // DİLİM KASTEN 8: yukarıdaki `hackerNewsSource` ile aynı gerekçe — repo
     // listesi ürün değildir, nişin ekosistem büyüklüğüdür (3/5 kanıt).
-    const json = JSON.parse(
-      await grab(
-        `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`,
-        2_500,
-        "application/vnd.github+json",
-      ),
-    ) as {
-      items?: {
-        full_name?: string;
-        description?: string | null;
-        stargazers_count?: number;
-        html_url?: string;
-      }[];
-    };
-    const out: RawProduct[] = [];
-    for (const item of json.items ?? []) {
-      const title = String(item.full_name ?? "").trim();
-      if (!title) continue;
-      out.push({
-        title: `${title} — ${String(item.description ?? "niş aracı").slice(0, 120)}`,
-        brand: "",
-        seller: "",
-        priceUsd: null,
-        rating: null,
-        ratingCount: null,
-        inStock: null,
-        source: "github",
-        url: String(item.html_url ?? ""),
-        notes: `${Number(item.stargazers_count ?? 0)} yıldız`,
-      });
-    }
-    return out;
+    // Ayrıştırma SAF ve testlidir: yalnız yanıtta YAZAN sayılar (yıldız, fork,
+    // açık konu, son push) `notes`a girer; `archived` repo elenir.
+    return parseGithubRepos(await res.json().catch(() => null), 8);
   },
 };
 
@@ -768,6 +747,48 @@ export const googleTrendsSource: ProductSource = {
         notes: `30 günlük momentum ${momentum > 0 ? "+" : ""}${momentum}% · ortalama indeks ${Math.round(
           avgIndex,
         ).toLocaleString("en-US")}`,
+      },
+    ];
+  },
+};
+
+/**
+ * GOOGLE TRENDS — ANAHTARLI YEDEK (SearchAPI / SerpAPI `engine=google_trends`).
+ *
+ * NEDEN GEREKLİ (ölçülen): anahtarsız Trends ucu datacenter IP'lerinde kalıcı
+ * 429 döndüğü için `google-trends` kaynağı sık sık 0 satır döner ve niş
+ * momentumu Wikipedia'ya düşer. Wikipedia maddesi olmayan nişlerde (yeni ürün
+ * kategorileri) talep sinyali tamamen kör kalıyordu. Bu kaynak aynı seriyi
+ * anahtarlı JSON ucundan okur; ölçüm yoksa DÜRÜSTÇE 0 satır döner.
+ *
+ * ÇİFT SAYIM YOK: pipeline momentumu İLK bulduğu satırdan alır; bu kaynak
+ * `google-trends`tan SONRA kayıtlıdır, yani anahtarsız ölçüm çalıştığında bu
+ * satırlar yalnız ek kanıt olur; `wikipedia` satırı zaten bu kaynağı beslemez.
+ */
+export const googleTrendsKeyedSource: ProductSource = {
+  name: "google-trends-keyed",
+  timeoutMs: 8_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const { fetchKeyedTrends } = await import("./google-trends-keyed.server");
+    const measured = await fetchKeyedTrends(niche, "US");
+    // Ölçüm yoksa satır ÜRETİLMEZ (0 momentum uydurulmaz).
+    if (!measured) return [];
+    const momentum = measured.momentumPct;
+    return [
+      {
+        title: `${niche} — Google Trends arama ilgisi (anahtarlı ölçüm)`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "google-trends-keyed",
+        url: `https://trends.google.com/trends/explore?q=${encodeURIComponent(niche.slice(0, 60))}`,
+        // Aynı desen: pipeline `momentum ±N%` yazısını `nicheMomentumPct`e çevirir.
+        notes: `30 günlük momentum ${momentum > 0 ? "+" : ""}${momentum}% · ortalama indeks ${measured.avgIndex.toLocaleString(
+          "en-US",
+        )} · sağlayıcı ${measured.provider}`,
       },
     ];
   },
@@ -2974,6 +2995,8 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÖNCE Google Trends, SONRA Wikipedia: momentum tek kaynaktan okunur, ikisi
   // birden kanıta girmez (bkz. `googleTrendsSource` çift sayım notu).
   googleTrendsSource,
+  // Anahtarsız uç 429 verdiğinde GERÇEK seriyi getiren yedek (SearchAPI/SerpAPI).
+  googleTrendsKeyedSource,
   googleNewsSource,
   // İKİ AYRI WİKİPEDİA ÖLÇÜMÜ: `wikipedia` talep satırı, `wikipedia-pageviews`
   // gerçek görüntülenme momentumu. İkisi farklı sinyaldir (kanıt varlığı ve
