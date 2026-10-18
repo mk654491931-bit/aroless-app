@@ -1850,6 +1850,9 @@ async function scrapeMarketplaceCountry(niche: string, country: string): Promise
           title,
           brand: row.brand,
           seller: row.seller || site.name,
+          category: row.category ?? "",
+          gtin: row.gtin ?? "",
+          mpn: row.mpn ?? "",
           priceUsd: usd,
           rating: row.rating,
           ratingCount: row.ratingCount,
@@ -1865,6 +1868,7 @@ async function scrapeMarketplaceCountry(niche: string, country: string): Promise
               : "",
             row.rating !== null ? `puan ${row.rating}/5` : "",
             row.ratingCount !== null ? `${row.ratingCount} değerlendirme` : "",
+            row.gtin ? `GTIN ${row.gtin}` : "",
           ]
             .filter(Boolean)
             .join(" · ")
@@ -2419,6 +2423,425 @@ export const dealFeedSource: ProductSource = {
   },
 };
 
+/* ------------ 14. WooCommerce Store API (anahtarsız, puan + yorum + kategori) */
+
+/**
+ * WOOCOMMERCE STORE API (`/wp-json/wc/store/v1/products`) — ANAHTARSIZ.
+ *
+ * NEDEN VAR (v2 rapor P1, 2026-10-17 canlı ölçüm):
+ *   Aday havuzundaki en büyük boşluk `ratingCount` (0/21) ve `category` (0–4/21)
+ *   idi. WooCommerce Store API v1 kamuya açık bir standarttır ve TEK yanıtta
+ *   şu alanların tamamını döner:
+ *     `name · sku · prices{price, currency_code, currency_minor_unit} ·
+ *      average_rating · review_count · categories[] · brands[] · images[] ·
+ *      permalink · is_in_stock`
+ *
+ * GÜVENLİ TASARIM (allowlist + opt-in):
+ *   • Rastgele mağaza taranmaz; `WOOCOMMERCE_STORES` ortam değişkeninde virgülle
+ *     ayrılmış mağaza domain'leri varsa veya varsayılan izinli mağaza listesi
+ *     nişle eşleşirse sorgulanır.
+ *   • Fiyat mağazanın `currency_minor_unit` (varsayılan 2 → kuruş/cent)
+ *     ölçeğine bölünerek okunur ve `toUsd` ile gerçek kura çevrilir.
+ *   • `review_count === 0` veya `average_rating === "0"` ise puan `null`
+ *     bırakılır ("0 puan" ölçüm değil, "henüz oy yok" demektir).
+ */
+export function parseWooStoreProducts(
+  payload: unknown,
+  storeLabel = "WooCommerce",
+  niche = "",
+): RawProduct[] {
+  if (!Array.isArray(payload)) return [];
+  const out: RawProduct[] = [];
+  for (const item of payload) {
+    const rec = (item ?? {}) as Record<string, unknown>;
+    const title = decode(String(rec["name"] ?? "")).trim();
+    if (title.length < 6) continue;
+    if (niche && !matchesNiche(title, niche)) continue;
+    const permalink = String(rec["permalink"] ?? "").trim();
+    if (!/^https?:\/\//i.test(permalink)) continue;
+
+    const prices = (rec["prices"] ?? {}) as Record<string, unknown>;
+    const rawPrice = Number(prices["price"]);
+    const minorUnit = Number(prices["currency_minor_unit"] ?? 2);
+    const scale = Number.isFinite(minorUnit) && minorUnit >= 0 && minorUnit <= 4 ? 10 ** minorUnit : 100;
+    const currency = String(prices["currency_code"] ?? "USD")
+      .trim()
+      .toUpperCase();
+    const priceLocal =
+      Number.isFinite(rawPrice) && rawPrice > 0 ? Math.round((rawPrice / scale) * 100) / 100 : null;
+    const priceUsd = currency === "USD" ? priceLocal : null;
+
+    const reviewCountRaw = Number(rec["review_count"] ?? 0);
+    const ratingCount =
+      Number.isFinite(reviewCountRaw) && reviewCountRaw > 0 ? Math.round(reviewCountRaw) : null;
+    const avgRaw = Number(rec["average_rating"] ?? 0);
+    const rating =
+      ratingCount !== null && Number.isFinite(avgRaw) && avgRaw > 0 && avgRaw <= 5
+        ? Math.round(avgRaw * 10) / 10
+        : null;
+
+    if (priceLocal === null && rating === null) continue;
+
+    const brands = Array.isArray(rec["brands"]) ? (rec["brands"] as Record<string, unknown>[]) : [];
+    const brandName = decode(String(brands[0]?.["name"] ?? "")).trim();
+
+    const cats = Array.isArray(rec["categories"])
+      ? (rec["categories"] as Record<string, unknown>[])
+      : [];
+    const categoryName = decode(String(cats[cats.length - 1]?.["name"] ?? "")).trim();
+
+    const images = Array.isArray(rec["images"]) ? (rec["images"] as Record<string, unknown>[]) : [];
+    const imageUrl = String(images[0]?.["src"] ?? "").trim();
+
+    const inStock =
+      typeof rec["is_in_stock"] === "boolean" ? (rec["is_in_stock"] as boolean) : null;
+    const sku = String(rec["sku"] ?? "").trim().slice(0, 60);
+
+    out.push({
+      title: title.slice(0, 160),
+      brand: brandName.slice(0, 60),
+      brandMeasured: brandName.length > 0,
+      seller: storeLabel,
+      category: categoryName.slice(0, 80),
+      mpn: sku,
+      priceUsd,
+      rating,
+      ratingCount,
+      inStock,
+      source: "woo-storefront",
+      url: permalink,
+      imageUrl,
+      notes: [
+        storeLabel,
+        priceLocal !== null ? `${priceLocal} ${currency}` : "",
+        rating !== null ? `puan ${rating}/5` : "",
+        ratingCount !== null ? `${ratingCount} değerlendirme` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+    if (out.length >= 16) break;
+  }
+  return out;
+}
+
+export function configuredWooStores(
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const raw = String(env["WOOCOMMERCE_STORES"] ?? env["WOO_STORES"] ?? "").trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, ""))
+    .filter((s) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(s))
+    .slice(0, 6);
+}
+
+export const wooStorefrontSource: ProductSource = {
+  name: "woo-storefront",
+  timeoutMs: 6_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const stores = configuredWooStores();
+    if (!stores.length) return [];
+    const q = String(niche ?? "").trim().slice(0, 60);
+    if (!q) return [];
+    const { toUsd } = await import("./fx-rates.server");
+    const settled = await Promise.allSettled(
+      stores.map(async (host) => {
+        const url = `https://${host}/wp-json/wc/store/v1/products?search=${encodeURIComponent(q)}&per_page=15`;
+        const json = await grabJson<unknown>(url, 4_500);
+        const rows = parseWooStoreProducts(json, host, q);
+        for (const r of rows) {
+          if (r.priceUsd === null && r.notes) {
+            const m = /(\d+(?:\.\d+)?)\s+([A-Z]{3})\b/.exec(r.notes);
+            if (m) r.priceUsd = await toUsd(Number(m[1]), m[2]!);
+          }
+        }
+        return rows.filter((r) => r.priceUsd !== null || r.rating !== null);
+      }),
+    );
+    const out: RawProduct[] = [];
+    for (const s of settled) if (s.status === "fulfilled") out.push(...s.value);
+    return out;
+  },
+};
+
+/* --- 15. Open Beauty Facts (`cgi/search.pl`, anahtarsız kozmetik zenginleştirme) */
+
+/**
+ * OPEN BEAUTY FACTS — yalnız kozmetik/kişisel bakım nişlerinde çalışır.
+ *
+ * ÖLÇÜLEN KURAL (v2 rapor §3 L2 + §5 düzeltme #1):
+ *   `/api/v2/search` metin parametresini (`search_terms` / `q`) YOK SAYIYOR ve
+ *   her sorguda aynı 77.736 kaydı döndürüyor. Buna karşılık klasik CGI arama ucu
+ *   (`https://world.openbeautyfacts.org/cgi/search.pl?search_terms=…&search_simple=1&action=process&json=1`)
+ *   gerçek metin araması yapıyor (ölçüldü: `serum` 46, `shampoo` 2.919 kayıt).
+ *
+ * DÜRÜSTLÜK: OBF fiyat yayınlamaz; bu kaynak `openfoodfacts` gibi yalnız
+ * pazar genişliği ve öne çıkan markaları kanıt satırı olarak döner.
+ */
+const BEAUTY_NICHE_RE =
+  /\b(serum|shampoo|sampuan|şampuan|cleanser|moisturizer|sunscreen|lip|lipstick|mascara|foundation|skincare|skin care|haircare|hair oil|face mask|toner|retinol|niacinamide|hyaluronic|krem|losyon|parfum|parfüm|perfume|cosmetic|kozmetik)\b/i;
+
+export function isBeautyNiche(niche: string): boolean {
+  return BEAUTY_NICHE_RE.test(String(niche ?? ""));
+}
+
+export const openBeautyFactsSource: ProductSource = {
+  name: "openbeautyfacts",
+  timeoutMs: 4_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    if (!isBeautyNiche(niche)) return [];
+    const q = encodeURIComponent(niche.slice(0, 60));
+    const url =
+      `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${q}` +
+      `&search_simple=1&action=process&json=1&page_size=20` +
+      `&fields=code,product_name,brands,categories`;
+    const json = await grabJson<{
+      count?: number;
+      products?: { brands?: string; product_name?: string; categories?: string }[];
+    }>(url, 3_500);
+    const count = Number(json?.count ?? 0);
+    if (count <= 0) return [];
+    const brandCounts = new Map<string, number>();
+    for (const p of json.products ?? []) {
+      const b = String(p.brands ?? "").split(",")[0]?.trim() ?? "";
+      if (b.length >= 2) brandCounts.set(b, (brandCounts.get(b) ?? 0) + 1);
+    }
+    const leaders = [...brandCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([b]) => b);
+    return [
+      {
+        title: `${niche} — Open Beauty Facts kozmetik kataloğu`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "openbeautyfacts",
+        url: `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${q}&search_simple=1&action=process`,
+        notes:
+          `kozmetik kataloğu ${count} ürün` +
+          (leaders.length ? ` · öne çıkan markalar ${leaders.join(", ")}` : ""),
+      },
+    ];
+  },
+};
+
+/* ---------------- 16. Tavily Search API (isteğe bağlı, 1.000 kredi/ay ücretsiz) */
+
+export function tavilyKey(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["TAVILY_API_KEY", "TAVILY_KEY"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+export function parseTavilyResults(payload: unknown, niche = ""): RawProduct[] {
+  const results = (payload as { results?: unknown })?.results;
+  if (!Array.isArray(results)) return [];
+  const out: RawProduct[] = [];
+  for (const item of results) {
+    const r = (item ?? {}) as Record<string, unknown>;
+    const title = decode(String(r["title"] ?? "")).trim();
+    const url = String(r["url"] ?? "").trim();
+    const content = decode(String(r["content"] ?? ""));
+    if (title.length < 8 || !/^https?:\/\//i.test(url)) continue;
+    if (niche && !matchesNiche(`${title} ${content}`, niche)) continue;
+    const price = priceFromText(`${title} ${content}`);
+    const { rating, count } = ratingFromText(`${title} ${content}`);
+    if (price === null && rating === null) continue;
+    let host = "";
+    try {
+      host = new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      continue;
+    }
+    out.push({
+      title: title.slice(0, 160),
+      brand: brandFromTitle(title),
+      seller: host.split(".")[0]?.replace(/^\w/, (m) => m.toUpperCase()) ?? "Web",
+      priceUsd: price,
+      rating,
+      ratingCount: count,
+      inStock: null,
+      source: "tavily-search",
+      url,
+      notes: [
+        host,
+        price !== null ? `$${price}` : "",
+        rating !== null ? `puan ${rating}/5` : "",
+        count !== null ? `${count} değerlendirme` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+export const tavilySearchSource: ProductSource = {
+  name: "tavily-search",
+  timeoutMs: 6_000,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const key = tavilyKey();
+    if (!key) return [];
+    const q = String(niche ?? "").trim().slice(0, 80);
+    if (!q) return [];
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        query: `${q} buy price review`,
+        search_depth: "basic",
+        max_results: 10,
+      }),
+      signal: AbortSignal.timeout(5_500),
+    });
+    if (!res.ok) return [];
+    return parseTavilyResults(await res.json().catch(() => null), q);
+  },
+};
+
+/* ---------------- 17. eBay Browse API (isteğe bağlı, 5.000 çağrı/gün ücretsiz) */
+
+export function ebayToken(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["EBAY_OAUTH_TOKEN", "EBAY_BEARER_TOKEN", "EBAY_ACCESS_TOKEN"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+export function parseEbayBrowseItems(payload: unknown): RawProduct[] {
+  const rec = (payload ?? {}) as { itemSummaries?: unknown; total?: unknown };
+  const items = Array.isArray(rec.itemSummaries) ? rec.itemSummaries : [];
+  const totalActive = Number(rec.total ?? 0);
+  const out: RawProduct[] = [];
+  for (const raw of items) {
+    const it = (raw ?? {}) as Record<string, unknown>;
+    const title = decode(String(it["title"] ?? "")).trim();
+    const url = String(it["itemWebUrl"] ?? "").trim();
+    if (title.length < 6 || !/^https?:\/\//i.test(url)) continue;
+    const priceObj = (it["price"] ?? {}) as Record<string, unknown>;
+    const priceVal = Number(priceObj["value"]);
+    const currency = String(priceObj["currency"] ?? "USD").toUpperCase();
+    if (!Number.isFinite(priceVal) || priceVal <= 0 || currency !== "USD") continue;
+    const imgObj = (it["image"] ?? {}) as Record<string, unknown>;
+    const imageUrl = String(imgObj["imageUrl"] ?? "").trim();
+    const sellerObj = (it["seller"] ?? {}) as Record<string, unknown>;
+    const seller = String(sellerObj["username"] ?? "eBay").trim();
+    const cats = Array.isArray(it["categories"])
+      ? (it["categories"] as Record<string, unknown>[])
+      : [];
+    const category = String(cats[0]?.["categoryName"] ?? "").trim();
+    out.push({
+      title: title.slice(0, 160),
+      brand: brandFromTitle(title),
+      seller,
+      category: category.slice(0, 80),
+      priceUsd: Math.round(priceVal * 100) / 100,
+      rating: null,
+      ratingCount: null,
+      inStock: true,
+      source: "ebay-browse",
+      url,
+      imageUrl,
+      notes: [
+        "eBay",
+        `$${priceVal}`,
+        totalActive > 0 ? `${totalActive.toLocaleString("tr-TR")} aktif ilan` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 200),
+    });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+export const ebayBrowseSource: ProductSource = {
+  name: "ebay-browse",
+  timeoutMs: 6_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const token = ebayToken();
+    if (!token) return [];
+    const q = String(niche ?? "").trim().slice(0, 80);
+    if (!q) return [];
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=20`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(5_500),
+    });
+    if (!res.ok) return [];
+    return parseEbayBrowseItems(await res.json().catch(() => null));
+  },
+};
+
+/* ---------------- 18. YouTube Data API v3 (isteğe bağlı, 10.000 birim/gün) */
+
+export function youtubeApiKey(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+/**
+ * YouTube video dikkat sinyali — SATIŞ DEĞİL, DİKKAT/İLGİ kanıtıdır.
+ * `NON_PRODUCT_SOURCES` içinde yer alır; aday ürün kartı üretmez, yalnız niş
+ * etkileşimini (`notes`) besler.
+ */
+export const youtubeAttentionSource: ProductSource = {
+  name: "youtube-attention",
+  timeoutMs: 4_500,
+  async scrape(niche: string): Promise<RawProduct[]> {
+    const key = youtubeApiKey();
+    if (!key) return [];
+    const q = String(niche ?? "").trim().slice(0, 60);
+    if (!q) return [];
+    const url =
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10` +
+      `&q=${encodeURIComponent(`${q} review`)}&key=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4_000) });
+    if (!res.ok) return [];
+    const json = (await res.json().catch(() => null)) as {
+      pageInfo?: { totalResults?: number };
+      items?: { id?: { videoId?: string }; snippet?: { title?: string } }[];
+    } | null;
+    const items = json?.items ?? [];
+    if (!items.length) return [];
+    const total = Number(json?.pageInfo?.totalResults ?? items.length);
+    return [
+      {
+        title: `${niche} — YouTube inceleme dikkat sinyali`,
+        brand: "",
+        seller: "",
+        priceUsd: null,
+        rating: null,
+        ratingCount: null,
+        inStock: null,
+        source: "youtube-attention",
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+        notes: `${items.length} güncel inceleme videosu · toplam ~${total.toLocaleString("tr-TR")} sonuç`,
+      },
+    ];
+  },
+};
+
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ gerçek TR ürün satırları (Hepsiburada + n11; fiyat + puan + görsel).
   trReaderSource,
@@ -2437,6 +2860,13 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ anahtarsız ABD deal akışı: gerçek fiyat + görsel + topluluk oyu.
   // Yalnız ABD'de koşar; başka ülkede 0 ağ çağrısı yapar.
   dealFeedSource,
+  // ÜCRETSİZ anahtarsız WooCommerce Store API (izinli mağaza listesi tanımlıysa):
+  // puan + yorum sayısı + kategori + fiyat aynı yanıtta.
+  wooStorefrontSource,
+  // ÜCRETSİZ API (anahtarla): eBay Browse API (5.000 çağrı/gün) ve Tavily Search (1.000/ay).
+  // Anahtar yoksa 0 ms'de boş döner.
+  ebayBrowseSource,
+  tavilySearchSource,
   // Ölçülmüş ticari alan getirenler (fiyat + puan): en yüksek değer.
   // (`itunes` YOK: dijital lisans kataloğu — nedeni dosyada belgeli.)
   openLibrarySource,
@@ -2465,8 +2895,10 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   hackerNewsSource,
   redditArchiveSource,
   githubSource,
+  youtubeAttentionSource,
   // Kapsam ölçümü.
   openFoodFactsSource,
+  openBeautyFactsSource,
   wikidataSource,
 ];
 

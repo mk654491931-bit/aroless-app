@@ -35,7 +35,7 @@ const payload = {
   total: 3,
   items: [
     {
-      ean: "0622356559772",
+      ean: "0622356559775",
       title: "Ninja AF101 Air Fryer, 4 Qt",
       brand: "Ninja",
       model: "AF101",
@@ -54,7 +54,7 @@ const ninja: CatalogRecord = {
   brand: "Ninja",
   model: "AF101",
   category: "Home & Garden > Kitchen & Dining",
-  gtin: "0622356559772",
+  gtin: "0622356559775",
   lowestUsd: 89.99,
   highestUsd: 129.99,
   imageUrl: "https://example.com/ninja.jpg",
@@ -76,7 +76,7 @@ describe("parseCatalogItems — YALNIZ okunabilen alanlar", () => {
     const [record] = parseCatalogItems(payload);
     expect(record?.brand).toBe("Ninja");
     expect(record?.model).toBe("AF101");
-    expect(record?.gtin).toBe("0622356559772");
+    expect(record?.gtin).toBe("0622356559775");
     expect(record?.category).toContain("Kitchen");
     expect(record?.lowestUsd).toBe(89.99);
     expect(record?.imageUrl).toBe("https://example.com/ninja.jpg");
@@ -115,7 +115,7 @@ describe("catalogMatchScore — KİMLİK ÇAPASI olmadan eşleşme sayılmaz", (
   });
 
   it("GTIN başlıkta geçiyorsa kesin eşleşme", () => {
-    expect(catalogMatchScore({ title: "Air Fryer 4 Qt 0622356559772" }, ninja)).toBe(1);
+    expect(catalogMatchScore({ title: "Air Fryer 4 Qt 0622356559775" }, ninja)).toBe(1);
   });
 
   it("kaydın markası başlıkta geçiyorsa güçlü eşleşme", () => {
@@ -156,7 +156,7 @@ describe("bestCatalogMatch", () => {
     const match = bestCatalogMatch({ title: "Ninja Air Fryer 5.5L" }, [ninja]);
     expect(match?.brand).toBe("Ninja");
     expect(match?.brandMeasured).toBe(true);
-    expect(match?.gtin).toBe("0622356559772");
+    expect(match?.gtin).toBe("0622356559775");
   });
 
   it("eşiğin altında `null` döner — alanlar BOŞ kalır", () => {
@@ -219,7 +219,7 @@ describe("enrichRowsWithCatalog — yalnız BOŞ alanlar dolar", () => {
     expect(rows[0]!.brand).toBe("Ninja");
     expect(rows[0]!.brandMeasured).toBe(true);
     expect(rows[0]!.category).toContain("Kitchen");
-    expect(rows[0]!.notes).toContain("GTIN 0622356559772");
+    expect(rows[0]!.notes).toContain("GTIN 0622356559775");
   });
 
   it("kaynağın VERDİĞİ markayı ezmez (ölçülmüş veri korunur)", () => {

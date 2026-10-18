@@ -32,6 +32,8 @@ import {
   type RawProduct,
 } from "./product-discovery.types";
 import { brandFromTitle } from "./product-brand";
+import { inferProductCategory } from "./product-categories";
+import { normalizeGtin } from "./product-identity";
 import { isNonProductSource } from "./product-discovery-query";
 
 /** Minimum kabul edilebilir puan (5 üzerinden). */
@@ -195,6 +197,11 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
   // (`brandMeasured: true`), başlıktan çıkarılan marka TÜREVDİR (false) ve
   // kanıt yuvasını doldurmaz — kartta yine gösterilir.
   const brandMeasured = declaredBrand !== "" && parsed.brandMeasured;
+  // KATEGORİ: kaynak ya da katalog verdiyse o kullanılır; boşsa başlıktaki
+  // somut ürün cinsi kelimelerinden Google Product Taxonomy yolu çıkarılır.
+  // Kategori `EVIDENCE_SLOTS` içinde değildir, yani bütünlük puanını şişirmez.
+  const declaredCategory = parsed.category.trim();
+  const category = declaredCategory || inferProductCategory(parsed.title);
   // Dolu yuva sayısı = veri bütünlüğü puanı (0-5). Marka yuvası yalnız
   // BAĞIMSIZ ölçümle dolar (`brandMeasured`).
   const { dataCompleteness, missingFields: missing } = evidenceCompleteness({
@@ -208,10 +215,7 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     brand: brand.slice(0, 60),
     brandMeasured,
     seller: parsed.seller.slice(0, 60),
-    // Kategori artık daima ölçülen alandan gelir. Önceden bilerek `""` idi:
-    // hiçbir kaynak vermediği için ölü bir alandı ve kısa listede her ürün
-    // kategorisiz çıkıyordu. Boş gelirse yine boş kalır — UYDURMA YAPMAZ.
-    category: parsed.category.slice(0, 80),
+    category: category.slice(0, 80),
     priceUsd: parsed.priceUsd,
     rating: parsed.rating,
     ratingCount: parsed.ratingCount,
@@ -225,6 +229,8 @@ export function normalizeRaw(raw: RawProduct): NormalizedProduct {
     // onu eler (bkz. `product-discovery-shortlist.server.ts`).
     imageUrl: parsed.imageUrl.trim().slice(0, 500),
     salesVolume: parsed.salesVolume,
+    gtin: normalizeGtin(parsed.gtin),
+    mpn: parsed.mpn.trim().slice(0, 60),
     fingerprint: productFingerprint({
       title: parsed.title,
       brand: parsed.brand,
@@ -372,13 +378,24 @@ export function scoreDeterministically(
 
 /* --------------------------------------------------------- Hard filter */
 
-/** Bir ürünün tüm tekilleştirme anahtarları (fingerprint + model kodu). */
+/** Bir ürünün tüm tekilleştirme anahtarları (GTIN + model kodu + fingerprint). */
 function dedupKeys(p: NormalizedProduct): string[] {
   const keys: string[] = [];
+  // 1) Küresel barkod (GTIN) — en güçlü çapa; farklı mağaza/başlık yazımlarını
+  //    sıfır yanlış-pozitifle birleştirir (GS1 Mod-10 doğrulanmış).
+  const gtin = normalizeGtin(p.gtin);
+  if (gtin) keys.push(`g:${gtin}`);
   const fp = p.fingerprint || productFingerprint({ title: p.name });
   if (fp) keys.push(`f:${fp}`);
   const mk = productModelKey({ title: p.name, brand: p.brand });
   if (mk) keys.push(`m:${mk}`);
+  // MPN + marka kombinasyonu da model anahtarı gibi davranır.
+  const brandNorm = productFingerprint({ title: p.brand ?? "" });
+  const mpnNorm = String(p.mpn ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  if (brandNorm && mpnNorm.length >= 4) keys.push(`mpn:${brandNorm}|${mpnNorm}`);
   // Hiç anahtar üretilemeyen satır (boş başlık) tek başına geçsin.
   return keys.length > 0 ? keys : [`x:${p.name}`];
 }
@@ -582,6 +599,8 @@ export function mergeDuplicates(a: NormalizedProduct, b: NormalizedProduct): Nor
     url: fillString(richest.url, other.url),
     imageUrl: fillString(richest.imageUrl, other.imageUrl),
     id: fillString(richest.id, other.id),
+    gtin: fillString(richest.gtin ?? "", other.gtin ?? ""),
+    mpn: fillString(richest.mpn ?? "", other.mpn ?? ""),
     priceUsd: fillNullable(richest.priceUsd, other.priceUsd),
     rating: fillNullable(richest.rating, other.rating),
     ratingCount: fillNullable(richest.ratingCount, other.ratingCount),

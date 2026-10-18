@@ -359,3 +359,110 @@ export async function fetchMicOffers(
   if (offers.length) await cacheSet(key, "mic-supplier-offers-v2", offers, MIC_CACHE_TTL_MS);
   return offers;
 }
+
+/* ---------------- CJ DROPSHIPPING API v2 (`listV2`, isteğe bağlı, 50K puan/gün) */
+
+/**
+ * CJ Dropshipping API token'ı (`CJ_API_KEY` veya `CJ_ACCESS_TOKEN`).
+ *
+ * NEDEN VAR (v2 rapor L4 + P1 #9):
+ *   CJ Dropshipping ücretsiz geliştirici katmanı günde 50.000 puan (00:00 UTC
+ *   sıfırlamalı) sunar; `/product/listV2` 50 puan (günde 1.000 arama) harcar
+ *   ve `sellPrice`, `nowPrice`, `directMinOrderNum` (MOQ) ve `warehouseInventoryNum`
+ *   döner. Anahtar yoksa 0 ms'de `[]` döner (ağ çağrısı yapılmaz).
+ */
+export function cjApiKey(env: Record<string, string | undefined> = process.env): string {
+  for (const name of ["CJ_API_KEY", "CJ_ACCESS_TOKEN", "CJDROPSHIPPING_API_KEY"]) {
+    const v = (env[name] ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+/**
+ * CJ `listV2` yanıtını `MicOffer` sözleşmesine ayrıştırır (SAF, ağsız).
+ *
+ * Fiyat aralığı (`"12.50 -- 15.80"` veya `"12.50-15.80"`) varsa alt ve üst uç
+ * ayrı ayrı okunur; tek fiyat varsa `unitPriceHighUsd` `null` kalır.
+ */
+export function parseCjOffers(payload: unknown): MicOffer[] {
+  const data = (payload as { data?: { content?: unknown[]; list?: unknown[] } })?.data;
+  const contentList = Array.isArray(data?.content)
+    ? data.content.flatMap((c) => {
+        const group = (c ?? {}) as { productList?: unknown[] };
+        return Array.isArray(group.productList) ? group.productList : [c];
+      })
+    : Array.isArray(data?.list)
+      ? data.list
+      : [];
+
+  const out: MicOffer[] = [];
+  for (const raw of contentList) {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const title = String(item["nameEn"] ?? item["productNameEn"] ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const id = String(item["id"] ?? item["pid"] ?? "").trim();
+    if (title.length < 4 || !id) continue;
+
+    const rawSell = String(item["nowPrice"] ?? item["sellPrice"] ?? "").trim();
+    const parts = rawSell.split(/\s*(?:--|-)\s*/);
+    const low = measuredMoney(parts[0]);
+    const high = parts.length > 1 ? measuredMoney(parts[1]) : null;
+    if (low === null) continue;
+
+    const moqRaw = Number(item["directMinOrderNum"] ?? item["minOrderQuantity"] ?? 0);
+    const moqUnits = Number.isFinite(moqRaw) && moqRaw > 0 ? Math.round(moqRaw) : 1;
+    const shipFrom = String(item["countryCode"] ?? "CN")
+      .trim()
+      .toUpperCase()
+      .slice(0, 4);
+    const imageUrl = String(item["bigImage"] ?? item["productImage"] ?? "").trim();
+
+    out.push({
+      title: title.slice(0, 180),
+      unitPriceUsd: low,
+      unitPriceHighUsd: high !== null && high > low ? high : null,
+      moqUnits,
+      moqUnit: "pieces",
+      store: "CJ Dropshipping",
+      shipFrom,
+      url: `https://cjdropshipping.com/product/-p-${id}.html`,
+      imageUrl,
+    });
+    if (out.length >= 25) break;
+  }
+  return out;
+}
+
+export async function fetchCjOffers(
+  niche: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<MicOffer[]> {
+  const token = cjApiKey();
+  if (!token) return [];
+  const query = micSearchQuery(niche);
+  if (!query) return [];
+
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const key = await cacheKey("cj-supplier-offers-v1", [query]);
+  const hit = await cacheGet<MicOffer[]>(key).catch(() => null);
+  if (hit && hit.length) return hit;
+
+  const url =
+    `https://developers.cjdropshipping.com/api2.0/v1/product/listV2` +
+    `?keyWord=${encodeURIComponent(query)}&page=1&size=20`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 6_000),
+    headers: {
+      "CJ-Access-Token": token,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`CJ HTTP ${res.status}`);
+  const offers = parseCjOffers(await res.json().catch(() => null));
+  if (offers.length) {
+    await cacheSet(key, "cj-supplier-offers-v1", offers, MIC_CACHE_TTL_MS).catch(() => {});
+  }
+  return offers;
+}

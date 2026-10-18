@@ -96,6 +96,15 @@ export const RawProductSchema = z.object({
    * `viewed90d` "kaç kişi gördü"yse bu "kaçı aldı"dır; ikisi karıştırılmaz.
    */
   salesVolume: z.number().int().min(0).nullable().default(null),
+  /**
+   * DOĞRULANMIŞ (GS1 Mod-10) GTIN/EAN/UPC küresel barkod kimliği. Boş olabilir.
+   * Doluysa çapraz kaynak tekilleştirmede en güçlü çapa olarak kullanılır.
+   */
+  gtin: z.string().default(""),
+  /**
+   * ÜRETİCİ MODEL / PARÇA KODU (MPN). Boş olabilir.
+   */
+  mpn: z.string().default(""),
 });
 /**
  * Kaynakların döndürdüğü HAM şekil.
@@ -146,6 +155,10 @@ export const NormalizedProductSchema = z.object({
   imageUrl: z.string().default(""),
   /** Satış adedi (ölçüldüyse). `null` = ölçülmedi. */
   salesVolume: z.number().int().min(0).nullable().default(null),
+  /** Doğrulanmış (GS1 Mod-10) GTIN/EAN/UPC küresel barkod kimliği (varsa). */
+  gtin: z.string().default(""),
+  /** Üretici model / parça kodu (MPN, varsa). */
+  mpn: z.string().default(""),
 
   /**
    * MARKA ÖLÇÜLDÜ MÜ, yoksa başlıktan mı ÇIKARILDI?

@@ -361,6 +361,9 @@ export const NON_PRODUCT_SOURCES = new Set([
   "google-trends",
   "google-news",
   "web-reviews",
+  "youtube-attention",
+  "openfoodfacts",
+  "openbeautyfacts",
 ]);
 
 /**

@@ -56,7 +56,7 @@ export const DIRECT_MODEL_PROVIDERS = [
   },
   {
     slot: "PROVIDER_D",
-    label: "Alibaba Qwen (qwen3.8-flash-next)",
+    label: "Alibaba Qwen (qwen3.8-flash-next) / GitHub Models",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen3.8-flash-next",
   },
@@ -80,6 +80,14 @@ export function configuredDirectModelProviders(
         break;
       }
     }
+  }
+  const ghKeys = githubModelsEnvKeys(env);
+  if (ghKeys.length > 0) {
+    out.push({
+      slot: "GITHUB_MODELS",
+      label: "GitHub Models (models.github.ai)",
+      model: (env["GITHUB_MODELS_MODEL"] ?? "").trim() || "openai/gpt-4.1-mini",
+    });
   }
   return out;
 }
@@ -270,6 +278,28 @@ export function sambanovaEnvKeys(): string[] {
 }
 
 /**
+ * GitHub Models (`models.github.ai/inference`):
+ * Ücretsiz günlük kota (standart PAT ile `gpt-4.1-mini` / `DeepSeek-R1` / `Llama-3.3-70B-Instruct`).
+ * `GITHUB_MODELS_TOKEN`, `GITHUB_MODELS_API_KEY` ve `_1.._8` yuvalarını tarar.
+ * (`GITHUB_TOKEN` yalnız git işlemleri için ayrı tutulduğundan otomatik taranmaz —
+ * kullanıcının açıkça `GITHUB_MODELS_TOKEN` koyması gerekir.)
+ */
+export function githubModelsEnvKeys(
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const out: string[] = [];
+  const names = ["GITHUB_MODELS_TOKEN", "GITHUB_MODELS_API_KEY", "GH_MODELS_TOKEN"];
+  for (let i = 1; i <= 8; i += 1) {
+    names.push(`GITHUB_MODELS_TOKEN_${i}`, `GITHUB_MODELS_API_KEY_${i}`);
+  }
+  for (const name of names) {
+    const v = (env[name] ?? "").trim();
+    if (v) out.push(v);
+  }
+  return Array.from(new Set(out));
+}
+
+/**
  * True when ANY AI provider credential is configured — gateway or any of the
  * project's own key pools. Used by env-check so the warning is accurate no
  * matter which suffix the user stored keys under.
@@ -284,6 +314,7 @@ export function anyAiKeyConfigured(): boolean {
     hfEnvKeys().length > 0 ||
     cerebrasEnvKeys().length > 0 ||
     sambanovaEnvKeys().length > 0 ||
+    githubModelsEnvKeys().length > 0 ||
     evrenEnvKeys().length > 0
   );
 }

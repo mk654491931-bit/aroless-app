@@ -431,7 +431,7 @@ async function attachSupplierEconomics(
   };
   if (!survivors.length) return empty;
   const { fetchSupplierOffers } = await import("./aliexpress-supplier.server");
-  const { fetchMicOffers } = await import("./mic-supplier.server");
+  const { cjApiKey, fetchCjOffers, fetchMicOffers } = await import("./mic-supplier.server");
   const { buildEconomics, supplierMatchKind } = await import("./supplier-economics");
   // NİŞ İFADELERİ (TR + İngilizce çevirisi) — niş seviyesi yedeği için.
   //
@@ -444,16 +444,20 @@ async function attachSupplierEconomics(
     (q): q is string => Boolean(q && q.trim()),
   );
 
-  // İKİ KAYNAK PARALEL ve FAIL-SOFT. MIC, AliExpress'in ölçemediği üç yuvayı
-  // getirir (MOQ, tedarikçi adı, FOB bandı) — biri düşerse diğeri tek başına
-  // eskisi gibi çalışır; kanıt uydurulmaz.
-  const [aeResult, micResult] = await Promise.allSettled([
+  // ÜÇ KAYNAK PARALEL ve FAIL-SOFT (AliExpress + Made-in-China + isteğe bağlı CJ Dropshipping).
+  // MIC ve CJ, AliExpress'in ölçemediği üç yuvayı getirir (MOQ, tedarikçi adı,
+  // FOB/birim fiyat bandı) — biri düşerse diğeri tek başına eskisi gibi çalışır;
+  // kanıt uydurulmaz. CJ anahtarı yoksa 0 ms'de boş döner.
+  const hasCj = Boolean(cjApiKey());
+  const [aeResult, micResult, cjResult] = await Promise.allSettled([
     fetchSupplierOffers(niche, { country }),
     fetchMicOffers(niche),
+    hasCj ? fetchCjOffers(niche) : Promise.resolve([]),
   ]);
   const sources: string[] = [];
   const aeOffers = aeResult.status === "fulfilled" ? aeResult.value : [];
   const micOffers = micResult.status === "fulfilled" ? micResult.value : [];
+  const cjOffers = cjResult.status === "fulfilled" ? cjResult.value : [];
   if (aeResult.status === "fulfilled") {
     sources.push(`aliexpress ${aeOffers.length} teklif`);
   } else {
@@ -464,12 +468,19 @@ async function attachSupplierEconomics(
   } else {
     sources.push(`made-in-china HATA (${micResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`);
   }
+  if (hasCj) {
+    if (cjResult.status === "fulfilled") {
+      sources.push(`cj-dropshipping ${cjOffers.length} teklif`);
+    } else {
+      sources.push(`cj-dropshipping HATA (${cjResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`);
+    }
+  }
 
-  // MIC teklifi bizim teklif sözleşmesine çevrilir: ölçmediği alanlar
+  // MIC ve CJ teklifleri bizim teklif sözleşmesine çevrilir: ölçmedikleri alanlar
   // `null`'dur (`sold`, `rating`, `discountPct`) — uydurulmaz.
   const offers = [
     ...aeOffers,
-    ...micOffers.map((o) => ({
+    ...[...micOffers, ...cjOffers].map((o) => ({
       title: o.title,
       unitPriceUsd: o.unitPriceUsd,
       unitPriceHighUsd: o.unitPriceHighUsd,

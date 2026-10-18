@@ -118,14 +118,25 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     },
     {
       id: "serpapi",
-      label: "SerpAPI ürün kaynağı (isteğe bağlı)",
-      ok: set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY"),
+      label: "SerpAPI / SearchAPI / Serper ürün kaynağı (isteğe bağlı)",
+      ok:
+        set(env, "SERPAPI_KEY") ||
+        set(env, "SERP_API_KEY") ||
+        set(env, "SEARCHAPI_KEY") ||
+        set(env, "SEARCHAPI_API_KEY") ||
+        set(env, "SERPER_API_KEY") ||
+        set(env, "SERPER_KEY"),
       optional: true,
       detail:
-        set(env, "SERPAPI_KEY") || set(env, "SERP_API_KEY")
+        set(env, "SERPAPI_KEY") ||
+        set(env, "SERP_API_KEY") ||
+        set(env, "SEARCHAPI_KEY") ||
+        set(env, "SEARCHAPI_API_KEY") ||
+        set(env, "SERPER_API_KEY") ||
+        set(env, "SERPER_KEY")
           ? "tanımlı — Google Shopping üzerinden gerçek mağaza fiyatı, puan ve ürün görseli aranır"
           : "Yok: gerçek fiyatlı ürün araması bu kaynağı atlar, kalan kaynaklarla hat yine çalışır.",
-      fix: "İsteğe bağlı — serapapi.com'da ücretsiz hesap açıp SERPAPI_KEY ekle.",
+      fix: "İsteğe bağlı — serpapi.com (SERPAPI_KEY), searchapi.io (SEARCHAPI_KEY) veya serper.dev (SERPER_API_KEY) ücretsiz anahtarı ekle.",
     },
     {
       id: "scraperapi",
@@ -153,28 +164,46 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     },
     {
       id: "reader_fallback",
-      label: "Yedek okuma sağlayıcısı (Firecrawl / ScrapingBee, isteğe bağlı)",
-      ok: set(env, "FIRECRAWL_API_KEY") || set(env, "SCRAPINGBEE_API_KEY"),
+      label: "Yedek okuma sağlayıcısı (Firecrawl / ScrapingBee / Tavily / Exa / Spider / Crawl4AI, isteğe bağlı)",
+      ok:
+        set(env, "FIRECRAWL_API_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") ||
+        set(env, "TAVILY_API_KEY") ||
+        set(env, "EXA_API_KEY") ||
+        set(env, "SPIDER_API_KEY") ||
+        set(env, "CRAWL4AI_URL"),
       optional: true,
       detail:
-        set(env, "FIRECRAWL_API_KEY") || set(env, "SCRAPINGBEE_API_KEY")
+        set(env, "FIRECRAWL_API_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") ||
+        set(env, "TAVILY_API_KEY") ||
+        set(env, "EXA_API_KEY") ||
+        set(env, "SPIDER_API_KEY") ||
+        set(env, "CRAWL4AI_URL")
           ? "tanımlı — Jina bir sayfayı veremediğinde (kota/engel) ürün satırı yedek okuyucudan gelir"
-          : "Yok: Jina engellediğinde o sayfanın ürün satırları atlanır (hat yine çalışır).",
+          : "Yok: Jina engellediğinde anahtarsız r.markdown.new/defuddle.md devreye girer (hat yine çalışır).",
       fix:
-        "İsteğe bağlı — firecrawl.dev'den ücretsiz anahtar (1.000 kredi/ay) → FIRECRAWL_API_KEY, " +
-        "ya da scrapingbee.com (ücretsiz 1.000 kredi) → SCRAPINGBEE_API_KEY.",
+        "İsteğe bağlı — firecrawl.dev (FIRECRAWL_API_KEY), scrapingbee.com (SCRAPINGBEE_API_KEY), " +
+        "tavily.com (TAVILY_API_KEY), exa.ai (EXA_API_KEY) veya spider.cloud (SPIDER_API_KEY).",
     },
     {
       id: "bestbuy",
-      label: "Best Buy katalog API'si (isteğe bağlı, ABD/CA)",
-      ok: set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY"),
+      label: "Best Buy / eBay katalog API'si (isteğe bağlı)",
+      ok:
+        set(env, "BESTBUY_API_KEY") ||
+        set(env, "BEST_BUY_API_KEY") ||
+        set(env, "EBAY_OAUTH_TOKEN") ||
+        (set(env, "EBAY_CLIENT_ID") && set(env, "EBAY_CLIENT_SECRET")),
       optional: true,
       detail:
-        set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")
-          ? "tanımlı — ABD nişlerinde gerçek fiyat + GERÇEK kullanıcı puanı + ürün görseli ekler"
-          : "Yok: ABD nişleri yalnız okuyucularla beslenir (Newegg + AliExpress).",
+        set(env, "BESTBUY_API_KEY") ||
+        set(env, "BEST_BUY_API_KEY") ||
+        set(env, "EBAY_OAUTH_TOKEN") ||
+        (set(env, "EBAY_CLIENT_ID") && set(env, "EBAY_CLIENT_SECRET"))
+          ? "tanımlı — resmî kataloglardan gerçek fiyat + kullanıcı puanı + GTIN/MPN + ürün görseli ekler"
+          : "Yok: ABD/küresel nişler yalnız okuyucularla ve anahtarsız kataloglarla beslenir.",
       fix:
-        "İsteğe bağlı — developer.bestbuy.com'dan ücretsiz anahtar al, BESTBUY_API_KEY olarak ekle.",
+        "İsteğe bağlı — developer.bestbuy.com (BESTBUY_API_KEY) veya developer.ebay.com (EBAY_CLIENT_ID + EBAY_CLIENT_SECRET).",
     },
     {
       id: "evren",

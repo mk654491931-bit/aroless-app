@@ -32,6 +32,7 @@
 
 import type { RawProduct } from "./product-discovery.types";
 import { brandFromTitle, plausibleBrand, titleMentionsBrand } from "./product-brand";
+import { normalizeGtin } from "./product-identity";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
@@ -82,12 +83,14 @@ export function parseCatalogItems(payload: unknown): CatalogRecord[] {
     if (!title || title.length < 3) continue;
     const images = Array.isArray(row.images) ? row.images : [];
     const image = images.map((i) => str(i)).find((u) => /^https?:\/\//i.test(u)) ?? "";
+    const rawGtin = str(row.ean) || str(row.upc) || str(row.gtin);
     out.push({
       title,
       brand: str(row.brand).slice(0, 40),
       model: str(row.model).slice(0, 40),
       category: str(row.category).slice(0, 120),
-      gtin: str(row.ean) || str(row.upc) || str(row.gtin),
+      // Yalnız Mod-10 geçerli barkod taşınır; sahte/bozuk dize elenir.
+      gtin: normalizeGtin(rawGtin),
       lowestUsd: usd(row.lowest_recorded_price),
       highestUsd: usd(row.highest_recorded_price),
       imageUrl: image,
@@ -480,6 +483,8 @@ export function enrichRowsWithCatalog(
       brandMeasured,
       category: category.slice(0, 80),
       imageUrl,
+      gtin: String(row.gtin ?? "").trim() || match.gtin,
+      mpn: String(row.mpn ?? "").trim() || match.model,
       priceUsd: useCatalogPrice ? match.lowestUsd : row.priceUsd,
       notes: [
         String(row.notes ?? ""),

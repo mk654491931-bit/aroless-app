@@ -15,6 +15,8 @@
  * Olmayan alan `null` kalır — puan uydurulmaz, fiyat tahmin edilmez.
  */
 
+import { normalizeGtin } from "./product-identity";
+
 /** Ham, kaynak sayfadan çıkmış satır (ağdan bağımsız). */
 export type MarketplaceRow = {
   title: string;
@@ -30,6 +32,14 @@ export type MarketplaceRow = {
   ratingCount: number | null;
   inStock: boolean | null;
   seller: string;
+  /** Doğrulanmış (GS1 Mod-10) GTIN/EAN/UPC — yoksa ya da geçersizse `""`. */
+  gtin?: string;
+  /** Üretici parça numarası (MPN) — yoksa `""`. */
+  mpn?: string;
+  /** Mağaza stok kodu (SKU) — yoksa `""`. */
+  sku?: string;
+  /** JSON-LD `category` alanı — yoksa `""`. */
+  category?: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -46,6 +56,28 @@ function collectProducts(node: unknown, depth = 0): Record<string, unknown>[] {
   if (!record) return [];
 
   const type = String(record["@type"] ?? "");
+  // `@type: "ProductGroup"` ise önce `hasVariant` altındaki varyantlar toplanır;
+  // üst grubun ortak alanları (brand, aggregateRating, category) eksik varyanta miras verilir.
+  if (type.includes("ProductGroup") && Array.isArray(record["hasVariant"])) {
+    const parentBrand = record["brand"];
+    const parentRating = record["aggregateRating"];
+    const parentCategory = record["category"];
+    const variants = (record["hasVariant"] as unknown[]).flatMap((v) =>
+      collectProducts(v, depth + 1),
+    );
+    if (variants.length) {
+      return variants.map((v) => ({
+        ...(parentBrand !== undefined && v["brand"] === undefined ? { brand: parentBrand } : {}),
+        ...(parentRating !== undefined && v["aggregateRating"] === undefined
+          ? { aggregateRating: parentRating }
+          : {}),
+        ...(parentCategory !== undefined && v["category"] === undefined
+          ? { category: parentCategory }
+          : {}),
+        ...v,
+      }));
+    }
+  }
   if (type === "Product" || type.includes("Product")) return [record];
 
   if (type.includes("ItemList")) {
@@ -216,6 +248,19 @@ export function parseMarketplaceHtml(html: string, limit = 12): MarketplaceRow[]
       if (offer.price === null && rating === null) continue;
 
       seen.add(key);
+      const rawGtin = firstString(product, [
+        "gtin",
+        "gtin13",
+        "gtin12",
+        "gtin14",
+        "gtin8",
+        "ean",
+        "upc",
+      ]);
+      const gtin = normalizeGtin(rawGtin);
+      const mpn = firstString(product, ["mpn", "model"]).slice(0, 60);
+      const sku = firstString(product, ["sku", "productID"]).slice(0, 60);
+      const category = firstString(product, ["category"]).slice(0, 80);
       rows.push({
         title: title.slice(0, 180),
         url: firstString(product, ["url", "@id"]),
@@ -229,6 +274,10 @@ export function parseMarketplaceHtml(html: string, limit = 12): MarketplaceRow[]
         ratingCount: count,
         inStock: offer.inStock,
         seller: offer.seller,
+        gtin,
+        mpn,
+        sku,
+        category,
       });
       if (rows.length >= limit) return rows;
     }

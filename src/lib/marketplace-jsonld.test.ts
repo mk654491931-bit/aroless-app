@@ -177,6 +177,36 @@ describe("parseMarketplaceHtml", () => {
     expect(parseMarketplaceHtml("")).toEqual([]);
     expect(parseMarketplaceHtml("   ")).toEqual([]);
   });
+
+  it("JSON-LD içinden geçerli GTIN/EAN/MPN/SKU ve kategori alanlarını okur", () => {
+    const html = pageWithLd({
+      "@type": "Product",
+      name: "Ninja AF101 Air Fryer",
+      brand: "Ninja",
+      gtin13: "0622356559775",
+      mpn: "AF101",
+      sku: "NIN-AF101-BLK",
+      category: "Home & Garden > Kitchen & Dining > Small Appliances",
+      offers: { price: "89.99", priceCurrency: "USD" },
+    });
+    const rows = parseMarketplaceHtml(html);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].gtin).toBe("0622356559775");
+    expect(rows[0].mpn).toBe("AF101");
+    expect(rows[0].sku).toBe("NIN-AF101-BLK");
+    expect(rows[0].category).toContain("Kitchen");
+  });
+
+  it("Mod-10 kontrol hanesi hatalı sahte barkodu reddeder", () => {
+    const html = pageWithLd({
+      "@type": "Product",
+      name: "Sahte Barkodlu Ürün",
+      gtin13: "0622356559772", // son hane 5 olmalıydı
+      offers: { price: "49.99", priceCurrency: "USD" },
+    });
+    const rows = parseMarketplaceHtml(html);
+    expect(rows[0].gtin).toBe("");
+  });
 });
 
 describe("extractJsonLdBlocks", () => {

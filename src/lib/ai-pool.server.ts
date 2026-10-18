@@ -71,6 +71,7 @@ import {
   evrenEnvKeys,
   evrenModels,
   geminiEnvKeys,
+  githubModelsEnvKeys,
   groqEnvKeys,
   hfEnvKeys,
   openRouterEnvKeys,
@@ -191,6 +192,9 @@ function poolGroupKeys(group: PoolGroup): string[] {
     const v = readEnv(`${prefix}_${i}`);
     if (v) keys.push(v);
   }
+  if (!keys.length && group === "pool_d") {
+    return githubModelsEnvKeys();
+  }
   return Array.from(new Set(keys));
 }
 
@@ -205,13 +209,24 @@ export function poolGroupConfig(group: PoolGroup): {
     case "pool_c":
     case "pool_d": {
       const prefix = poolEnvPrefix(group);
+      const explicitBase =
+        readEnv(`${prefix}_BASE_URL`) ||
+        readEnv(`${prefix}_URL`) ||
+        readEnv(`${prefix}_API_URL`) ||
+        readEnv(`${prefix}_HOST`);
+      const explicitModel = readEnv(`${prefix}_MODEL`);
+      if (!explicitBase && group === "pool_d" && githubModelsEnvKeys().length > 0) {
+        return {
+          baseUrl:
+            readEnv("GITHUB_MODELS_BASE_URL") ||
+            "https://models.github.ai/inference/chat/completions",
+          model:
+            explicitModel || readEnv("GITHUB_MODELS_MODEL") || "openai/gpt-4.1-mini",
+        };
+      }
       return {
-        baseUrl:
-          readEnv(`${prefix}_BASE_URL`) ||
-          readEnv(`${prefix}_URL`) ||
-          readEnv(`${prefix}_API_URL`) ||
-          readEnv(`${prefix}_HOST`),
-        model: readEnv(`${prefix}_MODEL`) || "Meta-Llama-3.3-70B-Instruct",
+        baseUrl: explicitBase,
+        model: explicitModel || "Meta-Llama-3.3-70B-Instruct",
       };
     }
     case "pool_e": {
