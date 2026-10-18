@@ -564,6 +564,90 @@ export const serpApiShoppingSource: ProductSource = {
   },
 };
 
+/**
+ * SEARCHAPI.IO + SERPER.DEV — SerpAPI ile AYNI Google Shopping verisinin iki
+ * ücretsiz katmanlı alternatifi.
+ *
+ * NEDEN ÜÇ KAYNAK: SerpAPI ücretsiz planı aylık ~100 aramayla sınırlıdır ve tek
+ * başına darboğazdır. SearchAPI (~100/ay) ve Serper (2.500 tek seferlik kredi)
+ * aynı veriyi ayrı kotalarla verir; üçü aynı koşuda koşar, `filter` katmanı
+ * tekilleştirir. Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ (0 ms, 0 satır).
+ *
+ * SORGU DİLİ: SerpAPI kaynağıyla aynı kural — TR'de yerel önce, diğer
+ * ülkelerde İngilizce karşılık önce (ölçülmüş hata: `gl=DE`ye Türkçe sorgu
+ * göndermek boş sonuç veriyordu).
+ */
+async function shoppingApiRows(
+  provider: "searchapi" | "serper",
+  niche: string,
+  country: string,
+): Promise<RawProduct[]> {
+  const mod = await import("./shopping-api-sources.server");
+  const configured =
+    provider === "searchapi" ? Boolean(mod.searchApiKey()) : Boolean(mod.serperKey());
+  if (!configured) return [];
+
+  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const key = await cacheKey(`${provider}-shopping`, [niche, country]);
+  const hit = await cacheGet<RawProduct[]>(key);
+  if (hit) return hit;
+
+  const { allowShoppingApiCredit } = await import("./scraper-quota.server");
+  if ((await allowShoppingApiCredit(provider)) === false) {
+    console.log(`[discovery] ${provider}-shopping: aylık kota doldu (${country})`);
+    return [];
+  }
+
+  const code = String(country ?? "").trim().toUpperCase() || "US";
+  const { englishProductQuery, productQueryVariants } = await import("./product-discovery-query");
+  const local = trMarketplaceQueries(niche);
+  const english = [englishProductQuery(niche), ...productQueryVariants(niche), niche]
+    .map((q) => q.trim())
+    .filter(Boolean);
+  const seenQ = new Set<string>();
+  const queries = (code === "TR" ? [...local, ...english] : [...english, ...local]).filter((q) => {
+    const k = q.toLowerCase();
+    if (seenQ.has(k)) return false;
+    seenQ.add(k);
+    return true;
+  });
+
+  for (const query of queries) {
+    const rows =
+      provider === "searchapi"
+        ? await mod.fetchSearchApiShopping(query, code)
+        : await mod.fetchSerperShopping(query, code);
+    if (!rows.length) continue;
+    // YALNIZ BOŞ OLMAYAN SONUÇ önbelleğe yazılır (geçici hata nişi bir gün
+    // boyunca boş göstermesin).
+    await cacheSet(key, `${provider}-shopping`, rows, TR_MARKETPLACE_TTL_MS);
+    return rows;
+  }
+  return [];
+}
+
+export const searchApiShoppingSource: ProductSource = {
+  name: "searchapi-shopping",
+  timeoutMs: 9_000,
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    return shoppingApiRows("searchapi", niche, country);
+  },
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return shoppingApiRows("searchapi", niche, "US");
+  },
+};
+
+export const serperShoppingSource: ProductSource = {
+  name: "serper-shopping",
+  timeoutMs: 9_000,
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    return shoppingApiRows("serper", niche, country);
+  },
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return shoppingApiRows("serper", niche, "US");
+  },
+};
+
 /** Son 60 günün tarih aralığı (pageviews API gün bazlı ister). */
 function wmStartDate(): string {
   return new Date(Date.now() - 59 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "") ?? "";
@@ -2880,6 +2964,10 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // Gerçek fiyat + puan + görsel, ÜLKEYE göre (SerpAPI Google Shopping).
   // Anahtar yoksa hiç ağ çağrısı yapmaz; anahtarsız hat aynen çalışır.
   serpApiShoppingSource,
+  // AYNI verinin iki ücretsiz-kotalı alternatifi (SearchAPI ~100/ay, Serper
+  // 2.500 kredi). Üçü birlikte koşar; biri tükenirse ürün araması ölmez.
+  searchApiShoppingSource,
+  serperShoppingSource,
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.

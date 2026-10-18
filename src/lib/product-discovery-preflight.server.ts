@@ -189,21 +189,28 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     {
       id: "bestbuy",
       label: "Best Buy / eBay katalog API'si (isteğe bağlı)",
+      // eBay kontrolü YALNIZ gerçekten okunan değişkenlere bakar: kaynak
+      // `EBAY_OAUTH_TOKEN` (ve eşanlamlıları) ile Bearer başlığı gönderir.
+      // `EBAY_CLIENT_ID`/`SECRET` tek başına hiçbir işe yaramaz (kaynak OAuth
+      // akışını kendisi çalıştırmaz) — burada "tanımlı" göstermek, olmayan bir
+      // kaynağı yeşil göstermek olurdu.
       ok:
         set(env, "BESTBUY_API_KEY") ||
         set(env, "BEST_BUY_API_KEY") ||
         set(env, "EBAY_OAUTH_TOKEN") ||
-        (set(env, "EBAY_CLIENT_ID") && set(env, "EBAY_CLIENT_SECRET")),
+        set(env, "EBAY_BEARER_TOKEN") ||
+        set(env, "EBAY_ACCESS_TOKEN"),
       optional: true,
       detail:
         set(env, "BESTBUY_API_KEY") ||
         set(env, "BEST_BUY_API_KEY") ||
         set(env, "EBAY_OAUTH_TOKEN") ||
-        (set(env, "EBAY_CLIENT_ID") && set(env, "EBAY_CLIENT_SECRET"))
+        set(env, "EBAY_BEARER_TOKEN") ||
+        set(env, "EBAY_ACCESS_TOKEN")
           ? "tanımlı — resmî kataloglardan gerçek fiyat + kullanıcı puanı + GTIN/MPN + ürün görseli ekler"
           : "Yok: ABD/küresel nişler yalnız okuyucularla ve anahtarsız kataloglarla beslenir.",
       fix:
-        "İsteğe bağlı — developer.bestbuy.com (BESTBUY_API_KEY) veya developer.ebay.com (EBAY_CLIENT_ID + EBAY_CLIENT_SECRET).",
+        "İsteğe bağlı — developer.bestbuy.com (BESTBUY_API_KEY) veya developer.ebay.com'da uygulama oluşturup aldığın Bearer jetonunu EBAY_OAUTH_TOKEN olarak ekle.",
     },
     {
       id: "evren",

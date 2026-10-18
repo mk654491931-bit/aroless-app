@@ -311,6 +311,7 @@ anahtar yoksa kaynak 0 ms'de boş döner (ağ çağrısı yapılmaz) — yani "a
 | L0 Aday havuzu | `woo-storefront` (WooCommerce Store API, `WOOCOMMERCE_STORES` allowlist) | anahtarsız | D2C mağaza katalogları: puan + yorum sayısı + kategori + fiyat tek yanıtta | allowlist boşsa 0 ms boş |
 | L0 Aday havuzu | `ebay-browse` (Browse API) | anahtar: `EBAY_OAUTH_TOKEN` | Küresel ikinci el/yeni pazar: fiyat + görsel + kategori + aktif ilan sayısı (rekabet kanıtı) | `parseEbayBrowseItems` saf test |
 | L0/L3 | `tavily-search` | anahtar: `TAVILY_API_KEY` | Web'de yayınlanmış gerçek fiyat/puan satırları (1.000 kredi/ay) | `parseTavilyResults` saf test |
+| L0/L3 | `searchapi-shopping` + `serper-shopping` | anahtar: `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI ile AYNI Google Shopping verisi (fiyat + puan + görsel) iki ek ücretsiz kotalı yoldan; biri tükenirse arama ölmez | `parseSerperShopping` / `parseSearchApiShopping` saf test; her servis kendi aylık kovasında |
 | L3 Talep | `youtube-attention` (Data API v3) | anahtar: `YOUTUBE_API_KEY` | Niş dikkat/ilgi sinyali — `NON_PRODUCT_SOURCES` içinde, ürün kartı üretmez | 0 ms boş (anahtarsız) |
 | L4 Tedarik | `cj-supplier.server.ts`: `parseCjOffers`, `fetchCjOffers`, `cjApiKey` | anahtar: `CJ_API_KEY` | MOQ (`directMinOrderNum`), depo ülkesi, fiyat bandı — AliExpress/MIC'in ölçemediği yuvalar | `parseCjOffers` saf test; pipeline 3. tedarik kaynağı olarak bağlandı |
 | L4 Kur | `fx-rates.server.ts` çoklu sağlayıcı + önbellek | anahtarsız | Kur gelmezse fiyat `null` kalır (tahmin yok); artık 2 sağlayıcı denenir | `product-discovery-money.test.ts` |
@@ -332,7 +333,7 @@ yasak), Alibaba/1688/Temu/Walmart (partner onayı). "Görüntülenme ≠ satış
 | `JINA_API_KEY_1..8` | jina.ai Reader | 10M token/anahtar | Ürün sayfası okuma (en yüksek etki) |
 | `SERPAPI_KEY` / `SEARCHAPI_KEY` / `SERPER_API_KEY` | SerpAPI / SearchAPI / Serper | 100/ay · 100/ay · 2.500 tek seferlik | Google Shopping gerçek fiyat + puan |
 | `SCRAPERAPI_KEY` | ScraperAPI | 1.000 kredi/ay | TR/yerel pazaryeri kazıması |
-| `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET` (veya `EBAY_OAUTH_TOKEN`) | eBay Browse | 5.000 çağrı/gün | Küresel pazar + aktif ilan sayısı |
+| `EBAY_OAUTH_TOKEN` (Bearer; `EBAY_BEARER_TOKEN`/`EBAY_ACCESS_TOKEN` eşanlamlı) | eBay Browse | 5.000 çağrı/gün | Küresel pazar + aktif ilan sayısı (`EBAY_CLIENT_ID`/`SECRET` tek başına yetmez — kaynak OAuth akışını çalıştırmaz) |
 | `TAVILY_API_KEY` | Tavily | 1.000 kredi/ay | Web fiyat/puan satırları |
 | `CJ_API_KEY` | CJ Dropshipping | 50.000 puan/gün | MOQ + depo ülkesi + fiyat bandı |
 | `BESTBUY_API_KEY` | Best Buy | ücretsiz anahtar | ABD katalog: fiyat + puan + GTIN |

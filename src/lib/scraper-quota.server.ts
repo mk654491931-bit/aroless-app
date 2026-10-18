@@ -232,6 +232,52 @@ export function catalogQuotaMessage(): string {
   );
 }
 
+/* ------------------------------- SearchAPI / Serper (Google Shopping) kotası */
+
+/**
+ * SEARCHAPI / SERPER — her servis KENDİ aylık kovasında sayılır.
+ *
+ * NEDEN AYRI KOVA: ikisi de Google Shopping verisi satar ama ücretsiz
+ * kotaları çok farklı (SearchAPI ~100 arama/ay, Serper 2.500 tek seferlik
+ * kredi). SerpAPI kovasıyla paylaşmak, hızlı tüketen servisin diğerlerini
+ * sessizce aç bırakması demekti.
+ *
+ * FAIL-OPEN: sayaç okunamazsa arama yapılır (kotayı korumak için ürün
+ * göstermemek daha kötüdür).
+ */
+function shoppingApiMonthlyLimit(provider: "searchapi" | "serper"): number {
+  const envName = provider === "searchapi" ? "SEARCHAPI_MONTHLY_LIMIT" : "SERPER_MONTHLY_LIMIT";
+  const fallback = provider === "searchapi" ? 80 : 2_000;
+  const raw = Number(process.env[envName] ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+/** SearchAPI / Serper araması yapmadan önce ilgili aylık bütçede yer var mı? */
+export async function allowShoppingApiCredit(
+  provider: "searchapi" | "serper",
+): Promise<boolean | null> {
+  const bucket = `${provider}-searches-${new Date().toISOString().slice(0, 7)}`;
+  const windowSeconds = 400 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: shoppingApiMonthlyLimit(provider),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[${provider}] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[${provider}] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
 /** SerpAPI araması yapmadan önce bütçede yer var mı? */
 export async function allowSerpApiCredit(): Promise<boolean | null> {
   const bucket = `serpapi-searches-${new Date().toISOString().slice(0, 7)}`;

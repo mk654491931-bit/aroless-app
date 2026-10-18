@@ -103,18 +103,90 @@ describe("Yeni ücretsiz kaynaklar ve tedarik/kategori yükseltmeleri (2026)", (
     await expect(openBeautyFactsSource.scrape("robot vacuum")).resolves.toEqual([]);
   });
 
-  it("anahtarlı kaynaklar (Tavily, eBay, YouTube, CJ, Woo) anahtar yokken ağa çıkmadan [] döner", async () => {
+  it("Google Shopping ücretsiz alternatifleri (SearchAPI + Serper) kaynak listesinde ve ayrıştırıcıları saf", async () => {
+    const names = PRODUCT_SOURCES.map((s) => s.name);
+    expect(names).toContain("searchapi-shopping");
+    expect(names).toContain("serper-shopping");
+
+    const { parseSerperShopping, parseSearchApiShopping } = await import(
+      "./shopping-api-sources.server"
+    );
+    // Serper şeması (`shopping[]`): fiyat metinden, puan 0-5, görsel `imageUrl`.
+    const serper = parseSerperShopping(
+      {
+        shopping: [
+          {
+            title: "Ninja AF101 Air Fryer 4 Qt",
+            price: "$89.99",
+            rating: 4.7,
+            ratingCount: 1200,
+            imageUrl: "https://example.com/ninja.jpg",
+            source: "Best Buy",
+            link: "https://example.com/ninja",
+          },
+          { title: "Fiyatı okunamayan kart", source: "X" },
+        ],
+      },
+      "air fryer",
+    );
+    expect(serper).toHaveLength(1);
+    expect(serper[0]).toMatchObject({
+      title: "Ninja AF101 Air Fryer 4 Qt",
+      source: "serper-shopping",
+      priceUsd: 89.99,
+      rating: 4.7,
+      ratingCount: 1200,
+      imageUrl: "https://example.com/ninja.jpg",
+      seller: "Best Buy",
+    });
+
+    // SearchAPI şeması SerpAPI ile aynı (`shopping_results[]`).
+    const searchApi = parseSearchApiShopping(
+      {
+        shopping_results: [
+          {
+            title: "Cosori Air Fryer 5.8L",
+            price: "$119.00",
+            extracted_price: 119,
+            rating: 4.5,
+            reviews: 900,
+            thumbnail: "https://example.com/cosori.jpg",
+            source: "Amazon",
+            link: "https://example.com/cosori",
+          },
+        ],
+      },
+      "air fryer",
+    );
+    expect(searchApi).toHaveLength(1);
+    expect(searchApi[0]).toMatchObject({
+      source: "searchapi-shopping",
+      priceUsd: 119,
+      rating: 4.5,
+      ratingCount: 900,
+    });
+
+    // Nişle alakasız başlık / bozuk yanıt satır ÜRETMEZ.
+    expect(parseSerperShopping({ shopping: [] }, "air fryer")).toEqual([]);
+    expect(parseSearchApiShopping(null, "air fryer")).toEqual([]);
+  });
+
+  it("anahtarlı kaynaklar (Tavily, eBay, YouTube, CJ, Woo, SearchAPI, Serper) anahtar yokken ağa çıkmadan [] döner", async () => {
     const {
       tavilySearchSource,
       ebayBrowseSource,
       youtubeAttentionSource,
       wooStorefrontSource,
+      searchApiShoppingSource,
+      serperShoppingSource,
     } = await import("./product-discovery-sources.server");
     const { fetchCjOffers, parseCjOffers } = await import("./mic-supplier.server");
     await expect(tavilySearchSource.scrape("air fryer")).resolves.toEqual([]);
     await expect(ebayBrowseSource.scrape("air fryer")).resolves.toEqual([]);
     await expect(youtubeAttentionSource.scrape("air fryer")).resolves.toEqual([]);
     await expect(wooStorefrontSource.scrape("air fryer")).resolves.toEqual([]);
+    await expect(searchApiShoppingSource.scrape("air fryer")).resolves.toEqual([]);
+    await expect(serperShoppingSource.scrape("air fryer")).resolves.toEqual([]);
     await expect(fetchCjOffers("air fryer")).resolves.toEqual([]);
 
     // CJ parser testi (saf):
