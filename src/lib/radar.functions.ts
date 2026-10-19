@@ -151,7 +151,7 @@ async function enrichWithTrends(
  */
 export const getRadar = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => RadarInput.parse(input ?? {}))
+  .validator((input: unknown) => RadarInput.parse(input ?? {}))
   .handler(async ({ data, context: ctx }) => {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -309,7 +309,7 @@ duyuruyordu; "radar" trend değil fotoğraftı. Bu uç son N günü okuyup
  */
 export const getRadarHistory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         country: z.enum(RADAR_COUNTRIES).default("US"),

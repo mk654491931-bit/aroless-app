@@ -30,7 +30,9 @@ import { normalizeRaw } from "./product-discovery-filter.server";
 import { parseDiscoveryResult } from "./product-discovery.functions";
 import type { NormalizedProduct, RawProduct } from "./product-discovery.types";
 
-const input = { niche: "air fryer", country: "US", platform: "General", topN: 5 };
+// Gerekçe metni dilini testin beklentileri belirler: bu dosya TR yerel
+// metinleri doğrular ("Trend gücü", "İsimsiz ürün"), bu yüzden `lang: "tr"`.
+const input = { niche: "air fryer", country: "US", platform: "General", topN: 5, lang: "tr" };
 
 /** Ölçülmüş bir aday: fiyat, puan, stok ve kanıt adresi taşır. */
 function good(index: number): NormalizedProduct {

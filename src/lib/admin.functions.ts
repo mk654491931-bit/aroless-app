@@ -252,7 +252,7 @@ function toSnapshot(row: {
 /** Tek bir kullanıcıyı e-posta ile bulur ve paket durumunu döner. */
 export const findAdminPlanTarget = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => EmailInput.parse(input))
+  .validator((input: unknown) => EmailInput.parse(input))
   .handler(async ({ data, context }): Promise<AdminPlanSnapshot> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -279,7 +279,7 @@ export const findAdminPlanTarget = createServerFn({ method: "POST" })
  */
 export const assignAdminPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => AssignPlanInput.parse(input))
+  .validator((input: unknown) => AssignPlanInput.parse(input))
   .handler(async ({ data, context }): Promise<AdminPlanSnapshot> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -367,7 +367,7 @@ export const assignAdminPlan = createServerFn({ method: "POST" })
 /** Kullanıcının paketini iptal eder: ücretsiz sürüme döner, süre kapatılır. */
 export const cancelAdminPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => EmailInput.parse(input))
+  .validator((input: unknown) => EmailInput.parse(input))
   .handler(async ({ data, context }): Promise<AdminPlanSnapshot> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

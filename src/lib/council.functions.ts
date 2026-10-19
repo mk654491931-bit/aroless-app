@@ -82,7 +82,7 @@ function creditError(message: string | null | undefined): Error {
  */
 export const runCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(normalize)
+  .validator(normalize)
   .handler(async ({ data, context }): Promise<CouncilAnalysisStart> => {
     const { runCouncil, peekCouncil } = await import("@/lib/council.server");
 
@@ -167,7 +167,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
  */
 export const pollCouncilAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(normalize)
+  .validator(normalize)
   .handler(async ({ data }): Promise<CouncilAnalysisPoll> => {
     const { peekCouncil } = await import("@/lib/council.server");
     const report = await peekCouncil(data.query, data.country, data.category, data.lang);

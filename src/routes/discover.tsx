@@ -37,6 +37,7 @@ import { withProGate } from "@/components/pro-route-gate";
 import { DiscoveryProgress } from "@/features/finder/components/discovery-progress";
 import { DiscoveryWinnerCard } from "@/features/finder/components/discovery-winner-card";
 import { useProductDiscovery } from "@/features/finder/hooks/use-product-discovery";
+import { getUiLang } from "@/lib/auto-i18n/lang";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { Consensus, TopProduct } from "@/lib/product-discovery.types";
 
@@ -100,6 +101,9 @@ function DiscoverPage() {
       country,
       platform,
       topN: Number(topN),
+      // Arayüz dili hat boyunca taşınır: 14 ajanın gerekçeleri ve final kart
+      // metni kullanıcının seçtiği dilde çıkar (bkz. lib/ai-language.ts).
+      lang: getUiLang(),
     });
   };
 

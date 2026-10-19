@@ -36,7 +36,7 @@ function parseMoney(s: string | undefined): number {
 
 export const insertProductsFromAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => InsertInput.parse(input))
+  .validator((input: unknown) => InsertInput.parse(input))
   .handler(async ({ data, context }) => {
     const items = (data.products as WinningProduct[]).map((p) => {
       const verdict = p.sellability_verdict;
@@ -71,7 +71,7 @@ export const insertProductsFromAnalysis = createServerFn({ method: "POST" })
 
 export const listProducts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ limit: z.number().int().min(1).max(100).default(20) }).parse(input),
   )
   .handler(async ({ data, context }): Promise<ProductRow[]> => {

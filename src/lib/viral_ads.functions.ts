@@ -29,7 +29,7 @@ const ListInput = z.object({
 
 export const listViralAds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ListInput.parse(input))
+  .validator((input: unknown) => ListInput.parse(input))
   .handler(async ({ data, context }): Promise<ViralAdRow[]> => {
     let q = context.supabase
       .from("viral_ads")
@@ -205,7 +205,7 @@ Return ONLY JSON:
 
 export const buildViralAd = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BuildAdInput.parse(input))
+  .validator((input: unknown) => BuildAdInput.parse(input))
   .handler(async ({ data, context: ctx }): Promise<GeneratedViralAd> => {
     // Viral reklam üretimi tam sağlayıcı havuzunda gerçek bir AI turudur:
     // jeton düşmeden koşmaz, üretim çökerse jeton iade edilir.

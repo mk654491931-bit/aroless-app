@@ -170,7 +170,7 @@ async function buildCompetitorReport(data: {
 
 export const analyzeCompetitors = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => AnalyzeInput.parse(i))
+  .validator((i: unknown) => AnalyzeInput.parse(i))
   .handler(async ({ data, context: ctx }): Promise<{ report: CompetitorReport }> => {
     // Rakip denetimi çok motorlu gerçek bir AI turudur: jeton düşmeden koşmaz,
     // iş çökerse iade edilir (yoksa anahtar havuzu karşılıksız yanar).
@@ -222,7 +222,7 @@ async function buildCountryStrategy(niche: string, country: string, lang?: strin
 
 export const getCountryStrategy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CountryStrategyInput.parse(i))
+  .validator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data, context: ctx }): Promise<{ strategy: string }> => {
     // Pazar karnesi AI stratejisi tek jetonluk bir iştir; iade garantisiyle koşar.
     await chargeForAi(
@@ -251,7 +251,7 @@ const CopilotInput = z.object({
  */
 export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => CopilotInput.parse(i))
+  .validator((i: unknown) => CopilotInput.parse(i))
   .handler(async ({ data }): Promise<{ reply: string }> => {
     try {
       const text = await callGemini(

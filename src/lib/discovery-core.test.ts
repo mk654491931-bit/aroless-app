@@ -45,6 +45,8 @@ const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
   id: "p-1",
   imageUrl: "https://cdn.test/air-fryer.jpg",
   salesVolume: 940,
+  gtin: "",
+  mpn: "",
   fingerprint: productFingerprint({ title: "Air Fryer 5.5L", brand: "Acme", seller: "shop" }),
   preScore: 72,
   signals: { demand: 70, competition: 60, margin: 80, rating: 75, availability: 85 },

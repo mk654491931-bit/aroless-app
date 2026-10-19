@@ -304,7 +304,7 @@ export type DiscoveryRunStatus = {
  */
 export const startDiscoveryRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(StartSchema)
+  .validator(StartSchema)
   .handler(async ({ data, context }) => {
     const token = bearerToken();
     const runId = crypto.randomUUID();
@@ -441,7 +441,7 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
  */
 export const getDiscoveryPreflight = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({}))
+  .validator(z.object({}))
   .handler(async () => {
     const { runDiscoveryPreflight } = await import("@/lib/product-discovery-preflight.server");
     try {
@@ -467,7 +467,7 @@ export const getDiscoveryPreflight = createServerFn({ method: "GET" })
  */
 export const getDiscoveryRun = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(StatusSchema)
+  .validator(StatusSchema)
   .handler(async ({ data, context }) => {
     const snapshot = await readRunSnapshot(data.runId, context.userId);
     return snapshot ?? { ok: false as const };
@@ -522,7 +522,7 @@ async function readRunSnapshot(
  */
 export const advanceDiscoveryRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(StatusSchema)
+  .validator(StatusSchema)
   .handler(async ({ data, context }) => {
     const job = await readDiscoveryJob(data.runId);
     if (!job || job.userId !== context.userId) return { ok: false as const };

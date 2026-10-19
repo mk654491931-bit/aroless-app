@@ -47,7 +47,7 @@ export const exportMyData = createServerFn({ method: "GET" })
 /** Hesabı ve bağlı tüm verileri kalıcı olarak siler. */
 export const deleteMyAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ confirm: z.literal("DELETE") }).parse(i))
+  .validator((i: unknown) => z.object({ confirm: z.literal("DELETE") }).parse(i))
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const uid = context.userId;

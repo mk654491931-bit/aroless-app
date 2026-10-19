@@ -36,6 +36,7 @@ const INPUT: ProductDiscoveryInput = {
   country: "US",
   platform: "General",
   topN: 5,
+  lang: "en",
 };
 
 function jobRecord(over: Record<string, unknown> = {}) {

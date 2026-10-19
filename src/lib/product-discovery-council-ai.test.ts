@@ -19,6 +19,7 @@ import type { NormalizedProduct } from "./product-discovery.types";
 const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
   name: "Ninja Air Fryer Pro 8QT",
   brand: "Ninja",
+  brandMeasured: false,
   seller: "Walmart",
   category: "",
   priceUsd: 129.99,
@@ -32,6 +33,8 @@ const product = (over: Partial<NormalizedProduct> = {}): NormalizedProduct => ({
   id: "sku-8qt",
   imageUrl: "https://example.com/8qt.jpg",
   salesVolume: 2100,
+  gtin: "",
+  mpn: "",
   fingerprint: `fp-${Math.random().toString(36).slice(2, 8)}`,
   preScore: 70,
   signals: { demand: 80, competition: 60, margin: 70, rating: 85, availability: 50 },

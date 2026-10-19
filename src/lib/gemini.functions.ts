@@ -330,7 +330,7 @@ export function productDebateContext(p: WinningProduct): string {
  */
 export const generateProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .validator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { runProductDiscovery } = await import("@/lib/discovery-pipeline.server");
     const jobs = await import("@/lib/discovery-jobs.server");
@@ -405,7 +405,7 @@ export const generateProducts = createServerFn({ method: "POST" })
 
 export const getDiscoveryJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ jobId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ jobId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("searches")
@@ -439,7 +439,7 @@ export type ValidationReport = {
 
 export const validateProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ValidateInput.parse(input))
+  .validator((input: unknown) => ValidateInput.parse(input))
   .handler(
     async ({ data, context }): Promise<{ report: ValidationReport; creditsRemaining: number }> => {
       const { data: remaining, error: deductErr } = await context.supabase.rpc("deduct_credit");
@@ -526,7 +526,7 @@ export type SeoKit = {
 
 export const generateSeoKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SeoInput.parse(input))
+  .validator((input: unknown) => SeoInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error: deductErr } = await context.supabase.rpc("deduct_credit");
     if (deductErr) {
@@ -586,7 +586,7 @@ export type CreativeScript = {
 
 export const generateCreativeScripts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ScriptInput.parse(input))
+  .validator((input: unknown) => ScriptInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error: deductErr } = await context.supabase.rpc("deduct_credit");
     if (deductErr) {
@@ -676,7 +676,7 @@ const SaveInput = z.object({
 
 export const saveFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SaveInput.parse(input))
+  .validator((input: unknown) => SaveInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("favorites").insert({
       user_id: context.userId,
@@ -698,7 +698,7 @@ const UpdateInput = z.object({
 
 export const updateFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => UpdateInput.parse(input))
+  .validator((input: unknown) => UpdateInput.parse(input))
   .handler(async ({ data, context }) => {
     const update: {
       name?: string;
@@ -724,7 +724,7 @@ const DeleteInput = z.object({ id: z.string().uuid() });
 
 export const deleteFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => DeleteInput.parse(input))
+  .validator((input: unknown) => DeleteInput.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("favorites")
@@ -741,7 +741,7 @@ const CompareInput = z.object({
 
 export const compareFavorites = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => CompareInput.parse(input))
+  .validator((input: unknown) => CompareInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("favorites")
@@ -806,7 +806,7 @@ export type BuyerSimulation = {
 
 export const simulateBuyers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SimInput.parse(input))
+  .validator((input: unknown) => SimInput.parse(input))
   .handler(async ({ data }) => {
     const apiKey = process.env.GEMINI_API_KEY;
 

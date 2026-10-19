@@ -21,7 +21,7 @@ function normalizeEmail(input: unknown): { email: string } {
 
 /** Şifre sıfırlama bağlantısını AWS SES ile gönderir. */
 export const requestPasswordReset = createServerFn({ method: "POST" })
-  .inputValidator(normalizeEmail)
+  .validator(normalizeEmail)
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendPasswordResetEmail } = await import("@/lib/email-service");
@@ -45,7 +45,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
 
 /** E-posta doğrulama bağlantısını yeniden gönderir. */
 export const resendVerificationEmail = createServerFn({ method: "POST" })
-  .inputValidator(normalizeEmail)
+  .validator(normalizeEmail)
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendVerificationEmail } = await import("@/lib/email-service");

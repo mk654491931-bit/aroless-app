@@ -478,7 +478,7 @@ const ApplyInput = z.object({
 
 export const applyForAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ApplyInput.parse(i ?? {}))
+  .validator((i: unknown) => ApplyInput.parse(i ?? {}))
   .handler(
     async ({
       data,
@@ -606,7 +606,7 @@ const MyPayoutInput = z.object({
  */
 export const updateMyPayoutProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => MyPayoutInput.parse(i))
+  .validator((i: unknown) => MyPayoutInput.parse(i))
   .handler(async ({ data, context }): Promise<{ ok: true; state: PayoutProfileState }> => {
     if (data.iban && !isValidIban(data.iban)) {
       throw badRequest("IBAN geçersiz (mod-97 kontrolü başarısız). Kontrol edip tekrar dene.");
@@ -789,7 +789,7 @@ export type AdminAffiliateTarget = {
 /** Görevlendirilecek hesabı e-posta ile bulur. */
 export const findAdminAffiliateTarget = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => DesignateInput.pick({ email: true }).parse(input))
+  .validator((input: unknown) => DesignateInput.pick({ email: true }).parse(input))
   .handler(async ({ data, context }): Promise<AdminAffiliateTarget> => {
     await assertAdmin(context);
     const { client: supabaseAdmin } = await adminOrUserClient(context);
@@ -828,7 +828,7 @@ export const findAdminAffiliateTarget = createServerFn({ method: "POST" })
  */
 export const designateAdminAffiliate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => DesignateInput.parse(input))
+  .validator((input: unknown) => DesignateInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true; target: AdminAffiliateTarget }> => {
     await assertAdmin(context);
     const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
@@ -978,7 +978,7 @@ const SetStatusSchema = z.object({
  */
 export const adminSetAffiliateStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SetStatusSchema.parse(input))
+  .validator((input: unknown) => SetStatusSchema.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; status: AffiliateStatus }> => {
     await assertAdmin(context);
     const { client: supabaseAdmin, isServiceRole } = await adminOrUserClient(context);
@@ -1399,7 +1399,7 @@ const MarkPaidInput = z.object({
  */
 export const adminMarkAffiliatePaid = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => MarkPaidInput.parse(i))
+  .validator((i: unknown) => MarkPaidInput.parse(i))
   .handler(
     async ({
       data,
@@ -1549,7 +1549,7 @@ const ReverseCommissionInput = z.object({
 /** Admin: tek bir komisyon satırını mahsup et (iade/chargeback/düzeltme). */
 export const adminReverseCommission = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ReverseCommissionInput.parse(i))
+  .validator((i: unknown) => ReverseCommissionInput.parse(i))
   .handler(async ({ data, context }): Promise<{ ok: boolean; result: string }> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -1591,7 +1591,7 @@ const PayoutDetailsInput = z.object({
  */
 export const adminUpdateAffiliatePayout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => PayoutDetailsInput.parse(i))
+  .validator((i: unknown) => PayoutDetailsInput.parse(i))
   .handler(
     async ({
       data,

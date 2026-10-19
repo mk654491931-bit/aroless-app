@@ -27,7 +27,7 @@ const SummarizeInput = z.object({
 
 export const summarizeComparison = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SummarizeInput.parse(input))
+  .validator((input: unknown) => SummarizeInput.parse(input))
   .handler(async ({ data, context }) => {
     // Karşılaştırma gerçek bir AI turudur: düşmeden koşmaz, çökerse iade edilir.
     await chargeForAi(
@@ -63,7 +63,7 @@ export type ComparisonProduct = {
 
 export const loadFavoritesForComparison = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => LoadInput.parse(input))
+  .validator((input: unknown) => LoadInput.parse(input))
   .handler(async ({ data, context }): Promise<ComparisonProduct[]> => {
     const { data: rows, error } = await context.supabase
       .from("favorites")

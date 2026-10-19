@@ -28,7 +28,7 @@ const IntelInput = z.object({
 /** Free external enrichment: Google Trends + AliExpress sourcing + Open Products Facts. */
 export const getMarketIntel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => IntelInput.parse(i))
+  .validator((i: unknown) => IntelInput.parse(i))
   .handler(async ({ data }): Promise<MarketIntel> => {
     const [trends, sourcing, physical] = await Promise.all([
       getGoogleTrends(data.query, data.country),

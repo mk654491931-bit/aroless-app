@@ -25,7 +25,7 @@ vi.mock("./product-discovery-jobs.server", () => jobsMock);
 import { executeProductDiscoveryStep } from "./product-discovery-steps.server";
 import type { NormalizedProduct } from "./product-discovery.types";
 
-const input = { niche: "air fryer", country: "US", platform: "General", topN: 5 };
+const input = { niche: "air fryer", country: "US", platform: "General", topN: 5, lang: "en" };
 
 /** Ölçülmüş bir aday ürün. `fingerprint` BİLEREK boş verilebilir. */
 function candidate(index: number, fingerprint = ""): NormalizedProduct {
@@ -47,6 +47,8 @@ function candidate(index: number, fingerprint = ""): NormalizedProduct {
     id: `p-${index}`,
     imageUrl: "",
     salesVolume: 900,
+    gtin: "",
+    mpn: "",
     fingerprint,
     preScore: 70,
     signals: { demand: 80, competition: 60, margin: 75, rating: 80, availability: 90 },

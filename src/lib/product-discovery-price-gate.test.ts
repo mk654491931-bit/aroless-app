@@ -168,6 +168,8 @@ describe("null fiyat — zincirin geri kalanı", () => {
       // optional değil) — `null` "ölçülmedi" demektir, 0 değil.
       salesVolume: null,
       viewed90d: null,
+      cohortCompetitors: null,
+      qualityGate: null,
       sources: ["github"],
       url: "https://github.com/example/awesome-led-desk-lamp",
       notes: "120 yıldız",
