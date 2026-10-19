@@ -139,6 +139,12 @@ export default defineConfig(async ({ command, mode }) => {
           "**/.claude/**",
           "**/.lovable/**",
           "**/.tanstack/tmp/**",
+          // Üretim derlemesi bu dizinlere yazıyor; dev sunucusunun onları
+          // izlemesi gereksiz dönüşüm üretip makineyi doyuruyordu (ölçüm:
+          // build sırasında load 8). Derleme çıktısı dev'e girdi değildir.
+          "**/.vercel/**",
+          "**/node_modules/.nitro/**",
+          "**/dist/**",
         ],
       },
     },
@@ -162,9 +168,6 @@ export default defineConfig(async ({ command, mode }) => {
             }
             if (id.includes("node_modules/@tanstack")) {
               return "tanstack-vendor";
-            }
-            if (id.includes("node_modules/jspdf")) {
-              return "pdf-vendor";
             }
             if (id.includes("node_modules/@supabase")) {
               return "supabase-vendor";
