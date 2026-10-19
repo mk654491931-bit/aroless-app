@@ -15,3 +15,19 @@ export const getMyPlanUsage = createServerFn({ method: "GET" })
     const { planUsageSnapshot } = await import("./plan-usage.server");
     return planUsageSnapshot(context.userId);
   });
+
+/**
+ * Admin bakiyesini 250'ye getirir (günde bir kez).
+ *
+ * NEDEN AYRI UÇ: profili okuyan her istekte `user_roles` sorgulamak, admin
+ * OLMAYAN kullanıcılar için de her 15 saniyede fazladan sorgu demekti. Bu uç
+ * yalnız istemci `isAdmin` bilgisini aldıktan sonra çağrılır; sonuç admin
+ * dışında hızlıca `{ok:false}` döner. Böylece admin 250 jetonu görür, diğer
+ * kullanıcıların profil okuması yavaşlamaz.
+ */
+export const ensureMyAdminBalance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ ok: boolean }> => {
+    const { ensureAdminBalance } = await import("./plan-usage.server");
+    return { ok: await ensureAdminBalance(context.userId) };
+  });

@@ -24,7 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { refundCredit } from "./credit-guard.server";
 import { featureCreditCost, type AiCreditFeature } from "./credit-costs";
-import { planLimitMessage, type UsageKind } from "./plan-usage";
+import { effectiveUsageLimit, planLimitMessage, type UsageKind } from "./plan-usage";
 
 export type ChargeOutcome =
   | { ok: true; charged: number; remaining: number | null; admin: boolean }
@@ -49,8 +49,24 @@ export async function refundFeatureCredits(
   amount: number,
   reason = "ai_failed",
   refKey?: string | null,
+  /**
+   * Tahsil edilen işin kimliği. Verilirse iade, aylık kullanım defterine de
+   * NEGATİF satır olarak yazılır; aksi hâlde jeton geri gelir ama "bu ay"
+   * sayacı dolu kalır ve kullanıcı bakiyesi varken PLAN_LIMIT görür.
+   */
+  feature?: string,
 ): Promise<void> {
-  if (amount > 0) await refundCredit(userId, amount, reason, refKey);
+  if (amount <= 0) return;
+  const refunded = await refundCredit(userId, amount, reason, refKey);
+  // `refunded === false` → aynı iade anahtarı zaten kullanılmış (QStash retry'ı).
+  // Bu durumda defteri ikinci kez düşürmeyiz; aksi hâlde kullanım eksiye gider.
+  if (!refunded || !feature) return;
+  try {
+    const usage = await import("./plan-usage.server");
+    await usage.recordUsageRefund({ userId, feature, credits: amount });
+  } catch {
+    /* ölçüm ikincil: iade çoktan yapıldı */
+  }
 }
 
 /** Kullanıcı-kapsamlı (RLS/JWT) istemci — `auth.uid()` bu jetonla dolar. */
@@ -84,9 +100,7 @@ async function profileSpend(
     const total = (Number.isFinite(finder) ? finder : 0) + (Number.isFinite(general) ? general : 0);
     return {
       total: Math.max(0, Math.floor(total)),
-      tier: String(
-        (data as { subscription_tier?: string | null }).subscription_tier ?? "Free",
-      ),
+      tier: String((data as { subscription_tier?: string | null }).subscription_tier ?? "Free"),
     };
   } catch {
     return null;
@@ -117,36 +131,46 @@ export async function chargeAiCredits(opts: {
     return { ok: false, reason: "UNAVAILABLE", charged: 0 };
   }
 
-  // Ön kontrol: bakiye yetmiyorsa HİÇ düşmeden reddet (kısmi düşme olmasın).
-  // Bakiye okunamazsa kararı aşağıdaki gerçek düşme denemesi verir.
-  const state = await profileSpend(client, opts.userId);
-  if (state !== null && state.total < amount)
-    return { ok: false, reason: "NO_CREDITS", charged: 0 };
+  // Ön kontrol için bakiye. Admin ise aşağıda 250'ye tazelenip YENİDEN okunur;
+  // bu yüzden erken `NO_CREDITS` dönüşü burada YOKTUR.
+  let state = await profileSpend(client, opts.userId);
 
   // ---- AYLIK PAKET LİMİTİ (ölçülen boşluk) ---------------------------------
   // `plans.ts` dört aylık hak tanımlıyor ama bunlar hiçbir zaman tüketilmiyordu.
   // Artık her jeton düşmesinden ÖNCE bu ayın sayacı paket limitiyle
   // karşılaştırılır: bakiye olsa bile aylık hak dolduysa iş başlatılmaz.
   //
+  // ADMIN ÖNCE TAZELENİR: admin kotası 250'dir, ama `profiles.credits` 0 iken
+  // aşağıdaki ön kontrol `total < amount` deyip NO_CREDITS döndürüyordu —
+  // DB'deki günlük tazeleme hiç çalışmıyordu. Artık admin bakiyesi tahsilattan
+  // önce 250'ye getirilir ve bakiye yeniden okunur.
+  //
   // FAIL-OPEN: sayaç okunamazsa (tablo yok/ağ hatası) ENGELLENMEZ — kotayı
   // korumak için müşteriyi kapıda bırakmak daha kötüdür.
-  const { usageKindForFeature, limitFor } = await import("./plan-usage");
-  const { monthUsage, isAdminUser } = await import("./plan-usage.server");
+  const { usageKindForFeature } = await import("./plan-usage");
+  const { monthUsage, isAdminUser, ensureAdminBalance } = await import("./plan-usage.server");
   const { tierLevel } = await import("./plans");
   const kind = usageKindForFeature(opts.feature);
   const tier = state?.tier ?? "Free";
   const level = tierLevel(tier);
-  const adminUser = level === 0 ? await isAdminUser(opts.userId) : false;
-  const limit = limitFor(level, kind, adminUser);
-  // ÜCRETSİZ PLANDA ASIL SINIR BAKİYEDİR (2 hoş geldin kredisi tek seferlik).
-  // Davet/referral ile kazanılan jetonlar aylık 2'lik kalıba sıkışmasın diye
-  // ücretsiz planda limit EN AZ bakiye kadar açılır; aksi hâlde kullanıcı
-  // kazandığı jetonu kullanamazdı — bu, "ödeme yaptım ama kullanamıyorum"
-  // şikâyetinin ters yönlü hâli olurdu.
-  const effectiveLimit =
-    level === 0 && !adminUser ? Math.max(limit, state?.total ?? 0) : limit;
+  // PAKETTEN BAĞIMSIZ: admin ücretli pakette görünse bile 250 hakkı vardır.
+  const adminUser = await isAdminUser(opts.userId);
+  if (adminUser && (state === null || state.total < amount)) {
+    await ensureAdminBalance(opts.userId);
+    state = (await profileSpend(client, opts.userId)) ?? state;
+  }
+  if (state !== null && state.total < amount)
+    return { ok: false, reason: "NO_CREDITS", charged: 0 };
+
   const used = await monthUsage(opts.userId);
-  if (used !== null && used[kind] >= effectiveLimit) {
+  const effectiveLimit = effectiveUsageLimit({
+    level,
+    kind,
+    isAdmin: adminUser,
+    used: used?.[kind] ?? null,
+    balance: state?.total ?? null,
+  });
+  if (used !== null && effectiveLimit !== null && used[kind] >= effectiveLimit) {
     return {
       ok: false,
       reason: "PLAN_LIMIT",
@@ -185,7 +209,7 @@ export async function chargeAiCredits(opts: {
     success: true,
   });
 
-  return { ok: true, charged, remaining, admin: false };
+  return { ok: true, charged, remaining, admin: adminUser };
 }
 
 /** İşin kullanımını deftere yazar (dinamik import: istemci paketine sunucu kodu girmesin). */

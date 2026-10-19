@@ -119,7 +119,7 @@ export const Route = createFileRoute("/api/public/agent")({
               );
               // Koşu hiç başlayamadıysa jetonu iade et (kullanıcı boş sonuç almaz).
               if (result.status === "failed") {
-                await refundFeatureCredits(guard.userId, cost, "velora_run_failed");
+                await refundFeatureCredits(guard.userId, cost, "velora_run_failed", null, feature);
               }
               return Response.json(result);
             }
@@ -127,7 +127,7 @@ export const Route = createFileRoute("/api/public/agent")({
             const { runVeloraAgentPipeline } = await import("@/lib/velora-pipeline.server");
             return Response.json(await runVeloraAgentPipeline(body));
           } catch (error) {
-            await refundFeatureCredits(guard.userId, cost, "velora_agent_failed");
+            await refundFeatureCredits(guard.userId, cost, "velora_agent_failed", null, feature);
             throw error;
           }
         } catch (e) {

@@ -135,6 +135,19 @@ export const ADMIN_QUOTA = {
   radarScans: 250,
 } as const satisfies Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
 
+/**
+ * Admin bakiyesini 250'ye tamamlamak için gereken miktar.
+ *
+ * Admin kotası "günde/her kalemde 250"dir; bakiye düşükse (ör. hoş geldin
+ * jetonu hiç verilmemiş ya da gün içinde tükenmiş) aradaki fark tamamlanır.
+ * Hedefin ÜSTÜNDEKİ bakiye ASLA kırpılmaz: kazanılmış jeton silinmez.
+ */
+export function adminTopUpAmount(credits: number | null | undefined): number {
+  const have = Number(credits);
+  if (!Number.isFinite(have) || have <= 0) return ADMIN_QUOTA.credits;
+  return Math.max(0, ADMIN_QUOTA.credits - Math.floor(have));
+}
+
 /** Aylık kullanım kotaları; ücretsiz hesap Find Winner'da 2 jeton (klasik düzen). */
 export function quotaFor(
   level: 0 | 1 | 2 | 3,

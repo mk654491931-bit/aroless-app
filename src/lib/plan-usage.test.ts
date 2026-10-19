@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  UNKNOWN_USAGE_LABEL,
+  effectiveUsageLimit,
   emptyUsageCounts,
+  freeUsageCeiling,
   limitFor,
   monthKey,
   monthRange,
@@ -9,14 +12,11 @@ import {
   planLimitMessage,
   planUsageRows,
   usageKindForFeature,
+  usageLabelFor,
   usageMeter,
 } from "./plan-usage";
-import { PLAN_BY_ID } from "./plans";
-import {
-  PLAN_RECONCILE_GAP_MS,
-  planPollingDone,
-  shouldReconcilePlan,
-} from "./plan-sync";
+import { ADMIN_QUOTA, PLAN_BY_ID, adminTopUpAmount } from "./plans";
+import { PLAN_RECONCILE_GAP_MS, planPollingDone, shouldReconcilePlan } from "./plan-sync";
 
 /**
  * PLAN KULLANIMI — ölçülen üç boşluğu kilitleyen testler:
@@ -128,6 +128,70 @@ describe("planUsageRows — paket limitleri plans.ts ile birebir", () => {
   });
 });
 
+describe("usageLabelFor — sayaç okunamadığında 0 değil 'bilinmiyor'", () => {
+  it("ölçülemeyen sayaç 'bilinmiyor' yazar (0 YAZMAZ)", () => {
+    expect(usageLabelFor({ used: 0, limit: 250, measured: false })).toBe(UNKNOWN_USAGE_LABEL);
+    expect(UNKNOWN_USAGE_LABEL).toBe("bilinmiyor");
+  });
+
+  it("yüklenirken '…', kapalı hakta '—', ölçülde 'kullanılan/limit'", () => {
+    expect(usageLabelFor({ used: 0, limit: 250, loading: true })).toBe("…");
+    expect(usageLabelFor({ used: 0, limit: 0, disabled: true, measured: true })).toBe("—");
+    expect(usageLabelFor({ used: 3, limit: 8, measured: true })).toBe("3/8");
+  });
+});
+
+describe("freeUsageCeiling — her kazanılan jeton harcanabilir kalır", () => {
+  it("kullanılan + kalan bakiye (eski max() jetonu kilitliyordu)", () => {
+    // 2 hoş geldin jetonu harcandı, davet ile 2 jeton kazanıldı:
+    // eski formül max(2, 2) = 2 → used=2 limiti aşmış görünüp ENGELLİYORDU.
+    expect(freeUsageCeiling(2, 2)).toBe(4);
+    expect(freeUsageCeiling(0, 2)).toBe(2);
+    expect(freeUsageCeiling(5, 3)).toBe(8);
+  });
+
+  it("okunamayan sayaç 'bilinmiyor' (null) — 0 sayılmaz", () => {
+    expect(freeUsageCeiling(null, 2)).toBeNull();
+    expect(freeUsageCeiling(2, null)).toBeNull();
+  });
+});
+
+describe("effectiveUsageLimit — admin paketten bağımsız 250", () => {
+  it("admin ücretli pakette olsa da 250 alır", () => {
+    expect(
+      effectiveUsageLimit({
+        level: 3,
+        kind: "credits",
+        isAdmin: true,
+        used: 0,
+        balance: 50,
+      }),
+    ).toBe(ADMIN_QUOTA.credits);
+  });
+
+  it("ücretsiz plan kullanılan + bakiye, ücretli plan paket limiti", () => {
+    expect(
+      effectiveUsageLimit({ level: 0, kind: "credits", isAdmin: false, used: 2, balance: 2 }),
+    ).toBe(4);
+    expect(
+      effectiveUsageLimit({ level: 1, kind: "toolRuns", isAdmin: false, used: 10, balance: 8 }),
+    ).toBe(PLAN_BY_ID.Starter.toolRuns);
+    expect(
+      effectiveUsageLimit({ level: 0, kind: "toolRuns", isAdmin: false, used: null, balance: 2 }),
+    ).toBeNull();
+  });
+});
+
+describe("adminTopUpAmount — 250 hedefi, üstü kırpılmaz", () => {
+  it("eksik bakiyeyi tamamlar, fazlasını silmez", () => {
+    expect(adminTopUpAmount(0)).toBe(250);
+    expect(adminTopUpAmount(249)).toBe(1);
+    expect(adminTopUpAmount(250)).toBe(0);
+    expect(adminTopUpAmount(400)).toBe(0);
+    expect(adminTopUpAmount(null)).toBe(250);
+  });
+});
+
 describe("planLabelFor — arayüzde her zaman okunur paket adı", () => {
   it("küçük harf ve eşanlamlılar kanonik etikete döner", () => {
     expect(planLabelFor("starter")).toBe("Starter");
@@ -171,7 +235,12 @@ describe("plan-sync — ödeme sonrası yoklama kararı", () => {
 
   it("bekleyen ödeme + Free → tazelenir; denemeler arasında boşluk bırakılır", () => {
     expect(
-      shouldReconcilePlan({ tier: "Free", pendingAgeMs: 1_000, lastReconcileAt: null, attempts: 0 }),
+      shouldReconcilePlan({
+        tier: "Free",
+        pendingAgeMs: 1_000,
+        lastReconcileAt: null,
+        attempts: 0,
+      }),
     ).toBe(true);
     expect(
       shouldReconcilePlan({

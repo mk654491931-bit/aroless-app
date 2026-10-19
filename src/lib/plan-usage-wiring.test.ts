@@ -20,7 +20,7 @@ describe("kullanım defteri — yazma ve okuma bağlı", () => {
     expect(usage).toContain("recordAiUsage");
     expect(usage).toContain('from("credit_usage_log")');
     // Ay sınırı ile okunur; ay başında sayaç kendiliğinden sıfırlanır.
-    expect(usage).toContain("gte(\"created_at\", startIso)");
+    expect(usage).toContain('gte("created_at", startIso)');
   });
 
   it("her jeton düşmesi deftere yazılır (tek kapı)", () => {
@@ -68,10 +68,41 @@ describe("sol bar — modül kullanımı sayaçtan okunur", () => {
     expect(sidebar).toContain("row.used");
     expect(sidebar).toContain("row.limit");
     expect(sidebar).toContain("planUsage.measured");
+    // Sayaç okunamadığında "0" değil "bilinmiyor" gösterilir.
+    expect(sidebar).toContain("usageLabelFor");
   });
 
   it("üst bar da kullanılan/limit gösterir (aynı kaynak)", () => {
-    expect(src("../components/app-topbar.tsx")).toContain("usePlanUsage");
+    const topbar = src("../components/app-topbar.tsx");
+    expect(topbar).toContain("usePlanUsage");
+    expect(topbar).toContain("usageLabelFor");
+    // Bakiye okunamadığında 0 değil "bilinmiyor".
+    expect(topbar).toContain("creditCountLabel");
     expect(src("../hooks/use-plan-usage.ts")).toContain("getMyPlanUsage");
+  });
+
+  it("admin tazelemesi bakiye ön kontrolünden ÖNCE çalışır (0 jetonla reddedilmez)", () => {
+    const charge = src("./credit-charge.server.ts");
+    expect(charge).toContain("ensureAdminBalance");
+    expect(charge.indexOf("ensureAdminBalance")).toBeLessThan(
+      charge.indexOf("state.total < amount"),
+    );
+    // Eski hatalı formül geri gelmesin: kullanılan + bakiye kullanılır.
+    expect(charge).not.toContain("Math.max(limit, state?.total");
+    expect(charge).toContain("effectiveUsageLimit");
+  });
+
+  it("admin 250 jetonu için sunucu ve istemci bağlı", () => {
+    expect(src("./plan-usage.server.ts")).toContain("ensureAdminBalance");
+    expect(src("./plan-usage.functions.ts")).toContain("ensureMyAdminBalance");
+    expect(src("../components/app-topbar.tsx")).toContain("ensureMyAdminBalance");
+    // Admin, ücretli pakette görünse bile 250 alır (paket seviyesine bağlı değil).
+    expect(src("./plan-usage.server.ts")).not.toContain("level === 0 ? await isAdminUser");
+  });
+
+  it("mükerrer kayıt/IP üç havuzu da kapatır (finder dahil)", () => {
+    const s = src("./signup.server.ts");
+    expect(s).toContain("finder_credits: 0");
+    expect(s).toContain("admin_exempt");
   });
 });

@@ -353,6 +353,7 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
         // Aynı koşu için iki ayrı hata yolu çalışsa (kayıt + kuyruk) kredi
         // bir kez iade edilir: anahtar veritabanında tekilleştirilir.
         `discovery:${runId}:job_row_failed`,
+        FEATURE,
       );
       return {
         ok: false,
@@ -548,7 +549,7 @@ export const advanceDiscoveryRun = createServerFn({ method: "POST" })
     if (!terminal && !backgroundOwned && job.updatedAt !== null) {
       if (Date.now() - job.updatedAt > STALLED_RUN_ABANDON_MS) {
         await failAndRefund(data.runId, "stalled_no_carrier", (amount) =>
-          refundFeatureCredits(job.userId, amount, "stalled"),
+          refundFeatureCredits(job.userId, amount, "stalled", null, FEATURE),
         );
         return (await readRunSnapshot(data.runId, context.userId)) ?? { ok: false as const };
       }
@@ -586,7 +587,7 @@ export const advanceDiscoveryRun = createServerFn({ method: "POST" })
           // bırakmak, kullanıcının ödediği krediyi sessizce yakmak olurdu:
           // dürüst bir hata + TAM BİR KEZ iade.
           await failAndRefund(data.runId, "discovery_input_unreadable", (amount) =>
-            refundFeatureCredits(job.userId, amount, "input_unreadable"),
+            refundFeatureCredits(job.userId, amount, "input_unreadable", null, FEATURE),
           );
         }
       } catch (error) {

@@ -212,7 +212,13 @@ export const Route = createFileRoute("/api/public/trend-analysis")({
           if (status === "failed") {
             if (charged > 0) {
               const { refundFeatureCredits } = await import("@/lib/credit-charge.server");
-              await refundFeatureCredits(guard.userId, charged, "trend_analysis_failed");
+              await refundFeatureCredits(
+                guard.userId,
+                charged,
+                "trend_analysis_failed",
+                null,
+                "trend-analysis",
+              );
             }
             return jsonError(500, "Analiz tamamlanamadı. Lütfen tekrar deneyin.");
           }

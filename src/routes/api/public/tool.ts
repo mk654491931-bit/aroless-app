@@ -100,7 +100,13 @@ export const Route = createFileRoute("/api/public/tool")({
               return { ok: true, payload: fresh };
             } catch (error) {
               // AI çöktü: düşülen jetonu iade et, hatayı yukarı taşı.
-              await refundFeatureCredits(guard.userId, creditCost, `tool_failed:${tool}`);
+              await refundFeatureCredits(
+                guard.userId,
+                creditCost,
+                `tool_failed:${tool}`,
+                null,
+                `tool:${tool}`,
+              );
               throw error;
             }
           };

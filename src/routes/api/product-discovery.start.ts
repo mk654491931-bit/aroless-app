@@ -98,7 +98,13 @@ export const Route = createFileRoute("/api/product-discovery/start")({
           });
         } catch (error) {
           // Kayıt açılamadıysa kredi havada kalır → hemen iade et.
-          await refundFeatureCredits(userId, charge.charged, "job_row_failed");
+          await refundFeatureCredits(
+            userId,
+            charge.charged,
+            "job_row_failed",
+            null,
+            "agent-pipeline",
+          );
           return json(
             {
               error: "İş kaydı oluşturulamadı; jeton iade edildi.",
@@ -133,7 +139,7 @@ export const Route = createFileRoute("/api/product-discovery/start")({
 
         if (!queued.ok) {
           await failAndRefund(runId, `queue_failed: ${queued.error}`, (amount) =>
-            refundFeatureCredits(userId, amount, "queue_failed"),
+            refundFeatureCredits(userId, amount, "queue_failed", null, "agent-pipeline"),
           );
           return json(
             {

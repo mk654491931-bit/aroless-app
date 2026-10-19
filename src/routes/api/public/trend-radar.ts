@@ -60,7 +60,13 @@ export const Route = createFileRoute("/api/public/trend-radar")({
             try {
               return await run();
             } catch (error) {
-              await refundFeatureCredits(session.userId, payment.outcome.charged, label);
+              await refundFeatureCredits(
+                session.userId,
+                payment.outcome.charged,
+                label,
+                null,
+                "radar-scan",
+              );
               throw error;
             }
           };

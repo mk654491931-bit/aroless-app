@@ -109,7 +109,7 @@ export type StepOutcome =
  */
 async function failStep(runId: string, userId: string, message: string): Promise<void> {
   await failAndRefund(runId, message, (amount) =>
-    refundFeatureCredits(userId, amount, "discovery_failed"),
+    refundFeatureCredits(userId, amount, "discovery_failed", null, "agent-pipeline"),
   );
 }
 

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
 import { usePlanUsage } from "@/hooks/use-plan-usage";
-import { planLabelFor } from "@/lib/plan-usage";
+import { planLabelFor, usageLabelFor } from "@/lib/plan-usage";
 import {
   Package,
   Coins,
@@ -322,7 +322,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
             <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
               <span>Bu ay</span>
               <span className="normal-case tracking-normal text-white/60">
-                {planUsage.loading ? "…" : planLabelFor(tier)}
+                {planUsage.loading ? "…" : isAdmin ? "Admin" : planLabelFor(tier)}
               </span>
             </div>
             {planUsage.rows.map((row) => (
@@ -337,9 +337,19 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
                           ? "font-mono text-amber-300"
                           : "font-mono text-white/70"
                     }
-                    title={`${row.hint} — bu ay ${row.used}/${row.limit}`}
+                    title={
+                      planUsage.measured
+                        ? `${row.hint} — bu ay ${row.used}/${row.limit}`
+                        : `${row.hint} — sayaç okunamadı, kullanım bilinmiyor`
+                    }
                   >
-                    {row.disabled ? "—" : `${row.used}/${row.limit}`}
+                    {usageLabelFor({
+                      used: row.used,
+                      limit: row.limit,
+                      disabled: row.disabled,
+                      measured: planUsage.measured,
+                      loading: planUsage.loading,
+                    })}
                   </span>
                 </div>
                 <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-white/10">
@@ -356,7 +366,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
             ))}
             {!planUsage.measured && !planUsage.loading && (
               <p className="text-[10px] text-white/40">
-                Sayaç okunamadı — kullanım “0” değil, “bilinmiyor”.
+                Sayaç okunamadı — bu ayki kullanım “0” değil, “bilinmiyor”.
               </p>
             )}
           </div>

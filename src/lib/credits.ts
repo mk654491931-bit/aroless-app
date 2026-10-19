@@ -69,6 +69,24 @@ export function creditBreakdownLabel(balances: CreditBalances): string {
 }
 
 /**
+ * Jeton sayısının GÖRÜNEN değeri.
+ *
+ * "0" ile "bilinmiyor" aynı şey değildir: profil okunamadığında 0 yazmak
+ * kullanıcıya "jetonum yok" der; oysa doğru beyan "ölçemedim" olur. Aynı
+ * kural üst barda, popover'da ve mobil rozette kullanılır.
+ */
+export const UNKNOWN_CREDIT_LABEL = "bilinmiyor";
+
+export function creditCountLabel(
+  value: number | null | undefined,
+  opts: { loading?: boolean } = {},
+): string {
+  if (opts.loading) return "…";
+  if (value === null || value === undefined) return UNKNOWN_CREDIT_LABEL;
+  return String(count(value));
+}
+
+/**
  * Sunucudan gelen kredi hatasını panelde okunur bir mesaja çevirir.
  *
  * NEDEN GEREKLİ: Jeton kapısı yetersiz bakiyede ham `NO_CREDITS` fırlatır; bunu

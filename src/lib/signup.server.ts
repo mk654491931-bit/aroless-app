@@ -151,30 +151,74 @@ export async function applyFingerprintPolicy(
   const reused = (byDevice.data?.length ?? 0) > 0 || (byIp.data?.length ?? 0) > 0;
   const paid = !["free", ""].includes(String(args.tier ?? "Free").toLowerCase());
 
+  // ADMIN MUAFİYETİ: admin hesabı 250 jetonluk kotaya sahiptir. Aynı ağ/cihaz
+  // üzerinden daha önce açılmış bir test hesabı yüzünden adminin kotasını
+  // sıfırlamak, "admine 250 ver" kuralını bozar ve panelde 0 gösterirdi.
+  const { data: adminRow } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", args.userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  let isAdmin = Boolean(adminRow);
+  // Rol yazılmamış olabilir: DB'nin kendi `is_designated_admin(email)` tanımı
+  // da admin sayılır (hoş geldin 250 jetonunu veren tanım aynıdır).
+  if (!isAdmin) {
+    try {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("email")
+        .eq("id", args.userId)
+        .maybeSingle();
+      const email = String((prof as { email?: string | null } | null)?.email ?? "").trim();
+      if (email) {
+        // `is_designated_admin` migration'da tanımlı; generated tiplerde yok.
+        const { data } = await admin.rpc(
+          "is_designated_admin" as never,
+          { _email: email } as never,
+        );
+        isAdmin = data === true;
+      }
+    } catch {
+      /* rol yok + e-posta okunamadı → admin değil (fail-closed) */
+    }
+  }
+
+  // ÜCRETSİZ HAK YALNIZ İLK KAYIT + İLK IP: aynı cihaz ya da aynı IP ile
+  // açılan sonraki ücretsiz hesaplar hoş geldin jetonu ALMAZ.
+  const blocked = reused && !paid && !isAdmin;
+
   await admin.from("device_fingerprints").insert({
     visitor_id: args.visitorId || `ip:${args.ipHash ?? "unknown"}`,
     user_id: args.userId,
     email: args.email,
     ip_hash: args.ipHash ?? null,
-    free_tier_granted: !reused,
+    free_tier_granted: !blocked,
   });
 
-  const blocked = reused && !paid;
   if (blocked) {
-    await admin.from("profiles").update({ credits: 0, sim_credits: 0 }).eq("id", args.userId);
+    // ÖLÇÜLEN HATA: yalnız `credits`/`sim_credits` sıfırlanıyordu; ürün bulucu
+    // jetonu (`finder_credits`) sıfırlanmadığı için mükerrer hesap yine 2
+    // hoş geldin jetonuyla aramaya devam ediyordu. Üç havuz birlikte kapanır.
+    await admin
+      .from("profiles")
+      .update({ credits: 0, finder_credits: 0, sim_credits: 0 })
+      .eq("id", args.userId);
   }
 
   // Denetim logu: ücretsiz kredinin kime, hangi cihaz/IP ile verildiği (ya da
   // neden verilmediği) kalıcı olarak kaydedilir.
   let credits = 0;
+  let finderCredits = 0;
   let simCredits = 0;
   if (!blocked) {
     const { data: prof } = await admin
       .from("profiles")
-      .select("credits, sim_credits")
+      .select("credits, finder_credits, sim_credits")
       .eq("id", args.userId)
       .maybeSingle();
     credits = prof?.credits ?? 0;
+    finderCredits = (prof as { finder_credits?: number | null } | null)?.finder_credits ?? 0;
     simCredits = prof?.sim_credits ?? 0;
   }
   await admin.from("free_credit_audit").insert({
@@ -185,13 +229,15 @@ export async function applyFingerprintPolicy(
     granted: !blocked,
     credits,
     sim_credits: simCredits,
-    reason: blocked
-      ? (byDevice.data?.length ?? 0) > 0
-        ? "duplicate_device"
-        : "duplicate_ip"
-      : "first_signup",
+    reason: isAdmin
+      ? "admin_exempt"
+      : blocked
+        ? (byDevice.data?.length ?? 0) > 0
+          ? "duplicate_device"
+          : "duplicate_ip"
+        : "first_signup",
     source: args.source ?? "unknown",
-    meta: { tier: args.tier ?? "Free", paid },
+    meta: { tier: args.tier ?? "Free", paid, admin: isAdmin, finder_credits: finderCredits },
   });
 
   // Kötüye kullanım kuralları: aynı cihaz/IP'den çoklu hesap veya kısa sürede

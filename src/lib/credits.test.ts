@@ -5,9 +5,11 @@
 // sürekli 0 kalıyor ve arama "kredin bitti" diye engelleniyordu.
 import { describe, expect, it } from "vitest";
 import {
+  UNKNOWN_CREDIT_LABEL,
   chargePoolFor,
   creditBalances,
   creditBreakdownLabel,
+  creditCountLabel,
   hasSpendableCredits,
   type CreditProfile,
 } from "./credits";
@@ -64,6 +66,20 @@ describe("chargePoolFor (DB düşme sırası)", () => {
     expect(chargePoolFor({ credits: 250, finder_credits: 0 })).toBe("credits");
     expect(chargePoolFor({ credits: 0, finder_credits: 2 })).toBe("finder_credits");
     expect(chargePoolFor(null)).toBe("credits");
+  });
+});
+
+describe("creditCountLabel — okunamayan bakiye '0' değil 'bilinmiyor'", () => {
+  it("bilinmeyen değer 0 yazmaz", () => {
+    expect(creditCountLabel(null)).toBe(UNKNOWN_CREDIT_LABEL);
+    expect(creditCountLabel(undefined)).toBe(UNKNOWN_CREDIT_LABEL);
+    expect(UNKNOWN_CREDIT_LABEL).toBe("bilinmiyor");
+  });
+
+  it("yüklenirken '…', bilinen değerde sayı", () => {
+    expect(creditCountLabel(null, { loading: true })).toBe("…");
+    expect(creditCountLabel(0)).toBe("0");
+    expect(creditCountLabel(250)).toBe("250");
   });
 });
 

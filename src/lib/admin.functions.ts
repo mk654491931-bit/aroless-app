@@ -8,12 +8,22 @@ async function assertAdmin(context: { supabase: any; userId: string; claims: any
     _user_id: context.userId,
     _role: "admin",
   });
-  if (error || !data) {
-    // 403, not 500 — TanStack Start serializes statusCode into the response.
-    const err = new Error("Forbidden") as Error & { statusCode: number };
-    err.statusCode = 403;
-    throw err;
+  if (!error && data) return;
+
+  // ROL YOKSA E-POSTA TABANLI TANIM: DB `handle_new_user` admini e-postayla
+  // tanıyıp 250 jeton veriyor; rolü yazılmamış eski bir hesap panelde "Free"
+  // görünüyor ve admin uçları 403 alıyordu. Aynı tanımı burada da uygula.
+  try {
+    const { isAdminAccount } = await import("./admin-identity.server");
+    if (await isAdminAccount(context.userId)) return;
+  } catch {
+    /* kimlik doğrulama hatası aşağıdaki 403 ile kapanır (fail-closed) */
   }
+
+  // 403, not 500 — TanStack Start serializes statusCode into the response.
+  const err = new Error("Forbidden") as Error & { statusCode: number };
+  err.statusCode = 403;
+  throw err;
 }
 
 export type AdminStats = {

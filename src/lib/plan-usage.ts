@@ -93,6 +93,77 @@ export function limitFor(level: 0 | 1 | 2 | 3, kind: UsageKind, isAdmin = false)
   return quotaFor(level)[kind];
 }
 
+/**
+ * ÜCRETSİZ PLANIN GERÇEK TAVANI = bu ay kullanılan + harcanabilir bakiye.
+ *
+ * NEDEN `max(limit, bakiye)` DEĞİL (ölçülen hata): kullanıcı 2 hoş geldin
+ * jetonunu harcadıktan sonra davet/referral ile 2 jeton kazandığında
+ * `used=2`, `bakiye=2` oluyor; eski formül `max(2, 2) = 2` verip
+ * `used >= limit` ile işi ENGELLİYORDU — yani kazanılan jeton harcanamıyordu.
+ * Doğru tavan, geçmiş tüketim + kalan bakiyedir; böylece her kazanılan jeton
+ * harcanabilir kalır ve hoş geldin jetonu hâlâ tek seferliktir (bakiye bitince
+ * tavan da biter).
+ *
+ * `used`/`balance` okunamıyorsa `null` döner: "bilinmiyor" demek, "0" demek
+ * değildir; çağıran bu durumda ENGELLEMEZ (fail-open) ve kararı gerçek düşme
+ * çağrısı verir.
+ */
+export function freeUsageCeiling(used: number | null, balance: number | null): number | null {
+  if (used === null || balance === null) return null;
+  const safeUsed = Number.isFinite(used) && used > 0 ? Math.floor(used) : 0;
+  const safeBalance = Number.isFinite(balance) && balance > 0 ? Math.floor(balance) : 0;
+  return safeUsed + safeBalance;
+}
+
+/**
+ * Tahsilat kapısının kullanacağı ETKİN aylık limit (tek karar noktası).
+ *
+ * • Admin → her kalemde 250 (`plans.ts` ADMIN_QUOTA). Paket seviyesi ne olursa
+ *   olsun admin 250'dir; eskiden yalnız `level === 0` iken admin sayılıyordu ve
+ *   ücretli paketteki admin 50/90 gibi paket limitine düşüyordu.
+ * • Ücretsiz → kullanılan + bakiye (yukarıdaki açıklama).
+ * • Ücretli → paketin aylık hakkı.
+ *
+ * `null` = bilinmiyor → engelleme yok.
+ */
+export function effectiveUsageLimit(args: {
+  level: 0 | 1 | 2 | 3;
+  kind: UsageKind;
+  isAdmin: boolean;
+  used: number | null;
+  balance: number | null;
+}): number | null {
+  if (args.isAdmin) return ADMIN_QUOTA[args.kind];
+  if (args.level === 0) return freeUsageCeiling(args.used, args.balance);
+  return limitFor(args.level, args.kind, false);
+}
+
+/**
+ * Sayaç okunamadığında gösterilecek metin.
+ *
+ * "0" yazmak YANLIŞ beyandır: 0 "hiç kullanmadım" demektir, burada ise
+ * "ölçemedim" durumu vardır. Arayüz bu ikisini ayırmak zorundadır.
+ */
+export const UNKNOWN_USAGE_LABEL = "bilinmiyor";
+
+/**
+ * Bir kullanım satırının görünen değeri: `3/8`, `—`, `…` ya da `bilinmiyor`.
+ *
+ * SAF fonksiyon: sol bar ve üst bar AYNI kuralı kullansın diye burada.
+ */
+export function usageLabelFor(args: {
+  used: number;
+  limit: number;
+  disabled?: boolean;
+  measured?: boolean;
+  loading?: boolean;
+}): string {
+  if (args.loading) return "…";
+  if (args.disabled) return "—";
+  if (args.measured === false) return UNKNOWN_USAGE_LABEL;
+  return `${args.used}/${args.limit}`;
+}
+
 export type UsageMeter = {
   used: number;
   limit: number;
@@ -165,7 +236,11 @@ export function planIdFor(level: 0 | 1 | 2 | 3): PlanId | null {
  * "Kota doldu" demek yetmez: hangi hak, kaç, hangi paket olduğu yazılır ki
  * kullanıcı ne yapacağını bilsin.
  */
-export function planLimitMessage(kind: UsageKind, limit: number, tier: string | null | undefined): string {
+export function planLimitMessage(
+  kind: UsageKind,
+  limit: number,
+  tier: string | null | undefined,
+): string {
   const meta = USAGE_KIND_META.find((m) => m.kind === kind);
   const name = meta?.label ?? "AI kullanımı";
   const plan = planLabelFor(tier);
