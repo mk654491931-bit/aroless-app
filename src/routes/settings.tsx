@@ -4,12 +4,17 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles, Loader2, BellRing, Coins } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, BellRing, Coins, CircleSlash } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LANGUAGES, activeLang, changeAppLanguage } from "@/lib/i18n";
 import { getFullProfile, updateProfilePrefs } from "@/lib/analysis.functions";
-import { reconcileMySubscription } from "@/lib/paddle.functions";
+import {
+  reconcileMySubscription,
+  getMySubscription,
+  cancelMySubscription,
+} from "@/lib/paddle.functions";
 import { useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
+import { subscriptionCancelView, formatSubscriptionEnd } from "@/lib/subscription-cancel";
 import { clearPlanPurchasePending } from "@/lib/plan-sync";
 import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
 import { planLabelFor } from "@/lib/plan-usage";
@@ -19,6 +24,17 @@ import { ReferralPanel } from "@/components/referral-panel";
 import { AffiliatePanel } from "@/components/affiliate-panel";
 import { SupportPanel } from "@/components/support-panel";
 import { AccountDataPanel } from "@/components/account-data-panel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const CURRENCIES = ["USD", "EUR", "TRY", "SAR", "GBP"] as const;
 
@@ -50,6 +66,8 @@ function SettingsPage() {
   const qc = useQueryClient();
   const profileFn = useServerFn(getFullProfile);
   const reconcileMySubscriptionFn = useServerFn(reconcileMySubscription);
+  const mySubscriptionFn = useServerFn(getMySubscription);
+  const cancelSubscriptionFn = useServerFn(cancelMySubscription);
   const updateFn = useServerFn(updateProfilePrefs);
   const search = Route.useSearch();
 
@@ -125,6 +143,52 @@ function SettingsPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  /**
+   * `cancel_at_period_end` abonelik defterinde tutulur (profil aynasında yok),
+   * bu yüzden durum ayrı okunur. İptal düğmesi buna göre gösterilir.
+   */
+  const subQ = useQuery({
+    queryKey: ["my-subscription", user?.id],
+    queryFn: () => mySubscriptionFn(),
+    enabled: !!user,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const cancelSub = useMutation({
+    mutationFn: () => cancelSubscriptionFn(),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        const byReason: Record<string, string> = {
+          not_configured: "Ödeme sağlayıcısı yapılandırılmamış. Lütfen destek ile iletişime geç.",
+          no_customer: "Paddle'da bu hesaba bağlı bir müşteri kaydı bulunamadı.",
+          no_live_subscription: "İptal edilecek etkin bir abonelik bulunamadı.",
+          already_ended: "Bu abonelik zaten sona ermiş.",
+          api_failed: res.message ?? "Paddle iptal isteğini reddetti.",
+        };
+        toast.error(byReason[res.reason] ?? "Abonelik iptal edilemedi.");
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ["my-subscription"] });
+      void qc.invalidateQueries({ queryKey: ["profile"] });
+      const end = formatSubscriptionEnd(res.periodEnd);
+      toast.success(
+        end
+          ? `Abonelik ${end} tarihinde sona erecek. Bu tarihten sonra tahsilat yapılmayacak.`
+          : "Abonelik dönem sonunda yenilenmeyecek.",
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const subView = subscriptionCancelView({
+    tier: subQ.data?.tier ?? profQ.data?.subscription_tier,
+    status: subQ.data?.status,
+    cancelAtPeriodEnd: subQ.data?.cancelAtPeriodEnd,
+    currentPeriodEnd: subQ.data?.currentPeriodEnd,
+  });
+  const endLabel = formatSubscriptionEnd(subView.endsAt);
 
   if (loading || !user)
     return (
@@ -274,6 +338,71 @@ function SettingsPage() {
               value={`${creditBalances(profQ.data).total} (${creditBreakdownLabel(creditBalances(profQ.data))})`}
             />
           </div>
+
+          {/* ABONELİK YÖNETİMİ — iptal DÖNEM SONUNDA yürürlüğe girer:
+              bu ayın ücreti iade edilmez, gelecek ay tahsilat yapılmaz. */}
+          {subQ.isLoading ? (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Abonelik durumu yükleniyor…
+            </div>
+          ) : subView.state === "scheduled" ? (
+            <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm">
+              <div className="flex items-center gap-2 font-medium">
+                <CircleSlash size={16} /> Abonelik iptal edildi
+              </div>
+              <p className="mt-1 text-muted-foreground">
+                {endLabel
+                  ? `${endLabel} tarihine kadar tüm özellikler açık kalır.`
+                  : "Dönem sonuna kadar tüm özellikler açık kalır."}{" "}
+                Bu tarihten sonra tahsilat yapılmaz. Bu ay için ödenen ücret iade edilmez.
+              </p>
+            </div>
+          ) : subView.state === "past_due" ? (
+            <div className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm">
+              <div className="font-medium">Ödeme alınamadı</div>
+              <p className="mt-1 text-muted-foreground">
+                Paddle ödemeyi yeniden deneyecek. Denemeleri durdurmak için aboneliği iptal
+                edebilirsin; dönem sonuna kadar erişimin açık kalır.
+              </p>
+              {subView.canCancel && (
+                <div className="mt-3">
+                  <CancelSubscriptionButton
+                    pending={cancelSub.isPending}
+                    endLabel={endLabel}
+                    onConfirm={() => cancelSub.mutate()}
+                  />
+                </div>
+              )}
+            </div>
+          ) : subView.state === "active" ? (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-medium">Abonelik aktif</div>
+                <p className="mt-1 text-muted-foreground">
+                  {endLabel
+                    ? `Sıradaki tahsilat: ${endLabel}.`
+                    : "Dönem sonunda otomatik yenilenir."}{" "}
+                  İptal etmezsen ödeme alınmaya devam eder.
+                </p>
+              </div>
+              {subView.canCancel && (
+                <CancelSubscriptionButton
+                  pending={cancelSub.isPending}
+                  endLabel={endLabel}
+                  onConfirm={() => cancelSub.mutate()}
+                />
+              )}
+            </div>
+          ) : subView.state === "ended" ? (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
+              Aboneliğin sona erdi. Yeniden başlatmak için bir paket seçebilirsin.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
+              Ücretli aboneliğin yok. Paketler tüm modülleri açar.
+            </div>
+          )}
+
           <Link
             to="/pricing"
             className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
@@ -288,6 +417,56 @@ function SettingsPage() {
         <AccountDataPanel />
       </main>
     </div>
+  );
+}
+
+/**
+ * Onaylı iptal düğmesi. Onay metni ürün kuralını AÇIKÇA söyler: bu ayın
+ * ücreti iade edilmez, gelecek ay tahsilat yapılmaz, erişim dönem sonuna kadar
+ * sürer. Kullanıcı ne olduğunu bilmeden iptal etmez.
+ */
+function CancelSubscriptionButton({
+  pending,
+  endLabel,
+  onConfirm,
+}: {
+  pending: boolean;
+  endLabel: string | null;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          type="button"
+          disabled={pending}
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-400/20 disabled:opacity-60"
+        >
+          {pending ? <Loader2 className="size-4 animate-spin" /> : <CircleSlash size={16} />}
+          Aboneliği iptal et
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Aboneliği iptal et</AlertDialogTitle>
+          <AlertDialogDescription>
+            {endLabel
+              ? `${endLabel} tarihine kadar tüm özellikler açık kalır.`
+              : "Dönem sonuna kadar tüm özellikler açık kalır."}{" "}
+            Bu ay için ödediğin ücret iade edilmez ve gelecek ay tahsilat yapılmaz.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-rose-500 text-white hover:bg-rose-600"
+          >
+            Aboneliği iptal et
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

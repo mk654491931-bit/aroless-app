@@ -159,6 +159,10 @@ describe("mapPaddleEvent — lifecycle events (refunds, cancels, out-of-order)",
       customData: {},
     });
     expect(cmd!.cancelAtPeriodEnd).toBe(true);
+    // İptal planlı ama dönem bitmedi: paket KORUNUR, aksi hâlde kullanıcı
+    // ödediği ayın geri kalanını kaybederdi.
+    expect(cmd!.tier).toBe("Pro");
+    expect(cmd!.status).toBe("active");
 
     const resumed = mapPaddleEvent(settings(), "subscription.updated", {
       id: "sub_456",

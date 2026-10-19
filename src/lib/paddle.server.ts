@@ -1017,6 +1017,37 @@ export async function fetchLiveSubscription(
   }
 }
 
+/**
+ * İPTAL EDİLEBİLİR abonelik: aktif, deneme ya da ödemesi gecikmiş (`past_due`).
+ *
+ * NEDEN `past_due` DE DAHİL: kullanıcı ödemesi alınamadığı için aboneliğini
+ * durduramıyorsa Paddle tahsilatı yeniden dener ve kullanıcı "iptal edemiyorum"
+ * der. İptal, aktif listeyle sınırlı olsaydı tam bu durumda düğme çalışmazdı.
+ */
+export const ACTIONABLE_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"] as const;
+
+export async function fetchActionableSubscription(
+  customerId: string,
+): Promise<Awaited<ReturnType<Paddle["subscriptions"]["get"]>> | null> {
+  try {
+    const paddle = getPaddleClient();
+    const [first] = await paddle.subscriptions
+      .list({
+        customerId: [customerId],
+        status: [...ACTIONABLE_SUBSCRIPTION_STATUSES],
+        perPage: 1,
+      })
+      .next();
+    return first ?? null;
+  } catch (error) {
+    console.warn(
+      "[Paddle] İptal edilebilir abonelik okunamadı:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
 /** Aboneliğin son TAMAMLANMIŞ işlemi (kredi ve ciro kaydı için). */
 export async function fetchLastCompletedTransaction(
   subscriptionId: string,

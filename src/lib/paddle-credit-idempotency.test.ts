@@ -131,8 +131,25 @@ describe("process_paddle_event — çağrı imzası uyumu", () => {
       anchor: "const args = {",
       stop: "} as Record<string, unknown>",
     },
-    { file: "./paddle.functions.ts", anchor: 'rpc("process_paddle_event", {', stop: "\n    })" },
+    // `paddle.functions.ts` iki yerden yazar: tazeleme ve ayarlar→iptal.
+    // Bitiş deseni girintiye bağlı olmadığı için iki çağrı da taranır.
+    { file: "./paddle.functions.ts", anchor: 'rpc("process_paddle_event", {', stop: "});" },
   ];
+
+  /** Bir dosyadaki TÜM çağrı bloklarını döndürür (ilk eşleşme yeterli değil). */
+  function callBlocks(src: string, site: { anchor: string; stop: string }): string[] {
+    const blocks: string[] = [];
+    let from = 0;
+    for (;;) {
+      const start = src.indexOf(site.anchor, from);
+      if (start === -1) break;
+      const end = src.indexOf(site.stop, start + site.anchor.length);
+      if (end === -1) break;
+      blocks.push(src.slice(start, end));
+      from = start + site.anchor.length;
+    }
+    return blocks;
+  }
 
   it("SQL imzası 19 parametre alır (adlar ve sıra sabit)", () => {
     expect(sqlParamNames.length).toBe(19);
@@ -141,15 +158,14 @@ describe("process_paddle_event — çağrı imzası uyumu", () => {
   });
 
   for (const site of callSites) {
-    it(`${site.file} aynı 19 adı geçirir`, () => {
+    it(`${site.file} aynı 19 adı geçirir (tüm çağrı yerleri)`, () => {
       const src = readFileSync(new URL(site.file, import.meta.url), "utf8");
-      const start = src.indexOf(site.anchor);
-      expect(start, `${site.file}: çağrı bloğu bulunamadı`).toBeGreaterThan(-1);
-      const end = src.indexOf(site.stop, start);
-      expect(end, `${site.file}: çağrı bloğu bitişi bulunamadı`).toBeGreaterThan(start);
-      const block = src.slice(start, end);
-      const passed = [...block.matchAll(/(_[a-z_]+):/g)].map((m) => m[1]!);
-      expect(passed.sort()).toEqual([...sqlParamNames].sort());
+      const blocks = callBlocks(src, site);
+      expect(blocks.length, `${site.file}: çağrı bloğu bulunamadı`).toBeGreaterThan(0);
+      for (const block of blocks) {
+        const passed = [...block.matchAll(/(_[a-z_]+):/g)].map((m) => m[1]!);
+        expect(passed.sort()).toEqual([...sqlParamNames].sort());
+      }
     });
   }
 });
