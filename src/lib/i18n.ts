@@ -1,6 +1,5 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
 
 const en = {
   common: {
@@ -1110,6 +1109,13 @@ export type LangEntry = (typeof LANGUAGES)[number];
 export const RTL_LANGS: LangCode[] = ["ar"];
 
 /**
+ * Dil tercihinin kalıcı anahtarı — TEK kaynak.
+ * `<head>` içindeki ilk boyama betiği (`__root`) ve `language-preference.ts`
+ * bu anahtarı okur; hiçbiri kendi sabitini yazmaz.
+ */
+export const LANGUAGE_STORAGE_KEY = "i18nextLng";
+
+/**
  * "en-US", "tr_TR", "EN" gibi tarayıcı locale'lerini desteklenen 2 harfli
  * koda indirger; tanınmayan her değer İngilizceye düşer.
  */
@@ -1149,6 +1155,9 @@ export function findLanguage(value?: string | null): LangEntry {
 export function changeAppLanguage(value: unknown): LangCode {
   const code = normalizeLang(value);
   applyDir(code);
+  // Seçim ANINDA yazılır: `changeLanguage` asenkron çözülür ve kullanıcı bu
+  // arada sekmeyi kapatırsa tercih kaybolmamalı.
+  persistLang(code);
   if (typeof window !== "undefined" && normalizeLang(i18n.language) !== code) {
     void i18n.changeLanguage(code);
   }
@@ -1161,24 +1170,91 @@ export function changeAppLanguage(value: unknown): LangCode {
  */
 export const RESOURCES = { en, tr, es, de, fr, ar };
 
-let initialized = false;
-export function initI18n() {
-  if (initialized || typeof window === "undefined") return;
-  initialized = true;
-  i18n
-    .use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
-      resources: RESOURCES,
-      fallbackLng: "en",
-      supportedLngs: ["en", "tr", "es", "de", "fr", "ar"],
-      ns: ["common"],
-      defaultNS: "common",
-      interpolation: { escapeValue: false },
-      detection: { order: ["localStorage", "navigator"], caches: ["localStorage"] },
-    });
-  applyDir(i18n.language as LangCode);
-  i18n.on("languageChanged", (lng: string) => applyDir(lng as LangCode));
+/** Dile ait tercihi cihaza yazar (sunucuda no-op). */
+function persistLang(code: LangCode): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, code);
+  } catch {
+    /* gizli mod / kota: tercih yalnız bu oturumda yaşar */
+  }
+}
+
+/** Tarayıcıda kayıtlı dil (yoksa null). */
+function storedLang(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * i18next örneği MODÜL YÜKLENİRKEN kurulur — effect'te değil.
+ *
+ * NEDEN: Eskiden `initI18n()` yalnızca `__root` effect'inde çalışıyordu. React
+ * ilk kareyi effect'lerden ÖNCE çizdiği için ilk boyamada örnek YOKTU;
+ * `useTranslation` uyarı basıp anahtarı döndürüyordu (ekranda "hero_1").
+ * Sunucuda hiç kurulmadığı için de her SSR'da `NO_I18NEXT_INSTANCE` uyarısı
+ * düşüyor ve sunucu metni çevrilmiyordu.
+ *
+ * Çözüm: örnek her iki tarafta da sabit "en" ile kurulur. Sunucu HTML'i ile
+ * istemcinin İLK karesi aynı metni üretir (hydration uyumlu); cihaz dili
+ * mount'tan sonra `initI18n()` ile uygulanır.
+ */
+void i18n.use(initReactI18next).init({
+  resources: RESOURCES,
+  lng: "en",
+  fallbackLng: "en",
+  supportedLngs: LANGUAGES.map((l) => l.code),
+  ns: ["common"],
+  defaultNS: "common",
+  interpolation: { escapeValue: false },
+  // Kaynaklar bellekte: init'i mikro göreve erteleme (i18next v26 adı
+  // `initAsync`), aksi hâlde ilk kare henüz kurulmamış örnekle çizilir.
+  initAsync: false,
+});
+
+// Tek nokta: dil değişince `<html lang/dir>` + kalıcı tercih.
+i18n.on("languageChanged", (lng: string) => {
+  const code = normalizeLang(lng);
+  applyDir(code);
+  persistLang(code);
+});
+
+/**
+ * Cihazın başlangıç dili: kayıtlı tercih → tarayıcı dilleri → İngilizce.
+ * (Eski `i18next-browser-languagedetector` sırasının aynısı; detector yalnızca
+ * bu iş için bir bağımlılıktı ve sunucuda çalışamıyordu.)
+ */
+function detectInitialLang(): LangCode {
+  const stored = storedLang();
+  if (isSupportedLang(stored)) return normalizeLang(stored);
+  if (typeof navigator !== "undefined") {
+    const list = navigator.languages?.length ? navigator.languages : [navigator.language];
+    for (const candidate of list) if (isSupportedLang(candidate)) return normalizeLang(candidate);
+  }
+  return "en";
+}
+
+let bootstrapped = false;
+
+/**
+ * Cihazın dilini uygular (istemcide, ilk mount'ta bir kez).
+ *
+ * Sunucuda hiçbir şey yapmaz: SSR her zaman "en" üretir, böylece ilk kare
+ * deterministik kalır ve hydration uyuşmazlığı doğmaz. Dönen değer, uygulanan
+ * dildir (çağıran state'i bundan beslemelidir — `changeLanguage` asenkron).
+ */
+export function initI18n(): LangCode {
+  if (typeof window === "undefined") return "en";
+  if (bootstrapped) return normalizeLang(i18n.language);
+  bootstrapped = true;
+  const target = detectInitialLang();
+  applyDir(target);
+  if (normalizeLang(i18n.language) !== target) void i18n.changeLanguage(target);
+  return target;
 }
 
 export function applyDir(lang: LangCode) {

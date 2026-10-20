@@ -5,10 +5,19 @@
  * cihazda açıkça seçtiyse o kazanır, aksi hâlde hesapta kayıtlı dil uygulanır.
  */
 
-import { isSupportedLang, normalizeLang, type LangCode } from "@/lib/i18n";
+import {
+  LANGUAGE_STORAGE_KEY,
+  isSupportedLang,
+  normalizeLang,
+  type LangCode,
+} from "@/lib/i18n";
 
-/** i18next LanguageDetector'ın localStorage cache anahtarı. */
-export const LANGUAGE_STORAGE_KEY = "i18nextLng";
+/**
+ * Kalıcı dil tercihinin anahtarı — tanımı `lib/i18n.ts`'te (tek kaynak).
+ * Buradaki yeniden dışa aktarım, mevcut çağıranları (ör. `__root`) kırmamak
+ * için duruyor.
+ */
+export { LANGUAGE_STORAGE_KEY };
 
 /** Cihazda kayıtlı dil tercihi (yoksa null). */
 export function storedLanguagePreference(): string | null {

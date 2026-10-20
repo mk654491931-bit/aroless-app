@@ -6,26 +6,25 @@ import { BrandLogo } from "@/components/brand-logo";
 import { useFxRates } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
+import { publicPageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/pricing")({
-  head: () => ({
-    meta: [
-      { title: "Aroless Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri" },
-      {
-        name: "description",
-        content:
-          "Aroless paketleri: tüm modüller her pakette açık, fark yalnızca aylık kullanım miktarında. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma.",
-      },
-      { property: "og:title", content: "Aroless Fiyatlandırma — Paketler ve Krediler" },
-      {
-        property: "og:description",
-        content:
-          "Tüm modüller açık; Starter, Pro ve Business paketleri aylık kullanım miktarında farklılaşır.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: () => {
+    const title = "Aroless Fiyatlandırma — Kazandıran Ürün Bulucu Paketleri";
+    const description =
+      "Aroless paketleri: tüm modüller her pakette açık, fark yalnızca aylık kullanım miktarında. TRY ve USD fiyatlarıyla şeffaf fiyatlandırma.";
+    const shared = publicPageHead({ path: "/pricing", title, description });
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:type", content: "website" },
+        { name: "twitter:card", content: "summary_large_image" },
+        ...shared.meta,
+      ],
+      links: shared.links,
+    };
+  },
   component: PricingPage,
 });
 

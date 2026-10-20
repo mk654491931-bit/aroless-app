@@ -40,9 +40,13 @@ import {
 
 export const Route = createFileRoute("/studio")({
   ssr: false,
-  validateSearch: (s: Record<string, unknown>) => ({
-    product: typeof s["product"] === "string" ? s["product"] : "",
-  }),
+  // Boş `product` anahtarı URL'e `?product=` olarak yazılıyordu: `/studio`
+  // gereksiz bir 307 turu atıyor ve paylaşılan bağlantılar kirli görünüyordu.
+  // Parametre yalnızca GERÇEKTEN varsa ayrıştırılır.
+  validateSearch: (s: Record<string, unknown>) => {
+    const product = typeof s["product"] === "string" ? s["product"].trim() : "";
+    return product ? { product } : {};
+  },
   head: () => ({
     meta: [
       { title: "Reklam Kreatif Stüdyosu — Aroless" },

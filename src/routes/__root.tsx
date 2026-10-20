@@ -203,11 +203,13 @@ function RootComponent() {
   useEffect(() => {
     // initI18n ayrıca <html lang/dir> niteliklerini yazar ve her dil
     // değişiminde `applyDir` ile yeniden uygular; burada tekrar yazılmaz.
-    initI18n();
+    // Uygulanan dili initI18n döndürür: `changeLanguage` asenkron çözüldüğü
+    // için `i18n.language` bu satırda hâlâ eski değeri taşıyabilir.
+    const initialLang = initI18n();
     // Tüm site bu normalize edilmiş koddan beslenir: "en-US" gibi locale'ler
     // de tek bir dile ("en") indirgenir.
-    setLang(normalizeLang(i18n.language));
-    setAutoLanguage(i18n.language);
+    setLang(initialLang);
+    setAutoLanguage(initialLang);
     // Dil değişince: DOM sözlüğü (+ başlık/meta), React ağacı ve AI/sunucu
     // kaynaklı içerikler tek noktadan yeni dile geçer.
     const onLang = (lng: string) => {

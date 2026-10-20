@@ -118,6 +118,7 @@ import {
 } from "@/components/onboarding-wizard";
 import { claimReferral } from "@/lib/referral.functions";
 import { claimPromoCode, type PromoClaimResult } from "@/lib/promo.functions";
+import { publicPageHead } from "@/lib/seo";
 import { storedRefAction, type ReferralClaimResult } from "@/lib/referral-rules";
 import { getBrandedItem, removeBrandedItem } from "@/lib/brand-storage";
 
@@ -133,17 +134,20 @@ import { sortProducts, type SortKey } from "@/features/finder/utils/sorting";
 import { requestRun } from "@/features/finder/utils/seo-creative-bridge";
 
 export const Route = createFileRoute("/")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "Aroless — Winning Product Finder" },
-      {
-        name: "description",
-        content:
-          "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports.",
-      },
-    ],
-  }),
+  // SSR AÇIK: `/` sitenin girişi ve sitemap'te priority 1.0. Eskiden client-only
+  // olduğu için crawler'a yalnız boş bir kabuk gidiyordu. Burada sunucu ile
+  // istemcinin İLK karesi aynı ağacı üretir (aşağıdaki `loading || !user`
+  // dalı landing'i çizer), oturum doğrulanınca panel yerini alır.
+  head: () => {
+    const title = "Aroless — Winning Product Finder";
+    const description =
+      "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports.";
+    const shared = publicPageHead({ path: "/", title, description });
+    return {
+      meta: [{ title }, { name: "description", content: description }, ...shared.meta],
+      links: shared.links,
+    };
+  },
   component: Dashboard,
 });
 
@@ -287,8 +291,7 @@ function Dashboard() {
   const validateFn = useServerFn(validateProduct);
   const validateMut = useMutation({
     // `lang`: doğrulama raporu (piyasa notu + ajan özetleri) seçilen dilde çıkar.
-    mutationFn: (query: string) =>
-      validateFn({ data: { query, platforms, lang: getUiLang() } }),
+    mutationFn: (query: string) => validateFn({ data: { query, platforms, lang: getUiLang() } }),
     onSuccess: (res) => {
       setValidationReport(res.report);
       qc.invalidateQueries({ queryKey: ["profile"] });
@@ -514,14 +517,12 @@ function Dashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, [tab]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
-  }
-  if (!user) return <MarketingLanding />;
+  // İLK BOYA: sunucu oturumu göremez, istemci de ilk karede henüz doğrulamadı.
+  // Bu yüzden YÜKLENİYOR durumunda da landing çizilir (spinner yerine):
+  //   • sunucu HTML'i gerçek içerik taşır (SEO + sosyal önizleme),
+  //   • istemcinin ilk karesi sunucununkiyle AYNI olur (hydration uyumlu),
+  //   • oturum doğrulanınca panel devralır.
+  if (loading || !user) return <MarketingLanding />;
 
   const credits = balances.total;
   const creditBreakdown = creditBreakdownLabel(balances);
