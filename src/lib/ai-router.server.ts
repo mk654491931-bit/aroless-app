@@ -107,19 +107,63 @@ const COUNCIL_FALLBACK_ORDER: ProviderId[] = [
 ];
 
 /**
- * Ajan indeksi → sağlayıcı zinciri.
+ * KONSEYDE BİRİNCİL OLABİLECEK TÜM ÜCRETSİZ SAĞLAYICILAR.
  *
- * 7 uzunlukta: [ana motor] + [diğer ana motor] + [5 yedek]. Ajanın birincili
- * `COUNCIL_PRIMARY_ORDER` arasında döngülenir → 14 ajanın yarısı EVREN'den,
- * yarısı Groq'tan başlar. Yedekler HER ajanda aynı sırada durur, yani bir
- * sağlayıcı çöktüğünde 14 ajanın hepsi aynı yedeğe düşer.
+ * NEDEN GENİŞ: 14 ajanın hepsi sabit iki birincil (EVREN/Groq) arasında
+ * dönerse, EVREN anahtarı yokken 14 çağrının TAMAMI aynı anda Groq'a biner.
+ * Ücretsiz Groq katmanı `llama-3.3-70b` için günde yalnız ~100K token verir;
+ * 14 ajanlık bir koşu ~30K token harcadığı için 3. koşuda tüm anahtarlar 429
+ * alır ve ajanlar nötr puana düşer. Bu liste, anahtarı OLAN her sağlayıcıyı
+ * birincil havuzuna katar — yük 6 sağlayıcıya yayılır.
  */
-export function councilChainFor(agentIndex: number): ProviderId[] {
-  const total = COUNCIL_PRIMARY_ORDER.length;
-  const primary = COUNCIL_PRIMARY_ORDER[((agentIndex % total) + total) % total] ?? "groq";
-  // Diğer ana motor HEMEN arkasında: EVREN çöktüyse Groq, Groq çöktüyse EVREN.
-  const otherPrimary = COUNCIL_PRIMARY_ORDER.filter((p) => p !== primary);
-  return [primary, ...otherPrimary, ...COUNCIL_FALLBACK_ORDER];
+export const COUNCIL_PROVIDERS = [
+  "evren",
+  "groq",
+  "gemini",
+  "openrouter",
+  "cerebras",
+  "sambanova",
+  "huggingface",
+] as const satisfies readonly ProviderId[];
+
+/** ProviderId → birleşik havuz grubu (anahtar var mı? sorusunun tek kaynağı). */
+const COUNCIL_PROVIDER_GROUP: Record<(typeof COUNCIL_PROVIDERS)[number], PoolGroup> = {
+  evren: "pool_e",
+  groq: "groq",
+  gemini: "gemini",
+  openrouter: "openrouter",
+  cerebras: "cerebras",
+  sambanova: "sambanova",
+  huggingface: "hf",
+};
+
+/**
+ * Bu dağıtımda GERÇEKTEN anahtarı tanımlı konsey sağlayıcıları.
+ *
+ * Öncelik `COUNCIL_PROVIDERS` sırasıdır (EVREN → Groq → Gemini → …). Yalnız
+ * İSİM döner; anahtar değeri okunmaz/dışa verilmez.
+ */
+export function configuredCouncilProviders(): ProviderId[] {
+  return COUNCIL_PROVIDERS.filter((provider) =>
+    poolGroupConfigured(COUNCIL_PROVIDER_GROUP[provider]),
+  );
+}
+
+/**
+ * `available` verilmezse eski davranış korunur (EVREN/Groq döngüsü). Verilirse
+ * yük, anahtarı olan TÜM sağlayıcılara eşit yayılır; kalanlar yedek kalır.
+ */
+export function councilChainFor(
+  agentIndex: number,
+  available?: readonly ProviderId[],
+): ProviderId[] {
+  const primaries = available && available.length > 0 ? [...available] : [...COUNCIL_PRIMARY_ORDER];
+  const total = primaries.length;
+  const primary = primaries[((agentIndex % total) + total) % total] ?? "groq";
+  // Diğer birinciller HEMEN arkasında: biri 429/5xx verirse yük ötekine kayar.
+  const rest = primaries.filter((p) => p !== primary);
+  const tail = COUNCIL_FALLBACK_ORDER.filter((p) => !primaries.includes(p));
+  return [primary, ...rest, ...tail];
 }
 
 export type ProviderId =
@@ -360,12 +404,27 @@ async function pooledDirectProvider(
     throw e;
   }
 }
+/**
+ * Gemini'nin ÜCRETSİZ kotası en geniş iki modeli (önce 2.0 Flash).
+ * `GEMINI_MODELS_LATEST` "flash-latest" ile başlıyor; ücretsiz katmanda RPM/RPD
+ * daha dar olduğu için konsey önce sabit 2.0 Flash'ı dener.
+ */
+export const GEMINI_FREE_MODELS = ["gemini-2.0-flash", "gemini-flash-latest"];
+
 const OPENROUTER_FREE = [
   "meta-llama/llama-3.3-70b-instruct:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "google/gemma-2-9b-it:free",
 ];
-const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+/**
+ * GROQ MODEL SIRASI — ÜCRETSİZ KOTA İÇİN TERS ÇEVRİLDİ.
+ *
+ * Ücretsiz katmanda `llama-3.3-70b-versatile` günde ~100K token, 8B model ise
+ * ~500K token verir (14 ajanlık koşu ≈ 30K token). JSON puanlama işi 8B modelin
+ * kapasitesi içindedir; 70B yalnız yedek olarak kalır. Aksi hâlde 3. koşuda
+ * günlük kota biter ve 14 ajan nötr puana düşer.
+ */
+export const GROQ_MODELS = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
 const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"];
 
 export const PROVIDERS: Record<ProviderId, ProviderCall> = {
@@ -420,9 +479,13 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
 
   gemini: async (prompt, temperature) => {
     try {
-      // 5 Gemini anahtarı arasında round-robin; QUOTA alan anahtar otomatik beklemeye alınır.
-      const text = await rotate("gemini", geminiKeyPool(), ["gemini"], (key) =>
-        callGemini(prompt, key, temperature, true),
+      // Gemini ÜCRETSİZ katmanı: `callGemini` burada ZEMİNSİZ (grounding kapalı)
+      // çağrılır. Ajanlar zaten kazınmış kanıtı okuyor; Google Search aracı
+      // çağrıyı 5-15 sn'ye çıkarıp 8 sn'lik faz tavanında iptal ediyordu (yani
+      // yedek sağlayıcı hiç cevap veremiyordu) ve ayrı bir kota tüketiyordu.
+      // 5 Gemini anahtarı round-robin; QUOTA alan anahtar beklemeye alınır.
+      const text = await rotate("gemini", geminiKeyPool(), ["flash"], (key) =>
+        callGemini(prompt, key, temperature, false, GEMINI_FREE_MODELS),
       );
       markPoolGroupOutcome("gemini", 1, "ok");
       return text;

@@ -59,6 +59,7 @@ import { COUNCIL_AGENTS, agentSchemaHint, type CouncilAgentKey } from "./council
 import { poolHealthSummary } from "./ai-pool.server";
 import {
   DEEP_CHAIN,
+  configuredCouncilProviders,
   councilChainFor,
   executeAgentWithFallback,
   parseAgentJson,
@@ -626,7 +627,13 @@ async function runOneAgent(
     //   2. YEDEK: Gemini → Cerebras → SambaNova → OpenRouter → HuggingFace.
     // Tanımlı olmayan havuzlar (örn. EVREN anahtarı yoksa) deneme harcanmadan
     // atlanır — `POOL_PROVIDER_GROUP` kontrolü bunu zincir girişinde yapar.
-    const chain = deps.runAgent ? DEEP_CHAIN : councilChainFor(councilIndex);
+    // ÜCRETSİZ KOTA: birincil sağlayıcılar anahtarı OLAN tüm sağlayıcılardan
+    // seçilir. Sabit EVREN/Groq döngüsü, EVREN yokken 14 çağrının tamamını aynı
+    // ücretsiz kotaya bindiriyordu; bu da günlük token tavanını hızla bitirip
+    // ajanları nötr puana düşürüyordu.
+    const chain = deps.runAgent
+      ? DEEP_CHAIN
+      : councilChainFor(councilIndex, configuredCouncilProviders());
     const result = await withCeiling(
       run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), chain, {
         temperature: 0.3,
@@ -768,6 +775,18 @@ function marketReachBlock(state: VeloraRunState): string {
     : "";
 }
 
+/**
+ * Ajan istemine konan kanıt bloğunun ÜST SINIRI (karakter).
+ *
+ * Ücretsiz katmanlar TOKEN/dakika ile sınırlıdır ve 14 ajan aynı anda koşar.
+ * 3.200 karakterlik blok + finalist listesi çağrı başına ~2.000 token'a
+ * çıkıyordu; 14 çağrı tek dalgada sağlayıcının dakikalık tavanını aşıp 429
+ * üretiyordu. 1.800 karakter (≈450 token) kanıtın ölçülen özünü korur
+ * (kaynak durumu, fiyat, talep, şikâyet örnekleri) ve dalgayı ücretsiz kotaya
+ * sığdırır. Kesilen kısım istemden düşer; hiçbir sayı UYDURULMAZ.
+ */
+const COUNCIL_EVIDENCE_CHARS = 1_800;
+
 function agentPrompt(
   agentKey: CouncilAgentKey,
   task: string,
@@ -796,7 +815,7 @@ PLATFORM: ${state.platform || "any"}
 
 ${
   councilEvidence.block
-    ? `PRE-COUNCIL SCRAPING EVIDENCE (collected by phase 0 BEFORE any agent ran — trend radar, Google Trends, Reddit, Hacker News, Google News, observed marketplace prices, supplier cost):\n${councilEvidence.block.slice(0, 3_200)}`
+    ? `PRE-COUNCIL SCRAPING EVIDENCE (collected by phase 0 BEFORE any agent ran — trend radar, Google Trends, Reddit, Hacker News, Google News, observed marketplace prices, supplier cost):\n${councilEvidence.block.slice(0, COUNCIL_EVIDENCE_CHARS)}`
     : 'PRE-COUNCIL SCRAPING EVIDENCE: the pre-council harvest returned no data. Score neutrally and say "unverified".'
 }
 
@@ -808,7 +827,7 @@ ${marketReachBlock(state)}
 CHAIN RULES:
 - Return ONLY valid minified JSON. No markdown or commentary.
 - Return exactly these fields and no extra fields: ${agentSchemaHint(agentKey)} PLUS "product_scores".
-- "product_scores" MUST list EVERY finalist exactly once: {"product_scores":[{"id":"C1","score":0-100,"note":"one short evidence-based reason"}]}
+- "product_scores" MUST list EVERY finalist exactly once: {"product_scores":[{"id":"C1","score":0-100,"note":"max 8 words, evidence-based"}]}
 - Score EVERY finalist above and no other product. Never invent products that are not in the list; a missing id is treated as "no opinion".
 - GROUND TRUTH RULE: use only the shared scraped evidence above. Never invent metrics; unverified or hallucinated numbers are rejected. If a finalist cannot be verified from the shared evidence, give it score 50 and write "unverified" in its note.
 - Never return null or a zero score. Numbers must be finite; prefer conservative estimates.`;

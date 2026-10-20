@@ -2,8 +2,16 @@
  * Pins the f/p + reliability priority of the shared provider chains so nobody
  * accidentally moves single-key providers ahead of the 5-key pools again.
  */
-import { describe, expect, it } from "vitest";
-import { DEEP_CHAIN, FAST_CHAIN, councilChainFor, type ProviderId } from "./ai-router.server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  DEEP_CHAIN,
+  FAST_CHAIN,
+  GEMINI_FREE_MODELS,
+  GROQ_MODELS,
+  configuredCouncilProviders,
+  councilChainFor,
+  type ProviderId,
+} from "./ai-router.server";
 
 describe("provider chain f/p ordering", () => {
   it("FAST_CHAIN leads with Groq and keeps the most rate-limited last", () => {
@@ -160,5 +168,69 @@ describe("konsey sağlayıcı dağıtımı (22 ücretsiz anahtarı verimli kulla
       expect(chain).toHaveLength(7);
       expect(new Set(chain).size).toBe(7);
     }
+  });
+});
+
+describe("ücretsiz kota: yük anahtarı OLAN sağlayıcılara yayılır", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("anahtarı olmayan sağlayıcı birincil seçilmez (EVREN yokken 14 ajan Groq'a binmez)", () => {
+    vi.stubEnv("GROQ_API_KEY_1", "q1");
+    vi.stubEnv("GEMINI_API_KEY_1", "g1");
+
+    expect(configuredCouncilProviders()).toEqual(["groq", "gemini"]);
+    const chains = Array.from({ length: 14 }, (_, i) =>
+      councilChainFor(i, configuredCouncilProviders()),
+    );
+    expect(chains.filter((c) => c[0] === "groq")).toHaveLength(7);
+    expect(chains.filter((c) => c[0] === "gemini")).toHaveLength(7);
+    for (const chain of chains) {
+      expect(chain).not.toContain("evren");
+      expect(new Set(chain).size).toBe(chain.length);
+      // Biri çökerse diğer yapılandırılmış sağlayıcı İLK yedekte.
+      expect(chain[1]).toBe(chain[0] === "groq" ? "gemini" : "groq");
+    }
+  });
+
+  it("6 sağlayıcı yapılandırıldığında 14 ajan dengeli dağılır", () => {
+    vi.stubEnv("GROQ_API_KEY_1", "q1");
+    vi.stubEnv("GEMINI_API_KEY_1", "g1");
+    vi.stubEnv("OPENROUTER_API_KEY_1", "o1");
+    vi.stubEnv("HF_TOKEN_1", "h1");
+    vi.stubEnv("CEREBRAS_API_KEY", "c1");
+    vi.stubEnv("SAMBANOVA_API_KEY", "s1");
+
+    const providers = configuredCouncilProviders();
+    expect(providers).toEqual([
+      "groq",
+      "gemini",
+      "openrouter",
+      "cerebras",
+      "sambanova",
+      "huggingface",
+    ]);
+
+    const primaries = Array.from({ length: 14 }, (_, i) => councilChainFor(i, providers)[0]!);
+    const counts = new Map<string, number>();
+    for (const p of primaries) counts.set(p, (counts.get(p) ?? 0) + 1);
+    // 14 / 6 → 3,3,2,2,2,2: hiçbir sağlayıcı dalganın yarısından fazlasını almaz.
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(3);
+    expect(counts.size).toBe(6);
+    for (const chain of Array.from({ length: 14 }, (_, i) => councilChainFor(i, providers))) {
+      expect(new Set(chain).size).toBe(chain.length);
+      for (const p of providers) expect(chain).toContain(p);
+    }
+  });
+
+  it("Groq ücretsiz kotada ÖNCE 8B modelini dener (500K TPD vs 100K TPD)", () => {
+    expect(GROQ_MODELS[0]).toBe("llama-3.1-8b-instant");
+    expect(GROQ_MODELS[1]).toBe("llama-3.3-70b-versatile");
+  });
+
+  it("Gemini yedeği ücretsiz modelle ve zeminsiz çağrılır (8 sn faz tavanına sığar)", () => {
+    expect(GEMINI_FREE_MODELS[0]).toBe("gemini-2.0-flash");
+    expect(GEMINI_FREE_MODELS).toContain("gemini-flash-latest");
   });
 });

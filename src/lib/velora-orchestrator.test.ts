@@ -383,6 +383,20 @@ describe("FAZ 0 — 14 ajan devreye girmeden ÖNCE sağlam kazıma", () => {
     expect(retriever!.prompt).toContain("ANALYSIS-LINE SCRAPING EVIDENCE");
   });
 
+  it("ücretsiz kota: her ajan istemi token bütçesinde kalır (14 çağrı tek dalgada)", async () => {
+    // Ücretsiz katmanlar TOKEN/dakika ile sınırlı. 14 ajan aynı anda koştuğu
+    // için istem şişerse ilk dalga 429 alır ve ajanlar nötr puana düşer.
+    // Bütçe: ≤4.500 karakter ≈ 1.100 token → 14 × 1,1K ≈ 15K token/dalga.
+    await startVeloraRun(
+      { userQuery: "mini ice maker", country: "US" },
+      { store: fakeStore(), runAgent: runAgentStub(stubRunner()) },
+    );
+    const council = prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName));
+    expect(council).toHaveLength(14);
+    const longest = Math.max(...council.map((p) => p.prompt.length));
+    expect(longest).toBeLessThanOrEqual(4_500);
+  });
+
   it("her ajan KENDİ UZMANLIK KANITINI görür (CFO fiyatı, UX şikâyeti, denetçi kaynak tablosu)", async () => {
     await startVeloraRun(
       { userQuery: "mini ice maker", country: "US" },
