@@ -71,8 +71,33 @@ export function rateLimitBackendStatus(): {
 }
 
 /**
+ * Uyarının sonundaki "Düzeltme" ipucunu SEBEBE göre üretir.
+ *
+ * Ölçülen sorun: ipucu her durumda `20260824013156_*.sql` dosyasını işaret
+ * ediyordu. Oysa (a) o dosya bu repoda yok — onarım dosyası
+ * `20261002000000_rate_limit_rpc_repair.sql` — ve (b) bu ortamda gerçek sebep
+ * migration değil, eksik `SUPABASE_SERVICE_ROLE_KEY`. Yani operatör var olmayan
+ * bir dosyayı arıyor, gerçek eksiği hiç görmüyordu.
+ */
+export function rateLimitRemediation(reason: string): string {
+  if (/SUPABASE_SERVICE_ROLE_KEY|Missing Supabase environment/i.test(reason)) {
+    return (
+      "Düzeltme: sunucu ortamına SUPABASE_SERVICE_ROLE_KEY ekleyin; anahtar yokken " +
+      "sınır yalnızca bu instance içinde tutulur."
+    );
+  }
+  if (/Could not find the function|schema cache/i.test(reason)) {
+    return (
+      "Düzeltme: supabase/migrations/20261002000000_rate_limit_rpc_repair.sql " +
+      "dosyasını canlı projeye uygulayın."
+    );
+  }
+  return "Düzeltme: /health ucundaki rateLimit.fallbackReason değerini inceleyin.";
+}
+
+/**
  * RPC yoksa süreç içi sınırı devreye alır ve uyarıyı **bir kez** basar.
- * Aynı sebeple tekrar tekrar log yazmak, hatta hatanın kendisinden daha fazla
+ * Aynı sebeple tekrar tekrar log yazmak, hatanın kendisinden daha fazla
  * gürültü üretir.
  */
 function noteDatabaseFallback(reason: string): void {
@@ -83,8 +108,8 @@ function noteDatabaseFallback(reason: string): void {
     rateLimitFallbackWarned = true;
     console.warn(
       "[rate-limit] public.bump_rate_limit çağrılamadı; istek sınırı bu instance içinde tutuluyor." +
-        ` Sebep: ${rateLimitFallbackReason}` +
-        " Düzeltme: supabase/migrations/20260824013156_*.sql dosyasını canlı projeye uygula.",
+        ` Sebep: ${rateLimitFallbackReason} ` +
+        rateLimitRemediation(rateLimitFallbackReason),
     );
   } else if (changed) {
     console.warn(`[rate-limit] arka uç değişti: ${rateLimitFallbackReason}`);

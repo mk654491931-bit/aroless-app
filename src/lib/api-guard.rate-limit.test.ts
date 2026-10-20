@@ -2,7 +2,8 @@
 //
 // Ölçülen canlı hata: `[rate-limit] rpc failed Could not find the function
 // public.bump_rate_limit(_bucket, _limit, _window_seconds) in the schema cache`
-// — yani `supabase/migrations/20260824013156_*.sql` canlı projeye uygulanmamış.
+// — yani RPC'yi kuran onarım migration'ı (`…_rate_limit_rpc_repair.sql`) canlı
+// projeye uygulanmamış.
 //
 // Eski davranış iki hatalıydı: sınır HİÇ uygulanmadan istekler geçiyordu ve
 // her istekte log'a hata yazılıyordu. Yeni davranış: sınır bu instance içinde
@@ -100,8 +101,29 @@ describe("rateLimit — RPC yoksa (migration uygulanmamış)", () => {
     const errors = vi.mocked(console.error).mock.calls;
     expect(warnings).toHaveLength(1);
     expect(errors).toHaveLength(0);
-    // Uyarı düzeltilebilir olmalı: migration dosyasının adı geçiyor.
-    expect(String(warnings[0]?.[0])).toContain("20260824013156");
+    // Uyarı düzeltilebilir olmalı — ve VAR OLAN dosyayı göstermeli.
+    expect(String(warnings[0]?.[0])).toContain("20261002000000_rate_limit_rpc_repair.sql");
+    // Repoda olmayan eski dosya adı ipucu olarak verilmemeli.
+    expect(String(warnings[0]?.[0])).not.toContain("20260824013156");
+  });
+
+  it("sebep eksik servis anahtarıysa ipucu migration değil env değişkenidir", async () => {
+    const mod = await freshModule();
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          "Missing Supabase environment variable(s): SUPABASE_SERVICE_ROLE_KEY. Connect Supabase in Lovable Cloud.",
+      },
+    });
+    await mod.rateLimit("b:env", 5, 60);
+
+    const warnings = vi.mocked(console.warn).mock.calls;
+    expect(warnings).toHaveLength(1);
+    const text = String(warnings[0]?.[0]);
+    expect(text).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(text).not.toContain(".sql");
+    expect(mod.rateLimitRemediation(text)).toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
 
   it("RPC tamamen çöktüğünde de çökmmez", async () => {
