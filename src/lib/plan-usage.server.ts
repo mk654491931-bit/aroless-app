@@ -70,31 +70,64 @@ export type UsageSnapshot = {
  * dönen yanıt jeton harcamadığı için kullanım da artırmaz — arayüzde
  * "önbellekten geldi, jeton harcanmadı" sözü böylece doğru kalır.
  */
-export async function recordAiUsage(opts: {
-  userId: string;
-  /** `tool:listing-seo` | `council` | `agent-pipeline` | `radar-scan` … */
-  feature: string;
-  credits: number;
-  success?: boolean;
-  model?: string | null;
-  meta?: Record<string, unknown>;
-}): Promise<void> {
+export async function recordAiUsage(
+  opts: {
+    userId: string;
+    /** `tool:listing-seo` | `council` | `agent-pipeline` | `radar-scan` … */
+    feature: string;
+    credits: number;
+    success?: boolean;
+    model?: string | null;
+    meta?: Record<string, unknown>;
+  },
+  /**
+   * Kullanıcının JWT istemcisi. Servis anahtarı yokken kayıt bununla yazılır
+   * (`log_ai_usage` RPC — yalnız pozitif, yalnız kendi satırı).
+   */
+  db?: ReadDb | null,
+): Promise<void> {
   const credits = Math.max(0, Math.floor(Number(opts.credits) || 0));
   if (!opts.userId || credits === 0) return;
-  try {
-    const { error } = await supabaseAdmin.from("credit_usage_log").insert({
-      user_id: opts.userId,
-      tool: String(opts.feature ?? "unknown").slice(0, 80),
-      credits,
-      success: opts.success ?? true,
-      model: opts.model ? String(opts.model).slice(0, 80) : null,
-      meta: { kind: usageKindForFeature(opts.feature), ...(opts.meta ?? {}) },
-    } as never);
-    if (error) {
+  const tool = String(opts.feature ?? "unknown").slice(0, 80);
+
+  // 1) SERVİS ANAHTARI VARSA tam kayıt (meta/model dahil).
+  const admin = serviceReadDb();
+  if (admin) {
+    try {
+      const { error } = await admin.from("credit_usage_log").insert({
+        user_id: opts.userId,
+        tool,
+        credits,
+        success: opts.success ?? true,
+        model: opts.model ? String(opts.model).slice(0, 80) : null,
+        meta: { kind: usageKindForFeature(opts.feature), ...(opts.meta ?? {}) },
+      } as never);
+      if (!error) return;
       console.warn(`[usage] kayıt yazılamadı (${opts.feature}): ${error.message.slice(0, 80)}`);
+    } catch (e) {
+      console.warn(`[usage] kayıt hatası (${opts.feature}): ${(e as Error).message.slice(0, 80)}`);
     }
-  } catch (e) {
-    console.warn(`[usage] kayıt hatası (${opts.feature}): ${(e as Error).message.slice(0, 80)}`);
+  }
+
+  // 2) SERVİS ANAHTARI YOK: kullanıcının kendi JWT'siyle güvenli yazma.
+  //    RPC yalnız POZİTİF tüketim yazar (iade yolu service_role'de kalır).
+  if (db) {
+    try {
+      const { error } = await db.rpc(
+        "log_ai_usage" as never,
+        { _tool: tool, _credits: credits } as never,
+      );
+      if (!error) return;
+      console.warn(`[usage] RPC kaydı yazılamadı (${opts.feature}): ${error.message.slice(0, 80)}`);
+    } catch (e) {
+      console.warn(
+        `[usage] RPC kayıt hatası (${opts.feature}): ${(e as Error).message.slice(0, 80)}`,
+      );
+    }
+  }
+
+  if (!admin && !db) {
+    console.warn(`[usage] kayıt atlandı (${opts.feature}): okuma istemcisi yok`);
   }
 }
 
@@ -223,13 +256,25 @@ export async function isAdminUser(userId: string, db?: ReadDb | null): Promise<b
  *      günü içerir; ikinci okuma aynı anahtarı kullandığı için jeton iki kez
  *      eklenmez, admin test harcamalarının bakiyeyi düşürdüğünü de görebilir.
  */
-export async function ensureAdminBalance(userId: string, now: Date = new Date()): Promise<boolean> {
+export async function ensureAdminBalance(
+  userId: string,
+  now: Date = new Date(),
+  /**
+   * Kullanıcının JWT istemcisi. Servis anahtarı yokken bakiye bu istemciyle
+   * okunur ve günlük 250 `claim_admin_daily_credits()` ile talep edilir —
+   * yani admin anahtar olmadan da 0'da kilitlenmez.
+   */
+  db?: ReadDb | null,
+): Promise<boolean> {
   if (!userId) return false;
   try {
-    if (!(await isAdminUser(userId))) return false;
+    const client = db ?? serviceReadDb();
+    if (!client) return false;
+    if (!(await isAdminUser(userId, client))) return false;
+    const admin = serviceReadDb();
 
     const readCredits = async (): Promise<number | null> => {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await client
         .from("profiles")
         .select("credits")
         .eq("id", userId)
@@ -243,9 +288,12 @@ export async function ensureAdminBalance(userId: string, now: Date = new Date())
     if (credits === null || credits >= ADMIN_QUOTA.credits) return credits !== null;
 
     // 1) Günlük tazeleme (idempotent; gün içinde tekrar çalışmaz).
-    // RPC henüz generated tiplerde yok (migration sonradan eklendi); çağrı
-    // bilinçli olarak dar bir cast ile yapılır, şema uydurulmaz.
-    const refresh = await supabaseAdmin.rpc("refresh_admin_daily_credits" as never);
+    // Servis anahtarı varsa tüm adminleri gezen sürüm; yoksa kullanıcının
+    // kendi hesabı için güvenli talep (`auth.uid()` + günde bir kez).
+    // RPC'ler henüz generated tiplerde yok; çağrı dar bir cast ile yapılır.
+    const refresh = admin
+      ? await admin.rpc("refresh_admin_daily_credits" as never)
+      : await client.rpc("claim_admin_daily_credits" as never);
     if (!refresh.error) {
       const after = await readCredits();
       // Okunamadıysa tazelemenin uygulandığını varsay: ikinci kez eklemeyelim.
@@ -254,8 +302,12 @@ export async function ensureAdminBalance(userId: string, now: Date = new Date())
     }
 
     // 2) Gün içi taban: günde bir kez, aradaki farkı tek seferlik ekle.
+    // İADE YOLU SERVİS ROLÜ İSTER (`refund_credit_once`); anahtar yoksa bu adım
+    // atlanır — günlük talep zaten 250'yi yazmıştır.
     const amount = adminTopUpAmount(credits);
     if (amount <= 0) return true;
+    // Servis anahtarı yoksa fark eklenemez (iade RPC'si service_role ister).
+    if (!admin) return false;
     const day = now.toISOString().slice(0, 10);
     const floorKey = `admin-floor:${userId}:${day}`;
     if (adminFloorAttempts.has(floorKey)) return false;

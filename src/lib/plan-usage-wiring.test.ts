@@ -35,8 +35,23 @@ describe("kullanım defteri — yazma ve okuma bağlı", () => {
 
   it("chargeForAi yolu da kullanım yazabilir (aksi hâlde 4 özellik sayaçsız kalırdı)", () => {
     const guard = src("./credit-guard.server.ts");
-    expect(guard).toContain("usage?: { userId: string; feature: string }");
+    expect(guard).toContain("usage?: {");
+    expect(guard).toContain("db?: ReadDb | null;");
     expect(guard).toContain("recordAiUsage");
+  });
+
+  it("sayaç yazımı ve admin 250 servis anahtarı olmadan da yazılır", () => {
+    // Kök neden: ikisi de yalnız supabaseAdmin ile yazılıyordu.
+    const usage = src("./plan-usage.server.ts");
+    expect(usage).toContain("log_ai_usage");
+    expect(usage).toContain("claim_admin_daily_credits");
+    expect(usage).toContain("serviceReadDb");
+    // Tahsilat yolu kendi JWT istemcisini deftere geçirir.
+    expect(src("./credit-charge.server.ts")).toContain("await recordAiUsage(");
+    expect(src("./credit-charge.server.ts")).toContain("client,");
+    // Araç/konsey/radar yolları da istemciyi verir.
+    expect(src("./compare.functions.ts")).toContain("db: context.supabase");
+    expect(src("./radar.functions.ts")).toContain("db: ctx.supabase");
   });
 });
 
@@ -101,6 +116,25 @@ describe("sol bar — modül kullanımı sayaçtan okunur", () => {
     );
     expect(src("./plan-usage.server.ts")).toContain("serviceReadDb");
     expect(src("./admin-identity.server.ts")).toContain("serviceReadDb");
+  });
+
+  it("kullanıcı kapsamlı jeton RPC'leri güvenli (yalnız pozitif, yalnız kendi satırı)", () => {
+    // Aylık limit bu defterin toplamından hesaplanır. Negatif satır yazılabilir
+    // olsaydı kullanıcı limitini kendi lehine düşürebilirdi; bu yüzden iade
+    // yolu service_role'da kalmalı.
+    const sql = src("../../supabase/migrations/20261020120000_user_scoped_credit_ops.sql");
+    expect(sql).toContain("IF _credits IS NULL OR _credits <= 0 THEN RETURN; END IF;");
+    expect(sql).toContain("auth.uid()");
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION public.log_ai_usage(text, integer) TO authenticated",
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION public.claim_admin_daily_credits() TO authenticated",
+    );
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION public.log_ai_usage(text, integer) FROM PUBLIC, anon",
+    );
+    expect(sql).toContain("'admin-daily:'");
   });
 
   it("admin 250 jetonu için sunucu ve istemci bağlı", () => {

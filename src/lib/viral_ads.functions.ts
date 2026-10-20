@@ -92,8 +92,6 @@ const BuildAdInput = z.object({
 
 type BuildAdInputType = z.infer<typeof BuildAdInput>;
 
-
-
 /**
  * Seçilen gerçek videodan yola çıkıp satıcının çekebileceği viral reklamı üretir.
  *
@@ -209,10 +207,10 @@ export const buildViralAd = createServerFn({ method: "POST" })
   .handler(async ({ data, context: ctx }): Promise<GeneratedViralAd> => {
     // Viral reklam üretimi tam sağlayıcı havuzunda gerçek bir AI turudur:
     // jeton düşmeden koşmaz, üretim çökerse jeton iade edilir.
-    await chargeForAi(
-      () => ctx.supabase.rpc("deduct_product_finder_credit"),
-      1,
-      { userId: ctx.userId, feature: "tool:creative-studio" },
-    );
+    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: ctx.userId,
+      feature: "tool:creative-studio",
+      db: ctx.supabase,
+    });
     return withCreditRefund(ctx.userId, () => buildViralAdBlueprint(data));
   });

@@ -177,6 +177,7 @@ export const getRadar = createServerFn({ method: "POST" })
       await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"), 1, {
         userId: ctx.userId,
         feature: "radar-scan",
+        db: ctx.supabase,
       });
 
     const { seeds, keywords, generatedBy } = await generateSeeds(data.country);

@@ -174,11 +174,11 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
   .handler(async ({ data, context: ctx }): Promise<{ report: CompetitorReport }> => {
     // Rakip denetimi çok motorlu gerçek bir AI turudur: jeton düşmeden koşmaz,
     // iş çökerse iade edilir (yoksa anahtar havuzu karşılıksız yanar).
-    await chargeForAi(
-      () => ctx.supabase.rpc("deduct_product_finder_credit"),
-      1,
-      { userId: ctx.userId, feature: "tool:competitor-intel" },
-    );
+    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: ctx.userId,
+      feature: "tool:competitor-intel",
+      db: ctx.supabase,
+    });
     return withCreditRefund(ctx.userId, () => buildCompetitorReport(data));
   });
 
@@ -189,7 +189,11 @@ const CountryStrategyInput = z.object({
 });
 
 /** Ülke/niş stratejisi gövdesi — kredi iadesiyle sarmalanabilsin diye ayrı. */
-async function buildCountryStrategy(niche: string, country: string, lang?: string): Promise<string> {
+async function buildCountryStrategy(
+  niche: string,
+  country: string,
+  lang?: string,
+): Promise<string> {
   const { hasAnyAiProvider } = await import("./ai.server");
   if (!hasAnyAiProvider()) {
     throw new Error(
@@ -225,11 +229,11 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
   .validator((i: unknown) => CountryStrategyInput.parse(i))
   .handler(async ({ data, context: ctx }): Promise<{ strategy: string }> => {
     // Pazar karnesi AI stratejisi tek jetonluk bir iştir; iade garantisiyle koşar.
-    await chargeForAi(
-      () => ctx.supabase.rpc("deduct_product_finder_credit"),
-      1,
-      { userId: ctx.userId, feature: "tool:arbitrage-matrix" },
-    );
+    await chargeForAi(() => ctx.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: ctx.userId,
+      feature: "tool:arbitrage-matrix",
+      db: ctx.supabase,
+    });
     return withCreditRefund(ctx.userId, async () => ({
       strategy: await buildCountryStrategy(data.niche, data.country, data.lang),
     }));

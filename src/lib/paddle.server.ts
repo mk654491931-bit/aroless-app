@@ -19,7 +19,7 @@
  */
 
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
-import { PLANS } from "@/lib/plans";
+import { PLAN_BY_ID, PLANS } from "@/lib/plans";
 
 export type PlanId = "Starter" | "Pro" | "Business";
 
@@ -503,14 +503,21 @@ export async function resolveDiscountCode(discountId: string | null): Promise<st
 /* ------------------------------------------------------------------ */
 
 /**
- * Credit grants applied on each successful subscription payment, mirroring the
- * legacy apply_subscription_credits() behaviour (Starter 10/5, Pro 20/10,
- * Business 50/25). "Search" credits map to profiles.credits, sim to sim_credits.
+ * Her başarılı abonelik ödemesinde verilen jetonlar.
+ *
+ * ÖLÇÜLEN HATA: bu sayılar `plans.ts`ten AYRI yazılıydı. Paket tanımı Starter
+ * için 8, Pro için 15 jeton diyordu ama ödeme 10/20 yazıyordu; aylık limit ise
+ * 8/15 kaldığı için verilen jetonun 2/5'i HİÇ kullanılamıyordu. Artık jeton
+ * miktarı TEK KAYNAKTAN (`PLANS`) türetilir — verilen jeton, aylık limit ve
+ * fiyat tablosundaki sayı aynıdır.
+ *
+ * "Search" jetonları `profiles.credits`e, simülasyon jetonları `sim_credits`e
+ * yazılır; sim, arama jetonunun yarısıdır (mevcut davranış korunur).
  */
 export const SUBSCRIPTION_CREDIT_GRANTS: Record<PlanId, { search: number; sim: number }> = {
-  Starter: { search: 10, sim: 5 },
-  Pro: { search: 20, sim: 10 },
-  Business: { search: 50, sim: 25 },
+  Starter: { search: PLAN_BY_ID.Starter.credits, sim: PLAN_BY_ID.Starter.credits / 2 },
+  Pro: { search: PLAN_BY_ID.Pro.credits, sim: PLAN_BY_ID.Pro.credits / 2 },
+  Business: { search: PLAN_BY_ID.Business.credits, sim: PLAN_BY_ID.Business.credits / 2 },
 };
 
 /** Subscription lifecycle events that map to a database command. */

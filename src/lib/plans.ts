@@ -11,7 +11,16 @@ export type Plan = {
   id: PlanId;
   label: string;
   usd: number;
-  /** Aylık ürün bulucu / derin analiz kredisi. */
+  /**
+   * Aylık ürün bulucu / derin analiz kredisi — TEK KAYNAK.
+   *
+   * Bu sayı üç yerde BİRDEN kullanılır ve üçü eşit olmak ZORUNDADIR:
+   *   1. ödeme sonrası verilen jeton (`SUBSCRIPTION_CREDIT_GRANTS`),
+   *   2. aylık kullanım limiti (`limitFor` / `effectiveUsageLimit`),
+   *   3. fiyat tablosunda yazan sayı.
+   * Ayrı yazıldıkları dönemde paket 20 jeton verirken limit 15 kaldı ve 5
+   * jeton HİÇ KULLANILAMIYORDU (`PLAN_LIMIT`). Artık üçü de buradan türer.
+   */
   credits: number;
   /** Paket seviyesi (sadece sıralama ve kullanım kotası için). */
   level: 1 | 2 | 3;
@@ -33,7 +42,7 @@ export const PLANS: Plan[] = [
     id: "Starter",
     label: "Starter",
     usd: 39,
-    credits: 8,
+    credits: 10,
     level: 1,
     highlight: false,
     toolRuns: 30,
@@ -41,7 +50,7 @@ export const PLANS: Plan[] = [
     radarScans: 6,
     features: [
       "Tüm 9 modül açık",
-      "8 ürün bulucu kredisi / ay",
+      "10 ürün bulucu kredisi / ay",
       "30 AI araç çalıştırma / ay",
       "2 AI Konsey oturumu / ay",
       "6 trend radar taraması / ay",
@@ -52,7 +61,7 @@ export const PLANS: Plan[] = [
     id: "Pro",
     label: "Pro",
     usd: 59,
-    credits: 15,
+    credits: 20,
     level: 2,
     highlight: true,
     toolRuns: 90,
@@ -60,7 +69,7 @@ export const PLANS: Plan[] = [
     radarScans: 20,
     features: [
       "Tüm 9 modül açık",
-      "15 ürün bulucu kredisi / ay",
+      "20 ürün bulucu kredisi / ay",
       "90 AI araç çalıştırma / ay",
       "6 AI Konsey oturumu / ay",
       "20 trend radar taraması / ay",

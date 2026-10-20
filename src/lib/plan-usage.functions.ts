@@ -32,5 +32,7 @@ export const ensureMyAdminBalance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ ok: boolean }> => {
     const { ensureAdminBalance } = await import("./plan-usage.server");
-    return { ok: await ensureAdminBalance(context.userId) };
+    // Kullanıcı istemcisi verilir: servis anahtarı yoksa günlük 250
+    // `claim_admin_daily_credits()` ile talep edilir.
+    return { ok: await ensureAdminBalance(context.userId, new Date(), context.supabase) };
   });

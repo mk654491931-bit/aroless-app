@@ -1,3 +1,5 @@
+import type { ReadDb } from "./supabase-read.server";
+
 /**
  * Kredi güvenliği (tek kaynak).
  *
@@ -103,7 +105,15 @@ export async function chargeForAi(
    * `credit_usage_log`a yazılır ve sol bardaki "bu ay" sayaçları eksilir.
    * Verilmezse davranış bire bir eskisi gibidir (geriye uyumlu).
    */
-  usage?: { userId: string; feature: string },
+  usage?: {
+    userId: string;
+    feature: string;
+    /**
+     * Çağıranın JWT istemcisi. Servis anahtarı yokken defter kaydı bununla
+     * yazılır (`log_ai_usage`); verilmezse yalnız süreçte anahtar varsa yazılır.
+     */
+    db?: ReadDb | null;
+  },
 ): Promise<void> {
   const n = Math.max(1, Math.round(amount));
   for (let i = 0; i < n; i++) {
@@ -114,7 +124,10 @@ export async function chargeForAi(
     // Fail-soft: defter yazılamazsa iş DÜŞMEZ (yalnız ölçüm eksik kalır).
     try {
       const mod = await import("./plan-usage.server");
-      await mod.recordAiUsage({ userId: usage.userId, feature: usage.feature, credits: n });
+      await mod.recordAiUsage(
+        { userId: usage.userId, feature: usage.feature, credits: n },
+        usage.db,
+      );
     } catch {
       /* ölçüm ikincil */
     }

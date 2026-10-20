@@ -129,7 +129,7 @@ describe("quotaFor", () => {
 
   it("returns Starter quotas for level 1", () => {
     const quota = quotaFor(1);
-    expect(quota.credits).toBe(8);
+    expect(quota.credits).toBe(10);
     expect(quota.toolRuns).toBe(30);
     expect(quota.councilRuns).toBe(2);
     expect(quota.radarScans).toBe(6);
@@ -137,7 +137,7 @@ describe("quotaFor", () => {
 
   it("returns Pro quotas for level 2", () => {
     const quota = quotaFor(2);
-    expect(quota.credits).toBe(15);
+    expect(quota.credits).toBe(20);
     expect(quota.toolRuns).toBe(90);
     expect(quota.councilRuns).toBe(6);
     expect(quota.radarScans).toBe(20);
@@ -217,8 +217,8 @@ describe("admin paket tanımlama yardımcıları", () => {
   });
 
   it("adminGrantFor paket kredisini PLANS ile aynı tutar", () => {
-    expect(adminGrantFor("Starter")).toEqual({ credits: 8, simCredits: 5 });
-    expect(adminGrantFor("Pro")).toEqual({ credits: 15, simCredits: 10 });
+    expect(adminGrantFor("Starter")).toEqual({ credits: 10, simCredits: 5 });
+    expect(adminGrantFor("Pro")).toEqual({ credits: 20, simCredits: 10 });
     expect(adminGrantFor("Business")).toEqual({ credits: 50, simCredits: 25 });
   });
 

@@ -158,7 +158,7 @@ export async function chargeAiCredits(opts: {
   // admin ve aylık sayaç doğru okunur (fail-open kapıya düşmez).
   const adminUser = await isAdminUser(opts.userId, client);
   if (adminUser && (state === null || state.total < amount)) {
-    await ensureAdminBalance(opts.userId);
+    await ensureAdminBalance(opts.userId, new Date(), client);
     state = (await profileSpend(client, opts.userId)) ?? state;
   }
   if (state !== null && state.total < amount)
@@ -204,26 +204,34 @@ export async function chargeAiCredits(opts: {
 
   // KULLANIM DEFTERİ — sol bardaki "bu ay" sayaçları buradan okunur.
   // Yazılamazsa iş DÜŞMEZ (fail-soft): defter yalnız ölçüm içindir.
-  await recordAiUsage({
-    userId: opts.userId,
-    feature: opts.feature,
-    credits: charged,
-    success: true,
-  });
+  // Kullanıcı istemcisi verilir: servis anahtarı yoksa kayıt `log_ai_usage`
+  // RPC'siyle yine de yazılır (aksi hâlde sayaç hep 0 kalıyordu).
+  await recordAiUsage(
+    {
+      userId: opts.userId,
+      feature: opts.feature,
+      credits: charged,
+      success: true,
+    },
+    client,
+  );
 
   return { ok: true, charged, remaining, admin: adminUser };
 }
 
 /** İşin kullanımını deftere yazar (dinamik import: istemci paketine sunucu kodu girmesin). */
-async function recordAiUsage(args: {
-  userId: string;
-  feature: string;
-  credits: number;
-  success?: boolean;
-}): Promise<void> {
+async function recordAiUsage(
+  args: {
+    userId: string;
+    feature: string;
+    credits: number;
+    success?: boolean;
+  },
+  db?: import("./supabase-read.server").ReadDb | null,
+): Promise<void> {
   try {
     const usage = await import("./plan-usage.server");
-    await usage.recordAiUsage(args);
+    await usage.recordAiUsage(args, db);
   } catch (e) {
     console.warn(`[usage] kayıt atlandı: ${(e as Error).message.slice(0, 80)}`);
   }

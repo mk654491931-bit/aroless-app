@@ -37,6 +37,15 @@ function balance(credits: number, finder = 0) {
   h.maybeSingle.mockResolvedValue({ data: { credits, finder_credits: finder }, error: null });
 }
 
+/**
+ * RPC çağrıları iki türlüdür: jeton DÜŞME (`deduct_product_finder_credit`) ve
+ * kullanım DEFTERİ (`log_ai_usage`). Sayım testleri yalnız düşmeyi ölçer;
+ * defter kaydı artık kullanıcının kendi JWT'siyle de yazılabildiği için aynı
+ * taklit istemciden geçer.
+ */
+const deductCalls = () =>
+  h.rpc.mock.calls.filter(([name]) => name === "deduct_product_finder_credit");
+
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.stubEnv("SUPABASE_URL", "https://example.supabase.co");
@@ -59,8 +68,10 @@ describe("chargeAiCredits", () => {
     h.rpc.mockResolvedValue({ data: 1, error: null });
     const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "radar-scan" });
     expect(outcome.ok).toBe(true);
-    expect(h.rpc).toHaveBeenCalledTimes(1);
+    expect(deductCalls()).toHaveLength(1);
     expect(h.rpc).toHaveBeenCalledWith("deduct_product_finder_credit");
+    // DEFTER: servis anahtarı olmasa da kullanıcı RPC'siyle yazılır.
+    expect(h.rpc).toHaveBeenCalledWith("log_ai_usage", { _tool: "radar-scan", _credits: 1 });
   });
 
   it("pahalı aracı (consensus) bakiyeden düştüğü kadar çağırır", async () => {
@@ -72,7 +83,9 @@ describe("chargeAiCredits", () => {
       feature: "tool:consensus",
     });
     expect(outcome).toEqual({ ok: true, charged: 2, remaining: 8, admin: false });
-    expect(h.rpc).toHaveBeenCalledTimes(2);
+    expect(deductCalls()).toHaveLength(2);
+    // 2 jeton tek satır olarak deftere yazılır.
+    expect(h.rpc).toHaveBeenCalledWith("log_ai_usage", { _tool: "tool:consensus", _credits: 2 });
   });
 
   it("kısmi düşmede iade eder ve dürüstçe reddeder (jeton buharlaşmaz)", async () => {
@@ -128,7 +141,7 @@ describe("chargeAiCredits", () => {
       feature: "trend-analysis",
     });
     expect(outcome.ok).toBe(true);
-    expect(h.rpc).toHaveBeenCalledTimes(1);
+    expect(deductCalls()).toHaveLength(1);
   });
 });
 
