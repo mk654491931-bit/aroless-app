@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { profileSummary, type ProfileSummary } from "@/lib/profile-summary";
 
 const SaveInput = z.object({
   search_query: z.string().min(1).max(400),
@@ -63,34 +64,28 @@ export const updateProfilePrefs = createServerFn({ method: "POST" })
   });
 
 /**
- * Profil okuma sütun kümeleri — GENİŞTEN DARA.
+ * Profil okuması TEK sorgu.
  *
  * NEDEN: tek bir sütun (ör. sonradan eklenen `public_id` veya `finder_credits`)
  * uygulanmamış bir kurulumda eksikse PostgREST TÜM sorguyu hata ile döndürür.
  * Üst bardaki jeton rozeti `data` boş kaldığı için "bilinmiyor" yazıyordu —
- * yani tek bir eksik sütun, kullanıcının bakiyesini gizliyordu. Artık sütun
- * kümesi kademeli daraltılır; okunabilen ilk küme döner.
+ * yani tek bir eksik sütun, kullanıcının bakiyesini gizliyordu. Eski çözüm
+ * sütun kümesini kademeli daraltıyordu: dört ardışık gidiş-dönüş ve her sütun
+ * birleşimi için kırılgan `select` tipleri. Artık `*` ile tek okuma yapılır:
+ * eksik sütun sorguyu düşürmez, ekstra turlar yoktur ve dönen özet ayrı tiplenir.
  */
-const PROFILE_COLUMNS = [
-  "email, public_id, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
-  "email, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
-  "email, credits, finder_credits, credits_spent, subscription_tier, created_at",
-  "credits, finder_credits, subscription_tier",
-] as const;
-
 export const getFullProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    let lastError: { message: string } | null = null;
-    for (const columns of PROFILE_COLUMNS) {
-      const { data, error } = await context.supabase
-        .from("profiles")
-        .select(columns)
-        .eq("id", context.userId)
-        .maybeSingle();
-      if (!error) return data;
-      lastError = error;
+  .handler(async ({ context }): Promise<ProfileSummary | null> => {
+    const { data, error } = await context.supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (error || !data) {
+      if (error)
+        console.warn(`[profile] okunamadı: ${error.message?.slice(0, 120) || "bilinmeyen hata"}`);
+      return null;
     }
-    console.warn(`[profile] okunamadı: ${lastError?.message?.slice(0, 120) ?? "bilinmeyen hata"}`);
-    return null;
+    return profileSummary(data);
   });
