@@ -13,7 +13,10 @@ export const getMyPlanUsage = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<UsageSnapshot> => {
     const { planUsageSnapshot } = await import("./plan-usage.server");
-    return planUsageSnapshot(context.userId);
+    // KULLANICININ KENDİ İSTEMCİSİ: paket adı ve bu ayın sayaçları RLS ile
+    // okunur. Servis anahtarı yoksa bile ekran aboneliğin limitlerini gösterir
+    // (eskiden "Free" / "bilinmiyor" görünüyordu).
+    return planUsageSnapshot(context.userId, new Date(), context.supabase);
   });
 
 /**

@@ -139,17 +139,22 @@ export function effectiveUsageLimit(args: {
 }
 
 /**
- * Sayaç okunamadığında gösterilecek metin.
+ * Sayaç okunamadığında "kullanılan" yerine yazılan işaret.
  *
  * "0" yazmak YANLIŞ beyandır: 0 "hiç kullanmadım" demektir, burada ise
- * "ölçemedim" durumu vardır. Arayüz bu ikisini ayırmak zorundadır.
+ * "ölçemedim" durumu vardır. Bu yüzden kullanılan tarafı `?` olur.
  */
-export const UNKNOWN_USAGE_LABEL = "bilinmiyor";
+export const UNKNOWN_USAGE_LABEL = "?";
 
 /**
- * Bir kullanım satırının görünen değeri: `3/8`, `—`, `…` ya da `bilinmiyor`.
+ * Bir kullanım satırının görünen değeri: `3/8`, `—`, `…` ya da `?/8`.
  *
- * SAF fonksiyon: sol bar ve üst bar AYNI kuralı kullansın diye burada.
+ * ÖLÇÜLEN SORUN: sayaç okunamadığında satır "bilinmiyor" yazıyordu — yani
+ * kullanıcı hem kullanımını hem de ABONELİĞİNİN aylık hakkını kaybediyordu.
+ * Oysa limit abonelikten gelir ve HER ZAMAN bilinir. Artık ölçülemeyen
+ * sayaçta limit gösterilir (`?/8` = "kullanım okunamadı, hakkın 8").
+ *
+ * SAF fonksiyon: sol bar, üst bar ve ayarlar AYNI kuralı kullansın diye burada.
  */
 export function usageLabelFor(args: {
   used: number;
@@ -160,7 +165,8 @@ export function usageLabelFor(args: {
 }): string {
   if (args.loading) return "…";
   if (args.disabled) return "—";
-  if (args.measured === false) return UNKNOWN_USAGE_LABEL;
+  if (args.measured === false)
+    return args.limit > 0 ? `${UNKNOWN_USAGE_LABEL}/${args.limit}` : UNKNOWN_USAGE_LABEL;
   return `${args.used}/${args.limit}`;
 }
 

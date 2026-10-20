@@ -71,11 +71,16 @@ export function creditBreakdownLabel(balances: CreditBalances): string {
 /**
  * Jeton sayısının GÖRÜNEN değeri.
  *
- * "0" ile "bilinmiyor" aynı şey değildir: profil okunamadığında 0 yazmak
- * kullanıcıya "jetonum yok" der; oysa doğru beyan "ölçemedim" olur. Aynı
- * kural üst barda, popover'da ve mobil rozette kullanılır.
+ * "0" ile "—" aynı şey değildir: profil okunamadığında 0 yazmak kullanıcıya
+ * "jetonum yok" der; oysa doğru beyan "ölçemedim" olur.
+ *
+ * ÖLÇÜLEN SORUN: bu değer uzun süre "bilinmiyor" kelimesiydi. Oturum henüz
+ * çözülmemişken (veya oturum kapalıyken) rozet her sayfa açılışında
+ * "bilinmiyor / 2" yazıyordu — kullanıcı bunu kendi bakiyesinin bozuk
+ * olduğu şeklinde okuyordu. Artık nötr bir işaret kullanılır ve geçici
+ * durumlar "…" ile gösterilir (bkz. `creditCountLabel({ loading })`).
  */
-export const UNKNOWN_CREDIT_LABEL = "bilinmiyor";
+export const UNKNOWN_CREDIT_LABEL = "—";
 
 export function creditCountLabel(
   value: number | null | undefined,

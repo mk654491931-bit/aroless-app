@@ -16,26 +16,39 @@
  * tanımına düşülür. İkisi de yoksa admin DEĞİLDİR (fail-closed).
  */
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { serviceReadDb, type ReadDb } from "./supabase-read.server";
 
-/** Kullanıcı admin mi? (Rol → e-posta tabanlı designated admin.) */
-export async function isAdminAccount(userId: string): Promise<boolean> {
+/**
+ * Kullanıcı admin mi? (Rol → e-posta tabanlı designated admin.)
+ *
+ * `db` verilirse okumalar O istemciyle yapılır. Kullanıcı isteğinden gelen
+ * JWT istemcisi yeterlidir: `user_roles` ve `profiles` üzerinde "kendi
+ * satırını okur" politikaları vardır. Böylece servis anahtarı tanımlı
+ * olmasa da admin hesabı tanınır (aksi hâlde 250 jetonluk kota sessizce
+ * kayboluyordu).
+ */
+export async function isAdminAccount(userId: string, db?: ReadDb | null): Promise<boolean> {
   if (!userId) return false;
+  const client = db ?? serviceReadDb();
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!error && data) return true;
+    if (client) {
+      const { data, error } = await client
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!error && data) return true;
+    }
   } catch {
     /* rol sorgusu başarısız → e-posta yolunu dene */
   }
 
+  if (!client) return false;
+
   try {
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile, error: profileError } = await client
       .from("profiles")
       .select("email")
       .eq("id", userId)
@@ -45,7 +58,7 @@ export async function isAdminAccount(userId: string): Promise<boolean> {
     if (!email) return false;
 
     // `is_designated_admin` migration'da tanımlı; generated tiplerde yok.
-    const { data, error } = await supabaseAdmin.rpc(
+    const { data, error } = await client.rpc(
       "is_designated_admin" as never,
       { _email: email } as never,
     );

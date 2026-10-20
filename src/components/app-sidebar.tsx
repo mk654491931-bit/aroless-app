@@ -340,7 +340,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
                     title={
                       planUsage.measured
                         ? `${row.hint} — bu ay ${row.used}/${row.limit}`
-                        : `${row.hint} — sayaç okunamadı, kullanım bilinmiyor`
+                        : `${row.hint} — sayaç okunamadı; aboneliğinin aylık hakkı ${row.limit}`
                     }
                   >
                     {usageLabelFor({
@@ -366,7 +366,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
             ))}
             {!planUsage.measured && !planUsage.loading && (
               <p className="text-[10px] text-white/40">
-                Sayaç okunamadı — bu ayki kullanım “0” değil, “bilinmiyor”.
+                Sayaç okunamadı — kullanım yerine aboneliğinin aylık hakkı gösteriliyor.
               </p>
             )}
           </div>

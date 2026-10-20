@@ -69,11 +69,15 @@ describe("chargePoolFor (DB düşme sırası)", () => {
   });
 });
 
-describe("creditCountLabel — okunamayan bakiye '0' değil 'bilinmiyor'", () => {
-  it("bilinmeyen değer 0 yazmaz", () => {
+// REGRESYON: rozet, oturum henüz çözülmemişken (veya oturum kapalıyken)
+// "bilinmiyor" yazıyordu; kullanıcı bunu bakiyesinin bozuk olduğu şeklinde
+// okuyordu. Artık geçici durum "…", okunamayan değer nötr "—" gösterilir.
+describe("creditCountLabel — okunamayan bakiye '0' değil '—'", () => {
+  it("bilinmeyen değer 0 yazmaz ve 'bilinmiyor' kelimesini kullanmaz", () => {
     expect(creditCountLabel(null)).toBe(UNKNOWN_CREDIT_LABEL);
     expect(creditCountLabel(undefined)).toBe(UNKNOWN_CREDIT_LABEL);
-    expect(UNKNOWN_CREDIT_LABEL).toBe("bilinmiyor");
+    expect(UNKNOWN_CREDIT_LABEL).toBe("—");
+    expect(UNKNOWN_CREDIT_LABEL).not.toContain("bilinmiyor");
   });
 
   it("yüklenirken '…', bilinen değerde sayı", () => {

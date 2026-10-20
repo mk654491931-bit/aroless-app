@@ -154,7 +154,9 @@ export async function chargeAiCredits(opts: {
   const tier = state?.tier ?? "Free";
   const level = tierLevel(tier);
   // PAKETTEN BAĞIMSIZ: admin ücretli pakette görünse bile 250 hakkı vardır.
-  const adminUser = await isAdminUser(opts.userId);
+  // Okuma, isteğin kendi JWT istemcisiyle yapılır: servis anahtarı yoksa da
+  // admin ve aylık sayaç doğru okunur (fail-open kapıya düşmez).
+  const adminUser = await isAdminUser(opts.userId, client);
   if (adminUser && (state === null || state.total < amount)) {
     await ensureAdminBalance(opts.userId);
     state = (await profileSpend(client, opts.userId)) ?? state;
@@ -162,7 +164,7 @@ export async function chargeAiCredits(opts: {
   if (state !== null && state.total < amount)
     return { ok: false, reason: "NO_CREDITS", charged: 0 };
 
-  const used = await monthUsage(opts.userId);
+  const used = await monthUsage(opts.userId, new Date(), client);
   const effectiveLimit = effectiveUsageLimit({
     level,
     kind,

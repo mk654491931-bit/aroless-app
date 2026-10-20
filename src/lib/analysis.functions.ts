@@ -62,16 +62,35 @@ export const updateProfilePrefs = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Profil okuma sütun kümeleri — GENİŞTEN DARA.
+ *
+ * NEDEN: tek bir sütun (ör. sonradan eklenen `public_id` veya `finder_credits`)
+ * uygulanmamış bir kurulumda eksikse PostgREST TÜM sorguyu hata ile döndürür.
+ * Üst bardaki jeton rozeti `data` boş kaldığı için "bilinmiyor" yazıyordu —
+ * yani tek bir eksik sütun, kullanıcının bakiyesini gizliyordu. Artık sütun
+ * kümesi kademeli daraltılır; okunabilen ilk küme döner.
+ */
+const PROFILE_COLUMNS = [
+  "email, public_id, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
+  "email, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
+  "email, credits, finder_credits, credits_spent, subscription_tier, created_at",
+  "credits, finder_credits, subscription_tier",
+] as const;
+
 export const getFullProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("profiles")
-      .select(
-        "email, public_id, credits, finder_credits, credits_spent, subscription_tier, language, currency, notifications_enabled, created_at",
-      )
-      .eq("id", context.userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return data;
+    let lastError: { message: string } | null = null;
+    for (const columns of PROFILE_COLUMNS) {
+      const { data, error } = await context.supabase
+        .from("profiles")
+        .select(columns)
+        .eq("id", context.userId)
+        .maybeSingle();
+      if (!error) return data;
+      lastError = error;
+    }
+    console.warn(`[profile] okunamadı: ${lastError?.message?.slice(0, 120) ?? "bilinmeyen hata"}`);
+    return null;
   });

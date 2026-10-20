@@ -92,6 +92,17 @@ describe("sol bar — modül kullanımı sayaçtan okunur", () => {
     expect(charge).toContain("effectiveUsageLimit");
   });
 
+  it("paket özeti KULLANICI istemcisiyle okunur (servis anahtarı zorunlu değil)", () => {
+    // "bilinmiyor" ekranının kök nedeni: yalnız supabaseAdmin ile okumak.
+    // Anahtar yoksa sayaç ve paket okunamıyor, ücretli kullanıcı Free limiti
+    // görüyordu. Artık istekteki JWT istemcisi verilir.
+    expect(src("./plan-usage.functions.ts")).toContain(
+      "planUsageSnapshot(context.userId, new Date(), context.supabase)",
+    );
+    expect(src("./plan-usage.server.ts")).toContain("serviceReadDb");
+    expect(src("./admin-identity.server.ts")).toContain("serviceReadDb");
+  });
+
   it("admin 250 jetonu için sunucu ve istemci bağlı", () => {
     expect(src("./plan-usage.server.ts")).toContain("ensureAdminBalance");
     expect(src("./plan-usage.functions.ts")).toContain("ensureMyAdminBalance");

@@ -18,6 +18,7 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { serviceReadDb, type ReadDb } from "./supabase-read.server";
 import { ADMIN_QUOTA, adminTopUpAmount, tierLevel } from "./plans";
 import {
   emptyUsageCounts,
@@ -104,11 +105,23 @@ export async function recordAiUsage(opts: {
 export async function monthUsage(
   userId: string,
   now: Date = new Date(),
+  /**
+   * Okuma istemcisi. Kullanıcı isteğinden geliyorsa O KULLANICININ JWT'si
+   * verilir: `credit_usage_log` üzerinde "kendi satırlarını okur" politikası
+   * vardır, servis anahtarı gerekmez. Verilmezse servis anahtarına düşülür.
+   */
+  db?: ReadDb | null,
 ): Promise<UsageCounts | null> {
   if (!userId) return null;
+  const client = db ?? serviceReadDb();
+  if (!client) {
+    // Ne kullanıcı istemcisi ne servis anahtarı var → "okunamadı".
+    console.warn("[usage] sayaç okunamadı: okuma istemcisi yok");
+    return null;
+  }
   const { startIso } = monthRange(now);
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await client
       .from("credit_usage_log")
       .select("tool, credits")
       .eq("user_id", userId)
@@ -179,12 +192,12 @@ export async function recordUsageRefund(opts: {
  * Rol kaydı yoksa e-posta tabanlı designated admin tanımına düşer; böylece
  * eski bir admin hesabı "Free" görünüp 250 jetonunu kaybetmez.
  */
-export async function isAdminUser(userId: string): Promise<boolean> {
+export async function isAdminUser(userId: string, db?: ReadDb | null): Promise<boolean> {
   const cached = adminFlagCache.get(userId);
   if (cached && Date.now() - cached.at < ADMIN_FLAG_TTL_MS) return cached.value;
   try {
     const { isAdminAccount } = await import("./admin-identity.server");
-    const value = await isAdminAccount(userId);
+    const value = await isAdminAccount(userId, db);
     adminFlagCache.set(userId, { value, at: Date.now() });
     return value;
   } catch {
@@ -259,16 +272,27 @@ export async function ensureAdminBalance(userId: string, now: Date = new Date())
 export async function planUsageSnapshot(
   userId: string,
   now: Date = new Date(),
+  /**
+   * Kullanıcı isteğinden gelen JWT istemcisi. Verilirse paket adı, yönetici
+   * bayrağı ve bu ayın sayaçları O istemciyle okunur — servis anahtarı yoksa
+   * bile ekran kullanıcının ABONELİĞİNİ gösterir ("Free" / "bilinmiyor" değil).
+   */
+  db?: ReadDb | null,
 ): Promise<UsageSnapshot> {
   const { startIso, key } = monthRange(now);
+  const client = db ?? serviceReadDb();
   let tier = "Free";
   try {
-    const { data } = await supabaseAdmin
-      .from("profiles")
-      .select("subscription_tier")
-      .eq("id", userId)
-      .maybeSingle();
-    tier = (data as { subscription_tier?: string | null } | null)?.subscription_tier ?? "Free";
+    if (client) {
+      const { data } = await client
+        .from("profiles")
+        .select("subscription_tier")
+        .eq("id", userId)
+        .maybeSingle();
+      tier = (data as { subscription_tier?: string | null } | null)?.subscription_tier ?? "Free";
+    } else {
+      console.warn("[usage] profil okunamadı: okuma istemcisi yok, Free varsayıldı");
+    }
   } catch {
     // profil okunamazsa ücretsiz varsayılır; ekran yanlış limit gösterirse
     // kullanıcı paketini görmez — bu yüzden log bırakılır.
@@ -278,8 +302,8 @@ export async function planUsageSnapshot(
   // ADMIN PAKETTEN BAĞIMSIZ: "admin = 250" kuralı, admin ücretli bir pakette
   // görünse bile geçerlidir. Eskiden yalnız `level === 0` iken soruluyordu ve
   // ücretli paketteki admin 50/90 gibi paket limitine düşüyordu.
-  const admin = await isAdminUser(userId);
-  const counts = await monthUsage(userId, now);
+  const admin = await isAdminUser(userId, client);
+  const counts = await monthUsage(userId, now, client);
   return {
     tier,
     level,

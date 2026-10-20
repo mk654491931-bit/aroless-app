@@ -76,7 +76,7 @@ export function AppTopbar() {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { tier, quota, isAdmin, loading: entLoading } = useEntitlements();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   /**
    * ÖDEME SONRASI TAZELEME: ödeme yapıldıysa bekleyen işareti görüp planı
    * Paddle'ın kendi kaydından yazdırır. Üst bar her uygulama sayfasında
@@ -114,8 +114,8 @@ export function AppTopbar() {
       measured: usage.measured,
       loading: usage.loading,
     });
-    // Dar rozetlerde uzun kelime taşmasın; açıklama `title`da ve popover'da.
-    return compact && label === UNKNOWN_USAGE_LABEL ? "?" : label;
+    // Dar rozetlerde uzun metin taşmasın; açıklama `title`da ve popover'da.
+    return compact && label.startsWith(UNKNOWN_USAGE_LABEL) ? UNKNOWN_USAGE_LABEL : label;
   };
   const profileFn = useServerFn(getFullProfile);
   /**
@@ -164,18 +164,27 @@ export function AppTopbar() {
   );
   const credits = balances.total;
   const breakdown = creditBreakdownLabel(balances);
-  // "0" ile "bilinmiyor" AYRI: profil okunamadıysa bakiye 0 değil, bilinmiyor.
+  // "0" ile "—" AYRI: profil okunamadıysa bakiye 0 değil, okunamadı.
   const balanceKnown = profileQ.data !== undefined && profileQ.data !== null;
+  /**
+   * OTURUM HENÜZ ÇÖZÜLMEDİYSE "…" gösterilir.
+   *
+   * ÖLÇÜLEN SORUN: rozet yalnız `profileQ.isLoading`e bakıyordu. Oturum
+   * çözülene kadar profil sorgusu DEVRE DIŞI olduğu için `isLoading` false
+   * kalıyor ve her sayfa açılışında bir an "bilinmiyor / 2" yazıyordu. Artık
+   * kimlik doğrulama da bekleme sayılır; kullanıcı yalnız "…" görür.
+   */
+  const balanceLoading = authLoading || profileQ.isLoading;
   const creditsLabel = creditCountLabel(balanceKnown ? credits : null, {
-    loading: profileQ.isLoading,
+    loading: balanceLoading,
   });
   const finderLabel = creditCountLabel(balanceKnown ? balances.finder : null, {
-    loading: profileQ.isLoading,
+    loading: balanceLoading,
   });
   const generalLabel = creditCountLabel(balanceKnown ? balances.general : null, {
-    loading: profileQ.isLoading,
+    loading: balanceLoading,
   });
-  const breakdownLabel = balanceKnown ? breakdown : "bakiye bilinmiyor";
+  const breakdownLabel = balanceKnown ? breakdown : "bakiye okunamadı";
   const publicId = useMemo(
     () => (profileQ.data as { public_id?: string | null } | undefined)?.public_id ?? null,
     [profileQ.data],
@@ -217,186 +226,194 @@ export function AppTopbar() {
               ID {publicId}
             </span>
           ) : null}
-          {/* Kalan Finder kredisi — tıklanabilir: popover'da 4'lü kota detayı (mobil uyumlu) */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs transition hover:bg-white/10 sm:inline-flex"
-                title={`Harcanabilir jeton: ${creditsLabel} (${breakdownLabel}) / Aylık kota: ${quota.credits} — detay için tıkla`}
-              >
-                <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
-                <span className="font-semibold">{creditsLabel}</span>
-                <span className="text-[10px] text-muted-foreground">/ {quota.credits}</span>
-                <ChevronDown size={10} className="text-white/40" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
-            >
-              <div className="space-y-3 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold tracking-wide text-white/90">
-                    Kullanım Hakkın
-                  </p>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">
-                    {tier}
-                    {isAdmin ? " · admin 250" : ""}
-                  </span>
-                </div>
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                      <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Harcanabilir jeton
-                    </span>
-                    <span className="font-mono text-xs font-semibold">{creditsLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 pl-5">
-                    <span className="text-[11px] text-white/50">Ürün bulucu jetonu</span>
-                    <span className="font-mono text-[11px] text-white/70">{finderLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 pl-5">
-                    <span className="text-[11px] text-white/50">Genel jetonlar</span>
-                    <span className="font-mono text-[11px] text-white/70">{generalLabel}</span>
-                  </div>
-                  {(
-                    [
-                      {
-                        kind: "credits" as const,
-                        label: "Bulucu",
-                        Icon: Coins,
-                        tone: "text-[oklch(0.85_0.18_90)]",
-                      },
-                      {
-                        kind: "toolRuns" as const,
-                        label: "AI Araç",
-                        Icon: Wrench,
-                        tone: "text-sky-400",
-                      },
-                      {
-                        kind: "councilRuns" as const,
-                        label: "Konsey",
-                        Icon: Users,
-                        tone: "text-violet-400",
-                      },
-                      {
-                        kind: "radarScans" as const,
-                        label: "Radar",
-                        Icon: Radar,
-                        tone: "text-emerald-400",
-                      },
-                    ] as const
-                  ).map(({ kind, label, Icon, tone }) => (
-                    <div key={kind} className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
-                        <Icon size={12} className={tone} /> {label}
-                      </span>
-                      <span className="font-mono text-xs font-semibold">
-                        {usageLabel(kind)}
-                        <span className="font-normal text-white/40"> /ay</span>
+          {/* Jeton/kota blokları YALNIZ oturum açıkken çizilir: oturum yokken
+              "— / 2" gibi anlamsız bir bakiye göstermek yerine hiç
+              gösterilmez. `user` çözülene kadar da gizli kalır (flash yok). */}
+          {user ? (
+            <>
+              {/* Kalan Finder kredisi — tıklanabilir: popover'da 4'lü kota detayı (mobil uyumlu) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs transition hover:bg-white/10 sm:inline-flex"
+                    title={`Harcanabilir jeton: ${creditsLabel} (${breakdownLabel}) / Aylık kota: ${quota.credits} — detay için tıkla`}
+                  >
+                    <Coins size={13} className="text-[oklch(0.85_0.18_90)]" />
+                    <span className="font-semibold">{creditsLabel}</span>
+                    <span className="text-[10px] text-muted-foreground">/ {quota.credits}</span>
+                    <ChevronDown size={10} className="text-white/40" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
+                >
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold tracking-wide text-white/90">
+                        Kullanım Hakkın
+                      </p>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/60">
+                        {tier}
+                        {isAdmin ? " · admin 250" : ""}
                       </span>
                     </div>
-                  ))}
-                </div>
-                <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-white/55">
-                  {isAdmin
-                    ? "Admin: her kalemde 250 jeton (bakiye günlük 250'ye tazelenir)."
-                    : "Kota ay başında yenilenir. Free planda Finder 2 jeton."}
-                </div>
-                <Link
-                  to="/pricing"
-                  className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90"
-                >
-                  Paketleri gör
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-          {/* Mobil için de aynı tetik: sm altında ikon-only */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden"
-                title={`Jeton ${creditsLabel} (${breakdownLabel}) — detay için tıkla`}
-              >
-                <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {creditsLabel}/
-                {quota.credits}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
-            >
-              <div className="space-y-3 p-4">
-                <p className="text-xs font-semibold tracking-wide text-white/90">
-                  Kullanım Hakkın · {tier}
-                </p>
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Harcanabilir jeton</span>
-                    <span className="font-mono font-semibold">{creditsLabel}</span>
-                  </div>
-                  <div className="flex justify-between pl-3">
-                    <span className="text-white/45">Ürün bulucu</span>
-                    <span className="font-mono text-white/70">{finderLabel}</span>
-                  </div>
-                  <div className="flex justify-between pl-3">
-                    <span className="text-white/45">Genel</span>
-                    <span className="font-mono text-white/70">{generalLabel}</span>
-                  </div>
-                  {(
-                    [
-                      { kind: "credits" as const, label: "Bulucu" },
-                      { kind: "toolRuns" as const, label: "AI Araç" },
-                      { kind: "councilRuns" as const, label: "Konsey" },
-                      { kind: "radarScans" as const, label: "Radar" },
-                    ] as const
-                  ).map(({ kind, label }) => (
-                    <div key={kind} className="flex justify-between">
-                      <span className="text-white/60">{label}</span>
-                      <span className="font-mono font-semibold">{usageLabel(kind)} /ay</span>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                          <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> Harcanabilir
+                          jeton
+                        </span>
+                        <span className="font-mono text-xs font-semibold">{creditsLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 pl-5">
+                        <span className="text-[11px] text-white/50">Ürün bulucu jetonu</span>
+                        <span className="font-mono text-[11px] text-white/70">{finderLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 pl-5">
+                        <span className="text-[11px] text-white/50">Genel jetonlar</span>
+                        <span className="font-mono text-[11px] text-white/70">{generalLabel}</span>
+                      </div>
+                      {(
+                        [
+                          {
+                            kind: "credits" as const,
+                            label: "Bulucu",
+                            Icon: Coins,
+                            tone: "text-[oklch(0.85_0.18_90)]",
+                          },
+                          {
+                            kind: "toolRuns" as const,
+                            label: "AI Araç",
+                            Icon: Wrench,
+                            tone: "text-sky-400",
+                          },
+                          {
+                            kind: "councilRuns" as const,
+                            label: "Konsey",
+                            Icon: Users,
+                            tone: "text-violet-400",
+                          },
+                          {
+                            kind: "radarScans" as const,
+                            label: "Radar",
+                            Icon: Radar,
+                            tone: "text-emerald-400",
+                          },
+                        ] as const
+                      ).map(({ kind, label, Icon, tone }) => (
+                        <div key={kind} className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+                            <Icon size={12} className={tone} /> {label}
+                          </span>
+                          <span className="font-mono text-xs font-semibold">
+                            {usageLabel(kind)}
+                            <span className="font-normal text-white/40"> /ay</span>
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <Link
-                  to="/pricing"
-                  className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black"
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-white/55">
+                      {isAdmin
+                        ? "Admin: her kalemde 250 jeton (bakiye günlük 250'ye tazelenir)."
+                        : "Kota ay başında yenilenir. Free planda Finder 2 jeton."}
+                    </div>
+                    <Link
+                      to="/pricing"
+                      className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90"
+                    >
+                      Paketleri gör
+                    </Link>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {/* Mobil için de aynı tetik: sm altında ikon-only */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden"
+                    title={`Jeton ${creditsLabel} (${breakdownLabel}) — detay için tıkla`}
+                  >
+                    <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {creditsLabel}/
+                    {quota.credits}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
                 >
-                  Paketleri gör
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-          {/* 4’lü kota — xl'de tek satır özet (desktop) */}
-          <span
-            className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex"
-            title={
-              isAdmin
-                ? "Admin: her kalemde 250 jeton (bakiye günlük tazelenir)"
-                : `Bu ay kullanılan / limit — Bulucu ${usageLabel("credits")} · Araç ${usageLabel("toolRuns")} · Konsey ${usageLabel("councilRuns")} · Radar ${usageLabel("radarScans")}`
-            }
-          >
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
-              <Coins size={10} className="text-[oklch(0.85_0.18_90)]" />
-              {usageLabel("credits", true)}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
-              <Wrench size={10} className="text-sky-400" />
-              {usageLabel("toolRuns", true)}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
-              <Users size={10} className="text-violet-400" />
-              {usageLabel("councilRuns", true)}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
-              <Radar size={10} className="text-emerald-400" />
-              {usageLabel("radarScans", true)}
-            </span>
-          </span>
+                  <div className="space-y-3 p-4">
+                    <p className="text-xs font-semibold tracking-wide text-white/90">
+                      Kullanım Hakkın · {tier}
+                    </p>
+                    <div className="space-y-2.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Harcanabilir jeton</span>
+                        <span className="font-mono font-semibold">{creditsLabel}</span>
+                      </div>
+                      <div className="flex justify-between pl-3">
+                        <span className="text-white/45">Ürün bulucu</span>
+                        <span className="font-mono text-white/70">{finderLabel}</span>
+                      </div>
+                      <div className="flex justify-between pl-3">
+                        <span className="text-white/45">Genel</span>
+                        <span className="font-mono text-white/70">{generalLabel}</span>
+                      </div>
+                      {(
+                        [
+                          { kind: "credits" as const, label: "Bulucu" },
+                          { kind: "toolRuns" as const, label: "AI Araç" },
+                          { kind: "councilRuns" as const, label: "Konsey" },
+                          { kind: "radarScans" as const, label: "Radar" },
+                        ] as const
+                      ).map(({ kind, label }) => (
+                        <div key={kind} className="flex justify-between">
+                          <span className="text-white/60">{label}</span>
+                          <span className="font-mono font-semibold">{usageLabel(kind)} /ay</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Link
+                      to="/pricing"
+                      className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black"
+                    >
+                      Paketleri gör
+                    </Link>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {/* 4’lü kota — xl'de tek satır özet (desktop) */}
+              <span
+                className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-1 py-1 text-[11px] xl:inline-flex"
+                title={
+                  isAdmin
+                    ? "Admin: her kalemde 250 jeton (bakiye günlük tazelenir)"
+                    : `Bu ay kullanılan / limit — Bulucu ${usageLabel("credits")} · Araç ${usageLabel("toolRuns")} · Konsey ${usageLabel("councilRuns")} · Radar ${usageLabel("radarScans")}`
+                }
+              >
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+                  <Coins size={10} className="text-[oklch(0.85_0.18_90)]" />
+                  {usageLabel("credits", true)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+                  <Wrench size={10} className="text-sky-400" />
+                  {usageLabel("toolRuns", true)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+                  <Users size={10} className="text-violet-400" />
+                  {usageLabel("councilRuns", true)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5">
+                  <Radar size={10} className="text-emerald-400" />
+                  {usageLabel("radarScans", true)}
+                </span>
+              </span>
+            </>
+          ) : null}
           <span className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] md:inline-flex">
             <Zap size={11} /> {tier}
             {isAdmin ? " · 250" : ""}

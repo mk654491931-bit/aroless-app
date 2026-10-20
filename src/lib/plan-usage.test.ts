@@ -128,10 +128,19 @@ describe("planUsageRows — paket limitleri plans.ts ile birebir", () => {
   });
 });
 
-describe("usageLabelFor — sayaç okunamadığında 0 değil 'bilinmiyor'", () => {
-  it("ölçülemeyen sayaç 'bilinmiyor' yazar (0 YAZMAZ)", () => {
-    expect(usageLabelFor({ used: 0, limit: 250, measured: false })).toBe(UNKNOWN_USAGE_LABEL);
-    expect(UNKNOWN_USAGE_LABEL).toBe("bilinmiyor");
+// REGRESYON: sayaç okunamadığında satır "bilinmiyor" yazıyordu; kullanıcı hem
+// kullanımını hem de aboneliğinin aylık hakkını kaybediyordu. Limit abonelikten
+// geldiği için HER ZAMAN bilinir: ölçülemeyen sayaçta limit gösterilir.
+describe("usageLabelFor — ölçülemeyen sayaçta abonelik hakkı görünür", () => {
+  it("ölçülemeyen sayaç '?/limit' yazar (0 YAZMAZ, 'bilinmiyor' DEMEZ)", () => {
+    expect(usageLabelFor({ used: 0, limit: 250, measured: false })).toBe("?/250");
+    expect(usageLabelFor({ used: 0, limit: 8, measured: false })).toBe("?/8");
+    expect(UNKNOWN_USAGE_LABEL).toBe("?");
+    expect(usageLabelFor({ used: 0, limit: 250, measured: false })).not.toContain("bilinmiyor");
+  });
+
+  it("limiti olmayan (kapalı) hakta yalnız '?' yazılır", () => {
+    expect(usageLabelFor({ used: 0, limit: 0, measured: false })).toBe("?");
   });
 
   it("yüklenirken '…', kapalı hakta '—', ölçülde 'kullanılan/limit'", () => {
