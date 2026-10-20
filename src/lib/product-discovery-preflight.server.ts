@@ -1,7 +1,9 @@
 import {
   configuredDirectModelProviders,
   evrenStatus,
+  geminiEnvKeys,
   jinaKeyCount,
+  openRouterEnvKeys,
 } from "./ai-keys.server";
 import { ebayCredentialsConfigured as ebayConfigured } from "./ebay-auth.server";
 // ============================================================================
@@ -110,12 +112,15 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     {
       id: "gemini",
       label: "Gemini seçici (isteğe bağlı)",
-      ok: set(env, "GEMINI_API_KEY"),
+      // SAYIYLA: yalnız `GEMINI_API_KEY` aramak, havuz kurulumu
+      // (`GEMINI_API_KEY_1..8` — README'de önerilen biçim) tanımlıyken "Yok"
+      // demek oluyordu. Panelin tek işi doğru söylemek: tarayıcı ortak.
+      ok: geminiEnvKeys(env).length > 0,
       optional: true,
-      detail: set(env, "GEMINI_API_KEY")
-        ? "tanımlı — 75→25 seçimi modele gider"
+      detail: geminiEnvKeys(env).length
+        ? `tanımlı — ${geminiEnvKeys(env).length} Gemini anahtarı havuza girdi; 75→25 seçimi modele gider`
         : "Yok: 75→25 seçimi deterministik ön skorlamayla yapılır, hat yine de çalışır.",
-      fix: "İsteğe bağlı — GEMINI_API_KEY eklenirse seçimi Gemini yapar.",
+      fix: "İsteğe bağlı — GEMINI_API_KEY (veya GEMINI_API_KEY_1..8) eklenirse seçimi Gemini yapar.",
     },
     {
       id: "serpapi",
@@ -171,16 +176,20 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       // BAĞLI DEĞİL (Tavily ayrı bir ürün kaynağıdır; diğer üçü hiçbir yerde
       // okunmuyor). Burada saymak, kullanıcıya olmayan bir yedeği varmış gibi
       // göstermek olurdu — panelin tek işi bunu engellemek.
-      ok: set(env, "FIRECRAWL_API_KEY") || set(env, "FIRECRAWL_KEY") ||
-        set(env, "SCRAPINGBEE_API_KEY") || set(env, "SCRAPING_BEE_API_KEY"),
+      ok:
+        set(env, "FIRECRAWL_API_KEY") ||
+        set(env, "FIRECRAWL_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") ||
+        set(env, "SCRAPING_BEE_API_KEY"),
       optional: true,
       detail:
-        set(env, "FIRECRAWL_API_KEY") || set(env, "FIRECRAWL_KEY") ||
-        set(env, "SCRAPINGBEE_API_KEY") || set(env, "SCRAPING_BEE_API_KEY")
+        set(env, "FIRECRAWL_API_KEY") ||
+        set(env, "FIRECRAWL_KEY") ||
+        set(env, "SCRAPINGBEE_API_KEY") ||
+        set(env, "SCRAPING_BEE_API_KEY")
           ? "tanımlı — Jina bir sayfayı veremediğinde (kota/engel) ürün satırı yedek okuyucudan gelir"
           : "Yok: Jina engellediğinde anahtarsız r.markdown.new/defuddle.md devreye girer (hat yine çalışır).",
-      fix:
-        "İsteğe bağlı — firecrawl.dev (FIRECRAWL_API_KEY) veya scrapingbee.com (SCRAPINGBEE_API_KEY).",
+      fix: "İsteğe bağlı — firecrawl.dev (FIRECRAWL_API_KEY) veya scrapingbee.com (SCRAPINGBEE_API_KEY).",
     },
     {
       id: "tavily_source",
@@ -206,8 +215,7 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         set(env, "BRAVE_API_KEY") || set(env, "BRAVE_SEARCH_API_KEY") || set(env, "BRAVE_KEY")
           ? "tanımlı — `web-reviews` önce Brave'i sorar: ülke/dil hedefli sonuç, 24 saat önbellek, aylık ~900 sorgu bütçesi; Bing/DDG yedek kalır"
           : "Yok: `web-reviews` anahtarsız Bing → DuckDuckGo HTML'ini okur (DDG ardışık isteklerde 202 bot-guard dönebiliyor).",
-      fix:
-        "İsteğe bağlı — api.search.brave.com'dan anahtar al, BRAVE_API_KEY olarak ekle ($5/1.000 istek, ayda $5 ücretsiz kredi ≈ 1.000 sorgu).",
+      fix: "İsteğe bağlı — api.search.brave.com'dan anahtar al, BRAVE_API_KEY olarak ekle ($5/1.000 istek, ayda $5 ücretsiz kredi ≈ 1.000 sorgu).",
     },
     {
       id: "bestbuy",
@@ -216,12 +224,14 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       // (`ebay-auth.server.ts`): `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET` verildiğinde
       // jeton alınır ve ~2 saatte bir yenilenir. Elle kopyalanan Bearer jetonu
       // (`EBAY_OAUTH_TOKEN`) hâlâ geçerli bir kısa yol olarak kabul edilir.
-      ok: ebayConfigured(env) || Boolean(set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")),
+      ok: ebayConfigured(env) || set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY"),
       optional: true,
       detail: ebayConfigured(env)
         ? "tanımlı — eBay Browse'tan gerçek fiyat + satıcı + ürün görseli okunur (jeton otomatik yenilenir)" +
-          (set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY") ? " · Best Buy da tanımlı" : "")
-        : Boolean(set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY"))
+          (set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")
+            ? " · Best Buy da tanımlı"
+            : "")
+        : set(env, "BESTBUY_API_KEY") || set(env, "BEST_BUY_API_KEY")
           ? "tanımlı — Best Buy kataloğundan gerçek fiyat + kullanıcı puanı + GTIN/MPN + ürün görseli ekler"
           : "Yok: ABD/küresel nişler yalnız okuyucularla ve anahtarsız kataloglarla beslenir.",
       fix:
@@ -235,15 +245,16 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
       // CJ API 2.0 `CJ-Access-Token` ister; panel API Key'i ile
       // `/authentication/getAccessToken` çağrılıp jeton alınır (`resolveCjAccessToken`).
       // Anahtar yoksa kaynak 0 ms'de boş döner; MOQ/depo/fiyat bandı yuvası boş kalır.
-      ok: Boolean(set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY") || set(env, "CJ_ACCESS_TOKEN")),
+      ok:
+        set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY") || set(env, "CJ_ACCESS_TOKEN"),
       optional: true,
-      detail: Boolean(set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY"))
-        ? "tanımlı — CJ'den MOQ, depo ülkesi ve birim fiyat bandı okunur (günde ~1.000 arama, 50.000 puan)"
-        : set(env, "CJ_ACCESS_TOKEN")
-          ? "tanımlı — hazır access token kullanılıyor (süresi dolduğunda API Key ile değiştir)"
-          : "Yok: tedarik tarafı AliExpress + Made-in-China ile çalışır; CJ'nin MOQ/depo kanıtı eklenmez.",
-      fix:
-        "İsteğe bağlı — cjdropshipping.com → Settings → API'den API Key al, CJ_API_KEY olarak ekle (jeton otomatik alınır).",
+      detail:
+        set(env, "CJ_API_KEY") || set(env, "CJDROPSHIPPING_API_KEY")
+          ? "tanımlı — CJ'den MOQ, depo ülkesi ve birim fiyat bandı okunur (günde ~1.000 arama, 50.000 puan)"
+          : set(env, "CJ_ACCESS_TOKEN")
+            ? "tanımlı — hazır access token kullanılıyor (süresi dolduğunda API Key ile değiştir)"
+            : "Yok: tedarik tarafı AliExpress + Made-in-China ile çalışır; CJ'nin MOQ/depo kanıtı eklenmez.",
+      fix: "İsteğe bağlı — cjdropshipping.com → Settings → API'den API Key al, CJ_API_KEY olarak ekle (jeton otomatik alınır).",
     },
     {
       id: "google_trends_keyed",
@@ -263,8 +274,7 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         set(env, "SERP_API_KEY")
           ? "tanımlı — anahtarsız Trends 429 verdiğinde gerçek aylık seri buradan okunur"
           : "Yok: niş momentumu anahtarsız Trends'e ve Wikipedia görüntülenmesine bağlı kalır.",
-      fix:
-        "İsteğe bağlı — SEARCHAPI_KEY veya SERPAPI_KEY ekle; jeton yoksa anahtarsız yol kullanılır.",
+      fix: "İsteğe bağlı — SEARCHAPI_KEY veya SERPAPI_KEY ekle; jeton yoksa anahtarsız yol kullanılır.",
     },
     {
       id: "github_token",
@@ -280,8 +290,7 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
         set(env, "GITHUB_API_TOKEN") || set(env, "GH_API_TOKEN") || set(env, "GITHUB_PAT")
           ? "tanımlı — GitHub repo kanıtı kimlikli arama kotasıyla (30 istek/dk) okunur"
           : "Yok: GitHub repo kanıtı kimliksiz arama kotasında (10 istek/dk) okunur; yoğun koşuda 403 olabilir.",
-      fix:
-        "İsteğe bağlı — github.com/settings/tokens adresinden salt-okunur (public_repo) jeton üret, GITHUB_API_TOKEN olarak ekle. Git kimliği için kullanılan GITHUB_TOKEN'dan AYRI tutulur.",
+      fix: "İsteğe bağlı — github.com/settings/tokens adresinden salt-okunur (public_repo) jeton üret, GITHUB_API_TOKEN olarak ekle. Git kimliği için kullanılan GITHUB_TOKEN'dan AYRI tutulur.",
     },
     {
       id: "evren",
@@ -299,14 +308,15 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     {
       id: "ai_models",
       label: "Gelişmiş model havuzu (isteğe bağlı)",
-      ok: set(env, "OPENROUTER_API_KEY") || directProviders.length > 0 || evren.ready,
+      // Numaralı OpenRouter adları (`OPENROUTER_API_KEY_1..8`) de geçerlidir.
+      ok: openRouterEnvKeys(env).length > 0 || directProviders.length > 0 || evren.ready,
       optional: true,
       detail: directProviders.length
         ? `tanımlı — doğrudan sağlayıcı: ${directProviders
             .map((p) => `${p.label} → ${p.model}`)
-            .join(", ")}` + (set(env, "OPENROUTER_API_KEY") ? " · OpenRouter da tanımlı" : "")
-        : set(env, "OPENROUTER_API_KEY")
-          ? "OpenRouter tanımlı — DeepSeek V4.1 Flash / GLM-5.3 / Qwen3.8 / MiMo-V2.6 / Gemma 4 tek anahtarla açılır"
+            .join(", ")}` + (openRouterEnvKeys(env).length ? " · OpenRouter da tanımlı" : "")
+        : openRouterEnvKeys(env).length
+          ? `OpenRouter tanımlı — ${openRouterEnvKeys(env).length} anahtar (DeepSeek V4.1 Flash / GLM-5.3 / Qwen3.8 / MiMo-V2.6 / Gemma 4)`
           : "Yok: hat yalnız Gemini/Groq/Cerebras/HF ile çalışır — gelişmiş modeller kullanılmaz.",
       fix:
         "İsteğe bağlı — OpenRouter anahtarı ekle VEYA doğrudan sağlayıcı anahtarı " +

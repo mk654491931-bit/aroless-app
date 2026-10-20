@@ -220,8 +220,7 @@ export function poolGroupConfig(group: PoolGroup): {
           baseUrl:
             readEnv("GITHUB_MODELS_BASE_URL") ||
             "https://models.github.ai/inference/chat/completions",
-          model:
-            explicitModel || readEnv("GITHUB_MODELS_MODEL") || "openai/gpt-4.1-mini",
+          model: explicitModel || readEnv("GITHUB_MODELS_MODEL") || "openai/gpt-4.1-mini",
         };
       }
       return {
@@ -389,14 +388,34 @@ export function poolBackoffMs(priority: PoolPriority | "all" = "all"): number {
   return min;
 }
 
-/** Counts + labels only — never key material. Safe for logs / health UIs. */
+/**
+ * Counts + labels only — never key material. Safe for logs / health UIs.
+ *
+ * ÜÇ AYRI DURUM — panelin "anahtar yok" dememesi için ayrıştırılır:
+ *   • `total`/`configured` → ortamda TANIMLI anahtar sayısı
+ *   • `available`         → ŞU AN denenebilecek düğüm sayısı
+ *   • `cooling`           → tanımlı ama kota/5xx yüzünden beklemeye alınmış
+ *   • `unusable`          → tanımlı ama uç/model eksik (PROVIDER_* yuvaları)
+ *
+ * NEDEN: `available === 0` tek başına "anahtar yok" DEMEK DEĞİLDİR. Ücretsiz
+ * katmanlarda 14 paralel ajan tüm anahtarları 60-90 sn park edebilir; eski
+ * özet bu durumu "0 anahtar" gibi gösterip kullanıcıyı Vercel env değişkenlerini
+ * boşuna kontrol etmeye yönlendiriyordu.
+ */
 export function poolHealthSummary(): {
   total: number;
   configured: number;
   available: number;
-  byGroup: Record<string, { configured: number; available: number }>;
+  /** Tanımlı + uç/model tamam, ama şu an beklemede (kota/5xx/timeout). */
+  cooling: number;
+  /** Tanımlı ama yapılandırma eksik (base URL / model) — hiç denenemez. */
+  unusable: number;
+  byGroup: Record<string, { configured: number; available: number; cooling: number }>;
 } {
-  const byGroup: Record<string, { configured: number; available: number }> = {};
+  const byGroup: Record<string, { configured: number; available: number; cooling: number }> = {};
+  // Tüm düğümler TEK kez hesaplanır: grup başına `buildPoolNodes()` çağırmak
+  // O(grup × düğüm) maliyetliydi ve sayaçlar yine de aynı sonucu veriyordu.
+  const readyNodes = buildPoolNodes();
   for (const group of ALL_ORDER) {
     const keys = poolGroupKeys(group);
     if (!keys.length) continue;
@@ -408,12 +427,22 @@ export function poolHealthSummary(): {
           ? group !== "pool_e" || Boolean(model)
           : false;
     const configured = keys.length;
-    const available = usable ? buildPoolNodes().filter((n) => n.group === group).length : 0;
-    byGroup[group] = { configured, available };
+    const available = usable ? readyNodes.filter((n) => n.group === group).length : 0;
+    // Beklemede = yapılandırması tamam ama o an soğumada olan anahtarlar.
+    const cooling = usable ? Math.max(0, configured - available) : 0;
+    byGroup[group] = { configured, available, cooling };
   }
   const total = Object.values(byGroup).reduce((s, g) => s + g.configured, 0);
   const available = Object.values(byGroup).reduce((s, g) => s + g.available, 0);
-  return { total, configured: total, available, byGroup };
+  const cooling = Object.values(byGroup).reduce((s, g) => s + g.cooling, 0);
+  return {
+    total,
+    configured: total,
+    available,
+    cooling,
+    unusable: total - available - cooling,
+    byGroup,
+  };
 }
 
 // ------------------------------------------------------------------ one-shot call

@@ -175,6 +175,45 @@ describe("ai-pool availability registry", () => {
     expect(buildPoolNodes("fast").some((n) => n.id === "CEREBRAS-01")).toBe(true);
   });
 
+  it("tüm anahtarlar beklemedeyken 'tanımlı' ile 'kullanılabilir' AYRI raporlanır", () => {
+    // Ölçülen hata: 14 paralel ajan ücretsiz katmanda tüm anahtarları park
+    // edince özet 0 kullanılabilir diyordu ve panel bunu "anahtar yok" gibi
+    // gösterip kullanıcıyı Vercel env değişkenlerine yolluyordu.
+    for (let i = 1; i <= 5; i++) {
+      stubEnv({ [`GEMINI_API_KEY_${i}`]: `g${i}`, [`GROQ_API_KEY_${i}`]: `q${i}` });
+    }
+    stubEnv({ CEREBRAS_API_KEY: "ck", SAMBANOVA_API_KEY: "sk" });
+    const before = poolHealthSummary();
+    expect(before.total).toBe(12);
+    expect(before.cooling).toBe(0);
+    expect(before.unusable).toBe(0);
+
+    parkPoolGroup("gemini", "quota");
+    parkPoolGroup("groq", "quota");
+    parkPoolGroup("cerebras", "quota");
+    parkPoolGroup("sambanova", "quota");
+
+    const parked = poolHealthSummary();
+    expect(parked.total).toBe(12); // tanımlı anahtarlar KAYBOLMAZ
+    expect(parked.available).toBe(0); // ama o an hiçbiri denenemez
+    expect(parked.cooling).toBe(12); // hepsi BEKLEMEDE — "yok" değil
+    expect(parked.unusable).toBe(0);
+    expect(parked.byGroup["gemini"]).toEqual({ configured: 5, available: 0, cooling: 5 });
+
+    // 90 sn sonra kendiliğinden geri gelir: yapılandırma hiç bozulmamıştı.
+    vi.advanceTimersByTime(91_000);
+    expect(poolHealthSummary().available).toBe(12);
+  });
+
+  it("uç/model eksik yuvalar 'beklemede' değil 'kullanılamaz' sayılır", () => {
+    stubEnv({ PROVIDER_A_1: "a1", PROVIDER_A_2: "a2", CEREBRAS_API_KEY: "ck" });
+    const h = poolHealthSummary();
+    expect(h.total).toBe(3);
+    expect(h.available).toBe(1);
+    expect(h.cooling).toBe(0); // soğuma değil, yapılandırma eksiği
+    expect(h.unusable).toBe(2);
+  });
+
   it("returns keys in canonical slot order for provider wrappers", () => {
     stubEnv({
       CEREBRAS_API_KEY_1: "one",

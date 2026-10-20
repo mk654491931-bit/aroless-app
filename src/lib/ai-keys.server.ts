@@ -13,8 +13,10 @@
  * Only reads happen here — no key material is ever exported.
  */
 
-function readEnv(name: string): string {
-  const v = process.env[name];
+type EnvLike = Record<string, string | undefined>;
+
+function readEnv(name: string, env: EnvLike = process.env): string {
+  const v = env[name];
   return v && v.trim() ? v.trim() : "";
 }
 
@@ -158,12 +160,17 @@ type KeySpec = {
   max?: number;
 };
 
-/** Collects env values in spec order, skipping empty/duplicate entries. */
-function collectEnvKeys(spec: KeySpec): string[] {
+/**
+ * Collects env values in spec order, skipping empty/duplicate entries.
+ *
+ * `env` verilebilir: teşhis panelleri (preflight) SAF çağırabilsin ve testte
+ * sahte ortamla doğrulanabilsin. Varsayılan `process.env` — davranış değişmez.
+ */
+function collectEnvKeys(spec: KeySpec, env: EnvLike = process.env): string[] {
   const out: string[] = [];
   const push = (name: string) => {
     if (!name) return;
-    const value = readEnv(name);
+    const value = readEnv(name, env);
     if (value) out.push(value);
   };
   for (const b of spec.base ?? []) push(b);
@@ -175,43 +182,55 @@ function collectEnvKeys(spec: KeySpec): string[] {
 }
 
 /** Gemini: GEMINI_API_KEY, GEMINI_API_KEY_1..8, GEMINI_1_API_KEY..8_API_KEY. */
-export function geminiEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["GEMINI_API_KEY"],
-    patterns: [(i) => `GEMINI_API_KEY_${i}`, (i) => `GEMINI_${i}_API_KEY`],
-  });
+export function geminiEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["GEMINI_API_KEY"],
+      patterns: [(i) => `GEMINI_API_KEY_${i}`, (i) => `GEMINI_${i}_API_KEY`],
+    },
+    env,
+  );
 }
 
 /** Groq: GROQ_API_KEY, GROQ_API_KEY_1..8, GROQ_1_API_KEY…, GROQ_API_KEY1… */
-export function groqEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["GROQ_API_KEY"],
-    patterns: [(i) => `GROQ_API_KEY_${i}`, (i) => `GROQ_${i}_API_KEY`, (i) => `GROQ_API_KEY${i}`],
-  });
+export function groqEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["GROQ_API_KEY"],
+      patterns: [(i) => `GROQ_API_KEY_${i}`, (i) => `GROQ_${i}_API_KEY`, (i) => `GROQ_API_KEY${i}`],
+    },
+    env,
+  );
 }
 
 /** OpenRouter: OPENROUTER_API_KEY, _1..8, OPENROUTER_API_KEY1…, OPENROUTER_1_API_KEY… */
-export function openRouterEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["OPENROUTER_API_KEY"],
-    patterns: [
-      (i) => `OPENROUTER_API_KEY_${i}`,
-      (i) => `OPENROUTER_API_KEY${i}`,
-      (i) => `OPENROUTER_${i}_API_KEY`,
-    ],
-  });
+export function openRouterEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["OPENROUTER_API_KEY"],
+      patterns: [
+        (i) => `OPENROUTER_API_KEY_${i}`,
+        (i) => `OPENROUTER_API_KEY${i}`,
+        (i) => `OPENROUTER_${i}_API_KEY`,
+      ],
+    },
+    env,
+  );
 }
 
 /** Hugging Face: HF_TOKEN, HUGGING_FACE_API_KEY…, HF_TOKEN_1..8, HUGGING_FACE_API_KEY_1..8 / KEY1… */
-export function hfEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["HF_TOKEN", "HUGGING_FACE_API_KEY", "HUGGING_FACE_TOKEN"],
-    patterns: [
-      (i) => `HF_TOKEN_${i}`,
-      (i) => `HUGGING_FACE_API_KEY_${i}`,
-      (i) => `HUGGING_FACE_API_KEY${i}`,
-    ],
-  });
+export function hfEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["HF_TOKEN", "HUGGING_FACE_API_KEY", "HUGGING_FACE_TOKEN"],
+      patterns: [
+        (i) => `HF_TOKEN_${i}`,
+        (i) => `HUGGING_FACE_API_KEY_${i}`,
+        (i) => `HUGGING_FACE_API_KEY${i}`,
+      ],
+    },
+    env,
+  );
 }
 
 /**
@@ -241,9 +260,7 @@ const JINA_KEY_NAMES: string[] = (() => {
   return names;
 })();
 
-export function jinaEnvKeys(
-  env: Record<string, string | undefined> = process.env,
-): string[] {
+export function jinaEnvKeys(env: Record<string, string | undefined> = process.env): string[] {
   const out: string[] = [];
   for (const name of JINA_KEY_NAMES) {
     const value = (env[name] ?? "").trim();
@@ -262,19 +279,25 @@ export function jinaKeyCount(env: Record<string, string | undefined> = process.e
 }
 
 /** Cerebras: CEREBRAS_API_KEY, CEREBRAS_API_KEY_1..8 */
-export function cerebrasEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["CEREBRAS_API_KEY"],
-    patterns: [(i) => `CEREBRAS_API_KEY_${i}`],
-  });
+export function cerebrasEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["CEREBRAS_API_KEY"],
+      patterns: [(i) => `CEREBRAS_API_KEY_${i}`],
+    },
+    env,
+  );
 }
 
 /** SambaNova: SAMBANOVA_API_KEY, SAMBANOVA_API_KEY_1..8 */
-export function sambanovaEnvKeys(): string[] {
-  return collectEnvKeys({
-    base: ["SAMBANOVA_API_KEY"],
-    patterns: [(i) => `SAMBANOVA_API_KEY_${i}`],
-  });
+export function sambanovaEnvKeys(env: EnvLike = process.env): string[] {
+  return collectEnvKeys(
+    {
+      base: ["SAMBANOVA_API_KEY"],
+      patterns: [(i) => `SAMBANOVA_API_KEY_${i}`],
+    },
+    env,
+  );
 }
 
 /**

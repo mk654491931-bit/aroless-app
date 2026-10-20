@@ -2147,13 +2147,21 @@ export type VeloraRunStatus = {
     trendMomentumPct: number | null;
   } | null;
   /**
-   * AI HAVUZ SAĞLIĞI — Vercel'de gerçekten kaç ücretsiz anahtar tanımlı ve
-   * o an kullanılabilir. Anahtar değerleri ASLA dışa vurulmaz.
+   * AI HAVUZ SAĞLIĞI — ortamda kaç anahtar TANIMLI, kaçı ŞU AN kullanılabilir.
+   * Anahtar değerleri ASLA dışa vurulmaz.
+   *
+   * `cooling` alanı "anahtar yok" ile "anahtar var ama kota yüzünden beklemede"
+   * ayrımını taşır; panel bu ayrımı yapmadan kullanıcıyı env değişkenlerine
+   * yönlendiriyordu (yanlış teşhis).
    */
   aiPool: {
     total: number;
     available: number;
-    groups: { group: string; configured: number; available: number }[];
+    /** Tanımlı ama kota/5xx yüzünden geçici olarak beklemede. */
+    cooling: number;
+    /** Tanımlı ama uç/model eksik — hiç denenemez. */
+    unusable: number;
+    groups: { group: string; configured: number; available: number; cooling: number }[];
   } | null;
   /** Karne geçici kovadan değil, kalıcı kazanan kayıtlarından geri kuruldu. */
   recovered: boolean;
@@ -2217,10 +2225,13 @@ function aiPoolSummary(): VeloraRunStatus["aiPool"] {
     return {
       total: h.total,
       available: h.available,
+      cooling: h.cooling,
+      unusable: h.unusable,
       groups: Object.entries(h.byGroup).map(([group, counts]) => ({
         group,
         configured: counts.configured,
         available: counts.available,
+        cooling: counts.cooling,
       })),
     };
   } catch {

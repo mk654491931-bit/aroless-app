@@ -97,9 +97,12 @@ describe("preflight env kontrolleri", () => {
     expect(trends?.ok).toBe(false);
     expect(trends?.optional).toBe(true);
     // Eksik olsalar da hat hazır kalır.
-    expect(buildPreflight({ ...READY, GITHUB_API_TOKEN: undefined }, { columnsError: null, rpcError: null }).ok).toBe(
-      true,
-    );
+    expect(
+      buildPreflight(
+        { ...READY, GITHUB_API_TOKEN: undefined },
+        { columnsError: null, rpcError: null },
+      ).ok,
+    ).toBe(true);
   });
 
   it("eBay Client ID + Secret ÇİFTİ tamamsa kaynak yeşil; tek başına değil", () => {
@@ -125,9 +128,9 @@ describe("preflight env kontrolleri", () => {
     expect(byId(onlyTavily, "reader_fallback")?.ok).toBe(false);
     expect(byId(onlyTavily, "tavily_source")?.ok).toBe(true);
     // Firecrawl varsa yedek gerçekten açılır.
-    expect(
-      byId(envChecks({ ...READY, FIRECRAWL_API_KEY: "fc" }), "reader_fallback")?.ok,
-    ).toBe(true);
+    expect(byId(envChecks({ ...READY, FIRECRAWL_API_KEY: "fc" }), "reader_fallback")?.ok).toBe(
+      true,
+    );
   });
 
   it("Brave satırı AYRI bir kaynak gibi değil, web-reviews motoru olarak görünür", () => {
@@ -196,6 +199,32 @@ describe("preflight env kontrolleri", () => {
     // SerpAPI/ScraperAPI/OpenRouter/EVREN/Jina okuyucu tanımlı olduğu için tek
     // eksik budur; hepsi isteğe bağlıdır ve yoklukları hattı düşürmez.
     expect(summarize(checks)).toBe("Hat çalışmaya hazır (1 isteğe bağlı eksik).");
+  });
+
+  it("NUMARALI Gemini anahtarları (GEMINI_API_KEY_1..8) 'yok' sayılmaz", () => {
+    // Ölçülen hata: kontrol yalnız `GEMINI_API_KEY` adına bakıyordu; havuz
+    // kurulumu (README: GEMINI_API_KEY_1..8) tanımlıyken panel "yok" diyordu.
+    const checks = envChecks({ ...READY, GEMINI_API_KEY: undefined, GEMINI_API_KEY_1: "g1" });
+    const check = byId(checks, "gemini");
+    expect(check?.ok).toBe(true);
+    expect(check?.detail).toContain("1 Gemini anahtarı");
+
+    const none = byId(envChecks({ ...READY, GEMINI_API_KEY: undefined }), "gemini");
+    expect(none?.ok).toBe(false);
+    expect(none?.fix).toContain("GEMINI_API_KEY_1");
+  });
+
+  it("NUMARALI OpenRouter anahtarları gelişmiş model havuzunda sayılır", () => {
+    const checks = envChecks({
+      ...READY,
+      OPENROUTER_API_KEY: undefined,
+      OPENROUTER_API_KEY_3: "or3",
+      PROVIDER_A_1: undefined,
+      EVREN_API_KEY: undefined,
+    });
+    const check = byId(checks, "ai_models");
+    expect(check?.ok).toBe(true);
+    expect(check?.detail).toContain("1 anahtar");
   });
 
   it("Jina okuyucu anahtarlarını SAYIYLA bildirir (isteğe bağlı, sır yok)", () => {

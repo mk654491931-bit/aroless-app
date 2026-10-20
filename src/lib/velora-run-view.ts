@@ -75,6 +75,24 @@ export type Dossier = {
   phases: { id: number; key: string; ms: number; within_ceiling: boolean; agents: number }[];
 };
 
+/**
+ * Havuz sağlığının panelde gösterilen (sırsız) özeti.
+ *
+ * `total` TANIMLI anahtar sayısıdır; `available` yalnızca ŞU AN denenebilen
+ * düğümlerdir. Ücretsiz katmanlarda 14 paralel ajan tüm anahtarları 60-90 sn
+ * park edebildiği için bu ikisi sık sık ayrışır — panelin "anahtar yok"
+ * dememesi için ayrım `cooling` / `unusable` ile taşınır.
+ */
+export type AiPoolHealth = {
+  total: number;
+  available: number;
+  /** Tanımlı ama kota/429/5xx yüzünden geçici olarak beklemede. */
+  cooling?: number;
+  /** Tanımlı ama uç/model eksik (PROVIDER_* yuvaları) — hiç denenemez. */
+  unusable?: number;
+  groups: { group: string; configured: number; available: number; cooling?: number }[];
+};
+
 /** `GET /api/public/agent?runId=…` yanıtı — panel koşuyu bununla yoklar. */
 export type RunStatusPayload = {
   runId: string;
@@ -121,14 +139,10 @@ export type RunStatusPayload = {
     trendMomentumPct: number | null;
   } | null;
   /**
-   * AI HAVUZ SAĞLIĞI — Vercel'de gerçekten kaç ücretsiz anahtar tanımlı ve
-   * o an kullanılabilir. Anahtar değerleri ASLA dışa vurulmaz.
+   * AI HAVUZ SAĞLIĞI — ortamda kaç ücretsiz anahtar TANIMLI ve kaçı o an
+   * kullanılabilir. Anahtar değerleri ASLA dışa vurulmaz.
    */
-  aiPool: {
-    total: number;
-    available: number;
-    groups: { group: string; configured: number; available: number }[];
-  } | null;
+  aiPool: AiPoolHealth | null;
   recovered: boolean;
   notes: string[];
 };
@@ -246,6 +260,57 @@ export function trackRecordLabel(product: DossierProduct): string | null {
   if (!t || t.appearances < 1) return null;
   const when = t.daysSinceSeen === 0 ? "bugün" : `${t.daysSinceSeen} gün önce`;
   return `Bu ürün ${t.appearances} önceki koşuda da çıktı · ort. puan ${t.avgScore} · en iyi sıra ${t.bestRank} · son görülme ${when} (satış verisi değil, bağımsız koşu teyidi)`;
+}
+
+/**
+ * AI HAVUZ UYARISI — "anahtar yok" ile "anahtar var ama beklemede" AYRI şeydir.
+ *
+ * Ölçülen hata: panel `available === 0` gördüğünde koşulsuz "Hiçbir ücretsiz
+ * anahtar kullanılabilir değil — Vercel ortam değişkenlerini kontrol edin"
+ * yazıyordu. Oysa ücretsiz katmanlarda 14 paralel ajan 22 anahtarın TAMAMINI
+ * 60-90 sn beklemeye alabiliyor; o anda sayı 0'a düşer ama yapılandırma
+ * yerindedir. Kullanıcı da boşuna Vercel env değişkenlerini denetliyordu.
+ *
+ * `null` → gösterilecek uyarı yok (anahtar var ve kullanılabilir).
+ */
+export function aiPoolNotice(pool: AiPoolHealth | null | undefined): {
+  tone: "warn" | "error";
+  text: string;
+} | null {
+  if (!pool) return null;
+  const cooling = Math.max(0, Number(pool.cooling ?? 0) || 0);
+  const unusable = Math.max(0, Number(pool.unusable ?? 0) || 0);
+  if (pool.available > 0) return null;
+  if (pool.total <= 0) {
+    return {
+      tone: "error",
+      text:
+        "Hiçbir AI anahtarı bulunamadı — 14 ajan nötr puan verecek. Vercel ortam değişkenlerini " +
+        "kontrol edin (GEMINI_API_KEY_1… / GROQ_API_KEY_1… gibi numaralı adlar da taranır).",
+    };
+  }
+  if (cooling > 0) {
+    return {
+      tone: "warn",
+      text:
+        `${pool.total} anahtar tanımlı ama ${cooling} tanesi şu an beklemede (kotasını doldurdu — ` +
+        "429/timeout). Ortam değişkenlerinde sorun yok; bekleme bitince aynı koşuda yeniden denenir.",
+    };
+  }
+  if (unusable > 0) {
+    return {
+      tone: "warn",
+      text:
+        `${unusable} anahtar tanımlı ama uç/model eksik olduğu için denenemiyor: ` +
+        "PROVIDER_A..D için `<SLOT>_BASE_URL`, PROVIDER_E (EVREN) için EVREN_API_KEY gerekir.",
+    };
+  }
+  // Eski sunucu sürümü `cooling` alanını göndermiyorsa da "anahtar yok" DEMEYİZ:
+  // total > 0 ise yapılandırma yerindedir, sorun o anki kullanılabilirliktedir.
+  return {
+    tone: "warn",
+    text: `${pool.total} anahtar tanımlı ama şu an kullanılamıyor (kota/timeout). Ortam değişkenlerinde sorun yok; bekleme bitince yeniden denenir.`,
+  };
 }
 
 /** Pazar erişimi satırlarının okunur özeti. */

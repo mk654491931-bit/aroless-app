@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, Layers, Loader2, Radar, Sparkles, Users } from
 import { runAgentPipeline } from "@/lib/velora-agents.functions";
 import { apiGet, apiPost } from "@/lib/api-client";
 import {
+  aiPoolNotice,
   noteLabel,
   veloraPollInterval,
   veloraStatusLabel,
@@ -125,6 +126,8 @@ export function VeloraDeepAnalysis({
   const payload = status.data;
   const finished = payload ? veloraPollInterval(payload) === false : false;
   const statusLabel = veloraStatusLabel(payload, orchestrate.isPending);
+  // Havuz uyarısı: "anahtar yok" ile "anahtar var ama beklemede" AYRI yazılır.
+  const poolNotice = aiPoolNotice(payload?.aiPool);
 
   return (
     <section className="glass rounded-2xl p-4 sm:p-5">
@@ -355,11 +358,18 @@ export function VeloraDeepAnalysis({
                   className={`rounded-full border px-2 py-0.5 text-[10px] ${
                     payload.aiPool.available > 0
                       ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
-                      : "border-red-400/40 bg-red-500/12 text-red-200"
+                      : payload.aiPool.total > 0
+                        ? "border-amber-400/40 bg-amber-500/12 text-amber-200"
+                        : "border-red-400/40 bg-red-500/12 text-red-200"
                   }`}
                 >
                   {payload.aiPool.available}/{payload.aiPool.total} anahtar kullanılabilir
                 </span>
+                {(payload.aiPool.cooling ?? 0) > 0 && (
+                  <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                    {payload.aiPool.cooling} beklemede
+                  </span>
+                )}
               </div>
               <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
                 14 ajan bu havuzdaki sağlayıcılara dağıtılır; 429 alan anahtar beklemeye alınır ve
@@ -376,8 +386,8 @@ export function VeloraDeepAnalysis({
                       className={
                         g.available > 0
                           ? "text-emerald-300"
-                          : g.configured === 0
-                            ? "text-amber-300"
+                          : g.configured === 0 || (g.cooling ?? 0) > 0
+                            ? "text-amber-300" // tanımlı ama beklemede: hata değil
                             : "text-red-300"
                       }
                     >
@@ -386,10 +396,13 @@ export function VeloraDeepAnalysis({
                   </li>
                 ))}
               </ul>
-              {payload.aiPool.available === 0 && (
-                <p className="mt-2 text-[10px] text-red-200">
-                  Hiçbir ücretsiz anahtar kullanılabilir değil — 14 ajan nötr puan verecek. Vercel
-                  ortam değişkenlerini kontrol edin.
+              {poolNotice && (
+                <p
+                  className={`mt-2 text-[10px] ${
+                    poolNotice.tone === "error" ? "text-red-200" : "text-amber-200"
+                  }`}
+                >
+                  {poolNotice.text}
                 </p>
               )}
             </div>
