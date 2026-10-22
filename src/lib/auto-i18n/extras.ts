@@ -1,3 +1,4 @@
+import { APP_COPY } from "./app-copy";
 import { PUBLIC_COPY, type PublicCopyLang } from "./public-copy";
 
 /** Hand-maintained strings coming from shared UI primitives (shadcn). */
@@ -88,6 +89,10 @@ export const EXTRAS: Record<string, Record<string, string>> = {
  *      metinleri. Bu sayfalar sonradan yazıldığı ve `dict-*` sözlükleri yalnız
  *      uygulama ekranlarını kapsadığı için, dil değiştirildiğinde bu yüzey
  *      çevrilmeden kalıyordu; katman bu boşluğu kapatır.
+ *   3. `APP_COPY` — panel, ürün kartı, fiyatlandırma, ayarlar ve durum
+ *      mesajları gibi SONRADAN eklenen uygulama ekranları. `dict-*` otomatik
+ *      üretildiği için bu metinler onda hiç yoktu; dil değişince Türkçe
+ *      kalıyorlardı.
  *
  * `runtime` bunu `{ ...dict, ...extrasFor(lang) }` biçiminde uygular; yani
  * buradaki kayıtlar ilgili dilin sözlüğünü geçersiz kılar ve o dilde eksik olan
@@ -102,6 +107,10 @@ export function extrasFor(lang: string): Record<string, string> {
   }
   for (const [src, map] of Object.entries(PUBLIC_COPY)) {
     const v = map[code as PublicCopyLang];
+    if (v) out[src] = v;
+  }
+  for (const [src, map] of Object.entries(APP_COPY)) {
+    const v = map[code as keyof typeof map];
     if (v) out[src] = v;
   }
   return out;

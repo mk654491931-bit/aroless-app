@@ -9,6 +9,7 @@
  */
 
 import { extrasFor } from "./extras";
+import { resolveNodeText } from "./resolve";
 
 export type AutoLang = "tr" | "en" | "es" | "de" | "fr" | "ar";
 
@@ -109,19 +110,23 @@ function shouldSkip(el: Element | null): boolean {
 }
 
 function applyToText(node: Text) {
-  const source = originalText.get(node) ?? node.nodeValue ?? "";
-  if (!source.trim()) return;
+  const current = node.nodeValue ?? "";
+  const stored = originalText.get(node);
+  if (!current.trim() && stored == null) return;
   if (shouldSkip(node.parentElement)) return;
-  const next = lookup(source);
-  if (next == null) {
-    if (originalText.has(node) && node.nodeValue !== source) {
-      node.nodeValue = source;
-      originalText.delete(node);
-    }
-    return;
-  }
-  if (!originalText.has(node)) originalText.set(node, source);
-  if (node.nodeValue !== next) node.nodeValue = next;
+
+  // Karar saf fonksiyonda (bkz. resolve.ts): React içeriği değiştirdiyse yeni
+  // metin KAYNAK kabul edilir, eski çeviri onun üstüne yazılmaz.
+  const { text, source } = resolveNodeText({
+    current,
+    storedSource: stored,
+    storedTarget: stored == null ? null : lookup(stored),
+    translate: lookup,
+  });
+
+  if (source == null) originalText.delete(node);
+  else originalText.set(node, source);
+  if (node.nodeValue !== text) node.nodeValue = text;
 }
 
 function applyToElement(el: Element) {
