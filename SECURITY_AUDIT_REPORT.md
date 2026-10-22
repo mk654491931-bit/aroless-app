@@ -186,9 +186,59 @@ yasal saklama yükümlülüğü nedeniyle korunuyor.
 
 ---
 
-## 12. Doğrulama
+## 12. İkinci sertleştirme turu
 
-- `bunx vitest run` → **160 dosya / 2166 test geçti** (15 canlı test atlandı).
+İlk turdan sonra "daha da iyi" hedefiyle yapılan ek denetim:
+
+### 12.1 IP tabanlı hız sınırları sahte başlıkla atlatılabiliyordu
+`clientIp()` sırayla `cf-connecting-ip` → `x-forwarded-for` **ilk halkası** →
+`x-real-ip` okuyordu. Bu başlıkların tamamı istemci tarafından gönderilebilir;
+platform gerçek IP'yi zincirin **sonuna** eklediği için saldırgan her istekte
+"ilk halka"yı değiştirip kayıt/OTP/AI sınırlarını sınırsız aşabiliyordu.
+**Kapatıldı:** `src/lib/client-ip.ts` — yalnız `x-vercel-forwarded-for`,
+`cf-ray` varsa `cf-connecting-ip`, `x-real-ip` ve XFF'in **son** halkası güvenilir;
+IPv4:port normalize edilir. `api-guard` ve `turnstile` aynı kaynağı kullanır.
+
+### 12.2 Turnstile jetonu tekrar oynatılabiliyordu
+Başarılı doğrulama sonucu 5 dakika cache'leniyordu; Turnstile jetonları tek
+kullanımlık olduğu için bir kez çözülen CAPTCHA ile aynı jeton defalarca
+kullanılabiliyordu. **Kapatıldı:** başarı asla cache'lenmez; yalnız başarısız
+sonuçlar, 500 girişlik sınırlı bir bellekte tutulur.
+
+### 12.3 Promosyon kodları topluca listelenebiliyordu
+`Authenticated view active codes` politikası oturum açmış herkese tüm aktif
+kodları ve affiliate sahiplerini açıyordu (rakip istihbaratı + hedefli deneme).
+**Kapatıldı:** politika kaldırıldı; doğrulama/sahiplik sunucu fonksiyonlarından
+yürür. Ayrıca `validatePromoCode` sınırsızdı → 20/dk sınır eklendi.
+
+### 12.4 `searches` tablosuna istemci yazımı
+`searches_insert_own` politikası, istemcinin kendi iş satırını uydurma
+`result`/`status` ile açmasına izin veriyordu. İstemci bu tabloya hiç yazmıyor;
+INSERT/UPDATE/DELETE yetkileri kaldırıldı, yalnız `SELECT` (kendi satırı) kaldı.
+
+### 12.5 Daha sıkı yetki modeli
+`profiles` için `REVOKE ALL` → `GRANT SELECT` + yalnız dört sütun `UPDATE`.
+Böylece varsayılan yetkilerle gelebilecek `DELETE/TRUNCATE/REFERENCES/TRIGGER`
+de kapanır (TRUNCATE, RLS'i tamamen atlar). Migration sonunda
+`NOTIFY pgrst, 'reload schema'` ile PostgREST önbelleği tazelenir.
+
+### 12.6 Zayıf şifre politikası
+Kayıt ve şifre sıfırlama alt sınırı 6 → **10 karakter** (bcrypt tavanı 72).
+Giriş alanı 6'da bırakıldı: mevcut hesapların girişi engellenmez.
+
+### 12.7 Bağımlılık denetimi
+`bun audit` başlangıçta **27 açık** (1 kritik, 13 yüksek) bildirdi; güvenli
+aralık içinde güncellendi (`bun audit fix`, vite 8.2.4, shell-quote 1.11.0,
+js-yaml 4.3.2, source-map-js 1.2.2, nanoid 3.3.18, dompurify 3.4.16 …).
+Sonuç: **0 açık**. (Bulguların tamamı derleme/test araçlarındaydı; üretim
+paketine girmiyorlardı, yine de kapatıldı.)
+
+---
+
+## 13. Doğrulama
+
+- `bunx vitest run` → **160 dosya / 2171 test geçti** (15 canlı test atlandı).
+- `bun audit` → **No vulnerabilities found** (537 paket).
 - Değişen tüm dosyalar + `routeTree.gen.ts` için `tsc --noEmit` → **temiz**.
   (Tam proje `tsc` bu ortamda 180 sn komut sınırını aştığı için parçalı doğrulandı;
   platformun tam tip kontrolü ayrıca koşar.)

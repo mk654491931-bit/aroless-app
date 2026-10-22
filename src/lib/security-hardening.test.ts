@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { clientIpFromHeaders } from "./client-ip";
 import { appOrigin, verifyWorkerRequest } from "./discovery-jobs.server";
 import { timingSafeEqualString } from "./safe-compare";
 import { veloraRunStatus } from "./velora-orchestrator.server";
@@ -61,6 +62,36 @@ describe("verifyWorkerRequest", () => {
     });
     expect(verifyWorkerRequest(ok)).toBe(true);
     expect(verifyWorkerRequest(bad)).toBe(false);
+  });
+});
+
+describe("clientIpFromHeaders (IP sahteciliği)", () => {
+  it("X-Forwarded-For'un istemci eklediği İLK halkasını yok sayar", () => {
+    const headers = new Headers({ "x-forwarded-for": "1.2.3.4, 203.0.113.9" });
+    expect(clientIpFromHeaders(headers)).toBe("203.0.113.9");
+  });
+
+  it("cf-connecting-ip'ye cf-ray yokken güvenmez", () => {
+    const headers = new Headers({ "cf-connecting-ip": "9.9.9.9" });
+    expect(clientIpFromHeaders(headers)).toBe("");
+  });
+
+  it("cf-ray varsa Cloudflare başlığını kullanır", () => {
+    const headers = new Headers({ "cf-ray": "abc123", "cf-connecting-ip": "9.9.9.9" });
+    expect(clientIpFromHeaders(headers)).toBe("9.9.9.9");
+  });
+
+  it("IPv4:port biçimini porttan arındırır", () => {
+    const headers = new Headers({ "x-real-ip": "198.51.100.7:4433" });
+    expect(clientIpFromHeaders(headers)).toBe("198.51.100.7");
+  });
+
+  it("Vercel başlığı diğerlerinden önce gelir", () => {
+    const headers = new Headers({
+      "x-vercel-forwarded-for": "203.0.113.5, 10.0.0.1",
+      "x-forwarded-for": "1.1.1.1",
+    });
+    expect(clientIpFromHeaders(headers)).toBe("203.0.113.5");
   });
 });
 

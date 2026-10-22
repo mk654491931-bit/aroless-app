@@ -41,8 +41,12 @@
 --    tercihi ve tanıtım (onboarding) bayrağı (bkz. analysis.functions.ts →
 --    updateProfilePrefs). Diğer HER ŞEY sunucuya aittir.
 -- ---------------------------------------------------------------------------
-REVOKE UPDATE ON public.profiles FROM authenticated, anon;
-REVOKE INSERT ON public.profiles FROM authenticated, anon;
+-- ÖNCE TÜMÜYLE KAPAT, SONRA GEREKLİYİ VER (fail-closed sıra).
+-- `REVOKE ALL` yalnız UPDATE/INSERT'i değil, varsayılan yetkilerle gelebilecek
+-- DELETE/TRUNCATE/REFERENCES/TRIGGER yetkilerini de kaldırır (TRUNCATE, RLS'i
+-- tamamen atlar; PostgREST üzerinden erişilemese de savunma derinliğidir).
+REVOKE ALL ON public.profiles FROM authenticated, anon;
+GRANT SELECT ON public.profiles TO authenticated;
 
 DO $$
 BEGIN
@@ -110,6 +114,33 @@ COMMENT ON FUNCTION public.profiles_guard_server_columns() IS
 --    İşleri yalnız sunucu (service_role) günceller; istemci sadece okur.
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS "searches_update_own" ON public.searches;
+DROP POLICY IF EXISTS "searches_insert_own" ON public.searches;
+
+-- İstemci bu tabloya hiç yazmaz (iş kaydını sunucu açar); yazma yetkisi de
+-- gereksiz. Okuma kendi satırıyla sınırlı kalır.
+REVOKE INSERT, UPDATE, DELETE ON public.searches FROM authenticated, anon;
+GRANT SELECT ON public.searches TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3b) PROMOSYON KODLARI: toplu listeleme kapatılır
+--
+--     "Authenticated view active codes" politikası, oturum açmış HERKESE tüm
+--     aktif kodları (ve kimin affiliate'i olduğunu) listeleme izni veriyordu.
+--     Bir rakip, kodları toplayıp influencer atıflarını haritalayabilir ya da
+--     kullanılmayan kodları hedefli deneyebilirdi. Kod doğrulama/sahiplik
+--     sunucu fonksiyonlarından (service_role) yürür; istemciye toplu okuma
+--     gerekmez.
+-- ---------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Authenticated view active codes" ON public.promo_codes;
+
+-- ---------------------------------------------------------------------------
+-- 3c) PostgREST şema önbelleğini tazele
+--
+--     Yetki değişiklikleri PostgREST'in önbelleğinde gecikebilir; tazelenmezse
+--     kullanıcı bir süre ESKİ (geniş) yetkiyle devam eder. Migration sonunda
+--     açıkça yenilenir.
+-- ---------------------------------------------------------------------------
+NOTIFY pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------------
 -- 4) NOT — e-posta (email) ve abonelik alanları

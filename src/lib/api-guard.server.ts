@@ -6,6 +6,8 @@
  * - `jsonError`: iç hata detaylarını sızdırmadan hata döndürür.
  */
 
+import { clientIpFromHeaders } from "@/lib/client-ip";
+
 export type GuardResult = { userId: string; token: string } | { response: Response };
 
 function json(status: number, body: Record<string, unknown>): Response {
@@ -21,14 +23,17 @@ export function jsonError(status: number, message: string, internal?: unknown): 
   return json(status, { error: message });
 }
 
-/** İstemci IP'si (Cloudflare / proxy başlıkları). */
+/**
+ * İstemci IP'si.
+ *
+ * GÜVENLİK: başlıkları ham okumak yanlıştı. `cf-connecting-ip` ve
+ * `x-forwarded-for`'un İLK halkası istemci tarafından gönderilebildiği için
+ * her istekte farklı IP uydurulup IP tabanlı hız sınırları atlatılabiliyordu.
+ * Çıkarım tek kaynakta toplandı: yalnız proxy'nin yazdığı değerler ve
+ * X-Forwarded-For'un SON halkası güvenilir sayılır (bkz. lib/client-ip.ts).
+ */
 export function clientIp(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
-    "unknown"
-  );
+  return clientIpFromHeaders(request.headers) || "unknown";
 }
 
 /** Basit hash — IP'yi düz metin saklamamak için. */

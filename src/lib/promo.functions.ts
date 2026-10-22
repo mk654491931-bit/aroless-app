@@ -122,7 +122,13 @@ export const deletePromoCode = createServerFn({ method: "POST" })
 export const validatePromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((i: unknown) => z.object({ code: z.string().trim().min(1).max(32) }).parse(i))
-  .handler(async ({ data }): Promise<{ valid: boolean; discount_pct: number; reason?: string }> => {
+  .handler(async ({ data, context }): Promise<{ valid: boolean; discount_pct: number; reason?: string }> => {
+    // Sınır: kod denemeleri kaba kuvvetle kod avlamak için kullanılmasın.
+    const { rateLimit } = await import("@/lib/api-guard.server");
+    const limited = await rateLimit(`promo:validate:${context.userId}`, 20, 60);
+    if (limited)
+      return { valid: false, discount_pct: 0, reason: "Çok fazla deneme, biraz sonra dene." };
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin
       .from("promo_codes")

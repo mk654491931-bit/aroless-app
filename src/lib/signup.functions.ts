@@ -61,8 +61,10 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 255) {
       throw new Error("Geçerli bir e-posta adresi girin.");
     }
-    if (password.length < 6 || password.length > 72)
-      throw new Error("Şifre en az 6 karakter olmalı.");
+    // GÜVENLİK: 6 karakterlik alt sınır zayıftı; kayıt yolunda 10'a çıkarıldı.
+    // 72 = bcrypt girdi tavanı (daha uzunu sessizce kırpılır).
+    if (password.length < 10 || password.length > 72)
+      throw new Error("Şifre en az 10 karakter olmalı.");
     if (password !== confirmPassword) throw new Error("Şifreler birbiriyle eşleşmiyor.");
     if (input?.legalAccepted !== true)
       throw new Error("Kayıt için zorunlu yasal onayları kabul etmelisiniz.");

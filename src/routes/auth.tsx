@@ -293,8 +293,8 @@ function AuthPage() {
 
   const strength = useMemo(() => {
     let s = 0;
-    if (password.length >= 6) s++;
-    if (password.length >= 10) s++;
+    if (password.length >= 8) s++;
+    if (password.length >= 12) s++;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) s++;
     if (/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) s++;
     return s;
@@ -448,8 +448,8 @@ function AuthPage() {
   /** Recovery oturumuyla yeni şifre belirleme. */
   const submitRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error("Şifre en az 6 karakter olmalı.");
+    if (newPassword.length < 10) {
+      toast.error("Şifre en az 10 karakter olmalı.");
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -494,14 +494,14 @@ function AuthPage() {
             </div>
             <h1 className="mt-5 text-2xl font-bold tracking-tight">Yeni şifre belirle</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Hesabın için yeni bir şifre gir. En az 6 karakter olmalı.
+              Hesabın için yeni bir şifre gir. En az 10 karakter olmalı.
             </p>
 
             <div className="mt-6 space-y-3">
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={10}
                 autoComplete="new-password"
                 placeholder="Yeni şifre"
                 value={newPassword}
@@ -511,7 +511,7 @@ function AuthPage() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={10}
                 autoComplete="new-password"
                 placeholder="Yeni şifre (tekrar)"
                 value={confirmNewPassword}
@@ -871,9 +871,11 @@ function AuthPage() {
                         <input
                           type={showPw ? "text" : "password"}
                           required
-                          minLength={6}
+                          minLength={mode === "signin" ? 6 : 10}
                           autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                          placeholder="Password (min. 6 characters)"
+                          placeholder={
+                            mode === "signin" ? "Password" : "Password (min. 10 characters)"
+                          }
                           value={password}
                           onFocus={() => setFocusField("password")}
                           onBlur={() => setFocusField(null)}
@@ -921,7 +923,7 @@ function AuthPage() {
                         <input
                           type={showPw ? "text" : "password"}
                           required
-                          minLength={6}
+                          minLength={10}
                           autoComplete="new-password"
                           placeholder="Confirm password"
                           value={confirmPassword}

@@ -2,14 +2,31 @@
 // TURNSTILE_SECRET_KEY tanımlı değilse doğrulama atlanır (graceful degrade).
 // Retry logic + timeout + caching ile geliştirildi.
 
+import { clientIpFromHeaders } from "@/lib/client-ip";
+
 const TURNSTILE_ENDPOINT = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_TIMEOUT = 8000; // 8 saniye
 const TURNSTILE_RETRIES = 2;
 const TURNSTILE_CACHE_DURATION = 300_000; // 5 dakika
 
-// In-memory cache — token→result mapping
+// Yalnız BAŞARISIZ doğrulamalar kısa süreliğine hatırlanır.
+//
+// GÜVENLİK (bulgu): başarılı sonuç da önbelleğe alınıyordu. Turnstile jetonları
+// TEK KULLANIMLIKTIR; başarıyı 5 dakika cache'lemek aynı jetonla art arda
+// sınırsız istek (replay) yapılabilmesi demekti — yani bir kez çözülen CAPTCHA
+// birçok kez kullanılabiliyordu. Başarı artık önbelleğe YAZILMAZ.
 type CacheEntry = { result: TurnstileResult; expires: number };
 const tokenCache = new Map<string, CacheEntry>();
+/** Bellek şişmesini önlemek için en fazla bu kadar başarısız jeton saklanır. */
+const MAX_CACHED_FAILURES = 500;
+
+function rememberFailure(token: string, result: TurnstileResult): void {
+  if (tokenCache.size >= MAX_CACHED_FAILURES) {
+    const oldest = tokenCache.keys().next().value;
+    if (oldest !== undefined) tokenCache.delete(oldest);
+  }
+  tokenCache.set(token, { result, expires: Date.now() + TURNSTILE_CACHE_DURATION });
+}
 
 // Provider sağlık izleme
 type ProviderHealth = {
@@ -51,11 +68,11 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
 
   if (!token) return { ok: false, skipped: false, reason: "token-required" };
 
-  // Cache kontrol
+  // Cache'te YALNIZ başarısız sonuçlar bulunur.
   const cached = tokenCache.get(token);
-  if (cached && cached.expires > Date.now()) {
-    console.log("[turnstile] Cache hit for token");
-    return cached.result;
+  if (cached) {
+    if (cached.expires > Date.now()) return cached.result;
+    tokenCache.delete(token);
   }
 
   let lastErr: unknown = null;
@@ -83,8 +100,8 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
         ? { ok: true, skipped: false }
         : { ok: false, skipped: false, reason: (json["error-codes"] ?? []).join(",") || "failed" };
 
-      // Cache ve health tracking
-      tokenCache.set(token, { result, expires: Date.now() + TURNSTILE_CACHE_DURATION });
+      // Başarı ASLA cache'lenmez (tek kullanımlık jeton); hata hatırlanır.
+      if (!result.ok) rememberFailure(token, result);
       providerHealth.lastSuccess = Date.now();
       providerHealth.successCount++;
 
@@ -118,15 +135,15 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<Turns
   return { ok: true, skipped: true, reason: "verifier-unreachable" };
 }
 
-/** İstekten istemci IP'sini çıkarır. */
+/**
+ * İstekten istemci IP'si (sahtelenemez çıkarım).
+ *
+ * GÜVENLİK: ham başlık okuması, `x-forwarded-for`un ilk halkasını uydurarak
+ * IP tabanlı sınırların atlatılmasına izin veriyordu; çıkarım tek kaynağa
+ * taşındı (bkz. lib/client-ip.ts).
+ */
 export function clientIp(request: Request): string {
-  const h = request.headers;
-  return (
-    h.get("cf-connecting-ip") ||
-    (h.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
-    h.get("x-real-ip") ||
-    ""
-  );
+  return clientIpFromHeaders(request.headers);
 }
 
 /** IP adresini geri döndürülemez şekilde hashler (KVKK/GDPR dostu). */
