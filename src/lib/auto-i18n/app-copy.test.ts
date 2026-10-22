@@ -2,8 +2,9 @@
  * UYGULAMA EKRANLARI ÇEVİRİ KATMANI — REGRESYON TESTİ.
  *
  * NEDEN VAR: `dict-*` sözlükleri otomatik üretildiği için sonradan eklenen
- * ekranlar (ürün kartı, fiyatlandırma, ayarlar, üst bar, panel) orada yoktu ve
- * dil değiştirildiğinde Türkçe kalıyordu. `APP_COPY` bu boşluğu kapatır.
+ * ekranlar (ürün kartı, fiyatlandırma, ayarlar, üst bar, panel, arama hataları)
+ * orada yoktu ve dil değiştirildiğinde Türkçe kalıyordu. `APP_COPY` +
+ * `APP_COPY_EXTRA` bu boşluğu kapatır.
  *
  * SÖZLEŞME:
  *   1. Anahtar, kaynak dosyadaki metnin birebir kendisidir (boşluklar tek
@@ -12,42 +13,56 @@
  *   2. Beş hedef dilin (en/es/de/fr/ar) hepsinde karşılık vardır.
  *   3. `extrasFor` her dili bu kayıtlarla çözebilir.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { APP_COPY, type AppCopyLang } from "./app-copy";
+import { APP_COPY_EXTRA } from "./app-copy-extra";
 import { extrasFor } from "./extras";
 
 const LANGS: AppCopyLang[] = ["en", "es", "de", "fr", "ar"];
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+/**
+ * Tüm kaynak dosyalar (testler ve çeviri katmanının kendisi hariç).
+ *
+ * `.ts` dosyaları da taranıyor: birçok kullanıcı metni bileşende değil, veri
+ * modülünde (araç kataloğu, e-posta şablonları, feed başlıkları) duruyor ve
+ * yine de ekrana basılıyor. `auto-i18n` bilinçli olarak dışlanır — sözlügün
+ * kendisini taramak "anahtar kaynakta var" kontrolünü anlamsız kılardı.
+ */
+function uiSources(dir = ROOT): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (["node_modules", "auto-i18n", "__tests__"].includes(entry.name)) continue;
+      if (entry.name.startsWith(".")) continue;
+      out.push(...uiSources(full));
+    } else if (/\.tsx?$/.test(entry.name) && !entry.name.includes(".test.")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
 
 /** Kaynak dosyayı çeviri katmanıyla aynı biçime getirir. */
-const normalized = (rel: string) =>
-  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8")
+const normalized = (path: string) =>
+  readFileSync(path, "utf8")
     .replace(/&apos;|&#39;/g, "'")
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/"\s*\+\s*"/g, "")
     .replace(/\s+/g, " ");
 
-const SOURCES = [
-  normalized("../../components/app-topbar.tsx"),
-  normalized("../../routes/dashboard.tsx"),
-  normalized("../../features/finder/components/product-card.tsx"),
-  normalized("../../features/finder/components/discovery-winner-card.tsx"),
-  normalized("../../components/search-states.tsx"),
-  normalized("../../routes/pricing.tsx"),
-  normalized("../../components/pricing-card.tsx"),
-  normalized("../../routes/settings.tsx"),
-  normalized("../../features/finder/components/discovery-progress.tsx"),
-  normalized("../../components/analysis-pipeline-modal.tsx"),
-];
+const SOURCES = uiSources().map(normalized);
+const entries = [...Object.entries(APP_COPY), ...Object.entries(APP_COPY_EXTRA)];
 
-const entries = Object.entries(APP_COPY);
-
-describe("APP_COPY", () => {
+describe("APP_COPY + APP_COPY_EXTRA", () => {
   it("kayıt boş değil", () => {
-    expect(entries.length).toBeGreaterThan(80);
+    expect(entries.length).toBeGreaterThan(150);
   });
 
   it("her anahtarın beş dilde karşılığı var", () => {

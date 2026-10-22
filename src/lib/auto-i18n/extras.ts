@@ -1,4 +1,5 @@
 import { APP_COPY } from "./app-copy";
+import { APP_COPY_EXTRA } from "./app-copy-extra";
 import { PUBLIC_COPY, type PublicCopyLang } from "./public-copy";
 
 /** Hand-maintained strings coming from shared UI primitives (shadcn). */
@@ -109,7 +110,7 @@ export function extrasFor(lang: string): Record<string, string> {
     const v = map[code as PublicCopyLang];
     if (v) out[src] = v;
   }
-  for (const [src, map] of Object.entries(APP_COPY)) {
+  for (const [src, map] of [...Object.entries(APP_COPY), ...Object.entries(APP_COPY_EXTRA)]) {
     const v = map[code as keyof typeof map];
     if (v) out[src] = v;
   }
