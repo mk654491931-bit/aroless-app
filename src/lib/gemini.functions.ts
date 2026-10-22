@@ -1,7 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
+
+/** Jeton kapısı kimlikleri (paket hakları: bulucu / liste SEO / kreatif). */
+const VALIDATE_PRODUCT_FEATURE = "agent-pipeline";
+const SEO_KIT_FEATURE = "tool:listing-seo";
+const CREATIVE_SCRIPT_FEATURE = "tool:creative-studio";
 import { callGemini, extractJson } from "@/lib/ai.server";
 import type { RealEconomics } from "@/lib/real-economics";
 import { type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
@@ -442,11 +447,22 @@ export const validateProduct = createServerFn({ method: "POST" })
   .validator((input: unknown) => ValidateInput.parse(input))
   .handler(
     async ({ data, context }): Promise<{ report: ValidationReport; creditsRemaining: number }> => {
-      const { data: remaining, error: deductErr } = await context.supabase.rpc("deduct_credit");
-      if (deductErr) {
-        if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-        throw new Error(deductErr.message);
-      }
+      // TEK KAPI: cüzdan + aylık ürün bulucu hakkı + kullanım defteri.
+      // (Eskiden `deduct_credit` doğrudan çağrılıyordu: paket kotası sorulmuyor,
+      // kullanım tablosuna satır yazılmıyordu.)
+      await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+        userId: context.userId,
+        feature: VALIDATE_PRODUCT_FEATURE,
+        db: context.supabase,
+      });
+      const { data: profileRow } = await context.supabase
+        .from("profiles")
+        .select("credits, finder_credits")
+        .eq("id", context.userId)
+        .maybeSingle();
+      const remaining =
+        Number((profileRow as { credits?: number } | null)?.credits ?? 0) +
+        Number((profileRow as { finder_credits?: number } | null)?.finder_credits ?? 0);
 
       // Ajan hattı başarısız olursa düşülen kredi iade edilir.
       return withCreditRefund(context.userId, async () => {
@@ -528,11 +544,11 @@ export const generateSeoKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => SeoInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: SEO_KIT_FEATURE,
+      db: context.supabase,
+    });
     const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `You are a senior DTC / e-commerce copywriter and SEO specialist. Generate a complete marketing kit for the product below, optimized for the target sales platform.
@@ -588,11 +604,11 @@ export const generateCreativeScripts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ScriptInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: CREATIVE_SCRIPT_FEATURE,
+      db: context.supabase,
+    });
     const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `You are a viral short-form video strategist who has scripted 9-figure DTC TikTok and Instagram Reels campaigns.

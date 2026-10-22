@@ -21,7 +21,16 @@ import {
   studioBudgetMs,
   type CreativeKit,
 } from "@/lib/creative-studio.server";
-import { withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
+
+/**
+ * Jeton kapısı kimliği — AI araç hakkı (`toolRuns`).
+ *
+ * NEDEN DEĞİŞTİ: eskiden doğrudan `deduct_credit` çağrılıyor, aylık hak ve
+ * kullanım defteri atlanıyordu. Kreatif stüdyo paket kotasını tüketmiyor ve
+ * "bu ay" tablosunda görünmüyordu.
+ */
+const CREATIVE_STUDIO_FEATURE = "tool:creative-studio";
 
 const KitInput = z.object({
   product: z.string().min(2).max(160),
@@ -63,11 +72,11 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => KitInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: CREATIVE_STUDIO_FEATURE,
+      db: context.supabase,
+    });
     // Üretim başarısız olursa düşülen kredi iade edilir.
     return withCreditRefund(context.userId, async () => {
       const plan = creativeKitPrompt(data);

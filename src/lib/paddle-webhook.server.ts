@@ -267,33 +267,25 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
       }
     }
 
-    // 7b. KREDİ İDEMPOTANSİYETİ — "sistem kendi kendine sürekli kredi
-    //     tanımlıyor" şikâyetinin kökü.
+    // 7b. KREDİ KARARI — "sistem kendi kendine sürekli kredi tanımlıyor" ve
+    //     "abonelik başladı ama jeton eklenmedi" şikâyetlerinin ortak noktası.
     //
-    //     Paddle aynı ÖDEME için birden çok olay gönderir
-    //     (`transaction.completed` + her değişiklikte `transaction.updated`)
-    //     ve her olayın KENDİ `event_id`si vardır. RPC yalnız `event_id`
-    //     bazında tekilleştirir; yani tek bir ödeme, o olayların her
-    //     birinde paket kredisini YENİDEN ekliyordu. Kredi artık İŞLEM
-    //     başına bir kez verilir: `transactions.external_id` tekil
-    //     yazıldığı için ikinci ve sonraki olaylarda kredi sıfırlanır.
+    //     Paddle aynı ÖDEME için birden çok olay gönderir (`transaction.completed`
+    //     + her değişiklikte `transaction.updated`) ve her olayın KENDİ
+    //     `event_id`si vardır. Tek seferlik olmayı artık VERİTABANI garanti eder:
+    //     `process_paddle_event`, krediyi `credit_ledger` üzerindeki
+    //     `paddle:<işlem kimliği>` anahtarıyla bir kez talep eder.
+    //
+    //     BURADA `transactions` satırına BAKILMAZ (eski hata): ilk olay paketi
+    //     çözemediğinde 0 jetonla yazılıyor ama `transactions` satırı yine
+    //     oluşuyordu; sonraki olaylar "zaten kayıtlı" deyip jetonu sonsuza kadar
+    //     reddediyordu. Ödeme kaydedilmiş, jeton hiç verilmemiş kalıyordu.
     if (command.searchCredits || command.simCredits) {
-      // `transactions.external_id` tekil yazıldığı için "bu işlem zaten
-      // kayıtlı mı?" sorusu kredi idempotansının anahtarıdır.
-      let alreadyRecorded = false;
-      if (command.transactionId) {
-        const { data: already } = await supabaseAdmin
-          .from("transactions")
-          .select("id")
-          .eq("external_id" as never, command.transactionId)
-          .maybeSingle();
-        alreadyRecorded = Boolean(already);
-      }
       const decision = creditGrantDecision({
         eventType: event.eventType,
         transactionStatus: (event.data as Record<string, unknown> | null)?.["status"] as
           string | null | undefined,
-        alreadyRecorded,
+        transactionId: command.transactionId,
         searchCredits: command.searchCredits,
         simCredits: command.simCredits,
       });

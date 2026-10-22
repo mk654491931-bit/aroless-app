@@ -11,14 +11,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   rpc: vi.fn(),
   maybeSingle: vi.fn(),
+  /** Bu ayın kullanım satırları (`credit_usage_log`). */
+  usageRows: vi.fn(async () => [] as { tool: string; credits: number }[]),
   refund: vi.fn(async () => true),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: h.maybeSingle }) }) }),
-    rpc: h.rpc,
-  }),
+  createClient: () => {
+    // Tek zincir: `.select().eq().maybeSingle()` (profil / rol) ve
+    // `.select().eq().gte().limit()` (kullanım defteri) aynı yüzeyde çalışsın.
+    // `user_roles` HER ZAMAN boş döner: aksi hâlde her test kullanıcısı admin
+    // sayılır, admin kotası (250) devreye girer ve plan limiti test edilemez.
+    let table = "";
+    const chain: Record<string, unknown> = {};
+    chain["select"] = () => chain;
+    chain["eq"] = () => chain;
+    chain["gte"] = () => chain;
+    chain["limit"] = async () => ({ data: await h.usageRows(), error: null });
+    chain["maybeSingle"] = async () =>
+      table === "user_roles" ? { data: null, error: null } : h.maybeSingle();
+    return {
+      from: (name: string) => {
+        table = name;
+        return chain;
+      },
+      rpc: h.rpc,
+    };
+  },
 }));
 
 vi.mock("./credit-guard.server", () => ({
@@ -33,8 +52,11 @@ import { chargeAiCredits, chargeOrRespond, noCreditsResponse } from "./credit-ch
 const USER = "11111111-2222-3333-4444-555555555555";
 const TOKEN = "header.payload.signature";
 
-function balance(credits: number, finder = 0) {
-  h.maybeSingle.mockResolvedValue({ data: { credits, finder_credits: finder }, error: null });
+function balance(credits: number, finder = 0, tier = "Free") {
+  h.maybeSingle.mockResolvedValue({
+    data: { credits, finder_credits: finder, subscription_tier: tier },
+    error: null,
+  });
 }
 
 /**
@@ -52,6 +74,8 @@ beforeEach(() => {
   vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "publishable-key");
   h.rpc.mockReset();
   h.maybeSingle.mockReset();
+  h.usageRows.mockReset();
+  h.usageRows.mockResolvedValue([]);
   h.refund.mockClear();
 });
 
@@ -130,6 +154,45 @@ describe("chargeAiCredits", () => {
     const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "council" });
     expect(outcome).toEqual({ ok: false, reason: "UNAVAILABLE", charged: 0 });
     expect(h.rpc).not.toHaveBeenCalled();
+  });
+
+  it("aylık hak dolduysa BAKİYE OLSA DA reddeder (PLAN_LIMIT)", async () => {
+    // ÖLÇÜLEN HATA: sunucu fonksiyonları `deduct_*` RPC'sini doğrudan
+    // çağırıyordu; "2 AI Konsey / ay" yazan paket sınırsızdı. Aylık sayaç artık
+    // bakiyeden ÖNCE sorulur ve hangi hakkın dolduğunu söyler.
+    balance(500, 0, "Pro");
+    h.usageRows.mockResolvedValue([{ tool: "council", credits: 6 }]);
+    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "council" });
+    expect(outcome).toEqual({
+      ok: false,
+      reason: "PLAN_LIMIT",
+      charged: 0,
+      kind: "councilRuns",
+      limit: 6,
+      tier: "Pro",
+    });
+    expect(deductCalls()).toHaveLength(0);
+  });
+
+  it("2 jetonluk iş, kalan hak 1 iken geçmez (aylık tavan aşılmaz)", async () => {
+    balance(500, 0, "Pro");
+    h.usageRows.mockResolvedValue([{ tool: "tool:consensus", credits: 89 }]);
+    const outcome = await chargeAiCredits({
+      userId: USER,
+      token: TOKEN,
+      feature: "tool:consensus",
+    });
+    expect(outcome).toMatchObject({ ok: false, reason: "PLAN_LIMIT", kind: "toolRuns" });
+    expect(deductCalls()).toHaveLength(0);
+  });
+
+  it("aylık kota okunamazsa ENGELLEMEZ (fail-open) ve düşmeyi dener", async () => {
+    balance(5, 0, "Pro");
+    h.usageRows.mockRejectedValue(new Error("boom"));
+    h.rpc.mockResolvedValue({ data: 4, error: null });
+    const outcome = await chargeAiCredits({ userId: USER, token: TOKEN, feature: "council" });
+    expect(outcome.ok).toBe(true);
+    expect(deductCalls()).toHaveLength(1);
   });
 
   it("bakiye okunamazsa kararı gerçek düşme denemesi verir", async () => {

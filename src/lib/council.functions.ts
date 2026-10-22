@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { refundCredit, withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, refundCredit, withCreditRefund } from "@/lib/credit-guard.server";
 import type { CouncilReport } from "@/lib/council.server";
 
 type Input = { query: string; country?: string; category?: string; lang?: string };
@@ -60,12 +60,38 @@ export type CouncilAnalysisStart =
 export type CouncilAnalysisPoll =
   { status: "ready"; report: CouncilReport } | { status: "processing" };
 
-function creditError(message: string | null | undefined): Error {
-  return new Error(
-    String(message ?? "").includes("no_credits")
-      ? "Arama krediniz bitti. Paketinizi yükseltin."
-      : "Kredi düşülemedi, lütfen tekrar deneyin.",
-  );
+/**
+ * Konsey tahsilatı — TEK KAPI.
+ *
+ * NEDEN: burada doğrudan `deduct_product_finder_credit` çağrılıyordu; yani
+ * paketin "aylık AI Konsey oturumu" hakkı hiç sorulmuyor ve kullanım
+ * defterine satır yazılmıyordu. Sonuç: Starter 2 konsey hakkı yerine bakiyesi
+ * yettiğince koşabiliyor, "bu ay" tablosunda da hiç görünmüyordu.
+ */
+const COUNCIL_FEATURE = "council";
+
+async function chargeCouncil(context: {
+  userId: string;
+  supabase: import("@supabase/supabase-js").SupabaseClient;
+}): Promise<void> {
+  try {
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: COUNCIL_FEATURE,
+      db: context.supabase,
+    });
+  } catch (error) {
+    const message = (error as Error)?.message ?? "";
+    if (message.includes("PLAN_LIMIT")) {
+      throw new Error(
+        "Bu ayki AI Konsey hakkın doldu. Ayarlar → Abonelik bölümünden paketini yükseltebilirsin.",
+      );
+    }
+    if (message.includes("NO_CREDITS") || message.includes("no_credits")) {
+      throw new Error("Arama krediniz bitti. Paketinizi yükseltin.");
+    }
+    throw new Error("Kredi düşülemedi, lütfen tekrar deneyin.");
+  }
 }
 
 /**
@@ -119,8 +145,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     // `defaultCouncilBudgetMs`), yani Vercel Hobby'de 300 sn'ye sığan `fast`
     // profille 14 ajan çalışır ve istek kendi kendine biter — 504 yok.
     if (plan === "inline") {
-      const { error } = await context.supabase.rpc("deduct_product_finder_credit");
-      if (error) throw creditError(error.message);
+      await chargeCouncil(context);
       return { status: "ready", report: await work() };
     }
 
@@ -131,8 +156,7 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
       return { status: "processing", ...poll };
     }
 
-    const { error } = await context.supabase.rpc("deduct_product_finder_credit");
-    if (error) throw creditError(error.message);
+    await chargeCouncil(context);
 
     // Hibrit kurulum: işi uzak işçiye QStash ile yolla.
     if (plan === "qstash-worker") {

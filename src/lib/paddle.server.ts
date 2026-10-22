@@ -19,7 +19,7 @@
  */
 
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
-import { PLAN_BY_ID, PLANS } from "@/lib/plans";
+import { PLAN_BY_ID, PLAN_CREDIT_GRANTS, PLANS } from "@/lib/plans";
 
 export type PlanId = "Starter" | "Pro" | "Business";
 
@@ -505,19 +505,24 @@ export async function resolveDiscountCode(discountId: string | null): Promise<st
 /**
  * Her başarılı abonelik ödemesinde verilen jetonlar.
  *
- * ÖLÇÜLEN HATA: bu sayılar `plans.ts`ten AYRI yazılıydı. Paket tanımı Starter
- * için 8, Pro için 15 jeton diyordu ama ödeme 10/20 yazıyordu; aylık limit ise
- * 8/15 kaldığı için verilen jetonun 2/5'i HİÇ kullanılamıyordu. Artık jeton
- * miktarı TEK KAYNAKTAN (`PLANS`) türetilir — verilen jeton, aylık limit ve
- * fiyat tablosundaki sayı aynıdır.
+ * İKİ ÖLÇÜLMÜŞ HATA burada kapatıldı:
+ *   1. Sayılar `plans.ts`ten AYRI yazılıydı; paket 8 jeton derken ödeme 10
+ *      yazıyor, aylık limit 8'de kalıyordu — verilen jetonun bir kısmı HİÇ
+ *      kullanılamıyordu. Artık miktar tek kaynaktan gelir.
+ *   2. Verilen jeton yalnız "ürün bulucu kredisi" kadardı (Starter 10). Her AI
+ *      işi aynı cüzdandan harcadığı için paket, fiyat tablosunda yazan 30 araç /
+ *      2 konsey / 6 radar hakkına HİÇ ulaşamıyordu. Artık grant, paketin dört
+ *      aylık hakkının TOPLAMIDIR (`monthlyCreditGrant`); her hak ayrıca kendi
+ *      aylık tavanıyla sınırlıdır.
  *
  * "Search" jetonları `profiles.credits`e, simülasyon jetonları `sim_credits`e
- * yazılır; sim, arama jetonunun yarısıdır (mevcut davranış korunur).
+ * yazılır; sim, bulucu jetonunun yarısıdır (eski simülatör havuzu, mevcut
+ * davranış korunur).
  */
 export const SUBSCRIPTION_CREDIT_GRANTS: Record<PlanId, { search: number; sim: number }> = {
-  Starter: { search: PLAN_BY_ID.Starter.credits, sim: PLAN_BY_ID.Starter.credits / 2 },
-  Pro: { search: PLAN_BY_ID.Pro.credits, sim: PLAN_BY_ID.Pro.credits / 2 },
-  Business: { search: PLAN_BY_ID.Business.credits, sim: PLAN_BY_ID.Business.credits / 2 },
+  Starter: { search: PLAN_CREDIT_GRANTS.Starter, sim: PLAN_BY_ID.Starter.credits / 2 },
+  Pro: { search: PLAN_CREDIT_GRANTS.Pro, sim: PLAN_BY_ID.Pro.credits / 2 },
+  Business: { search: PLAN_CREDIT_GRANTS.Business, sim: PLAN_BY_ID.Business.credits / 2 },
 };
 
 /** Subscription lifecycle events that map to a database command. */
@@ -805,15 +810,24 @@ export function mapPaddleEvent(
  * tekilleştirdiği için paket kredisi HER olayda yeniden ekleniyordu — kullanıcı
  * "sistem kendi kendine sürekli kredi tanımlıyor" diye bildirdi.
  *
- * KURAL: kredi İŞLEM başına bir kez verilir. Aynı işlem için ikinci olay
- * (`alreadyRecorded`) ve ödeme bildirmeyen durum güncellemeleri kredi üretmez.
+ * KURAL: kredi İŞLEM başına bir kez verilir — bunu veritabanındaki
+ * `credit_ledger` tekil anahtarı garanti eder. Bu kapı yalnız "bu olay ödeme mi?"
+ * sorusunu yanıtlar; ödeme bildirmeyen durum güncellemeleri kredi üretmez.
  */
 export function creditGrantDecision(args: {
   eventType: string;
   /** Olaydaki işlem durumu (`transaction.updated` için belirleyici). */
   transactionStatus?: string | null;
-  /** Bu işlem için zaten bir `transactions` satırı var mı? */
-  alreadyRecorded: boolean;
+  /**
+   * Ödeme olayının işlem kimliği. Tazeleme (reconcile) yolunda "bu aboneliğin
+   * son tamamlanmış işlemi"dir; hangi ödeme için jeton istendiğini söyler.
+   */
+  transactionId?: string | null;
+  /**
+   * GERİYE UYUMLULUK: eski çağrılar bu alanı geçiyor. Kredi kapısı ARTIK bu
+   * bayrağa dayanmaz (aşağıdaki açıklama).
+   */
+  alreadyRecorded?: boolean;
   searchCredits: number;
   simCredits: number;
 }): { search: number; sim: number; granted: boolean; reason: string } {
@@ -822,13 +836,29 @@ export function creditGrantDecision(args: {
     return { ...none, reason: "no-grant-mapped" };
   }
   const status = String(args.transactionStatus ?? "").toLowerCase();
-  const paid = args.eventType === "transaction.completed" || status === "completed";
+  /**
+   * ÖDEME SAYILAN OLAYLAR: gerçek ödeme olayları + tazeleme (reconcile).
+   *
+   * ÖLÇÜLEN HATA ("abonelik başlatıldı ama jeton eklenmedi"): kredi kapısı
+   * `transactions` satırının VARLIĞINA bakıyordu. İlk olay paketi çözemediği
+   * için (fiyat kimliği eşleşmedi ya da Paddle API'si o an yanıt vermedi)
+   * 0 jetonla yazıldığında `transactions` satırı yine oluşuyordu; sonraki
+   * olaylar ve yetki tazeleme "zaten kayıtlı" deyip jetonu SONSUZA KADAR
+   * reddediyordu. Yani ödeme kaydedilmiş, jeton hiç verilmemiş kalıyordu.
+   *
+   * Artık kapı yalnız "bu olay ödeme mi?" sorusuna bakar; jetonun işlem başına
+   * BİR kez verilmesini veritabanındaki `credit_ledger` tekil anahtarı garanti
+   * eder (`process_paddle_event`, `ref_key = 'paddle:<işlem kimliği>'`). Bu
+   * yüzden aynı olay iki kez gelse de jeton ikinci kez eklenmez.
+   */
+  const paidEvent = args.eventType === "transaction.completed" || status === "completed";
+  // Tazeleme de ödeme yoludur: webhook kaçtığında jetonun verildiği tek yer
+  // burasıdır. Tek seferlik olmasını `credit_ledger` anahtarı sağlar.
+  const reconcileEvent = args.eventType.startsWith("reconcile.");
+  const paid = paidEvent || reconcileEvent;
   if (!paid) {
     // Durum bildirimi (ör. `ready` → `completed`), yeni bir satın alma değildir.
     return { ...none, reason: "not-paid" };
-  }
-  if (args.alreadyRecorded) {
-    return { ...none, reason: "already-granted" };
   }
   return {
     search: Math.max(0, args.searchCredits),

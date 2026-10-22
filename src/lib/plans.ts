@@ -103,7 +103,7 @@ export const PLAN_BY_ID: Record<PlanId, Plan> = {
   Business: PLANS[2],
 };
 
-/** Kullanım karşılaştırma tablosu satırları. */
+/**
 export const USAGE_ROWS: {
   key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
   label: string;
@@ -114,6 +114,35 @@ export const USAGE_ROWS: {
   { key: "councilRuns", label: "14'lü AI Konsey oturumu", unit: "/ ay" },
   { key: "radarScans", label: "Trend radar taraması", unit: "/ ay" },
 ];
+
+/**
+ * AYLIK JETON KARŞILIĞI — paketin dört hakkının TOPLAMI.
+ *
+ * ÖLÇÜLEN HATA (kullanıcı bildirimi: "pakete göre jeton eklenmiyor, sistem
+ * yanlış çalışıyor"): ödeme yalnız "ürün bulucu kredisi" kadar jeton veriyordu
+ * (Starter 10). Oysa HER AI işi aynı cüzdandan harcanıyor; yani kullanıcı
+ * fiyat tablosunda "30 AI araç çalıştırma" görse de 10 işten sonra "jeton
+ * bitti" duvarına çarpıyordu. Dört aylık hakkın ÜÇÜ hiç ulaşılamıyordu.
+ *
+ * Artık verilen jeton, hakların toplamı kadardır; her hak ayrıca kendi aylık
+ * tavanıyla sınırlanır (`plan-usage.ts` → `limitFor`). Böylece:
+ *   • fiyat tablosundaki her sayı gerçekten kullanılabilir,
+ *   • cüzdan tek para birimi kalır (araçların "1 kredi" etiketi doğru kalır),
+ *   • bir hakkın kullanılmayan payı başka hakka taşmaz (tavanlar ayrı sayılır).
+ */
+export function monthlyCreditGrant(
+  plan: Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">,
+): number {
+  const total = plan.credits + plan.toolRuns + plan.councilRuns + plan.radarScans;
+  return Math.max(0, Math.floor(total));
+}
+
+/** Ödeme sonrası verilecek jeton — paket başına TEK KAYNAK. */
+export const PLAN_CREDIT_GRANTS: Record<PlanId, number> = {
+  Starter: monthlyCreditGrant(PLAN_BY_ID.Starter),
+  Pro: monthlyCreditGrant(PLAN_BY_ID.Pro),
+  Business: monthlyCreditGrant(PLAN_BY_ID.Business),
+};
 
 /** Kullanıcının abonelik tier metnini seviyeye çevirir (0 = ücretsiz). */
 export function tierLevel(tier: string | undefined | null): 0 | 1 | 2 | 3 {

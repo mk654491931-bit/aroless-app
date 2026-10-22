@@ -101,21 +101,50 @@ export async function chargeForAi(
   deduct: () => PromiseLike<{ error: { message?: string | null } | null }>,
   amount = 1,
   /**
-   * KULLANIM DEFTERİ (isteğe bağlı ama önerilir): verilirse düşen jeton
-   * `credit_usage_log`a yazılır ve sol bardaki "bu ay" sayaçları eksilir.
-   * Verilmezse davranış bire bir eskisi gibidir (geriye uyumlu).
+   * KULLANIM DEFTERİ + AYLIK HAK KAPISI (isteğe bağlı ama önerilir).
+   *
+   * Verilirse tahsilat TEK KAPIYA (`chargeAiCredits`) devredilir: cüzdan
+   * bakiyesi, paketin AYLIK HAKKI (`plans.ts` → `toolRuns` / `councilRuns` /
+   * `radarScans`) ve kullanım defteri birlikte işler. Verilmezse davranış bire
+   * bir eskisi gibidir (geriye uyumlu).
+   *
+   * NEDEN ÖNEMLİ: bu çağrılar `deduct_*` RPC'sini doğrudan çağırdığı için
+   * aylık hak hiç sorulmuyordu — yani "30 araç / ay" yazan paket sınırsızdı.
+   * Artık server fonksiyonları da aynı kapıdan geçer.
    */
   usage?: {
     userId: string;
     feature: string;
     /**
-     * Çağıranın JWT istemcisi. Servis anahtarı yokken defter kaydı bununla
-     * yazılır (`log_ai_usage`); verilmezse yalnız süreçte anahtar varsa yazılır.
+     * Çağıranın JWT istemcisi. Servis anahtarı yokken defter kaydı ve hak
+     * kontrolü bununla yapılır; verilmezse süreçte anahtar varsa yazılır.
      */
     db?: ReadDb | null;
   },
 ): Promise<void> {
   const n = Math.max(1, Math.round(amount));
+  if (usage?.userId && usage.db) {
+    const { chargeAiCredits } = await import("./credit-charge.server");
+    const outcome = await chargeAiCredits({
+      userId: usage.userId,
+      db: usage.db,
+      feature: usage.feature as import("./credit-costs").AiCreditFeature,
+      amount: n,
+    });
+    if (!outcome.ok) {
+      // `UNAVAILABLE` arayüzde "bakiye doğrulanamadı" olarak çevrilir; ham
+      // "UNAVAILABLE" metni kullanıcıya gösterilmez.
+      throw new Error(outcome.reason === "UNAVAILABLE" ? "CREDIT_DEDUCT_FAILED" : outcome.reason);
+    }
+    return;
+  }
+  if (usage) {
+    // Görünür uyarı: `db` olmadan aylık hak sorulamaz. Sessizce tavan atlamak
+    // "30 araç / ay" sözünü bozar; en azından logda görünsün.
+    console.warn(
+      `[credits] ${usage.feature}: kullanıcı istemcisi verilmedi — aylık hak kontrolü atlandı`,
+    );
+  }
   for (let i = 0; i < n; i++) {
     const { error } = await deduct();
     if (error) throw creditDeductError(error.message);

@@ -115,18 +115,26 @@ async function profileSpend(
  */
 export async function chargeAiCredits(opts: {
   userId: string;
-  token: string;
+  /** Kullanıcının erişim jetonu (yoksa `db` verilmelidir). */
+  token?: string;
+  /**
+   * Çağıranın zaten kurduğu KULLANICI istemcisi (RLS + `auth.uid()`).
+   * Server fonksiyonları bunu verir: aynı istekte ikinci bir istemci
+   * kurulmaz ve jetonun iletilmesine gerek kalmaz.
+   */
+  db?: import("./supabase-read.server").ReadDb | null;
   feature: AiCreditFeature;
   /** Fiyatı ezmek için (örn. testte); verilmezse `featureCreditCost` kullanılır. */
   amount?: number;
 }): Promise<ChargeOutcome> {
   const amount = Math.max(0, Math.floor(opts.amount ?? featureCreditCost(opts.feature)));
   if (amount === 0) return { ok: true, charged: 0, remaining: null, admin: false };
-  if (!opts.token) return { ok: false, reason: "UNAVAILABLE", charged: 0 };
 
   let client: ReturnType<typeof userClient>;
   try {
-    client = userClient(opts.token);
+    if (opts.db) client = opts.db as ReturnType<typeof userClient>;
+    else if (opts.token) client = userClient(opts.token);
+    else return { ok: false, reason: "UNAVAILABLE", charged: 0 };
   } catch {
     return { ok: false, reason: "UNAVAILABLE", charged: 0 };
   }
@@ -172,7 +180,10 @@ export async function chargeAiCredits(opts: {
     used: used?.[kind] ?? null,
     balance: state?.total ?? null,
   });
-  if (used !== null && effectiveLimit !== null && used[kind] >= effectiveLimit) {
+  // `used >= limit` YERİNE `used + amount > limit`: `consensus` gibi 2 jetonluk
+  // bir iş, kalan hak 1 iken eskiden geçiyor ve aylık hakkı 1 aşıyordu. Tavan
+  // artık işin TAM maliyeti kadar aranır.
+  if (used !== null && effectiveLimit !== null && used[kind] + amount > effectiveLimit) {
     return {
       ok: false,
       reason: "PLAN_LIMIT",
@@ -298,7 +309,8 @@ export function creditUnavailableResponse(): Response {
 /** Kolaylık: tahsilatı yapıp hazır yanıtı/log'u döner. */
 export async function chargeOrRespond(opts: {
   userId: string;
-  token: string;
+  token?: string;
+  db?: import("./supabase-read.server").ReadDb | null;
   feature: AiCreditFeature;
   amount?: number;
 }): Promise<
@@ -363,7 +375,8 @@ export type IdempotentChargeOutcome =
 
 export async function chargeOnce(opts: {
   userId: string;
-  token: string;
+  token?: string;
+  db?: import("./supabase-read.server").ReadDb | null;
   feature: AiCreditFeature;
   amount?: number;
   /**

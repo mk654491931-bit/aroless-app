@@ -123,20 +123,15 @@ export const reconcileMySubscription = createServerFn({ method: "POST" })
       return { ok: false, reason: "plan_unresolved", status: snapshot.status };
     }
 
-    // Kredi: webhook ile AYNI kural — işlem başına bir kez.
-    let alreadyRecorded = false;
-    if (command.transactionId) {
-      const { data: already } = await supabaseAdmin
-        .from("transactions")
-        .select("id")
-        .eq("external_id" as never, command.transactionId)
-        .maybeSingle();
-      alreadyRecorded = Boolean(already);
-    }
+    // Kredi: webhook ile AYNI kural — işlem başına bir kez. Tekilliği
+    // `credit_ledger` anahtarı garanti eder; burada `transactions` satırına
+    // BAKILMAZ. (Eski davranışta bakılıyordu ve ilk olay 0 jetonla yazıldığında
+    // — ör. paket fiyat kimliği o an çözülemediğinde — jeton bu kurtarma
+    // yolundan da SONSUZA KADAR reddediliyordu: "abonelik başladı ama jeton
+    // eklenmedi" belirtisinin kaynağı buydu.)
     const decision = creditGrantDecision({
-      eventType: "transaction.completed",
-      transactionStatus: "completed",
-      alreadyRecorded,
+      eventType: command.eventType,
+      transactionId: command.transactionId,
       searchCredits: command.searchCredits,
       simCredits: command.simCredits,
     });

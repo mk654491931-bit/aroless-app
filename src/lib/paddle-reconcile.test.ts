@@ -19,6 +19,7 @@ import {
   planForSnapshot,
   reconcileCommand,
   reconcileEventKey,
+  SUBSCRIPTION_CREDIT_GRANTS,
   subscriptionSnapshot,
   transactionSnapshot,
   type PaddleSubscriptionSnapshot,
@@ -195,9 +196,19 @@ describe("reconcileCommand — DB komutuna dönüşüm", () => {
         userId: "u",
         occurredAt: "2026-10-08T00:00:00.000Z",
       });
-    expect(grants("pri_starter")).toMatchObject({ searchCredits: 10, simCredits: 5 });
-    expect(grants("pri_pro")).toMatchObject({ searchCredits: 20, simCredits: 10 });
-    expect(grants("pri_business")).toMatchObject({ searchCredits: 50, simCredits: 25 });
+    // Grant = paketin dört aylık hakkının toplamı (tek kaynak: `plans.ts`).
+    expect(grants("pri_starter")).toMatchObject({
+      searchCredits: SUBSCRIPTION_CREDIT_GRANTS.Starter.search,
+      simCredits: 5,
+    });
+    expect(grants("pri_pro")).toMatchObject({
+      searchCredits: SUBSCRIPTION_CREDIT_GRANTS.Pro.search,
+      simCredits: 10,
+    });
+    expect(grants("pri_business")).toMatchObject({
+      searchCredits: SUBSCRIPTION_CREDIT_GRANTS.Business.search,
+      simCredits: 25,
+    });
   });
 
   it("işlem yoksa kredi yine haritalanır ama işlem kimliği null kalır", () => {
@@ -210,7 +221,7 @@ describe("reconcileCommand — DB komutuna dönüşüm", () => {
     });
     expect(cmd!.transactionId).toBeNull();
     // İşlem kimliği olmadığı için çağıran krediyi tekilleştiremez → karar onun.
-    expect(cmd!.searchCredits).toBe(20);
+    expect(cmd!.searchCredits).toBe(SUBSCRIPTION_CREDIT_GRANTS.Pro.search);
   });
 
   it("plan çözülemezse null döner — sessizce 'Free' ya da uydurma plan yazılmaz", () => {

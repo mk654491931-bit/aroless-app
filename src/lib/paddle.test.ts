@@ -4,8 +4,11 @@ import {
   mapPaddleEvent,
   planForAsset,
   refundSignal,
+  SUBSCRIPTION_CREDIT_GRANTS,
   type PaddleSettings,
 } from "./paddle.server";
+
+const PRO_GRANT = SUBSCRIPTION_CREDIT_GRANTS.Pro.search;
 
 /**
  * Contract tests for the Paddle webhook → database command mapping.
@@ -61,7 +64,8 @@ describe("mapPaddleEvent — successful payments", () => {
     const cmd = mapPaddleEvent(settings(), "transaction.completed", completedPayment().data);
     expect(cmd).not.toBeNull();
     expect(cmd!.tier).toBe("Pro");
-    expect(cmd!.searchCredits).toBe(20);
+    // Grant, paketin DÖRT aylık hakkının toplamıdır (Pro = 20+90+6+20).
+    expect(cmd!.searchCredits).toBe(PRO_GRANT);
     expect(cmd!.simCredits).toBe(10);
     expect(cmd!.amountCents).toBe(2900);
     expect(cmd!.currency).toBe("USD");
@@ -208,40 +212,54 @@ describe("planForAsset — ürün ID'siyle plan çözümü", () => {
       }).data,
     );
     expect(cmd!.tier).toBe("Pro");
-    expect(cmd!.searchCredits).toBe(20);
+    expect(cmd!.searchCredits).toBe(PRO_GRANT);
     expect(cmd!.productId).toBe("pro_pro");
   });
 });
 
-describe("creditGrantDecision — kredi işlem başına bir kez", () => {
+describe("creditGrantDecision — jeton talebi", () => {
   it("tamamlanan ödemede krediyi geçirir", () => {
     const d = creditGrantDecision({
       eventType: "transaction.completed",
       transactionStatus: "completed",
-      alreadyRecorded: false,
-      searchCredits: 20,
+      transactionId: "txn_123",
+      searchCredits: PRO_GRANT,
       simCredits: 10,
     });
-    expect(d).toMatchObject({ granted: true, search: 20, sim: 10 });
+    expect(d).toMatchObject({ granted: true, search: PRO_GRANT, sim: 10 });
   });
 
-  it("AYNI işlem için ikinci olayda kredi VERMEZ (kendi kendine kredi şikâyeti)", () => {
+  it("aynı işlemin ikinci olayı da TALEP edilir; tekilliği veritabanı sağlar", () => {
+    // ÖLÇÜLEN HATA: burada `alreadyRecorded` ile kredi sıfırlanıyordu. İlk olay
+    // paketi çözemediği için 0 jetonla yazıldığında `transactions` satırı yine
+    // oluşuyor, sonraki olaylar ve yetki tazeleme jetonu SONSUZA KADAR
+    // reddediyordu ("abonelik başladı ama jeton eklenmedi"). Artık talep her
+    // zaman yapılır; `credit_ledger` anahtarı ikinci kez EKLEMEZ.
     const d = creditGrantDecision({
       eventType: "transaction.updated",
       transactionStatus: "completed",
-      alreadyRecorded: true,
-      searchCredits: 20,
+      transactionId: "txn_123",
+      searchCredits: PRO_GRANT,
       simCredits: 10,
     });
-    expect(d).toMatchObject({ granted: false, search: 0, sim: 0, reason: "already-granted" });
+    expect(d).toMatchObject({ granted: true, search: PRO_GRANT });
+  });
+
+  it("yetki tazeleme (reconcile) jetonu geçirir — webhook kaçarsa tek kurtarma yolu", () => {
+    const d = creditGrantDecision({
+      eventType: "reconcile.subscription",
+      transactionId: "txn_123",
+      searchCredits: PRO_GRANT,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: true, search: PRO_GRANT });
   });
 
   it("ödenmemiş durum güncellemesi kredi doğurmaz", () => {
     const d = creditGrantDecision({
       eventType: "transaction.updated",
       transactionStatus: "ready",
-      alreadyRecorded: false,
-      searchCredits: 20,
+      searchCredits: PRO_GRANT,
       simCredits: 10,
     });
     expect(d).toMatchObject({ granted: false, reason: "not-paid" });
@@ -250,7 +268,6 @@ describe("creditGrantDecision — kredi işlem başına bir kez", () => {
   it("kredisiz olayda hiçbir şey yapmaz", () => {
     const d = creditGrantDecision({
       eventType: "transaction.completed",
-      alreadyRecorded: false,
       searchCredits: 0,
       simCredits: 0,
     });

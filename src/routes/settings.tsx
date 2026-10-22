@@ -19,6 +19,7 @@ import { clearPlanPurchasePending } from "@/lib/plan-sync";
 import { creditBalances, creditBreakdownLabel } from "@/lib/credits";
 import { planLabelFor } from "@/lib/plan-usage";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PlanUsageTable } from "@/components/plan-usage-table";
 import { HuggingFacePanel } from "@/components/huggingface-panel";
 import { ReferralPanel } from "@/components/referral-panel";
 import { AffiliatePanel } from "@/components/affiliate-panel";
@@ -338,6 +339,16 @@ function SettingsPage() {
               value={`${creditBalances(profQ.data).total} (${creditBreakdownLabel(creditBalances(profQ.data))})`}
             />
           </div>
+
+          {/* AYLIK KULLANIM TABLOSU — ölçülen boşluk: paket hakları (araç /
+              konsey / radar) hiçbir yerde tablo olarak görünmüyordu; kullanıcı
+              yalnız sol bardaki küçük şeritte "3/30" gibi bir sayı görüyor,
+              "aylık hakkım ne, ne kadar kaldı?" sorusunu yanıtlayamıyordu. */}
+          <PlanUsageTable
+            tier={profQ.data?.subscription_tier}
+            credits={profQ.data?.credits}
+            finderCredits={profQ.data?.finder_credits}
+          />
 
           {/* ABONELİK YÖNETİMİ — iptal DÖNEM SONUNDA yürürlüğe girer:
               bu ayın ücreti iade edilmez, gelecek ay tahsilat yapılmaz. */}

@@ -8,7 +8,17 @@ import {
   auditPrompt,
   type AuditReport,
 } from "@/lib/store-audit.server";
-import { withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
+
+/**
+ * Jeton kapısı kimliği. Bu modül "AI araç" hakkından harcar (`toolRuns`).
+ *
+ * NEDEN DEĞİŞTİ: eskiden doğrudan `deduct_credit` çağrılıyordu — yani ne paketin
+ * aylık araç hakkı soruluyor, ne de kullanım defterine satır yazılıyordu. Sonuç:
+ * "30 araç / ay" yazan paket sınırsız kalıyor ve "bu ay" tablosunda bu iş hiç
+ * görünmüyordu (kullanıcı bildirimi: tablo eksik/yanlış).
+ */
+const STORE_AUDIT_FEATURE = "tool:store-audit";
 
 const AuditInput = z.object({
   url: z.string().url().max(300),
@@ -30,11 +40,11 @@ export const auditStore = createServerFn({ method: "POST" })
     const url = data.url.startsWith("http") ? data.url : `https://${data.url}`;
     if (!/^https?:\/\//i.test(url)) throw new Error("INVALID_URL");
 
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: STORE_AUDIT_FEATURE,
+      db: context.supabase,
+    });
 
     // Sayfa çekilemezse veya analiz başarısız olursa kredi iade edilir —
     // kullanıcı erişilemeyen bir URL için kredi kaybetmez.

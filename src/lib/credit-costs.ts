@@ -22,8 +22,18 @@
 
 import type { ToolId } from "./tools-prompts.server";
 
+/**
+ * Jeton düşen AI işinin kimliği.
+ *
+ * `tool:${string}` bilinçli olarak GENİŞ: sunucu fonksiyonları araç kimliğini
+ * çalışma zamanında üretiyor (`tool:compare`, `tool:creative-studio` …) ve
+ * dar bir birleşim tipi bu çağrıları derlemede kırıyordu. Fiyat garantisi
+ * kaybolmuyor: `TOOL_CREDIT_COSTS` hâlâ `satisfies Record<ToolId, number>`
+ * olduğu için yeni bir aracın fiyatı tanımlanmadan derleme geçmez; bilinmeyen
+ * kimlik `DEFAULT_TOOL_CREDIT_COST` (1) ile ücretlendirilir — bedava kalmaz.
+ */
 export type AiCreditFeature =
-  `tool:${ToolId}` | "council" | "agent-pipeline" | "trend-analysis" | "radar-scan";
+  `tool:${string}` | "council" | "agent-pipeline" | "trend-analysis" | "radar-scan";
 
 /**
  * Araç başına jeton. `satisfies Record<ToolId, number>` kasıtlıdır: yeni bir

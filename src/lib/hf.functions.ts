@@ -2,7 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
+
+/**
+ * Jeton kapısı kimliği — bu bir ÜRÜN BULUCU koşusudur (`credits` hakkı).
+ *
+ * NEDEN DEĞİŞTİ: doğrudan `deduct_credit` çağrılıyordu; paketin "ürün bulucu
+ * kredisi" hakkı sorulmuyor ve kullanım defterine yazılmıyordu — yani bu arama
+ * "bu ay" tablosunda hiç görünmüyordu.
+ */
+const HF_SEARCH_FEATURE = "agent-pipeline";
 
 const HfInput = z.object({
   niche: z.string().min(2).max(120),
@@ -25,12 +34,12 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
     const { buildHfPrompt, callHuggingFace, mapHfProducts, mergeHfProducts, HF_MODELS } =
       await import("@/lib/hf.server");
 
-    // Every search costs 1 credit, regardless of engine.
-    const { error: deductErr } = await context.supabase.rpc("deduct_credit");
-    if (deductErr) {
-      if (String(deductErr.message).includes("no_credits")) throw new Error("NO_CREDITS");
-      throw new Error(deductErr.message);
-    }
+    // Every search costs 1 credit, regardless of engine — tek kapıdan.
+    await chargeForAi(() => context.supabase.rpc("deduct_product_finder_credit"), 1, {
+      userId: context.userId,
+      feature: HF_SEARCH_FEATURE,
+      db: context.supabase,
+    });
 
     const base = {
       niche: data.niche,

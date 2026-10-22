@@ -5,7 +5,7 @@ import { getMyPlanUsage } from "@/lib/plan-usage.functions";
 import { emptyUsageCounts, planUsageRows, type UsageRow } from "@/lib/plan-usage";
 
 /**
- * Bu ayın paket kullanımı (sol bar / üst bar).
+ * Bu ayın paket kullanımı (sol bar / üst bar / ayarlar tablosu).
  *
  * NEDEN 30 sn'de bir tazelenir: AI işleri farklı uçlardan koşar (araç ucu,
  * konsey, radar, bulucu). Her ucun arayüzü ayrı ayrı önbellek boşaltmak yerine
@@ -16,6 +16,11 @@ export function usePlanUsage(): {
   rows: UsageRow[];
   loading: boolean;
   measured: boolean;
+  /** Paket adı ("Pro", "Free" …) — tablo başlığı için. */
+  tier: string | null;
+  /** "2026-10" — sayaçların ait olduğu ay. */
+  period: string | null;
+  isAdmin: boolean;
   refresh: () => void;
 } {
   const { user } = useAuth();
@@ -39,6 +44,9 @@ export function usePlanUsage(): {
     rows,
     loading: q.isLoading,
     measured: data?.measured ?? false,
+    tier: data?.tier ?? null,
+    period: data?.period ?? null,
+    isAdmin: data?.isAdmin ?? false,
     refresh: () => void q.refetch(),
   };
 }
