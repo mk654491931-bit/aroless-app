@@ -122,28 +122,33 @@ export const deletePromoCode = createServerFn({ method: "POST" })
 export const validatePromoCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((i: unknown) => z.object({ code: z.string().trim().min(1).max(32) }).parse(i))
-  .handler(async ({ data, context }): Promise<{ valid: boolean; discount_pct: number; reason?: string }> => {
-    // Sınır: kod denemeleri kaba kuvvetle kod avlamak için kullanılmasın.
-    const { rateLimit } = await import("@/lib/api-guard.server");
-    const limited = await rateLimit(`promo:validate:${context.userId}`, 20, 60);
-    if (limited)
-      return { valid: false, discount_pct: 0, reason: "Çok fazla deneme, biraz sonra dene." };
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ valid: boolean; discount_pct: number; reason?: string }> => {
+      // Sınır: kod denemeleri kaba kuvvetle kod avlamak için kullanılmasın.
+      const { rateLimit } = await import("@/lib/api-guard.server");
+      const limited = await rateLimit(`promo:validate:${context.userId}`, 20, 60);
+      if (limited)
+        return { valid: false, discount_pct: 0, reason: "Çok fazla deneme, biraz sonra dene." };
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row } = await supabaseAdmin
-      .from("promo_codes")
-      .select("discount_pct, active, expires_at, max_redemptions, times_redeemed")
-      .eq("code", data.code.trim().toUpperCase())
-      .maybeSingle();
-    if (!row) return { valid: false, discount_pct: 0, reason: "Kod bulunamadı." };
-    if (!row.active) return { valid: false, discount_pct: 0, reason: "Kod pasif." };
-    if (row.expires_at && new Date(row.expires_at) < new Date())
-      return { valid: false, discount_pct: 0, reason: "Kodun süresi dolmuş." };
-    if (row.max_redemptions != null && row.times_redeemed >= row.max_redemptions) {
-      return { valid: false, discount_pct: 0, reason: "Kod kullanım limitine ulaştı." };
-    }
-    return { valid: true, discount_pct: row.discount_pct };
-  });
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: row } = await supabaseAdmin
+        .from("promo_codes")
+        .select("discount_pct, active, expires_at, max_redemptions, times_redeemed")
+        .eq("code", data.code.trim().toUpperCase())
+        .maybeSingle();
+      if (!row) return { valid: false, discount_pct: 0, reason: "Kod bulunamadı." };
+      if (!row.active) return { valid: false, discount_pct: 0, reason: "Kod pasif." };
+      if (row.expires_at && new Date(row.expires_at) < new Date())
+        return { valid: false, discount_pct: 0, reason: "Kodun süresi dolmuş." };
+      if (row.max_redemptions != null && row.times_redeemed >= row.max_redemptions) {
+        return { valid: false, discount_pct: 0, reason: "Kod kullanım limitine ulaştı." };
+      }
+      return { valid: true, discount_pct: row.discount_pct };
+    },
+  );
 
 /**
  * KAYIT SONRASI KOD SAHİPLENME — `?promo=KOD` linkiyle gelen kullanıcının
@@ -255,6 +260,20 @@ export const claimPromoCode = createServerFn({ method: "POST" })
       };
     }
 
+    /**
+     * KONTENJAN ATOMİK AYRILIR.
+     *
+     * Okuma → +1 → yazma yöntemi eşzamanlı iki sahiplenmede sayacı eksik
+     * bırakıyor ve `max_redemptions` sınırını AŞIRIYORDU (kontrollü kampanya,
+     * kontrolsüz indirime dönüşüyordu). Artırma artık veritabanında tek atomik
+     * UPDATE; kod tükendiyse hiçbir satır YAZILMADAN sahiplenme reddedilir.
+     */
+    const { reservePromoRedemption, releasePromoRedemption } = await import("@/lib/promo-counter");
+    const reservation = await reservePromoRedemption(admin, promoRow.id);
+    if (!reservation.reserved) {
+      return { ok: false, code: "not_found", reason: "Kod kullanım limitine ulaştı." };
+    }
+
     try {
       await admin
         .from("profiles")
@@ -271,11 +290,16 @@ export const claimPromoCode = createServerFn({ method: "POST" })
         },
         { onConflict: "user_id" },
       );
-      await admin
-        .from("promo_codes")
-        .update({ times_redeemed: (promoRow.times_redeemed ?? 0) + 1 })
-        .eq("id", promoRow.id);
+      // RPC uygulanmamış ortamda eski usulle sayılır (bkz. promo-counter.ts).
+      if (!reservation.atomic) {
+        await admin
+          .from("promo_codes")
+          .update({ times_redeemed: (promoRow.times_redeemed ?? 0) + 1 })
+          .eq("id", promoRow.id);
+      }
     } catch (e) {
+      // Yazma başarısızsa ayrılan kontenjan geri bırakılır: sayaç şişmesin.
+      await releasePromoRedemption(admin, promoRow.id);
       console.warn("[promo] claim write failed", e);
       return { ok: false, code: "insert_failed", reason: "Kod kaydedilemedi, tekrar dene." };
     }

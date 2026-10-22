@@ -85,10 +85,11 @@ describe("self-referral koruması", () => {
   });
 
   it("self-referral'da atıf YAZILMAZ (komisyon doğmaz) ama admin uyarısı düşer", () => {
+    // `bindable` = kontenjanı ayrılmış kod (atomik sayaç, bkz. promo-counter.ts).
     expect(signupFns).toMatch(
-      /if \(selfReferral && promo\.affiliate_id\)[\s\S]{0,400}?notifySelfReferralBlocked\(/,
+      /if \(selfReferral && bindable\.affiliate_id\)[\s\S]{0,400}?notifySelfReferralBlocked\(/,
     );
-    expect(signupFns).toMatch(/else \{[\s\S]{0,600}?referred_by: promo\.affiliate_id/);
+    expect(signupFns).toMatch(/else \{[\s\S]{0,600}?referred_by: bindable\.affiliate_id/);
   });
 
   it("kontrol hatası kaydı ENGELLEMEZ (meşru kayıt düşmez)", () => {

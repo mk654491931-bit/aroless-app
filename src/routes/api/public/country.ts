@@ -111,6 +111,9 @@ async function fetchCountryMetaServer(code: string): Promise<Omit<CountryPayload
 
 async function fetchRateServer(currency: string): Promise<number> {
   const cur = (currency || "USD").toUpperCase();
+  // GÜVENLİK: para birimi kodu dış kaynaktan (ülke kaydı) gelebilir. Doğrulanmadan
+  // aşağıdaki URL'e yazılırsa `path/query` enjeksiyonuna (ör. `US&to=X`) açık olurdu.
+  if (!/^[A-Z]{3}$/.test(cur)) return 0;
   if (cur === "USD") return 1;
   const hit = rateCache.get(cur);
   if (hit && Date.now() - hit.at < RATE_TTL) return hit.value;

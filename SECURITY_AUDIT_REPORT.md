@@ -235,13 +235,54 @@ paketine girmiyorlardı, yine de kapatıldı.)
 
 ---
 
-## 13. Doğrulama
+## 13. Üçüncü tur — jeton iadesi, promosyon sayacı, atıf tablosu
 
-- `bunx vitest run` → **160 dosya / 2171 test geçti** (15 canlı test atlandı).
+### 13.1 KRİTİK — Kullanıcı kendi jetonunu iade ettirebiliyordu
+`refund_product_finder_credit_for_job(uuid)` fonksiyonu `authenticated` rolüne
+açıktı ve uygulamada onu **çağıran hiçbir kod yoktu** (iade yolu
+`refund_credit_once` + `mark_discovery_credit_refunded`, service_role). Yani:
+
+1. Ürün Bulucu araması başlatılır → 1 jeton düşer,
+2. kullanıcı `POST /rest/v1/rpc/refund_product_finder_credit_for_job` çağırır →
+   jeton geri gelir,
+3. arama normal şekilde **tamamlanır** (iş durdurulmaz).
+
+Sonuç: her arama bedava; jeton ekonomisi tamamen çöker. Migration'da EXECUTE
+yetkisi `authenticated`/`anon`'dan alındı, ayrıca fonksiyon gövdesi yalnız
+`status = 'failed'` olan iş için iade yapacak şekilde sıkılaştırıldı
+(savunma derinliği).
+
+### 13.2 ORTA — Promosyon sayacı yarışı (`max_redemptions` aşımı)
+Sayaç okuma → +1 → yazma ile artırılıyordu; eşzamanlı iki sahiplenme aynı
+değeri okuyup aynı değeri yazdığı için sınır **aşılabiliyordu**. Artırma tek
+atomik `UPDATE`e taşındı (`increment_promo_redemption`, sınır aynı ifadenin
+içinde). Kod tükendiyse sahiplenme artık hiçbir satır yazmadan reddedilir; yazma
+hatasında kontenjan `release_promo_redemption` ile geri bırakılır.
+
+### 13.3 ORTA — `promo_redemptions` istemci yazımı
+`authenticated` rolü kendi atıf satırını ekleyebiliyordu (admin/affiliate
+raporlarını kirletme). Yazma yollarının tamamı sunucuda olduğu için INSERT/
+UPDATE/DELETE yetkisi kaldırıldı; okuma korundu.
+
+### 13.4 DÜŞÜK — trend-radar webhook sırrı
+`provided !== secret` sabit olmayan zamanlı karşılaştırma `timingSafeEqualString`
+ile değiştirildi (diğer sır yollarıyla aynı sözleşme).
+
+### 13.5 DÜŞÜK — Dış veriden URL'e para birimi enjeksiyonu
+`/api/public/country` döviz kodunu doğrulamadan Frankfurter adresine yazıyordu;
+artık yalnız `^[A-Z]{3}$` geçer.
+
+---
+
+## 14. Doğrulama
+
+- `bunx vitest run` → **161 dosya / 2184 test geçti** (15 canlı test atlandı).
 - `bun audit` → **No vulnerabilities found** (537 paket).
-- Değişen tüm dosyalar + `routeTree.gen.ts` için `tsc --noEmit` → **temiz**.
-  (Tam proje `tsc` bu ortamda 180 sn komut sınırını aştığı için parçalı doğrulandı;
-  platformun tam tip kontrolü ayrıca koşar.)
+- Değişen dosyalar + `routeTree.gen.ts` için `tsc --noEmit` → **temiz**.
+  (Tam proje `tsc` bu ortamda bellek/180 sn sınırına takıldığı için parçalı
+  doğrulandı; platformun tam tip kontrolü ayrıca koşar.)
 - `eslint` → değişen dosyalarda **0 hata**.
 - Yeni regresyon testleri: `src/lib/security-hardening.test.ts`
-  (sabit zamanlı karşılaştırma, host-header yok sayma, işçi sırrı, IDOR sahiplik kapısı).
+  (sabit zamanlı karşılaştırma, host-header yok sayma, işçi sırrı, IDOR sahiplik
+  kapısı, iade RPC'sinin istemciye kapalı olması, atomik promosyon sayacı) ve
+  `src/lib/promo-counter.test.ts`.

@@ -185,8 +185,23 @@ export const startEmailSignup = createServerFn({ method: "POST" })
     // Promosyon kodunu kalıcı olarak bağla ve kullanımı say.
     let promoDiscount = 0;
     if (promo) {
+      /**
+       * KONTENJAN ATOMİK AYRILIR (bkz. lib/promo-counter.ts).
+       *
+       * ÖNEMLİ: profil/atıf yazımından ÖNCE ayrılır. Kod tükenmişse kullanıcı
+       * koda BAĞLANMAZ — aksi hâlde sayaç dolmuş olsa da yeni hesaplar kodun
+       * indiriminden yararlanmaya devam ederdi (`max_redemptions` anlamsızlaşırdı).
+       */
+      const { reservePromoRedemption, releasePromoRedemption } =
+        await import("@/lib/promo-counter");
+      const reservation = await reservePromoRedemption(supabaseAdmin, promo.id);
+      // Kontenjan ayrılmadıysa kod BAĞLANMAZ; `bindable` null kalır ve aşağıdaki
+      // yazma bloğu hiç çalışmaz (böylece iade de gerekmez).
+      const bindable = reservation.reserved ? promo : null;
+
       try {
-        promoDiscount = promo.discount_pct;
+        if (!bindable) throw new Error("promo_exhausted");
+        promoDiscount = bindable.discount_pct;
 
         // SELF-REFERRAL KORUMASI: aynı cihazdan kendi affiliate koduyla açılan
         // ikinci hesap %30 komisyonu affiliate'in kendisine yazdırırdı (kalıcı
@@ -195,15 +210,15 @@ export const startEmailSignup = createServerFn({ method: "POST" })
         // için hiç doğmaz. Kullanım kaydı yine tutulur — admin panelde kodun
         // kaç kişiyi getirdiği görünür, ama kazanç doğmaz.
         const selfReferral = await isSelfReferralSignup(supabaseAdmin, {
-          affiliateUserId: promo.affiliate_id,
+          affiliateUserId: bindable.affiliate_id,
           visitorId: data.visitorId,
         });
-        if (selfReferral && promo.affiliate_id) {
+        if (selfReferral && bindable.affiliate_id) {
           await notifySelfReferralBlocked(supabaseAdmin, {
             userId,
             email: data.email,
-            affiliateUserId: promo.affiliate_id,
-            code: promo.code,
+            affiliateUserId: bindable.affiliate_id,
+            code: bindable.code,
             visitorId: data.visitorId,
           });
         } else {
@@ -213,28 +228,35 @@ export const startEmailSignup = createServerFn({ method: "POST" })
           await supabaseAdmin
             .from("profiles")
             .update({
-              promo_code: promo.code,
-              ...(promo.affiliate_id ? { referred_by: promo.affiliate_id } : {}),
+              promo_code: bindable.code,
+              ...(bindable.affiliate_id ? { referred_by: bindable.affiliate_id } : {}),
             })
             .eq("id", userId);
         }
-        await supabaseAdmin
-          .from("promo_redemptions")
-          .upsert(
-            { promo_code_id: promo.id, code: promo.code, user_id: userId, email: data.email },
-            { onConflict: "user_id" },
-          );
-        const { data: pc } = await supabaseAdmin
-          .from("promo_codes")
-          .select("times_redeemed")
-          .eq("id", promo.id)
-          .maybeSingle();
-        await supabaseAdmin
-          .from("promo_codes")
-          .update({ times_redeemed: (pc?.times_redeemed ?? 0) + 1 })
-          .eq("id", promo.id);
+        await supabaseAdmin.from("promo_redemptions").upsert(
+          {
+            promo_code_id: bindable.id,
+            code: bindable.code,
+            user_id: userId,
+            email: data.email,
+          },
+          { onConflict: "user_id" },
+        );
+        // RPC uygulanmamış ortamda eski usulle sayılır (bkz. promo-counter.ts).
+        if (!reservation.atomic) {
+          const { data: pc } = await supabaseAdmin
+            .from("promo_codes")
+            .select("times_redeemed")
+            .eq("id", bindable.id)
+            .maybeSingle();
+          await supabaseAdmin
+            .from("promo_codes")
+            .update({ times_redeemed: (pc?.times_redeemed ?? 0) + 1 })
+            .eq("id", bindable.id);
+        }
       } catch {
-        /* promosyon kaydı kritik değil */
+        /* promosyon kaydı kritik değil — ayrılan kontenjan geri bırakılır */
+        if (bindable) await releasePromoRedemption(supabaseAdmin, bindable.id);
       }
     }
 

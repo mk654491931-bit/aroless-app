@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clientIpFromHeaders } from "./client-ip";
@@ -125,5 +126,70 @@ describe("veloraRunStatus — sahiplik kapısı (IDOR)", () => {
     expect(status.status).toBe("unknown");
     expect(status.dossier).toBeNull();
     expect(status.notes).toContain("RUN_NOT_FOUND");
+  });
+});
+
+const ROUND2_MIGRATION = "supabase/migrations/20261023000000_security_lockdown_round2.sql";
+
+/**
+ * JETON İADESİ — İSTEMCİYE KAPALI OLMALI.
+ *
+ * Bulgu: `refund_product_finder_credit_for_job(uuid)` `authenticated` rolüne
+ * açıktı. Kullanıcı kendi BAŞARILI araması için iade çağırıp jetonunu geri
+ * alabiliyor, arama yine tamamlanıyordu → sınırsız bedava kullanım.
+ */
+describe("iade RPC'si istemciye kapalı", () => {
+  const sql = readFileSync(ROUND2_MIGRATION, "utf8");
+
+  it("authenticated/anon EXECUTE yetkisi kaldırılmış", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.refund_product_finder_credit_for_job\(uuid\)\s*\n\s*FROM PUBLIC, anon, authenticated;/,
+    );
+    expect(sql).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.refund_product_finder_credit_for_job\(uuid\)\s*\n\s*TO service_role;/,
+    );
+  });
+
+  it("yetki geri verilse bile yalnız BAŞARISIZ iş iade edilir", () => {
+    expect(sql).toContain("job_status IS DISTINCT FROM 'failed'");
+  });
+
+  it("promosyon sayacı atomik ve sınır kontrollü", () => {
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.increment_promo_redemption");
+    expect(sql).toMatch(/COALESCE\(times_redeemed, 0\) < max_redemptions/);
+  });
+
+  it("promo_redemptions istemci yazımına kapalı", () => {
+    expect(sql).toContain(
+      "REVOKE INSERT, UPDATE, DELETE ON public.promo_redemptions FROM authenticated, anon;",
+    );
+  });
+});
+
+/**
+ * ZAMANLAMA SALDIRISI — paylaşılan sır `!==` ile karşılaştırılırsa yanıt
+ * süresinden karakter tahmini yapılabilir. Tüm sır yolları sabit zamanlı
+ * karşılaştırmayı kullanmalıdır.
+ */
+describe("trend-radar webhook sırrı sabit zamanlı", () => {
+  const source = readFileSync("src/routes/api/public/trend-radar.ts", "utf8");
+
+  it("timingSafeEqualString kullanır", () => {
+    expect(source).toContain("timingSafeEqualString(provided, secret)");
+  });
+
+  it("sır yoksa fail-closed davranır", () => {
+    expect(source).toMatch(/if \(!secret \|\| !timingSafeEqualString\(provided, secret\)\)/);
+  });
+});
+
+/**
+ * DIŞ VERİ → URL: para birimi kodu doğrulanmadan dış servise giden adrese
+ * yazılırsa path/query enjeksiyonu mümkün olur.
+ */
+describe("country ucu döviz kodunu doğrular", () => {
+  const source = readFileSync("src/routes/api/public/country.ts", "utf8");
+  it("yalnız 3 harfli ISO kodu geçer", () => {
+    expect(source).toContain("/^[A-Z]{3}$/.test(cur)");
   });
 });

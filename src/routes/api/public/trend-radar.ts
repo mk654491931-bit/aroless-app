@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, guardPublic, jsonError, readJsonBody } from "@/lib/api-guard.server";
+import { timingSafeEqualString } from "@/lib/safe-compare";
 
 /**
  * Aroless — Multi-Platform Automated AI Trend Discovery endpoint.
@@ -27,9 +28,13 @@ export const Route = createFileRoute("/api/public/trend-radar")({
 
           if (action === "webhook") {
             // Dış kaynaklı besleme: yalnızca paylaşılan gizli anahtarla.
+            // GÜVENLİK: karşılaştırma SABİT ZAMANLIDIR. `!==` ile yapılan
+            // karşılaştırma, yanıt süresinden sırrın karakter karakter tahmin
+            // edilmesine (timing attack) izin veriyordu.
             const secret = process.env["TREND_WEBHOOK_SECRET"];
             const provided = request.headers.get("x-webhook-secret") ?? "";
-            if (!secret || provided !== secret) return jsonError(401, "Yetkisiz istek.");
+            if (!secret || !timingSafeEqualString(provided, secret))
+              return jsonError(401, "Yetkisiz istek.");
             const ipLimited = await guardPublic(request, "trend-radar-webhook", 60, 60);
             if (ipLimited) return ipLimited;
           } else {
