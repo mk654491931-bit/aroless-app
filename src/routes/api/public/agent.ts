@@ -1,14 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { guardAuthed, jsonError, readJsonBody } from "@/lib/api-guard.server";
-
-/** İsteğin public origin'i — QStash faz devrinin hedefi buradan kurulur. */
-function publicOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const proto = request.headers.get("x-forwarded-proto");
-  if (host) return `${proto ?? url.protocol.replace(":", "")}://${host}`;
-  return url.origin;
-}
+import { appOrigin } from "@/lib/discovery-jobs.server";
 
 /**
  * Velora 14 ajanlı yönlendirici uç noktası (oturum zorunlu).
@@ -41,9 +33,12 @@ export const Route = createFileRoute("/api/public/agent")({
 
         try {
           const orchestrator = await import("@/lib/velora-orchestrator.server");
-          const status = await orchestrator.veloraRunStatus(runId, {
-            store: orchestrator.defaultVeloraStore(),
-          });
+          // SAHİPLİK: `runId` bilinse bile başka kullanıcının karnesi dönmez.
+          const status = await orchestrator.veloraRunStatus(
+            runId,
+            { store: orchestrator.defaultVeloraStore() },
+            { requestedBy: guard.userId },
+          );
           return new Response(JSON.stringify(status), {
             status: 200,
             headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -110,11 +105,16 @@ export const Route = createFileRoute("/api/public/agent")({
           try {
             if (isOrchestrated) {
               const orchestrator = await import("@/lib/velora-orchestrator.server");
+              // İstemcinin dayattığı `runId` ATILIR: aksi hâlde başka bir
+              // kullanıcının koşu durumu ezilebilir veya tahmin edilebilir bir
+              // kimlikle sonuç okunabilirdi. Kimlik sunucuda üretilir.
+              const { runId: _clientRunId, ...safeBody } = body;
+              void _clientRunId;
               const result = await orchestrator.startVeloraRun(
-                { ...body, requestedBy: guard.userId },
+                { ...safeBody, requestedBy: guard.userId },
                 {
                   store: orchestrator.defaultVeloraStore(),
-                  handoff: orchestrator.veloraQStashHandoff(publicOrigin(request)),
+                  handoff: orchestrator.veloraQStashHandoff(appOrigin(request)),
                 },
               );
               // Koşu hiç başlayamadıysa jetonu iade et (kullanıcı boş sonuç almaz).

@@ -25,7 +25,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 
-import { requireUser } from "@/lib/api-guard.server";
+import { rateLimit, readJsonBody, requireUser } from "@/lib/api-guard.server";
 import { appOrigin, DISCOVERY_MAX_BUDGET_MS } from "@/lib/discovery-jobs.server";
 import {
   chargeOnce,
@@ -52,8 +52,12 @@ export const Route = createFileRoute("/api/product-discovery/start")({
         if ("response" in guard) return guard.response;
         const { userId, token } = guard;
 
-        // 2) GİRDİ DOĞRULAMA
-        const body = (await request.json().catch(() => null)) as unknown;
+        // 1b) İSTEK SINIRI — kuyruk şişirme / maliyet kötüye kullanımı.
+        const limited = await rateLimit(`discovery-start:u:${userId}`, 6, 60);
+        if (limited) return limited;
+
+        // 2) GİRDİ DOĞRULAMA (gövde boyutu da sınırlı: 64 KB)
+        const body = await readJsonBody<unknown>(request);
         const parsed = ProductDiscoveryInputSchema.safeParse(body);
         if (!parsed.success) {
           return json(

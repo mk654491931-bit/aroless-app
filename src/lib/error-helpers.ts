@@ -63,23 +63,19 @@ export function classifyServerError(error: unknown): {
 
 /**
  * Attempts to refund a credit on error. Fire-and-forget — never throws.
+ *
+ * GÜVENLİK: iade KULLANICI istemcisiyle `profiles.credits` yazmaz. Bakiye
+ * sütunları istemciye kapalıdır (bkz. 20261022000000 migration); iade sunucu
+ * tarafında, tek seferlik `refund_credit_once` üzerinden yapılır.
  */
 export async function tryRefundCredit(
-  supabase: {
-    from: (table: string) => {
-      update: (vals: Record<string, number>) => {
-        eq: (col: string, val: string) => Promise<unknown>;
-      };
-    };
-  },
+  _supabase: unknown,
   userId: string,
-  currentCredits: number,
+  _currentCredits: number,
 ): Promise<void> {
   try {
-    await supabase
-      .from("profiles")
-      .update({ credits: currentCredits + 1 })
-      .eq("id", userId);
+    const { refundCredit } = await import("@/lib/credit-guard.server");
+    await refundCredit(userId, 1, "server_fn_error");
   } catch {
     /* kredi iadesi başarısız olsa da akış bozulmaz */
   }

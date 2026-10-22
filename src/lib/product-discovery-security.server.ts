@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { Receiver } from "@upstash/qstash";
+import { timingSafeEqualString } from "@/lib/safe-compare";
 
 /* ------------------------------------------------------ Ortam kontrolü */
 
@@ -118,7 +119,8 @@ export async function verifyQStashSignature(
   const jobSecret = (envMap["JOB_WORKER_SECRET"] ?? "").trim();
   if (jobSecret) {
     const provided = (forwardedJobSecret ?? "").trim();
-    if (provided && provided === jobSecret) {
+    // Sabit zamanlı karşılaştırma (timing attack): `===` erken çıkış yapar.
+    if (provided && timingSafeEqualString(provided, jobSecret)) {
       try {
         return { ok: true, body: JSON.parse(raw) as unknown };
       } catch {

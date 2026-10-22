@@ -2019,9 +2019,13 @@ export async function startVeloraRun(
   deps: VeloraOrchestratorDeps,
 ): Promise<VeloraRunResult> {
   const parsed = VeloraInputSchema.parse(input);
+  // GÜVENLİK (bulgu): `runId` istemciden alınıyordu ve yalnız zaman damgası +
+  // 4 rastgele karakterden oluşuyordu. İstemci kendi `runId`'sini dayatabildiği
+  // için (a) başkasının koşu durumunu EZEBİLİYOR, (b) tahmin edilebilir kimlikle
+  // başkalarının karnesini okuyabiliyordu. Kimlik artık HER ZAMAN sunucuda,
+  // kriptografik rastgelelikle üretilir; istemci değeri yok sayılır.
   const state: VeloraRunState = {
-    runId:
-      parsed.runId ?? `velora_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+    runId: `velora_${globalThis.crypto.randomUUID()}`.slice(0, 120),
     query: parsed.userQuery,
     country: (parsed.country ?? "GLOBAL").toUpperCase(),
     platform: parsed.platform ?? "General",
@@ -2277,6 +2281,13 @@ function nextMissingPhase(state: VeloraRunState): VeloraPhaseId | null {
 export async function veloraRunStatus(
   runId: string,
   deps: Pick<VeloraOrchestratorDeps, "store">,
+  /**
+   * SAHİPLİK KAPISI (IDOR). Verilirse, koşunun `requestedBy` alanı bu
+   * kullanıcıyla eşleşmiyorsa durum/karne DÖNMEZ: başka bir kullanıcının
+   * `runId`'si bilinse bile sonucu okunamaz. Eşleşmeyen istek "bilinmiyor"
+   * görünür — böylece koşunun var olup olmadığı da sızmaz.
+   */
+  opts: { requestedBy?: string | null } = {},
 ): Promise<VeloraRunStatus> {
   const totalPhases = VELORA_PHASES.length;
   const base = {
@@ -2291,6 +2302,27 @@ export async function veloraRunStatus(
     state = await deps.store.loadState(runId);
   } catch (e) {
     notes.push(`STATE_READ_FAILED:${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (state && opts.requestedBy && state.requestedBy && state.requestedBy !== opts.requestedBy) {
+    console.warn(`[velora] sahiplik reddi: ${runId.slice(0, 12)}… istenen kullanıcıyla eşleşmiyor`);
+    return {
+      ...base,
+      status: "unknown",
+      completedPhases: 0,
+      activePhase: null,
+      nextPhase: null,
+      updatedAtMs: 0,
+      stale: false,
+      dossier: null,
+      push: null,
+      selfTest: null,
+      phases: [],
+      harvest: null,
+      aiPool: aiPoolSummary(),
+      recovered: false,
+      notes: ["RUN_NOT_FOUND"],
+    };
   }
 
   if (!state) {

@@ -46,6 +46,13 @@ export const Route = createFileRoute("/api/search")({
           return json({ success: false, error: "Unauthorized" }, 401);
         }
 
+        // İstek sınırı: kullanıcı başına 10 arama/dk. Kredisiz bir hesap bile
+        // sınırsız iş kaydı açıp kuyruğu şişirebiliyordu (pahalı AI işi daha
+        // sonra `deduct` aşamasında düşüyor, yani sıra maliyetsiz dolduruluyordu).
+        const { rateLimit } = await import("@/lib/api-guard.server");
+        const limited = await rateLimit(`search:u:${userId}`, 10, 60);
+        if (limited) return limited;
+
         const started = await jobs.startDiscoveryJob({
           input: parsed.data,
           userId,

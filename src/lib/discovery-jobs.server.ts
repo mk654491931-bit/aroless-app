@@ -50,6 +50,7 @@ import {
   COUNCIL_ENRICH_MIN_MS,
   MIN_INLINE_COUNCIL_MS,
 } from "@/lib/council-budget.server";
+import { timingSafeEqualString } from "@/lib/safe-compare";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -664,11 +665,14 @@ export async function resolveUserId(accessToken: string): Promise<string> {
 
 /** QStash'in geri çağıracağı herkese açık origin. */
 export function appOrigin(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  const isLocal = (value: string) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(value);
-  if (host && !isLocal(host)) return proto + ":" + "//" + host;
-
+  // GÜVENLİK (bulgu): eskiden `x-forwarded-host` / `Host` başlığı İLK sırada
+  // kullanılıyordu. Bu değer QStash yayınının hedefi oluyor ve yayına
+  // `Upstash-Forward-x-job-secret: <işçi sırrı>` başlığı ekleniyor. Saldırgan
+  // başlığı değiştirerek yayını KENDİ sunucusuna yönlendirip paylaşılan işçi
+  // sırrını ele geçirebilirdi (sonra sahte iş tetikleme / maliyet saldırısı).
+  //
+  // Artık sıra: yapılandırılmış adres → platformun verdiği adres → isteğin
+  // kendi URL'i. İstemci başlıkları HİÇ kullanılmaz.
   const explicit = env("APP_URL") ?? env("PUBLIC_APP_URL");
   if (explicit) return explicit.replace(/\/+$/, "");
 
@@ -678,7 +682,11 @@ export function appOrigin(request: Request): string {
     return HTTPS_PREFIX + bare;
   }
 
-  return host ? proto + ":" + "//" + host : "";
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return "";
+  }
 }
 
 /** İşçi uç noktasını korumak için paylaşılan sır. */
@@ -880,7 +888,10 @@ export function verifyWorkerRequest(request: Request): boolean {
     request.headers.get("x-job-secret") ??
     request.headers.get("upstash-forward-x-job-secret") ??
     "";
-  return provided.length > 0 && provided === secret;
+  if (!provided) return false;
+  // Sabit zamanlı karşılaştırma: `===` erken çıkışı, sır uzunluğunu/ön ekini
+  // zamanlama üzerinden sızdırabilir.
+  return timingSafeEqualString(provided, secret);
 }
 
 /**

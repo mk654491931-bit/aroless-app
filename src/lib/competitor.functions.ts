@@ -256,8 +256,13 @@ const CopilotInput = z.object({
 export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((i: unknown) => CopilotInput.parse(i))
-  .handler(async ({ data }): Promise<{ reply: string }> => {
+  .handler(async ({ data, context }): Promise<{ reply: string }> => {
     try {
+      // Jeton harcamayan bir AI ucu olduğu için istek sınırı ŞART: aksi hâlde
+      // tek bir hesap sınırsız AI çağrısıyla sağlayıcı kotasını tüketebilirdi.
+      const { rateLimit } = await import("@/lib/api-guard.server");
+      const limited = await rateLimit(`copilot:u:${context.userId}`, 20, 60);
+      if (limited) return { reply: "Çok fazla mesaj gönderdin. Bir dakika sonra tekrar dene." };
       const text = await callGemini(
         copilotPrompt(data.message, data.context, data.history, data.lang),
         undefined,

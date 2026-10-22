@@ -20,7 +20,6 @@ import {
   combineJointScores,
   type CouncilSummary,
 } from "@/lib/consensus-types";
-import type { CreditPool as ChargePool } from "@/lib/credits";
 import { countryName } from "@/lib/countries";
 import { marketBriefBlock, countryAngles } from "@/lib/platform-market";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
@@ -183,25 +182,8 @@ export async function runProductDiscovery(
   ctx: DiscoveryContext,
 ): Promise<DiscoveryResult> {
   let remaining: number = ctx.creditsRemaining ?? 0;
-  /**
-   * Düşmenin hangi havuzdan yapıldığı ve düşmeden önceki harcama sayacı.
-   * İade AYNI havuza ve aynı muhasebeye dönmelidir: eskiden iade her zaman
-   * `credits`'e yazılıyordu, bu yüzden ücretsiz kullanıcının hoş geldin jetonu
-   * harcanıp yerine genel jeton konuyordu (iki havuz birbirine karışıyordu).
-   */
-  let chargedPool: ChargePool = "credits";
-  let creditsSpentBefore = 0;
 
   if (ctx.deductCredit) {
-    const { creditBalances, chargePoolFor } = await import("@/lib/credits");
-    const { data: before } = await ctx.supabase
-      .from("profiles")
-      .select("finder_credits, credits, credits_spent")
-      .eq("id", ctx.userId)
-      .maybeSingle();
-    chargedPool = chargePoolFor(before);
-    creditsSpentBefore = creditBalances(before).spent;
-
     const { data: deducted, error: deductErr } = await ctx.supabase.rpc(
       "deduct_product_finder_credit",
     );
@@ -477,13 +459,19 @@ Return STRICT JSON only (a single JSON object, no prose, no markdown fences), ma
     // bir jeton artardı.
     if (!ctx.deductCredit) return;
     try {
-      // İade, DÜŞÜLEN havuzun düşme sonrası değerini bir geri alır ve harcama
-      // sayacını eski hâline döndürür (mantıksal olarak o harcama hiç olmadı).
-      const patch =
-        chargedPool === "finder_credits"
-          ? { finder_credits: remaining + 1, credits_spent: Math.max(0, creditsSpentBefore) }
-          : { credits: remaining + 1, credits_spent: Math.max(0, creditsSpentBefore) };
-      await ctx.supabase.from("profiles").update(patch).eq("id", ctx.userId);
+      // GÜVENLİK: iade artık İSTEMCİ (RLS) istemcisiyle profil satırına yazmaz.
+      // Kullanıcı istemcisinin bakiye sütunlarını yazabilmesi, herkesin kendine
+      // sınırsız jeton yazması demekti (bkz. 20261022000000 migration).
+      // İade sunucu tarafında, `refund_credit_once` ile TEK SEFER uygulanır.
+      const { refundCredit } = await import("@/lib/credit-guard.server");
+      await refundCredit(
+        ctx.userId,
+        1,
+        "discovery_pipeline_failed",
+        `discovery-refund:${ctx.userId}:${startedAt}`,
+      );
+      // Yerel sayaç yalnız akışın kendi muhasebesi içindir.
+      remaining = Math.max(0, remaining) + 1;
     } catch {
       /* kredi iadesi başarısız olsa da akış bozulmaz */
     }

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { guardAuthed } from "@/lib/api-guard.server";
 
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
@@ -25,7 +26,13 @@ export const Route = createFileRoute("/api/checkout")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+          // Sınır: oturum + kullanıcı başına 10 ödeme oturumu/dk. Aksi hâlde
+          // kimliği doğrulanmış bir hesap Paddle API'sine sınırsız çağrı
+          // yapabilir (sağlayıcı kotası / maliyet kötüye kullanımı).
+          const guard = await guardAuthed(request, "checkout", 10, 60);
+          if ("response" in guard) return guard.response;
+
+          const token = guard.token;
           if (!token) return json({ error: "Unauthorized" }, 401);
 
           const supabase = createClient<Database>(

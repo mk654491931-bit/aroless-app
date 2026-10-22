@@ -21,17 +21,6 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
-/** İsteğin public origin'i — QStash faz devrinin hedefi buradan kurulur. */
-function appOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  if (forwardedHost) {
-    return `${forwardedProto ?? url.protocol.replace(":", "")}://${forwardedHost}`;
-  }
-  return url.origin;
-}
-
 /** Tetikleyicinin kullandığı anahtarla BİREBİR aynı olmalı (dedupe). */
 function councilKeyOf(query: string, country: string, category: string, lang: string): string {
   return `council:${[query, country, category, lang]
@@ -71,9 +60,11 @@ export const Route = createFileRoute("/api/jobs")({
             return json({ success: false, error: "Invalid velora phase payload" }, 400);
           }
           const orchestrator = await import("@/lib/velora-orchestrator.server");
+          // GÜVENLİK: origin, istemci başlıklarından DEĞİL, sunucunun
+          // yapılandırılmış adresinden türetilir (bkz. discovery-jobs.appOrigin).
           const outcome = await orchestrator.resumeVeloraRun(runId, phase as 1 | 2 | 3 | 4, {
             store: orchestrator.defaultVeloraStore(),
-            handoff: orchestrator.veloraQStashHandoff(appOrigin(request)),
+            handoff: orchestrator.veloraQStashHandoff(jobs.appOrigin(request)),
           });
           return json(
             {

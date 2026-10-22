@@ -59,6 +59,11 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       supabaseAdmin.from("notification_preferences").delete().eq("user_id", uid),
       supabaseAdmin.from("support_tickets").delete().eq("user_id", uid),
       supabaseAdmin.from("credit_usage_log").delete().eq("user_id", uid),
+      // KVKK/GDPR: simülasyon geçmişi ve cihaz parmak izi de kişisel veridir;
+      // hesap silinirken bunlar da temizlenir. (Finansal kayıtlar yasal saklama
+      // yükümlülüğü nedeniyle `transactions` tablosunda kalır.)
+      supabaseAdmin.from("sim_runs").delete().eq("user_id", uid),
+      supabaseAdmin.from("device_fingerprints").delete().eq("user_id", uid),
     ]);
     const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
     if (error) throw new Error(error.message);

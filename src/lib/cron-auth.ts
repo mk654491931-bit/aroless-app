@@ -11,6 +11,8 @@
 // koşar ve başarısız koşuyu TEKRAR DENEMEZ; bu yüzden iş idempotenttir.
 // ============================================================================
 
+import { timingSafeEqualString } from "./safe-compare";
+
 export type CronAuthEnv = {
   CRON_SECRET?: string;
   JOB_WORKER_SECRET?: string;
@@ -54,7 +56,8 @@ export function cronAuthorized(headers: Headers, env: CronAuthEnv = process.env)
   for (const name of SECRET_NAMES) {
     const expected = (env[name] ?? "").trim();
     if (!expected) continue;
-    if (provided.some((p) => p === expected)) return true;
+    // Sabit zamanlı: sırlar `===` ile karşılaştırılmaz (timing attack).
+    if (provided.some((p) => timingSafeEqualString(p, expected))) return true;
   }
   return false;
 }

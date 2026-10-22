@@ -34,8 +34,117 @@ const UA =
 const PAGE_TIMEOUT_MS = 12_000;
 const IMAGE_TIMEOUT_MS = 6_000;
 
-/** İç ağ / özel adres — public ucun SSRF'e açılmasını engeller. */
-function isPublicHttpUrl(raw: string): boolean {
+// ============================================================================
+// SSRF SAVUNMASI
+//
+// BULGU: eski koruma yalnız yazılı adres biçimlerini (10.x, 127.x, 169.254.x)
+// reddediyordu ve `redirect: "follow"` ile isteği atıyordu. Bu iki açık,
+// herkese açık `?u=` ucunu metin tabanlı bir SSRF'e çeviriyordu:
+//   • Saldırganın genel bir alan adı, DNS'te 169.254.169.254 / 127.0.0.1'e
+//     çözümlenebilir (DNS rebinding) — metin kontrolü bunu görmez.
+//   • Genel bir alan adı 302 ile `http://169.254.169.254/latest/meta-data/`
+//     adresine yönlendirebilir — `redirect: "follow"` bu atlamayı izler.
+//   • `http://2130706433/`, `http://0x7f000001/`, `http://[::ffff:127.0.0.1]/`
+//     gibi kodlamalar regex'i atlar.
+//   • `:6379`, `:11211` gibi standart dışı portlarla iç servisler denenebilir.
+//
+// ÇÖZÜM: (1) port 80/443 dışını reddet, (2) tüm IP kodlamalarını normalize et,
+// (3) alan adını GERÇEKTEN çözümle ve özel/ayrılmış aralığa düşüyorsa reddet,
+// (4) yönlendirmeleri ELLE, her adımı yeniden doğrulayarak izle.
+// ============================================================================
+
+/** Yalnız standart web portları: iç servis taramasını (redis, postgres…) keser. */
+const ALLOWED_PORTS = new Set(["", "80", "443"]);
+
+/** Yerel/metadata amaçlı alan adları — DNS'e hiç sorulmadan reddedilir. */
+const BLOCKED_HOST_SUFFIXES = [
+  ".localhost",
+  ".local",
+  ".internal",
+  ".home.arpa",
+  ".lan",
+  ".intranet",
+];
+
+const BLOCKED_EXACT_HOSTS = new Set([
+  "localhost",
+  "metadata",
+  "metadata.google.internal",
+  "instance-data",
+  "kubernetes.default",
+  "kubernetes.default.svc",
+]);
+
+/** IPv4 adresi özel/ayrılmış bir aralıkta mı? */
+function isPrivateIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4) return true;
+  const octets = parts.map((p) => Number(p));
+  if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b] = octets as [number, number, number, number];
+  if (a === 0 || a === 10 || a === 127) return true; // bu ağ / özel / loopback
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a === 169 && b === 254) return true; // link-local + bulut metadata
+  if (a === 172 && b >= 16 && b <= 31) return true; // özel
+  if (a === 192 && b === 168) return true; // özel
+  if (a === 192 && (b === 0 || b === 2)) return true; // IETF / TEST-NET-1
+  if (a === 198 && (b === 18 || b === 19)) return true; // benchmark
+  if (a === 198 && b === 51) return true; // TEST-NET-2
+  if (a === 203 && b === 0) return true; // TEST-NET-3
+  if (a >= 224) return true; // multicast + ayrılmış + broadcast
+  return false;
+}
+
+/** IPv6 adresi özel/ayrılmış bir aralıkta mı? (IPv4-mapped adresler dahil) */
+function isPrivateIpv6(rawHost: string): boolean {
+  const host = rawHost.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "::" || host === "::1") return true;
+  // IPv4-mapped (::ffff:127.0.0.1) → IPv4 kuralına devret.
+  const mapped = /^(?:0*:)*ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
+  if (mapped?.[1]) return isPrivateIpv4(mapped[1]);
+  if (host.startsWith("::ffff:")) return true; // çözümlenemeyen eşleme → reddet
+  if (host.startsWith("fc") || host.startsWith("fd")) return true; // unique local
+  if (
+    host.startsWith("fe8") ||
+    host.startsWith("fe9") ||
+    host.startsWith("fea") ||
+    host.startsWith("feb")
+  )
+    return true; // link-local
+  if (host.startsWith("ff")) return true; // multicast
+  if (host.startsWith("64:ff9b:")) return true; // NAT64 → iç ağa köprü olabilir
+  return false;
+}
+
+/** Metin biçimindeki IP benzeri host'ları normalize eder. */
+function looksLikeNumericHost(host: string): boolean {
+  return /^(0x[0-9a-f]+|[0-9]+)$/i.test(host) || /^0[0-7]+(\.[0-7]+){0,3}$/.test(host);
+}
+
+/** DNS çözümlemesi özel bir adrese düşüyor mu? Ağ yoksa fail-closed. */
+async function resolvesToPrivateAddress(host: string): Promise<boolean> {
+  try {
+    const { lookup } = await import("node:dns/promises");
+    const results = await lookup(host, { all: true, verbatim: true });
+    if (!Array.isArray(results) || results.length === 0) return true;
+    return results.some((entry) =>
+      entry.family === 6 ? isPrivateIpv6(entry.address) : isPrivateIpv4(entry.address),
+    );
+  } catch {
+    // Çözümleme başarısızsa istek zaten yapılamaz; yine de fail-closed kalırız.
+    return true;
+  }
+}
+
+/**
+ * Genel erişime açık, güvenli bir http(s) adresi mi?
+ *
+ * `deep` true ise DNS de çözümlenir (yönlendirme adımlarında her seferinde).
+ */
+async function isSafeRemoteUrl(
+  raw: string,
+  options: { resolveDns?: boolean } = {},
+): Promise<boolean> {
   let url: URL;
   try {
     url = new URL(raw);
@@ -43,17 +152,72 @@ function isPublicHttpUrl(raw: string): boolean {
     return false;
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-  const host = url.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
-  if (/^(10\.|127\.|192\.168\.|169\.254\.|0\.)/.test(host)) return false;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-  if (host === "[::1]" || host.startsWith("[fd") || host.startsWith("[fe80")) return false;
-  return true;
+  if (url.username || url.password) return false;
+  if (!ALLOWED_PORTS.has(url.port)) return false;
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host) return false;
+  if (BLOCKED_EXACT_HOSTS.has(host)) return false;
+  if (BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return false;
+  if (looksLikeNumericHost(host)) return false;
+
+  // IPv6 literal (köşeli parantezli) veya IPv4 literal.
+  if (host.includes(":")) {
+    if (isPrivateIpv6(host)) return false;
+  } else if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    if (isPrivateIpv4(host)) return false;
+  }
+
+  if (options.resolveDns === false) return true;
+  return !(await resolvesToPrivateAddress(host));
+}
+
+/** İzin verilen en fazla yönlendirme sayısı. */
+const MAX_REDIRECTS = 3;
+
+/**
+ * Yönlendirmeleri ELLE izleyen fetch — her adım yeniden doğrulanır.
+ *
+ * `redirect: "follow"` kullanılsaydı, genel bir alan adı 302 ile iç adrese
+ * (bulut metadata, 127.0.0.1) yönlendirerek tüm kontrolleri atlatırdı.
+ */
+async function fetchWithGuardedRedirects(
+  rawUrl: string,
+  init: { headers: Record<string, string>; timeoutMs: number; method?: string },
+): Promise<Response | null> {
+  let current = rawUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!(await isSafeRemoteUrl(current))) return null;
+    let res: Response;
+    try {
+      res = await fetch(current, {
+        method: init.method ?? "GET",
+        headers: init.headers,
+        signal: AbortSignal.timeout(init.timeoutMs),
+        redirect: "manual",
+      });
+    } catch {
+      return null;
+    }
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) return null;
+      try {
+        current = new URL(location, current).toString();
+      } catch {
+        return null;
+      }
+      continue;
+    }
+    return res;
+  }
+  // Yönlendirme zinciri çok uzun → döngü/kaçış şüphesi.
+  return null;
 }
 
 /** Ürün sayfasının HTML'ini getirir. Hata fırlatmaz. */
 async function fetchProductPage(productUrl: string, countryCode?: string): Promise<string | null> {
-  if (!isPublicHttpUrl(productUrl)) return null;
+  if (!(await isSafeRemoteUrl(productUrl))) return null;
   try {
     const viaProxy = await fetchThroughScraperApi(productUrl, {
       countryCode: countryCode || "us",
@@ -63,16 +227,20 @@ async function fetchProductPage(productUrl: string, countryCode?: string): Promi
   } catch {
     /* proxy düştü → doğrudan kazımaya düş */
   }
+
+  const res = await fetchWithGuardedRedirects(productUrl, {
+    headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
+    timeoutMs: PAGE_TIMEOUT_MS,
+  });
+  if (!res || !res.ok) return null;
+  const type = res.headers.get("content-type") ?? "";
+  if (type && !type.includes("text/html")) return null;
+  // Bellek koruması: 2 MB üzeri gövde okunmaz (sıkıştırılmış bomba / dev sayfa).
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > 2_000_000) return null;
   try {
-    const res = await fetch(productUrl, {
-      headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
-      redirect: "follow",
-    });
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") ?? "";
-    if (type && !type.includes("text/html")) return null;
-    return await res.text();
+    const body = await res.text();
+    return body.length > 2_500_000 ? null : body;
   } catch {
     return null;
   }
@@ -86,23 +254,19 @@ async function fetchProductPage(productUrl: string, countryCode?: string): Promi
  * doğrulama içindir — 200 dönmesi tek başına ürün görseli sayılmaz.
  */
 async function confirmImageIsServed(imageUrl: string): Promise<{ ok: boolean; reason: string }> {
-  if (!isPublicHttpUrl(imageUrl))
+  if (!(await isSafeRemoteUrl(imageUrl)))
     return { ok: false, reason: "Görsel adresi genel erişime açık değil." };
-  try {
-    const res = await fetch(imageUrl, {
-      method: "GET",
-      headers: { "user-agent": UA, accept: "image/*" },
-      signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
-    });
-    if (!res.ok) return { ok: false, reason: `Görsel sunucusu HTTP ${res.status} döndürdü.` };
-    const type = (res.headers.get("content-type") ?? "").toLowerCase();
-    if (type && !type.startsWith("image/")) {
-      return { ok: false, reason: `Görsel adresi image/* değil (${type}).` };
-    }
-    return { ok: true, reason: "Sunucu bu adresi bir görsel olarak servis ediyor." };
-  } catch {
-    return { ok: false, reason: "Görsel adresine ulaşılamadı (zaman aşımı / ağ hatası)." };
+  const res = await fetchWithGuardedRedirects(imageUrl, {
+    headers: { "user-agent": UA, accept: "image/*" },
+    timeoutMs: IMAGE_TIMEOUT_MS,
+  });
+  if (!res) return { ok: false, reason: "Görsel adresine ulaşılamadı (zaman aşımı / ağ hatası)." };
+  if (!res.ok) return { ok: false, reason: `Görsel sunucusu HTTP ${res.status} döndürdü.` };
+  const type = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (type && !type.startsWith("image/")) {
+    return { ok: false, reason: `Görsel adresi image/* değil (${type}).` };
   }
+  return { ok: true, reason: "Sunucu bu adresi bir görsel olarak servis ediyor." };
 }
 
 /** Skraper kaynağının verdiği ham görsel adresini doğrular. */
@@ -133,7 +297,7 @@ export async function resolveVerifiedProductImage(
   productTitle = "",
   options: { countryCode?: string; sharedImageUrls?: ReadonlySet<string> } = {},
 ): Promise<VerifiedProductImage> {
-  if (!isPublicHttpUrl(productUrl)) {
+  if (!(await isSafeRemoteUrl(productUrl))) {
     return unverifiedImage(
       "unverified_no_product_page",
       "Ürün adresi geçerli bir genel URL değil.",

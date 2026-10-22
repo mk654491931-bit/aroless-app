@@ -282,6 +282,14 @@ async function sendViaSes(args: SendEmailArgs): Promise<SendEmailResult> {
 
 /** Development/fallback mode: console'a log ve simüle et. */
 async function sendViaConsole(args: SendEmailArgs): Promise<SendEmailResult> {
+  // GUVENLIK: Uretimde saglayici yoksa "gonderildi" demek ve govdeyi (OTP!) loga
+  // yazmak kabul edilemez. Uretimde fail-closed doner, log yazmaz.
+  if (process.env["NODE_ENV"] === "production") {
+    console.error("[email] Saglayici yok; e-posta gonderilmedi (uretimde konsol yedegi kapali).");
+    providerStats.console.failureCount++;
+    return { sent: false, reason: "no_email_provider" };
+  }
+
   const to = (Array.isArray(args.to) ? args.to : [args.to]).filter(Boolean);
   const messageId = `console-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
