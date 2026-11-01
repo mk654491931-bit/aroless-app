@@ -546,6 +546,8 @@ export async function runConsensus(prompt: string) {
 
   return {
     ...aggregate,
+    /** Kaç motorun gerçekten çağrıldığı — 0 ise anahtar yoktur. */
+    attempted: runners.length,
     // Legacy alanlar: mevcut arayüz/API sözleşmesi bozulmasın.
     gemini: pick("gemini"),
     groq: pick("groq"),

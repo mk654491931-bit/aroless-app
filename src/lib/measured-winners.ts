@@ -26,7 +26,7 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
  * satış veya görüntülenme ölçümü isteriz; bunlar yoksa satır "kazanan"
  * sayılmaz. Bu kapı, ölçülmüş yolun kalitesiz satırlarla dolmasını engeller.
  */
-function hasUsableEvidence(p: NormalizedProduct): boolean {
+export function isUsableMeasuredProduct(p: NormalizedProduct): boolean {
   return (
     p.priceUsd !== null ||
     p.rating !== null ||
@@ -71,7 +71,7 @@ export function measuredWinnerRows(
   const best = new Map<string, NormalizedProduct>();
   for (const p of products) {
     if (!p || p.name.trim().length < 3) continue;
-    if (!hasUsableEvidence(p)) continue;
+    if (!isUsableMeasuredProduct(p)) continue;
     const key = dedupeKey(p);
     const incumbent = best.get(key);
     if (!incumbent) {

@@ -54,6 +54,8 @@ type Consensus = {
   hybrid: number;
   agreement?: number;
   engines?: number;
+  /** Kaç motorun çağrıldığı — `engines` 0 iken "anahtar yok" demenin şartı. */
+  attempted?: number;
   /** Yeni sözleşme: yalnız gerçekten çağrılan motorlar. */
   results?: Engine[];
 };
@@ -218,9 +220,9 @@ function ConsensusCard() {
               )}
               {(data.engines ?? 0) === 0 && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-amber-200">
-                  Yapılandırılmış AI anahtarı bulunamadı. Gemini, Groq, OpenRouter,
-                  Hugging Face, Cerebras veya SambaNova anahtarlarından en az birini Ayarlar →
-                  Environment bölümüne ekleyin.
+                  {(data.attempted ?? 0) > 0
+                    ? "Motorlar çağrıldı ama yanıt vermedi (kota veya zaman aşımı). 20-30 sn sonra tekrar deneyin."
+                    : "Çağrılabilir AI motoru bulunamadı: anahtar tanımlı değil veya tümü kota beklemesinde. Gemini, Groq, OpenRouter, Hugging Face, Cerebras veya SambaNova anahtarlarından en az birini Ayarlar → Environment bölümüne ekleyin."}
                 </p>
               )}
             </div>

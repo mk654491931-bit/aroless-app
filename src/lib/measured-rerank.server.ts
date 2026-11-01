@@ -16,7 +16,10 @@
 import { callAiMesh, extractJson } from "./ai.server";
 import { anyAiKeyConfigured } from "./ai-keys.server";
 import type { NormalizedProduct } from "./product-discovery.types";
-import type { MeasuredRerank } from "./measured-winners";
+import {
+  isUsableMeasuredProduct,
+  type MeasuredRerank,
+} from "./measured-winners";
 
 /** İsteme girecek en fazla aday — ücretsiz modellerin bağlamını şişirmemek için. */
 const MAX_CANDIDATES = 30;
@@ -55,7 +58,8 @@ export async function rerankMeasuredWithAi(
   if (!anyAiKeyConfigured() || products.length === 0) return null;
 
   const candidates = [...products]
-    .filter((p) => p.name.trim().length >= 3)
+    // Aynı kalite kapısı: modele, kartta gösterilemeyecek satırları seçtirmeyiz.
+    .filter((p) => p.name.trim().length >= 3 && isUsableMeasuredProduct(p))
     .sort(
       (a, b) =>
         b.preScore - a.preScore ||
