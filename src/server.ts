@@ -22,6 +22,7 @@ import {
 } from "./lib/discovery-jobs.server";
 import { discoveryChainHealth } from "./lib/product-discovery-runner.server";
 import { readerHealth } from "./lib/product-discovery-reader.server";
+import { poolHealthSummary } from "./lib/ai-pool.server";
 import { rateLimitBackendStatus } from "./lib/api-guard.server";
 import {
   discoverySliceMs,
@@ -201,6 +202,10 @@ export default {
             // neden (fiyatsız/görselsiz) düştüğünü söyler — sessiz kaybın
             // panosu burasıdır. SIR YOK: yalnız sayaç.
             reader: readerHealth(),
+            // AI HAVUZU — yalnız sayaç ve grup adları; anahtar değeri YOK.
+            // Vercel'de "anahtarları ekledim ama çalışmıyor" geri bildiriminde
+            // tek bakışta kaç anahtarın görüldüğünü kanıtlar.
+            aiPool: poolHealthSummary(),
             jobs: backgroundJobStats(),
             caches: swrCacheStats(),
             // İstek sınırının nerede tutulduğu. "memory" görünüyorsa

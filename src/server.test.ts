@@ -71,4 +71,24 @@ describe("sunucu girişi / /health", () => {
     expect(text).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/); // JWT benzeri parça yok
     expect(res.headers.get("cache-control")).toContain("no-store");
   });
+
+  it("AI havuzu sayaçlarını raporlar, anahtar değeri sızdırmaz", async () => {
+    const res = await serverEntry.fetch(healthRequest(), {}, {});
+    const body = (await res.json()) as {
+      aiPool?: {
+        total: number;
+        configured: number;
+        available: number;
+        byGroup: Record<string, { configured: number; available: number }>;
+      };
+    };
+    expect(body.aiPool).toBeTruthy();
+    expect(body.aiPool!.configured).toBe(body.aiPool!.total);
+    expect(typeof body.aiPool!.available).toBe("number");
+    // Yalnız grup adları ve sayılar; gizli anahtar metni yok.
+    for (const group of Object.keys(body.aiPool!.byGroup)) {
+      expect(group).toMatch(/^[a-z_]+$/);
+    }
+    expect(JSON.stringify(body.aiPool)).not.toMatch(/[A-Za-z0-9_-]{32,}/);
+  });
 });
