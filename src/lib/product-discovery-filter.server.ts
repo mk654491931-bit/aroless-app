@@ -167,12 +167,17 @@ export function evidenceCompleteness(p: EvidenceShape): {
  * formülden geçer. Kopyalansaydı aynı kanıt iki farklı puan üretebilirdi.
  */
 export function signalWeightedScore(signals: NormalizedProduct["signals"]): number {
+  // NaN KORUMASI: `undefined` bir bağlam alanı (ör. momentum hiç ölçülmedi)
+  // `Math.max` içinde NaN üretip tüm ön skoru NaN yapıyordu. NaN puan
+  // sıralamayı bozar ve kartta "ön skor NaN" olarak görünür. Eksik sinyal
+  // "ölçülmedi" demektir; nötr 50 ile devam edilir.
+  const safe = (n: number) => (Number.isFinite(n) ? n : 50);
   return (
-    signals.demand * 0.28 +
-    signals.margin * 0.26 +
-    signals.rating * 0.22 +
-    signals.availability * 0.12 +
-    signals.competition * 0.12
+    safe(signals.demand) * 0.28 +
+    safe(signals.margin) * 0.26 +
+    safe(signals.rating) * 0.22 +
+    safe(signals.availability) * 0.12 +
+    safe(signals.competition) * 0.12
   );
 }
 
@@ -280,13 +285,14 @@ function demandScore(
   viewedMax: number,
 ): number {
   const signals: number[] = [];
-  // Wikipedia momentum en güçlü talep göstergesidir.
-  if (context.nicheMomentumPct !== null) {
+  // Wikipedia momentum en güçlü talep göstergesidir. `null` = ölçülmedi;
+  // `undefined` de aynı kabul edilir (eski çağrılar alanı taşımayabilir).
+  if (typeof context.nicheMomentumPct === "number" && Number.isFinite(context.nicheMomentumPct)) {
     // -%50 → 0, 0% → 50, +%100 → 100 (doğrusal, ölçülen değere göre).
     signals.push(50 + Math.max(-50, Math.min(100, context.nicheMomentumPct)));
   }
   // Etkileşim yoğunluğu: nişe özel toplam konuşma hacmi.
-  if (context.nicheEngagement > 0) {
+  if (typeof context.nicheEngagement === "number" && context.nicheEngagement > 0) {
     signals.push(50 + clamp01(context.nicheEngagement / 400) * 50 - 25);
   }
   // PERAKENDE TALEBİ: kaç kişi ürünü gerçekten GÖRDÜ (90 gün). Söylem değil,
@@ -386,10 +392,14 @@ export function scoreDeterministically(
     // Bu, "kanıtsız üst puan" üretmeyi engeller ve 14 ajanın confidence
     // hesabına da gerçek bir girdi sağlar.
     const penalty = evidencePenalty(product.dataCompleteness);
+    const rawScore = weighted - penalty;
     return {
       ...product,
       signals,
-      preScore: Math.max(0, Math.min(100, Math.round(weighted - penalty))),
+      // NaN skor sıralamayı ve kart metnini bozar; ölçülemeyen puan 0'dır.
+      preScore: Number.isFinite(rawScore)
+        ? Math.max(0, Math.min(100, Math.round(rawScore)))
+        : 0,
     };
   });
 }

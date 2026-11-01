@@ -1,7 +1,7 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { CreditCost } from "@/components/credit-cost";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
@@ -150,6 +150,37 @@ async function api(body: Record<string, unknown>) {
 
 const srcColor = (s: string) => SOURCES.find((x) => x.id === s)?.color ?? "#94a3b8";
 
+/** Tarama/analiz sonucunu sekme içinde sakla: modül yeniden açıldığında boş görünmesin. */
+const FEED_TTL_MS = 6 * 60 * 60 * 1000;
+type CachedFeed = { trends: ScrapedTrend[]; statuses: SourceStatus[]; savedAt: number };
+type CachedSynth = { synth: Synthesis; savedAt: number };
+const feedKey = (region: string, category: string) => `aroless.trendRadar.feed.${region}.${category}`;
+const synthKey = (region: string, category: string) => `aroless.trendRadar.synth.${region}.${category}`;
+
+function readCache<T extends { savedAt: number }>(key: string): T | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as T;
+    if (!parsed || !Number.isFinite(parsed.savedAt)) return null;
+    if (Date.now() - parsed.savedAt > FEED_TTL_MS) {
+      globalThis.sessionStorage?.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, value: unknown): void {
+  try {
+    globalThis.sessionStorage?.setItem(key, JSON.stringify(value));
+  } catch {
+    /* gizli sekme / kota dolu: önbellek ikincil */
+  }
+}
+
 function StatusDot({ ok }: { ok: boolean }) {
   return (
     <span
@@ -227,6 +258,18 @@ function TrendRadar() {
   } | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
 
+  // Sekme içi önbellek: kullanıcı modülden çıkıp döndüğünde tarama sonucu ve
+  // sentez kaybolmasın. Sunucu tarafı kalıcılık ayrıca best-effort yapılır.
+  useEffect(() => {
+    const cached = readCache<CachedFeed>(feedKey(region, category));
+    if (cached) {
+      setTrends(cached.trends ?? []);
+      setStatuses(cached.statuses ?? []);
+    }
+    const cachedSynth = readCache<CachedSynth>(synthKey(region, category));
+    setSynth(cachedSynth?.synth ?? null);
+  }, [region, category]);
+
   const toggle = (s: TrendSource) =>
     setActive((a) => (a.includes(s) ? a.filter((x) => x !== s) : [...a, s]));
 
@@ -271,6 +314,16 @@ function TrendRadar() {
       setTrends(j.trends ?? []);
       setStatuses(j.statuses ?? []);
       setSynth(null);
+      writeCache(feedKey(region, category), {
+        trends: j.trends ?? [],
+        statuses: j.statuses ?? [],
+        savedAt: Date.now(),
+      } satisfies CachedFeed);
+      try {
+        globalThis.sessionStorage?.removeItem(synthKey(region, category));
+      } catch {
+        /* önbellek ikincil */
+      }
       const ok = (j.statuses ?? []).filter((s: SourceStatus) => s.status === "active").length;
       toast.success(`Otomatik kazıma tamam — ${j.trends?.length ?? 0} sinyal, ${ok} kaynak aktif`);
     } catch (e) {
@@ -294,7 +347,13 @@ function TrendRadar() {
         trends: trends.slice(0, 70),
       });
       setSynth(j);
-      toast.success(`Aroless Deep AI hazır — ${j.engines?.length ?? 0} motor birleştirildi`);
+      writeCache(synthKey(region, category), { synth: j, savedAt: Date.now() } satisfies CachedSynth);
+      const localOnly = Array.isArray(j.engines) && j.engines.includes("deterministic");
+      toast.success(
+        localOnly
+          ? `AI motoru yok — ${j.breakouts?.length ?? 0} sinyal yerel skorla sıralandı`
+          : `Aroless Deep AI hazır — ${j.engines?.length ?? 0} motor birleştirildi`,
+      );
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -354,6 +413,7 @@ function TrendRadar() {
   );
 
   const statusOf = (s: TrendSource) => statuses.find((x) => x.source === s);
+  const localEngine = synth?.engines?.includes("deterministic") ?? false;
 
   return (
     <HubShell
@@ -379,6 +439,7 @@ function TrendRadar() {
               return (
                 <span
                   key={s.id}
+                  title={st?.detail ?? "Henüz taranmadı"}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5"
                 >
                   <StatusDot ok={!!st && ok} />
@@ -392,9 +453,20 @@ function TrendRadar() {
                 </span>
               );
             })}
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
-              <StatusDot ok /> <Brain size={12} /> AI Engine:{" "}
-              <b className="text-emerald-400">Ready</b>
+            <span
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5"
+              title={
+                localEngine
+                  ? "AI sağlayıcısı yanıt vermedi; skorlar ölçülmüş sinyallerden yerel olarak hesaplandı."
+                  : synth
+                    ? `AI motorları: ${(synth.engines ?? []).join(" + ")}`
+                    : "Henüz analiz çalıştırılmadı"
+              }
+            >
+              <StatusDot ok={!!synth && !localEngine} /> <Brain size={12} /> Signal Engine:{" "}
+              <b className={localEngine ? "text-amber-300" : synth ? "text-emerald-400" : "text-slate-400"}>
+                {localEngine ? "Local" : synth ? "AI" : "Idle"}
+              </b>
               {synth?.engines?.length ? (
                 <span className="text-slate-400">({synth.engines.join(" + ")})</span>
               ) : null}
@@ -513,6 +585,12 @@ function TrendRadar() {
             <p className="text-sm text-slate-500">Henüz analiz yok.</p>
           ) : (
             <>
+              {localEngine && (
+                <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                  AI sağlayıcısı yanıt vermedi. Skorlar uydurulmadı: kazınmış hacim, büyüme ve kaynak
+                  sayısı yerel sinyal motoruyla ağırlıklandırıldı.
+                </p>
+              )}
               <div className="grid gap-3 md:grid-cols-3">
                 {synth.breakouts.slice(0, 3).map((b) => (
                   <div

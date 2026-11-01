@@ -56,6 +56,12 @@ import {
 import { useMoney } from "@/lib/currency";
 import { netMarginView } from "../utils/export";
 import { useCardProductImage } from "../utils/product-image";
+import {
+  estimateBand,
+  formatIntegerBand,
+  formatMoneyBand,
+  formatPercentBand,
+} from "../utils/ranges";
 
 /** Ölçülmemiş sayıyı "0,00" gibi gösterilemez — "—" yazılır. */
 function moneyOrDash(
@@ -238,26 +244,35 @@ function DollarGap({ p }: { p: WinningProduct }) {
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Koyarsın</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {money(invest, { showUsd: false })}
+            {formatMoneyBand(estimateBand(invest), (n) => money(n, { showUsd: false })) ??
+              money(invest, { showUsd: false })}
           </div>
           <div className="text-[9px] text-muted-foreground">tedarik+kargo+reklam</div>
         </div>
         <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
           <div className="text-[9px] uppercase text-emerald-300/80">Kazanırsın</div>
           <div className="text-xs font-bold text-emerald-300 mt-0.5">
-            {money(netPerUnit, { showUsd: false })} / adet
+            {formatMoneyBand(estimateBand(netPerUnit), (n) => money(n, { showUsd: false })) ??
+              money(netPerUnit, { showUsd: false })}{" "}
+            / adet
           </div>
           <div className="text-[9px] text-muted-foreground">
-            net marj %{re?.net_margin_pct ?? cb?.net_margin_pct ?? p.profit_margin_pct ?? 0}
+            net marj{" "}
+            {formatPercentBand(re?.net_margin_pct ?? cb?.net_margin_pct ?? p.profit_margin_pct, 6) ??
+              "—"}
           </div>
         </div>
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Başabaş</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {breakeven ? breakeven + " adet" : "—"}
+            {breakeven
+              ? (formatIntegerBand(estimateBand(breakeven, 0.8, 1.3)) ?? String(breakeven)) + " adet"
+              : "—"}
           </div>
           <div className="text-[9px] text-muted-foreground">
-            {re ? re.monthly.units + " adet/ay ölçek" : "ilk siparişler"}
+            {re
+              ? `${formatIntegerBand(estimateBand(re.monthly.units)) ?? re.monthly.units} adet/ay ölçek`
+              : "ilk siparişler"}
           </div>
         </div>
       </div>
@@ -370,13 +385,16 @@ function MetricPill({
   label,
   value,
   highlight,
+  title,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
+  title?: string;
 }) {
   return (
     <div
+      title={title}
       className={`rounded-md border px-1.5 py-1 text-center ${highlight ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300" : "bg-white/[0.04] border-white/10"}`}
     >
       <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
@@ -867,31 +885,70 @@ export function ProductCard({
       </div>
 
       {/* Aylık satış/ciro/net: hacim MODELİNDEN gelir. Maliyet kanıtı yoksa
-          `enrichProduct` null döner ve o durumda satır yerine "—" TİZİNLERİ
-          gösterilmez — üç tane tire, ölçülebilir bir bilgi değildir. */}
-      {enriched.est_monthly_sales !== null && (
-        <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-          <MetricPill label="Sales/mo" value={enriched.est_monthly_sales.toLocaleString()} />
-          <MetricPill
-            label="Revenue"
-            value={money(enriched.est_monthly_revenue_usd ?? 0, { compact: true, showUsd: false })}
-          />
-          <MetricPill
-            label="Net/mo"
-            value={money(enriched.est_monthly_net_profit_usd ?? 0, {
-              compact: true,
-              showUsd: false,
-            })}
-            highlight
-          />
-        </div>
-      )}
+          `enrichProduct` null döner ve o durumda satır yerine "—" TİZENLERİ
+          gösterilmez — üç tane tire, ölçülebilir bir bilgi değildir.
+          TAHMİN ARALIĞI: bu sayılar ölçüm değil model çıktısıdır; tek bir
+          "kesin" adet yerine alt/üst bant gösterilir. Net/mo için modelin
+          kendi low/high değerleri varsa onlar kullanılır. */}
+      {enriched.est_monthly_sales !== null &&
+        (() => {
+          const salesBand = estimateBand(enriched.est_monthly_sales);
+          const retail = measuredMoney(p.selling_price_usd);
+          const revenueBand =
+            salesBand && retail !== null
+              ? { low: salesBand.low * retail, high: salesBand.high * retail }
+              : null;
+          const netBand =
+            enriched.monthly_net_low_usd !== null && enriched.monthly_net_high_usd !== null
+              ? { low: enriched.monthly_net_low_usd, high: enriched.monthly_net_high_usd }
+              : estimateBand(enriched.est_monthly_net_profit_usd);
+          return (
+            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+              <MetricPill
+                label="Sales/mo"
+                value={formatIntegerBand(salesBand) ?? NOT_MEASURED}
+                title="Model tahmini — kesin adet değil, alt/üst bant"
+              />
+              <MetricPill
+                label="Revenue"
+                value={
+                  formatMoneyBand(revenueBand, (n) => money(n, { compact: true, showUsd: false })) ??
+                  NOT_MEASURED
+                }
+                title="Model tahmini ciro aralığı (ölçülen satış fiyatı × tahmini adet)"
+              />
+              <MetricPill
+                label="Net/mo"
+                value={
+                  formatMoneyBand(netBand, (n) => money(n, { compact: true, showUsd: false })) ??
+                  NOT_MEASURED
+                }
+                highlight
+                title="Model tahmini aylık net kâr aralığı — reklam, iade ve komisyon varsayımları dahil"
+              />
+            </div>
+          );
+        })()}
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">Supplier</div>
           <div className="text-xs font-semibold mt-0.5">
-            {moneyOrDash(p.supplier_price_usd, money)}
+            {(() => {
+              const s = p.supplier_evidence;
+              const low = s?.supplierLowUsd ?? null;
+              const high = s?.supplierHighUsd ?? null;
+              // Ölçülen teklif bandı varsa tek bir nokta fiyat yerine band
+              // gösterilir; bant ölçümden gelir, uydurulmaz.
+              if (low !== null && high !== null && high > low) {
+                return (
+                  <span title={`${s?.samples ?? 0} toptan teklifin ölçülen bandı`}>
+                    {money(low, { showUsd: false })}–{money(high, { showUsd: false })}
+                  </span>
+                );
+              }
+              return moneyOrDash(p.supplier_price_usd, money);
+            })()}
           </div>
           {currency !== "USD" && measuredMoney(p.supplier_price_usd) !== null && (
             <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>

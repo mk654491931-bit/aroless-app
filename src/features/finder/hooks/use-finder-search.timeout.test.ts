@@ -81,9 +81,11 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     expect(preflightAt).toBeGreaterThan(-1);
     expect(startAt).toBeGreaterThan(-1);
     expect(preflightAt).toBeLessThan(startAt);
-    // Engellenirse kullanıcıya düzeltilebilir sebep yazılır ve iş BAŞLATILMAZ.
-    expect(src).toContain("kredi harcanmadı");
-    expect(src).toContain("Arama motoru kurulmamış");
+    // Kurulum eksikse arama ENGELLENMEZ: boş ekran/kilit yerine canlı
+    // kaynaklardan ölçülen ürünlere geçilir ve AI Konsey'in koşmayacağı
+    // dürüstçe söylenir.
+    expect(src).toContain("AI Konsey koşmayacak");
+    expect(src).toContain("measured.mutate(vars)");
   });
 
   it("denetim alınamazsa arama yine başlar (kontrol asla kilitlemez)", async () => {
@@ -138,19 +140,21 @@ describe("gerçek hat durumunda klasik hat devreye girmez", () => {
     expect(src.slice(emptyAt - 120, emptyAt + 40)).toContain("fallback: false");
   });
 
-  it("klasik hat YALNIZ altyapı hatasında devreye girer", async () => {
+  it("gerçek hat hatası uydurma AI planlarına değil ölçülmüş yola düşer", async () => {
     const src = await read(HOOK);
-    // Yapısal kontrol: `gen.mutate(vars)` çağrısı, `!outcome.fallback` ve
+    // Yapısal kontrol: `measured.mutate(vars)` çağrısı, `!outcome.fallback` ve
     // `still-running` dallarının ALTINDA olmalı — yani gerçek hat hatası
-    // klasik hatta asla düşmez.
-    const genAt = src.indexOf("gen.mutate(vars)");
+    // doğrudan ölçülmüş yola düşer, AI'ın yazdığı ürün planlarına dönmez.
+    const measuredAt = src.indexOf("measured.mutate(vars)");
     const failedGuardAt = src.indexOf("if (!outcome.fallback)");
     const stillRunningAt = src.indexOf('outcome.reason === "still-running"');
-    expect(genAt).toBeGreaterThan(-1);
+    expect(measuredAt).toBeGreaterThan(-1);
     expect(failedGuardAt).toBeGreaterThan(-1);
     expect(stillRunningAt).toBeGreaterThan(-1);
     expect(failedGuardAt).toBeLessThan(stillRunningAt);
-    expect(stillRunningAt).toBeLessThan(genAt);
+    expect(stillRunningAt).toBeLessThan(measuredAt);
+    // Eski AI hattı otomatik geri düşme olarak ÇAĞRILMAZ.
+    expect(src).not.toContain("gen.mutate(vars)");
   });
 
   it("gerçek hata kullanıcıya Türkçe sebep olarak yazılır", async () => {

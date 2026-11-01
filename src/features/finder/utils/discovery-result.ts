@@ -50,9 +50,17 @@ export function toWinningProducts(
         ? `· ${row.rating.toFixed(1)} puan${row.ratingCount ? ` (${row.ratingCount} değerlendirme)` : ""}`
         : "· puan ölçülemedi";
     const evidence = row.evidence.slice(0, 2).join(" ");
-    const whyWinning = `14 ajan puanı ${Math.round(row.councilScore)}/100 · güven ${Math.round(
-      row.confidenceScore,
-    )}/100${evidence ? ` · ${evidence}` : ""}`;
+    // PUANIN KAYNAĞI: 14 ajan oyu ile ölçülmüş sinyal aynı cümleyle
+    // sunulmamalı. `measured` yolunda konsey hiç koşmadı; "14 ajan" yazmak
+    // ölçülmemiş bir şeyi ölçülmüş gibi göstermek olurdu.
+    const measuredOnly = row.scoreSource === "measured";
+    const whyWinning = measuredOnly
+      ? `Ölçülmüş sinyal puanı ${Math.round(row.councilScore)}/100 · güven ${Math.round(
+          row.confidenceScore,
+        )}/100 · veri bütünlüğü ${row.dataCompleteness}/5${evidence ? ` · ${evidence}` : ""}`
+      : `14 ajan puanı ${Math.round(row.councilScore)}/100 · güven ${Math.round(
+          row.confidenceScore,
+        )}/100${evidence ? ` · ${evidence}` : ""}`;
 
     const rivals = siblings
       .filter((other) => other.fingerprint && other.fingerprint !== row.fingerprint)
@@ -149,7 +157,7 @@ export function toWinningProducts(
       data_sources: row.sources,
       confidence_reason: `Veri bütünlüğü ${row.dataCompleteness}/5${ratingText} · ön skor ${Math.round(
         row.preScore,
-      )}`,
+      )}${measuredOnly ? " · ölçülmüş kaynak sinyali (AI konseyi koşmadı)" : ""}`,
       // NOT: `council` alanı BİLEREK yazılmaz. O alan eski hattın tam AI
       // yönetici raporu (`CouncilSummary`) şeklindedir; yalnız puandan bir
       // nesne uydurmak kartta “yönetici raporu var” yanıltması yaratırdı.

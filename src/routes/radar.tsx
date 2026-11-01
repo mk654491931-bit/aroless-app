@@ -35,6 +35,7 @@ import {
 import { RADAR_FLAG_LABEL } from "@/lib/radar-series";
 import { RadarSparkline } from "@/components/radar-sparkline";
 import { creditErrorMessage } from "@/lib/credits";
+import { formatPercentBand } from "@/features/finder/utils/ranges";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/radar")({
@@ -126,8 +127,10 @@ function RadarCard({ item, rank }: { item: RadarItem; rank: number }) {
             <div className="text-[9px] uppercase text-muted-foreground">fiyat bandı</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-sm font-bold">%{item.est_margin_pct}</div>
-            <div className="text-[9px] uppercase text-muted-foreground">tah. marj</div>
+            <div className="text-sm font-bold" title="Tahmini marj — tek sayı değil, bant">
+              {formatPercentBand(item.est_margin_pct, 6, 0, 90) ?? `~%${item.est_margin_pct}`}
+            </div>
+            <div className="text-[9px] uppercase text-muted-foreground">tah. marj (bant)</div>
           </div>
         </div>
         {item.reason && (

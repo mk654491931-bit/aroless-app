@@ -121,6 +121,9 @@ export function DiscoveryWinnerCard({
    * bir uyarıyı basmak da yanıltıcı olurdu.
    */
   const rescued = winner.qualityGate === "rescued";
+  // Puanın kaynağı: ölçülmüş yedek yolda 14 ajan koşmadı. Aynı "konsey
+  // puanı" etiketini basmak, olmayan bir oylamayı varmış gibi gösterirdi.
+  const measuredOnly = winner.scoreSource === "measured";
 
   return (
     <article className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -149,7 +152,9 @@ export function DiscoveryWinnerCard({
           <div className={`text-2xl font-bold tabular-nums ${scoreTone(winner.councilScore)}`}>
             {winner.councilScore}
           </div>
-          <div className="text-[10px] text-muted-foreground">konsey puanı</div>
+          <div className="text-[10px] text-muted-foreground">
+            {measuredOnly ? "ölçülmüş sinyal puanı" : "konsey puanı"}
+          </div>
         </div>
       </header>
 
@@ -165,7 +170,7 @@ export function DiscoveryWinnerCard({
         </div>
         <span className="text-xs font-medium tabular-nums">{winner.confidenceScore}</span>
         <span className="text-[10px] text-muted-foreground">
-          ({winner.votes}/{TOTAL_AGENTS} oy)
+          {measuredOnly ? "(AI konseyi koşmadı)" : `(${winner.votes}/${TOTAL_AGENTS} oy)`}
         </span>
       </div>
 
@@ -181,9 +186,11 @@ export function DiscoveryWinnerCard({
         <div className="rounded-lg bg-muted/30 py-2">
           <dt className="text-[10px] text-muted-foreground">Tedarik</dt>
           <dd className="text-sm font-semibold tabular-nums">
-            {winner.supplier?.supplierPriceUsd != null
-              ? fmtPrice(winner.supplier.supplierPriceUsd)
-              : "—"}
+            {winner.supplier?.supplierLowUsd != null && winner.supplier?.supplierHighUsd != null
+              ? `${fmtPrice(winner.supplier.supplierLowUsd)}–${fmtPrice(winner.supplier.supplierHighUsd)}`
+              : winner.supplier?.supplierPriceUsd != null
+                ? fmtPrice(winner.supplier.supplierPriceUsd)
+                : "—"}
           </dd>
         </div>
         {/* TALEP: puan → satış adedi → görüntülenme (ölçülen ilk sayı kazanır). */}

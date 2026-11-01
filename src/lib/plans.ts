@@ -103,7 +103,7 @@ export const PLAN_BY_ID: Record<PlanId, Plan> = {
   Business: PLANS[2],
 };
 
-/**
+/** Aylık kullanım tablosunun satırları — paket alanlarıyla birebir. */
 export const USAGE_ROWS: {
   key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
   label: string;

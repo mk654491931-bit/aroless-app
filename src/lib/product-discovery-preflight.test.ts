@@ -58,7 +58,9 @@ const READY: PreflightEnv = {
 };
 
 const byId = (checks: { id: string }[], id: string) =>
-  checks.find((c) => c.id === id) as { ok: boolean; optional?: boolean; fix: string } | undefined;
+  checks.find((c) => c.id === id) as
+    | { ok: boolean; optional?: boolean; fix: string; detail: string }
+    | undefined;
 
 describe("preflight env kontrolleri", () => {
   it("tam kurulumda tüm kontroller geçer", () => {

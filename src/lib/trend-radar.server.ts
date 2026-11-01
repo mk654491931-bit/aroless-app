@@ -493,6 +493,151 @@ export type AiSynthesis = {
   scores: Record<string, number>;
 };
 
+const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+
+/** Türkçe hacim biçimi: 42000 → "42 B" (yerel sentezde kullanılır). */
+function compactVolume(value: number): string {
+  try {
+    return new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 }).format(
+      Math.max(0, Math.round(value)),
+    );
+  } catch {
+    return String(Math.max(0, Math.round(value)));
+  }
+}
+
+/**
+ * YEREL SENTEZ — AI motorları yokken/başarısızken Trend Radar'ı boş bırakmaz.
+ *
+ * NEDEN VAR (ölçülen arıza): `.env` yalnız Supabase anahtarları içerdiğinde
+ * `runDeepAnalysis` dört AI motorunun dördünü de boş döndürüyor ve arayüz
+ * "Henüz analiz yok"da kalıyordu. Oysa kazınmış sinyaller (hacim, büyüme,
+ * sıra, kaynak) elimizde: bunlar AI olmadan da karşılaştırılabilir. Bu fonksiyon
+ * hiçbir sayı UYDURMAZ; yalnız ölçülmüş sinyalleri ağırlıklandırır ve hangi
+ * kaynakta kaç sinyal olduğunu yazar. `engines: ["deterministic"]` etiketi
+ * arayüzde "AI değil, yerel sinyal motoru" olarak okunur.
+ */
+export function localSynthesis(
+  trends: readonly ScrapedTrend[],
+  mode: AiMode,
+  region: string,
+  category: string,
+): AiSynthesis {
+  const byName = new Map<
+    string,
+    { trend: ScrapedTrend; sources: Set<TrendSource>; bestVolume: number; bestGrowth: number; bestRank: number }
+  >();
+  for (const t of trends) {
+    const key = String(t.trend_name ?? "")
+      .toLocaleLowerCase("tr-TR")
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (key.length < 2) continue;
+    const volume = Number.isFinite(t.metrics?.search_volume) ? t.metrics.search_volume : 0;
+    const growth = Number.isFinite(t.metrics?.growth_rate) ? t.metrics.growth_rate : 0;
+    const rank = Number.isFinite(t.metrics?.rank) ? t.metrics.rank : 0;
+    const cur = byName.get(key);
+    if (cur) {
+      cur.sources.add(t.source);
+      cur.bestVolume = Math.max(cur.bestVolume, volume);
+      cur.bestGrowth = Math.max(cur.bestGrowth, growth);
+      cur.bestRank = cur.bestRank > 0 ? Math.min(cur.bestRank, rank || cur.bestRank) : rank;
+    } else {
+      byName.set(key, {
+        trend: t,
+        sources: new Set([t.source]),
+        bestVolume: volume,
+        bestGrowth: growth,
+        bestRank: rank,
+      });
+    }
+  }
+
+  const scored = [...byName.values()].map((row) => {
+    const volumeScore = clamp(8 + Math.log10(row.bestVolume + 1) * 18, 0, 100);
+    const growthScore = clamp(50 + row.bestGrowth * 0.35, 0, 100);
+    const rankScore = row.bestRank > 0 ? clamp(100 - (row.bestRank - 1) * 6, 0, 100) : 50;
+    const crossSourceBonus = Math.min(12, (row.sources.size - 1) * 6);
+    const score = clamp(
+      Math.round(growthScore * 0.42 + volumeScore * 0.38 + rankScore * 0.2 + crossSourceBonus),
+      0,
+      100,
+    );
+    const confidence = clamp(45 + row.sources.size * 8 + Math.round(volumeScore / 10), 40, 92);
+    return { ...row, score, confidence };
+  });
+
+  const ranked = [...scored].sort((a, b) => b.score - a.score || b.bestVolume - a.bestVolume);
+  const breakouts: AiTrendVerdict[] = ranked
+    .filter((row) => row.score >= 35 && row.bestGrowth >= -10)
+    .slice(0, 8)
+    .map((row) => {
+      const sources = [...row.sources];
+      const cross =
+        sources.length > 1 ? ` Aynı sinyal ${sources.length} platformda görüldü.` : "";
+      return {
+        trend_name: row.trend.trend_name,
+        sources,
+        ai_demand_score: row.score,
+        signal: row.score >= 70 && row.bestGrowth > 0 ? "verified" : "watch",
+        confidence: row.confidence,
+        reasoning:
+          `${sources.join(", ")} verisinde ${compactVolume(row.bestVolume)} arama hacmi ve ` +
+          `%${row.bestGrowth >= 0 ? "+" : ""}${row.bestGrowth} büyüme ölçüldü.${cross}`,
+        sentiment: row.bestGrowth >= 15 ? "positive" : row.bestGrowth <= -5 ? "negative" : "neutral",
+        hooks: [],
+        persona: "",
+        positioning: "",
+        ad_copy: "",
+      };
+    });
+
+  // KORELASYON: en az iki farklı platformda geçen anlamlı kelimeler.
+  const tokenSources = new Map<string, Set<TrendSource>>();
+  for (const t of trends) {
+    const tokens = new Set(
+      String(t.trend_name ?? "")
+        .toLocaleLowerCase("tr-TR")
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((w) => w.length >= 4),
+    );
+    for (const token of tokens) {
+      const set = tokenSources.get(token) ?? new Set<TrendSource>();
+      set.add(t.source);
+      tokenSources.set(token, set);
+    }
+  }
+  const correlations = [...tokenSources.entries()]
+    .filter(([, sources]) => sources.size >= 2)
+    .sort((a, b) => b[1].size - a[1].size || b[0].length - a[0].length)
+    .slice(0, 3)
+    .map(([theme, sources]) => ({
+      theme,
+      platforms: [...sources],
+      note: `${sources.size} platformda birlikte görülen ortak tema.`,
+    }));
+
+  const noise_filtered = ranked
+    .filter((row) => row.score < 35 || row.bestGrowth < -10)
+    .slice(0, 5)
+    .map((row) => `${row.trend.trend_name} (skor ${row.score}, büyüme %${row.bestGrowth})`);
+
+  const topNames = breakouts.slice(0, 3).map((b) => b.trend_name);
+  return {
+    mode,
+    engines: ["deterministic"],
+    summary:
+      `AI sağlayıcılarına ulaşılamadı; ${trends.length} canlı sinyal yerel olarak ` +
+      `skorlandı (${region} · ${category}).` +
+      (topNames.length ? ` Öne çıkanlar: ${topNames.join(", ")}.` : ""),
+    breakouts,
+    noise_filtered,
+    correlations,
+    scores: Object.fromEntries(breakouts.map((b) => [b.trend_name, b.ai_demand_score])),
+  };
+}
+
 const MODE_BRIEF: Record<AiMode, string> = {
   fast: "FAST SYNTHESIS: be quick and decisive, short reasoning, top signals only.",
   deep: "DEEP MARKET RESEARCH: analyse demand durability, seasonality, saturation and buyer intent in depth.",
@@ -567,15 +712,10 @@ export async function runDeepAnalysis(
   });
 
   if (!parsed.length) {
-    return {
-      mode,
-      engines: [],
-      summary: "AI motorlarına şu an ulaşılamadı — ham sinyaller aşağıda listeleniyor.",
-      breakouts: [],
-      noise_filtered: [],
-      correlations: [],
-      scores: {},
-    };
+    // AI motorları yok/başarısız: ham sinyaller yine de karşılaştırılabilir.
+    // Boş bir "analiz yok" ekranı yerine ölçülmüş sinyallerden yerel sentez
+    // döner; arayüz bunu `engines: ["deterministic"]` ile açıkça etiketler.
+    return localSynthesis(trends, mode, region, category);
   }
 
   // Fuse: average AI demand score per trend across engines, union of strategy fields.
@@ -692,5 +832,19 @@ Return ONLY minified JSON (all prose in Turkish):
       if (data["headline"] || data["hooks"]) return data;
     }
   }
-  return {};
+  // AI brifingi üretilemedi: boş modal yerine dürüst bir "veri yok" brifingi.
+  return {
+    headline: `${trend} — AI brifingi şu an üretilemedi`,
+    opportunity:
+      "AI sağlayıcılarına ulaşılamadı. Canlı trend sinyalleri kullanılabilir; brifing için Deep AI Analysis'i yeniden çalıştır.",
+    audience: [],
+    angles: [],
+    hooks: [],
+    ad_copy: [],
+    risks: ["Fiyat, marj ve hedef kitle alanları AI brifingi olmadan ölçülmedi."],
+    next_steps: [
+      "Trend Radar'da Deep AI Analysis'i yeniden çalıştır.",
+      "AI anahtarı tanımlıysa sağlayıcı havuzu otomatik devreye girer.",
+    ],
+  };
 }

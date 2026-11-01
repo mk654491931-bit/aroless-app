@@ -1442,6 +1442,8 @@ export function runFinalRankStep(
             // yanıtlar: `passed` = eşiği geçti, `rescued` = yalnız liste boş
             // kalmasın diye gösteriliyor (kullanıcıya açıkça yazılır).
             qualityGate: rescuedRows.has(row) ? ("rescued" as const) : ("passed" as const),
+            // Puanın kaynağı: bu yol 14 ajan oylarından geçti.
+            scoreSource: "council" as const,
           } as unknown as NormalizedProduct;
         })
         .filter((p): p is NormalizedProduct => p !== null)

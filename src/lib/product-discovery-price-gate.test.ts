@@ -170,6 +170,7 @@ describe("null fiyat — zincirin geri kalanı", () => {
       viewed90d: null,
       cohortCompetitors: null,
       qualityGate: null,
+      scoreSource: null,
       sources: ["github"],
       url: "https://github.com/example/awesome-led-desk-lamp",
       notes: "120 yıldız",

@@ -48,7 +48,12 @@ import {
 } from "@/lib/product-discovery-runner.server";
 import { discoverySliceMs } from "@/lib/product-discovery-slices.server";
 import { LaunchReadinessSchema } from "@/lib/launch-readiness";
-import { ConsensusSchema, TopProductSchema, type TopProduct } from "@/lib/product-discovery.types";
+import {
+  ConsensusSchema,
+  TopProductSchema,
+  type NormalizedProduct,
+  type TopProduct,
+} from "@/lib/product-discovery.types";
 import { SupplierEvidenceSchema } from "@/lib/supplier-economics";
 
 /**
@@ -160,6 +165,20 @@ export const DiscoveryWinnerSchema = z.object({
    */
   qualityGate: z
     .enum(["passed", "rescued"])
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
+  /**
+   * PUANIN KAYNAĞI — "14 ajan mı oyladı, yoksa ölçülmüş sinyaller mi?".
+   *
+   * Ölçülen arıza: AI/veritabanı kurulumu yokken canlı kaynaklardan bulunan
+   * ürünler de "14 ajan puanı" etiketiyle sunuluyordu. `measured` bu durumda
+   * arayüzün doğru cümleyi kurmasını sağlar; eski kayıtlarda `null` kalır ve
+   * hiçbir rozet basılmaz (varsayılan uydurulmaz).
+   */
+  scoreSource: z
+    .enum(["council", "measured"])
     .nullable()
     .optional()
     .catch(null)
@@ -421,6 +440,104 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
 
     // `inline`: zinciri istemci yoklaması sürer. `/start` yalnız kaydı açar.
     return { ok: true, runId, charged: charge.charged, mode: "inline" };
+  });
+
+/* ------------------------------------------- Ölçülmüş kazananlar (DB'siz) */
+
+const MeasuredInput = z.object({
+  niche: z.string().min(2).max(120),
+  country: z.string().min(2).max(4).default("US"),
+  platform: z.string().max(40).default("General"),
+  topN: z.number().int().min(3).max(10).default(5),
+});
+
+/**
+ * KALICI İŞ KAYDI OLMADAN kazıma + filtre + sıralama.
+ *
+ * NEDEN AYRI YOL: `startDiscoveryRun` iş kaydını `searches` tablosuna yazar ve
+ * bu tablo yalnız servis rolüyle yazılabilir. Servis rolü tanımlı değilse ürün
+ * bulucu daha ilk adımda duruyordu ("Arama motoru kurulmamış"). Oysa kazıma
+ * hattının ilk aşaması saf koddur ve veritabanına ihtiyaç duymaz. Bu fonksiyon
+ * o gerçek satırları döndürür; 14 ajan/karne YOKTUR ve arayüz bunu açıkça
+ * "ölçülmüş sinyaller" olarak etiketler.
+ *
+ * KREDİ: iş başlamadan 1 jeton düşer; sonuç boşsa veya hata olursa iade edilir.
+ * Yani kullanıcı boş bir tur için ödeme yapmaz.
+ */
+export const findMeasuredWinners = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(MeasuredInput)
+  .handler(async ({ data, context }) => {
+    const token = bearerToken();
+    const charge = await chargeOnce({
+      userId: context.userId,
+      token,
+      feature: FEATURE,
+    });
+    if (!charge.ok) {
+      if (charge.reason === "PLAN_LIMIT") {
+        return {
+          ok: false as const,
+          reason: "plan-limit" as const,
+          message: planLimitMessage(
+            charge.kind ?? "credits",
+            charge.limit ?? 0,
+            charge.tier ?? null,
+          ),
+        };
+      }
+      if (charge.reason === "NO_CREDITS") {
+        noCreditsResponse(1, FEATURE);
+        return { ok: false as const, reason: "no-credits" as const };
+      }
+      creditUnavailableResponse();
+      return { ok: false as const, reason: "credit-unavailable" as const };
+    }
+
+    try {
+      const { runScrapeFilterStep } = await import("./product-discovery-pipeline.server");
+      const { measuredWinnerRows } = await import("./measured-winners");
+      // Kaynaklar paralel koşar; 25 sn tavanı tek bir kaynağın isteği
+      // kilitlemesini engeller. Filtre çıktısı 75 adayla sınırlıdır.
+      const result = await runScrapeFilterStep(
+        data.niche,
+        data.country,
+        data.platform,
+        Math.max(20, data.topN * 5),
+        { sourceCapMs: 25_000 },
+      );
+      const rows = measuredWinnerRows(
+        (result.products ?? []) as NormalizedProduct[],
+        data.topN,
+      );
+      if (!rows.length) {
+        await refundFeatureCredits(
+          context.userId,
+          charge.charged,
+          "measured_empty",
+          null,
+          FEATURE,
+        );
+        return {
+          ok: false as const,
+          reason: "empty" as const,
+          detail: (result.notes ?? []).join(" ").slice(0, 400),
+        };
+      }
+      return {
+        ok: true as const,
+        rows,
+        charged: charge.charged,
+        mode: "measured" as const,
+      };
+    } catch (error) {
+      await refundFeatureCredits(context.userId, charge.charged, "measured_failed", null, FEATURE);
+      return {
+        ok: false as const,
+        reason: "failed" as const,
+        detail: (error instanceof Error ? error.message : "measured_failed").slice(0, 300),
+      };
+    }
   });
 
 /* ------------------------------------------------------------- Teşhis */

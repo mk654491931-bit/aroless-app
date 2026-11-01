@@ -11,6 +11,7 @@ import {
   getDiscoveryPreflight,
   advanceDiscoveryRun,
   startDiscoveryRun,
+  findMeasuredWinners,
   type DiscoveryWinner,
 } from "@/lib/product-discovery.functions";
 import type { EngineId, MarketplaceId } from "@/lib/engines";
@@ -24,7 +25,6 @@ import {
   toWinningProducts,
   describeDiscoveryFailure,
   hintsForFailure,
-  discoverySetupNotice,
   blockingSetupIssues,
 } from "../utils/discovery-result";
 import { setDiscoveryPipelineActive } from "../utils/discovery-progress-store";
@@ -186,6 +186,9 @@ export function useFinderSearch(opts: {
   const saveAnalysisFn = useServerFn(saveAnalysis);
   const insertProductsFn = useServerFn(insertProductsFromAnalysis);
   const startDiscoveryFn = useServerFn(startDiscoveryRun);
+  // DB/AI kurulumu yoksa çalışan ölçülmüş yol: iş kaydı açmaz, kazınmış
+  // ürünleri doğrudan döndürür. "Boş sonuç" yerine gerçek kaynak satırı verir.
+  const measuredFn = useServerFn(findMeasuredWinners);
   // SÜRÜCÜ: yoklama aynı zamanda zinciri ilerletir. Kuyruk yoksa iş bu şekilde
   // ilerler; kuyruk/arka plan varsa çağrı atomik sahiplenme sayesinde hiçbir
   // şeyi ikiye katlamaz, yalnız güncel durumu döner.
@@ -442,15 +445,16 @@ export function useFinderSearch(opts: {
    * fonksiyon yalnız başlatır ve yoklar.
    *
    * GERİ DÜŞME SÖZLEŞMESİ: yeni hat kurulamazsa (kuyruk yok, QStash yok,
-   * zaman aşımı) `fallback` döner ve `onSuccess` ESKİ hatta (`gen.mutate`)
-   * düşer. Yani yeni hatın bir sorunu ürün arama özelliğini KAPATMAZ — yalnız
-   * eski yol devreye girer. Kullanıcı farkı görmez, hat çalışır.
+   * zaman aşımı) `fallback` döner ve ÖLÇÜLMÜŞ yola (`measured.mutate`) geçilir.
+   * Eski AI ürün-planı hattına (`gen`) ARTIK otomatik dönülmez: o yol gerçek
+   * kaynak satırı değil, modelin yazdığı planı döndürüyordu ve kullanıcı bunu
+   * "uydurma" olarak görüyordu.
    *
    * Kredi: yeni hat krediyi kendi düşer (`startDiscoveryRun`). Düşülemezse
-   * `no-credits` döner ve ESKİ hat DENEMEZ — yoksa kullanıcı iki kez ücret
-   * öderdi. Kuyruk/timeout gibi "para alındı ama iş yapılmadı" durumlarında
-   * yeni hat krediyi tam bir kez iade eder, sonra eski hat kendi kredisini
-   * düşer: net bir kredi.
+   * `no-credits` döner ve hiçbir ikinci yol DENENMEZ — yoksa kullanıcı iki kez
+   * ücret öderdi. Kuyruk/timeout gibi "para alındı ama iş yapılmadı"
+   * durumlarında yeni hat krediyi tam bir kez iade eder; ölçülmüş yol kendi
+   * jetonunu düşer: net bir kredi.
    */
   const pipeline = useMutation({
     mutationFn: async (
@@ -631,20 +635,22 @@ export function useFinderSearch(opts: {
           setStalled(false);
           return;
         }
-        // Kredi İADE EDİLMİŞ durumda (kuyruk/hata) → eski hatta düşmek bedava.
-        console.warn(`[finder] yeni hat düştü (${outcome.reason}) — eski hatta geri dönülüyor`);
+        // Kredi İADE EDİLMİŞ durumda (kuyruk/hata) → AI üretimine değil, canlı
+        // kaynaklardan ÖLÇÜLEN yola geçilir. Eski klasik hat AI'ın yazdığı
+        // ürün planlarını döndürüyordu; kullanıcı bunları "uydurma" olarak
+        // görüyordu. Ölçülmüş yol gerçek fiyat/puan/satış satırı verir.
+        console.warn(
+          `[finder] yeni hat düştü (${outcome.reason}) — ölçülmüş kaynak yoluna geçiliyor`,
+        );
         // DÜRÜST BİLDİRİM: eskiden tek satırlık genel bir mesaj vardı ve kullanıcı
         // hatta ne olduğunu öğrenemiyordu. "5 ürün" gördüğü için hattın hiç
         // çalışmadığını fark etmiyordu. Artık ekranda: sebep + eksik olan şey +
         // ÇÖZÜM yazıyor. Teşhis `getDiscoveryPreflight` sunucu fonksiyonuyla
         // çekilir (HTTP ucu tarayıcıdan açılamaz: Bearer başlığı ister).
-        setFallbackNotice(discoverySetupNotice(outcome.reason, null));
-        void getPreflightFn({ data: {} })
-          .then((report) => setFallbackNotice(discoverySetupNotice(outcome.reason, report)))
-          .catch(() => {
-            /* teşhis alınamazsa yukarıdaki kısa mesaj kalır */
-          });
-        gen.mutate(vars);
+        setFallbackNotice(
+          "Kalıcı iş kaydı kurulumu tamam değil; arama canlı kaynaklardan ölçülerek yapılıyor. AI Konsey koşmayacak.",
+        );
+        measured.mutate(vars);
         return;
       }
       const products = attachWinnerScores(toWinningProducts(outcome.rows, outcome.rows));
@@ -705,10 +711,136 @@ export function useFinderSearch(opts: {
     },
   });
   /**
-   * Bekleme göstergesi üç yolun birleşimidir: yeni hat, eski hat, HF motoru.
+   * ÖLÇÜLMÜŞ YEDEK YOL — DB/AI kurulumu olmadan gerçek ürün satırları.
+   *
+   * `startDiscoveryRun` servis rolü/migration istiyor; bunlar yoksa ürün
+   * bulucu daha önce hiç arama yapmıyordu. Bu yol kazıma + sert filtreyi
+   * doğrudan koşturur, 1 jeton düşer, sonuç boşsa iade eder. 14 ajan oyu
+   * YOKTUR; kart `scoreSource: "measured"` sayesinde bunu açıkça söyler.
+   */
+  const measured = useMutation({
+    mutationFn: async (vars: GenVars) => {
+      const country =
+        vars.target_country === "GLOBAL"
+          ? "US"
+          : vars.target_country.slice(0, 2).toUpperCase() || "US";
+      return await measuredFn({
+        data: {
+          niche: vars.niche,
+          country,
+          platform: (vars.platforms[0] ?? "General").slice(0, 40),
+          topN: 5,
+        },
+      });
+    },
+    onSuccess: (res, vars) => {
+      setStalled(false);
+      setStillRunning(false);
+      setEnriching(false);
+      setCouncilPending(false);
+      if (!res.ok) {
+        if (res.reason === "no-credits") {
+          toast.error("Kredi yok — paketini yükseltip devam edebilirsin.");
+          opts.onNeedUpgrade();
+          return;
+        }
+        if (res.reason === "plan-limit") {
+          toast.error(res.message || "Paketinin aylık kullanım hakkı doldu.");
+          return;
+        }
+        if (res.reason === "credit-unavailable") {
+          opts.onClearResults();
+          setSearchError({
+            kind: "auth",
+            title: "Kredi doğrulanamadı",
+            body: "Kredi servisi şu an yanıt vermiyor; istek başlatılmadı ve jeton düşülmedi.",
+            hint: "Birkaç saniye sonra tekrar dene.",
+            niche: vars.niche,
+          });
+          return;
+        }
+        opts.onClearResults();
+        if (res.reason === "empty") {
+          setSearchError({
+            kind: "unknown",
+            title: "Bu nişte ölçülebilir ürün bulunamadı",
+            body: describeDiscoveryFailure("empty_result"),
+            hint: "Farklı bir niş ifadesi dene; kaynaklar ürün döndürdüyse sert filtre hepsini elemiş olabilir.",
+            niche: vars.niche,
+          });
+          return;
+        }
+        setSearchError({
+          kind: "server",
+          title: "Canlı kaynak taraması başarısız",
+          body: `Kaynaklar taranamadı: ${res.detail || "bilinmeyen hata"}`,
+          hint: "Bu bir AI hatası değil; kaynak ağlarına erişilemedi. Tekrar dene.",
+          niche: vars.niche,
+        });
+        return;
+      }
+
+      const products = attachWinnerScores(
+        toWinningProducts(res.rows, res.rows),
+      ).filter(
+        (p) =>
+          p.name.trim().length > 0 &&
+          (p.selling_price_usd !== "" ||
+            p.measured?.rating !== null ||
+            p.measured?.salesVolume !== null ||
+            p.image_url ||
+            p.source_url),
+      );
+      if (!products.length) {
+        opts.onClearResults();
+        setSearchError({
+          kind: "unknown",
+          title: "Bu nişte ölçülebilir ürün bulunamadı",
+          body: describeDiscoveryFailure("empty_result"),
+          hint: "Farklı bir niş ifadesi dene.",
+          niche: vars.niche,
+        });
+        return;
+      }
+
+      opts.onResults(products, [], null, false);
+      setFallbackNotice(
+        "Ürünler canlı kaynaklardan ölçüldü. AI Konsey bu aramada koşmadı; puanlar ölçülmüş sinyallerden (fiyat, puan, satış, kaynak) hesaplandı.",
+      );
+      setSearchError(null);
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      toast.success(`${products.length} ürün canlı kaynaklardan ölçüldü.`);
+      saveAnalysisFn({
+        data: {
+          search_query: `${vars.niche} · ${vars.category} · ${vars.budget}`,
+          results: products,
+        },
+      }).catch(() => {});
+      insertProductsFn({ data: { products, target_country: vars.target_country } }).catch(() => {});
+    },
+    onError: (err: Error) => {
+      setStalled(false);
+      setStillRunning(false);
+      opts.onClearResults();
+      setSearchError({ ...describeSearchFailure(err.message), raw: err.message });
+    },
+    onSettled: () => {
+      // Güvenlik zamanlayıcısı ölçülmüş yol için de temizlenmeli: aksi hâlde
+      // sonuç teslim edildikten dakikalar sonra "hâlâ çalışıyor" şeridi açılırdı.
+      setStalled(false);
+      setDiscoveryPipelineActive(false);
+      if (searchSafetyTimerRef.current) {
+        clearTimeout(searchSafetyTimerRef.current);
+        searchSafetyTimerRef.current = null;
+      }
+    },
+  });
+
+  /**
+   * Bekleme göstergesi: 14 ajanlı hat + ölçülmüş yedek + klasik yedek.
    * `pipeline` YUKARIDA tanımlıdır; aşağıda yazmak TDZ hatası verirdi.
    */
-  const searching = gen.isPending || pipeline.isPending;
+  const searching = gen.isPending || pipeline.isPending || measured.isPending;
 
   const runSearch = useCallback(
     (nicheValue: string, resultQuerySetter?: (v: string) => void) => {
@@ -770,9 +902,10 @@ export function useFinderSearch(opts: {
       // zaman aşımına uğradı" kartını görüyordu. Gerçek sebep (eksik servis
       // rolü anahtarı / uygulanmamış migration) ekranda HİÇ görünmüyordu.
       //
-      // Şimdi denetim ÖNCE yapılır: veritabanı tarafı eksikse iş hiç
-      // başlatılmaz — kredi yakılmaz, kullanıcı 280 sn beklemez, ekranda
-      // DÜZELTİLEBİLİR somut eksik yazar. QStash eksikliği engel DEĞİLDİR
+      // Şimdi denetim ÖNCE yapılır: veritabanı tarafı eksikse 4 adımlı hat
+      // hiç başlatılmaz. Bunun yerine kazıma + sert filtreyi doğrudan koşan
+      // ölçülmüş yola geçilir; kullanıcı 280 sn beklemez ve boş/uydurma ürün
+      // yerine gerçek kaynak satırı görür. QStash eksikliği engel DEĞİLDİR
       // (`inline` yolu çalışır); yalnız veritabanı tarafı engeldir.
       const vars: GenVars = {
         niche: nicheValue,
@@ -795,16 +928,15 @@ export function useFinderSearch(opts: {
             pipeline.mutate(vars);
             return;
           }
-          const body = blocking.join(" · ");
-          setSearchError({
-            kind: "server",
-            title: "Arama motoru kurulmamış",
-            body: `Kurulum eksik olduğu için arama başlatılmadı — kredi harcanmadı. Eksik: ${body}`,
-            hint: "Bu, geçici bir arıza değil: sunucu tarafında bir kurulum adımı eksik.",
-            niche: nicheValue,
-          });
+          // Kalıcı iş kaydı kurulumu yok (servis rolü/migration): aramayı
+          // ENGELLEME. Kazıma + sert filtre veritabanı olmadan da çalışır;
+          // kullanıcı boş ekran yerine gerçek, ölçülmüş ürün satırları görür.
+          setFallbackNotice(
+            "Kalıcı iş kaydı kurulumu tamam değil; arama canlı kaynaklardan ölçülerek yapılıyor. AI Konsey koşmayacak.",
+          );
+          setSearchError(null);
           setStalled(false);
-          if (searchSafetyTimerRef.current) clearTimeout(searchSafetyTimerRef.current);
+          measured.mutate(vars);
         })
         .catch(() => {
           // Denetim alınamazsa eski yolla devam: kontrol, aramayı ASLA engellemez.
