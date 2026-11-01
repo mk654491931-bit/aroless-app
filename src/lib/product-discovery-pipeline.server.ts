@@ -1052,7 +1052,7 @@ export async function geminiShortlistSelector(
   /** Çıktı dili: kartta okunan gerekçe seçilen dilde yazılır. */
   lang?: string,
 ): Promise<NormalizedProduct[]> {
-  const { callGemini } = await import("./ai.server");
+  const { callAiMesh } = await import("./ai.server");
   // Tek import yüzeyi: AI seçim doğrulaması ORTAK ÇEKİRDEKTEN gelir (kimlik
   // zaten modül başında çekirdekten alınıyor).
   const { resolveSelection } = await import("./discovery-core");
@@ -1084,7 +1084,9 @@ export async function geminiShortlistSelector(
   //   katkısı olmaz. Bu yüzden ağ/sağlayıcı hatası da aynı yedeğe gider.
   let raw: string;
   try {
-    raw = await callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
+    // TÜM ÜCRETSİZ MOTORLAR: yalnız Gemini değil, gateway/22 anahtarlık havuz
+    // sırayla denenir. Model yalnız mevcut adaylardan indeks seçer.
+    raw = await callAiMesh(prompt, { temperature: 0.2, grounded: false, deadlineAt });
   } catch (e) {
     console.log(
       `[discovery] gemini kısa liste çağrısı başarısız (${(e as Error).message.slice(0, 120)}); ` +

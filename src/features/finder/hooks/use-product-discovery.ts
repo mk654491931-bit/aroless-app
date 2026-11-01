@@ -29,7 +29,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
-import { advanceDiscoveryRun, startDiscoveryRun } from "@/lib/product-discovery.functions";
+import {
+  advanceDiscoveryRun,
+  findMeasuredWinners,
+  startDiscoveryRun,
+} from "@/lib/product-discovery.functions";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 import type {
   Consensus,
@@ -78,6 +82,13 @@ export type DiscoveryRun = {
    */
   topProducts: TopProduct[];
   error: string | null;
+  /**
+   * Kalıcı iş kaydı açılamadığında hat ölçülmüş kazananlara düştüyse dolar.
+   * Arayüz bunu "14 ajan koştu" gibi göstermez; kaynağı açıkça yazar.
+   */
+  note: string | null;
+  /** Bu sonuç DB'siz ölçülmüş yoldan mı geldi? */
+  measured: boolean;
 };
 
 const EMPTY: DiscoveryRun = {
@@ -89,6 +100,8 @@ const EMPTY: DiscoveryRun = {
   consensus: [],
   topProducts: [],
   error: null,
+  note: null,
+  measured: false,
 };
 
 export function useProductDiscovery(): {
@@ -101,11 +114,96 @@ export function useProductDiscovery(): {
   const qc = useQueryClient();
   const startFn = useServerFn(startDiscoveryRun);
   const statusFn = useServerFn(advanceDiscoveryRun);
+  const measuredFn = useServerFn(findMeasuredWinners);
 
   const [isStarting, setIsStarting] = useState(false);
   const [run, setRun] = useState<DiscoveryRun>(EMPTY);
 
   const reset = useCallback(() => setRun(EMPTY), []);
+
+  /**
+   * DB'SİZ YEDEK — Büyüme Suite'in boş kalmasını engeller.
+   *
+   * `startDiscoveryRun` iş kaydını Supabase'e yazar. Servis rolü/migration
+   * yoksa kayıt açılamaz ve sunucu `queue-failed` döner (krediyi iade eder).
+   * Eski istemci bu durumda yalnız toast gösterip ekranı boşaltıyordu; kullanıcı
+   * "Büyüme Suite çalışmıyor" diyordu. Oysa kazıma + filtre hattı DB'ye ihtiyaç
+   * duymaz: `findMeasuredWinners` aynı gerçek satırları tek istekte döndürür.
+   *
+   * DÜRÜSTLÜK: bu yol 14 ajanlık konseyi ÇALIŞTIRMAZ. Sonuç "ölçülmüş" olarak
+   * etiketlenir ve arayüz bunu ayrı bir notla söyler.
+   */
+  const runMeasuredFallback = useCallback(
+    async (input: ProductDiscoveryInput): Promise<boolean> => {
+      setRun((prev) => ({
+        ...prev,
+        status: "queued",
+        progress: 10,
+        step: "measured",
+        note: "İş kaydı açılamadı; doğrudan ölçülmüş kazananlara geçiliyor.",
+        measured: true,
+      }));
+      try {
+        const res = await measuredFn({
+          data: {
+            niche: input.niche,
+            country: input.country,
+            platform: input.platform,
+            topN: Math.max(3, Math.min(10, input.topN)),
+          },
+        });
+        if (!res?.ok) {
+          const message =
+            res?.reason === "empty"
+              ? "Bu niş için ölçülebilir kanıtlı ürün çıkmadı. Daha dar bir niş dene."
+              : res?.reason === "no-credits"
+                ? "Kredi yok — ölçülmüş arama da başlatılamadı."
+                : res?.reason === "plan-limit"
+                  ? "Paketinin aylık kullanım hakkı doldu."
+                  : "Ölçülmüş arama da tamamlanamadı.";
+          toast.error(message);
+          setRun({
+            ...EMPTY,
+            status: "completed",
+            progress: 100,
+            step: "measured",
+            error: message,
+            measured: true,
+          });
+          return false;
+        }
+        setRun({
+          ...EMPTY,
+          status: "completed",
+          progress: 100,
+          step: "measured",
+          products: res.rows,
+          note:
+            "14 ajanlık konsey çalışmadı (kalıcı iş kaydı yok). Aşağıdaki ürünler " +
+            "kazınmış fiyat, puan, satış ve kaynak kanıtıyla sıralandı; AI anahtarı " +
+            "varsa yalnızca mevcut gerçek satırlar arasından seçim yaptı, yoksa sıralama " +
+            "deterministik kaldı.",
+          measured: true,
+        });
+        toast.success(`${res.rows.length} ölçülmüş kazanan bulundu.`);
+        void qc.invalidateQueries({ queryKey: ["profile"] });
+        return true;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Ölçülmüş arama başlatılamadı.";
+        toast.error(message);
+        setRun({
+          ...EMPTY,
+          status: "completed",
+          progress: 100,
+          step: "measured",
+          error: message,
+          measured: true,
+        });
+        return false;
+      }
+    },
+    [measuredFn, qc],
+  );
 
   const start = useCallback(
     async (input: ProductDiscoveryInput): Promise<boolean> => {
@@ -128,6 +226,12 @@ export function useProductDiscovery(): {
                 : reason === "credit-unavailable"
                   ? "Kredi servisi şu an yanıt vermiyor. Tekrar dene."
                   : "Arama başlatılamadı. Jeton iade edildi.";
+          // Yalnız DB'ye bağlı başlatma hatasında ölçülmüş yedeğe düş.
+          // Kredi/paket hatalarında ikinci bir ücretli çağrı başlatmak yanlış
+          // olurdu: o durumda gerçekten kredi yoktur.
+          if (reason === "queue-failed") {
+            return await runMeasuredFallback(input);
+          }
           toast.error(message);
           setRun(EMPTY);
           return false;
@@ -144,7 +248,7 @@ export function useProductDiscovery(): {
         setIsStarting(false);
       }
     },
-    [startFn, qc],
+    [startFn, qc, runMeasuredFallback],
   );
 
   // Yoklama döngüsü. `runId` dolduğunda başlar, terminal durumda veya
@@ -200,6 +304,9 @@ export function useProductDiscovery(): {
             // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
             topProducts: res.result?.topProducts.length ? res.result.topProducts : prev.topProducts,
             error: res.error ?? null,
+            // Ölçülmüş yedek notu DB yoklamasında silinmez; normal işte null'dır.
+            note: prev.note,
+            measured: prev.measured,
           };
           // İlerleme parmak izi değiştiyse "takılma saati" sıfırlanır.
           const fingerprint = `${next.status}|${next.progress}|${next.step}|${next.products.length}`;

@@ -235,23 +235,32 @@ export function poolGroupConfig(group: PoolGroup): {
       return { baseUrl: evrenBaseUrl(), model: evrenModels()[0] ?? "" };
     }
     case "cerebras":
-      return { baseUrl: "https://api.cerebras.ai/v1/chat/completions", model: "" };
+      // Ücretsiz katman: 8B modeli en yüksek günlük token hakkına sahip.
+      return { baseUrl: "https://api.cerebras.ai/v1/chat/completions", model: "llama3.1-8b" };
     case "sambanova":
-      return { baseUrl: "https://api.sambanova.ai/v1/chat/completions", model: "" };
+      // Ücretsiz katman: Llama 3.3 70B, SambaNova'nın ücretsiz havuzunda açık.
+      return {
+        baseUrl: "https://api.sambanova.ai/v1/chat/completions",
+        model: "Meta-Llama-3.3-70B-Instruct",
+      };
     case "groq":
+      // 8B anlık model günlük ücretsiz kotası 70B'nin ~5 katı; önce o denenir.
       return {
         baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
       };
     case "gemini":
+      // OpenAI-uyumlu uç NOKTA TAM olmalı: eksik `/chat/completions` her
+      // çağrıda 404 üretiyordu ve 5 Gemini anahtarı havuzda ölü duruyordu.
       return {
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
-        model: "gemini-flash-latest",
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        model: "gemini-2.0-flash",
       };
     case "openrouter":
+      // `:free` eki ZORUNLU: eksikken istek ücretli modele gidip 402 dönüyor.
       return {
         baseUrl: "https://openrouter.ai/api/v1/chat/completions",
-        model: "meta-llama/llama-3.3-70b-instruct",
+        model: "meta-llama/llama-3.3-70b-instruct:free",
       };
     case "hf":
       return {

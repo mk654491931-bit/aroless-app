@@ -497,6 +497,7 @@ export const findMeasuredWinners = createServerFn({ method: "POST" })
     try {
       const { runScrapeFilterStep } = await import("./product-discovery-pipeline.server");
       const { measuredWinnerRows } = await import("./measured-winners");
+      const { rerankMeasuredWithAi } = await import("./measured-rerank.server");
       // Kaynaklar paralel koşar; 25 sn tavanı tek bir kaynağın isteği
       // kilitlemesini engeller. Filtre çıktısı 75 adayla sınırlıdır.
       const result = await runScrapeFilterStep(
@@ -506,9 +507,19 @@ export const findMeasuredWinners = createServerFn({ method: "POST" })
         Math.max(20, data.topN * 5),
         { sourceCapMs: 25_000 },
       );
+      // AI SIRALAMASI (isteğe bağlı): aynı gerçek satırlar arasından seçim.
+      // Anahtar yoksa/çağrı düşerse `null` döner ve deterministik sıralama
+      // aynen kalır. Modelin başlık/fiyat üretmesine izin verilmez.
+      const aiRerank = await rerankMeasuredWithAi(
+        (result.products ?? []) as NormalizedProduct[],
+        data.niche,
+        data.topN,
+        Date.now() + 12_000,
+      ).catch(() => null);
       const rows = measuredWinnerRows(
         (result.products ?? []) as NormalizedProduct[],
         data.topN,
+        aiRerank ?? undefined,
       );
       if (!rows.length) {
         await refundFeatureCredits(

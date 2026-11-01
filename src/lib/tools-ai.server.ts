@@ -8,6 +8,7 @@ import {
   callSweepProvider,
   extractJson,
   geminiKeyPool,
+  hasGateway,
   isQuotaError,
 } from "./ai.server";
 import { openRouterEnvKeys } from "./ai-keys.server";
@@ -73,38 +74,51 @@ export async function callOpenRouter(prompt: string, temperature = 0.4): Promise
   prompt = withEstimationRules(prompt);
   const keys = openRouterKeyPool();
   if (!keys.length) return callLovableAI(prompt, temperature);
-  const models = ["meta-llama/llama-3.3-70b-instruct", "mistralai/mistral-small-3.1-24b-instruct"];
+  // `:free` eki olmadan OpenRouter ücretli modele gider ve 402 döner.
+  const models = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+  ];
   let lastErr: unknown = null;
   for (const key of keys) {
-    for (let i = 0; i < models.length; i++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12_000);
-      try {
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          signal: controller.signal,
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-          body: JSON.stringify({
-            model: models[i],
-            temperature,
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-          }),
-        });
-        if (!resp.ok) {
-          const body = (await resp.text()).slice(0, 180);
-          lastErr = new Error(`OpenRouter ${resp.status}: ${body}`);
-          if (isQuotaError(resp.status, body)) break; // key spent — rotate
-          continue;
+    for (const model of models) {
+      // Bazı ücretsiz modeller `response_format` desteklemez ve 400 döner.
+      // İlk deneme JSON modunda; 400 gelirse aynı model JSON modu OLMADAN
+      // bir kez daha denenir. Böylece ücretsiz model yüzünden konsey düşmez.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12_000);
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+            body: JSON.stringify({
+              model,
+              temperature,
+              messages: [{ role: "user", content: prompt }],
+              ...(attempt === 0 ? { response_format: { type: "json_object" } } : {}),
+            }),
+          });
+          if (!resp.ok) {
+            const body = (await resp.text()).slice(0, 180);
+            lastErr = new Error(`OpenRouter ${resp.status}: ${body}`);
+            if (isQuotaError(resp.status, body)) break; // key spent — rotate
+            if (resp.status === 400 && attempt === 0) continue;
+            break; // this model failed — try the next one
+          }
+          const json = (await resp.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          return json.choices?.[0]?.message?.content ?? "{}";
+        } catch (e) {
+          if (e instanceof Error && e.name === "AbortError")
+            lastErr = new Error("OpenRouter timeout");
+          else lastErr = e;
+          break;
+        } finally {
+          clearTimeout(timer);
         }
-        const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        return json.choices?.[0]?.message?.content ?? "{}";
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError")
-          lastErr = new Error("OpenRouter timeout");
-        else lastErr = e;
-      } finally {
-        clearTimeout(timer);
       }
     }
   }
@@ -407,8 +421,79 @@ function fuse(parts: { provider: Provider; data: Partial<ToolResult> }[]): ToolR
   };
 }
 
-/** Multi-AI consensus: four engines score the same product independently. */
+/** Konseyde konuşan motorlar — kullanıcının 22 ücretsiz anahtarının tamamı. */
+const CONSENSUS_PROVIDERS: Exclude<Provider, "lovable">[] = [
+  "gemini",
+  "groq",
+  "openrouter",
+  "hf",
+  "cerebras",
+  "sambanova",
+];
+
+/** Motor adlarının kullanıcıya görünen kısa etiketleri. */
+export const CONSENSUS_PROVIDER_LABELS: Record<Provider, string> = {
+  gemini: "Gemini",
+  groq: "Groq",
+  openrouter: "OpenRouter",
+  hf: "Hugging Face",
+  cerebras: "Cerebras",
+  sambanova: "SambaNova",
+  lovable: "AI Gateway",
+};
+
+export type ConsensusEntry = { provider: Provider; score: number; note: string };
+
+/**
+ * Motor yanıtlarını ağırlıklı tek skora indirger — SAF, test edilebilir.
+ *
+ * Ağırlıklar sağlayıcının bağlam kalitesine göre sabittir; yalnız GERÇEKTEN
+ * yanıt veren (score > 0) motorlar paydaya girer. Hiç motor konuşmazsa
+ * `hybrid: 0`, `engines: 0` ve `agreement: 0` döner — uydurma skor yok.
+ */
+export function aggregateConsensus(entries: readonly ConsensusEntry[]): {
+  hybrid: number;
+  agreement: number;
+  engines: number;
+} {
+  const weights: Record<Provider, number> = {
+    gemini: 0.24,
+    groq: 0.18,
+    openrouter: 0.14,
+    hf: 0.12,
+    cerebras: 0.12,
+    sambanova: 0.12,
+    lovable: 0.08,
+  };
+  const answered = entries.filter((e) => e.score > 0);
+  const wSum = answered.reduce((s, e) => s + (weights[e.provider] ?? 0), 0);
+  const hybrid = wSum
+    ? Math.round(answered.reduce((s, e) => s + e.score * (weights[e.provider] ?? 0), 0) / wSum)
+    : 0;
+  const scores = answered.map((e) => e.score);
+  const spread = scores.length > 1 ? Math.max(...scores) - Math.min(...scores) : 0;
+  const agreement = scores.length > 1 ? Math.max(0, 100 - spread * 2) : 0;
+  return { hybrid, agreement, engines: answered.length };
+}
+
+/**
+ * ÇOK MOTORLU KONSEY — tek bir sağlayıcıya bağlı değildir.
+ *
+ * Eski sürüm yalnız Gemini + Groq + OpenRouter + Gateway çağırıyordu; HF,
+ * Cerebras ve SambaNova anahtarları hiç kullanılmıyordu. Artık yapılandırılmış
+ * altı ücretsiz sağlayıcı PARALEL koşar (her biri kendi 5'li/1'lik anahtar
+ * havuzunu döner). Gateway yalnız tanımlıysa yedek olarak eklenir; tanımlı
+ * değilse 22 anahtarlık doğrudan havuz zaten çağrılmış olur.
+ */
 export async function runConsensus(prompt: string) {
+  /** Growth kartı 30 sn'lik bütçede kalmalı; tek motor onu kilitleyemez. */
+  const withConsensusTimeout = <T>(p: Promise<T>, ms = 18_000): Promise<T> =>
+    Promise.race([
+      p,
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("consensus provider timeout")), ms),
+      ),
+    ]);
   const ask = async (fn: () => Promise<string>) => {
     const parsed = extractJson<{ score?: number; note?: string }>(await fn(), {});
     return {
@@ -424,33 +509,56 @@ export async function runConsensus(prompt: string) {
       return { score: 0, note: "Bu motor şu anda yanıt vermedi." };
     }
   };
-  const [gemini, groq, openrouter, lovable] = await Promise.all([
-    settle(() => callGemini(scoring, geminiKey(1), 0.4, true)),
-    settle(() => callGroq(scoring, 0.3)),
-    settle(() => callOpenRouter(scoring, 0.4)),
-    settle(() => callLovableAI(scoring, 0.4)),
-  ]);
-
-  // Weighted hybrid — grounded/search-capable engines carry more weight.
-  const weights: Record<string, number> = {
-    gemini: 0.34,
-    groq: 0.24,
-    openrouter: 0.22,
-    lovable: 0.2,
+  const settleNamed = async (provider: Provider, fn: () => Promise<string>): Promise<ConsensusEntry> => {
+    const result = await settle(() => withConsensusTimeout(fn()));
+    return { provider, ...result };
   };
-  const entries = Object.entries({ gemini, groq, openrouter, lovable }).filter(
-    ([, r]) => r.score > 0,
+
+  const allRunners: Array<[Exclude<Provider, "lovable">, () => Promise<string>]> = [
+    ["gemini", () => callGemini(scoring, geminiKey(1), 0.4, false)],
+    ["groq", () => callGroq(scoring, 0.3)],
+    ["openrouter", () => callOpenRouter(scoring, 0.4)],
+    ["hf", () => callSweepProvider("hf", scoring, 0.4)],
+    ["cerebras", () => callSweepProvider("cerebras", scoring, 0.3)],
+    ["sambanova", () => callSweepProvider("sambanova", scoring, 0.4)],
+  ];
+  // Yalnız GERÇEKTEN anahtarı olan (ve cooldown'da olmayan) motorları çağır.
+  // Anahtarsız sağlayıcıyı denemek 6 boş gauge üretir ve kullanıcıya "çalışmıyor"
+  // görüntüsü verir; oysa olan anahtarlar sorunsuz cevap verebilir.
+  const runners: Array<[Provider, () => Promise<string>]> = allRunners.filter(([provider]) =>
+    poolGroupAvailable(provider),
   );
-  const wSum = entries.reduce((s, [k]) => s + (weights[k] ?? 0), 0);
-  const hybrid = wSum
-    ? Math.round(entries.reduce((s, [k, r]) => s + r.score * (weights[k] ?? 0), 0) / wSum)
-    : 0;
+  // Gateway varsa son çare olarak ekle; yoksa çağrı zaten doğrudan havuzu süpürür.
+  if (hasGateway()) runners.push(["lovable", () => callLovableAI(scoring, 0.4)]);
 
-  const scores = entries.map(([, r]) => r.score);
-  const spread = scores.length > 1 ? Math.max(...scores) - Math.min(...scores) : 0;
-  const agreement = scores.length > 1 ? Math.max(0, 100 - spread * 2) : 0;
+  const results = await Promise.all(
+    runners.map(([provider, fn]) => settleNamed(provider, fn)),
+  );
+  const aggregate = aggregateConsensus(results);
 
-  return { gemini, groq, openrouter, lovable, hybrid, agreement, engines: entries.length };
+  const byProvider = new Map(results.map((r) => [r.provider, r]));
+  const fallback = (provider: Provider): ConsensusEntry => ({
+    provider,
+    score: 0,
+    note: `${CONSENSUS_PROVIDER_LABELS[provider]} yapılandırılmadı veya yanıt vermedi.`,
+  });
+  const pick = (provider: Provider) => byProvider.get(provider) ?? fallback(provider);
+
+  return {
+    ...aggregate,
+    // Legacy alanlar: mevcut arayüz/API sözleşmesi bozulmasın.
+    gemini: pick("gemini"),
+    groq: pick("groq"),
+    openrouter: pick("openrouter"),
+    lovable: pick("lovable"),
+    // Yeni sözleşme: arayüz hangi motorların gerçekten konuştuğunu gösterir.
+    results,
+  };
+}
+
+/** Konseyin çağırdığı sağlayıcılar (UI/teşhis için tek kaynak). */
+export function consensusProviderLabels(): Array<{ id: Provider; label: string }> {
+  return CONSENSUS_PROVIDERS.map((id) => ({ id, label: CONSENSUS_PROVIDER_LABELS[id] }));
 }
 
 function clampNum(v: unknown, min: number, max: number, fb: number) {

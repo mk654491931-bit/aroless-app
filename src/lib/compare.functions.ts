@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callGemini } from "@/lib/ai.server";
+import { callAiMesh } from "@/lib/ai.server";
 import { outputLanguageDirective } from "@/lib/ai-language";
 import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 import type { WinningProduct } from "@/lib/gemini.functions";
@@ -37,7 +37,9 @@ export const summarizeComparison = createServerFn({ method: "POST" })
     });
     return withCreditRefund(context.userId, async () => {
       const prompt = `Compare these winning product ideas and recommend the best one. Return ONLY a JSON object with keys: winner (product name), reasoning (2-3 sentences), runner_up, risks.\n\nProducts:\n${JSON.stringify(data.products, null, 2)}\n\n${outputLanguageDirective(data.lang, "reasoning, runner_up ve risks")}`;
-      const text = await callGemini(prompt, undefined, 0.3, false);
+      // Karşılaştırma da tek sağlayıcıya bağlı değil: mesh altı ücretsiz
+      // sağlayıcının anahtarlarını sırayla dener.
+      const text = await callAiMesh(prompt, { temperature: 0.3, grounded: false });
       try {
         const json = JSON.parse(text.replace(/```json|```/g, "").trim());
         return {

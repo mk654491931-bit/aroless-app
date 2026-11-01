@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callGemini, extractJson } from "./ai.server";
+import { callAiMesh, extractJson } from "./ai.server";
 import {
   baselinePrompt,
   crisisPrompt,
@@ -33,9 +33,9 @@ export const startSimulation = createServerFn({ method: "POST" })
       const { data: remaining, error } = await context.supabase.rpc("deduct_sim_credit");
       if (error) throw new Error("NO_SIM_CREDITS");
 
-      const key = process.env.GEMINI_API_KEY;
       // Statik/mock baseline yok: veriler yalnızca canlı AI pazar taramasından gelir.
-      const text = await callGemini(baselinePrompt(data), key, 0.4);
+      // Motor seçimi tek sağlayıcıya kilitlenmez; anahtarı olan herhangi biri yanıtlar.
+      const text = await callAiMesh(baselinePrompt(data), { temperature: 0.4 });
       const parsed = extractJson<Partial<MarketBaseline>>(text, {});
       if (parsed.cvr_pct == null || parsed.cpc_usd == null) {
         throw new Error("Canlı pazar verisi alınamadı. Lütfen tekrar deneyin.");
@@ -73,7 +73,7 @@ export const getSimCrisis = createServerFn({ method: "POST" })
   .validator((i: unknown) => CrisisInput.parse(i))
   .handler(async ({ data }): Promise<{ crisis: Crisis | null }> => {
     try {
-      const text = await callGemini(crisisPrompt(data), process.env.GEMINI_API_KEY, 1.0);
+      const text = await callAiMesh(crisisPrompt(data), { temperature: 1.0 });
       const parsed = extractJson<Partial<Crisis>>(text, {});
       if (!parsed.title || !Array.isArray(parsed.choices) || parsed.choices.length < 2)
         return { crisis: null };
@@ -115,7 +115,7 @@ export const getSimReviews = createServerFn({ method: "POST" })
   .handler(
     async ({ data }): Promise<{ reviews: { stars: number; author: string; text: string }[] }> => {
       try {
-        const text = await callGemini(reviewsPrompt(data), process.env.GEMINI_API_KEY, 1.0);
+        const text = await callAiMesh(reviewsPrompt(data), { temperature: 1.0 });
         const parsed = extractJson<{
           reviews?: { stars?: number; author?: string; text?: string }[];
         }>(text, {});
@@ -148,7 +148,7 @@ export const getSimCoach = createServerFn({ method: "POST" })
   .validator((i: unknown) => CoachInput.parse(i))
   .handler(async ({ data }): Promise<{ advice: CoachAdvice | null }> => {
     try {
-      const text = await callGemini(coachPrompt(data), process.env.GEMINI_API_KEY, 0.7);
+      const text = await callAiMesh(coachPrompt(data), { temperature: 0.7 });
       const p = extractJson<Partial<CoachAdvice>>(text, {});
       if (!p.verdict && !p.why) return { advice: null };
       return {

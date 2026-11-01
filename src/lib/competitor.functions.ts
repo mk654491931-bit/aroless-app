@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callGemini, callGroq, extractJson } from "./ai.server";
+import { callAiMesh, extractJson } from "./ai.server";
 import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 import {
   sellersPrompt,
@@ -56,11 +56,19 @@ async function buildCompetitorReport(data: {
   type SellersRaw = { avg_price_usd?: number; sellers?: Partial<CompetitorSeller>[] };
   type SentimentRaw = { sentiment_summary?: string; weaknesses?: Partial<CompetitorWeakness>[] };
   const [sellersRaw, sentimentRaw] = await Promise.all([
-    // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
-    callGemini(sellersPrompt(data.query, country, liveContext, data.lang), undefined, 0.4)
+    // TEK SAĞLAYICIYA BAĞLI DEĞİL: mesh, Gemini/Groq/OpenRouter/HF/Cerebras/
+    // SambaNova anahtarlarını sırayla dener. Canlı bağlam zaten yukarıda
+    // toplandığı için `grounded` gereksiz gecikme ve kota harcaması olurdu.
+    callAiMesh(sellersPrompt(data.query, country, liveContext, data.lang), {
+      temperature: 0.4,
+      grounded: false,
+    })
       .then((t) => extractJson<SellersRaw>(t, {}))
       .catch((): SellersRaw => ({})),
-    callGroq(sentimentPrompt(data.query, country, liveContext, data.lang), 0.3)
+    callAiMesh(sentimentPrompt(data.query, country, liveContext, data.lang), {
+      temperature: 0.3,
+      grounded: false,
+    })
       .then((t) => extractJson<SentimentRaw>(t, {}))
       .catch((): SentimentRaw => ({})),
   ]);
@@ -131,10 +139,9 @@ async function buildCompetitorReport(data: {
     .join("\n")
     .slice(0, 2500);
 
-  const strategy = await callGemini(
+  const strategy = await callAiMesh(
     strategyPrompt(data.query, country, context, data.lang),
-    undefined,
-    0.6,
+    { temperature: 0.6, grounded: false },
   )
     .then((t) => {
       const p = extractJson<Partial<CounterStrategy>>(t, {});
@@ -207,7 +214,11 @@ async function buildCountryStrategy(
     ]);
   try {
     const text = await withBudget(
-      callGemini(countryStrategyPrompt(niche, country, lang), undefined, 0.6, false),
+      callAiMesh(countryStrategyPrompt(niche, country, lang), {
+        temperature: 0.6,
+        grounded: false,
+        deadlineAt: Date.now() + 18_000,
+      }),
     );
     const p = extractJson<{ strategy?: string }>(text, {});
     const s = String(p.strategy ?? "").trim();
@@ -263,11 +274,9 @@ export const askCopilot = createServerFn({ method: "POST" })
       const { rateLimit } = await import("@/lib/api-guard.server");
       const limited = await rateLimit(`copilot:u:${context.userId}`, 20, 60);
       if (limited) return { reply: "Çok fazla mesaj gönderdin. Bir dakika sonra tekrar dene." };
-      const text = await callGemini(
+      const text = await callAiMesh(
         copilotPrompt(data.message, data.context, data.history, data.lang),
-        undefined,
-        0.8,
-        false,
+        { temperature: 0.8, grounded: false },
       );
       const p = extractJson<{ reply?: string }>(text, {});
       return {

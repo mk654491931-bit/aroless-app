@@ -69,8 +69,10 @@ describe("görev bazlı merdivenler", () => {
     }
   });
 
-  it("sweep ucuz/hızlı, deep güçlü modelle başlar", () => {
-    expect(OPENROUTER_MODELS_BY_TASK.sweep[0]).toBe("qwen/qwen3.8-flash");
-    expect(OPENROUTER_MODELS_BY_TASK.deep[0]).toBe("z-ai/glm-5.3");
+  it("sweep ve deep ÜCRETSİZ modelle başlar (kullanıcı maliyet şartı)", () => {
+    // Kullanıcı yalnız ücretsiz modellerin kullanılmasını istedi; ücretli
+    // slug'lar merdivenin sonunda yalnız yedek olarak durur.
+    expect(OPENROUTER_MODELS_BY_TASK.sweep[0]).toContain(":free");
+    expect(OPENROUTER_MODELS_BY_TASK.deep[0]).toContain(":free");
   });
 });

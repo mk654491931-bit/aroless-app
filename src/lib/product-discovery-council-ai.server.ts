@@ -24,7 +24,7 @@
 //     saklamak olurdu.
 // ============================================================================
 
-import { callGemini, withDeadline as withAiDeadline } from "./ai.server";
+import { callAiMesh, withDeadline as withAiDeadline } from "./ai.server";
 import { COUNCIL_AGENTS, COUNCIL_AGENT_KEYS, type CouncilAgentKey } from "./council-chain.server";
 import { productIdentityKey } from "./discovery-core";
 import { buildConsensus, type AgentVote } from "./product-discovery-consensus";
@@ -79,9 +79,15 @@ export type CouncilRunResult = {
 /** Çağrıyı testte değiştirebilmek için注入 noktası. */
 export type CouncilAiCall = (prompt: string, deadlineAt: number) => Promise<string>;
 
-/** Varsayılan çağrı: Gemini öncelikli, havuz yedeğli (bkz. `callGemini`). */
+/**
+ * Varsayılan çağrı: tek sağlayıcıya kilitlenmez.
+ *
+ * `callAiMesh` önce ağ geçidini, yoksa 22 anahtarlık doğrudan havuzu süpürür
+ * (Gemini → Groq → Cerebras → SambaNova → HF → OpenRouter). Böylece bir
+ * sağlayıcının kotası dolduğunda 14 ajanın tamamı nötr puana düşmez.
+ */
 const defaultCall: CouncilAiCall = async (prompt, deadlineAt) =>
-  callGemini(prompt, undefined, 0.2, false, undefined, deadlineAt);
+  callAiMesh(prompt, { temperature: 0.2, grounded: false, deadlineAt });
 
 /**
  * Ürünü ajana anlatan tek satırlık ÖLÇÜLMÜŞ özet.

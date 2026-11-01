@@ -73,6 +73,35 @@ describe("measuredWinnerRows — ölçülmüş kaynak satırı", () => {
     expect(rows).toEqual([]);
   });
 
+  it("AI sırası yalnız GERÇEK satırları yeniden sıralar, ölçülmüş puanı değiştirmez", () => {
+    const high = product({
+      name: "High score board",
+      fingerprint: "high-board",
+      preScore: 90,
+    });
+    const low = product({
+      name: "Low score board",
+      fingerprint: "low-board",
+      preScore: 40,
+    });
+    const rows = measuredWinnerRows([high, low], 2, {
+      order: ["low-board"],
+      reasons: new Map([["low-board", "yüksek satış sinyali"]]),
+    });
+    expect(rows.map((r) => r.name)).toEqual(["Low score board", "High score board"]);
+    // Skor hâlâ ölçülmüş ön skordur; modelin seçimi puanı uydurmaz.
+    expect(rows[0].councilScore).toBe(40);
+    expect(rows[0].evidence.join(" ")).toContain("AI gerekçesi: yüksek satış sinyali");
+  });
+
+  it("listenin dışında kalan AI seçimi deterministik sırayı bozmaz", () => {
+    const rows = measuredWinnerRows([product({ fingerprint: "real" })], 1, {
+      order: ["does-not-exist"],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].fingerprint).toBe("real");
+  });
+
   it("aynı ürünün kopyasını tekilleştirir, yüksek skorlu kaydı tutar", () => {
     const rows = measuredWinnerRows(
       [

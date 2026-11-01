@@ -220,6 +220,12 @@ function DiscoverPage() {
         </div>
       )}
 
+      {d.run.note && !d.isRunning && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-200">
+          {d.run.note}
+        </div>
+      )}
+
       {/* ---- Sonuç ---- */}
       {d.run.status === "completed" && d.run.products.length === 0 && (
         <div className="rounded-xl border border-border bg-card p-8 text-center">

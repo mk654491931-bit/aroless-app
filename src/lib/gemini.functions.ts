@@ -7,7 +7,7 @@ import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 const VALIDATE_PRODUCT_FEATURE = "agent-pipeline";
 const SEO_KIT_FEATURE = "tool:listing-seo";
 const CREATIVE_SCRIPT_FEATURE = "tool:creative-studio";
-import { callGemini, extractJson } from "@/lib/ai.server";
+import { callAiMesh, extractJson } from "@/lib/ai.server";
 import type { RealEconomics } from "@/lib/real-economics";
 import { type ConsensusResult, type CouncilSummary, type HybridScore } from "@/lib/consensus-types";
 import type { GitHubRepoTrend } from "@/lib/github-trends.server";
@@ -549,7 +549,6 @@ export const generateSeoKit = createServerFn({ method: "POST" })
       feature: SEO_KIT_FEATURE,
       db: context.supabase,
     });
-    const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `You are a senior DTC / e-commerce copywriter and SEO specialist. Generate a complete marketing kit for the product below, optimized for the target sales platform.
 
@@ -571,7 +570,7 @@ Return STRICT JSON only:
 }`;
     // Üretim başarısız olursa düşülen kredi iade edilir.
     return withCreditRefund(context.userId, async () => {
-      const text = await callGemini(prompt, apiKey);
+      const text = await callAiMesh(prompt, { temperature: 0.4, grounded: false });
       let parsed: SeoKit = { titles: [], meta_descriptions: [], keywords: [], ad_copy: [] };
       parsed = extractJson<SeoKit>(text, parsed);
       return parsed;
@@ -609,7 +608,6 @@ export const generateCreativeScripts = createServerFn({ method: "POST" })
       feature: CREATIVE_SCRIPT_FEATURE,
       db: context.supabase,
     });
-    const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `You are a viral short-form video strategist who has scripted 9-figure DTC TikTok and Instagram Reels campaigns.
 Write 2 fully-produced short-form video scripts (one TikTok, one Instagram Reels) for the product below. Each script MUST be immediately shootable by a solo creator with a phone.
@@ -647,7 +645,7 @@ Return STRICT JSON only:
 }`;
     // Üretim başarısız olursa düşülen kredi iade edilir.
     return withCreditRefund(context.userId, async () => {
-      const text = await callGemini(prompt, apiKey);
+      const text = await callAiMesh(prompt, { temperature: 0.7, grounded: false });
       let parsed: { scripts?: CreativeScript[] } = {};
       parsed = extractJson<{ scripts?: CreativeScript[] }>(text, { scripts: [] });
       return { scripts: parsed.scripts ?? [] };
@@ -824,7 +822,6 @@ export const simulateBuyers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => SimInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `You are a consumer-research simulator and CRO scientist.
 Simulate a panel of EXACTLY 100 distinct human shoppers with varied personalities, ages, incomes, risk tolerance, shopping habits and skepticism levels, and decide how many would actually BUY the product below at the stated price, and how many would NOT.
@@ -862,7 +859,7 @@ Return STRICT JSON only:
   }
 }`;
 
-    const text = await callGemini(prompt, apiKey, 0.8);
+    const text = await callAiMesh(prompt, { temperature: 0.8, grounded: false });
     let parsed: BuyerSimulation | null = null;
     parsed = extractJson<BuyerSimulation | null>(text, null);
     if (!parsed || !Array.isArray(parsed.segments)) throw new Error("Simulation failed, try again");

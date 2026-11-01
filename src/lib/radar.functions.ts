@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { callAiMesh, extractJson } from "@/lib/ai.server";
+import { anyAiKeyConfigured } from "@/lib/ai-keys.server";
 import { chargeForAi, refundCredit } from "@/lib/credit-guard.server";
 import {
   applyTrendEvidence,
@@ -63,6 +64,14 @@ async function generateSeeds(country: string): Promise<{
   generatedBy: RadarEvidence["generated_by"];
 }> {
   const keywords = new Map<string, string>();
+  // Anahtar yoksa 45 sn'lik AI penceresini beklemek anlamsız: canlı trend
+  // yedeği zaten ölçülmüş veriyle dolu. Bu, /radar'ın açılışta boş kalmasını
+  // önleyen hızlı yoldur (AI anahtarı varsa normal mesh çağrısı koşar).
+  if (!anyAiKeyConfigured()) {
+    const fallback = trendFallbackSeeds(country, 10);
+    for (const s of fallback) keywords.set(s.title.toLowerCase(), s.title);
+    return { seeds: fallback, keywords, generatedBy: "trends" };
+  }
   try {
     const text = await timeout(
       callAiMesh(radarPrompt(country, 10), { temperature: 0.85, grounded: true }),

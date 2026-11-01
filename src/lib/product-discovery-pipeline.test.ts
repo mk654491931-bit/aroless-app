@@ -48,7 +48,25 @@ import { productIdOf } from "./discovery-quality";
  * modele gerçekten iletildiğini kanıtlar. `ai.server` bu dosyada başka bir
  * yerde statik olarak içe aktarılmaz (çağrı dinamiktir).
  */
-const aiMock = vi.hoisted(() => ({ callGemini: vi.fn() }));
+const aiMock = vi.hoisted(() => {
+  const callGemini = vi.fn();
+  return {
+    callGemini,
+    // Üretim kodu artık `callAiMesh` kullanıyor; testlerin mevcut Gemini
+    // beklentileri bozulmasın diye mesh çağrısı aynı sözleşmeye köprülenir.
+    callAiMesh: vi.fn(
+      (prompt: string, opts?: { temperature?: number; grounded?: boolean; deadlineAt?: number }) =>
+        callGemini(
+          prompt,
+          undefined,
+          opts?.temperature ?? 0.5,
+          opts?.grounded ?? true,
+          undefined,
+          opts?.deadlineAt,
+        ),
+    ),
+  };
+});
 vi.mock("./ai.server", () => aiMock);
 
 /** Tam ölçülmüş bir ürün (bütünlük 5/5 → penaltı sıfır). */
@@ -707,13 +725,9 @@ describe("gemini kısa liste süre sınırı", () => {
       deadlineAt,
     );
 
-    expect(aiMock.callGemini).toHaveBeenCalledWith(
+    expect(aiMock.callAiMesh).toHaveBeenCalledWith(
       expect.any(String),
-      undefined,
-      0.2,
-      false,
-      undefined,
-      deadlineAt,
+      expect.objectContaining({ temperature: 0.2, grounded: false, deadlineAt }),
     );
     expect(picked.length).toBe(2);
   });
@@ -723,13 +737,9 @@ describe("gemini kısa liste süre sınırı", () => {
 
     await geminiShortlistSelector([fullProduct({ id: "p-1" })], "air fryer");
 
-    expect(aiMock.callGemini).toHaveBeenCalledWith(
+    expect(aiMock.callAiMesh).toHaveBeenCalledWith(
       expect.any(String),
-      undefined,
-      0.2,
-      false,
-      undefined,
-      undefined,
+      expect.objectContaining({ temperature: 0.2, grounded: false, deadlineAt: undefined }),
     );
   });
 });

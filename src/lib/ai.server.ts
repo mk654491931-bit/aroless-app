@@ -55,6 +55,11 @@ export const GROQ_MODELS_LATEST = [
  * yalnız 200 ms bekletir.
  */
 export const OPENROUTER_MODELS_LATEST = [
+  // ÜCRETSİZ AİLE — görev merdivenleri bunların alt kümesidir; ücretli
+  // slug'lar yalnız yedek olarak sonra gelir.
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "google/gemma-2-9b-it:free",
   "deepseek/deepseek-v4.1-flash",
   "qwen/qwen3.8-flash",
   "z-ai/glm-5.3",
@@ -80,14 +85,20 @@ export const OPENROUTER_MODELS_LATEST = [
  */
 export const OPENROUTER_MODELS_BY_TASK = {
   /** Konsey/ajan dalgaları: çok çağrı, kısa yanıt, 10 sn'lik dilim. */
+  // ÜCRETSİZ ÖNCE: kullanıcı yalnız ücretsiz modellerin kullanılmasını istedi.
+  // `:free` eki olmayan slug ücretli modele gider ve 402 döner.
   sweep: [
-    "qwen/qwen3.8-flash",
-    "deepseek/deepseek-v4.1-flash",
-    "google/gemma-4-31b-it:free",
-    "z-ai/glm-5.3",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "google/gemma-2-9b-it:free",
   ],
-  /** Sentez/rapor/kısa liste: kalite birincil, maliyet ikincil. */
-  deep: ["z-ai/glm-5.3", "xiaomi/mimo-v2.6-pro", "deepseek/deepseek-v4.1-flash"],
+  /** Sentez/rapor/kısa liste: ücretsiz modeller önce, kalite yedeği sonra. */
+  deep: [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "z-ai/glm-5.3",
+    "xiaomi/mimo-v2.6-pro",
+    "deepseek/deepseek-v4.1-flash",
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 /** Her modelin bu uygulamada NEDEN seçildiğinin kısa gerekçesi. */
@@ -103,6 +114,12 @@ export const MODEL_ROUTING_NOTES: Record<string, string> = {
   "deepseek/deepseek-v4-flash":
     "Aynı aileden önceki nesil; V4.1 erişilemezse aynı yeteneğin yedeği.",
   "google/gemma-4-31b-it:free": "ÜCRETSİZ ve yoğun 31B; kota biten anahtarlarda bedava yedek.",
+  "meta-llama/llama-3.3-70b-instruct:free":
+    "ÜCRETSİZ 70B; anahtar rotasyonunda ek maliyet çıkarmadan güçlü JSON/analiz yedeği.",
+  "mistralai/mistral-small-3.1-24b-instruct:free":
+    "ÜCRETSİZ küçük model; hızlı yanıt ve Türkçe metin için ikinci bedava basamak.",
+  "google/gemma-2-9b-it:free":
+    "ÜCRETSİZ 9B; yüksek hacimli konsey/araç çağrılarında son bedava yedek.",
 };
 export async function callLovableAI(
   prompt: string,

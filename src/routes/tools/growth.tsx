@@ -45,7 +45,7 @@ export const Route = createFileRoute("/tools/growth")({
   component: withProGate(GrowthHub),
 });
 
-type Engine = { score: number; note: string };
+type Engine = { provider?: string; score: number; note: string };
 type Consensus = {
   gemini: Engine;
   groq: Engine;
@@ -54,6 +54,28 @@ type Consensus = {
   hybrid: number;
   agreement?: number;
   engines?: number;
+  /** Yeni sözleşme: yalnız gerçekten çağrılan motorlar. */
+  results?: Engine[];
+};
+
+/** Motor etiketi → renk. Yeni sağlayıcı eklendiğinde gauge yine görünür. */
+const ENGINE_COLORS: Record<string, string> = {
+  gemini: "var(--accent-active)",
+  groq: "var(--profit)",
+  openrouter: "var(--ai)",
+  hf: "#f59e0b",
+  cerebras: "#38bdf8",
+  sambanova: "#a78bfa",
+  lovable: "var(--warning)",
+};
+const ENGINE_LABELS: Record<string, string> = {
+  gemini: "Gemini",
+  groq: "Groq",
+  openrouter: "OpenRouter",
+  hf: "Hugging Face",
+  cerebras: "Cerebras",
+  sambanova: "SambaNova",
+  lovable: "AI Gateway",
 };
 
 function Gauge360({ value, label, color }: { value: number; label: string; color: string }) {
@@ -127,12 +149,12 @@ function ConsensusCard() {
             <Gauge size={15} className="text-[var(--ai)]" />
           </span>
           Multi-AI Consensus Score
-          {/* 4 motor bağımsız puanlar + sentez: tek tıklamada en ağır araç. */}
-          <CreditCost amount={2} label="4 motor · 2 kredi" className="ms-auto" />
+          {/* Yapılandırılmış tüm ücretsiz motorlar bağımsız puanlar + sentez. */}
+          <CreditCost amount={2} label="çok motorlu · 2 kredi" className="ms-auto" />
         </CardTitle>
         <CardDescription className="text-xs">
-          Gemini, Groq, OpenRouter ve Lovable AI aynı ürünü bağımsız puanlar; hibrit skor ağırlıklı
-          olarak birleştirilir.
+          Gemini, Groq, OpenRouter, Hugging Face, Cerebras ve SambaNova anahtarlarından hangisi
+          tanımlıysa aynı ürünü bağımsız puanlar; hibrit skor ağırlıklı olarak birleştirilir.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -168,31 +190,37 @@ function ConsensusCard() {
           </div>
           <Button onClick={run} disabled={loading} className="w-full gap-2">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            {loading ? "4 motor çalışıyor…" : "Consensus Skorunu Hesapla"}
+            {loading ? "Motorlar çalışıyor…" : "Consensus Skorunu Hesapla"}
           </Button>
           {data && (
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p>
-                <span className="font-semibold text-[var(--accent-active)]">Gemini:</span>{" "}
-                {data.gemini.note}
-              </p>
-              <p>
-                <span className="font-semibold text-[var(--profit)]">Groq:</span> {data.groq.note}
-              </p>
-              <p>
-                <span className="font-semibold text-[var(--ai)]">OpenRouter:</span>{" "}
-                {data.openrouter.note}
-              </p>
-              {data.lovable && (
-                <p>
-                  <span className="font-semibold text-[var(--warning)]">Lovable AI:</span>{" "}
-                  {data.lovable.note}
+              {(data.results?.length
+                ? data.results
+                : [data.gemini, data.groq, data.openrouter, data.lovable].filter(
+                    (e): e is Engine => Boolean(e),
+                  )
+              ).map((engine) => (
+                <p key={engine.provider ?? engine.note}>
+                  <span
+                    className="font-semibold"
+                    style={{ color: ENGINE_COLORS[engine.provider ?? ""] ?? "var(--foreground)" }}
+                  >
+                    {ENGINE_LABELS[engine.provider ?? ""] ?? engine.provider ?? "Motor"}:
+                  </span>{" "}
+                  {engine.note}
                 </p>
-              )}
+              ))}
               {typeof data.agreement === "number" && (
                 <p className="pt-1">
                   <span className="font-semibold">Motor uyumu:</span> %{data.agreement} ·{" "}
                   {data.engines ?? 0} motor yanıt verdi
+                </p>
+              )}
+              {(data.engines ?? 0) === 0 && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-amber-200">
+                  Yapılandırılmış AI anahtarı bulunamadı. Gemini, Groq, OpenRouter,
+                  Hugging Face, Cerebras veya SambaNova anahtarlarından en az birini Ayarlar →
+                  Environment bölümüne ekleyin.
                 </p>
               )}
             </div>
@@ -200,10 +228,19 @@ function ConsensusCard() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
-          <Gauge360 value={data?.gemini.score ?? 0} label="Gemini" color="var(--accent-active)" />
-          <Gauge360 value={data?.groq.score ?? 0} label="Groq" color="var(--profit)" />
-          <Gauge360 value={data?.openrouter.score ?? 0} label="OpenRouter" color="var(--ai)" />
-          <Gauge360 value={data?.lovable?.score ?? 0} label="Lovable AI" color="var(--warning)" />
+          {(data?.results?.length
+            ? data.results
+            : [data?.gemini, data?.groq, data?.openrouter, data?.lovable].filter(
+                (e): e is Engine => Boolean(e),
+              )
+          ).map((engine) => (
+            <Gauge360
+              key={engine.provider ?? engine.note}
+              value={Math.round(engine.score)}
+              label={ENGINE_LABELS[engine.provider ?? ""] ?? engine.provider ?? "Motor"}
+              color={ENGINE_COLORS[engine.provider ?? ""] ?? "var(--foreground)"}
+            />
+          ))}
           <div className="ml-2 rounded-xl border border-[var(--profit)]/30 bg-[var(--profit)]/10 px-4 py-3 text-center">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Hybrid</div>
             <div className="text-3xl font-black text-[var(--profit)]">{data?.hybrid ?? 0}%</div>

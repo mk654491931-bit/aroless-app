@@ -18,7 +18,14 @@ import type { DiscoveryWinner } from "./product-discovery.functions";
 
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 
-/** Ölçülmüş bir satırın kartta gösterilebilir en az bir kanıtı var mı? */
+/**
+ * Kartta gösterilebilir ticari kanıt var mı?
+ *
+ * SADECE görsel/link yeterli DEĞİLDİR: arama sonucu sayfasından gelen bir
+ * başlık+URL, ürünün satışta olduğunu kanıtlamaz. En az bir fiyat, puan,
+ * satış veya görüntülenme ölçümü isteriz; bunlar yoksa satır "kazanan"
+ * sayılmaz. Bu kapı, ölçülmüş yolun kalitesiz satırlarla dolmasını engeller.
+ */
 function hasUsableEvidence(p: NormalizedProduct): boolean {
   return (
     p.priceUsd !== null ||
@@ -26,8 +33,7 @@ function hasUsableEvidence(p: NormalizedProduct): boolean {
     p.ratingCount !== null ||
     p.salesVolume !== null ||
     p.viewed90d !== null ||
-    p.imageUrl.trim() !== "" ||
-    p.url.trim() !== ""
+    (p.url.trim() !== "" && p.dataCompleteness >= 3)
   );
 }
 
@@ -42,9 +48,25 @@ function dedupeKey(p: NormalizedProduct): string {
  * parmak iziyle tekilleştirilir; en zengin kayıt kalır (kaynak satırları
  * `filterAndPreRank` içinde zaten birleştirilmiş olabilir, bu ikinci güvenlik).
  */
+export type MeasuredRerank = {
+  /** AI'ın seçtiği parmak izleri; listede olmayanlar deterministik sıraya düşer. */
+  order: readonly string[];
+  /** Parmak izi → kısa gerekçe (yalnız doğrulanmış satırlar için). */
+  reasons?: ReadonlyMap<string, string>;
+};
+
 export function measuredWinnerRows(
   products: readonly NormalizedProduct[],
   topN = 5,
+  /**
+   * İSTEĞE BAĞLI AI SIRALAMASI.
+   *
+   * Model yalnız GERÇEK satırlar arasından seçim yapar; başlık/fiyat üretmez.
+   * Sıra değişir, ölçülmüş puan (`preScore`) değişmez — yani "AI sıraladı"
+   * dense bile karttaki skor hâlâ ölçülmüş sinyaldir. Model çökerse parametre
+   * verilmez ve sıralama tamamen deterministik kalır.
+   */
+  rerank?: MeasuredRerank,
 ): DiscoveryWinner[] {
   const best = new Map<string, NormalizedProduct>();
   for (const p of products) {
@@ -63,13 +85,22 @@ export function measuredWinnerRows(
     if (better) best.set(key, p);
   }
 
-  const ranked = [...best.values()].sort(
-    (a, b) =>
+  const aiRank = new Map<string, number>();
+  for (const [i, key] of (rerank?.order ?? []).entries()) {
+    if (!aiRank.has(key)) aiRank.set(key, i);
+  }
+  const NO_AI_RANK = Number.MAX_SAFE_INTEGER;
+  const ranked = [...best.values()].sort((a, b) => {
+    const ra = aiRank.get(dedupeKey(a)) ?? NO_AI_RANK;
+    const rb = aiRank.get(dedupeKey(b)) ?? NO_AI_RANK;
+    return (
+      ra - rb ||
       b.preScore - a.preScore ||
       b.dataCompleteness - a.dataCompleteness ||
       b.sources.length - a.sources.length ||
-      a.name.localeCompare(b.name, "tr"),
-  );
+      a.name.localeCompare(b.name, "tr")
+    );
+  });
 
   return ranked.slice(0, Math.max(1, topN)).map((row) => {
     const evidence: string[] = [];
@@ -85,6 +116,8 @@ export function measuredWinnerRows(
     if (row.supplier?.supplierPriceUsd != null)
       evidence.push(`Toptan: $${row.supplier.supplierPriceUsd.toFixed(2)}`);
     if (row.grossMarginPct != null) evidence.push(`Brüt marj: %${Math.round(row.grossMarginPct)}`);
+    const aiReason = rerank?.reasons?.get(dedupeKey(row));
+    if (aiReason) evidence.unshift(`AI gerekçesi: ${aiReason}`);
     if (row.imageUrl.trim() !== "") evidence.push("Ürün görseli kaynaktan doğrulandı");
     if (row.sources.length) evidence.push(`Kaynak: ${row.sources.join(", ")}`);
 
@@ -118,8 +151,9 @@ export function measuredWinnerRows(
       cohortCompetitors: row.cohortCompetitors ?? null,
       launch: row.launch ?? null,
       notes:
-        [row.brand, row.seller ? `satıcı ${row.seller}` : ""].filter(Boolean).join(" · ") ||
-        "Canlı kaynak satırından ölçüldü.",
+        [row.brand, row.seller ? `satıcı ${row.seller}` : "", aiReason ? `AI: ${aiReason}` : ""]
+          .filter(Boolean)
+          .join(" · ") || "Canlı kaynak satırından ölçüldü.",
       preScore: Number.isFinite(row.preScore) ? Math.round(row.preScore) : 0,
       dataCompleteness: completeness,
       fingerprint: row.fingerprint,

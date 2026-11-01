@@ -6,6 +6,7 @@ import {
   poolBackoffMs,
   parkPoolGroup,
   poolGroupAvailable,
+  poolGroupConfig,
   poolHealthSummary,
   readPoolGroupKeys,
   resetPoolCooldowns,
@@ -212,6 +213,25 @@ describe("ai-pool availability registry", () => {
     expect(h.available).toBe(1);
     expect(h.cooling).toBe(0); // soğuma değil, yapılandırma eksiği
     expect(h.unusable).toBe(2);
+  });
+
+  it("her yerleşik sağlayıcının ücretsiz modeli ve tam uç noktası tanımlı", () => {
+    // Ölçülen hata: Cerebras/SambaNova modeli boş, Gemini URL'sinde
+    // `/chat/completions` eksikti; 22 anahtarın bir kısmı her çağrıda 400/404
+    // üretiyordu. Bu test o ölü yapılandırmayı geri getirmez.
+    const gemini = poolGroupConfig("gemini");
+    expect(gemini.baseUrl.endsWith("/chat/completions")).toBe(true);
+    expect(gemini.model).toBe("gemini-2.0-flash");
+
+    expect(poolGroupConfig("groq").model).toBe("llama-3.1-8b-instant");
+    expect(poolGroupConfig("openrouter").model).toContain(":free");
+    expect(poolGroupConfig("hf").model).toContain("Qwen");
+    expect(poolGroupConfig("cerebras").model).toBeTruthy();
+    expect(poolGroupConfig("sambanova").model).toContain("Llama");
+    for (const group of ["gemini", "groq", "openrouter", "hf", "cerebras", "sambanova"] as const) {
+      expect(poolGroupConfig(group).baseUrl).toMatch(/^https:\/\//);
+      expect(poolGroupConfig(group).model.trim()).not.toBe("");
+    }
   });
 
   it("returns keys in canonical slot order for provider wrappers", () => {
