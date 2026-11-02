@@ -91,7 +91,7 @@ export function SiteFooter() {
                 params={{ slug: "cerez-politikasi" }}
                 className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
               >
-                <Shield className="h-3.5 w-3.5" /> Güvenlik & SLA
+                <Shield className="h-3.5 w-3.5" /> Çerez Politikası
               </Link>
             </li>
           </ul>

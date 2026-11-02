@@ -13,11 +13,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ALL_TOOL_ENTRIES, TOOL_ENTRY_COUNT, TOOL_HUBS } from "@/lib/tools-catalog";
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, children, ...rest }: { to: string; children?: React.ReactNode }) => (
-    <a href={to} {...rest}>
-      {children}
-    </a>
-  ),
+  Link: ({
+    to,
+    search,
+    children,
+    ...rest
+  }: {
+    to: string;
+    search?: Record<string, string>;
+    children?: React.ReactNode;
+  }) => {
+    const query = search ? `?${new URLSearchParams(search).toString()}` : "";
+    return (
+      <a href={`${to}${query}`} {...rest}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 import { ToolsShowcasePage } from "./tools-showcase-page";
@@ -65,7 +77,9 @@ describe("ToolsShowcasePage", () => {
 
   it("kullanıcıyı uygulamaya ve ortaklık programına sokan CTA'lar vardır", () => {
     const out = html();
-    expect(out).toContain('href="/auth"');
+    // "Ücretsiz başla" doğrudan kayıt modunu açmalı; düz `/auth` giriş
+    // sekmesine düşüp yeni kullanıcıyı yanlış forma götürüyordu.
+    expect(out).toContain('href="/auth?mode=signup"');
     expect(out).toContain('href="/affiliate"');
     expect(out).toContain('href="/pricing"');
   });

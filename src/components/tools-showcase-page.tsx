@@ -46,6 +46,7 @@ export function ToolsShowcasePage() {
           </Link>
           <Link
             to="/auth"
+            search={{ mode: "signup" }}
             className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
           >
             Ücretsiz başla
@@ -73,6 +74,7 @@ export function ToolsShowcasePage() {
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Link
             to="/auth"
+            search={{ mode: "signup" }}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Ücretsiz başla <ArrowRight className="h-4 w-4" />
@@ -95,7 +97,7 @@ export function ToolsShowcasePage() {
         <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Araç modülleri</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Her modül kendi ekranında çalışır ve girdilerini tek yerde toplar. Ücretsiz plan Ürün
-          Bulucu'yu kapsar; araç modülleri paket seçildiğinde açılır.
+          Bulucu'yu kapsar; Starter, Pro ve Business paketlerinde tüm araç modülleri açılır.
         </p>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {TOOL_HUBS.map((hub) => (
@@ -133,15 +135,18 @@ export function ToolsShowcasePage() {
 
       {/* KAPANIŞ */}
       <section className="mt-14 rounded-3xl border border-border bg-card/40 p-8 text-center backdrop-blur">
-        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Araçlar paketle açılır</h2>
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+          Ücretli paketlerde tüm araçlar açık
+        </h2>
         <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground">
-          Paketler arasındaki fark modül erişimi değil, aylık kullanım kotasıdır: hangi paketi
-          seçersen tüm araç modülleri açık olur. Ücretsiz plan Ürün Bulucu ve hoş geldin kredisiyle
-          başlar.
+          Starter, Pro ve Business arasındaki fark modül erişimi değil, aylık kullanım kotasıdır:
+          hangi ücretli paketi seçersen tüm araç modülleri açık olur. Ücretsiz plan Ürün Bulucu ve
+          hoş geldin kredisiyle başlar.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Link
             to="/auth"
+            search={{ mode: "signup" }}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Ücretsiz başla <ArrowRight className="h-4 w-4" />

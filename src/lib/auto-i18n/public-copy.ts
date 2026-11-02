@@ -995,13 +995,13 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Modules d'outils",
     ar: "وحدات الأدوات",
   },
-  "Her modül kendi ekranında çalışır ve girdilerini tek yerde toplar. Ücretsiz plan Ürün Bulucu'yu kapsar; araç modülleri paket seçildiğinde açılır.":
+  "Her modül kendi ekranında çalışır ve girdilerini tek yerde toplar. Ücretsiz plan Ürün Bulucu'yu kapsar; Starter, Pro ve Business paketlerinde tüm araç modülleri açılır.":
     {
-      en: "Each module runs on its own screen and gathers its inputs in one place. The free plan covers Product Finder; tool modules open once you choose a plan.",
-      es: "Cada módulo funciona en su propia pantalla y reúne sus datos en un lugar. El plan gratuito cubre el Buscador de productos; los módulos de herramientas se abren al elegir un plan.",
-      de: "Jedes Modul läuft auf einem eigenen Bildschirm und sammelt seine Eingaben an einer Stelle. Der kostenlose Plan umfasst den Produktfinder; Werkzeugmodule öffnen sich mit einem Paket.",
-      fr: "Chaque module dispose de son propre écran et regroupe ses saisies au même endroit. Le forfait gratuit couvre le Chercheur de produits ; les modules d'outils s'ouvrent dès qu'un forfait est choisi.",
-      ar: "تعمل كل وحدة على شاشتها وتجمع مدخلاتها في مكان واحد. تغطي الخطة المجانية مكتشف المنتجات، وتُفتح وحدات الأدوات عند اختيار خطة.",
+      en: "Each module runs on its own screen and gathers its inputs in one place. The free plan covers Product Finder; every tool module opens on Starter, Pro and Business plans.",
+      es: "Cada módulo funciona en su propia pantalla y reúne sus datos en un lugar. El plan gratuito cubre el Buscador de productos; todos los módulos de herramientas se abren en los planes Starter, Pro y Business.",
+      de: "Jedes Modul läuft auf einem eigenen Bildschirm und sammelt seine Eingaben an einer Stelle. Der kostenlose Plan umfasst den Produktfinder; in den Paketen Starter, Pro und Business sind alle Werkzeugmodule offen.",
+      fr: "Chaque module dispose de son propre écran et regroupe ses saisies au même endroit. Le forfait gratuit couvre le Chercheur de produits ; tous les modules d'outils sont ouverts avec les forfaits Starter, Pro et Business.",
+      ar: "تعمل كل وحدة على شاشتها وتجمع مدخلاتها في مكان واحد. تغطي الخطة المجانية مكتشف المنتجات، وتُفتح جميع وحدات الأدوات في خطط Starter وPro وBusiness.",
     },
   "Modülü aç": {
     en: "Open module",
@@ -1010,20 +1010,20 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Ouvrir le module",
     ar: "افتح الوحدة",
   },
-  "Araçlar paketle açılır": {
-    en: "Tools unlock with a plan",
-    es: "Las herramientas se abren con un plan",
-    de: "Werkzeuge werden mit einem Paket freigeschaltet",
-    fr: "Les outils s'ouvrent avec un forfait",
-    ar: "تُفتح الأدوات مع الاشتراك",
+  "Ücretli paketlerde tüm araçlar açık": {
+    en: "Every tool is open on paid plans",
+    es: "Todas las herramientas están abiertas en los planes de pago",
+    de: "In den bezahlten Paketen sind alle Werkzeuge offen",
+    fr: "Tous les outils sont ouverts avec les forfaits payants",
+    ar: "جميع الأدوات مفتوحة في الخطط المدفوعة",
   },
-  "Paketler arasındaki fark modül erişimi değil, aylık kullanım kotasıdır: hangi paketi seçersen tüm araç modülleri açık olur. Ücretsiz plan Ürün Bulucu ve hoş geldin kredisiyle başlar.":
+  "Starter, Pro ve Business arasındaki fark modül erişimi değil, aylık kullanım kotasıdır: hangi ücretli paketi seçersen tüm araç modülleri açık olur. Ücretsiz plan Ürün Bulucu ve hoş geldin kredisiyle başlar.":
     {
-      en: "The difference between plans is not module access but the monthly usage quota: whichever plan you pick, every tool module is open. The free plan starts with Product Finder and a welcome credit.",
-      es: "La diferencia entre planes no es el acceso a módulos, sino la cuota de uso mensual: elijas el plan que elijas, todos los módulos están abiertos. El plan gratuito empieza con el Buscador de productos y un crédito de bienvenida.",
-      de: "Der Unterschied zwischen den Paketen ist nicht der Modulzugang, sondern das monatliche Nutzungskontingent: egal welches Paket du wählst, alle Werkzeugmodule sind offen. Der kostenlose Plan startet mit Produktfinder und einem Willkommens-Credit.",
-      fr: "La différence entre les forfaits n'est pas l'accès aux modules mais le quota d'usage mensuel : quel que soit le forfait choisi, tous les modules sont ouverts. Le forfait gratuit démarre avec le Chercheur de produits et un crédit de bienvenue.",
-      ar: "الفرق بين الخطط ليس في الوصول إلى الوحدات بل في حصة الاستخدام الشهرية: أي خطة تختارها تُفتح كل وحدات الأدوات. تبدأ الخطة المجانية بمكتشف المنتجات ورصيد ترحيبي.",
+      en: "The difference between Starter, Pro and Business is not module access but the monthly usage quota: whichever paid plan you pick, every tool module is open. The free plan starts with Product Finder and a welcome credit.",
+      es: "La diferencia entre Starter, Pro y Business no es el acceso a módulos, sino la cuota de uso mensual: elijas el plan de pago que elijas, todos los módulos están abiertos. El plan gratuito empieza con el Buscador de productos y un crédito de bienvenida.",
+      de: "Der Unterschied zwischen Starter, Pro und Business ist nicht der Modulzugang, sondern das monatliche Nutzungskontingent: egal welches bezahlte Paket du wählst, alle Werkzeugmodule sind offen. Der kostenlose Plan startet mit Produktfinder und einem Willkommens-Credit.",
+      fr: "La différence entre Starter, Pro et Business n'est pas l'accès aux modules mais le quota d'usage mensuel : quel que soit le forfait payant choisi, tous les modules sont ouverts. Le forfait gratuit démarre avec le Chercheur de produits et un crédit de bienvenue.",
+      ar: "الفرق بين Starter وPro وBusiness ليس في الوصول إلى الوحدات بل في حصة الاستخدام الشهرية: أي خطة مدفوعة تختارها تُفتح كل وحدات الأدوات. تبدأ الخطة المجانية بمكتشف المنتجات ورصيد ترحيبي.",
     },
   "Paketleri karşılaştır": {
     en: "Compare plans",

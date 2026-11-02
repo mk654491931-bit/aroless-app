@@ -18,7 +18,10 @@ export function CountUp({
 }: CountUpProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const startedRef = useRef(false);
-  const [value, setValue] = useState(0);
+  // SSR/crawler ilk karesinde GERÇEK değeri görsün: 0 göstermek, sayfayı
+  // "metrikler sıfır" gibi okutuyor ve JS kapalıysa kalıcı oluyordu. Animasyon
+  // görünür olduğunda bu değerden 0'a çekilip yukarı sayar.
+  const [value, setValue] = useState(end);
 
   useEffect(() => {
     const el = ref.current;
@@ -35,6 +38,7 @@ export function CountUp({
         if (!entries.some((e) => e.isIntersecting) || startedRef.current) return;
         startedRef.current = true;
         observer.disconnect();
+        setValue(0);
         const t0 = performance.now();
         const step = (t: number) => {
           const p = Math.min(1, (t - t0) / duration);

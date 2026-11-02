@@ -239,6 +239,21 @@ function AuthPage() {
   const registerFingerprintFn = useServerFn(registerDeviceFingerprint);
   const claimReferralFn = useServerFn(claimReferral);
 
+  // "Ücretsiz başla" CTA'ları `?mode=signup` ile gelir. Sayfanın üstündeki
+  // tanıtım bloğu mobilde formu ekranın çok altına ittiği için, kayıt niyetiyle
+  // gelen kullanıcıyı doğrudan forma getir; aksi hâlde CTA "çalışmıyor" gibi
+  // görünüyor ve kullanıcı formu bulmak için sayfayı taramak zorunda kalıyor.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") !== "signup" && window.location.hash !== "#signin") return;
+    const form = document.getElementById("signin");
+    if (!form) return;
+    const frame = window.requestAnimationFrame(() =>
+      form.scrollIntoView({ block: "start", behavior: "auto" }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   useEffect(() => {
     // Recovery sırasında oturum açılır ama kullanıcı henüz yeni şifresini
     // belirlemedi: bu ekrandan ayrılmamalı.
