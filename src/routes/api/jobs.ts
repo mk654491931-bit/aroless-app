@@ -106,7 +106,13 @@ export const Route = createFileRoute("/api/jobs")({
           async () => {
             const { runCouncil } = await import("@/lib/council.server");
             const { withCreditRefund } = await import("@/lib/credit-guard.server");
-            return withCreditRefund(userId, () => runCouncil(query, country, category, lang));
+            return withCreditRefund(
+              userId,
+              () => runCouncil(query, country, category, lang),
+              1,
+              null,
+              "council",
+            );
           },
           { key },
         );

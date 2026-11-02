@@ -650,7 +650,7 @@ export function useFinderSearch(opts: {
         setFallbackNotice(
           "Kalıcı iş kaydı kurulumu tamam değil; arama canlı kaynaklardan ölçülerek yapılıyor. AI Konsey koşmayacak.",
         );
-        measured.mutate(vars);
+        measured.mutate({ ...vars, requestId: crypto.randomUUID() });
         return;
       }
       const products = attachWinnerScores(toWinningProducts(outcome.rows, outcome.rows));
@@ -718,8 +718,10 @@ export function useFinderSearch(opts: {
    * doğrudan koşturur, 1 jeton düşer, sonuç boşsa iade eder. 14 ajan oyu
    * YOKTUR; kart `scoreSource: "measured"` sayesinde bunu açıkça söyler.
    */
+  // Retry aynı `requestId` ile gider: sunucu aynı işi ikinci kez ücretlendirmez.
+  type MeasuredVars = GenVars & { requestId: string };
   const measured = useMutation({
-    mutationFn: async (vars: GenVars) => {
+    mutationFn: async (vars: MeasuredVars) => {
       const country =
         vars.target_country === "GLOBAL"
           ? "US"
@@ -730,6 +732,7 @@ export function useFinderSearch(opts: {
           country,
           platform: (vars.platforms[0] ?? "General").slice(0, 40),
           topN: 5,
+          requestId: vars.requestId,
         },
       });
     },
@@ -936,7 +939,7 @@ export function useFinderSearch(opts: {
           );
           setSearchError(null);
           setStalled(false);
-          measured.mutate(vars);
+          measured.mutate({ ...vars, requestId: crypto.randomUUID() });
         })
         .catch(() => {
           // Denetim alınamazsa eski yolla devam: kontrol, aramayı ASLA engellemez.

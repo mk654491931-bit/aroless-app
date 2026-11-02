@@ -38,11 +38,9 @@ export const Route = createFileRoute("/api/public/tool")({
           const { cacheGet, cacheKey, cacheSet } = await import("@/lib/ai-cache.server");
           const { isCacheableToolResult, toolCacheParts, toolCacheTtlMs } =
             await import("@/lib/tools-cache.server");
-          const { toolCreditCost } = await import("@/lib/credit-costs");
           const { chargeOrRespond, refundFeatureCredits } =
             await import("@/lib/credit-charge.server");
           const prompt = buildPrompt(tool, input);
-          const creditCost = toolCreditCost(tool);
 
           // Bütçe platformdan gelir (Vercel 300 sn → 90 sn'lik araç bütçesi),
           // yani çok motorlu tur koşabilir; üst sınır yine de 90 sn'dir ki
@@ -91,9 +89,27 @@ export const Route = createFileRoute("/api/public/tool")({
               feature: `tool:${tool}`,
             });
             if (!payment.ok) return { ok: false, response: payment.response };
+            // GERÇEK düşen tutar iade edilir; feature fiyatı ile tool fiyatı
+            // bir gün ayrışırsa eksik/fazla iade oluşmasın.
+            const chargedAmount = payment.outcome.charged;
 
             try {
               const fresh = await compute();
+              // CONSENSUS BOŞSA ÜCRET ALINMAZ: runConsensus hata fırlatmaz,
+              // tüm motorlar düşünce `{engines:0}` döner. Eskiden bu sonuç
+              // 2 jeton karşılığında kullanıcıya gösteriliyordu.
+              if (
+                tool === "consensus" &&
+                Number((fresh as { engines?: unknown } | null)?.engines ?? 0) === 0
+              ) {
+                throw new Error("CONSENSUS_NO_ENGINE");
+              }
+              // NEWS boş dönerse (iki AI yolu da boş metin verdi) kullanıcı
+              // boş haber listesi için 1 jeton ödememeli.
+              if (tool === "news") {
+                const items = (fresh as { items?: unknown } | null)?.items;
+                if (Array.isArray(items) && items.length === 0) throw new Error("NEWS_EMPTY");
+              }
               if (key && ttlMs !== null && isCacheableToolResult(fresh)) {
                 await cacheSet(key, scope, fresh, ttlMs);
               }
@@ -102,7 +118,7 @@ export const Route = createFileRoute("/api/public/tool")({
               // AI çöktü: düşülen jetonu iade et, hatayı yukarı taşı.
               await refundFeatureCredits(
                 guard.userId,
-                creditCost,
+                chargedAmount,
                 `tool_failed:${tool}`,
                 null,
                 `tool:${tool}`,
@@ -172,6 +188,13 @@ export const Route = createFileRoute("/api/public/tool")({
                   "retry-after": "4",
                 },
               },
+            );
+          }
+          if (msg === "CONSENSUS_NO_ENGINE" || msg === "NEWS_EMPTY") {
+            return jsonError(
+              503,
+              "AI sonucu boş döndü; bu iş için düşülen jeton iade edildi. 20-30 sn sonra tekrar deneyin.",
+              e,
             );
           }
           if (/AI anahtar\u0131|AI gateway|not configured|no api key/i.test(msg)) {

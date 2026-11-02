@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chargeForAi, refundCredit, withCreditRefund } from "@/lib/credit-guard.server";
+import { chargeForAi, withCreditRefund } from "@/lib/credit-guard.server";
 import type { CouncilReport } from "@/lib/council.server";
 
 type Input = { query: string; country?: string; category?: string; lang?: string };
@@ -136,8 +136,12 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     // kalıcı bir anahtar, aynı sorgu için GELECEKTEKİ meşru bir iadeyi de
     // engellerdi (kullanıcı gerçek bir hata yüzünden kredisini kaybederdi).
     const work = () =>
-      withCreditRefund(context.userId, () =>
-        runCouncil(data.query, data.country, data.category, data.lang),
+      withCreditRefund(
+        context.userId,
+        () => runCouncil(data.query, data.country, data.category, data.lang),
+        1,
+        null,
+        COUNCIL_FEATURE,
       );
 
     // Yerel geliştirme veya (worker'sız) süre limiti yeten sunucusuz ortam:
@@ -166,7 +170,14 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
         dedupeId: key,
       });
       if (!enqueued.ok) {
-        await refundCredit(context.userId, 1, "council_dispatch_failed");
+        const { refundFeatureCredits } = await import("@/lib/credit-charge.server");
+        await refundFeatureCredits(
+          context.userId,
+          1,
+          "council_dispatch_failed",
+          null,
+          COUNCIL_FEATURE,
+        );
         return {
           status: "unavailable",
           error:
@@ -179,7 +190,14 @@ export const runCouncilAnalysis = createServerFn({ method: "POST" })
     const started = runner.runInBackground("council-analysis", work, { key });
     if (!started.started) {
       // Yarışı kaybettik (başka bir istek aynı işi başlattı): krediyi iade et.
-      await refundCredit(context.userId, 1, "duplicate_council_job");
+      const { refundFeatureCredits } = await import("@/lib/credit-charge.server");
+      await refundFeatureCredits(
+        context.userId,
+        1,
+        "duplicate_council_job",
+        null,
+        COUNCIL_FEATURE,
+      );
       return { status: "processing", ...poll };
     }
     return { status: "processing", ...poll };

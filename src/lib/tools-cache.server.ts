@@ -126,7 +126,24 @@ export function isCacheableToolResult(value: unknown): boolean {
     headline?: unknown;
     bullets?: unknown;
     metrics?: unknown;
+    items?: unknown;
+    engines?: unknown;
+    hybrid?: unknown;
   };
+
+  // NEWS — araç sonucu `{items:[...]}` döner; başlık/madde alanları yoktur.
+  // Boş haber listesi "sonuç yok" demektir; önbelleğe yazılırsa 10 dakika
+  // boyunca kullanıcı boş sonuç görür.
+  if (Array.isArray(result.items)) return result.items.length > 0;
+
+  // CONSENSUS — `{hybrid, engines, results[]}` döner; başlık/madde yoktur.
+  // En az bir motor gerçekten cevap verdiyse sonuç önbelleğe değer. `engines:0`
+  // ise tüm motorlar düşmüştür; önbelleğe yazılmaz ve jeton iade edilir.
+  if (result.hybrid !== undefined || result.engines !== undefined) {
+    const engines = Number(result.engines);
+    return Number.isFinite(engines) && engines > 0;
+  }
+
   const headline = typeof result.headline === "string" && result.headline.trim().length > 0;
   const bullets = Array.isArray(result.bullets) && result.bullets.length > 0;
   const metrics = Array.isArray(result.metrics) && result.metrics.length > 0;

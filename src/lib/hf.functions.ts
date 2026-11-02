@@ -127,7 +127,9 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
         if (lists.length === 0)
           throw new Error((settled[0] as PromiseRejectedResult).reason?.message ?? "HF_ERROR");
         const merged = mergeHfProducts(lists) as unknown as WinningProduct[];
-        const products = await enrichWithLiveData(rankProfitable(merged));
+        const ranked = rankProfitable(merged);
+        if (ranked.length === 0) throw new Error("HF_EMPTY");
+        const products = await enrichWithLiveData(ranked);
         return {
           products,
           model: `${HF_MODELS.llama} + ${HF_MODELS.qwen}`,
@@ -136,11 +138,15 @@ export const huggingFaceSearch = createServerFn({ method: "POST" })
         };
       }
 
-      const products = await enrichWithLiveData(
-        rankProfitable((await runOne(data.engine)) as unknown as WinningProduct[]),
+      const ranked = rankProfitable(
+        (await runOne(data.engine)) as unknown as WinningProduct[],
       );
+      // Model boş liste döndürdüyse "başarılı arama" sayılmaz; aksi hâlde
+      // kullanıcı 1 jeton ödeyip boş sonuç görür.
+      if (ranked.length === 0) throw new Error("HF_EMPTY");
+      const products = await enrichWithLiveData(ranked);
       return { products, model: HF_MODELS[data.engine], engines: 1, live: true };
-    });
+    }, 1, null, HF_SEARCH_FEATURE);
   });
 
 /** Connection probe for the settings panel. */

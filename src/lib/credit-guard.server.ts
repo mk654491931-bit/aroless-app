@@ -178,11 +178,31 @@ export async function withCreditRefund<T>(
   run: () => Promise<T>,
   amount = 1,
   refKey?: string | null,
+  /**
+   * Tahsil edilen işin kimliği (`tool:compare`, `council` …). Verilirse iade,
+   * aylık kullanım defterine NEGATİF satır olarak da yazılır. Verilmezse eski
+   * davranış korunur: jeton geri gelir ama "bu ay" sayacı dolu kalabilir.
+   */
+  feature?: string,
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    await refundCredit(userId, amount, "analysis_failed", refKey ? `${refKey}:refund` : null);
+    if (feature) {
+      // `refundFeatureCredits` hem bakiyeyi hem aylık defteri düzeltir. Dinamik
+      // import: `credit-charge.server` bu modülü statik olarak içe aktarıyor,
+      // döngüsel yükleme yapmayalım.
+      const { refundFeatureCredits } = await import("./credit-charge.server");
+      await refundFeatureCredits(
+        userId,
+        amount,
+        "analysis_failed",
+        refKey ? `${refKey}:refund` : null,
+        feature,
+      );
+    } else {
+      await refundCredit(userId, amount, "analysis_failed", refKey ? `${refKey}:refund` : null);
+    }
     throw error;
   }
 }

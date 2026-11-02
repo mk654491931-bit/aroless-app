@@ -85,7 +85,7 @@ describe("istemci bekleme bütçesi ölü nokta üretmez", () => {
     // kaynaklardan ölçülen ürünlere geçilir ve AI Konsey'in koşmayacağı
     // dürüstçe söylenir.
     expect(src).toContain("AI Konsey koşmayacak");
-    expect(src).toContain("measured.mutate(vars)");
+    expect(src).toContain("measured.mutate({ ...vars, requestId: crypto.randomUUID() })");
   });
 
   it("denetim alınamazsa arama yine başlar (kontrol asla kilitlemez)", async () => {
@@ -145,7 +145,7 @@ describe("gerçek hat durumunda klasik hat devreye girmez", () => {
     // Yapısal kontrol: `measured.mutate(vars)` çağrısı, `!outcome.fallback` ve
     // `still-running` dallarının ALTINDA olmalı — yani gerçek hat hatası
     // doğrudan ölçülmüş yola düşer, AI'ın yazdığı ürün planlarına dönmez.
-    const measuredAt = src.indexOf("measured.mutate(vars)");
+    const measuredAt = src.indexOf("measured.mutate({ ...vars, requestId");
     const failedGuardAt = src.indexOf("if (!outcome.fallback)");
     const stillRunningAt = src.indexOf('outcome.reason === "still-running"');
     expect(measuredAt).toBeGreaterThan(-1);

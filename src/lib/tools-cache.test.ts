@@ -99,6 +99,25 @@ describe("isCacheableToolResult", () => {
     ).toBe(true);
   });
 
+  it("consensus ve news sonuçlarını tanır — aynı girdi ikinci kez ücretlenmez", () => {
+    // Regresyon: bu iki araç `{headline, bullets}` döndürmediği için eski
+    // fonksiyon onları "önbelleğe değmez" sayıyordu; her tıklama yeniden AI
+    // çalıştırıp 2/1 jeton düşürüyordu.
+    expect(
+      isCacheableToolResult({
+        hybrid: 74,
+        engines: 6,
+        results: [{ provider: "gemini", score: 74, note: "güçlü" }],
+      }),
+    ).toBe(true);
+    expect(isCacheableToolResult({ items: [{ title: "haber" }] })).toBe(true);
+
+    // Boş sonuç asla önbelleğe yazılmaz; aksi hâlde kullanıcı saatlerce boş
+    // ekran görür ve ödeme yapmış olur.
+    expect(isCacheableToolResult({ hybrid: 0, engines: 0, results: [] })).toBe(false);
+    expect(isCacheableToolResult({ items: [] })).toBe(false);
+  });
+
   it("boş/degrade sonucu reddeder (boş sonuç saatlerce servis edilmesin)", () => {
     expect(isCacheableToolResult(null)).toBe(false);
     expect(isCacheableToolResult(undefined)).toBe(false);

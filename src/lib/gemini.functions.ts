@@ -491,6 +491,13 @@ export const validateProduct = createServerFn({ method: "POST" })
           .join("\n");
 
         const consensus = await runConsensus({ context: ctx, lang: data.lang });
+        // Ajanlar hata durumunda istisna atmıyor, 0 puanlı "değerlendirilemedi"
+        // karnesi döndürüyor. Bu boş karne ücretli sayılmamalı.
+        const answered =
+          Number(consensus.agent1.score) > 0 ||
+          Number(consensus.agent2.score) > 0 ||
+          Number(consensus.agent4?.score ?? 0) > 0;
+        if (!answered) throw new Error("CONSENSUS_EMPTY");
         return {
           report: {
             query: data.query,
@@ -500,7 +507,7 @@ export const validateProduct = createServerFn({ method: "POST" })
           },
           creditsRemaining: remaining as number,
         };
-      });
+      }, 1, null, VALIDATE_PRODUCT_FEATURE);
     },
   );
 
@@ -573,8 +580,18 @@ Return STRICT JSON only:
       const text = await callAiMesh(prompt, { temperature: 0.4, grounded: false });
       let parsed: SeoKit = { titles: [], meta_descriptions: [], keywords: [], ad_copy: [] };
       parsed = extractJson<SeoKit>(text, parsed);
+      // Parse edilemeyen/boş cevap başarı sayılmaz: kullanıcı boş SEO kiti
+      // için jeton ödememeli.
+      if (
+        !parsed.titles.length &&
+        !parsed.meta_descriptions.length &&
+        !parsed.keywords.length &&
+        !parsed.ad_copy.length
+      ) {
+        throw new Error("SEO_EMPTY");
+      }
       return parsed;
-    });
+    }, 1, null, SEO_KIT_FEATURE);
   });
 
 // ---------- Creative Studio (TikTok / Reels scripts) ----------
@@ -648,8 +665,11 @@ Return STRICT JSON only:
       const text = await callAiMesh(prompt, { temperature: 0.7, grounded: false });
       let parsed: { scripts?: CreativeScript[] } = {};
       parsed = extractJson<{ scripts?: CreativeScript[] }>(text, { scripts: [] });
-      return { scripts: parsed.scripts ?? [] };
-    });
+      if (!Array.isArray(parsed.scripts) || parsed.scripts.length === 0) {
+        throw new Error("SCRIPTS_EMPTY");
+      }
+      return { scripts: parsed.scripts };
+    }, 1, null, CREATIVE_SCRIPT_FEATURE);
   });
 
 // ---------- Favorites / Product Library ----------

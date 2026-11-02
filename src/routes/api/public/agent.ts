@@ -90,10 +90,8 @@ export const Route = createFileRoute("/api/public/agent")({
             }
           }
 
-          const { featureCreditCost } = await import("@/lib/credit-costs");
           const { chargeOrRespond, refundFeatureCredits } =
             await import("@/lib/credit-charge.server");
-          const cost = featureCreditCost(feature);
 
           const payment = await chargeOrRespond({
             userId: guard.userId,
@@ -101,6 +99,9 @@ export const Route = createFileRoute("/api/public/agent")({
             feature,
           });
           if (!payment.ok) return payment.response;
+          // Gerçek düşen tutarı iade et: fiyat tablosu ile tahsilat bir gün
+          // ayrışırsa kullanıcı eksik/fazla iade görmesin.
+          const cost = payment.outcome.charged;
 
           try {
             if (isOrchestrated) {

@@ -170,7 +170,7 @@ export const generateCreativeKit = createServerFn({ method: "POST" })
         payload: kit,
         created_at: new Date().toISOString(),
       }) as unknown as CreativeAssetRow;
-    });
+    }, 1, null, CREATIVE_STUDIO_FEATURE);
   });
 
 export const listCreativeAssets = createServerFn({ method: "POST" })

@@ -449,6 +449,11 @@ const MeasuredInput = z.object({
   country: z.string().min(2).max(4).default("US"),
   platform: z.string().max(40).default("General"),
   topN: z.number().int().min(3).max(10).default(5),
+  /**
+   * İstemci retry'ında AYNI değer gönderilir. Ölçülmüş arama 1 jetonluk
+   * olduğundan ağ hatası/yeniden deneme aynı işi iki kez ücretlendirmemeli.
+   */
+  requestId: z.string().uuid().optional(),
 });
 
 /**
@@ -473,6 +478,7 @@ export const findMeasuredWinners = createServerFn({ method: "POST" })
       userId: context.userId,
       token,
       feature: FEATURE,
+      chargeKey: data.requestId ? `measured:${data.requestId}` : undefined,
     });
     if (!charge.ok) {
       if (charge.reason === "PLAN_LIMIT") {

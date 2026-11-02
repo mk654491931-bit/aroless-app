@@ -74,6 +74,16 @@ export const auditStore = createServerFn({ method: "POST" })
         0,
         Math.min(100, Math.round(Number(report.health_score) || 0)),
       );
+      // AI boş/ayrıştırılamaz JSON döndürdüyse kullanıcı boş rapor için
+      // ödeme yapmamalı: `withCreditRefund` yalnız istisnada iade eder.
+      const hasReport =
+        report.summary.trim().length > 0 ||
+        report.strengths.length > 0 ||
+        report.issues.length > 0 ||
+        report.conversion_killers.length > 0 ||
+        report.quick_wins.length > 0 ||
+        report.trust_signals.length > 0;
+      if (!hasReport) throw new Error("AUDIT_EMPTY");
 
       const { data: saved } = await context.supabase
         .from("store_audits")
@@ -98,7 +108,7 @@ export const auditStore = createServerFn({ method: "POST" })
       } as StoreAuditRow & {
         signals: ReturnType<typeof extractSignals>;
       };
-    });
+    }, 1, null, STORE_AUDIT_FEATURE);
   });
 
 export const listStoreAudits = createServerFn({ method: "POST" })

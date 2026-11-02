@@ -212,5 +212,11 @@ export const buildViralAd = createServerFn({ method: "POST" })
       feature: "tool:creative-studio",
       db: ctx.supabase,
     });
-    return withCreditRefund(ctx.userId, () => buildViralAdBlueprint(data));
+    return withCreditRefund(
+      ctx.userId,
+      () => buildViralAdBlueprint(data),
+      1,
+      null,
+      "tool:creative-studio",
+    );
   });

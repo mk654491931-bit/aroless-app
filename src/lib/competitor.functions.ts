@@ -186,7 +186,13 @@ export const analyzeCompetitors = createServerFn({ method: "POST" })
       feature: "tool:competitor-intel",
       db: ctx.supabase,
     });
-    return withCreditRefund(ctx.userId, () => buildCompetitorReport(data));
+    return withCreditRefund(
+      ctx.userId,
+      () => buildCompetitorReport(data),
+      1,
+      null,
+      "tool:competitor-intel",
+    );
   });
 
 const CountryStrategyInput = z.object({
@@ -245,9 +251,15 @@ export const getCountryStrategy = createServerFn({ method: "POST" })
       feature: "tool:arbitrage-matrix",
       db: ctx.supabase,
     });
-    return withCreditRefund(ctx.userId, async () => ({
-      strategy: await buildCountryStrategy(data.niche, data.country, data.lang),
-    }));
+    return withCreditRefund(
+      ctx.userId,
+      async () => ({
+        strategy: await buildCountryStrategy(data.niche, data.country, data.lang),
+      }),
+      1,
+      null,
+      "tool:arbitrage-matrix",
+    );
   });
 
 const CopilotInput = z.object({

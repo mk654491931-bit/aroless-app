@@ -42,16 +42,28 @@ export const summarizeComparison = createServerFn({ method: "POST" })
       const text = await callAiMesh(prompt, { temperature: 0.3, grounded: false });
       try {
         const json = JSON.parse(text.replace(/```json|```/g, "").trim());
-        return {
+        const result = {
           winner: String(json.winner || ""),
           reasoning: String(json.reasoning || ""),
           runner_up: String(json.runner_up || ""),
           risks: Array.isArray(json.risks) ? json.risks.map(String) : [],
         };
-      } catch {
-        return { winner: "", reasoning: text.slice(0, 400), runner_up: "", risks: [] };
+        if (!result.winner.trim() && !result.reasoning.trim()) throw new Error("COMPARE_EMPTY");
+        return result;
+      } catch (error) {
+        if (error instanceof Error && error.message === "COMPARE_EMPTY") throw error;
+        const result = {
+          winner: "",
+          reasoning: text.slice(0, 400),
+          runner_up: "",
+          risks: [] as string[],
+        };
+        // Ağ geçidi boş metin döndürdüyse iade edilir; dolu serbest metin
+        // kullanıcıya gösterilebilir bir karşılaştırma cevabıdır.
+        if (!result.reasoning.trim()) throw new Error("COMPARE_EMPTY");
+        return result;
       }
-    });
+    }, 1, null, "tool:compare");
   });
 
 const LoadInput = z.object({ ids: z.array(z.string().uuid()).min(2).max(4) });
