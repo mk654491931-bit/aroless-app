@@ -480,6 +480,11 @@ export function useFinderSearch(opts: {
           // Seçilen arayüz dili hattın AI adımlarına taşınır: kart gerekçeleri
           // ve konsey notları kullanıcının dilinde yazılır.
           lang: opts.lang.slice(0, 2) || "en",
+          // GELİŞMİŞ ALANLAR — daha önce yalnız klasik hatta kullanılıyordu.
+          // Artık kanıtlı hattın AI kısa listesi ve 14 ajanı da bu brief'i görür.
+          category: vars.category,
+          audience: vars.audience,
+          budget: vars.budget,
         },
       });
       if (!started.ok) {
@@ -733,6 +738,9 @@ export function useFinderSearch(opts: {
           platform: (vars.platforms[0] ?? "General").slice(0, 40),
           topN: 5,
           requestId: vars.requestId,
+          category: vars.category,
+          audience: vars.audience,
+          budget: vars.budget,
         },
       });
     },

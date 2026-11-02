@@ -76,7 +76,7 @@ export type DiscoveryRun = {
   products: DiscoveryWinner[];
   consensus: Consensus[];
   /**
-   * Nihai 5 ürünün sözleşmesi (`top_products`). Sunucu tarafında kalıcı sonuca
+   * Nihai ürünlerin sözleşmesi (`top_products`, varsayılan 5 / üst sınır 10). Sunucu tarafında kalıcı sonuca
    * yazıldığı için TÜM taşıyıcılarda (qstash / arka plan / yoklama) dolar;
    * eski koşularda boştur ve arayüz sessizce ürün kartlarına düşer.
    */

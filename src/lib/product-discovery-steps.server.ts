@@ -30,7 +30,6 @@ import {
 } from "./product-discovery-jobs.server";
 import {
   buildTopProducts,
-  DISCOVERY_FINAL_N,
   GEMINI_SHORTLIST_SIZE,
   geminiShortlistSelector,
   runFinalRankStep,
@@ -41,6 +40,7 @@ import {
 import { productIdentityKey } from "./discovery-core";
 import type { DiscoveryStep } from "./product-discovery-qstash.server";
 import type { ShortlistStats } from "./product-discovery-shortlist.server";
+import { discoveryBriefLine } from "./product-discovery.types";
 import type {
   Consensus,
   FilterStats,
@@ -156,6 +156,8 @@ export async function executeProductDiscoveryStep(args: {
       : 0;
   const sliceDeadline = args.sliceDeadlineAt ?? args.deadlineAt ?? Date.now() + 8_000;
   const forceFinish = args.forceFinish === true;
+  /** Kategori/kitle/bütçe — AI kısa listesi ve 14 ajan aynı brief'i görür. */
+  const brief = discoveryBriefLine(input);
 
   try {
     switch (step) {
@@ -251,6 +253,7 @@ export async function executeProductDiscoveryStep(args: {
           input.niche,
           sliceDeadline,
           input.lang,
+          brief,
         );
 
         if (!picks.length && !forceFinish && slice + 1 < GEMINI_MAX_SLICES) {
@@ -282,6 +285,8 @@ export async function executeProductDiscoveryStep(args: {
           input.niche,
           GEMINI_SHORTLIST_SIZE,
           async () => picks,
+          input.lang,
+          brief,
         );
         if (!result.ok) {
           await failStep(runId, userId, "gemini_shortlist başarısız.");
@@ -330,6 +335,7 @@ export async function executeProductDiscoveryStep(args: {
           // BİTİR: yeni dilim yayınlamak 280 sn sözünü aşardı.
           force: forceFinish,
           lang: input.lang,
+          brief,
         });
 
         if (council.partial) {
@@ -412,13 +418,13 @@ export async function executeProductDiscoveryStep(args: {
           return { ok: false, error: "final sıralama başarısız." };
         }
 
-        // NİHAİ 5 — 14 ajanın oyununun TEK çıktısı, dış sözleşmeye çevrilir.
+        // NİHAİ LİSTE — 14 ajanın oyununun TEK çıktısı, dış sözleşmeye çevrilir.
         //
         // Buradaki sıralama 14 ajanın uzlaşmış `councilScore`'udur; bu
         // fonksiyon YENİDEN puanlama yapmaz, sadece kazanmış oyu dışarı
         // verilen `top_products` şekline çevirir. `ranked.products` YALNIZCA
-        // kazananları içerir, bu yüzden `input.topN` (25) değil sonucun kendi
-        // uzunluğu (5) kullanılır: 25 oy satırından 5'ini yeniden seçmek,
+        // kazananları içerir, bu yüzden `ranked.consensus` (25) değil sonucun kendi
+        // uzunluğu kullanılır: 25 oy satırından istenen kadarını yeniden seçmek,
         // konseyin kararını ikinci bir kez sorgulamak olurdu.
         //
         // ÖNEMLİ: kaynak olarak `ranked.consensus` DEĞİL `ranked.products`
@@ -428,9 +434,11 @@ export async function executeProductDiscoveryStep(args: {
         // ve "ölçülmedi" gerekçesiyle çıkardı — yani gerekçesiz bir liste.
         // `input.lang`: gerekçe metni (trend/marj/rekabet/kanıt) seçilen dilde
         // kurulur — arayüz İspanyolca ise kart Türkçe gerekçe göstermez.
+        // Kullanıcı 8/10 sonuç istediyse sözleşme de o kadar ürün taşır.
+        // `DISCOVERY_FINAL_N` yalnız varsayılandır; üst sınır 10'dur.
         const { top_products } = buildTopProducts(
           (ranked.products ?? []) as never,
-          DISCOVERY_FINAL_N,
+          input.topN,
           input.lang,
         );
 
@@ -445,7 +453,7 @@ export async function executeProductDiscoveryStep(args: {
           stats: job?.stats ?? null,
           stepStats: {},
           sources: job?.stats?.perSource ?? [],
-          // Nihai 5 ürünün sözleşmesi de KALICI SONUCUN parçasıdır: istemci
+          // Nihai ürün sözleşmesi de KALICI SONUCUN parçasıdır: istemci
           // sonucu `searches.result`ten okur, adım yanıtından değil.
           topProducts: top_products,
         });

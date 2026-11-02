@@ -54,6 +54,8 @@ export async function rerankMeasuredWithAi(
   niche: string,
   topN: number,
   deadlineAt: number,
+  /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+  brief?: string,
 ): Promise<MeasuredRerank | null> {
   if (!anyAiKeyConfigured() || products.length === 0) return null;
 
@@ -74,6 +76,7 @@ export async function rerankMeasuredWithAi(
     "Sen deneyimli bir e-ticaret ürün alıcısısın. Aşağıdaki GERÇEK kaynak satırları arasından",
     `"${niche}" nişi için ticari potansiyeli en yüksek ${Math.max(1, topN)} ürünü seç.`,
     "Yalnız verilen satırları kullan; yeni ürün, fiyat veya satış rakamı UYDURMA.",
+    ...(brief ? [brief] : []),
     "Satış hacmi, görüntülenme, puan ve kaynak doğrulaması güçlü olanları ödüllendir.",
     "Yanıt YALNIZ şu JSON olsun:",
     '{"picks":[{"index":1,"reason":"en fazla 12 kelime"}]}',

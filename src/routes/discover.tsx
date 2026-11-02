@@ -89,6 +89,9 @@ function DiscoverPage() {
   const [country, setCountry] = useState("US");
   const [platform, setPlatform] = useState<string>("Genel");
   const [topN, setTopN] = useState("5");
+  const [category, setCategory] = useState("");
+  const [audience, setAudience] = useState("");
+  const [budget, setBudget] = useState("");
 
   const d = useProductDiscovery();
   const canSubmit = niche.trim().length >= 2 && !d.isStarting && !d.isRunning;
@@ -101,6 +104,11 @@ function DiscoverPage() {
       country,
       platform,
       topN: Number(topN),
+      // Hedef bağlamı AI kısa listesine ve 14 ajana taşınır; kaynak taraması
+      // yine nişi arar (brief ölçülmemiş veri uydurmaz).
+      category: category.trim() || undefined,
+      audience: audience.trim() || undefined,
+      budget: budget.trim() || undefined,
       // Arayüz dili hat boyunca taşınır: 14 ajanın gerekçeleri ve final kart
       // metni kullanıcının seçtiği dilde çıkar (bkz. lib/ai-language.ts).
       lang: getUiLang(),
@@ -193,6 +201,46 @@ function DiscoverPage() {
                 </Select>
               </div>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="finder-category">Kategori (opsiyonel)</Label>
+                <Input
+                  id="finder-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="Ev & Yaşam"
+                  maxLength={60}
+                  disabled={d.isRunning}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="finder-audience">Hedef kitle (opsiyonel)</Label>
+                <Input
+                  id="finder-audience"
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value)}
+                  placeholder="küçük dairede yaşayanlar"
+                  maxLength={120}
+                  disabled={d.isRunning}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="finder-budget">Başlangıç bütçesi (opsiyonel)</Label>
+                <Input
+                  id="finder-budget"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  placeholder="$500 - $2,000"
+                  maxLength={40}
+                  disabled={d.isRunning}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Bu brief yalnızca AI kısa listesi ve 14 ajanın puanlamasında kullanılır; kaynaklar yine
+              niş terimleriyle taranır ve ölçülmemiş veri üretilmez.
+            </p>
 
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={!canSubmit}>

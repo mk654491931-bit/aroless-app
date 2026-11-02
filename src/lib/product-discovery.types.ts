@@ -435,7 +435,7 @@ export const ProductDiscoveryInputSchema = z.object({
   niche: z.string().min(2).max(120),
   country: z.string().min(2).max(4).default("US"),
   platform: z.string().max(40).default("General"),
-  /** Kaç ürün istendi (nihai en iyi 5). */
+  /** Kaç ürün istendi (varsayılan 5, üst sınır 10). */
   topN: z.number().int().min(1).max(10).default(5),
   /**
    * Kullanıcının seçtiği arayüz dili (2 harf).
@@ -447,8 +447,50 @@ export const ProductDiscoveryInputSchema = z.object({
    * her adıma ulaşır.
    */
   lang: z.string().max(5).default("en"),
+  /**
+   * Ürün Bulucu'nun gelişmiş alanları — hattın AI seçim ve puanlama
+   * adımlarına "arama brief'i" olarak taşınır. OPSİYONELDİR: eski istemciler,
+   * eski QStash gövdeleri ve eski veritabanı kayıtları alanları göndermez;
+   * bu durumda hat eskisi gibi yalnız nişle çalışır.
+   */
+  category: z.string().max(60).optional(),
+  audience: z.string().max(120).optional(),
+  budget: z.string().max(40).optional(),
 });
 export type ProductDiscoveryInput = z.infer<typeof ProductDiscoveryInputSchema>;
+
+/**
+ * AI adımlarına giden kısa, insan-okur arama brief'i.
+ *
+ * NEDEN VAR: ana ekrandaki kategori/kitle/bütçe alanları yalnız klasik
+ * hatta kullanılıyordu; kanıtlı keşif hattı bu alanları hiç görmüyordu.
+ * Brief, kazıma sorgusunu DEĞİŞTİRMEZ (kaynaklar ürün terimleriyle aranır);
+ * yalnız kısa liste ve 14 ajanın seçim/puanlama gerekçesine hedef bağlamı
+ * ekler. Ölçülmemiş bir alan brief'e yazılmaz.
+ */
+export function discoveryBriefLine(input: Partial<ProductDiscoveryInput>): string {
+  const generic = new Set(["general", "genel", "any", "all", "tümü", "hepsi"]);
+  const useful = (value: unknown): string => {
+    const text = String(value ?? "").trim();
+    return text && !generic.has(text.toLowerCase()) ? text : "";
+  };
+  const parts: string[] = [];
+  const country = String(input.country ?? "").trim();
+  if (country) parts.push(`pazar ${country}`);
+  const platform = useful(input.platform);
+  if (platform) parts.push(`kanal ${platform}`);
+  const category = useful(input.category);
+  if (category) parts.push(`kategori ${category}`);
+  const audience = useful(input.audience);
+  if (audience) parts.push(`hedef kitle ${audience}`);
+  const budget = useful(input.budget);
+  if (budget) parts.push(`başlangıç bütçesi ${budget}`);
+  if (!parts.length) return "";
+  return (
+    `Arama brief'i — ${parts.join(" · ")}. ` +
+    "Seçim ve puanlamada bu hedefe uygunluğu dikkate al; ölçülmemiş veriyi uydurma."
+  );
+}
 
 /** Filtre istatistikleri — panelde "neden bu sayı?" sorusunu yanıtlar. */
 export const FilterStatsSchema = z.object({

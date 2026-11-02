@@ -59,12 +59,18 @@ import { reasonCopy } from "./product-discovery-reason";
 export const DISCOVERY_TOP_N = 75;
 
 /**
- * ADIM 4'ün üst sınırı: nihai 5 ürün.
+ * ADIM 4'ün VARSAYILAN hedefi: nihai 5 ürün (kullanıcı 10'a kadar isteyebilir).
  *
  * Aynı gerekçe `DISCOVERY_TOP_N` ile aynı: sayı gömülü halde birden çok
  * yere dağılmış olursa hat sözünü kendi büyüklüğüne göre tutar.
  */
 export const DISCOVERY_FINAL_N = 5;
+/**
+ * Kullanıcının isteyebileceği üst sınır. Varsayılan 5 kalır (mevcut sözleşme
+ * ve testler); `/discover` 8/10 seçtiğinde hat artık gerçekten o kadar ürün
+ * döndürür. `DISCOVERY_FINAL_N` yalnız varsayılandır, tavan değildir.
+ */
+export const DISCOVERY_MAX_FINAL_N = 10;
 
 /* ------------------------------------------- Nihai kalite ölçütleri (kapı) */
 
@@ -179,7 +185,7 @@ export function shouldRequireImages(
   return imaged >= threshold;
 }
 
-/* ------------------------------------ Nihai 5 ürünün sözleşmesi (top_products) */
+/* ------------------------------- Nihai ürünlerin sözleşmesi (top_products) */
 
 /**
  * `TopProductSchema` artık paylaşılan tipler katmanında tanımlıdır
@@ -201,12 +207,12 @@ export type { TopProduct };
  * GEREKÇEDİR — aşağıda `buildTopProducts` nasıl kurduğu yazılıdır.
  */
 export const TopProductsPayloadSchema = z.object({
-  top_products: z.array(TopProductSchema).max(DISCOVERY_FINAL_N),
+  top_products: z.array(TopProductSchema).max(DISCOVERY_MAX_FINAL_N),
 });
 export type TopProductsPayload = z.infer<typeof TopProductsPayloadSchema>;
 
 /**
- * Nihai 5 ürünü `top_products` sözleşmesine çevirir.
+ * Nihai ürünleri (varsayılan 5, üst sınır 10) `top_products` sözleşmesine çevirir.
  *
  * NEDEN ÜÇÜNCÜ BİR MODEL ÇAĞRISI YOK:
  *   Repo tasarımı ilkesi "$0 maliyet, AI yalnız iki yerde"dir (`gemini_shortlist`
@@ -251,7 +257,7 @@ export function buildTopProducts(
   lang: string = "tr",
 ): TopProductsPayload {
   const copy = reasonCopy(lang);
-  const taken = ranked.slice(0, Math.max(0, Math.min(limit, DISCOVERY_FINAL_N)));
+  const taken = ranked.slice(0, Math.max(0, Math.min(limit, DISCOVERY_MAX_FINAL_N)));
   const top_products = taken.map((p) => {
     const demand = p.signals?.demand ?? null;
     const margin = p.signals?.margin ?? null;
@@ -957,6 +963,8 @@ export async function runGeminiShortlistStep(
   ) => Promise<NormalizedProduct[]>,
   /** Kullanıcının seçtiği arayüz dili — modelin `reasoning` metni bu dilde çıkar. */
   lang?: string,
+  /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+  brief?: string,
 ): Promise<DiscoveryStepResult> {
   if (products.length === 0) {
     return {
@@ -976,7 +984,7 @@ export async function runGeminiShortlistStep(
   const selector =
     geminiSelect ??
     ((p: readonly NormalizedProduct[], n: string) =>
-      geminiShortlistSelector(p, n, undefined, lang));
+      geminiShortlistSelector(p, n, undefined, lang, brief));
   const {
     products: shortlist,
     via: shortlistVia,
@@ -1051,6 +1059,8 @@ export async function geminiShortlistSelector(
   deadlineAt?: number,
   /** Çıktı dili: kartta okunan gerekçe seçilen dilde yazılır. */
   lang?: string,
+  /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+  brief?: string,
 ): Promise<NormalizedProduct[]> {
   const { callAiMesh } = await import("./ai.server");
   // Tek import yüzeyi: AI seçim doğrulaması ORTAK ÇEKİRDEKTEN gelir (kimlik
@@ -1064,7 +1074,7 @@ export async function geminiShortlistSelector(
   // kayıyordu — yani Gemini hiçbir zaman seçim yapamıyordu.
   const candidates = products.slice(0, GEMINI_SHORTLIST_SIZE);
   const roster = candidates.map((p) => ({ productId: productIdOf(p), product: p }));
-  const prompt = buildShortlistPrompt(products, niche, lang);
+  const prompt = buildShortlistPrompt(products, niche, lang, brief);
 
   // `grounded=false`: aday listesi SABİT ve elimizde. Google Search grounding
   // yalnız gecikmeyi artırır ve modelin JSON dışında arama metni sarmalamasına
@@ -1170,6 +1180,8 @@ export function buildShortlistPrompt(
    * yazdığı `reasoning` (kart üzerinde okunan gerekçe) bu dilde üretilir.
    */
   lang?: string,
+  /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+  brief?: string,
 ): string {
   // LİSTEDE productId YAZIYOR — sözleşme buna bağlı. İstem "productId dön"
   // diyor, doğrulayıcı da girdideki `productIdOf(p)` ile eşleştiriyor; kimlik
@@ -1204,6 +1216,7 @@ export function buildShortlistPrompt(
     "- Yalnız aşağıdaki adaylardan birinin productId değerini kullan.",
     "- Yeni ürün üretme, listede olmayan kimlik yazma.",
     "- Fiyat, görsel, adres veya marka YAZMA; bunlar zaten ölçülmüştür.",
+    ...(brief ? ["", brief] : []),
     "",
     "YANITINI SADECE geçerli JSON olarak ver, başka hiçbir metin yazma:",
     '{"picks":[{"productId":"<listelenen kimlik>","score":0,"reasoning":"<kısa gerekçe>"}]}',
@@ -1374,7 +1387,7 @@ export function isWinnerWorthy(
 }
 
 /**
- * Uzlaşmaya göre nihai en iyi 5 ürünü seçer ve 'completed' durumunu verir.
+ * Uzlaşmaya göre nihai en iyi ürünleri (varsayılan 5) seçer ve 'completed' durumunu verir.
  *
  * KRİTİK (arayüzun gördüğü veri): `consensus` kaydı ürünün KENDİSİ değildir;
  * yalnız oy skorlarını taşır. Kullanıcıya ürünü göstermek için fiyat, marka,

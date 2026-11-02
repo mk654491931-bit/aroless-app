@@ -50,7 +50,9 @@ import { discoverySliceMs } from "@/lib/product-discovery-slices.server";
 import { LaunchReadinessSchema } from "@/lib/launch-readiness";
 import {
   ConsensusSchema,
+  ProductDiscoveryInputSchema,
   TopProductSchema,
+  discoveryBriefLine,
   type NormalizedProduct,
   type TopProduct,
 } from "@/lib/product-discovery.types";
@@ -255,14 +257,10 @@ function driverBudgetMs(): number {
   return Math.min(discoverySliceMs() * DRIVER_SLICE_COUNT, Math.max(MIN_SLICE_BUDGET_MS, usable));
 }
 
-const StartSchema = z.object({
-  niche: z.string().min(2).max(120),
-  country: z.string().min(2).max(4).default("US"),
-  platform: z.string().max(40).default("General"),
-  topN: z.number().int().min(1).max(10).default(5),
-  // Seçilen arayüz dili: hattın AI adımları sonuç metinlerini bu dilde üretir.
-  lang: z.string().max(5).default("en"),
-});
+// TEK KAYNAK: aynı şema QStash gövdesi, HTTP başlatma ucu ve sunucu
+// fonksiyonu tarafından kullanılır. Böylece yeni bir alan (kategori, hedef
+// kitle, bütçe) eklendiğinde biri güncellenip diğeri unutulamaz.
+const StartSchema = ProductDiscoveryInputSchema;
 
 const StatusSchema = z.object({ runId: z.string().uuid() });
 
@@ -444,10 +442,7 @@ export const startDiscoveryRun = createServerFn({ method: "POST" })
 
 /* ------------------------------------------- Ölçülmüş kazananlar (DB'siz) */
 
-const MeasuredInput = z.object({
-  niche: z.string().min(2).max(120),
-  country: z.string().min(2).max(4).default("US"),
-  platform: z.string().max(40).default("General"),
+const MeasuredInput = ProductDiscoveryInputSchema.extend({
   topN: z.number().int().min(3).max(10).default(5),
   /**
    * İstemci retry'ında AYNI değer gönderilir. Ölçülmüş arama 1 jetonluk
@@ -521,6 +516,7 @@ export const findMeasuredWinners = createServerFn({ method: "POST" })
         data.niche,
         data.topN,
         Date.now() + 12_000,
+        discoveryBriefLine(data),
       ).catch(() => null);
       const rows = measuredWinnerRows(
         (result.products ?? []) as NormalizedProduct[],

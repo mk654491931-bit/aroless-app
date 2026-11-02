@@ -125,12 +125,15 @@ export function buildAgentPrompt(
   niche: string,
   /** Çıktı dili — ajana "gerekçe yaz" denen `note` alanı bu dilde çıkar. */
   lang?: string,
+  /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+  brief?: string,
 ): string {
   const roster = products.slice(0, 40).map(candidateLine).join("\n");
   return [
     `Sen "${agent.name}" adlı bir e-ticaret analistisin. Görevin: ${agent.task}`,
     `Niş: "${niche}". Aşağıdaki ${Math.min(products.length, 40)} aday ürünü KENDİ KRİTERİNE GÖRE puanla.`,
     "Puan 0-100 olsun (50 = nötr, kanıt yoksa 50 ver; uydurma).",
+    ...(brief ? [brief] : []),
     "ÖLÇÜLEN sayıları kullan: satış hacmi, görüntülenme ve kaç kaynağın ürünü doğruladığı ayrım yaratır.",
     "Ölçülmüş satışı/görüntülenmesi yüksek ürünü ödüllendir; 'ölçülmedi' yazan alanı tahmin etme.",
     "Her satırda tek bir cümle gerekçe yaz (en fazla 12 kelime).",
@@ -192,7 +195,7 @@ export function parseAgentScores(
 export async function runCouncilWithAi(
   products: readonly NormalizedProduct[],
   niche: string,
-  opts: { call?: CouncilAiCall; deadlineAt?: number; lang?: string } = {},
+  opts: { call?: CouncilAiCall; deadlineAt?: number; lang?: string; brief?: string } = {},
 ): Promise<CouncilRunResult> {
   const startedAt = Date.now();
   // Bütçe yoksa varsayılan: Vercel Hobby adımı ~5 dk; konsey bunun içinde.
@@ -212,6 +215,7 @@ export async function runCouncilWithAi(
       state,
       sliceDeadlineAt: deadlineAt,
       lang: opts.lang,
+      brief: opts.brief,
     });
     if (!slice.partial) {
       return {
@@ -234,6 +238,7 @@ export async function runCouncilWithAi(
     sliceDeadlineAt: deadlineAt,
     force: true,
     lang: opts.lang,
+    brief: opts.brief,
   });
   return {
     consensus: forced.consensus,
@@ -421,6 +426,7 @@ async function runCouncilWave(args: {
   call: CouncilAiCall;
   deadlineAt: number;
   lang?: string;
+  brief?: string;
 }): Promise<Map<CouncilAgentKey, Scored>> {
   const settled = await Promise.allSettled(
     args.roles.map(async (agentKey) => {
@@ -434,7 +440,7 @@ async function runCouncilWave(args: {
       const left = args.deadlineAt - Date.now();
       if (left <= 0) throw new Error("timeout: council-wave");
       const raw = await withAiDeadline(
-        args.call(buildAgentPrompt(agent, args.products, args.niche, args.lang), args.deadlineAt),
+        args.call(buildAgentPrompt(agent, args.products, args.niche, args.lang, args.brief), args.deadlineAt),
         left,
         `council:${agentKey}`,
       );
@@ -492,6 +498,8 @@ export async function runCouncilSlice(
     minCallMs?: number;
     /** Çıktı dili — 14 ajanın gerekçe cümleleri bu dilde yazılır. */
     lang?: string;
+    /** Kategori/hedef kitle/bütçe gibi hedef bağlamı (opsiyonel). */
+    brief?: string;
   } = {},
 ): Promise<CouncilSliceResult> {
   const startedAt = Date.now();
@@ -556,6 +564,7 @@ export async function runCouncilSlice(
     call,
     deadlineAt: deadline,
     lang: opts.lang,
+    brief: opts.brief,
   });
   for (const [role, rows] of scored) scoresByAgent.set(role, rows);
   for (const role of wave) done.add(role);

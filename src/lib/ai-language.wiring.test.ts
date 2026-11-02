@@ -212,7 +212,11 @@ describe("dil zinciri — istemciden isteme", () => {
     const types = await read("src/lib/product-discovery.types.ts");
     expect(types).toContain('lang: z.string().max(5).default("en")');
     const fn = await read("src/lib/product-discovery.functions.ts");
-    expect(fn).toContain('lang: z.string().max(5).default("en")');
+    // Tek kaynak sözleşmesi: başlatma şeması ayrı kopya değil, paylaşılan
+    // `ProductDiscoveryInputSchema`dır. Böylece `lang` (ve yeni brief alanları)
+    // sunucu fonksiyonunda sessizce unutulamaz.
+    expect(fn).toContain("ProductDiscoveryInputSchema");
+    expect(fn).toContain("const StartSchema = ProductDiscoveryInputSchema");
   });
 
   it("adımlar dili kısa liste, konsey ve kazanan gerekçesine geçirir", async () => {

@@ -121,6 +121,37 @@ describe("final adımı ürünleri doğrudan çıkarır", () => {
     expect(payload.topProducts[0]!.title).toBe("Air Fryer 1");
   });
 
+  it("istenen 8 ürünü 5'te kırpmaz — /discover 8/10 seçimi gerçekten teslim edilir", async () => {
+    const batch = Array.from({ length: 10 }, (_, i) => candidate(i + 1, `fp-${i + 1}`));
+    const consensus = Array.from({ length: 10 }, (_, i) =>
+      consensusRow(i + 1, `fp-${i + 1}`),
+    );
+
+    const outcome = await executeProductDiscoveryStep({
+      step: "final",
+      runId: "run-1",
+      userId: "user-1",
+      input: { ...input, topN: 8 },
+      batch,
+      consensus,
+      deadlineAt: Date.now() + 10_000,
+    });
+
+    expect(outcome.ok).toBe(true);
+    const [, payload] = jobsMock.finishDiscoveryJob.mock.calls[0] as [
+      string,
+      {
+        products: NormalizedProduct[];
+        topProducts: { title: string }[];
+      },
+    ];
+    expect(payload.products).toHaveLength(8);
+    expect(payload.topProducts).toHaveLength(8);
+    expect(payload.topProducts.map((p) => p.title)).toEqual(
+      Array.from({ length: 8 }, (_, i) => `Air Fryer ${i + 1}`),
+    );
+  });
+
   it("normal parmak izli koşuda sözleşme değişmez", async () => {
     const batch = Array.from({ length: 3 }, (_, i) => candidate(i + 1, `fp-${i + 1}`));
     const consensus = Array.from({ length: 3 }, (_, i) => consensusRow(i + 1, `fp-${i + 1}`));
