@@ -378,6 +378,30 @@ describe("deterministic pre-scoring", () => {
     expect(hot!.signals.demand).toBeGreaterThan(cold!.signals.demand);
   });
 
+  it("ölçülen SATIŞ HACMİ talep sinyalini kohort içinde yükseltir", () => {
+    // AliExpress'in açıkça yazdığı "N sold" ölçülmüş bir talep kanıtıdır.
+    // Aynı fiyat/puanla yalnız satış hacmi farklı: 1.200 satan ürün, 12 satan
+    // üründen daha yüksek talep sinyali almalı.
+    const base = { notes: "", priceUsd: 59.9, rating: 4.4, ratingCount: 500 };
+    const [hot, cold] = scoreDeterministically(
+      [
+        normalizeRaw(raw({ ...base, title: "Air Fryer Pro X", salesVolume: 1200 })),
+        normalizeRaw(raw({ ...base, title: "Air Fryer Lite Y", salesVolume: 12 })),
+      ],
+      { nicheMomentumPct: null, nicheEngagement: 0 },
+    );
+    expect(hot!.signals.demand).toBeGreaterThan(cold!.signals.demand);
+    expect(hot!.signals.demand).toBeGreaterThan(50);
+  });
+
+  it("satış hacmi ÖLÇÜLMEDİYSE talep sinyali nötr kalır", () => {
+    const [unknown] = scoreDeterministically(
+      [normalizeRaw(raw({ notes: "", salesVolume: null }))],
+      { nicheMomentumPct: null, nicheEngagement: 0 },
+    );
+    expect(unknown!.signals.demand).toBe(50);
+  });
+
   it("görüntülenme ÖLÇÜLMEDİYSE talep sinyali nötr kalır (0 sayılmaz)", () => {
     // "kimse görmedi" ile "ölçemedik" farklıdır. Ölçülmemiş satır 0
     // puanlanırsa gerçekten ilgi görmeyen ürünle aynı sınıfa düşer.

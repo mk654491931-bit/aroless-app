@@ -269,7 +269,8 @@ const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
  * Talep sinyali (0-100).
  *
  * Ölçülebilir kanıt: niş etkileşim yoğunluğu (upvote+yorum), GitHub yıldız,
- * Wikipedia momentum VE perakendede 90 günlük görüntülenme. Kanıt YOKSA 50
+ * Wikipedia momentum, pazaryerinin açıkça yazdığı satış hacmi ("N sold") VE
+ * perakendede 90 günlük görüntülenme. Kanıt YOKSA 50
  * (nötr) döner — 0 değil, çünkü "ilgi yok" demek "ölçemedim" demek değildir
  * ve 0 puan ürünleri haksız cezalandırır.
  *
@@ -283,6 +284,7 @@ function demandScore(
   product: NormalizedProduct,
   context: DemandContext,
   viewedMax: number,
+  salesMax: number,
 ): number {
   const signals: number[] = [];
   // Wikipedia momentum en güçlü talep göstergesidir. `null` = ölçülmedi;
@@ -300,6 +302,19 @@ function demandScore(
   // yarısı → 50, yok denecek kadar az → 25.
   if (product.viewed90d !== null && viewedMax > 0) {
     signals.push(50 + clamp01(product.viewed90d / viewedMax) * 50 - 25);
+  }
+  // SATIŞ HACMİ — pazaryerinin açıkça yazdığı "N sold" (AliExpress).
+  //
+  // ÖLÇÜLEN BOŞLUK: `salesVolume` bütünlük puanında "ölçülmüş talep" sayılıyor
+  // ama talep sinyaline HİÇ girmiyordu; yani 10.000 satmış ürün ile 1 satmış
+  // ürün aynı 50 puanı alabiliyordu. Burada kohort içindeki log oranı kullanılır:
+  // satış hacmi doğrusal değil, katlanarak büyür. Küçük hacimlerin tek başına
+  // güçlü sinyal olmaması için log tabanlı bir güven katsayısı vardır (50 satış
+  // ve üzeri tam güven). Ölçülmemiş (null) satır bu sinyali HİÇ üretmez.
+  if (typeof product.salesVolume === "number" && product.salesVolume > 0 && salesMax > 0) {
+    const relative = clamp01(Math.log1p(product.salesVolume) / Math.log1p(salesMax));
+    const confidence = clamp01(Math.log1p(product.salesVolume) / Math.log1p(50));
+    signals.push(50 + (relative * 50 - 25) * confidence);
   }
   return signals.length ? Math.round(signals.reduce((a, b) => a + b, 0) / signals.length) : 50;
 }
@@ -376,9 +391,12 @@ export function scoreDeterministically(
   // Görüntülenme yalnızca aynı koşu içinde karşılaştırılabilir; bu yüzden
   // normalizasyon tabanı burada, TÜM adaylar görüldükten sonra hesaplanır.
   const viewedMax = products.reduce((max, p) => Math.max(max, p.viewed90d ?? 0), 0);
+  // Satış hacmi de yalnız aynı koşuda karşılaştırılabilir; "N sold" farklı
+  // pazaryerlerinde farklı zaman pencerelerini kapsayabilir.
+  const salesMax = products.reduce((max, p) => Math.max(max, p.salesVolume ?? 0), 0);
   return products.map((product) => {
     const signals = {
-      demand: demandScore(product, context, viewedMax),
+      demand: demandScore(product, context, viewedMax, salesMax),
       competition: competitionScore(product, products),
       margin: marginScore(product.priceUsd),
       rating: ratingScore(product.rating, product.ratingCount),

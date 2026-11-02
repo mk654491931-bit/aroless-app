@@ -57,6 +57,15 @@ const READER = "https://r.jina.ai/";
  * (bkz. `priceStamp`), böylece arayüz "hangi ana ait fiyat" sorusunu yanıtlar.
  */
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+/**
+ * BOŞ SONUÇ ÖNBELLEĞİ — 3 saat değil 15 dakika.
+ *
+ * NEDEN: ücretsiz Jina katmanı arama başına ~57K token harcıyor. Aynı niş
+ * "sonuç yok" döndürdüğünde her tekrar arama kotayı yeniden yakıyordu. Kısa
+ * negatif önbellek bunu durdurur; 15 dakika sonra kaynak yeniden denenir, yani
+ * geçici engel kalıcı bir "boş" sonucuna dönüşmez.
+ */
+const EMPTY_CACHE_TTL_MS = 15 * 60 * 1000;
 const PER_SITE_TIMEOUT_MS = 8_500;
 /** Tarayıcı motoru hazır-HTML motorundan yavaş: ölçülen 0,4–13 sn → 20 sn tavan. */
 const PER_SITE_BROWSER_TIMEOUT_MS = 20_000;
@@ -1385,19 +1394,46 @@ export function dedupeRows(rows: ReaderRow[]): ReaderRow[] {
   return out;
 }
 
+/**
+ * Ücretsiz okuyucu önbelleği — TEK UÇUŞ (single-flight) + negatif önbellek.
+ *
+ * NEDEN `cached()` KULLANILIR: aynı nişi iki sekme/iki kullanıcı aynı anda
+ * ararsa eski "oku, yoksa çek, yaz" akışı iki kez Jina'ya gidiyor ve ücretsiz
+ * token kotasını ikiye katlıyordu. `cached()` uçuştaki aynı anahtarı paylaşır;
+ * ikinci istek ağa çıkmaz. Boş sonuç ise KISA süreliğine yazılır: hemen
+ * tekrar denemek kotayı boşa yakar, ama 15 dakika sonra taze deneme yapılır.
+ */
+export async function cachedReaderRows(
+  scope: string,
+  parts: unknown[],
+  load: () => Promise<RawProduct[]>,
+  opts: { emptyTtlMs?: number } = {},
+): Promise<RawProduct[]> {
+  const { cached, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const { data, cache_hit } = await cached<RawProduct[]>(scope, parts, load, CACHE_TTL_MS);
+  if (!cache_hit && data.length === 0) {
+    // `cached()` boş listeyi 3 saatlik TTL ile yazdı; bu kaydı kısa ömürle
+    // değiştir. Böylece "bu nişte ürün yok" 3 saat boyunca gerçek gibi kalmaz.
+    const key = await cacheKey(scope, parts);
+    await cacheSet(key, scope, data, opts.emptyTtlMs ?? EMPTY_CACHE_TTL_MS).catch(() => {});
+  }
+  return data;
+}
+
 export async function scrapeTrReader(niche: string): Promise<RawProduct[]> {
   const q = String(niche ?? "")
     .trim()
     .slice(0, 80);
   if (!q) return [];
-  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
   // v2: n11 satırları geri geldi (browser motoru). v1 kayıtları yalnız
   // Hepsiburada taşıyordu; anahtar sürümü artırılmazsa 3 saat boyunca eski,
   // eksik havuz servis edilirdi.
-  const key = await cacheKey("tr-reader:v2", [q.toLocaleLowerCase("tr-TR")]);
-  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
-  if (hit && hit.length) return hit;
+  return cachedReaderRows("tr-reader:v2", [q.toLocaleLowerCase("tr-TR")], () =>
+    loadTrReader(q),
+  );
+}
 
+async function loadTrReader(q: string): Promise<RawProduct[]> {
   const enc = encodeURIComponent(q);
   // MOTOR SEÇİMİ — ÖLÇÜLDÜ (2026-10-12, iki ayrı gün):
   //   n11 önbellekli sayfa: `direct` 200 / 58.025 karakter (tarayıcı ile AYNI)
@@ -1487,7 +1523,6 @@ export async function scrapeTrReader(niche: string): Promise<RawProduct[]> {
         .slice(0, 200),
     });
   }
-  if (products.length) await cacheSet(key, "tr-reader:v2", products, CACHE_TTL_MS).catch(() => {});
   return products;
 }
 
@@ -1506,13 +1541,14 @@ export async function scrapeAliExpress(niche: string): Promise<RawProduct[]> {
     .trim()
     .slice(0, 80);
   if (!q) return [];
-  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
   // v2: satır notuna fiyat ÖLÇÜM ZAMANI eklendi ve "son 90 günün en düşük
   // fiyatı" bayrağı taşınıyor; v1 kayıtları bu kanıtı taşımıyor.
-  const key = await cacheKey("ali-reader:v2", [q.toLocaleLowerCase("tr-TR")]);
-  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
-  if (hit && hit.length) return hit;
+  return cachedReaderRows("ali-reader:v2", [q.toLocaleLowerCase("tr-TR")], () =>
+    loadAliExpress(q),
+  );
+}
 
+async function loadAliExpress(q: string): Promise<RawProduct[]> {
   const slug = encodeURIComponent(q.replace(/\s+/g, "-"));
   const pages = [
     `https://www.aliexpress.com/w/wholesale-${slug}.html`,
@@ -1582,7 +1618,6 @@ export async function scrapeAliExpress(niche: string): Promise<RawProduct[]> {
         .slice(0, 200),
     });
   }
-  if (products.length) await cacheSet(key, "ali-reader:v2", products, CACHE_TTL_MS).catch(() => {});
   return products;
 }
 
@@ -1601,11 +1636,12 @@ export async function scrapeNewegg(niche: string): Promise<RawProduct[]> {
     .trim()
     .slice(0, 80);
   if (!q) return [];
-  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
-  const key = await cacheKey("newegg-reader:v1", [q.toLocaleLowerCase("tr-TR")]);
-  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
-  if (hit && hit.length) return hit;
+  return cachedReaderRows("newegg-reader:v1", [q.toLocaleLowerCase("tr-TR")], () =>
+    loadNewegg(q),
+  );
+}
 
+async function loadNewegg(q: string): Promise<RawProduct[]> {
   const slug = encodeURIComponent(q.replace(/\s+/g, "+"));
   const pages = [
     `https://www.newegg.com/p/pl?d=${slug}`,
@@ -1679,8 +1715,6 @@ export async function scrapeNewegg(niche: string): Promise<RawProduct[]> {
         .slice(0, 200),
     });
   }
-  if (products.length)
-    await cacheSet(key, "newegg-reader:v1", products, CACHE_TTL_MS).catch(() => {});
   return products;
 }
 
@@ -1754,11 +1788,13 @@ export async function scrapeLocalMarketplace(
     .trim()
     .slice(0, 80);
   if (!q) return [];
-  const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
-  const key = await cacheKey(`${config.source}:v1`, [q.toLocaleLowerCase("tr-TR")]);
-  const hit = await cacheGet<RawProduct[]>(key).catch(() => null);
-  if (hit && hit.length) return hit;
+  return cachedReaderRows(`${config.source}:v1`, [q.toLocaleLowerCase("tr-TR")], () =>
+    loadLocalMarketplace(site, q),
+  );
+}
 
+async function loadLocalMarketplace(site: LocalSite, q: string): Promise<RawProduct[]> {
+  const config = LOCAL_SITES[site];
   const url = config.pageUrl(encodeURIComponent(q));
   const settled = await readPageWithEscalation(url, PER_SITE_TIMEOUT_MS)
     .then(({ text }) => config.parse(text))
@@ -1815,9 +1851,6 @@ export async function scrapeLocalMarketplace(
         .join(" · ")
         .slice(0, 200),
     });
-  }
-  if (products.length) {
-    await cacheSet(key, `${config.source}:v1`, products, CACHE_TTL_MS).catch(() => {});
   }
   return products;
 }
