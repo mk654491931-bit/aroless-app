@@ -1,10 +1,10 @@
 /**
  * ARAÇ KATALOĞU SÖZLEŞMESİ.
  *
- * NEDEN TEST: public /tools sayfası 22 aracın tamamını tanıtıyor. Bu liste elle
+ * NEDEN TEST: public /tools sayfası 23 aracın tamamını tanıtıyor. Bu liste elle
  * tutulsa, sunucuya yeni bir `ToolId` eklendiğinde (ya da biri kaldırıldığında)
- * sayfa sessizce eksik/yanlış tanıtım yapardı — pazarlama sayfasında "22 araç"
- * yazarken 23 aracın olması gibi. Test, katalog ile `TOOL_PROVIDER` arasındaki
+ * sayfa sessizce eksik/yanlış tanıtım yapardı — pazarlama sayfasında "23 araç"
+ * yazarken 24 aracın olması gibi. Test, katalog ile `TOOL_PROVIDER` arasındaki
  * kümeyi iki yönlü karşılaştırır.
  *
  * İkinci sözleşme: her aracın hedef rotası gerçek bir rotaya işaret etmeli.

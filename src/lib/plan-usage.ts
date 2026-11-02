@@ -39,7 +39,7 @@ export const USAGE_KIND_META: readonly UsageKindMeta[] = [
     label: "Bulucu + derin analiz",
     hint: "Ürün bulucu araması ve derin ürün analizi",
   },
-  { kind: "toolRuns", label: "AI araç", hint: "22 AI aracının her çalıştırması" },
+  { kind: "toolRuns", label: "AI araç", hint: "23 AI aracının her çalıştırması" },
   { kind: "councilRuns", label: "AI Konsey", hint: "14 ajanlı konsey oturumu" },
   { kind: "radarScans", label: "Trend radar", hint: "Trend radar taraması" },
 ];
@@ -48,7 +48,7 @@ export const USAGE_KIND_META: readonly UsageKindMeta[] = [
  * Bir AI işini hangi aylık hakka yazar?
  *
  * EŞLEME GEREKÇESİ (plans.ts ile birebir):
- *   • `tool:<id>`      → AI araç çalıştırma (22 araç, konsey aracı dahil)
+ *   • `tool:<id>`      → AI araç çalıştırma (23 araç, konsey aracı dahil)
  *   • `council`        → AI Konsey oturumu
  *   • `agent-pipeline` → Bulucu + derin analiz (ürün keşfi ve Velora derin hattı;
  *                        plans.ts bu havuzu "ürün bulucu / derin analiz kredisi"

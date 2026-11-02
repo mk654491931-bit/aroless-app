@@ -80,7 +80,8 @@ export const TOOL_HUBS: ToolHub[] = [
     id: "growth",
     emoji: "🚀",
     title: "Growth & Market AI",
-    summary: "Ürünü üç motorla puanla, sepeti büyüt, stok tarihini kaçırma, rakip reklamını çöz.",
+    summary:
+      "Ürünü altı AI motoruyla puanla, 90 günlük plana bağla, sepeti büyüt, stok tarihini kaçırma, rakip reklamını çöz.",
     route: "/tools/growth",
     tools: [
       { id: "consensus", label: "Multi-AI Consensus Score" },
@@ -89,6 +90,7 @@ export const TOOL_HUBS: ToolHub[] = [
       { id: "arbitrage-matrix", label: "Arbitrage Matrix" },
       { id: "ad-hook-extractor", label: "Competitor Ad Hook Extractor" },
       { id: "competitor-intel", label: "Rakip İlan İstihbaratı" },
+      { id: "growth-plan", label: "90 Günlük Büyüme Planı" },
     ],
   },
   {

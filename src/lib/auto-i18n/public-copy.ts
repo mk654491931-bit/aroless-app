@@ -1076,13 +1076,14 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "IA croissance et marché",
     ar: "ذكاء النمو والسوق",
   },
-  "Ürünü üç motorla puanla, sepeti büyüt, stok tarihini kaçırma, rakip reklamını çöz.": {
-    en: "Score the product with three engines, grow the basket, keep track of stock dates and decode competitor ads.",
-    es: "Puntúa el producto con tres motores, amplía el carrito, no pierdas las fechas de stock y descifra la publicidad rival.",
-    de: "Bewerte das Produkt mit drei Motoren, vergrößere den Warenkorb, verpasse keine Bestelltermine und entschlüssele Konkurrenzwerbung.",
-    fr: "Notez le produit avec trois moteurs, augmentez le panier, ne manquez aucune date de stock et décryptez la publicité concurrente.",
-    ar: "قيّم المنتج بثلاثة محركات، وكبّر السلة، ولا تفوّت مواعيد المخزون، وفكّك إعلانات المنافسين.",
-  },
+  "Ürünü altı AI motoruyla puanla, 90 günlük plana bağla, sepeti büyüt, stok tarihini kaçırma, rakip reklamını çöz.":
+    {
+      en: "Score the product with six AI engines, turn it into a 90-day plan, grow the basket, keep track of stock dates and decode competitor ads.",
+      es: "Puntúa el producto con seis motores de IA, conviértelo en un plan de 90 días, amplía el carrito, no pierdas las fechas de stock y descifra la publicidad rival.",
+      de: "Bewerte das Produkt mit sechs KI-Motoren, mache daraus einen 90-Tage-Plan, vergrößere den Warenkorb, verpasse keine Bestelltermine und entschlüssele Konkurrenzwerbung.",
+      fr: "Notez le produit avec six moteurs d'IA, transformez-le en plan de 90 jours, augmentez le panier, ne manquez aucune date de stock et décryptez la publicité concurrente.",
+      ar: "قيّم المنتج بستة محركات ذكاء اصطناعي، وحوّله إلى خطة 90 يومًا، وكبّر السلة، ولا تفوّت مواعيد المخزون، وفكّك إعلانات المنافسين.",
+    },
   "Listing & Conversion Studio": {
     en: "Listing & Conversion Studio",
     es: "Estudio de listing y conversión",
@@ -1230,6 +1231,13 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     de: "Wettbewerbs-Listing-Intelligence",
     fr: "Veille sur les annonces concurrentes",
     ar: "استخبارات إعلانات المنافسين",
+  },
+  "90 Günlük Büyüme Planı": {
+    en: "90-Day Growth Plan",
+    es: "Plan de crecimiento de 90 días",
+    de: "90-Tage-Wachstumsplan",
+    fr: "Plan de croissance sur 90 jours",
+    ar: "خطة نمو لمدة 90 يومًا",
   },
   "Listing SEO Optimizer": {
     en: "Listing SEO Optimizer",

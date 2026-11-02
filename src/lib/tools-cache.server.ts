@@ -63,6 +63,7 @@ export const TOOL_CACHE_TTL_MS = {
   "hs-classifier": TOOL_CACHE_TIERS.market,
   "compliance-check": TOOL_CACHE_TIERS.market,
   "competitor-intel": TOOL_CACHE_TIERS.market,
+  "growth-plan": TOOL_CACHE_TIERS.market,
   // --- YAPISAL ---
   "supplier-negotiator": TOOL_CACHE_TIERS.structural,
   "offer-analyzer": TOOL_CACHE_TIERS.structural,

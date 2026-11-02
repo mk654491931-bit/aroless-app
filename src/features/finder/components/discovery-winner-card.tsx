@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { AlertTriangle, ExternalLink, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
@@ -308,16 +309,25 @@ export function DiscoveryWinnerCard({
             </span>
           )}
         </div>
-        {winner.url && (
-          <a
-            href={winner.url}
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex items-center gap-3">
+          <Link
+            to="/tools/growth"
+            search={{ product: winner.name }}
             className="inline-flex items-center gap-1 text-primary hover:underline"
           >
-            Kaynağa git <ExternalLink className="size-3" />
-          </a>
-        )}
+            <Rocket className="size-3" /> 90 günlük plan
+          </Link>
+          {winner.url && (
+            <a
+              href={winner.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Kaynağa git <ExternalLink className="size-3" />
+            </a>
+          )}
+        </div>
       </footer>
     </article>
   );

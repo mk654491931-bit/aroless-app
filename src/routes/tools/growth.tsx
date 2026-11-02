@@ -12,6 +12,7 @@ import {
   Loader2,
   Sparkles,
   Swords,
+  Target,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,18 +26,23 @@ import { apiFetch } from "@/lib/api-client";
 
 export const Route = createFileRoute("/tools/growth")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>) => {
+    const product = typeof s["product"] === "string" ? s["product"].trim().slice(0, 120) : "";
+    return product ? { product } : {};
+  },
   head: () => ({
     meta: [
       { title: "Growth & Market AI — Aroless" },
       {
         name: "description",
         content:
-          "Multi-AI consensus scoring, bundle AOV booster, lead-time countdown, cross-border arbitrage matrix and competitor ad hook extraction.",
+          "Six-engine AI consensus scoring, a 90-day growth plan, bundle AOV booster, lead-time countdown, cross-border arbitrage matrix and competitor ad hook extraction.",
       },
       { property: "og:title", content: "Growth & Market AI — Aroless" },
       {
         property: "og:description",
-        content: "Three AI engines score your product and map your growth moves.",
+        content:
+          "Six configured AI engines score your product and turn it into a 90-day growth plan.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -198,8 +204,8 @@ function ConsensusCard() {
             <div className="space-y-2 text-xs text-muted-foreground">
               {(data.results?.length
                 ? data.results
-                : [data.gemini, data.groq, data.openrouter, data.lovable].filter(
-                    (e): e is Engine => Boolean(e),
+                : [data.gemini, data.groq, data.openrouter, data.lovable].filter((e): e is Engine =>
+                    Boolean(e),
                   )
               ).map((engine) => (
                 <p key={engine.provider ?? engine.note}>
@@ -232,8 +238,8 @@ function ConsensusCard() {
         <div className="flex flex-wrap items-center justify-center gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
           {(data?.results?.length
             ? data.results
-            : [data?.gemini, data?.groq, data?.openrouter, data?.lovable].filter(
-                (e): e is Engine => Boolean(e),
+            : [data?.gemini, data?.groq, data?.openrouter, data?.lovable].filter((e): e is Engine =>
+                Boolean(e),
               )
           ).map((engine) => (
             <Gauge360
@@ -253,7 +259,82 @@ function ConsensusCard() {
   );
 }
 
+function GrowthPlanCard({ initialProduct }: { initialProduct?: string }) {
+  const [input, setInput] = useState({
+    product: initialProduct ?? "",
+    country: "US",
+    channel: "Amazon US",
+    price: "39.99",
+    cost: "8.50",
+    budget: "1500",
+    goal: "90 günde kârlılığı doğrula ve günlük 10 siparişe çık",
+  });
+
+  return (
+    <div id="growth-plan" className="scroll-mt-24">
+      <ToolCard
+        icon={Target}
+        title="90 Günlük Büyüme Planı"
+        description="Ürünün birim ekonomisini, kanal maliyetlerini ve reklam bütçesini tek plana bağlar; 0-30, 31-60 ve 61-90 gün için ölçülebilir aksiyonlar üretir."
+        runLabel="90 Günlük Planı Çıkar"
+        onRun={() => callTool("growth-plan", input)}
+      >
+        <Field label="Ürün">
+          <Input
+            value={input.product}
+            onChange={(e) => setInput({ ...input, product: e.target.value })}
+            placeholder="Pilates minderi"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Pazar">
+            <Input
+              value={input.country}
+              onChange={(e) => setInput({ ...input, country: e.target.value })}
+            />
+          </Field>
+          <Field label="Kanal">
+            <Input
+              value={input.channel}
+              onChange={(e) => setInput({ ...input, channel: e.target.value })}
+            />
+          </Field>
+          <Field label="Satış fiyatı ($)">
+            <Input
+              type="number"
+              value={input.price}
+              onChange={(e) => setInput({ ...input, price: e.target.value })}
+            />
+          </Field>
+          <Field label="Landed maliyet ($)">
+            <Input
+              type="number"
+              value={input.cost}
+              onChange={(e) => setInput({ ...input, cost: e.target.value })}
+            />
+          </Field>
+          <Field label="Aylık reklam bütçesi ($)">
+            <Input
+              type="number"
+              value={input.budget}
+              onChange={(e) => setInput({ ...input, budget: e.target.value })}
+            />
+          </Field>
+          <Field label="90 günlük hedef">
+            <Input
+              value={input.goal}
+              onChange={(e) => setInput({ ...input, goal: e.target.value })}
+              placeholder="Günlük 10 sipariş, %25 net marj"
+            />
+          </Field>
+        </div>
+      </ToolCard>
+    </div>
+  );
+}
+
 function GrowthHub() {
+  const search = Route.useSearch();
   const today = new Date().toISOString().slice(0, 10);
   const [bundle, setBundle] = useState({ product: "", price: "39.99", channel: "Amazon US" });
   const [lead, setLead] = useState({
@@ -278,9 +359,11 @@ function GrowthHub() {
     <HubShell
       emoji="🚀"
       title="Growth & Market AI"
-      subtitle="Ürünü üç motorla puanla, sepeti büyüt, stok tarihini kaçırma ve rakibin reklam kancasını çöz."
+      subtitle="Ürünü altı AI motoruyla puanla, 90 günlük büyüme planına bağla, sepeti büyüt, stok tarihini kaçırma ve rakibin reklam kancasını çöz."
     >
       <ConsensusCard />
+
+      <GrowthPlanCard initialProduct={search.product} />
 
       <ToolCard
         icon={PackagePlus}

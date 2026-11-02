@@ -1,4 +1,4 @@
-// Server-only prompt builders for the 22 Aroless tools.
+// Server-only prompt builders for the 23 Aroless tools.
 import type { Provider } from "./tools-ai.server";
 
 export type ToolId =
@@ -23,6 +23,7 @@ export type ToolId =
   | "hs-classifier"
   | "compliance-check"
   | "competitor-intel"
+  | "growth-plan"
   | "news";
 
 type Ctx = Record<string, string>;
@@ -66,6 +67,7 @@ export const TOOL_PROVIDER: Record<ToolId, Provider> = {
   "hs-classifier": "gemini",
   "compliance-check": "gemini",
   "competitor-intel": "openrouter",
+  "growth-plan": "gemini",
   news: "gemini",
 };
 
@@ -200,6 +202,11 @@ Bu ürünün o pazaryerinde SATIŞA UYGUN olup olmadığını denetle: kısıtl�
       return `${BASE}
 Rakip ürün/ilan: ${f(c, "competitor")} | Kanıt (fiyat/BSR/yorum/kupon metni): ${f(c, "evidence")} | Kategori: ${f(c, "category", "-")} | Bizim landed maliyetimiz: $${f(c, "cost", "bilinmiyor")} | Hedef pazar yeri: ${f(c, "channel", "Amazon US")}
 Bu rakibi parçala: fiyat merdiveni ve kampanya/kupon deseni, yorum sayısı-kalitesi ve tekrarlayan 1-2 yıldızlı şikâyetler, görsel/başlık/bullet zayıflıkları, varyasyon ve bundle boşlukları, teslim süresi ve stok davranışı, kırılabilir savunma noktaları. Ardından onları fiyat, ürün iyileştirmesi, paket, görsel ve anahtar kelime eksenlerinde nasıl yeneceğimizi SOMUT hamlelerle yaz. Fiyat kırarak girmek yalnızca matematikle savunulabiliyorsa önerilsin. metrics: Fiyat boşluğu $, Zayıf nokta sayısı, Önerilen giriş fiyatı (tone action), Tahmini kazanma süresi. table: ["Fırsat","Rakip durumu","Bizim hamle","Beklenen etki"]. bullets: 90 günlük saldırı sırası ve kaçınılacak tuzaklar.`;
+
+    case "growth-plan":
+      return `${BASE}
+Ürün: ${f(c, "product")} | Pazar: ${f(c, "country", "US")} | Kanal: ${f(c, "channel", "Amazon US")} | Satış fiyatı: $${f(c, "price", "bilinmiyor")} | Landed maliyet: $${f(c, "cost", "bilinmiyor")} | Aylık reklam bütçesi: $${f(c, "budget", "bilinmiyor")} | 90 günlük hedef: ${f(c, "goal", "kârlılığı doğrulamak")}
+Bu ürün için 90 günlük, UYGULANABİLİR bir büyüme planı çıkar. Önce bugünkü birim ekonomisini kur: kanal komisyonu, fulfillment, iade payı, reklam/CPI, ödeme ve vergi. Sonra hedefe ulaşmak için gereken günlük satış adedi, başabaş ROAS/CPA ve nakit ihtiyacını hesapla. Planı 0-30, 31-60 ve 61-90 gün olarak üç faza ayır; her fazda 3-5 somut aksiyon, bütçe, sorumlu rol ve ölçülecek tek bir KPI yaz. Ürünü test etmek için en hızlı doğrulama deneyini (kreatif hook testi, fiyat testi, bundle testi veya ön sipariş) tanımla. En riskli 3 varsayımı ve her birini en ucuz nasıl çözeceğini yaz. Genel tavsiye verme; her satır bu ürüne özgü ve rakamlı olsun. metrics: 90 günlük net kâr bandı (tone profit), Gereken günlük satış, Başabaş ROAS (tone warning), İlk 30 gün bütçesi. table: ["Faz","Aksiyon","Bütçe","KPI","Hedef"] en az 10 satır. bullets: kanal/teklif/pricing hamleleri. risks: 90 günü batırabilecek üç risk ve erken uyarı eşiği. actions: bu hafta başlayacak 4-6 adım. assumptions: ölçülmesi gereken 3-4 varsayım. verdict: "GİRİLİR / TEST ET / KAÇIN" + tek sayı.`;
 
     case "consensus":
       return `${BASE}

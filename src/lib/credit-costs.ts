@@ -3,7 +3,7 @@
  *
  * NEDEN GEREKLİ: Bu üründe tükenmesi en kolay kaynak AI kotasıdır ve her AI
  * çağrısı ya para (sağlayıcı kotası) ya da kullanıcının aylık hakkını harcar.
- * Önceden yalnızca ÜRÜN BULUCU ve KONSEY jeton düşüyordu; 22 araç, 14 ajanlı
+ * Önceden yalnızca ÜRÜN BULUCU ve KONSEY jeton düşüyordu; 23 araç, 14 ajanlı
  * Velora hattı ve trend analizi **tamamen ücretsiz** çalışıyordu — yani:
  *  1. sunucu maliyeti karşılıksız kalıyordu,
  *  2. aynı kullanıcı sınırsız kullanıp anahtar havuzunu yakabiliyordu,
@@ -16,8 +16,8 @@
  *  - Derinlik farkı jetonla değil PAKET KOTALARIYLA ölçülür (`plans.ts`:
  *    toolRuns / councilRuns / radarScans). Bu yüzden tek tıklamalık her AI işi
  *    1 jetondur — arayüzde, veritabanında ve burada aynı sayı konuşulur.
- *  - TEK İSTİSNA `consensus`: bir tıklamada 4 bağımsız motor + sentez koşar,
- *    yani 2 jeton. Arayüz bunu "4 motor · 2 jeton" diye açıkça yazar.
+ *  - TEK İSTİSNA `consensus`: bir tıklamada 6 bağımsız motor + sentez koşar,
+ *    yani 2 jeton. Arayüz bunu "çok motorlu · 2 jeton" diye açıkça yazar.
  */
 
 import type { ToolId } from "./tools-prompts.server";
@@ -63,6 +63,7 @@ export const TOOL_CREDIT_COSTS = {
   "hs-classifier": 1,
   "compliance-check": 1,
   "competitor-intel": 1,
+  "growth-plan": 1,
   // --- ağır: 4 motor BAĞIMSIZ puanlar + karşılaştırma ---
   consensus: 2,
 } satisfies Record<ToolId, number>;

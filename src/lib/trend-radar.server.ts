@@ -9,7 +9,21 @@
 // Every source degrades gracefully — a dead source reports `error` status and
 // the pipeline keeps working with the remaining ones.
 // ============================================================================
-import { callGemini, callGroq, callLovableAI, extractJson } from "./ai.server";
+import {
+  callGemini,
+  callGroq,
+  callLovableAI,
+  callSweepProvider,
+  extractJson,
+  hasGateway,
+  withDeadline,
+} from "./ai.server";
+import {
+  poolGroupAvailable,
+  poolHealthSummary,
+  runPoolWithFailover,
+  type PoolGroup,
+} from "./ai-pool.server";
 import { callOpenRouter } from "./tools-ai.server";
 
 export type TrendSource = "Google" | "Amazon" | "TikTok" | "Yandex" | "RSS" | "GitHub";
@@ -495,6 +509,81 @@ export type AiSynthesis = {
 
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 
+/**
+ * Trend adlarını kaynaklar arasında eşleştirmek için kararlı anahtar.
+ * Noktalama/büyük-küçük harf farkı aynı ürünü iki ayrı sinyal gibi göstermesin.
+ */
+export function trendKey(name: string): string {
+  return String(name ?? "")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * AI'ya giden sinyalleri tekrar etmeden hazırlar.
+ *
+ * ÖLÇÜLEN SORUN: aynı ürün Google + TikTok + Amazon'da ayrı satırlar olarak
+ * gidince 70 satırlık bağlamın büyük kısmı tekrar eden metne gidiyor, model
+ * farklı nişleri görmekte zorlanıyordu. Burada aynı ürün tek satırda birleşir;
+ * kaynak sayısı ve ölçülmüş en iyi hacim/büyüme korunur.
+ */
+export type TrendPromptSignal = {
+  name: string;
+  sources: TrendSource[];
+  volume: number;
+  growth: number;
+  rank: number;
+  count: number;
+};
+
+export function prepareTrendSignals(
+  trends: readonly ScrapedTrend[],
+  limit = 70,
+): TrendPromptSignal[] {
+  const byKey = new Map<string, TrendPromptSignal>();
+  for (const t of trends) {
+    const key = trendKey(t.trend_name);
+    if (key.length < 2) continue;
+    const volume = Number.isFinite(t.metrics?.search_volume)
+      ? Math.max(0, Math.round(t.metrics.search_volume))
+      : 0;
+    const growth = Number.isFinite(t.metrics?.growth_rate) ? t.metrics.growth_rate : 0;
+    const rank = Number.isFinite(t.metrics?.rank) && t.metrics.rank > 0 ? t.metrics.rank : 0;
+    const current = byKey.get(key);
+    if (current) {
+      if (!current.sources.includes(t.source)) current.sources.push(t.source);
+      current.volume = Math.max(current.volume, volume);
+      current.growth = Math.max(current.growth, growth);
+      current.rank =
+        current.rank > 0 && rank > 0 ? Math.min(current.rank, rank) : current.rank || rank;
+      current.count += 1;
+    } else {
+      byKey.set(key, {
+        name: t.trend_name.trim().slice(0, 120),
+        sources: [t.source],
+        volume,
+        growth,
+        rank,
+        count: 1,
+      });
+    }
+  }
+
+  // En güçlü sinyaller önce: büyüme + ölçülmüş hacim + çoklu kaynak.
+  return [...byKey.values()]
+    .sort((a, b) => {
+      const score = (s: TrendPromptSignal) =>
+        s.growth * 0.55 +
+        Math.log10(s.volume + 1) * 8 +
+        Math.min(12, (s.sources.length - 1) * 6) +
+        (s.rank > 0 ? Math.max(0, 12 - s.rank * 0.5) : 0);
+      return score(b) - score(a);
+    })
+    .slice(0, Math.max(1, limit));
+}
+
 /** Türkçe hacim biçimi: 42000 → "42 B" (yerel sentezde kullanılır). */
 function compactVolume(value: number): string {
   try {
@@ -525,14 +614,16 @@ export function localSynthesis(
 ): AiSynthesis {
   const byName = new Map<
     string,
-    { trend: ScrapedTrend; sources: Set<TrendSource>; bestVolume: number; bestGrowth: number; bestRank: number }
+    {
+      trend: ScrapedTrend;
+      sources: Set<TrendSource>;
+      bestVolume: number;
+      bestGrowth: number;
+      bestRank: number;
+    }
   >();
   for (const t of trends) {
-    const key = String(t.trend_name ?? "")
-      .toLocaleLowerCase("tr-TR")
-      .replace(/[^\p{L}\p{N}\s]/gu, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const key = trendKey(t.trend_name);
     if (key.length < 2) continue;
     const volume = Number.isFinite(t.metrics?.search_volume) ? t.metrics.search_volume : 0;
     const growth = Number.isFinite(t.metrics?.growth_rate) ? t.metrics.growth_rate : 0;
@@ -574,8 +665,7 @@ export function localSynthesis(
     .slice(0, 8)
     .map((row) => {
       const sources = [...row.sources];
-      const cross =
-        sources.length > 1 ? ` Aynı sinyal ${sources.length} platformda görüldü.` : "";
+      const cross = sources.length > 1 ? ` Aynı sinyal ${sources.length} platformda görüldü.` : "";
       return {
         trend_name: row.trend.trend_name,
         sources,
@@ -585,7 +675,8 @@ export function localSynthesis(
         reasoning:
           `${sources.join(", ")} verisinde ${compactVolume(row.bestVolume)} arama hacmi ve ` +
           `%${row.bestGrowth >= 0 ? "+" : ""}${row.bestGrowth} büyüme ölçüldü.${cross}`,
-        sentiment: row.bestGrowth >= 15 ? "positive" : row.bestGrowth <= -5 ? "negative" : "neutral",
+        sentiment:
+          row.bestGrowth >= 15 ? "positive" : row.bestGrowth <= -5 ? "negative" : "neutral",
         hooks: [],
         persona: "",
         positioning: "",
@@ -645,64 +736,128 @@ const MODE_BRIEF: Record<AiMode, string> = {
     "E-COMMERCE STRATEGY MODE: focus on how to sell it — offers, hooks, personas, creative angles, pricing.",
 };
 
-function buildPrompt(
+export function buildPrompt(
   trends: ScrapedTrend[],
   mode: AiMode,
   region: string,
   category: string,
 ): string {
-  const lines = trends
-    .slice(0, 70)
+  const signals = prepareTrendSignals(trends, 70);
+  const lines = signals
     .map(
-      (t) =>
-        `${t.source}|${t.trend_name}|vol=${t.metrics.search_volume}|growth=${t.metrics.growth_rate}%|rank=${t.metrics.rank}`,
+      (s) =>
+        `${s.name} | sources=${s.sources.join("+")} | vol=${s.volume}|growth=${s.growth}%|rank=${s.rank}|signals=${s.count}`,
     )
     .join("\n");
   return `You are AROLESS DEEP AI INTELLIGENCE, a multi-platform e-commerce trend analyst.
 ${MODE_BRIEF[mode]}
 Region: ${region} | Category: ${category}
 
-RAW MULTI-PLATFORM SIGNALS (scraped web + RSS, one per line):
-${lines}
+DEDUPLICATED MULTI-PLATFORM SIGNALS (scraped web + RSS + GitHub; sources joined per trend):
+${lines || "(no signals)"}
 
 Tasks:
-1. NOISE FILTERING: discard one-off news spikes, celebrity/politics chatter and non-commercial noise.
-2. CROSS-PLATFORM CORRELATION: find themes appearing on 2+ platforms (Amazon product + TikTok hashtag + Google/Yandex search).
-3. UNIFIED AI DEMAND SCORE 0-100 per surviving trend, based on multi-platform momentum and purchase intent.
-4. ACTIONABLE STRATEGY for the breakout trends.
+1. NOISE FILTERING: discard one-off news spikes, celebrity/politics chatter and non-commercial noise. A trend with weak purchase intent must not be rescued by a high search volume alone.
+2. CROSS-PLATFORM CORRELATION: find themes appearing on 2+ platforms (Amazon product + TikTok hashtag + Google/Yandex search + GitHub).
+3. UNIFIED AI DEMAND SCORE 0-100 per surviving trend, based on multi-platform momentum, source diversity and purchase intent. If the evidence is thin, lower the score instead of inventing demand.
+4. ACTIONABLE STRATEGY for the breakout trends: who buys it, why now, how to position it and a ready ad hook.
 
 Return ONLY minified JSON (all prose in Turkish):
-{"summary": string (max 240 chars),
- "breakouts": [{"trend_name": string, "sources": ["Google"|"Amazon"|"TikTok"|"Yandex"|"RSS"], "ai_demand_score": 0-100,
-   "signal": "verified"|"watch", "confidence": 0-100, "reasoning": string (2 sentences),
+{"summary": string (max 240 chars; mention the strongest cross-platform evidence and the main risk),
+ "breakouts": [{"trend_name": string, "sources": ["Google"|"Amazon"|"TikTok"|"Yandex"|"RSS"|"GitHub"], "ai_demand_score": 0-100,
+   "signal": "verified"|"watch", "confidence": 0-100, "reasoning": string (2 sentences, cite measured volume/growth when available),
    "sentiment": "positive"|"neutral"|"negative", "hooks": [string] (3),
    "persona": string, "positioning": string, "ad_copy": string (max 220 chars)}] (5-8 items, best first),
  "noise_filtered": [string] (3-6 discarded signals),
  "correlations": [{"theme": string, "platforms": [string], "note": string}] (2-4)}`;
 }
 
-const ENGINES: { name: string; run: (p: string) => Promise<string> }[] = [
+type TrendAiEngine = {
+  name: string;
+  group?: PoolGroup;
+  run: (prompt: string) => Promise<string>;
+};
+
+/**
+ * Trend Radar'ın kullanabildiği TÜM sağlayıcılar.
+ *
+ * Eski sürüm yalnız Gemini + Groq + OpenRouter + Gateway çağırıyordu; Hugging
+ * Face, Cerebras ve SambaNova anahtarları Trend Radar'da hiç kullanılmıyordu.
+ * Artık hangi sağlayıcının anahtarı tanımlıysa paralel hakem olarak katılır;
+ * fast modda ilk üç, deep/strategy modunda tümü çalışır. Gateway yalnız
+ * tanımlıysa son hakem olarak eklenir (anahtarsız çağrı yapılmaz).
+ */
+const DIRECT_TREND_ENGINES: (TrendAiEngine & { group: PoolGroup })[] = [
   {
     name: "gemini",
+    group: "gemini",
     run: (p) =>
       // apiKey bilinçli olarak verilmez: 5'li Gemini havuzu round-robin kullanılır.
       callGemini(p, undefined, 0.45, false, ["gemini-flash-latest", "gemini-2.0-flash"]),
   },
-  { name: "groq", run: (p) => callGroq(p, 0.4) },
-  { name: "openrouter", run: (p) => callOpenRouter(p, 0.4) },
-  { name: "lovable", run: (p) => callLovableAI(p, 0.4) },
+  { name: "groq", group: "groq", run: (p) => callGroq(p, 0.4) },
+  { name: "openrouter", group: "openrouter", run: (p) => callOpenRouter(p, 0.4) },
+  { name: "hf", group: "hf", run: (p) => callSweepProvider("hf", p, 0.4) },
+  { name: "cerebras", group: "cerebras", run: (p) => callSweepProvider("cerebras", p, 0.45) },
+  { name: "sambanova", group: "sambanova", run: (p) => callSweepProvider("sambanova", p, 0.45) },
 ];
 
-/** Hybrid: 2 engines for fast mode, 4 for deep/strategy — outputs fused. */
+export function availableTrendEngines(mode: AiMode): TrendAiEngine[] {
+  const direct = DIRECT_TREND_ENGINES.filter((engine) => poolGroupAvailable(engine.group));
+  const engines: TrendAiEngine[] = mode === "fast" ? direct.slice(0, 3) : [...direct];
+  if (hasGateway()) {
+    engines.push({ name: "gateway", run: (p) => callLovableAI(p, 0.4) });
+  } else if (!engines.length && poolHealthSummary().available > 0) {
+    // PROVIDER_A-E / EVREN gibi yalnız özel havuza anahtar tanımlandıysa
+    // callLovableAI doğrudan tüm havuzu süpürür.
+    engines.push({ name: "ai-pool", run: (p) => callLovableAI(p, 0.4) });
+  }
+  return engines;
+}
+
+function summaryScore(summary: string): number {
+  return (
+    Math.min(160, summary.length) +
+    (/\d/.test(summary) ? 35 : 0) +
+    (/%/.test(summary) ? 20 : 0) +
+    (/kaynak|platform|ölçül|doğrula/i.test(summary) ? 15 : 0)
+  );
+}
+
+function briefScore(data: Record<string, unknown>): number {
+  let score = 0;
+  for (const key of ["headline", "opportunity", "persona", "positioning", "ad_copy"]) {
+    if (String(data[key] ?? "").trim()) score += 2;
+  }
+  for (const key of ["audience", "angles", "hooks", "ad_copy", "risks", "next_steps"]) {
+    const value = data[key];
+    if (Array.isArray(value)) score += value.length;
+  }
+  if (data["pricing"] && typeof data["pricing"] === "object") score += 3;
+  return score;
+}
+
+/** Hybrid: 3 engines for fast mode, every configured engine for deep/strategy. */
 export async function runDeepAnalysis(
   trends: ScrapedTrend[],
   mode: AiMode,
   region: string,
   category: string,
 ): Promise<AiSynthesis> {
+  const local = localSynthesis(trends, mode, region, category);
+  const anyAi = hasGateway() || poolHealthSummary().available > 0;
+  if (!anyAi) return local;
+
   const prompt = buildPrompt(trends, mode, region, category);
-  const pool = mode === "fast" ? ENGINES.slice(0, 2) : ENGINES;
-  const settled = await Promise.allSettled(pool.map((e) => e.run(prompt)));
+  const pool = availableTrendEngines(mode);
+  if (!pool.length) return local;
+
+  // Sağlayıcı başına SERT süre sınırı: yeni eklenen HF/Cerebras/SambaNova
+  // anahtar havuzları kendi içinde birden çok deneme yapabilir. Bir motorun
+  // yavaşlığı tüm radar yanıtını Vercel süresine kadar bekletmesin.
+  const settled = await Promise.allSettled(
+    pool.map((e) => withDeadline(e.run(prompt), 22_000, `trend:${e.name}`)),
+  );
 
   const parsed: { engine: string; data: Record<string, unknown> }[] = [];
   settled.forEach((r, i) => {
@@ -711,12 +866,28 @@ export async function runDeepAnalysis(
     if (Array.isArray(data["breakouts"])) parsed.push({ engine: pool[i]!.name, data });
   });
 
+  // Tüm paralel motorlar düştüyse tam havuzu SON KEZ sırayla dene. Bu yol
+  // PROVIDER_A-E / EVREN gibi özel yuvaları ve kotadan dönen anahtarları kapsar.
   if (!parsed.length) {
-    // AI motorları yok/başarısız: ham sinyaller yine de karşılaştırılabilir.
-    // Boş bir "analiz yok" ekranı yerine ölçülmüş sinyallerden yerel sentez
-    // döner; arayüz bunu `engines: ["deterministic"]` ile açıkça etiketler.
-    return localSynthesis(trends, mode, region, category);
+    try {
+      const fallback = await runPoolWithFailover(mode === "fast" ? "fast" : "deep", {
+        prompt,
+        temperature: 0.4,
+        deadlineAt: Date.now() + 25_000,
+        timeoutMs: 9_000,
+      });
+      if (fallback.text) {
+        const data = extractJson<Record<string, unknown>>(fallback.text, {});
+        if (Array.isArray(data["breakouts"])) {
+          parsed.push({ engine: fallback.node ? `pool:${fallback.node.group}` : "ai-pool", data });
+        }
+      }
+    } catch {
+      /* yerel senteze düş */
+    }
   }
+
+  if (!parsed.length) return local;
 
   // Fuse: average AI demand score per trend across engines, union of strategy fields.
   const byName = new Map<string, { v: AiTrendVerdict; scores: number[] }>();
@@ -725,7 +896,8 @@ export async function runDeepAnalysis(
       const b = (rawB ?? {}) as Record<string, unknown>;
       const name = String(b["trend_name"] ?? "").trim();
       if (!name) continue;
-      const key = name.toLowerCase();
+      const key = trendKey(name);
+      if (!key) continue;
       const score = Math.max(0, Math.min(100, Math.round(Number(b["ai_demand_score"]) || 0)));
       const arr = (k: string, n: number) =>
         Array.isArray(b[k]) ? (b[k] as unknown[]).slice(0, n).map(String) : [];
@@ -734,6 +906,14 @@ export async function runDeepAnalysis(
         cur.scores.push(score);
         if (!cur.v.hooks.length) cur.v.hooks = arr("hooks", 3);
         if (!cur.v.reasoning) cur.v.reasoning = String(b["reasoning"] ?? "");
+        if (!cur.v.persona) cur.v.persona = String(b["persona"] ?? "").slice(0, 240);
+        if (!cur.v.positioning) cur.v.positioning = String(b["positioning"] ?? "").slice(0, 240);
+        if (!cur.v.ad_copy) cur.v.ad_copy = String(b["ad_copy"] ?? "").slice(0, 300);
+        cur.v.confidence = Math.max(
+          cur.v.confidence,
+          Math.max(0, Math.min(100, Math.round(Number(b["confidence"]) || 60))),
+        );
+        if (String(b["signal"]) === "verified") cur.v.signal = "verified";
         cur.v.sources = Array.from(
           new Set([...cur.v.sources, ...(arr("sources", 5) as TrendSource[])]),
         );
@@ -770,10 +950,30 @@ export async function runDeepAnalysis(
         confidence: Math.min(100, v.confidence + (scores.length - 1) * 8),
       };
     })
-    .sort((a, b) => b.ai_demand_score - a.ai_demand_score)
-    .slice(0, 8);
+    .sort((a, b) => b.ai_demand_score - a.ai_demand_score);
 
-  const first = parsed[0]!.data;
+  // ÖLÇÜLEN SİNYAL KORUNUR: AI güçlü bir trendi atlarsa yerel motorun
+  // doğruladığı sinyal listeden düşmesin. Yalnız AI'da OLMAYANlar eklenir;
+  // aynı ürün iki kez gösterilmez ve skor uydurulmaz.
+  const aiKeys = new Set(breakouts.map((b) => trendKey(b.trend_name)));
+  for (const b of local.breakouts) {
+    if (breakouts.length >= 8) break;
+    const key = trendKey(b.trend_name);
+    if (!key || aiKeys.has(key)) continue;
+    aiKeys.add(key);
+    breakouts.push({ ...b, reasoning: `${b.reasoning} Ölçülmüş sinyal korundu.` });
+  }
+  const finalBreakouts = breakouts.slice(0, 8);
+
+  const summaries = parsed
+    .map((p) =>
+      String(p.data["summary"] ?? "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((summary) => summary.length > 0)
+    .sort((a, b) => summaryScore(b) - summaryScore(a));
+
   const noise = new Set<string>();
   parsed.forEach((p) =>
     (Array.isArray(p.data["noise_filtered"]) ? p.data["noise_filtered"] : [])
@@ -781,29 +981,41 @@ export async function runDeepAnalysis(
       .forEach((n) => noise.add(String(n))),
   );
 
-  const correlations = (Array.isArray(first["correlations"]) ? first["correlations"] : [])
-    .slice(0, 4)
-    .map((c) => {
+  const corrMap = new Map<string, { theme: string; platforms: Set<string>; note: string }>();
+  for (const p of parsed) {
+    const rows = Array.isArray(p.data["correlations"]) ? p.data["correlations"] : [];
+    for (const c of rows.slice(0, 6)) {
       const o = (c ?? {}) as Record<string, unknown>;
-      return {
-        theme: String(o["theme"] ?? ""),
-        platforms: (Array.isArray(o["platforms"]) ? o["platforms"] : []).map(
-          String,
-        ) as TrendSource[],
-        note: String(o["note"] ?? "").slice(0, 240),
-      };
-    });
+      const theme = String(o["theme"] ?? "").trim();
+      if (!theme) continue;
+      const key = trendKey(theme) || theme.toLowerCase();
+      const platforms = (Array.isArray(o["platforms"]) ? o["platforms"] : []).map(String);
+      const note = String(o["note"] ?? "").slice(0, 240);
+      const current = corrMap.get(key);
+      if (current) {
+        for (const platform of platforms) current.platforms.add(platform);
+        if (note.length > current.note.length) current.note = note;
+      } else {
+        corrMap.set(key, { theme, platforms: new Set(platforms), note });
+      }
+    }
+  }
+  const correlations = [...corrMap.values()].slice(0, 4).map((c) => ({
+    theme: c.theme,
+    platforms: [...c.platforms] as TrendSource[],
+    note: c.note,
+  }));
 
   const scores: Record<string, number> = {};
-  breakouts.forEach((b) => (scores[b.trend_name] = b.ai_demand_score));
+  finalBreakouts.forEach((b) => (scores[b.trend_name] = b.ai_demand_score));
 
   return {
     mode,
-    engines: parsed.map((p) => p.engine),
-    summary: String(first["summary"] ?? "").slice(0, 320),
-    breakouts,
-    noise_filtered: Array.from(noise).slice(0, 6),
-    correlations,
+    engines: Array.from(new Set(parsed.map((p) => p.engine))),
+    summary: (summaries[0] ?? local.summary).slice(0, 320),
+    breakouts: finalBreakouts,
+    noise_filtered: (noise.size ? [...noise] : local.noise_filtered).slice(0, 6),
+    correlations: correlations.length ? correlations : local.correlations,
     scores,
   };
 }
@@ -817,7 +1029,7 @@ export async function runProductBrief(
   const prompt = `You are AROLESS DEEP AI INTELLIGENCE. Write a full e-commerce product brief for the breakout trend below.
 Trend: ${trend} | Region: ${region} | Category: ${category}
 
-Return ONLY minified JSON (all prose in Turkish):
+Return ONLY minified JSON (all prose in Turkish; every number must be an explicit estimation range, never a fake-precise figure):
 {"headline": string, "opportunity": string (3 sentences),
  "audience": [{"persona": string, "pain": string, "trigger": string}] (3),
  "angles": [string] (4 positioning angles),
@@ -825,13 +1037,39 @@ Return ONLY minified JSON (all prose in Turkish):
  "ad_copy": [{"channel": "TikTok"|"Meta"|"Google", "copy": string}] (3),
  "pricing": {"suggested_retail_usd": number, "landed_cost_usd": number, "margin_pct": number},
  "risks": [string] (3), "next_steps": [string] (4)}`;
-  const settled = await Promise.allSettled(ENGINES.slice(0, 2).map((e) => e.run(prompt)));
-  for (const r of settled) {
-    if (r.status === "fulfilled") {
+
+  const anyAi = hasGateway() || poolHealthSummary().available > 0;
+  if (anyAi) {
+    const engines = availableTrendEngines("deep").slice(0, 4);
+    const settled = await Promise.allSettled(
+      engines.map((e) => withDeadline(e.run(prompt), 18_000, `brief:${e.name}`)),
+    );
+    const parsed: Record<string, unknown>[] = [];
+    for (const r of settled) {
+      if (r.status !== "fulfilled") continue;
       const data = extractJson<Record<string, unknown>>(r.value, {});
-      if (data["headline"] || data["hooks"]) return data;
+      if (data["headline"] || data["hooks"]) parsed.push(data);
+    }
+    if (parsed.length) {
+      return parsed.sort((a, b) => briefScore(b) - briefScore(a))[0]!;
+    }
+    // Son çare: tam anahtar havuzunu sırayla dene.
+    try {
+      const fallback = await runPoolWithFailover("deep", {
+        prompt,
+        temperature: 0.4,
+        deadlineAt: Date.now() + 20_000,
+        timeoutMs: 8_000,
+      });
+      if (fallback.text) {
+        const data = extractJson<Record<string, unknown>>(fallback.text, {});
+        if (data["headline"] || data["hooks"]) return data;
+      }
+    } catch {
+      /* dürüst "veri yok" brifingine düş */
     }
   }
+
   // AI brifingi üretilemedi: boş modal yerine dürüst bir "veri yok" brifingi.
   return {
     headline: `${trend} — AI brifingi şu an üretilemedi`,

@@ -35,12 +35,14 @@ const INPUTS: Record<string, string> = {
   today: "2026-01-01",
   hour: "09",
   mode: "live",
+  budget: "1500",
+  goal: "90 günde kârlılığı doğrula",
 };
 
 describe("araç prompt kayıt defteri", () => {
   it("HER araç için dolu bir prompt üretir (eksik switch case'i yok)", () => {
     const tools = Object.keys(TOOL_PROVIDER) as ToolId[];
-    expect(tools).toHaveLength(22);
+    expect(tools).toHaveLength(23);
     expect(Object.keys(TOOL_CACHE_TTL_MS).sort()).toEqual([...tools].sort());
 
     for (const tool of tools) {
@@ -85,6 +87,19 @@ describe("araç prompt kayıt defteri", () => {
     expect(TOOL_PROVIDER["hs-classifier"]).toBe("gemini");
     expect(TOOL_PROVIDER["compliance-check"]).toBe("gemini");
     expect(TOOL_PROVIDER["competitor-intel"]).toBe("openrouter");
+    expect(TOOL_PROVIDER["growth-plan"]).toBe("gemini");
+
+    const plan = buildPrompt("growth-plan", {
+      product: "pilates minderi",
+      price: "39.99",
+      cost: "8.50",
+      budget: "1500",
+      goal: "günlük 10 sipariş",
+    });
+    expect(plan).toContain("pilates minderi");
+    expect(plan).toContain("$1500");
+    expect(plan).toContain("günlük 10 sipariş");
+    expect(plan).toContain("0-30");
   });
 
   it("boş girdide çökmez, '-' varsayılanını kullanır", () => {

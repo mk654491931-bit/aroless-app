@@ -66,12 +66,12 @@ export const Route = createFileRoute("/trend-radar")({
       {
         name: "description",
         content:
-          "Google, Amazon, TikTok ve Yandex açık verilerini kazıyan otomatik botlar + RSS akışları, Aroless Deep AI ile tek bir talep skorunda birleşiyor.",
+          "Google, Amazon, TikTok, Yandex ve GitHub açık verilerini kazıyan otomatik botlar + RSS akışları; altı AI sağlayıcısının anahtar havuzuyla tek bir talep skorunda birleşiyor.",
       },
       { property: "og:title", content: "Aroless Trend Radar — Çok Platformlu AI Trend Keşfi" },
       {
         property: "og:description",
-        content: "Kazınmış web verisi ve RSS akışlarından hibrit AI trend sentezi.",
+        content: "Kazınmış web verisi, RSS ve GitHub sinyallerinden çok motorlu AI trend sentezi.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -132,9 +132,9 @@ const SOURCES: { id: TrendSource; label: string; color: string }[] = [
 const REGIONS = ["GLOBAL", "US", "GB", "DE", "FR", "TR", "CA", "AU", "NL", "IT", "ES"];
 const CATEGORIES = ["General", "Electronics", "Home", "Beauty", "Sports", "Toys", "Pet", "Fashion"];
 const MODES = [
-  { id: "fast", label: "Fast Synthesis (2 motor)" },
-  { id: "deep", label: "Deep Market Research (4 motor)" },
-  { id: "strategy", label: "E-Commerce Strategy Mode (4 motor)" },
+  { id: "fast", label: "Fast Synthesis (3+ motor)" },
+  { id: "deep", label: "Deep Market Research (tüm AI motorları)" },
+  { id: "strategy", label: "E-Commerce Strategy Mode (tüm AI motorları)" },
 ];
 
 async function api(body: Record<string, unknown>) {
@@ -154,8 +154,10 @@ const srcColor = (s: string) => SOURCES.find((x) => x.id === s)?.color ?? "#94a3
 const FEED_TTL_MS = 6 * 60 * 60 * 1000;
 type CachedFeed = { trends: ScrapedTrend[]; statuses: SourceStatus[]; savedAt: number };
 type CachedSynth = { synth: Synthesis; savedAt: number };
-const feedKey = (region: string, category: string) => `aroless.trendRadar.feed.${region}.${category}`;
-const synthKey = (region: string, category: string) => `aroless.trendRadar.synth.${region}.${category}`;
+const feedKey = (region: string, category: string) =>
+  `aroless.trendRadar.feed.${region}.${category}`;
+const synthKey = (region: string, category: string) =>
+  `aroless.trendRadar.synth.${region}.${category}`;
 
 function readCache<T extends { savedAt: number }>(key: string): T | null {
   try {
@@ -347,7 +349,10 @@ function TrendRadar() {
         trends: trends.slice(0, 70),
       });
       setSynth(j);
-      writeCache(synthKey(region, category), { synth: j, savedAt: Date.now() } satisfies CachedSynth);
+      writeCache(synthKey(region, category), {
+        synth: j,
+        savedAt: Date.now(),
+      } satisfies CachedSynth);
       const localOnly = Array.isArray(j.engines) && j.engines.includes("deterministic");
       toast.success(
         localOnly
@@ -419,7 +424,7 @@ function TrendRadar() {
     <HubShell
       emoji="📡"
       title="Aroless Trend Radar"
-      subtitle="Google, Amazon, TikTok ve Yandex'in halka açık sayfalarını kazıyan otomatik botlar + açık RSS/webhook akışları, Aroless Deep AI Intelligence ile tek bir talep skorunda birleşiyor."
+      subtitle="Google, Amazon, TikTok, Yandex ve GitHub sinyalleri + açık RSS/webhook akışları; Gemini, Groq, OpenRouter, Hugging Face, Cerebras ve SambaNova anahtar havuzuyla tek bir talep skorunda birleşiyor."
     >
       {/* ------------------------------------------------ live control panel */}
       <Card className="lg:col-span-2 border-white/10 bg-slate-950/60">
@@ -464,7 +469,11 @@ function TrendRadar() {
               }
             >
               <StatusDot ok={!!synth && !localEngine} /> <Brain size={12} /> Signal Engine:{" "}
-              <b className={localEngine ? "text-amber-300" : synth ? "text-emerald-400" : "text-slate-400"}>
+              <b
+                className={
+                  localEngine ? "text-amber-300" : synth ? "text-emerald-400" : "text-slate-400"
+                }
+              >
                 {localEngine ? "Local" : synth ? "AI" : "Idle"}
               </b>
               {synth?.engines?.length ? (
@@ -587,8 +596,8 @@ function TrendRadar() {
             <>
               {localEngine && (
                 <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
-                  AI sağlayıcısı yanıt vermedi. Skorlar uydurulmadı: kazınmış hacim, büyüme ve kaynak
-                  sayısı yerel sinyal motoruyla ağırlıklandırıldı.
+                  AI sağlayıcısı yanıt vermedi. Skorlar uydurulmadı: kazınmış hacim, büyüme ve
+                  kaynak sayısı yerel sinyal motoruyla ağırlıklandırıldı.
                 </p>
               )}
               <div className="grid gap-3 md:grid-cols-3">
@@ -933,8 +942,9 @@ function TrendRadar() {
               </p>
             </div>
             <p className="rounded-lg border border-white/10 bg-white/5 p-2 text-[11px] text-slate-400">
-              AI anahtarları (Gemini ×3, Groq, OpenRouter, Lovable AI) sunucu tarafında güvenli
-              şekilde saklanır — panelde girilmez.
+              AI anahtarları (Gemini ×5, Groq ×5, OpenRouter ×5, Hugging Face ×5, Cerebras,
+              SambaNova ve AI Gateway) sunucu tarafında güvenli şekilde saklanır — panelde girilmez.
+              Deep/Strategy modu tanımlı tüm motorları paralel hakem olarak kullanır.
             </p>
           </div>
         </DialogContent>

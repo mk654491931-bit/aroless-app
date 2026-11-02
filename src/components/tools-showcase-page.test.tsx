@@ -60,13 +60,13 @@ describe("ToolsShowcasePage", () => {
     }
   });
 
-  it("katalogdaki 22 aracın tamamı sayfada görünür", () => {
+  it("katalogdaki tüm araçlar sayfada görünür", () => {
     const out = html();
     const missing = ALL_TOOL_ENTRIES.filter((tool) => !out.includes(escaped(tool.label))).map(
       (t) => t.id,
     );
     expect(missing).toEqual([]);
-    expect(TOOL_ENTRY_COUNT).toBe(22);
+    expect(TOOL_ENTRY_COUNT).toBe(23);
   });
 
   it("sayılar koddan gelir (araç sayısı ve modül sayısı)", () => {

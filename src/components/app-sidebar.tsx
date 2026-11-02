@@ -219,6 +219,7 @@ const GROUPS: {
     items: [
       { key: "win_radar", title: "Kazanan Ürün Radarı", url: "/radar", icon: Radar },
       { key: "discovery", title: "Kanıtlı Ürün Keşfi", url: "/discover", icon: Sparkles },
+      { key: "growth_plan", title: "90 Günlük Büyüme Planı", url: "/tools/growth", icon: Rocket },
       { key: "roi_panel", title: "Kâr / ROI Paneli", url: "/roi", icon: Wallet },
       { key: "store_audit", title: "AI Mağaza Denetçisi", url: "/audit", icon: ShieldCheck },
       { key: "creative_studio", title: "Reklam Kreatif Stüdyosu", url: "/studio", icon: Megaphone },

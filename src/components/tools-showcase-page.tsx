@@ -1,7 +1,7 @@
 /**
  * ARAÇ MERKEZİ — halka açık tanıtım sayfası (/tools).
  *
- * NEDEN VAR: 22 AI aracı uygulamanın içinde çalışıyordu ama dışarıdan bakan bir
+ * NEDEN VAR: 23 AI aracı uygulamanın içinde çalışıyordu ama dışarıdan bakan bir
  * ziyaretçi (ya da Aroless'i tanıtan bir ortak) hangi araçların olduğunu hiçbir
  * yerde göremiyordu; araçların tek girişi giriş yapmış kullanıcının kenar
  * çubuğuydu. Public sayfa olmadan araçların varlığı "linki olan bilir" hâline
