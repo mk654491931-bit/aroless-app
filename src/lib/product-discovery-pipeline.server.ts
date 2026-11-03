@@ -582,18 +582,57 @@ export async function runScrapeFilterStep(
    */
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
-  const { runSources } = await import("./product-discovery-sources.server");
+  const { runSources, runSourceRescue } = await import("./product-discovery-sources.server");
   const { buildShortlist, imageFillCapFor, salvageShortlist } =
     await import("./product-discovery-shortlist.server");
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
-  const { products: rawPool, reports } = await runSources(niche, undefined, {
+  const sourceStartedAt = Date.now();
+  let { products: rawPool, reports } = await runSources(niche, undefined, {
     capMs: opts.sourceCapMs,
     // GLOBAL SaaS: kaynaklar hedef ülkenin YEREL pazaryerine bakar
     // (bkz. `MARKETPLACES_BY_COUNTRY`). Ülke boşsa kaynaklar kendi
     // varsayılanına döner — eski davranış korunur.
     country,
   });
+
+  // 1a) SIFIR HAM SATIR = ÜLKE KAPISI VERİYİ TAMAMEN KESMİŞ OLABİLİR.
+  //
+  // Ölçülen senaryo: TR dışı bir aramada `tr-reader` kapıdan hemen boş döner;
+  // aynı anda AliExpress/Bing ağ hatası alırsa havuz sıfır kalır. Burada
+  // yalnız bu durumda, ülke kapısız `scrape()` yolu bir kez denenir. Normal
+  // aramada yabancı pazar satırı KARIŞMAZ; kurtarma satırları nota yazılır.
+  let rescuedSources = 0;
+  let rescuedRows = 0;
+  // Yalnız sinyal satırı (Wikipedia/HN/GitHub) gelmişse ÜRÜN verisi yoktur.
+  // "Ham havuz boş değil" diye kurtarmayı atlamak, tam da kullanıcının
+  // gördüğü "sinyal var ama ürün yok" durumunu üretirdi.
+  const { isNonProductSource } = await import("./product-discovery-query");
+  const hasProductRows = rawPool.some((row) => !isNonProductSource(String(row.source ?? "")));
+  if (!hasProductRows) {
+    // Birincil turdan kalan bütçe; en az 1,5 sn, en çok 6 sn. Dilim tavanı
+    // aşılmadan yalnız hızlı kaynakların şansı korunur.
+    const elapsed = Date.now() - sourceStartedAt;
+    const rescueCapMs = Math.max(
+      1_500,
+      Math.min(6_000, (opts.sourceCapMs ?? 6_000) - elapsed),
+    );
+    const rescue = await runSourceRescue(niche, country, { capMs: rescueCapMs });
+    if (rescue.products.length) {
+      // SİNYAL SATIRLARINI KORU: havuzda yalnız Wikipedia/GitHub sinyali
+      // varken kurtarma ürünlerini tek başına yazmak, niş momentumunu ve
+      // etkileşim bağlamını kaybettirirdi. Ürün satırları EKLENİR; tekilleştirme
+      // ve filtre bir sonraki adımda zaten çalışır.
+      rawPool = [...rawPool, ...rescue.products];
+      rescuedRows = rescue.products.length;
+      rescuedSources = rescue.reports.filter((r) => r.items > 0).length;
+      // Rapor adları aynıdır; birincil boş kaydı kurtarma kaydıyla değiştir.
+      // Böylece panelde aynı kaynak iki kez görünmez.
+      const byName = new Map(reports.map((r) => [r.name, r]));
+      for (const report of rescue.reports) byName.set(report.name, report);
+      reports = [...byName.values()];
+    }
+  }
 
   // 1b) MARKA ÖLÇÜMÜ (kaynaktan) + KATALOG ZENGİNLEŞTİRMESİ (ücretsiz).
   //
@@ -918,6 +957,20 @@ export async function runScrapeFilterStep(
         `bütünlük ${stats.rejectedByCompleteness}). Gemini aşamasına boş liste gönderilmez.`,
     );
   }
+  if (rescuedRows > 0) {
+    notes.push(
+      `Birincil kaynak turu boştu; ${rescuedSources} kaynağın ülke kapısız kurtarma ` +
+        `turu ${rescuedRows} gerçek satır getirdi (satırlar "küresel kurtarma" olarak işaretli).`,
+    );
+  }
+  // KAPSAM GÖRÜNÜRLÜĞÜ: kaç kaynağın gerçekten koştuğu ve kaçının yanıt
+  // verdiği tek satırda görünür. "Kaynak yok" ile "kaynak koştu ama boş"
+  // ayrımı kaybolmaz; kullanıcı hangi kaynağın veri getirdiğini görebilir.
+  const answeredSources = reports.filter((r) => r.ok && r.items > 0).length;
+  notes.push(
+    `Kaynak kapsamı: ${reports.length} kaynak koştu, ${answeredSources} kaynak ` +
+      `${reports.reduce((sum, r) => sum + r.items, 0)} ham satır getirdi.`,
+  );
   const failed = reports.filter((r) => !r.ok).map((r) => `${r.name}: ${r.error}`);
   if (failed.length) notes.push(`Çalışmayan kaynak(lar) — ${failed.join("; ")}`);
 
@@ -1072,7 +1125,13 @@ export async function geminiShortlistSelector(
   // yalnız `{"picks":[...]}` kabul ediyordu. Model talimatı izleyince (yani
   // DÜZGÜN çalışınca) yanıt doğrulamadan düşüyor ve hat sessizce yedeğe
   // kayıyordu — yani Gemini hiçbir zaman seçim yapamıyordu.
-  const candidates = products.slice(0, GEMINI_SHORTLIST_SIZE);
+  // MODEL 75 ADAYIN TAMAMINI GÖRMELİ — ÖLÇÜLEN HATA (2026-11-02): burada
+  // `slice(0, GEMINI_SHORTLIST_SIZE)` vardı; yani 75 adaylık havuzun yalnız
+  // ilk 25'i isteme giriyor, model de o 25'in TAMAMINI seçiyordu. Sonuç:
+  // "75 → 25" seçimi fiilen yapılmıyor, deterministik ilk 25 neyse o kalıyordu.
+  // Artık aday havuzu 75, seçim hedefi 25'tir; model gerçekten eleme yapar.
+  // Üst sınır `DISCOVERY_TOP_N`dir (llm kısa liste sözleşmesiyle aynı).
+  const candidates = products.slice(0, DISCOVERY_TOP_N);
   const roster = candidates.map((p) => ({ productId: productIdOf(p), product: p }));
   const prompt = buildShortlistPrompt(products, niche, lang, brief);
 
@@ -1193,24 +1252,37 @@ export function buildShortlistPrompt(
   // Her satır GERÇEK kimliği ve ÖLÇÜLMÜŞ kalite sinyalini taşır (§11/§12):
   // model, az kanıtlı bir adayı zengin kanıtlı bir adayın önüne koymamalıdır.
   // `güven`/`bütünlük` uydurulmaz; kaynak+görsel+ölçüm durumundan türetilir.
-  const roster = products
-    .slice(0, GEMINI_SHORTLIST_SIZE)
+  const candidates = products.slice(0, DISCOVERY_TOP_N);
+  const roster = candidates
     .map((p) => {
       const quality = candidateQuality(p);
       const price = p.priceUsd === null ? "" : ` · fiyat $${p.priceUsd.toFixed(2)}`;
       const rating = p.rating === null ? "" : ` · puan ${p.rating.toFixed(1)}`;
+      // MODEL ARTIK ÖLÇÜLMÜŞ SİNYALLERİ DE GÖRÜR: yalnız "ön skor" vermek,
+      // talebin NEREDEN geldiğini gizliyordu. Satış/görüntülenme/değerlendirme
+      // sayısı ölçülmüşse açıkça yazılır; ölçülmemişse hiç yazılmaz (0 değil).
+      const measured = [
+        p.salesVolume !== null ? `satış ${p.salesVolume}` : "",
+        p.viewed90d !== null ? `görüntülenme ${p.viewed90d}` : "",
+        p.ratingCount !== null ? `${p.ratingCount} değerlendirme` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       return (
         `${productIdOf(p)} · ${p.name} · ön skor ${Math.round(p.preScore)} · ` +
-        `kanıt ${p.dataCompleteness}/5 · bütünlük ${quality.completeness}/100 · ` +
-        `güven ${quality.confidence}/100${price}${rating}`
+        `talep ${p.signals.demand}/100 · rekabet ${p.signals.competition}/100 · ` +
+        `marj ${p.signals.margin}/100 · kanıt ${p.dataCompleteness}/5 · ` +
+        `bütünlük ${quality.completeness}/100 · güven ${quality.confidence}/100` +
+        `${price}${rating}${measured ? ` · ${measured}` : ""}`
       );
     })
     .join("\n");
-  const want = Math.min(GEMINI_SHORTLIST_SIZE, products.length);
+  const want = Math.min(GEMINI_SHORTLIST_SIZE, candidates.length);
   return [
     `Sen bir e-ticaret ürün seçicisisin. Niş: "${niche}".`,
-    `Aşağıdaki ${Math.min(products.length, GEMINI_SHORTLIST_SIZE)} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
-    "Değerlendirme: talep kanıtı, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
+    `Aşağıdaki ${candidates.length} adaydan ticari olarak EN GÜÇLÜ ${want}'ini seç.`,
+    "Değerlendirme: ölçülmüş talep, rekabet doygunluğu, marj potansiyeli, ürün kalitesi.",
+    "Talep/rekabet/marj satırları ÖLÇÜLMÜŞ sinyallerdir; satış, görüntülenme ve değerlendirme sayıları varsa onları kanıt olarak kullan.",
     "",
     "KESİN KURALLAR:",
     "- Yalnız aşağıdaki adaylardan birinin productId değerini kullan.",

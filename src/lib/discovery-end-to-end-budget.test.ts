@@ -150,7 +150,7 @@ describe("uçtan uca 280 sn sözü — dilimli zincir", () => {
     expect(finals.length).toBeGreaterThan(0);
   });
 
-  it("hiçbir teslimat 10 saniyelik dilimi aşmaz", () => {
+  it("hiçbir teslimat 15 saniyelik dilimi aşmaz", () => {
     const result = simulateChain({ neverFinishes: true, steps: STEPS, roles: ROLES });
     // `workMs` işe ayrılan süredir; platforma giden toplam süre buna devir
     // payı eklenince dilim süresine (10 sn) oturur.

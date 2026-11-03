@@ -396,7 +396,31 @@ describe("deterministic pre-scoring", () => {
 
   it("satış hacmi ÖLÇÜLMEDİYSE talep sinyali nötr kalır", () => {
     const [unknown] = scoreDeterministically(
-      [normalizeRaw(raw({ notes: "", salesVolume: null }))],
+      [normalizeRaw(raw({ notes: "", salesVolume: null, ratingCount: null }))],
+      { nicheMomentumPct: null, nicheEngagement: 0 },
+    );
+    expect(unknown!.signals.demand).toBe(50);
+  });
+
+  it("ölçülen DEĞERLENDİRME SAYISI talep sinyalini kohort içinde yükseltir", () => {
+    // Satış hacmi vermeyen kaynaklarda (Newegg, Bing, TR okuyucu) gerçek
+    // kullanıcı değerlendirme sayısı tek talep kanıtıdır. 10.000 yorumlu ürün,
+    // 3 yorumlu üründen yüksek talep sinyali almalı; ikisi de ölçülmüştür.
+    const base = { notes: "", priceUsd: 59.9, rating: 4.4, salesVolume: null };
+    const [hot, cold] = scoreDeterministically(
+      [
+        normalizeRaw(raw({ ...base, title: "Air Fryer Pro X", ratingCount: 10_000 })),
+        normalizeRaw(raw({ ...base, title: "Air Fryer Lite Y", ratingCount: 3 })),
+      ],
+      { nicheMomentumPct: null, nicheEngagement: 0 },
+    );
+    expect(hot!.signals.demand).toBeGreaterThan(cold!.signals.demand);
+    expect(hot!.signals.demand).toBeGreaterThan(50);
+  });
+
+  it("değerlendirme sayısı ÖLÇÜLMEDİYSE talep sinyali nötr kalır", () => {
+    const [unknown] = scoreDeterministically(
+      [normalizeRaw(raw({ notes: "", ratingCount: null, salesVolume: null, viewed90d: null }))],
       { nicheMomentumPct: null, nicheEngagement: 0 },
     );
     expect(unknown!.signals.demand).toBe(50);
@@ -405,10 +429,13 @@ describe("deterministic pre-scoring", () => {
   it("görüntülenme ÖLÇÜLMEDİYSE talep sinyali nötr kalır (0 sayılmaz)", () => {
     // "kimse görmedi" ile "ölçemedik" farklıdır. Ölçülmemiş satır 0
     // puanlanırsa gerçekten ilgi görmeyen ürünle aynı sınıfa düşer.
-    const [unknown] = scoreDeterministically([normalizeRaw(raw({ notes: "", viewed90d: null }))], {
-      nicheMomentumPct: null,
-      nicheEngagement: 0,
-    });
+    const [unknown] = scoreDeterministically(
+      [normalizeRaw(raw({ notes: "", viewed90d: null, ratingCount: null }))],
+      {
+        nicheMomentumPct: null,
+        nicheEngagement: 0,
+      },
+    );
     expect(unknown!.signals.demand).toBe(50);
   });
 
@@ -417,8 +444,8 @@ describe("deterministic pre-scoring", () => {
     // momentum 12 → 62; etkileşim 300 → 50 + (300/400)*50 − 25 = 62,5;
     // iki sinyalin ortalaması 62. Görüntülenme devreye girmez.
     const products = [
-      normalizeRaw(raw({ title: "Ürün A" })),
-      normalizeRaw(raw({ title: "Ürün B" })),
+      normalizeRaw(raw({ title: "Ürün A", ratingCount: null })),
+      normalizeRaw(raw({ title: "Ürün B", ratingCount: null })),
     ];
     const scored = scoreDeterministically(products, {
       nicheMomentumPct: 12,

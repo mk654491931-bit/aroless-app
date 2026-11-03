@@ -32,6 +32,7 @@ import { assessLaunch } from "./launch-readiness";
 import { buildAgentPrompt } from "./product-discovery-council-ai.server";
 import {
   deterministicVotes,
+  reviewsDemandScore,
   runCouncilOnProducts,
   salesDemandScore,
   sourceStrength,
@@ -121,6 +122,11 @@ describe("ölçülen hacim ve kaynak sayısı konsey oyuna girer", () => {
     expect(salesDemandScore(10_000)!).toBeGreaterThan(salesDemandScore(100)!);
     expect(viewsDemandScore(null)).toBeNull();
     expect(viewsDemandScore(10_000)!).toBeGreaterThan(viewsDemandScore(100)!);
+    // Satış/görüntülenme vermeyen kaynaklarda değerlendirme sayısı da
+    // ölçülmüş talep kanıtıdır; `null` sinyal üretmez.
+    expect(reviewsDemandScore(null)).toBeNull();
+    expect(reviewsDemandScore(0)).toBeNull();
+    expect(reviewsDemandScore(10_000)!).toBeGreaterThan(reviewsDemandScore(50)!);
     expect(sourceStrength([])).toBe(0);
     expect(sourceStrength(["a", "b", "c", "d"])).toBe(24);
   });

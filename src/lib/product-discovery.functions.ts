@@ -221,7 +221,7 @@ const FEATURE = "agent-pipeline" as const;
  *
  * NEDEN ARTIK SABİT 150 SN DEĞİL: eskiden adım başına TEK bir uzun koşu vardı ve
  * `deep`in 14 rolüne yer açmak için yoklamaya 150 sn veriliyordu. Artık iş
- * dilimlidir (varsayılan 10 sn): aynı ilerleme birkaç dilimde elde edilir ve
+ * dilimlidir (varsayılan 15 sn): aynı ilerleme birkaç dilimde elde edilir ve
  * devralma yapan yoklama isteği de kısa kalır. Kullanıcının kuralı burada da
  * geçerlidir — platformu zorlamayız; sekme açık kaldığı sürece yoklamalar
  * zinciri dilim dilim ilerletir.

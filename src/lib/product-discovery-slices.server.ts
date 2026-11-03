@@ -10,7 +10,7 @@
 // de açıklama kalır.
 //
 // ÇÖZÜM: her teslimat EN FAZLA bir DİLİM kadar çalışır (`DISCOVERY_SLICE_MS`,
-// varsayılan 10 sn). Adım dilim içinde bitmezse:
+// varsayılan 15 sn). Adım dilim içinde bitmezse:
 //   • o ana kadarki ilerleme ARA NOKTaya yazılır (hangi roller konuştu, hangi
 //     kaynaklar okundu),
 //   • aynı adım için SIRADAKİ dilim QStash'e yayınlanır,
@@ -33,8 +33,17 @@ import { readEnvValue } from "./host-runtime.server";
 
 type EnvMap = Record<string, string | undefined>;
 
-/** Bir dilimin üst sınırı (ms). Kullanıcı isteği: "her işlemi 10 saniyelik böl". */
-export const DEFAULT_SLICE_MS = 10_000;
+/**
+ * Bir dilimin üst sınırı (ms).
+ *
+ * ÖLÇÜLEN EKSİK VERİ (2026-11-02): 10 sn'lik dilimden işe yalnız 7 sn kalıyor
+ * (`SLICE_RETURN_MARGIN_MS=3 sn`), adımın kaynak tavanı da ~6 sn'ye kırpılıyordu.
+ * Oysa Jina okuyucularının kendi tavanı 9,5 sn; yani ÜCRETSİZ ürün okuyucuları
+ * her aramada kendi süreleri dolmadan kesiliyordu. 15 sn, 12 sn iş payı bırakır
+ * ve 9,5 sn'lik okuyucuların tamamının bitmesine izin verir; 40 sn'lik QStash
+ * teslimat penceresi ve 300 sn'lik platform tavanı içinde kalır.
+ */
+export const DEFAULT_SLICE_MS = 15_000;
 
 /** Dilim alt sınırı: bundan kısası işe yaramaz (bir model çağrısı bile sığmaz). */
 export const MIN_SLICE_MS = 3_000;

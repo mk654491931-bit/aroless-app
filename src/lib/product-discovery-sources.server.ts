@@ -3289,6 +3289,100 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
  * ama `reports` her zaman doludur — "hiçbir şey bulunamadı" ile
  * "hiçbir şey aranmadı" ayrımı kaybolmaz.
  */
+/**
+ * ÜLKE KAPISI YÜZÜNDEN HİÇ ÇALIŞMAMIŞ OLABİLECEK KAYNAKLAR.
+ *
+ * `runSources` ülke verildiğinde `scrapeForCountry` çağırır. TR dışındaki bir
+ * aramada `tr-reader` hemen `[]` döner; TR aramasında `newegg-reader` aynıdır.
+ * Birincil tur sıfır satır getirirse bu kaynaklar HİÇ denenmemiş olur ve
+ * kullanıcı "veri gelmiyor" görür. Kurtarma turu yalnız bu durumda, bu
+ * kaynakların ülke kapısını atlayan `scrape()` yolunu dener; normal aramada
+ * yabancı pazar satırı KARIŞMAZ.
+ */
+const RESCUE_SOURCE_NAMES = new Set([
+  "tr-reader",
+  "newegg-reader",
+  "otto-reader",
+  "flipkart-reader",
+  "rakuten-reader",
+  "bestbuy-api",
+  "deal-feed",
+  "serpapi-shopping",
+  "searchapi-shopping",
+  "serper-shopping",
+  "ebay-browse",
+]);
+
+/**
+ * BOŞ HAVUZ KURTARMASI — "hiç veri gelmedi" ekranına karşı son ağ turu.
+ *
+ * Yalnız birincil `runSources` turu TAMAMEN boşsa çağrılır. Seçilen
+ * kaynakların `scrape()` (ülke kapısız) yolu denenir; böylece hedef ülkede
+ * katalog boş olsa bile başka bir pazarın GERÇEK satırı bulunabilir. Her satıra
+ * "küresel kurtarma" notu eklenir: kullanıcı hangi satırın hedef ülke dışından
+ * geldiğini görür. Ölçülmemiş alan yine `null` kalır; uydurma yok.
+ */
+export async function runSourceRescue(
+  niche: string,
+  country: string,
+  /**
+   * Testte kaynak listesi değiştirilebilir; üretimde tüm kaynak kaydı kullanılır.
+   * `capMs` birincil turdan kalan bütçeye göre verilir.
+   */
+  opts: { capMs?: number; sources?: readonly ProductSource[] } = {},
+): Promise<{ products: RawProduct[]; reports: SourceReport[] }> {
+  const cap =
+    Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
+      ? Math.round(opts.capMs as number)
+      : 5_000;
+  const candidates = (opts.sources ?? PRODUCT_SOURCES).filter((source) =>
+    RESCUE_SOURCE_NAMES.has(source.name),
+  );
+  const products: RawProduct[] = [];
+  const reports: SourceReport[] = await Promise.all(
+    candidates.map(async (source): Promise<SourceReport> => {
+      const startedAt = Date.now();
+      const budgetMs = Math.max(1_000, Math.min(source.timeoutMs, cap));
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const rows = await Promise.race([
+          source.scrape(niche),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`timeout>${budgetMs}ms`)), budgetMs);
+          }),
+        ]);
+        products.push(
+          ...rows.map((row) => ({
+            ...row,
+            notes: [row.notes, country ? "küresel kurtarma" : "kurtarma"]
+              .filter(Boolean)
+              .join(" · ")
+              .slice(0, 200),
+          })),
+        );
+        return {
+          name: source.name,
+          ok: true,
+          items: rows.length,
+          ms: Date.now() - startedAt,
+          error: "",
+        };
+      } catch (error) {
+        return {
+          name: source.name,
+          ok: false,
+          items: 0,
+          ms: Date.now() - startedAt,
+          error: error instanceof Error ? error.message.slice(0, 90) : "unreachable",
+        };
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }),
+  );
+  return { products, reports };
+}
+
 export async function runSources(
   niche: string,
   sources: readonly ProductSource[] = PRODUCT_SOURCES,

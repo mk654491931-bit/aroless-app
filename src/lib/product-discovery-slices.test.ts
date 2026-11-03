@@ -1,5 +1,5 @@
 // ============================================================================
-// DİLİM BÜTÇESİ — 10 SN'LİK İŞLEMLER (birim testleri, ağ yok).
+// DİLİM BÜTÇESİ — 15 SN'LİK İŞLEMLER (birim testleri, ağ yok).
 //
 // Sözleşme: her QStash teslimatı en fazla BİR dilim kadar çalışır, dilim
 // bütçesi makul sınırlara kırpılır, zincir sözü dilimleme yüzünden uzamaz ve
@@ -24,8 +24,8 @@ import {
 } from "./product-discovery-slices.server";
 
 describe("dilim bütçesi", () => {
-  it("varsayılan dilim 10 saniyedir (kullanıcının istediği kural)", () => {
-    expect(DEFAULT_SLICE_MS).toBe(10_000);
+  it("varsayılan dilim 15 saniyedir (okuyucuların 9,5 sn tavanı sığsın)", () => {
+    expect(DEFAULT_SLICE_MS).toBe(15_000);
     expect(discoverySliceMs({})).toBe(DEFAULT_SLICE_MS);
   });
 

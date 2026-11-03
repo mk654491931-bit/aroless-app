@@ -582,7 +582,7 @@ export const DiscoveryStepPayloadSchema = z.object({
    * BU TESLİMATIN DİLİM NUMARASI (0 tabanlı).
    *
    * Her QStash mesajı artık bir adımın TAMAMINI değil, en fazla bir DİLİMİNİ
-   * koşar (`DISCOVERY_SLICE_MS`, varsayılan 10 sn). Adım dilim içinde bitmezse
+   * koşar (`DISCOVERY_SLICE_MS`, varsayılan 15 sn). Adım dilim içinde bitmezse
    * o ana kadarki ilerleme ara noktaya yazılır ve AYNI adımın sıradaki dilimi
    * yayınlanır. Kimlik alanı olduğu için gövdede taşınır; QStash dedupe
    * anahtarı da `runId:step:slice` olur, böylece devam dilimi engellenmez ama

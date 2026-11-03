@@ -61,6 +61,19 @@ export function viewsDemandScore(views: number | null): number | null {
   return Math.max(0, Math.min(100, Math.round(50 + Math.log10(views) * 10)));
 }
 
+/**
+ * Ölçülen değerlendirme sayısını 0-100 talep sinyaline çevirir; yoksa `null`.
+ *
+ * Satış hacmi vermeyen kaynaklarda (Newegg, Bing, TR okuyucu, eBay) gerçek
+ * kullanıcı sayısı tek talep kanıtıdır. AI konseyi devre dışıyken `cmo` ve
+ * `trend_hunter` oylarını besler; böylece “sinyal yok” diye 50'de kalmaz.
+ */
+export function reviewsDemandScore(reviews: number | null): number | null {
+  if (reviews === null || reviews <= 0) return null;
+  // log10: 50 değerlendirme → 67, 1.000 → 80, 10.000 → 90.
+  return Math.max(0, Math.min(100, Math.round(50 + Math.log10(reviews) * 10)));
+}
+
 /** Kaç FARKLI kaynak ürünü doğruladı → kanıt gücü (0-24). */
 export function sourceStrength(sources: readonly string[]): number {
   return Math.min(3, sources.length) * 8;
@@ -74,7 +87,8 @@ export function deterministicVotes(product: NormalizedProduct): AgentVote[] {
   // ÖLÇÜLEN hacim → 0-100 talep sinyali. `null` = ölçülmedi (50'ye zorlanmaz).
   const salesDemand = salesDemandScore(product.salesVolume);
   const viewDemand = viewsDemandScore(product.viewed90d);
-  const measured = [salesDemand, viewDemand].filter((v): v is number => v !== null);
+  const reviewDemand = reviewsDemandScore(product.ratingCount);
+  const measured = [salesDemand, viewDemand, reviewDemand].filter((v): v is number => v !== null);
   // Kohort içi normalize edilmiş sinyal (2 pay) ölçülen hacimle harmanlanır;
   // hiç hacim ölçülmediyse mevcut sinyal AYNEN kalır — nötre düşürülmez.
   const demand = measured.length

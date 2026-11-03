@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-import { marketplacesForCountry, runSources } from "./product-discovery-sources.server";
+import {
+  marketplacesForCountry,
+  runSourceRescue,
+  runSources,
+  type ProductSource,
+} from "./product-discovery-sources.server";
 import { englishProductQuery } from "./product-discovery-query";
 
 /**
@@ -106,5 +111,74 @@ describe("runSources — hedef ülkeyi kaynağa taşır", () => {
       { capMs: 2_000 },
     );
     expect(called).toBe(true);
+  });
+});
+
+describe("runSourceRescue — boş havuzda ülke kapısını atlar", () => {
+  it("yalnız kurtarma listesindeki kaynağı ülke kapısız çağırır ve satırı işaretler", async () => {
+    let countryCalls = 0;
+    let defaultCalls = 0;
+    const source: ProductSource = {
+      name: "tr-reader",
+      timeoutMs: 2_000,
+      scrape: () => {
+        defaultCalls += 1;
+        return Promise.resolve([{ title: "Gerçek ürün", source: "tr-reader", notes: "ölçüldü" }]);
+      },
+      scrapeForCountry: () => {
+        countryCalls += 1;
+        return Promise.resolve([]);
+      },
+    };
+
+    const result = await runSourceRescue("air fryer", "US", {
+      capMs: 2_000,
+      sources: [source],
+    });
+
+    expect(countryCalls).toBe(0);
+    expect(defaultCalls).toBe(1);
+    expect(result.products).toHaveLength(1);
+    expect(result.products[0]!.notes).toContain("küresel kurtarma");
+    expect(result.reports[0]).toMatchObject({ name: "tr-reader", ok: true, items: 1 });
+  });
+
+  it("kurtarma listesinde olmayan kaynağı çalıştırmaz (normal aramada yabancı pazar yok)", async () => {
+    let called = false;
+    const source: ProductSource = {
+      name: "probe",
+      timeoutMs: 1_000,
+      scrape: () => {
+        called = true;
+        return Promise.resolve([]);
+      },
+      scrapeForCountry: () => Promise.resolve([]),
+    };
+    const result = await runSourceRescue("air fryer", "US", { sources: [source] });
+    expect(called).toBe(false);
+    expect(result.products).toEqual([]);
+    expect(result.reports).toEqual([]);
+  });
+
+  it("kaynak hatası fail-soft raporlanır, diğer satırlar korunur", async () => {
+    const result = await runSourceRescue("air fryer", "DE", {
+      capMs: 1_000,
+      sources: [
+        {
+          name: "otto-reader",
+          timeoutMs: 1_000,
+          scrape: () => Promise.reject(new Error("blocked")),
+        },
+        {
+          name: "rakuten-reader",
+          timeoutMs: 1_000,
+          scrape: () => Promise.resolve([{ title: "Japon ürünü", source: "rakuten-reader" }]),
+        },
+      ],
+    });
+    expect(result.products).toHaveLength(1);
+    const failed = result.reports.find((r) => r.name === "otto-reader");
+    expect(failed?.ok).toBe(false);
+    expect(failed?.error).toContain("blocked");
   });
 });

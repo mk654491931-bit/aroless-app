@@ -39,7 +39,8 @@ function compactLine(p: NormalizedProduct, index: number): string {
   const sources = p.sources.length ? `${p.sources.length} kaynak` : "tek kaynak";
   return (
     `${index}. ${p.name.slice(0, 90)} | ${price} | ${rating} | ${sales} | ` +
-    `${views} | ${sources} | ön skor ${Math.round(p.preScore)}`
+    `${views} | talep ${p.signals.demand}/100 | rekabet ${p.signals.competition}/100 | ` +
+    `${sources} | ön skor ${Math.round(p.preScore)}`
   );
 }
 

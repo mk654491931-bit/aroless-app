@@ -7,7 +7,7 @@
  * DİLİMLER (10 sn kuralı) — BİR İSTEK = BİR DİLİM:
  *
  * Bu uç artık bir adımın TAMAMINI değil, en fazla bir DİLİMİNİ koşar
- * (`DISCOVERY_SLICE_MS`, varsayılan 10 sn; uzun adımlar için bkz.
+ * (`DISCOVERY_SLICE_MS`, varsayılan 15 sn; uzun adımlar için bkz.
  * `product-discovery-slices.server.ts`). Adım dilim içinde bitmezse:
  *   1. o ana kadarki ilerleme ARA NOKTAYA yazılır (ör. konseyde hangi roller
  *      konuştu ve puanları),

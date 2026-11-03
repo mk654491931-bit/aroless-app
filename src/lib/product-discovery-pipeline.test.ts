@@ -439,16 +439,24 @@ describe("buildShortlistPrompt", () => {
     expect(prompt).toContain(`tam olarak ${GEMINI_SHORTLIST_SIZE} farklı productId`);
   });
 
-  it("her adayı GERÇEK productId ile listeler (model uydurma kimlik yazmasın)", () => {
-    // Regresyon kapısı: istem "productId dön" diyordu ama listede kimlik
-    // YOKTU (sıralı numara vardı). Model doğru davranıp listedeki tek bir
-    // kimliği kopyalayamayınca uydurmak zorunda kalıyor ve doğrulayıcı her
-    // seçimi eliyordu — hat sessizce yedeğe düşüyordu. Satırlar `productIdOf`
-    // ile üretilir, yani liste ile doğrulayıcının beklediği kimlikler aynıdır.
+  it("75 adayın TAMAMINI gerçek productId ile listeler (model gerçekten eler)", () => {
+    // ÖLÇÜLEN HATA (2026-11-02): istem 75 adaylık havuzun yalnız ilk 25'ini
+    // listeliyor, model de o 25'in tamamını seçiyordu. Yani "75 → 25"
+    // seçimi fiilen yoktu. İstem artık tüm aday havuzunu listelemeli.
     const prompt = buildShortlistPrompt(pool, "air fryer");
-    for (const product of pool.slice(0, GEMINI_SHORTLIST_SIZE)) {
+    for (const product of pool) {
       expect(prompt).toContain(productIdOf(product));
     }
+    // 30. aday da gerçekten istemde: eski sürüm bu satırı hiç göndermiyordu.
+    expect(prompt).toContain(productIdOf(pool[29]!));
+  });
+
+  it("modelin gördüğü satırda ÖLÇÜLMÜŞ talep/rekabet/marj sinyalleri vardır", () => {
+    const prompt = buildShortlistPrompt(pool, "air fryer");
+    expect(prompt).toContain(`talep ${pool[0]!.signals.demand}/100`);
+    expect(prompt).toContain("rekabet");
+    expect(prompt).toContain("marj");
+    expect(prompt).toContain("satış");
   });
 
   it("kimlik dışında ürün verisi istemde ÖLÇÜLMÜŞ olarak yazar", () => {
@@ -607,6 +615,19 @@ describe("Gemini kısa liste — productId sözleşmesi ve halüsinasyon kapıs�
     aiMock.callGemini.mockResolvedValue(JSON.stringify({ picks: [99, 2] }));
     const picked = await geminiShortlistSelector([p1, p2], "air fryer");
     expect(picked.map((p) => p.id)).toEqual(["sku-2"]);
+  });
+
+  it("30 adaylı havuzda 30. adayı da model seçebilir (25'lik dilim yok)", async () => {
+    const pool = Array.from({ length: 30 }, (_, i) =>
+      fullProduct({ id: `s-${i}`, name: `Ürün ${i + 1}` }),
+    );
+    const target = pool[29]!;
+    aiMock.callGemini.mockResolvedValue(
+      JSON.stringify({ picks: [{ productId: productIdOf(target), score: 90 }] }),
+    );
+    const picked = await geminiShortlistSelector(pool, "air fryer");
+    expect(picked).toHaveLength(1);
+    expect(picked[0]!.id).toBe("s-29");
   });
 
   it("havuz 25'ten küçükse sayı DOLDURULMAZ", async () => {

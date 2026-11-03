@@ -108,7 +108,9 @@ function candidateLine(p: NormalizedProduct, index: number): string {
   const sources = p.sources.length ? `${p.sources.length} kaynak` : "tek kaynak";
   return (
     `${index}. ${p.name.slice(0, 70)} | marka: ${p.brand || "?"} | ${price} | ${rating} | ` +
-    `${seller} | ${views} | ${sales} | ${sources} | ön skor ${p.preScore} | kanıt ${p.dataCompleteness}/5`
+    `${seller} | ${views} | ${sales} | talep ${p.signals.demand}/100 | ` +
+    `rekabet ${p.signals.competition}/100 | marj ${p.signals.margin}/100 | ` +
+    `${sources} | ön skor ${p.preScore} | kanıt ${p.dataCompleteness}/5`
   );
 }
 
@@ -134,8 +136,8 @@ export function buildAgentPrompt(
     `Niş: "${niche}". Aşağıdaki ${Math.min(products.length, 40)} aday ürünü KENDİ KRİTERİNE GÖRE puanla.`,
     "Puan 0-100 olsun (50 = nötr, kanıt yoksa 50 ver; uydurma).",
     ...(brief ? [brief] : []),
-    "ÖLÇÜLEN sayıları kullan: satış hacmi, görüntülenme ve kaç kaynağın ürünü doğruladığı ayrım yaratır.",
-    "Ölçülmüş satışı/görüntülenmesi yüksek ürünü ödüllendir; 'ölçülmedi' yazan alanı tahmin etme.",
+    "ÖLÇÜLEN sayıları kullan: satış hacmi, görüntülenme, değerlendirme sayısı ve kaç kaynağın ürünü doğruladığı ayrım yaratır.",
+    "Talep/rekabet/marj satırları ölçülmüş sinyallerdir; yüksek talebi ve düşük rekabeti ödüllendir, 'ölçülmedi' yazan alanı tahmin etme.",
     "Her satırda tek bir cümle gerekçe yaz (en fazla 12 kelime).",
     "Sadece listedeki indeksleri kullan; yeni ürün ekleme.",
     "",

@@ -14,8 +14,14 @@
 // ============================================================================
 import { describe, expect, it, vi } from "vitest";
 
-/** Kaynak katmanı mock'u: ağ yerine ölçülmüş/kirli satırları biz veriyoruz. */
-const sourcesMock = vi.hoisted(() => ({ runSources: vi.fn() }));
+/**
+ * Kaynak katmanı mock'u: ağ yerine ölçülmüş/kirli satırları biz veriyoruz.
+ * `runSourceRescue` da mock'lanır; sıfır havuzda gerçek ağ turu açmasın.
+ */
+const sourcesMock = vi.hoisted(() => ({
+  runSources: vi.fn(),
+  runSourceRescue: vi.fn(),
+}));
 vi.mock("./product-discovery-sources.server", () => sourcesMock);
 
 import { runScrapeFilterStep } from "./product-discovery-pipeline.server";
@@ -41,6 +47,9 @@ describe("runScrapeFilterStep — ilk aşama boş kalırsa kurtarma", () => {
       products: [lowRatedRow()],
       reports: [{ name: "web-reviews", ok: true, items: 1, ms: 12, error: "" }],
     });
+    // `web-reviews` ürün dışı bir kaynaktır; kurtarma turu boş dönerse
+    // mevcut satır salvajla korunmalı.
+    sourcesMock.runSourceRescue.mockResolvedValue({ products: [], reports: [] });
 
     const result = await runScrapeFilterStep("LED masa lambası", "US", "General", 5, {
       sourceCapMs: 2_000,
@@ -55,11 +64,52 @@ describe("runScrapeFilterStep — ilk aşama boş kalırsa kurtarma", () => {
     expect(result.products[0]?.priceUsd).toBeNull();
   });
 
+  it("yalnız SİNYAL satırı geldiyse ürün kurtarma turunu çalıştırır", async () => {
+    // Wikipedia/GitHub gibi kaynaklar talep sinyali verir ama ürün satmaz.
+    // "Ham havuz boş değil" diye kurtarmayı atlamak, sinyal varken ürün
+    // olmamasına yol açardı. Kurtarma satırı gerçek ürün alanları taşır.
+    sourcesMock.runSources.mockResolvedValue({
+      products: [
+        {
+          title: "Air Fryer ekosistemi",
+          source: "github",
+          url: "https://github.com/acme/air-fryer",
+          notes: "1.200 yıldız",
+        },
+      ],
+      reports: [{ name: "github", ok: true, items: 1, ms: 8, error: "" }],
+    });
+    sourcesMock.runSourceRescue.mockResolvedValue({
+      products: [
+        {
+          title: "Air Fryer 5L",
+          source: "aliexpress-reader",
+          priceUsd: 99,
+          rating: 4.5,
+          ratingCount: 500,
+          imageUrl: "https://cdn.example.test/air-fryer.jpg",
+          url: "https://example.test/air-fryer",
+          notes: "",
+        },
+      ],
+      reports: [{ name: "aliexpress-reader", ok: true, items: 1, ms: 12, error: "" }],
+    });
+
+    const result = await runScrapeFilterStep("air fryer", "US", "General", 5, {
+      sourceCapMs: 2_000,
+    });
+
+    expect(sourcesMock.runSourceRescue).toHaveBeenCalled();
+    expect(result.products.length).toBeGreaterThan(0);
+    expect(result.notes.join(" ")).toContain("kurtarma");
+  });
+
   it("kaynak hiç satır döndürmediyse kurtarma da boş kalır (uydurma yok)", async () => {
     sourcesMock.runSources.mockResolvedValue({
       products: [],
       reports: [{ name: "web-reviews", ok: false, items: 0, ms: 9, error: "fetch failed" }],
     });
+    sourcesMock.runSourceRescue.mockResolvedValue({ products: [], reports: [] });
 
     const result = await runScrapeFilterStep("LED masa lambası", "US", "General", 5, {
       sourceCapMs: 2_000,

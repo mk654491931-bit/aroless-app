@@ -23,7 +23,7 @@
 // zincir yine de doğru sırayla koşar. Bu ayrım kritik: ilerlemeyi yalnız durum
 // sütununa bağlamak, "kolon yok" durumunda yanlış adımı çalıştırırdı.
 //
-// DİLİMLER — HER TESLİMAT EN FAZLA BİR DİLİM (varsayılan 10 sn):
+// DİLİMLER — HER TESLİMAT EN FAZLA BİR DİLİM (varsayılan 15 sn):
 //
 // Her taşıyıcı (QStash teslimatı, süreç içi arka plan işi, tarayıcı yoklaması)
 // AYNI kuralı uygular: bir adımı dilim dilim koşar, her dilimin ilerlemesini
@@ -155,7 +155,7 @@ export const STALE_STEP_TAKEOVER_MS = 60_000;
  *
  * NEDEN ARTIK "ADIM" DEĞİL "DİLİM" EŞİĞİ: eskiden her adım tek bir istekte
  * koşuyordu ve ona en az 25 sn tanımak zorundaydık (`MIN_STEP_BUDGET_MS`). Artık
- * her teslimat en fazla bir dilim (varsayılan 10 sn) koşar ve devam dilimleri
+ * her teslimat en fazla bir dilim (varsayılan 15 sn) koşar ve devam dilimleri
  * birbirini hızla takip eder. Bu yüzden zincir kapısı küçüldü: kalan süre tek
  * bir dilime yetiyorsa adım yine başlar, yetmiyorsa dürüstçe durur (iş zaten
  * ara noktada saklıdır ve bir sonraki yoklama/dilim devam eder).

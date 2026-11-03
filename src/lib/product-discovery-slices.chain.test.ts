@@ -1,5 +1,5 @@
 // ============================================================================
-// DİLİMLİ ZİNCİR — "HER İŞLEM 10 SN, SONRA QSTASH" SÖZLEŞMESİ.
+// DİLİMLİ ZİNCİR — "HER İŞLEM 15 SN, SONRA QSTASH" SÖZLEŞMESİ.
 //
 // Bu testler davranışı kilitler:
 //   1. Bir teslimatın iş bütçesi DİLİMDİR (zincir sözü değil).
@@ -348,7 +348,7 @@ describe("zincir sürücüsü dilim dilim koşar (runDiscoveryChain)", () => {
     expect(deepSaves.at(-1)?.done).toContain("deep");
   });
 
-  it("HER teslimat kendi DİLİM bütçesiyle sınırlıdır (10 sn)", async () => {
+  it("HER teslimat kendi DİLİM bütçesiyle sınırlıdır (15 sn)", async () => {
     const observed: number[] = [];
     stepsMock.executeProductDiscoveryStep.mockImplementation(async (args: ExecArgs) => {
       observed.push((args.sliceDeadlineAt ?? 0) - Date.now());
