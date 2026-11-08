@@ -78,12 +78,14 @@ export function measuredMarginPct(p: {
  * kargo, komisyon ve aylık hacim KAZINAMAZ. Bu yüzden o hatta
  * `hasMeasuredEconomics` `false` döner ve kart "—" gösterir.
  *
- * `real_economics` model çıktısı olsa da EN AZ BİR GERÇEK maliyet girdisi
- * (tedarik fiyatı ya da dolu bir maliyet kalemi) varsa kabul edilir; aksi
- * halde `realEconomics` her şeyi varsayılanla doldurup sayı uydurur.
+ * `real_economics` bir MODEL çıktısıdır; varlığı tek başına ölçüm sayılmaz.
+ * Modelin tedarik fiyatı gerçekten ölçülmüşse (`supplier_measured: true`) ya
+ * da üründe dolu bir maliyet kalemi varsa kabul edilir. Aksi hâlde
+ * `realEconomics` her şeyi varsayılanla doldurup sayı uydurur.
  */
 export function hasMeasuredEconomics(p: EconomicsEvidenceInput): boolean {
-  if (p.real_economics && typeof p.real_economics === "object") return true;
+  const model = p.real_economics as { supplier_measured?: boolean } | null | undefined;
+  if (model && typeof model === "object" && model.supplier_measured === true) return true;
   if (measuredMoney(p.supplier_price_usd) !== null) return true;
   const cb = p.cost_breakdown;
   if (!cb) return false;
@@ -110,7 +112,9 @@ export function hasMeasuredEconomics(p: EconomicsEvidenceInput): boolean {
  * ölçülmüş `net_profit` varsa hesaplanır.
  */
 export function hasMeasuredNetProfit(p: EconomicsEvidenceInput): boolean {
-  if (p.real_economics && typeof p.real_economics === "object") return true;
+  // `real_economics` NET ÖLÇÜM DEĞİLDİR: kargo, komisyon, CAC ve iade
+  // kalemleri modelin varsayımlarıdır. Yalnız tam maliyet dökümü ya da
+  // doğrudan ölçülmüş `net_profit` gerçek net kâr sayılır.
   const cb = p.cost_breakdown;
   if (!cb) return false;
   if (measuredMoney(cb.net_profit) !== null) return true;

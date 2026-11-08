@@ -61,6 +61,14 @@ export type RealEconomics = {
   assumptions: string[];
   /** Hangi sektör/ülke/pazar tahminlerinin kullanıldığı + kaynak bağlantıları. */
   benchmarks: EconomicsBenchmark[];
+  /**
+   * Tedarik fiyatı GERÇEKTEN ölçüldü mü, yoksa model/AI tahmini mi?
+   *
+   * NEDEN VAR: model, ölçülmemiş tedarik fiyatını perakendenin ~%30'uyla
+   * dolduruyor. Bu bir senaryo varsayımıdır; ölçülmüş tedarik fiyatı gibi
+   * sunulamaz ve ölçülmüş fiyatın üzerine yazılamaz.
+   */
+  supplier_measured?: boolean;
   /** Modelin uygulandığı bağlam (rozetlerde gösterilir). */
   context: { country: string; country_label: string; category: string; platform: string };
 };
@@ -74,6 +82,11 @@ export type RealEconomicsInput = {
   trend_score?: number;
   cvr_pct?: number;
   startup_cost_usd?: unknown;
+  /**
+   * Tedarik fiyatı ölçülmüş bir kaynaktan mı geldi?
+   * `true` ise fiyat model bandına ÇEKİLMEZ; ölçüm neyse o kullanılır.
+   */
+  supplier_price_measured?: boolean;
   /** ISO ülke kodu (US, DE, TR…) veya GLOBAL. */
   country?: string;
   /** Ürün kategorisi / niş (sektör benchmark'ı için). */
@@ -366,15 +379,23 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
 
   const retail = clamp(money(input.selling_price_usd) || 29.9, 3, 5000);
 
-  // Sourcing sanity: real dropship/private-label COGS is 20-40% of retail.
-  let supplier = money(input.supplier_price_usd);
-  const sourcingOutOfBand = !(
-    supplier > 0 &&
-    supplier >= retail * 0.12 &&
-    supplier <= retail * 0.55
-  );
-  if (sourcingOutOfBand) supplier = retail * 0.3;
-  supplier = clamp(supplier, retail * 0.12, retail * 0.55);
+  // Sourcing sanity YALNIZ model/AI tahmini içindir. Ölçülmüş tedarik fiyatı
+  // gerçek bir sayfadan geldiyse band "düzeltmesi" yapılmaz: ölçümü modele
+  // uydurmak, ölçümü silmekle aynıdır. Ölçülmüş fiyat marjı negatife
+  // düşürüyorsa doğru sonuç da odur.
+  const supplierInput = money(input.supplier_price_usd);
+  const supplierMeasured = input.supplier_price_measured === true && supplierInput > 0;
+  let supplier = supplierInput;
+  let sourcingOutOfBand = false;
+  if (!supplierMeasured) {
+    sourcingOutOfBand = !(
+      supplier > 0 &&
+      supplier >= retail * 0.12 &&
+      supplier <= retail * 0.55
+    );
+    if (sourcingOutOfBand) supplier = retail * 0.3;
+    supplier = clamp(supplier, retail * 0.12, retail * 0.55);
+  }
 
   const cb = countryBench(input.country);
   const sb = sectorBench(input.category);
@@ -460,9 +481,11 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
       high_usd: Math.round(monthlyNet * (monthlyNet > 0 ? 1.7 : 0.4)),
     },
     assumptions: [
-      sourcingOutOfBand
-        ? `Tedarik fiyatı gerçekçi banda çekildi (perakendenin ~%30'u): $${r2(supplier)}`
-        : `Tedarik fiyatı kaynak verisinden: $${r2(supplier)}`,
+      supplierMeasured
+        ? `Tedarik fiyatı ÖLÇÜLDÜ: $${r2(supplier)} (model bandına çekilmedi).`
+        : sourcingOutOfBand
+          ? `Tedarik fiyatı ölçülmedi/AI tahmini; model varsayımı (perakendenin ~%30'u): $${r2(supplier)}.`
+          : `Tedarik fiyatı AI tahmini/model: $${r2(supplier)} — ölçülmüş tedarik fiyatı DEĞİL.`,
       `${label} + ödeme komisyonu %2.9 + $0.30`,
       isMarketplace
         ? `Reklam gideri satışın %${Math.round((cac / retail) * 100)}'i (pazaryeri TACoS) → $${r2(cac)}/sipariş`
@@ -472,6 +495,7 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
       `Ülke pazarı: ${cb.label} (CPC çarpanı ×${cb.cpc} · yerel kargo $${cb.ship}) · ${cb.tax}`,
       `Sektör: ${sb.label} — ortalama iade %${Math.round(sb.returns * 100)}, dönüşüm %${sb.cvr}`,
     ],
+    supplier_measured: supplierMeasured,
     context: {
       country: (input.country ?? "GLOBAL").toUpperCase(),
       country_label: cb.label,

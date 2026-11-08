@@ -75,7 +75,36 @@ describe("toWinningProducts — ölçülmüş talep sinyalleri", () => {
     expect(product.measured?.viewed90d).toBeNull();
   });
 
-  it("tedarik kanıtı ve brüt marj aynen taşınır (Supplier/Marj hücresi)", () => {
+  it("NİŞ bandı ürün maliyeti/marjı olarak TAŞINMAZ — yalnız band kanıtı kalır", () => {
+    const evidence = {
+      samples: 3,
+      supplierPriceUsd: null,
+      supplierLowUsd: 14.1,
+      supplierHighUsd: 26.36,
+      listPriceUsd: null,
+      discountPct: null,
+      soldTotal: null,
+      soldMax: null,
+      store: "",
+      shipFrom: "",
+      url: "",
+      matchKind: "niche" as const,
+    };
+    const [product] = toWinningProducts([
+      row({ supplier: evidence, grossMarginPct: 56.9, feeBudgetUsd: 23.14 }),
+    ]);
+    expect(product.supplier_price_usd).toBe("");
+    expect(product.supplier_evidence?.matchKind).toBe("niche");
+    expect(product.supplier_evidence?.supplierLowUsd).toBe(14.1);
+    expect(product.supplier_evidence?.supplierHighUsd).toBe(26.36);
+    // Pipeline yanlışlıkla marj taşısa bile adaptör NİŞTE marjı karta yazmaz.
+    expect(product.gross_margin_pct).toBeNull();
+    expect(product.fee_budget_usd).toBeNull();
+    expect(product.cost_breakdown?.supplier_cost).toBe("");
+    expect(product.supplier_links ?? []).toEqual([]);
+  });
+
+  it("BİREBİR ürün eşleşmesinde tedarik fiyatı ve brüt marj taşınır", () => {
     const evidence = {
       samples: 3,
       supplierPriceUsd: 17.52,
@@ -83,19 +112,22 @@ describe("toWinningProducts — ölçülmüş talep sinyalleri", () => {
       supplierHighUsd: 26.36,
       listPriceUsd: 80.52,
       discountPct: 67,
-      soldTotal: 695,
+      soldTotal: null,
+      soldMax: 695,
       store: "PETRAEL Local Store",
       shipFrom: "CN",
       url: "https://www.aliexpress.com/item/3256809985321027.html",
-      matchKind: "niche" as const,
+      matchKind: "product" as const,
     };
     const [product] = toWinningProducts([
       row({ supplier: evidence, grossMarginPct: 56.9, feeBudgetUsd: 23.14 }),
     ]);
     expect(product.supplier_price_usd).toBe("17.52");
-    expect(product.supplier_evidence?.matchKind).toBe("niche");
+    expect(product.supplier_evidence?.matchKind).toBe("product");
     expect(product.gross_margin_pct).toBe(56.9);
     expect(product.fee_budget_usd).toBe(23.14);
+    expect(product.cost_breakdown?.supplier_cost).toBe("17.52");
+    expect(product.supplier_links).toEqual(["https://www.aliexpress.com/item/3256809985321027.html"]);
   });
 });
 

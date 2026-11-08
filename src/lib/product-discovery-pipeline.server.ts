@@ -894,12 +894,12 @@ export async function runScrapeFilterStep(
   ];
   if (supplierStats.matched > 0) {
     notes.push(
-      `Tedarik kanıtı: ${supplierStats.matched}/${survivors.length} ürüne toptan ` +
-        `teklif eşleşti (${supplierStats.matchedProduct} birebir ürün, ` +
-        `${supplierStats.matchedNiche} aynı niş; ${supplierStats.offers} teklif tarandı, ` +
-        `medyan birim fiyat ` +
+      `Tedarik kanıtı: ${supplierStats.matched}/${survivors.length} ürün için ölçüm ` +
+        `var (${supplierStats.matchedProduct} birebir ürün teklifi, ` +
+        `${supplierStats.matchedNiche} niş bandı; ${supplierStats.offers} teklif tarandı, ` +
+        `birebir medyan birim fiyat ` +
         `${supplierStats.medianUsd === null ? "ölçülmedi" : `$${supplierStats.medianUsd}`}); ` +
-        `brüt marj ${supplierStats.withMargin} üründe, MOQ ${supplierStats.withMoq} üründe hesaplandı.`,
+        `brüt marj yalnız ${supplierStats.withMargin} üründe hesaplandı, MOQ ${supplierStats.withMoq} üründe ölçüldü.`,
     );
   } else if (survivors.length > 0) {
     notes.push(
@@ -936,9 +936,10 @@ export async function runScrapeFilterStep(
   // sebep görünmez kalırsa kullanıcı "neden lansman sayısı düştü" diye sorar.
   if (supplierStats.matchedNiche > 0) {
     notes.push(
-      `Tedarik proxy'si: ${supplierStats.matchedNiche} aday yalnız NİŞ bandıyla ` +
-        `fiyatlandı (bu ürünün kendi toptan teklifi yok) — bunlar lansman ` +
-        `kararında "atılabilir" SAYILMAZ; tedarikçiden bu ürüne ait FOB fiyatı istenmeli.`,
+      `Tedarik proxy'si: ${supplierStats.matchedNiche} aday için yalnız NİŞ fiyat ` +
+        `bandı ölçüldü (bu ürünün kendi toptan teklifi yok). Bant ürün maliyeti ` +
+        `sayılmadı; marj üretilmedi ve bu adaylar lansman kararında "atılabilir" ` +
+        `SAYILMAZ. Tedarikçiden bu ürüne ait FOB fiyatı istenmeli.`,
     );
   }
   if (rescued > 0) {

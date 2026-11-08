@@ -142,7 +142,11 @@ describe("buildSupplierEvidence", () => {
     expect(evidence.supplierLowUsd).toBeCloseTo(21.94, 2);
     expect(evidence.supplierHighUsd).toBeCloseTo(35.38, 2);
     expect(evidence.supplierPriceUsd).toBeCloseTo(26.36, 2);
-    expect(evidence.soldTotal).toBe(695 + 154 + 695);
+    // HAVUZ TOPLAMI DEĞİL: aynı nişteki tüm tekliflerin satışı bu ürünün
+    // satışı gibi gösterilemez. `soldTotal` yeni kayıtlarda null, `soldMax`
+    // tek bir teklifin ölçülen satışıdır.
+    expect(evidence.soldTotal).toBeNull();
+    expect(evidence.soldMax).toBe(695);
   });
 
   it("eşleşme yoksa ALANLAR BOŞ kalır (0 yazmaz)", () => {
@@ -157,6 +161,7 @@ describe("buildSupplierEvidence", () => {
       [offer({ sold: null })],
     );
     expect(evidence.soldTotal).toBeNull();
+    expect(evidence.soldMax).toBeNull();
   });
 });
 
@@ -184,30 +189,34 @@ describe("NİŞ seviyesi tedarik yedeği — çok dilli başlıklarda '—' kalm
       nicheQueries: ["air fryer"],
     });
     expect(evidence.samples).toBe(2);
-    expect(evidence.supplierPriceUsd).toBeCloseTo(38.85, 2);
+    // NİŞ BANDI ÜRÜN MALİYETİ DEĞİLDİR: `supplierPriceUsd` null kalır, böylece
+    // marj da üretilemez. Yalnız ölçülen band taşınır.
+    expect(evidence.supplierPriceUsd).toBeNull();
     // Kanıtın gücü SAKLANMAZ: bu bir niş bandıdır, birebir ürün fiyatı değil.
     expect(supplierMatchKind(evidence)).toBe("niche");
     // Alakasız hoparlör teklifi banda KARIMAZ.
     // p25 doğrusal interpolasyon: 35.2 + (42.5−35.2)×0.25 = 37.03
     expect(evidence.supplierLowUsd).toBeCloseTo(37.03, 2);
+    expect(evidence.supplierHighUsd).toBeCloseTo(40.67, 2);
   });
 
-  it("niş eşleşmesi marjı da hesaplanabilir kılar (marj '—' kalmasın)", () => {
+  it("niş bandı marj ÜRETMEZ — ürün maliyeti ölçülmemişse brüt marj da yoktur", () => {
     const { supplier, margin } = buildEconomics(
       { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 123.45 },
       englishOffers,
       { nicheQueries: ["air fryer"] },
     );
-    expect(supplier.supplierPriceUsd).not.toBeNull();
-    expect(margin.grossMarginPct).toBeGreaterThan(0);
+    expect(supplier.supplierPriceUsd).toBeNull();
+    expect(supplier.supplierLowUsd).not.toBeNull();
+    expect(margin.grossMarginPct).toBeNull();
+    expect(margin.feeBudgetUsd).toBeNull();
     expect(margin.netMarginPct).toBeNull();
   });
 
-  it("niş havuzunda MOQ/aralık HAVUZUN İLK teklifinden değil, EN BAŞLATILABİLİR tekliften alınır", () => {
-    // ÖLÇÜLEN HATA: eski kod `nicheOffers[0]`i seçiyordu — yani kaynak
-    // sırasına göre rastgele bir teklifi. Aynı nişte MOQ 10 olan tedarikçi
-    // masadayken kanıta MOQ 1.000 yazılabiliyor, "ilk sipariş sermayesi" bu
-    // ürünün değil o rastgele teklifin rakamı oluyordu.
+  it("niş bandı teklife özel MOQ/mağaza/satış TAŞIMAZ (ürünün tedarikçisi sanılmasın)", () => {
+    // Niş bandı yalnız comparable tekliflerden kurulmuş FİYAT ARALIĞIDIR;
+    // MOQ, mağaza, kargo, URL ve satış tek bir teklife aittir ve bu ürünün
+    // kendi teklifi değildir. Taşınırsa arayüz onu ürünün tedarikçisi sanar.
     const offers = [
       offer({
         title: "Air Fryer 6L Large Capacity Oil-free Electric Oven",
@@ -234,37 +243,14 @@ describe("NİŞ seviyesi tedarik yedeği — çok dilli başlıklarda '—' kalm
       { nicheQueries: ["air fryer"] },
     );
     expect(supplierMatchKind(evidence)).toBe("niche");
-    expect(evidence.moqUnits).toBe(10);
-    expect(evidence.store).toBe("Kucuk MOQ Ltd.");
-    // Bant YİNE havuzun tamamından kurulur (medyan değişmez).
     expect(evidence.samples).toBe(2);
-    expect(evidence.supplierPriceUsd).toBe(40.5);
-  });
-
-  it("tüm niş teklifleri tavanın üstündeyse en DÜŞÜK ilk sipariş sermayesi seçilir", () => {
-    const offers = [
-      offer({
-        title: "Air Fryer 6L Large Capacity Electric Oven",
-        unitPriceUsd: 30,
-        moqUnits: 900, // 27.000 $
-        store: "Cok Pahali Ltd.",
-        sold: 5,
-      }),
-      offer({
-        title: "Household Air Fryer 5.5L Digital Fryer Oven",
-        unitPriceUsd: 60,
-        moqUnits: 100, // 6.000 $ — daha küçük ilk sipariş
-        store: "Daha Az Pahali Ltd.",
-        sold: 3100,
-      }),
-    ];
-    const evidence = buildSupplierEvidence(
-      { name: "Bosch MAF240B0 Sıcak Hava Fritözü", priceUsd: 199 },
-      offers,
-      { nicheQueries: ["air fryer"] },
-    );
-    expect(evidence.store).toBe("Daha Az Pahali Ltd.");
-    expect(evidence.moqUnits).toBe(100);
+    expect(evidence.supplierPriceUsd).toBeNull();
+    expect(evidence.moqUnits ?? null).toBeNull();
+    expect(evidence.moqUnit ?? "").toBe("");
+    expect(evidence.store).toBe("");
+    expect(evidence.shipFrom).toBe("");
+    expect(evidence.url).toBe("");
+    expect(evidence.soldMax ?? null).toBeNull();
   });
 
   it("niş ifadesi verilmezse DAVRANIŞ DEĞİŞMEZ (uydurma yok)", () => {
@@ -564,7 +550,7 @@ describe("specConflict / specMap — ölçü çelişmesi yakalanır, yanlış al
     expect(specMap("2 in 1 Robot Vacuum and Mop").length).toBeUndefined();
     expect(specMap("Robot Vacuum MAF240B0").length).toBeUndefined();
     // Gerçek ölçüler okunur.
-    expect(specMap("Air Fryer 6 Qt").volume).toBeCloseTo(5678.1, 0);
+    expect(specMap("Air Fryer 6 Qt").volume?.[0]).toBeCloseTo(5678.1, 0);
     expect(specMap("Tower Fan 180 cm").length).toEqual([1800]);
     expect(specMap("Air Fryer 1500W").power).toEqual([1500]);
   });

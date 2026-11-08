@@ -301,7 +301,16 @@ export const SupplierEvidenceSchema = z.object({
   supplierHighUsd: z.number().nullable(),
   listPriceUsd: z.number().nullable(),
   discountPct: z.number().nullable(),
+  /**
+   * ESKİ kayıtların havuz toplamı. Yeni kanıtta ÜRETİLMEZ (`null`).
+   *
+   * Ölçülen hata: aynı nişteki tüm tekliflerin satışları toplanıp "tedarik
+   * satışı" gibi gösteriliyordu; 22.582 adet gibi bir sayı, bu ürünün değil
+   * havuzun satışıydı. Yeni alan `soldMax` tek bir teklifin ölçümünü taşır.
+   */
   soldTotal: z.number().int().min(0).nullable(),
+  /** En çok satan TEK teklifin ölçülen satışı. `null` = ölçülmedi. */
+  soldMax: z.number().int().min(0).nullable().optional().catch(null),
   store: z.string(),
   shipFrom: z.string(),
   url: z.string(),
@@ -358,6 +367,7 @@ export function emptySupplierEvidence(): SupplierEvidence {
     listPriceUsd: null,
     discountPct: null,
     soldTotal: null,
+    soldMax: null,
     store: "",
     shipFrom: "",
     url: "",
@@ -649,19 +659,17 @@ export function buildSupplierEvidence(
         )
       : [];
     if (!nicheOffers.length) return emptySupplierEvidence();
-    // NİŞ HAVUZUNDA "EN BAŞLATILABİLİR" TEKLİF SEÇİLİR — havuzun İLK teklifi
-    // DEĞİL.
+    // NİŞ BANDI YALNIZ BANTTIR — ürün maliyeti DEĞİLDİR.
     //
-    // NEDEN ÖLÇÜM: MOQ ve FOB ARALIĞI teklife ÖZEL alanlardır (havuz medyanı
-    // bunları taşımaz) ve eski kod bunları `nicheOffers[0]`ten — yani kaynak
-    // sırasına göre rastgele bir tekliften — alıyordu. Ölçülen sonuç: aynı
-    // nişte MOQ 10 olan tedarikçi masadayken kanıta MOQ 50/1.000 yazılabiliyor,
-    // "ilk sipariş sermayesi" bu ürünün değil o rastgele teklifin rakamı
-    // oluyordu. Seçim artık deterministiktir ve kural birebir eşleşmeyle
-    // AYNIdır (`moreStartable`): bilinen ve tavanın altında → MOQ bilinmiyor →
-    // tavanın üstünde.
-    const nicheBest = nicheOffers.reduce((a, b) => (moreStartable(b, a) ? b : a));
-    return withMatchKind(buildEvidenceFromPool(nicheOffers, nicheBest), "niche");
+    // Ölçülen hata: aynı nişteki tekliflerin medyanı `supplierPriceUsd`e
+    // yazılıyor ve `buildMarginEvidence` bu sayıdan "brüt marj" üretiyordu.
+    // Böylece bu ürünün kendi toptan fiyatı hiç ölçülmediği hâlde kartta
+    // "Toptan birim $X" ve "Brüt marj %Y" görünüyordu. Bant faydalı bir
+    // karşılaştırmadır ama ürün maliyetinin YERİNE KONAMAZ. Bu yüzden:
+    //   • `supplierPriceUsd` null kalır (marj da null olur),
+    //   • MOQ/mağaza/kargo/URL/etiket/satış gibi TEKLİFE ÖZEL alanlar boş kalır,
+    //   • yalnız `supplierLowUsd`/`supplierHighUsd` ve `samples` taşınır.
+    return buildNicheBand(nicheOffers);
   }
 
   // Bant yalnız EN ALAKALI tekliflerden kurulur. “>= best” yerine TAM EŞİTLİK
@@ -689,6 +697,25 @@ function withMatchKind(
   matchKind: "product" | "niche",
 ): SupplierEvidence {
   return { ...evidence, matchKind };
+}
+
+/**
+ * Niş yedeği: yalnız ÖLÇÜLEN fiyat bandı + örnek sayısı.
+ *
+ * Teklife özel hiçbir alan taşınmaz; taşınırsa arayüz onu bu ürünün tedarikçisi
+ * sanar (ölçülen hata: niş bandı medyanı "Toptan birim" olarak gösteriliyordu).
+ */
+function buildNicheBand(pool: readonly SupplierOfferLike[]): SupplierEvidence {
+  const prices = pool
+    .map((offer) => measuredMoney(offer.unitPriceUsd))
+    .filter((value): value is number => value !== null);
+  return {
+    ...emptySupplierEvidence(),
+    samples: prices.length,
+    supplierLowUsd: money2(percentile(prices, 0.25)),
+    supplierHighUsd: money2(percentile(prices, 0.75)),
+    matchKind: "niche",
+  };
 }
 
 /**
@@ -733,7 +760,10 @@ function buildEvidenceFromPool(
     discountPct: discounts.length
       ? Math.round(discounts.reduce((a, b) => a + b, 0) / discounts.length)
       : null,
-    soldTotal: solds.length ? solds.reduce((a, b) => a + b, 0) : null,
+    // HAVUZ TOPLAMI DEĞİL: tek bir teklifin ölçülen satışı. Toplam, aynı
+    // nişteki tüm ilanların satışını bu ürünün satışı gibi gösteriyordu.
+    soldTotal: null,
+    soldMax: solds.length ? Math.max(...solds) : null,
     // MAĞAZA/KARGO: en çok satan teklif önce, ölçüm YOKSA eşleşen teklifin
     // kendi değeri. `??` yeterli DEĞİLDİ: AliExpress'te satış adedi olup mağaza
     // adı boş olan kartlar var (ölçüldü: 60 kartın 10'u) ve o durumda `store`
@@ -777,7 +807,10 @@ export function buildEconomics(
     supplier,
     margin: buildMarginEvidence({
       sellUsd: candidate.priceUsd,
-      supplierUsd: supplier.supplierPriceUsd,
+      // NİŞ BANDI MARJ ÜRETMEZ: `supplierPriceUsd` yalnız birebir ürün
+      // eşleşmesinde doludur; yine de niyet açıkça burada kilitlenir.
+      supplierUsd:
+        supplierMatchKind(supplier) === "product" ? supplier.supplierPriceUsd : null,
     }),
   };
 }

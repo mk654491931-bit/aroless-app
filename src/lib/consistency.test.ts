@@ -1,6 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { parseMoneyNum, checkConsistency, buyersPer1000, conversionTone } from "./consistency";
+import {
+  parseMoneyNum,
+  checkConsistency,
+  buyersPer1000,
+  conversionTone,
+  normalizeProduct,
+} from "./consistency";
 import type { WinningProduct } from "./gemini.functions";
+
+describe("normalizeProduct — model çıktısı ölçüm alanlarına YAZILMAZ", () => {
+  it("AI tedarik fiyatı boşsa modelin varsayımı ölçülmüş alanlara kopyalanmaz", () => {
+    const product = normalizeProduct(
+      makeProduct({
+        selling_price_usd: "$40",
+        supplier_price_usd: "",
+        profit_margin_pct: 0,
+        cost_breakdown: {
+          supplier_cost: "",
+          shipping_cost: "",
+          platform_fee: "",
+          ad_spend: "",
+          net_profit: "",
+          net_margin_pct: 0,
+        },
+      }),
+    );
+
+    // Model `real_economics` içinde varsayım üretir; bu bir senaryodur,
+    // sayfadan ölçülmüş tedarik fiyatı değildir. Ölçüm alanları boş kalır.
+    expect(product.supplier_price_usd).toBe("");
+    expect(product.cost_breakdown?.supplier_cost).toBe("");
+    expect(product.cost_breakdown?.net_profit).toBe("");
+    expect(product.profit_margin_pct).toBe(0);
+    expect(product.real_economics?.supplier).toBeGreaterThan(0);
+    expect(product.real_economics?.supplier_measured).toBe(false);
+  });
+});
 
 describe("parseMoneyNum", () => {
   it("parses dollar strings", () => {

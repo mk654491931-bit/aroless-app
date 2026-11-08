@@ -21,6 +21,7 @@
 
 import type { WinningProduct } from "@/lib/gemini.functions";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
+import { supplierMatchKind } from "@/lib/supplier-economics";
 
 /** Deterministik rekabet sinyalini arayüzün üç seviyeli etiketine çevirir. */
 function competitionLabel(score: number): WinningProduct["competition_level"] {
@@ -67,6 +68,16 @@ export function toWinningProducts(
       .slice(0, 3)
       .map((other) => other.name);
 
+    // TEDARİK KANITININ GÜCÜ: niş bandı bu ürünün toptan fiyatı DEĞİLDİR.
+    // Ölçülen hata: `supplierPriceUsd` niş havuzunun medyanı olduğu hâlde
+    // `supplier_price_usd`e ve brüt marja yazılıyordu; kartta "Toptan birim"
+    // ve "Brüt marj" bu ürün ölçülmüş gibi görünüyordu. Nişte yalnız bandı
+    // taşı; ürün maliyeti ve marj BOŞ kalır.
+    const productMatch = row.supplier ? supplierMatchKind(row.supplier) === "product" : false;
+    const supplierPrice = productMatch ? (row.supplier?.supplierPriceUsd ?? null) : null;
+    const grossMargin = productMatch ? (row.grossMarginPct ?? null) : null;
+    const feeBudget = productMatch ? (row.feeBudgetUsd ?? null) : null;
+
     return {
       name: row.name,
       description:
@@ -108,15 +119,14 @@ export function toWinningProducts(
       // ÖLÇÜLMÜŞ TEDARİK FİYATI (Anahtarsız toptan kaynaktan gelir). Teklif
       // eşleşmediyse BOŞ kalır — eskiden de boştu ama sebebi "kaynak yok"du;
       // şimdi fiyat gerçekten ölçülüyor (bkz. `supplier-economics.ts`).
-      supplier_price_usd:
-        row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
-          ? ""
-          : String(row.supplier.supplierPriceUsd),
+      supplier_price_usd: supplierPrice === null ? "" : String(supplierPrice),
       // "Net marj" ölçülmedi: kargo/gümrük/komisyon kaynakta YOK. 0 yazmak
-      // uydurmadır; aşağıdaki `gross_margin_pct` ise İKİ ÖLÇÜMÜN aritmetiği
-      // olduğu için gerçektir ve brüt marj olarak ETİKETLENİR.
-      gross_margin_pct: row.grossMarginPct ?? null,
-      fee_budget_usd: row.feeBudgetUsd ?? null,
+      // uydurmadır; `gross_margin_pct` YALNIZ birebir ürün eşleşmesinde iki
+      // ölçümün aritmetiğidir. Niş bandından marj üretilmez.
+      gross_margin_pct: grossMargin,
+      fee_budget_usd: feeBudget,
+      // Niş bandı kanıt olarak KALIR (samples + low/high) ama ürün maliyeti
+      // sayılmaz; `matchKind: "niche"` bunu taşır.
       supplier_evidence: row.supplier ?? null,
       selling_price_usd: price,
       profit_margin_pct: 0,
@@ -124,13 +134,10 @@ export function toWinningProducts(
       platform_fit: row.seller ? [row.seller] : [],
       platform_strategy: "",
       competitor_examples: rivals,
-      supplier_links: row.supplier?.url ? [row.supplier.url] : [],
+      supplier_links: productMatch && row.supplier?.url ? [row.supplier.url] : [],
       alibaba_links: [],
       cost_breakdown: {
-        supplier_cost:
-          row.supplier?.supplierPriceUsd === null || row.supplier?.supplierPriceUsd === undefined
-            ? ""
-            : String(row.supplier.supplierPriceUsd),
+        supplier_cost: supplierPrice === null ? "" : String(supplierPrice),
         // Kargo/komisyon/reklam ölçülmedi → boş. Boş yazmak "0 $ demiyor":
         // bu alanların hiçbiri `0` değil, hiç ölçülmedi.
         shipping_cost: "",

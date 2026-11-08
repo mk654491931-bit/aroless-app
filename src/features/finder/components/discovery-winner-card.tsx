@@ -20,6 +20,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
+import { supplierMatchKind } from "@/lib/supplier-economics";
 
 /** Konseydeki ajan sayısı — payda sabittir. */
 const TOTAL_AGENTS = 14;
@@ -112,6 +113,9 @@ export function DiscoveryWinnerCard({
   // (eski kayıt) hiç gösterilmez: "—" bile yazmak karar varmış gibi okunurdu.
   const launch = winner.launch ?? null;
   const moq = winner.supplier?.moqUnits ?? null;
+  // NİŞ BANDI ürünün kendi tedarik fiyatı DEĞİLDİR; kart bunu "Tedarik"
+  // etiketiyle tek sayı gibi sunmamalı.
+  const nicheBand = supplierMatchKind(winner.supplier) === "niche";
   /**
    * KALİTE KAPISI DURUMU — yalnız `rescued` iken rozet basılır.
    *
@@ -185,7 +189,9 @@ export function DiscoveryWinnerCard({
             "kaynak yok" değil, bu ürüne alakalı toptan teklif bulunamaması —
             o durumda 0 yazmak yerine "—" yazılır. */}
         <div className="rounded-lg bg-muted/30 py-2">
-          <dt className="text-[10px] text-muted-foreground">Tedarik</dt>
+          <dt className="text-[10px] text-muted-foreground">
+            {nicheBand ? "Niş bandı" : "Tedarik"}
+          </dt>
           <dd className="text-sm font-semibold tabular-nums">
             {winner.supplier?.supplierLowUsd != null && winner.supplier?.supplierHighUsd != null
               ? `${fmtPrice(winner.supplier.supplierLowUsd)}–${fmtPrice(winner.supplier.supplierHighUsd)}`

@@ -169,8 +169,7 @@ export function buildShopifyCsv(products: WinningProduct[]): string {
  * girdilerden gelir:
  *   • dökümde `net_profit` ölçülmüşse → o,
  *   • dört maliyet kalemi de ölçülmüşse → satış − (tedarik+kargo+komisyon+reklam),
- *   • döküm yok ama gerçek-dünya modeli varsa → modelin net/adet değeri
- *     (kart bunu zaten varsayımlarıyla BİRLİKTE, "tahmini" bağlamında gösterir),
+ *   • model (`real_economics`) NET ÖLÇÜM DEĞİLDİR; burada kullanılmaz,
  *   • hiçbiri yoksa → "—". Uydurma tahmin YOK.
  */
 export function netMarginView(p: WinningProduct): { text: string; bad: boolean } {
@@ -193,8 +192,6 @@ export function netMarginView(p: WinningProduct): { text: string; bad: boolean }
       // BİLİNMİYORdur (eksik kalemi tahmin etmek uydurma olurdu).
       if (supplier && shipping && fee && ad) net = sell - (supplier + shipping + fee + ad);
     }
-  } else if (p.real_economics) {
-    net = p.real_economics.net_per_unit;
   }
   // Satış fiyatı da net de yoksa yüzde hesaplanamaz — bu da "ölçtük ve sıfır
   // bulduk" DEĞİLDİR.

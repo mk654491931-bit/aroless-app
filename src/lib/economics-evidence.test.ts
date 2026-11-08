@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-import { hasMeasuredEconomics, measuredMarginPct, measuredMoney } from "./economics-evidence";
+import {
+  hasMeasuredEconomics,
+  hasMeasuredNetProfit,
+  measuredMarginPct,
+  measuredMoney,
+} from "./economics-evidence";
 import { enrichProduct, NOT_MEASURED } from "./recommendation";
 import { netMarginView } from "@/features/finder/utils/export";
 import type { WinningProduct } from "./gemini.functions";
@@ -83,6 +88,27 @@ describe("hasMeasuredEconomics", () => {
   it("gerçek maliyet girdisi varsa doğru", () => {
     expect(hasMeasuredEconomics(measuredOnlyProduct({ supplier_price_usd: "$7" }))).toBe(true);
   });
+
+  it("yalnız model çıktısı (real_economics) ÖLÇÜM DEĞİLDİR", () => {
+    const product = measuredOnlyProduct({
+      real_economics: {
+        net_per_unit: 5,
+        supplier_measured: false,
+      } as unknown as WinningProduct["real_economics"],
+    });
+    expect(hasMeasuredEconomics(product)).toBe(false);
+    expect(hasMeasuredNetProfit(product)).toBe(false);
+  });
+
+  it("model tedarik fiyatını ölçülmüş sayarsa kabul edilir", () => {
+    const product = measuredOnlyProduct({
+      real_economics: {
+        net_per_unit: 5,
+        supplier_measured: true,
+      } as unknown as WinningProduct["real_economics"],
+    });
+    expect(hasMeasuredEconomics(product)).toBe(true);
+  });
 });
 
 describe("ölçümlü hatta uydurma sayı üretilmez", () => {
@@ -121,6 +147,19 @@ describe("ölçümlü hatta uydurma sayı üretilmez", () => {
     );
     expect(view.text).toBe("44%");
     expect(view.bad).toBe(false);
+  });
+
+  it("modelin net kârı ölçülmüş net diye GÖSTERİLMEZ", () => {
+    const view = netMarginView(
+      measuredOnlyProduct({
+        real_economics: {
+          net_per_unit: 9.5,
+          net_margin_pct: 38,
+          supplier_measured: false,
+        } as unknown as WinningProduct["real_economics"],
+      }),
+    );
+    expect(view).toEqual({ text: NOT_MEASURED, bad: false });
   });
 
   it("eksik maliyet dökümünde kalan kalemleri TAHMİN edip net marj üretmez", () => {

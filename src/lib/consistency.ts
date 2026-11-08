@@ -300,7 +300,13 @@ export function normalizeProduct(
   const fmt = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
   const platform = out.platform_fit?.[0] ?? "Shopify";
 
-  // ---- Gerçek dünya birim ekonomisi (AI'nin uydurduğu marjların yerine) ----
+  // ---- Gerçek dünya birim ekonomisi (AYRI MODEL — ölçüm değil) ----
+  //
+  // Ölçülen hata: bu modelin çıktısı `cost_breakdown` ve `supplier_price_usd`
+  // alanlarına YAZILIYOR, böylece "ölçülmüş tedarik/marj" gibi görünüyordu.
+  // Model tedarik fiyatı yoksa perakendenin ~%30'unu varsayar; bu bir senaryo
+  // varsayımıdır, sayfadan ölçülmüş fiyat değildir. Artık model yalnız
+  // `real_economics` içinde KALIR; ölçüm alanlarına dokunmaz.
   const re = realEconomics({
     selling_price_usd: out.selling_price_usd,
     supplier_price_usd: out.supplier_price_usd ?? out.cost_breakdown?.supplier_cost,
@@ -312,32 +318,11 @@ export function normalizeProduct(
     startup_cost_usd: out.startup_cost_usd,
     country: ctx?.country,
     category: ctx?.category || out.name,
+    // AI'ın yazdığı tedarik fiyatı ÖLÇÜM DEĞİLDİR; model onu bandına çekebilir
+    // ama bu çıktı ölçülmüş fiyat diye hiçbir alana yazılmaz.
+    supplier_price_measured: false,
   });
   out.real_economics = re;
-  out.cost_breakdown = {
-    supplier_cost: fmt(re.supplier),
-    shipping_cost: fmt(re.shipping),
-    platform_fee: `${fmt(re.platform_fee + re.payment_fee)} (${Math.round(((re.platform_fee + re.payment_fee) / re.retail) * 100)}%)`,
-    ad_spend: fmt(re.cac),
-    net_profit: fmt(re.net_per_unit),
-    net_margin_pct: Math.round(re.net_margin_pct),
-  };
-  out.profit_margin_pct = Math.round(re.net_margin_pct);
-  if (!parseMoneyNum(out.supplier_price_usd)) out.supplier_price_usd = fmt(re.supplier);
-
-  // unit_economics
-  {
-    const startup = parseMoneyNum(out.startup_cost_usd) || 500;
-    const netUnit = re.net_per_unit;
-    out.unit_economics = {
-      breakeven_units: netUnit > 0 ? Math.max(1, Math.round(startup / netUnit)) : 0,
-      breakeven_roas: re.breakeven_roas,
-      target_cpa_usd: fmt(Math.max(1.5, re.gross_per_unit * 0.7)),
-      ltv_usd: fmt(re.retail * 1.25),
-      repeat_purchase_rate_pct: out.unit_economics?.repeat_purchase_rate_pct ?? 15,
-      return_rate_pct: Math.round((re.returns_cost / Math.max(1, re.supplier + re.shipping)) * 100),
-    };
-  }
 
   // sourcing
   if (!out.sourcing) {

@@ -95,16 +95,22 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
   const gross = p.gross_margin_pct ?? null;
   const feeBudget = p.fee_budget_usd ?? null;
   const supplierPrice = measuredMoney(p.supplier_price_usd);
-  if (!s || (supplierPrice === null && gross === null)) return null;
+  const nicheMatch = supplierMatchKind(s) === "niche";
+  const bandLow = s?.supplierLowUsd ?? null;
+  const bandHigh = s?.supplierHighUsd ?? null;
+  const band =
+    bandLow !== null && bandHigh !== null
+      ? bandHigh > bandLow
+        ? `${money(bandLow, { showUsd: false })} – ${money(bandHigh, { showUsd: false })}`
+        : money(bandLow, { showUsd: false })
+      : null;
+  if (!s || (supplierPrice === null && gross === null && band === null)) return null;
   // KANITIN GÜCÜ: birebir ürün eşleşmesi mi, yoksa aynı nişteki global band mı?
   // Ayrımı KAPATMAK yanıltıcı olurdu: niş bandı ürünün kendi toptan fiyatı
   // değildir ve panel bunu söylemek zorundadır (bkz. `supplier-economics.ts`).
-  const nicheMatch = supplierMatchKind(s) === "niche";
-
-  const band =
-    s.supplierLowUsd !== null && s.supplierHighUsd !== null && s.supplierHighUsd > s.supplierLowUsd
-      ? `${money(s.supplierLowUsd, { showUsd: false })} – ${money(s.supplierHighUsd, { showUsd: false })}`
-      : null;
+  // Eski kayıtların havuz toplamı (`soldTotal`) GÖSTERİLMEZ: bu ürünün satışı
+  // değildir. Yalnız yeni `soldMax` — tek bir teklifin ölçülen satışı — gösterilir.
+  const sold = s.soldMax ?? null;
 
   return (
     <div className="mt-3 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.08] to-violet-500/[0.05] px-3 py-2.5 text-[11px]">
@@ -117,14 +123,20 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         <span className="text-muted-foreground flex items-center gap-1">
-          <Package size={10} /> Toptan birim
+          <Package size={10} /> {nicheMatch ? "Niş fiyat bandı" : "Toptan birim"}
         </span>
         <span className="text-right font-semibold text-sky-200">
-          {supplierPrice === null ? NOT_MEASURED : money(supplierPrice ?? 0, { showUsd: false })}
-          {band && <span className="ml-1 font-normal text-muted-foreground">({band})</span>}
+          {nicheMatch
+            ? (band ?? NOT_MEASURED)
+            : supplierPrice === null
+              ? NOT_MEASURED
+              : money(supplierPrice, { showUsd: false })}
+          {!nicheMatch && band && (
+            <span className="ml-1 font-normal text-muted-foreground">({band})</span>
+          )}
         </span>
 
-        {s.listPriceUsd !== null && (
+        {!nicheMatch && s.listPriceUsd !== null && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
               <Store size={10} /> Etiket fiyatı
@@ -140,18 +152,18 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           </>
         )}
 
-        {s.soldTotal !== null && (
+        {!nicheMatch && sold !== null && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
-              <Radar size={10} /> Tedarik satışı
+              <Radar size={10} /> En çok satan teklif
             </span>
             <span className="text-right font-semibold">
-              {s.soldTotal.toLocaleString("tr-TR")} adet
+              {sold.toLocaleString("tr-TR")} adet
             </span>
           </>
         )}
 
-        {s.store && (
+        {!nicheMatch && s.store && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
               <Store size={10} /> Mağaza
@@ -160,7 +172,7 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           </>
         )}
 
-        {s.shipFrom && (
+        {!nicheMatch && s.shipFrom && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
               <Truck size={10} /> Kargo çıkışı
@@ -169,7 +181,7 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           </>
         )}
 
-        {gross !== null && (
+        {!nicheMatch && gross !== null && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
               <Percent size={10} /> Brüt marj
@@ -180,7 +192,7 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           </>
         )}
 
-        {feeBudget !== null && (
+        {!nicheMatch && feeBudget !== null && (
           <>
             <span className="text-muted-foreground flex items-center gap-1">
               <DollarSign size={10} /> Kargoya kalan pay
@@ -191,15 +203,15 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
       </div>
 
       <div className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground leading-relaxed">
-        {nicheMatch &&
-          "Birebir ürün eşleşmesi bulunamadı: bant AYNI NİŞTEKİ karşılaştırılabilir tekliflerden ölçüldü, bu ürünün kendi toptan fiyatı değildir. "}
-        {gross !== null
-          ? "Satış − toptan = brüt marj. Net marj ölçülmedi: kargo, gümrük ve platform komisyonu bu kaynakta YOK, tahmin edilmedi."
-          : "Perakende fiyat ölçülmediği için marj hesaplanamadı."}
+        {nicheMatch
+          ? "Birebir ürün eşleşmesi bulunamadı: bant AYNI NİŞTEKİ karşılaştırılabilir tekliflerden ölçüldü, bu ürünün kendi toptan fiyatı değildir. Bu yüzden bu banddan marj hesaplanmadı."
+          : gross !== null
+            ? "Satış − toptan = brüt marj. Net marj ölçülmedi: kargo, gümrük ve platform komisyonu bu kaynakta YOK, tahmin edilmedi."
+            : "Tedarik ya da perakende fiyatı ölçülmediği için marj hesaplanamadı."}
         {s.samples > 0 && ` ${s.samples} toptan teklifle desteklendi.`}
       </div>
 
-      {s.url && (
+      {!nicheMatch && s.url && (
         <a
           href={s.url}
           target="_blank"
@@ -932,18 +944,23 @@ export function ProductCard({
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
-          <div className="text-[10px] uppercase text-muted-foreground">Supplier</div>
+          <div className="text-[10px] uppercase text-muted-foreground">
+            {supplierMatchKind(p.supplier_evidence) === "niche" ? "Tedarik bandı" : "Supplier"}
+          </div>
           <div className="text-xs font-semibold mt-0.5">
             {(() => {
               const s = p.supplier_evidence;
               const low = s?.supplierLowUsd ?? null;
               const high = s?.supplierHighUsd ?? null;
               // Ölçülen teklif bandı varsa tek bir nokta fiyat yerine band
-              // gösterilir; bant ölçümden gelir, uydurulmaz.
-              if (low !== null && high !== null && high > low) {
+              // gösterilir; bant ölçümden gelir, uydurulmaz. Niş bandı ise
+              // "Supplier" DEĞİL "Tedarik bandı" etiketiyle sunulur.
+              if (low !== null && high !== null) {
                 return (
                   <span title={`${s?.samples ?? 0} toptan teklifin ölçülen bandı`}>
-                    {money(low, { showUsd: false })}–{money(high, { showUsd: false })}
+                    {high > low
+                      ? `${money(low, { showUsd: false })}–${money(high, { showUsd: false })}`
+                      : money(low, { showUsd: false })}
                   </span>
                 );
               }
