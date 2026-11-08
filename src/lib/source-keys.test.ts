@@ -47,7 +47,9 @@ describe("ürün kaynağı anahtar envanteri", () => {
     );
 
     expect(noSecret?.configured).toBe(false);
+    expect(noSecret?.key).toContain("EBAY_CLIENT_SECRET");
     expect(noId?.configured).toBe(false);
+    expect(noId?.key).toContain("EBAY_CLIENT_ID");
     expect(complete?.configured).toBe(true);
     expect(bearer?.configured).toBe(true);
   });

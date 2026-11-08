@@ -13,7 +13,12 @@
 //     `providers` alanında kota genişliği sırasıyla görünür.
 // ============================================================================
 
-import { ebayCredentialsConfigured } from "./ebay-auth.server";
+import {
+  ebayClientId,
+  ebayClientSecret,
+  ebayCredentialsConfigured,
+  ebayStaticToken,
+} from "./ebay-auth.server";
 import {
   googleShoppingProviderPlan,
   type GoogleShoppingProvider,
@@ -62,6 +67,21 @@ function hasAny(env: Record<string, string | undefined>, keys: readonly string[]
 }
 
 /**
+ * eBay için TEK bir env adı söylemek yanıltıcı olabilir: Browse jetonu ya
+ * Bearer ya da Client ID + Secret ister. Hangi tarafın eksik olduğunu
+ * (değerini değil) söyleyerek kullanıcının doğru anahtarı eklemesini sağlar.
+ */
+function ebayKeyHint(env: Record<string, string | undefined>): string {
+  const bearer = Boolean(ebayStaticToken(env));
+  const id = Boolean(ebayClientId(env));
+  const secret = Boolean(ebayClientSecret(env));
+  if (bearer || (id && secret)) return "EBAY_OAUTH_TOKEN";
+  if (id && !secret) return "EBAY_CLIENT_SECRET (Client ID var)";
+  if (!id && secret) return "EBAY_CLIENT_ID (Secret var)";
+  return "EBAY_CLIENT_ID + EBAY_CLIENT_SECRET";
+}
+
+/**
  * Kaynak başına kullanılabilirlik. Sır içermez.
  *
  * eBay özel: yarım kimlik (yalnız Client ID veya yalnız Secret) `configured`
@@ -82,7 +102,7 @@ export function sourceKeyReadiness(
     return {
       source,
       configured,
-      key: keys[0] ?? "",
+      key: source === "ebay-browse" ? ebayKeyHint(env) : (keys[0] ?? ""),
       ...(providers ? { providers } : {}),
     };
   });
