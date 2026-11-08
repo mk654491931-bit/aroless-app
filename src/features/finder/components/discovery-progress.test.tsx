@@ -49,6 +49,18 @@ describe("DiscoveryStats — kaynak sağlığı", () => {
     expect(html).not.toContain("Çalışmayan:");
   });
 
+  it("aksesuar elemesini toplamda ve ayrı satırda gösterir", () => {
+    const html = renderToStaticMarkup(
+      <DiscoveryStats
+        stats={{ ...stats([]), inputCount: 5, survivors: 1, rejectedByAccessory: 4 }}
+      />,
+    );
+
+    expect(html).toContain("4 aksesuar/yedek parça");
+    // Toplam "elendi" sayacı aksesuar elemesini de kapsar.
+    expect(html).toContain(">4</div><div class=\"text-[10px] text-muted-foreground\">elendi</div>");
+  });
+
   it("gerçek ağ hatasını anahtarsız kaynakla karıştırmaz", () => {
     const html = renderToStaticMarkup(
       <DiscoveryStats

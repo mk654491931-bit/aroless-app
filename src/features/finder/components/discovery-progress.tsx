@@ -132,7 +132,8 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
     stats.rejectedByPrice +
     stats.rejectedByDuplicate +
     stats.rejectedByCompleteness +
-    stats.rejectedBySource;
+    stats.rejectedBySource +
+    stats.rejectedByAccessory;
 
   const healthy = stats.perSource.filter((s) => s.ok);
   const failedSources = stats.perSource.filter((s) => !s.ok);
@@ -165,6 +166,9 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
         {stats.rejectedByRating > 0 && <p>• {stats.rejectedByRating} düşük puanlı</p>}
         {stats.rejectedByDuplicate > 0 && <p>• {stats.rejectedByDuplicate} yinelenen ürün</p>}
         {stats.rejectedByCompleteness > 0 && <p>• {stats.rejectedByCompleteness} kanıtsız</p>}
+        {stats.rejectedByAccessory > 0 && (
+          <p>• {stats.rejectedByAccessory} aksesuar/yedek parça</p>
+        )}
       </div>
       {healthy.length > 0 && (
         <p className="text-muted-foreground">
