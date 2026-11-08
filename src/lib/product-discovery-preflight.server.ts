@@ -6,6 +6,10 @@ import {
   openRouterEnvKeys,
 } from "./ai-keys.server";
 import { ebayCredentialsConfigured as ebayConfigured } from "./ebay-auth.server";
+import {
+  GOOGLE_SHOPPING_PROVIDER_LABELS,
+  googleShoppingProviderPlan,
+} from "./google-shopping.server";
 // ============================================================================
 // PRODUCT DISCOVERY — HAT ÖNCE KONTROLÜ (PREFLIGHT).
 //
@@ -124,25 +128,19 @@ export function envChecks(env: PreflightEnv = process.env): PreflightCheck[] {
     },
     {
       id: "serpapi",
-      label: "SerpAPI / SearchAPI / Serper ürün kaynağı (isteğe bağlı)",
-      ok:
-        set(env, "SERPAPI_KEY") ||
-        set(env, "SERP_API_KEY") ||
-        set(env, "SEARCHAPI_KEY") ||
-        set(env, "SEARCHAPI_API_KEY") ||
-        set(env, "SERPER_API_KEY") ||
-        set(env, "SERPER_KEY"),
+      label: "Google Shopping sağlayıcıları (Serper / SearchAPI / SerpAPI)",
+      // ÜÇÜ ARTIK PARALEL DEĞİL: geniş kotalı sağlayıcı birincil, diğerleri
+      // yalnız sonuç eşiğin altındaysa yedek. Panel "kaç sağlayıcı tanımlı"
+      // sorusunu yanıtlar; üçünün aynı aramada çağrıldığını ima etmez.
+      ok: googleShoppingProviderPlan(env).length > 0,
       optional: true,
       detail:
-        set(env, "SERPAPI_KEY") ||
-        set(env, "SERP_API_KEY") ||
-        set(env, "SEARCHAPI_KEY") ||
-        set(env, "SEARCHAPI_API_KEY") ||
-        set(env, "SERPER_API_KEY") ||
-        set(env, "SERPER_KEY")
-          ? "tanımlı — Google Shopping üzerinden gerçek mağaza fiyatı, puan ve ürün görseli aranır"
+        googleShoppingProviderPlan(env).length > 0
+          ? `tanımlı — ${googleShoppingProviderPlan(env)
+              .map((provider) => GOOGLE_SHOPPING_PROVIDER_LABELS[provider])
+              .join(" → ")}. Birincil yeterli satır dönerse yedeklere istek gitmez.`
           : "Yok: gerçek fiyatlı ürün araması bu kaynağı atlar, kalan kaynaklarla hat yine çalışır.",
-      fix: "İsteğe bağlı — serpapi.com (SERPAPI_KEY), searchapi.io (SEARCHAPI_KEY) veya serper.dev (SERPER_API_KEY) ücretsiz anahtarı ekle.",
+      fix: "İsteğe bağlı — serper.dev (SERPER_API_KEY), searchapi.io (SEARCHAPI_KEY) veya serpapi.com (SERPAPI_KEY) anahtarı ekle.",
     },
     {
       id: "scraperapi",

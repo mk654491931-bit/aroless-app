@@ -12,9 +12,10 @@
 //     yanıt şeması `shopping[]` (alan adları farklı: `imageUrl`,
 //     `ratingCount`).
 //
-// ÜÇÜ BİRDEN KULLANILIR, biri diğerinin yerine geçmez: aynı koşuda üç kaynak
-// ayrı satır üretir ve `filter` katmanı tekilleştirir (fingerprint/GTIN).
-// Böylece SerpAPI kotası dolduğunda ürün araması ölmez.
+// ARTIK ÜÇÜ BİRDEN ÇAĞRILMAZ (Adım 4): `google-shopping` koordinatörü önce
+// Serper'i, yeterli benzersiz satır gelmezse SearchAPI'yi, o da yetmezse
+// SerpAPI'yi çağırır. Böylece aynı Google Shopping verisi için üç kota
+// harcanmaz; sağlayıcı tükendiğinde ürün araması yine ölmez.
 //
 // DÜRÜSTLÜK:
 //   • Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ (`scrape` 0 satır döner).

@@ -134,7 +134,10 @@ export function toRawProducts(
     if (tokens.length && !tokens.some((t) => key.includes(t))) continue;
     seen.add(key);
     out.push(row);
-    if (out.length >= 12) break;
+    // Her sağlayıcı 20 sonuç ister (`num=20`); 12'de kesmek varsayılan 20
+    // eşiğini hiçbir zaman doldurmuyor ve gereksiz yedek çağrılarına yol
+    // açıyordu. 20, sağlayıcı yanıtının tamamıdır.
+    if (out.length >= 20) break;
   }
   return out;
 }

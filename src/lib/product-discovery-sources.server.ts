@@ -26,7 +26,13 @@ import {
   fetchHackerNewsStories,
   REDDIT_SUBS,
 } from "./shared-niche-scrapers.server";
-import { allowDealFeedRequest } from "./scraper-quota.server";
+import { allowDealFeedRequest, allowTavilyCredit } from "./scraper-quota.server";
+import {
+  chooseGoogleShoppingRows,
+  googleShoppingMinRows,
+  googleShoppingProviderPlan,
+  type GoogleShoppingProvider,
+} from "./google-shopping.server";
 
 /** Bir scraping kaynağının sözleşmesi. Yeni kaynak = bu arayüzü uygulamak. */
 export interface ProductSource {
@@ -59,6 +65,29 @@ export type SourceReport = {
 };
 
 /* ------------------------------------------------------------------ utils */
+
+/**
+ * ANAHTARLI VE TEKRAR EDİLEBİLİR KAYNAK ÖNBELLEĞİ — tek uçuş + kısa boş TTL.
+ *
+ * Tavily/eBay gibi kaynaklar önceden her aramada ağa gidiyordu; aynı nişi
+ * iki sekme/iki kullanıcı aradığında kota iki kez yanıyordu. `cached()` aynı
+ * anahtarı uçuşta birleştirir. Boş sonuç 12 saat boyunca "gerçek boş" gibi
+ * kalmasın diye 60 saniyeye çekilir; dolu sonuç normal TTL ile saklanır.
+ */
+async function cachedSourceRows(
+  scope: string,
+  parts: unknown[],
+  ttlMs: number,
+  load: () => Promise<RawProduct[]>,
+): Promise<RawProduct[]> {
+  const { cached, cacheKey, cacheSet } = await import("./ai-cache.server");
+  const { data, cache_hit } = await cached<RawProduct[]>(scope, parts, load, ttlMs);
+  if (!cache_hit && data.length === 0) {
+    const key = await cacheKey(scope, parts);
+    await cacheSet(key, scope, data, 60_000).catch(() => {});
+  }
+  return data;
+}
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
@@ -564,8 +593,9 @@ export const serpApiShoppingSource: ProductSource = {
  *
  * NEDEN ÜÇ KAYNAK: SerpAPI ücretsiz planı aylık ~100 aramayla sınırlıdır ve tek
  * başına darboğazdır. SearchAPI (~100/ay) ve Serper (2.500 tek seferlik kredi)
- * aynı veriyi ayrı kotalarla verir; üçü aynı koşuda koşar, `filter` katmanı
- * tekilleştirir. Anahtar yoksa AĞ ÇAĞRISI YAPILMAZ (0 ms, 0 satır).
+ * aynı veriyi ayrı kotalarla verir. `google-shopping` koordinatörü bunları
+ * SIRAYLA çağırır; yeterli benzersiz satır gelince sonrakine geçmez. Anahtar
+ * yoksa AĞ ÇAĞRISI YAPILMAZ (0 ms, 0 satır).
  *
  * SORGU DİLİ: SerpAPI kaynağıyla aynı kural — TR'de yerel önce, diğer
  * ülkelerde İngilizce karşılık önce (ölçülmüş hata: `gl=DE`ye Türkçe sorgu
@@ -639,6 +669,52 @@ export const serperShoppingSource: ProductSource = {
   },
   async scrape(niche: string): Promise<RawProduct[]> {
     return shoppingApiRows("serper", niche, "US");
+  },
+};
+
+/**
+ * GOOGLE SHOPPING KOORDİNATÖRÜ — üç sağlayıcıyı aynı aramada PARALEL değil,
+ * yeterlilik sırasına göre çağırır.
+ *
+ * ÖLÇÜLEN İSRAF (Adım 4): SerpAPI + SearchAPI + Serper aynı Google Shopping
+ * sonuçlarını satıyor; üçü her aramada koşunca aynı ~20 satır için üç kota
+ * harcanıyordu. Artık Serper (en geniş kredi) birincil; yalnız sonuç 20'nin
+ * altındaysa SearchAPI, o da yetmezse SerpAPI devreye girer. Birincil zengin
+ * dönerse dar kotalı iki sağlayıcı HİÇ çağrılmaz — veri kaybı yok, çünkü
+ * eksik/boş durumda yedek aynı aramada çalışır.
+ *
+ * ÖNBELLEK: Birleşik sonuç 24 saat `google-shopping:v2` altında tutulur;
+ * aynı niş + ülke tekrarında üç sağlayıcıya da 0 istek gider. Boş sonuç
+ * 60 saniye ile sınırlıdır (geçici hata nişi gün boyu boş göstermesin).
+ */
+const GOOGLE_SHOPPING_TTL_MS = 24 * 60 * 60 * 1000;
+
+function googleShoppingSourceFor(provider: GoogleShoppingProvider): ProductSource {
+  if (provider === "serper") return serperShoppingSource;
+  if (provider === "searchapi") return searchApiShoppingSource;
+  return serpApiShoppingSource;
+}
+
+export const googleShoppingSource: ProductSource = {
+  name: "google-shopping",
+  timeoutMs: 9_500,
+  async scrapeForCountry(niche: string, country: string): Promise<RawProduct[]> {
+    const q = String(niche ?? "").trim();
+    if (!q) return [];
+    const code = String(country ?? "").trim().toUpperCase() || "US";
+    return cachedSourceRows("google-shopping:v2", [q, code], GOOGLE_SHOPPING_TTL_MS, async () => {
+      const plan = googleShoppingProviderPlan();
+      if (!plan.length) return [];
+      const { rows } = await chooseGoogleShoppingRows(
+        plan,
+        (provider) => googleShoppingSourceFor(provider).scrapeForCountry!(q, code),
+        { minRows: googleShoppingMinRows() },
+      );
+      return rows;
+    });
+  },
+  async scrape(niche: string): Promise<RawProduct[]> {
+    return googleShoppingSource.scrapeForCountry!(niche, "US");
   },
 };
 
@@ -3129,18 +3205,26 @@ export const tavilySearchSource: ProductSource = {
     if (!key) return [];
     const q = String(niche ?? "").trim().slice(0, 80);
     if (!q) return [];
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        query: `${q} buy price review`,
-        search_depth: "basic",
-        max_results: 10,
-      }),
-      signal: AbortSignal.timeout(5_500),
+    // 12 saat: web'de yayınlanmış fiyat/puan satırı aynı gün içinde değişebilir
+    // ama her aramada 1.000 kredilik aylık havuzu yakmak gereksizdir.
+    return cachedSourceRows("tavily-search:v2", [q.toLowerCase()], 12 * 60 * 60 * 1000, async () => {
+      if ((await allowTavilyCredit()) === false) {
+        console.log("[discovery] tavily-search: aylık kota doldu");
+        return [];
+      }
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          query: `${q} buy price review`,
+          search_depth: "basic",
+          max_results: 10,
+        }),
+        signal: AbortSignal.timeout(5_500),
+      });
+      if (!res.ok) return [];
+      return parseTavilyResults(await res.json().catch(() => null), q);
     });
-    if (!res.ok) return [];
-    return parseTavilyResults(await res.json().catch(() => null), q);
   },
 };
 
@@ -3223,27 +3307,33 @@ export const ebayBrowseSource: ProductSource = {
   async scrape(niche: string): Promise<RawProduct[]> {
     // Jeton: elle verilen Bearer VEYA Client ID/Secret ile üretilen uygulama
     // jetonu (önbellekli, ~2 saatte yenilenir).
-    const token = await ebayBearer();
-    if (!token) return [];
-    // EBAY_US İngilizce dizin: Türkçe sorgu 0 ilan döndürür. Önce İngilizce
-    // karşılık, 0 satır gelirse özgün metin denenir (ikinci istek yalnız gerekirse).
-    for (const query of englishThenOriginal(niche)) {
-      const q = query.slice(0, 80);
-      if (!q) continue;
-      const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=20`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(5_500),
-      });
-      if (!res.ok) return [];
-      const rows = parseEbayBrowseItems(await res.json().catch(() => null));
-      if (rows.length > 0) return rows;
-    }
-    return [];
+    const initial = String(niche ?? "").trim();
+    if (!initial) return [];
+    // 6 saat: eBay ilanları canlıdır, ama aynı nişi tekrar eden kullanıcı
+    // için her seferinde 5.000/gün kotasından çağrı yakmak gereksizdir.
+    return cachedSourceRows("ebay-browse:v2", [initial.toLowerCase()], 6 * 60 * 60 * 1000, async () => {
+      const token = await ebayBearer();
+      if (!token) return [];
+      // EBAY_US İngilizce dizin: Türkçe sorgu 0 ilan döndürür. Önce İngilizce
+      // karşılık, 0 satır gelirse özgün metin denenir (ikinci istek yalnız gerekirse).
+      for (const query of englishThenOriginal(initial)) {
+        const q = query.slice(0, 80);
+        if (!q) continue;
+        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=20`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+            Accept: "application/json",
+          },
+          signal: AbortSignal.timeout(5_500),
+        });
+        if (!res.ok) return [];
+        const rows = parseEbayBrowseItems(await res.json().catch(() => null));
+        if (rows.length > 0) return rows;
+      }
+      return [];
+    });
   },
 };
 
@@ -3313,13 +3403,26 @@ export const KEYED_SOURCE_ENV: Readonly<Record<string, readonly string[]>> = {
     "EBAY_OAUTH_TOKEN",
     "EBAY_BEARER_TOKEN",
     "EBAY_ACCESS_TOKEN",
-    "EBAY_CLIENT_ID",
+    // Client ID tek başına yetmez: Browse jetonu için Secret (veya hazır
+    // Bearer) gerekir. ID'yi yeterli saymak "ölçüldü" yalanı üretirdi.
+    "EBAY_CLIENT_SECRET",
+    "EBAY_CERT_ID",
   ],
   "tavily-search": ["TAVILY_API_KEY", "TAVILY_KEY"],
   "tr-marketplace": ["SCRAPERAPI_KEY", "SCRAPI_KEY", "SCRAP_API_KEY"],
-  "serpapi-shopping": ["SERPAPI_KEY", "SERP_API_KEY", "SERPAPI_API_KEY"],
-  "searchapi-shopping": ["SEARCHAPI_KEY", "SEARCHAPI_API_KEY", "SEARCHAPI_IO_KEY"],
-  "serper-shopping": ["SERPER_API_KEY", "SERPER_KEY", "SERPER_DEV_API_KEY"],
+  // Tek koordinatör: bu anahtarlardan HERHANGİ biri varsa Google Shopping
+  // ölçülebilir. Sıra, kota genişliğine göre birincil sağlayıcıyı belirler.
+  "google-shopping": [
+    "SERPER_API_KEY",
+    "SERPER_KEY",
+    "SERPER_DEV_API_KEY",
+    "SEARCHAPI_KEY",
+    "SEARCHAPI_API_KEY",
+    "SEARCHAPI_IO_KEY",
+    "SERPAPI_KEY",
+    "SERP_API_KEY",
+    "SERPAPI_API_KEY",
+  ],
   "youtube-attention": ["YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"],
 };
 
@@ -3370,13 +3473,11 @@ export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // Fiziksel ürün: gerçek fiyat + gerçek puan (Türk pazaryeri, anahtarla).
   // Anahtar yoksa hiç ağ çağrısı yapmaz.
   trMarketplaceSource,
-  // Gerçek fiyat + puan + görsel, ÜLKEYE göre (SerpAPI Google Shopping).
-  // Anahtar yoksa hiç ağ çağrısı yapmaz; anahtarsız hat aynen çalışır.
-  serpApiShoppingSource,
-  // AYNI verinin iki ücretsiz-kotalı alternatifi (SearchAPI ~100/ay, Serper
-  // 2.500 kredi). Üçü birlikte koşar; biri tükenirse ürün araması ölmez.
-  searchApiShoppingSource,
-  serperShoppingSource,
+  // Gerçek fiyat + puan + görsel, ÜLKEYE göre (Google Shopping).
+  // Üç sağlayıcı ARTIK PARALEL DEĞİL: Serper → SearchAPI → SerpAPI sırasıyla,
+  // yalnız sonuç eşiğin altındaysa yedeğe geçilir. Anahtar yoksa hiç ağ
+  // çağrısı yapmaz; anahtarsız hat aynen çalışır.
+  googleShoppingSource,
   // Fiziksel ürünün GERÇEK kullanıcı puanı + değerlendirme sayısı (anahtarsız).
   bingShoppingSource,
   // Talep/hype ölçümü.
@@ -3427,9 +3528,7 @@ const RESCUE_SOURCE_NAMES = new Set([
   "rakuten-reader",
   "bestbuy-api",
   "deal-feed",
-  "serpapi-shopping",
-  "searchapi-shopping",
-  "serper-shopping",
+  "google-shopping",
   "ebay-browse",
 ]);
 

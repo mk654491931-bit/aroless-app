@@ -173,6 +173,45 @@ export async function allowSupplierCredit(): Promise<boolean | null> {
   }
 }
 
+/* ------------------------------------------------ Tavily (web ürün kaynağı) */
+
+/**
+ * TAVILY — 1.000 kredi/ay ücretsiz; VARSAYILAN 900 bırakılır.
+ *
+ * NEDEN KENDİ KOVASI: Tavily ayrı bir web ürün kaynağıdır; ScraperAPI/SerpAPI
+ * sayaçlarıyla paylaşırsa biri diğerini sessizce tüketir. Boş sonuç 60 sn
+ * önbelleğe alınır, dolu sonuç 12 saat — yani aynı niş tekrarında kredi
+ * harcanmaz. `TAVILY_MONTHLY_LIMIT` ile değiştirilebilir.
+ */
+function tavilyMonthlyLimit(): number {
+  const raw = Number(process.env.TAVILY_MONTHLY_LIMIT ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 900;
+}
+
+/** Tavily araması yapmadan önce aylık bütçede yer var mı? */
+export async function allowTavilyCredit(): Promise<boolean | null> {
+  const bucket = `tavily-searches-${new Date().toISOString().slice(0, 7)}`;
+  const windowSeconds = 400 * 24 * 60 * 60;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("bump_rate_limit", {
+      _bucket: bucket,
+      _limit: tavilyMonthlyLimit(),
+      _window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.log(`[tavily] kota sayacı okunamadı (${error.message.slice(0, 80)}); fail-open`);
+      return null;
+    }
+    return data !== false;
+  } catch (e) {
+    console.log(
+      `[tavily] kota sayacı çağrılamadı (${(e as Error).message.slice(0, 80)}); fail-open`,
+    );
+    return null;
+  }
+}
+
 /* --------------------------------------------- Ürün kataloğu (UPCitemdb) */
 
 /**

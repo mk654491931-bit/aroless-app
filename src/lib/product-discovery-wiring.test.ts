@@ -43,8 +43,20 @@ describe("kaynak anahtarı görünürlüğü", () => {
     });
     expect(missing.map((row) => row.source)).not.toContain("bestbuy-api");
     expect(missing.map((row) => row.source)).not.toContain("ebay-browse");
-    expect(missing.map((row) => row.source)).toContain("serpapi-shopping");
-    expect(missing.find((row) => row.source === "serpapi-shopping")?.key).toBe("SERPAPI_KEY");
+    expect(missing.map((row) => row.source)).toContain("google-shopping");
+    expect(missing.find((row) => row.source === "google-shopping")?.key).toBe("SERPER_API_KEY");
+  });
+
+  it("Vercel'de BestBuy/YouTube dışındaki anahtarlar tanımlıysa yalnız o ikisini eksik raporlar", () => {
+    const missing = missingKeyedSources({
+      SERPER_API_KEY: "serper",
+      SEARCHAPI_KEY: "searchapi",
+      SERPAPI_KEY: "serpapi",
+      EBAY_OAUTH_TOKEN: "ebay",
+      TAVILY_API_KEY: "tavily",
+      SCRAPERAPI_KEY: "scraper",
+    });
+    expect(missing.map((row) => row.source).sort()).toEqual(["bestbuy-api", "youtube-attention"]);
   });
 });
 

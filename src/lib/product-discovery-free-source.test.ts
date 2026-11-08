@@ -204,10 +204,20 @@ describe("Yeni ücretsiz kaynaklar ve tedarik/kategori yükseltmeleri (2026)", (
     await expect(openBeautyFactsSource.scrape("robot vacuum")).resolves.toEqual([]);
   });
 
-  it("Google Shopping ücretsiz alternatifleri (SearchAPI + Serper) kaynak listesinde ve ayrıştırıcıları saf", async () => {
+  it("Google Shopping tek koordinatörde, sağlayıcı sırası kota genişliğine göre ve ayrıştırıcılar saf", async () => {
     const names = PRODUCT_SOURCES.map((s) => s.name);
-    expect(names).toContain("searchapi-shopping");
-    expect(names).toContain("serper-shopping");
+    expect(names).toContain("google-shopping");
+    expect(names).not.toContain("serpapi-shopping");
+
+    const { googleShoppingProviderPlan } = await import("./google-shopping.server");
+    expect(
+      googleShoppingProviderPlan({
+        SERPER_API_KEY: "s",
+        SEARCHAPI_KEY: "sa",
+        SERPAPI_KEY: "sp",
+      }),
+    ).toEqual(["serper", "searchapi", "serpapi"]);
+    expect(googleShoppingProviderPlan({ SERPAPI_KEY: "sp" })).toEqual(["serpapi"]);
 
     const { parseSerperShopping, parseSearchApiShopping } = await import(
       "./shopping-api-sources.server"
