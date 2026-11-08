@@ -259,7 +259,12 @@ function DiscoverPage() {
 
       {/* ---- İlerleme ---- */}
       {showProgress && (
-        <DiscoveryProgress status={d.run.status} progress={d.run.progress} step={d.run.step} />
+        <DiscoveryProgress
+          status={d.run.status}
+          progress={d.run.progress}
+          step={d.run.step}
+          stats={d.run.stats}
+        />
       )}
 
       {d.run.error && !d.isRunning && (

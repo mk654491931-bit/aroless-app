@@ -11,9 +11,10 @@
 // "kanıt topladık" izlenimi doğar.
 // ============================================================================
 
-import { AlertTriangle, CheckCircle2, Loader2, Search, Users } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Loader2, Search, Users } from "lucide-react";
 
 import type { FilterStats, ProductDiscoveryStatus } from "@/lib/product-discovery.types";
+import { sourceLabel } from "@/features/finder/utils/source-label";
 
 /** Adım sırası ve kullanıcıya gösterilen adı. */
 const STEPS: readonly { key: string; label: string }[] = [
@@ -38,37 +39,20 @@ function stepIndex(step: string | null): number {
   return STEPS.findIndex((s) => s.key === step);
 }
 
-/** İç kaynak adlarını kullanıcıya gösterilecek adlara çevirir. */
-const SOURCE_LABELS: Record<string, string> = {
-  "bestbuy-api": "Best Buy",
-  "ebay-browse": "eBay",
-  "tavily-search": "Tavily",
-  "tr-marketplace": "ScraperAPI",
-  "google-shopping": "Google Shopping",
-  "youtube-attention": "YouTube",
-  "reddit-archive": "Reddit arşivi",
-  openfoodfacts: "Open Food Facts",
-  "aliexpress-reader": "AliExpress",
-  "made-in-china": "Made-in-China",
-  "web-reviews": "Web yorumları",
-  "bing-shopping": "Bing Shopping",
-  "hackernews-demand": "Hacker News",
-  "wikipedia-demand": "Wikipedia",
-  "github-repos": "GitHub",
-};
-
-function sourceLabel(name: string): string {
-  return SOURCE_LABELS[name] ?? name;
-}
-
 export function DiscoveryProgress({
   status,
   progress,
   step,
+  stats,
 }: {
   status: ProductDiscoveryStatus;
   progress: number;
   step: string | null;
+  /**
+   * İlk taramanın kaynak raporu. İlk adım bitince dolar; o ana kadar kaynak
+   * sağlığı bölümü hiç gösterilmez (olmayan bir ölçümü varmış gibi sunmayız).
+   */
+  stats?: FilterStats | null;
 }): React.JSX.Element {
   const effectiveStep = step ?? STATUS_TO_STEP[status] ?? "scrape_filter";
   const current = stepIndex(effectiveStep);
@@ -120,6 +104,58 @@ export function DiscoveryProgress({
           );
         })}
       </ol>
+
+      {/* KAYNAK SAĞLIĞI — ilk tarama biter bitmez, sonuç ekranını beklemeden. */}
+      {stats && stats.perSource.length > 0 && (
+        <div className="border-t border-border pt-3">
+          <SourceHealth stats={stats} title="Kaynak sağlığı (ilk tarama)" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Kaynak sağlığı satırları — ilerleme paneli ve sonuç özeti AYNI bileşeni
+ * kullanır. Böylece "hangi kaynak çalıştı / anahtarsız / bozuk" tanımı iki
+ * ekranda farklılaşamaz.
+ */
+export function SourceHealth({
+  stats,
+  title = "Kaynak sağlığı",
+}: {
+  stats: FilterStats;
+  title?: string;
+}): React.JSX.Element {
+  const healthy = stats.perSource.filter((s) => s.ok);
+  const failedSources = stats.perSource.filter((s) => !s.ok);
+  // ANAHTARSIZ ≠ ÇALIŞMADI: kaynak hiç çağrılmadıysa "çalışmayan" demek
+  // yanlış olur. İkisini ayrı gösteriyoruz; ikisinin de nedeni tooltip'te.
+  const keyless = failedSources.filter((s) => s.error.includes("anahtar tanımlı değil"));
+  const broken = failedSources.filter((s) => !s.error.includes("anahtar tanımlı değil"));
+
+  return (
+    <div className="space-y-1.5 text-[11px] text-muted-foreground" data-testid="source-health">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
+        <Activity className="size-3.5" />
+        <span>{title}</span>
+      </div>
+      {healthy.length > 0 && (
+        <p>• Çalışan kaynak: {healthy.map((s) => sourceLabel(s.name)).join(", ")}</p>
+      )}
+      {keyless.length > 0 && (
+        <p className="text-amber-500/90" title={keyless.map((s) => s.error).join(" · ")}>
+          • Anahtarsız (çağrılmadı): {keyless.map((s) => sourceLabel(s.name)).join(", ")}
+        </p>
+      )}
+      {broken.length > 0 && (
+        <p className="text-amber-500/90" title={broken.map((s) => s.error).join(" · ")}>
+          • Çalışmayan: {broken.map((s) => sourceLabel(s.name)).join(", ")}
+        </p>
+      )}
+      {!healthy.length && !keyless.length && !broken.length && (
+        <p>Bu koşuda kaynak raporu yok.</p>
+      )}
     </div>
   );
 }
@@ -134,13 +170,6 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
     stats.rejectedByCompleteness +
     stats.rejectedBySource +
     stats.rejectedByAccessory;
-
-  const healthy = stats.perSource.filter((s) => s.ok);
-  const failedSources = stats.perSource.filter((s) => !s.ok);
-  // ANAHTARSIZ ≠ ÇALIŞMADI: kaynak hiç çağrılmadıysa "çalışmayan" demek
-  // yanlış olur. İkisini ayrı gösteriyoruz; ikisinin de nedeni tooltip'te.
-  const keyless = failedSources.filter((s) => s.error.includes("anahtar tanımlı değil"));
-  const broken = failedSources.filter((s) => !s.error.includes("anahtar tanımlı değil"));
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 text-xs space-y-3">
@@ -170,21 +199,7 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
           <p>• {stats.rejectedByAccessory} aksesuar/yedek parça</p>
         )}
       </div>
-      {healthy.length > 0 && (
-        <p className="text-muted-foreground">
-          • Çalışan kaynak: {healthy.map((s) => sourceLabel(s.name)).join(", ")}
-        </p>
-      )}
-      {keyless.length > 0 && (
-        <p className="text-amber-500/90" title={keyless.map((s) => s.error).join(" · ")}>
-          • Anahtarsız (çağrılmadı): {keyless.map((s) => sourceLabel(s.name)).join(", ")}
-        </p>
-      )}
-      {broken.length > 0 && (
-        <p className="text-amber-500/90" title={broken.map((s) => s.error).join(" · ")}>
-          • Çalışmayan: {broken.map((s) => sourceLabel(s.name)).join(", ")}
-        </p>
-      )}
+      <SourceHealth stats={stats} />
     </div>
   );
 }

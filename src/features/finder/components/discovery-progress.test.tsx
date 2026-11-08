@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DiscoveryStats } from "./discovery-progress";
+import { DiscoveryProgress, DiscoveryStats } from "./discovery-progress";
 import type { FilterStats } from "@/lib/product-discovery.types";
 
 /**
@@ -25,6 +25,34 @@ function stats(perSource: FilterStats["perSource"]): FilterStats {
     perSource,
   };
 }
+
+describe("DiscoveryProgress — canlı kaynak sağlığı", () => {
+  it("ilk tarama raporunu sonuç ekranını beklemeden gösterir", () => {
+    const html = renderToStaticMarkup(
+      <DiscoveryProgress
+        status="deep_analysis"
+        progress={55}
+        step="deep"
+        stats={stats([
+          { name: "tavily-search", ok: true, items: 4, ms: 120, error: "" },
+          { name: "ebay-browse", ok: false, items: 0, ms: 0, error: "anahtar tanımlı değil" },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Kaynak sağlığı (ilk tarama)");
+    expect(html).toContain("Çalışan kaynak: Tavily");
+    expect(html).toContain("Anahtarsız (çağrılmadı): eBay");
+  });
+
+  it("kaynak raporu yokken sağlık bölümünü uydurmaz", () => {
+    const html = renderToStaticMarkup(
+      <DiscoveryProgress status="scraping" progress={10} step="scrape_filter" />,
+    );
+
+    expect(html).not.toContain("Kaynak sağlığı");
+  });
+});
 
 describe("DiscoveryStats — kaynak sağlığı", () => {
   it("anahtarsız kaynağı \"Anahtarsız (çağrılmadı)\" olarak ayırır", () => {

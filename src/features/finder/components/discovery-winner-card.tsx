@@ -15,11 +15,12 @@
 // bilgidir; sayı uydurmak bu kartın var oluş sebebini çürütürdü.
 // ============================================================================
 
-import { AlertTriangle, ExternalLink, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
+import { AlertTriangle, Database, ExternalLink, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
+import { sourceLabel } from "@/features/finder/utils/source-label";
 import { supplierMatchKind } from "@/lib/supplier-economics";
 
 /** Konseydeki ajan sayısı — payda sabittir. */
@@ -129,6 +130,11 @@ export function DiscoveryWinnerCard({
   // Puanın kaynağı: ölçülmüş yedek yolda 14 ajan koşmadı. Aynı "konsey
   // puanı" etiketini basmak, olmayan bir oylamayı varmış gibi gösterirdi.
   const measuredOnly = winner.scoreSource === "measured";
+  // Tekrarlı kaynak adları tekilleştirilir; kaynak yoksa bunu AÇIKÇA
+  // söyleriz (boş bir çip satırı "kaynak var" izlenimi vermemeli).
+  const sourceNames = Array.from(
+    new Set(winner.sources.map((source) => source.trim()).filter(Boolean)),
+  );
 
   return (
     <article className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -148,9 +154,9 @@ export function DiscoveryWinnerCard({
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold leading-tight">{winner.name || "İsimsiz ürün"}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {[winner.brand, winner.seller, winner.category, winner.sources.join(", ")]
+            {[winner.brand, winner.seller, winner.category]
               .filter(Boolean)
-              .join(" · ") || "Kaynak bilgisi yok"}
+              .join(" · ") || "Ürün bilgisi sınırlı"}
           </p>
         </div>
         <div className="shrink-0 text-right">
@@ -162,6 +168,35 @@ export function DiscoveryWinnerCard({
           </div>
         </div>
       </header>
+
+      {/* KAYNAK KANITI — ürünün hangi gerçek kaynaklardan ölçüldüğünü
+          teknik kimlik yerine kullanıcı dilinde gösterir. Kaynak adı yoksa
+          "ölçülmedi" der; boş/yanlış bir kaynak etiketi basmaz. */}
+      <div
+        data-testid="source-evidence"
+        className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-[11px]"
+      >
+        <Database className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="font-medium text-foreground/80">Kaynak kanıtı</span>
+        {sourceNames.length > 0 ? (
+          <>
+            {sourceNames.map((source) => (
+              <span
+                key={source}
+                title={`Teknik kaynak: ${source}`}
+                className="rounded-md border border-border bg-background/60 px-1.5 py-0.5 text-[10px] text-foreground/80"
+              >
+                {sourceLabel(source)}
+              </span>
+            ))}
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              {sourceNames.length} kaynak
+            </span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">Kaynak adı ölçülmedi</span>
+        )}
+      </div>
 
       {/* GÜVEN — councilScore'ın ALTINDA ve AYRI. Eşitlik bozucusu budur. */}
       <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">

@@ -148,7 +148,8 @@ export function measuredWinnerRows(
     const aiReason = rerank?.reasons?.get(dedupeKey(row));
     if (aiReason) evidence.unshift(`AI gerekçesi: ${aiReason}`);
     if (row.imageUrl.trim() !== "") evidence.push("Ürün görseli kaynaktan doğrulandı");
-    if (row.sources.length) evidence.push(`Kaynak: ${row.sources.join(", ")}`);
+    // Kaynak adları kartın ayrı "Kaynak kanıtı" satırında gösterilir; burada
+    // ham teknik adları tekrar etmek kanıt listesini okunaksız yapıyordu.
 
     const completeness = clamp(Math.round(row.dataCompleteness), 0, 5);
     const confidence = clamp(
