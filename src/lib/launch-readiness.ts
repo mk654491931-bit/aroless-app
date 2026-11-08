@@ -24,7 +24,7 @@
 import { z } from "zod";
 
 import { measuredMoney } from "./economics-evidence";
-import { realEconomics } from "./real-economics";
+import { landedCostModel } from "./real-economics";
 
 /* --------------------------------------------------------------- Politika */
 
@@ -78,7 +78,7 @@ export const LAUNCH_MAX_FIRST_ORDER_USD = 1_500;
  * Ülke/platform benchmark'larıyla kargo + komisyon + ödeme + iade + paketleme
  * düşüldükten sonra kalan pay, sıfıra yakınsa ürün "marjlı" görünse de
  * gerçekte çalışmaz. $5 keyfî bir kâr hedefi değil, modelin yuvarlama ve
- * vergi/gümrük hariç tutma payına karşı küçük bir güvenlik tamponudur.
+ * gümrük/HS kodu hariç tutma payına karşı küçük bir güvenlik tamponudur.
  */
 export const LAUNCH_MIN_LANDED_HEADROOM_USD = 5;
 
@@ -172,7 +172,7 @@ export type LaunchInput = {
   moqUnit?: string;
   /** Aynı kohortta ölçülen benzer rakip satır sayısı. `null` = ölçülmedi. */
   cohortCompetitors?: number | null;
-  /** Hedef ülke (landed-cost modelinin kargo/vergi benchmark'ı). */
+  /** Hedef ülke (landed-cost modelinin kargo/KDV benchmark'ı). */
   country?: string;
   /** Hedef satış platformu (komisyon modeli). Boşsa landed kapısı `unknown`. */
   platform?: string;
@@ -399,7 +399,7 @@ export function assessLaunch(input: LaunchInput): LaunchReadiness {
     };
   } else {
     try {
-      const econ = realEconomics({
+      const econ = landedCostModel({
         selling_price_usd: price,
         supplier_price_usd: unitHigh,
         supplier_price_measured: true,
@@ -407,19 +407,21 @@ export function assessLaunch(input: LaunchInput): LaunchReadiness {
         country: input.country,
         category: input.category,
       });
-      const landedCost =
-        econ.supplier +
-        econ.shipping +
-        econ.platform_fee +
-        econ.payment_fee +
-        econ.returns_cost +
-        econ.misc;
-      const headroom = price - landedCost;
+      const headroom = econ.net_after_landed;
+      // KDV notu ülkeye göre DEĞİŞİR: "KDV dahil" ülkelerde fiyatın içinden
+      // düşüldü; ABD/Kanada'da checkout'ta eklendiği için düşülmedi; ülke
+      // bilinmiyorsa sayı uydurulmadı. Gümrük her durumda kapsam dışı.
+      const vatLine = !econ.vat.known
+        ? "KDV rejimi bilinmiyor; KDV modelde yok."
+        : econ.vat.included && econ.vat.rate > 0
+          ? `KDV %${Math.round(econ.vat.rate * 100)} fiyatın içinden düşüldü (${money(econ.vat_cost)}).`
+          : "Satış vergisi checkout'ta eklenir; modelde ayrıca düşülmedi.";
       const detail =
         `MODEL (ölçüm değil): toptan ${money(econ.supplier)} + kargo ${money(econ.shipping)} ` +
         `+ komisyon ${money(econ.platform_fee)} + ödeme ${money(econ.payment_fee)} ` +
-        `+ iade ${money(econ.returns_cost)} + paketleme ${money(econ.misc)} = ${money(landedCost)}. ` +
-        `KDV/gümrük hariç; ürünün kendi kargo/komisyon teklifi değildir.`;
+        `+ iade ${money(econ.returns_cost)} + paketleme ${money(econ.misc)} ` +
+        `+ KDV ${money(econ.vat_cost)} = ${money(econ.landed_cost)}. ${vatLine} ` +
+        `Gümrük/HS kodu hariç; ürünün kendi kargo/komisyon teklifi değildir.`;
       landedGate =
         headroom >= LAUNCH_MIN_LANDED_HEADROOM_USD
           ? {

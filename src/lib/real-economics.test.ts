@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { realEconomics } from "./real-economics";
+import { countryVatModel, landedCostModel, realEconomics } from "./real-economics";
 
 /**
  * ÖLÇÜLEN TEDARİK FİYATI MODELE UYDURULMAZ.
@@ -43,5 +43,50 @@ describe("realEconomics — ölçülmüş tedarik fiyatı", () => {
     expect(result.supplier).toBeCloseTo(30, 2);
     expect(result.supplier_measured).toBe(false);
     expect(result.assumptions[0]).toContain("ölçülmedi/AI tahmini");
+  });
+});
+
+describe("landedCostModel — ülke KDV rejimi", () => {
+  const base = {
+    selling_price_usd: 30,
+    supplier_price_usd: 10,
+    supplier_price_measured: true as const,
+    platform: "Amazon",
+    category: "Home",
+  };
+
+  it("KDV DAHİL ülkede (DE) fiyatın içinden KDV düşer", () => {
+    const de = landedCostModel({ ...base, country: "DE" });
+    expect(de.vat.known).toBe(true);
+    expect(de.vat.included).toBe(true);
+    expect(de.vat.rate).toBeCloseTo(0.19, 2);
+    expect(de.vat_cost).toBeCloseTo(30 - 30 / 1.19, 2);
+    expect(de.landed_cost).toBeCloseTo(
+      de.supplier + de.shipping + de.platform_fee + de.payment_fee + de.returns_cost + de.misc + de.vat_cost,
+      2,
+    );
+    expect(de.net_after_landed).toBeCloseTo(30 - de.landed_cost, 2);
+  });
+
+  it("satış vergisi checkout'ta eklenen ülkede (US) ayrıca KDV düşmez", () => {
+    const us = landedCostModel({ ...base, country: "US" });
+    expect(us.vat.known).toBe(true);
+    expect(us.vat.included).toBe(false);
+    expect(us.vat_cost).toBe(0);
+  });
+
+  it("aynı üründe DE landed > US landed; KDV modeli kârı şişirmez", () => {
+    const de = landedCostModel({ ...base, country: "DE" });
+    const us = landedCostModel({ ...base, country: "US" });
+    expect(de.landed_cost).toBeGreaterThan(us.landed_cost);
+    expect(de.net_after_landed).toBeLessThan(us.net_after_landed);
+  });
+
+  it("bilinmeyen ülkede sayı uydurulmaz", () => {
+    const model = countryVatModel("ZZ");
+    expect(model.known).toBe(false);
+    expect(model.rate).toBe(0);
+    const global = landedCostModel({ ...base, country: "ZZ" });
+    expect(global.vat_cost).toBe(0);
   });
 });

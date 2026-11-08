@@ -343,7 +343,7 @@ sayılmaz, model çıktısı da ölçüm diye sunulmaz:
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
 | Brüt marj | Ölçülen toptan − perakende aritmetiği | ≥ **%60** (kargo/komisyon öncesi) |
 | Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (Meta medyan CPA ≈ $38,99) |
-| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme modeli | Model sonrası pay ≥ **$5**; KDV/gümrük hariç |
+| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme + ülke KDV modeli | Model sonrası pay ≥ **$5**; gümrük/HS hariç |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
 | Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü taraması (VETO yönlü) | kelime yok |
 
@@ -357,7 +357,9 @@ marjdır. Mevzuat/IP kapısı **yalnız veto yönünde** çalışır: kelime bul
 **Landed cost kapısı bilinçli olarak MODEL'dir, ölçüm değildir.** Ürünün kendi
 kargo/komisyon teklifi kaynaklarda yoksa ülke/platform benchmark'ı uygulanır;
 model yalnız **veto** edebilir (kalan pay yoksa ürün atılabilir sayılmaz), pass
-olması "ölçüldü" anlamına gelmez. KDV/gümrük modelin dışındadır.
+olması "ölçüldü" anlamına gelmez. KDV, ülke rejimine göre modelin içindedir:
+KDV dahil raf fiyatı olan AB/UK/TR/AU'da fiyatın içinden düşülür; ABD/Kanada'da
+checkout'ta eklendiği için ayrıca düşülmez. Gümrük/HS kodu hâlâ modelin dışındadır.
 
 `Atılabilir` denmesi için dört çekirdek ölçüm birlikte gerekir: hiçbir kapı `fail`
 olmayacak, **tedarik · fiyat · marj · reklam bütçesi ÖLÇÜLMÜŞ olacak** ve hepsi

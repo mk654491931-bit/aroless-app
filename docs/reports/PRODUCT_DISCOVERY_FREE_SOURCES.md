@@ -202,13 +202,14 @@ kapı `unknown`dır ve **asla `pass` sayılmaz**. Landed cost kapısı MODEL'dir
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
 | Brüt marj | Ölçülen toptan − perakende | ≥ **%60** (kargo/komisyon öncesi) |
 | Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (ölçülen medyan CPA $38,99) |
-| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme | Model sonrası pay ≥ **$5**; KDV/gümrük hariç |
+| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme + ülke KDV modeli | Model sonrası pay ≥ **$5**; gümrük/HS hariç |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
 | Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü (VETO yönlü) | kelime yok |
 
 `launchable` = hiç `fail` yok **ve** tedarik · fiyat · marj · reklam bütçesi
 ÖLÇÜLMÜŞ ve geçmiş. Landed modeli `fail` derse karar ayrıca kapanır; modelin
-`pass` olması ölçüm sayılmaz. Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run
+`pass` olması ölçüm sayılmaz. KDV, ülke rejimine göre modele girer (KDV dahil
+fiyatlarda düşülür; ABD/Kanada'da checkout'ta eklenir); gümrük/HS hariçtir. Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run
 mic-supplier.live`, perakende = 3 × medyan FOB varsayımı):
 
 | Niş | Karar | Ölçülen sebep |

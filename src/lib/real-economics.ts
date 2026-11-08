@@ -73,6 +73,31 @@ export type RealEconomics = {
   context: { country: string; country_label: string; category: string; platform: string };
 };
 
+/**
+ * LANDED-COST MODELİ — ürünün perakende fiyatından düşülen tüm model kalemleri.
+ *
+ * `realEconomics`den farkı: KDV'yi AYRICA ve AÇIKÇA taşır. Bu çıktı bir
+ * ÖLÇÜM değildir; ürünün kendi kargo/komisyon/vergi teklifi değil, ülke ve
+ * platform benchmark'larından türetilmiş bir senaryodur. Gümrük/HS kodu
+ * bilinmediği için `duty_excluded` her zaman true'dur.
+ */
+export type LandedCostModel = {
+  retail: number;
+  supplier: number;
+  shipping: number;
+  platform_fee: number;
+  payment_fee: number;
+  returns_cost: number;
+  misc: number;
+  vat_cost: number;
+  landed_cost: number;
+  /** Perakende − model landed (KDV dahil, gümrük hariç). */
+  net_after_landed: number;
+  vat: CountryVatModel;
+  /** Gümrük/HS kodu modellenmedi; sayı uydurulmadı. */
+  duty_excluded: true;
+};
+
 export type RealEconomicsInput = {
   selling_price_usd?: unknown;
   supplier_price_usd?: unknown;
@@ -156,6 +181,12 @@ type CountryBench = {
   ship: number;
   /** VAT / sales-tax note. */
   tax: string;
+  /** Sayısal KDV/satış vergisi oranı (0-1). `vatKnown=false` ise model uygulanmaz. */
+  vatRate: number;
+  /** Fiyat KDV/satış vergisi DAHİL mi? AB/UK/TR/AU'da evet; US/CA'da checkout'ta eklenir. */
+  vatIncluded: boolean;
+  /** Ülke vergi rejimi biliniyor mu? GLOBAL fallback'te false. */
+  vatKnown: boolean;
   source: string;
   url: string;
 };
@@ -167,6 +198,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.3,
     ship: 5.5,
     tax: "Eyalet satış vergisi %0-9.5 (fiyata dahil değil)",
+    vatRate: 0,
+    vatIncluded: false,
+    vatKnown: true,
     source: "Statista – US e-commerce & CPC benchmarks",
     url: "https://www.statista.com/topics/2443/us-ecommerce/",
   },
@@ -176,6 +210,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.6,
     ship: 4.9,
     tax: "KDV %19 (fiyata dahil)",
+    vatRate: 0.19,
+    vatIncluded: true,
+    vatKnown: true,
     source: "Eurostat – E-commerce statistics",
     url: "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=E-commerce_statistics",
   },
@@ -185,6 +222,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.9,
     ship: 4.5,
     tax: "KDV %20 (fiyata dahil)",
+    vatRate: 0.2,
+    vatIncluded: true,
+    vatKnown: true,
     source: "ONS – Retail sales, internet sales",
     url: "https://www.ons.gov.uk/businessindustryandtrade/retailindustry",
   },
@@ -194,6 +234,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.4,
     ship: 5.2,
     tax: "KDV %20 (fiyata dahil)",
+    vatRate: 0.2,
+    vatIncluded: true,
+    vatKnown: true,
     source: "FEVAD – Bilan du e-commerce",
     url: "https://www.fevad.com/",
   },
@@ -203,6 +246,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.2,
     ship: 6.5,
     tax: "GST/HST %5-15",
+    vatRate: 0.05,
+    vatIncluded: false,
+    vatKnown: true,
     source: "Statistics Canada – Retail e-commerce",
     url: "https://www150.statcan.gc.ca/n1/en/subjects/business_performance_and_ownership/retail_and_wholesale",
   },
@@ -212,6 +258,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.5,
     ship: 7.5,
     tax: "GST %10",
+    vatRate: 0.1,
+    vatIncluded: true,
+    vatKnown: true,
     source: "Australia Post – eCommerce Industry Report",
     url: "https://auspost.com.au/business/marketing-and-communications/access-data-and-insights/ecommerce-industry-report",
   },
@@ -221,6 +270,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 1.9,
     ship: 2.2,
     tax: "KDV %20 (fiyata dahil)",
+    vatRate: 0.2,
+    vatIncluded: true,
+    vatKnown: true,
     source: "TÜİK / TOBB E-Ticaret Bilgi Sistemi",
     url: "https://www.eticaret.gov.tr/istatistikler",
   },
@@ -230,6 +282,9 @@ const COUNTRY_BENCH: Record<string, CountryBench> = {
     cvr: 2.1,
     ship: 5,
     tax: "Pazara göre değişken KDV/satış vergisi",
+    vatRate: 0,
+    vatIncluded: false,
+    vatKnown: false,
     source: "Statista – Global e-commerce benchmarks",
     url: "https://www.statista.com/markets/413/e-commerce/",
   },
@@ -245,6 +300,44 @@ function countryBench(code?: string): CountryBench {
     TÜRKIYE: "TR",
   };
   return COUNTRY_BENCH[alias[c] ?? c] ?? COUNTRY_BENCH.GLOBAL;
+}
+
+/**
+ * ÜLKE BAZLI KDV MODELİ — "fiyat KDV dahil mi, değil mi?"
+ *
+ * NEDEN AYRI: ülke benchmark'ı zaten vergi notunu taşıyordu ama landed-cost/
+ * net kâr hesabına SAYISAL olarak girmiyordu. AB/UK/TR/AU'da raf fiyatı
+ * KDV dahildir; satıcı bu KDV'yi tahsil edip devreder, yani cironun tamamı
+ * satıcının değildir. ABD/Kanada'da satış vergisi checkout'ta eklenir; bu
+ * yüzden model onu ayrıca düşmez. GLOBAL fallback'te vergi rejimi BİLİNMEZ;
+ * sayı uydurulmaz (`vatKnown=false`).
+ */
+export type CountryVatModel = {
+  country: string;
+  label: string;
+  /** 0-1 arası KDV/satış vergisi oranı. */
+  rate: number;
+  /** Fiyat bu vergiyi içeriyor mu? */
+  included: boolean;
+  /** Ülke rejimi biliniyor mu? GLOBAL fallback'te false. */
+  known: boolean;
+  note: string;
+  source: string;
+  url: string;
+};
+
+export function countryVatModel(code?: string): CountryVatModel {
+  const cb = countryBench(code);
+  return {
+    country: (code ?? "GLOBAL").toUpperCase(),
+    label: cb.label,
+    rate: cb.vatRate,
+    included: cb.vatIncluded,
+    known: cb.vatKnown,
+    note: cb.tax,
+    source: cb.source,
+    url: cb.url,
+  };
 }
 
 type SectorBench = { label: string; returns: number; cvr: number; source: string; url: string };
@@ -574,6 +667,39 @@ export function realEconomics(input: RealEconomicsInput): RealEconomics {
 }
 
 /** Formats a USD amount the same way the cards do. */
+export function landedCostModel(input: RealEconomicsInput): LandedCostModel {
+  const econ = realEconomics(input);
+  const vat = countryVatModel(input.country);
+  // KDV yalnız fiyat KDV DAHİL ise ve oran biliniyorsa düşülür. ABD/Kanada'da
+  // satış vergisi checkout'ta eklenir; satıcının cirosundan ayrıca düşmek
+  // yanlış olurdu. GLOBAL fallback'te oran bilinmez → 0, "ölçülmedi" notu.
+  const vat_cost =
+    vat.included && vat.rate > 0 ? r2(econ.retail - econ.retail / (1 + vat.rate)) : 0;
+  const landed_cost = r2(
+    econ.supplier +
+      econ.shipping +
+      econ.platform_fee +
+      econ.payment_fee +
+      econ.returns_cost +
+      econ.misc +
+      vat_cost,
+  );
+  return {
+    retail: econ.retail,
+    supplier: econ.supplier,
+    shipping: econ.shipping,
+    platform_fee: econ.platform_fee,
+    payment_fee: econ.payment_fee,
+    returns_cost: econ.returns_cost,
+    misc: econ.misc,
+    vat_cost,
+    landed_cost,
+    net_after_landed: r2(econ.retail - landed_cost),
+    vat,
+    duty_excluded: true,
+  };
+}
+
 export function usd(n: number): string {
   return `$${(Math.round(n * 100) / 100).toFixed(2)}`;
 }

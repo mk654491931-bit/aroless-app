@@ -138,6 +138,28 @@ describe("assessLaunch — ölçülen kanıttan atılabilirlik kararı", () => {
     expect(r.blockers.join(" ")).toContain("Landed cost");
   });
 
+  it("KDV DAHİL ülkede (DE) KDV düşülünce model payı eşiğin altına düşer", () => {
+    // ABD'de aynı girdiler modelden geçer; Almanya'da %19 KDV fiyatın
+    // içinden düşünce $5 tamponu kalmaz. Bu, KDV'nin neden modele girdiğinin
+    // somut kanıtıdır; gümrük hâlâ kapsam dışı.
+    const inputs = {
+      ...healthy,
+      priceUsd: 30,
+      supplierPriceUsd: 10,
+      supplierPriceHighUsd: 10,
+      moqUnits: 20,
+      grossMarginPct: 67,
+      platform: "Amazon",
+    };
+    const us = assessLaunch({ ...inputs, country: "US" });
+    const de = assessLaunch({ ...inputs, country: "DE" });
+    expect(gate(us, "landed").state).toBe("pass");
+    expect(gate(de, "landed").state).toBe("fail");
+    expect(gate(de, "landed").detail).toContain("KDV %19");
+    expect(gate(de, "landed").detail).toContain("Gümrük/HS kodu hariç");
+    expect(de.launchable).toBe(false);
+  });
+
   it("platform yoksa landed kapısı 'unknown' kalır; model uydurulmaz", () => {
     const r = assessLaunch({ ...healthy, platform: "" });
     expect(gate(r, "landed").state).toBe("unknown");
