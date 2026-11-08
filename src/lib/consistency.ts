@@ -1,5 +1,6 @@
 import type { WinningProduct } from "./gemini.functions";
 import { measuredMoney } from "./economics-evidence";
+import { parseMoneyNumber } from "./money";
 import { realEconomics } from "./real-economics";
 
 export type Issue = {
@@ -14,14 +15,15 @@ export type ConsistencyReport = {
   checked: number;
 };
 
+/**
+ * Tek para parserına delege eder.
+ *
+ * Eski gövde `"12.033,41"` → `12.03341` okuyordu; aynı ürünün bir panelinde
+ * `$12.033,41`, diğerinde `$12,03` görünmesinin nedeni buydu. Artık bütün
+ * sayısal para alanları `src/lib/money.ts` sözleşmesini kullanır.
+ */
 export function parseMoneyNum(s: string | undefined | null): number {
-  if (s === undefined || s === null) return 0;
-  const m = String(s)
-    .replace(/,/g, "")
-    .match(/-?\d+(\.\d+)?/);
-  if (!m) return 0;
-  const n = Number(m[0]);
-  return Number.isFinite(n) ? n : 0;
+  return parseMoneyNumber(s);
 }
 
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;

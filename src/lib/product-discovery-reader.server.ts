@@ -31,6 +31,7 @@
  */
 import type { RawProduct } from "./product-discovery.types";
 import { jinaEnvKeys } from "./ai-keys.server";
+import { CURRENCY_BY_SYMBOL, parseAmount, parseMoneyText } from "@/lib/money";
 
 /**
  * OKUMA MOTORU — ÖLÇÜLMÜŞ FARK (2026-10-12, n11 arama sayfası):
@@ -111,14 +112,10 @@ export interface GlobalReaderRow {
   site: "AliExpress" | "Newegg";
 }
 
-/** "1.359,15" → 1359.15 · "599" → 599 · "2.905" → 2905 */
+/** "1.359,15" → 1359.15 · "599" → 599 · "2.905" → 2905 (tek parser). */
 export function parseTry(raw: string): number | null {
-  const s = String(raw ?? "")
-    .trim()
-    .replace(/\s/g, "");
-  if (!s) return null;
-  const n = Number(s.replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) && n > 0 && n < 5_000_000 ? Math.round(n * 100) / 100 : null;
+  const n = parseAmount(raw);
+  return n !== null && n < 5_000_000 ? n : null;
 }
 
 const TL_RE = /(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s?(?:TL|₺)/g;
@@ -263,14 +260,10 @@ export function parseN11(md: string): ReaderRow[] {
 
 /* ------------------------------------------- AliExpress (GLOBAL, anahtarsız) */
 
-/** "$1,299.00" → 1299 · "$84.99" → 84.99 · "$" → null */
+/** "$1,299.00" → 1299 · "$84.99" → 84.99 · "$" → null (tek parser). */
 export function parseUsd(raw: string): number | null {
-  const s = String(raw ?? "")
-    .replace(/[$\s]/g, "")
-    .replace(/,/g, "");
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 && n < 500_000 ? Math.round(n * 100) / 100 : null;
+  const n = parseAmount(raw);
+  return n !== null && n < 500_000 ? n : null;
 }
 
 /**
@@ -439,104 +432,23 @@ export function parseNewegg(md: string): GlobalReaderRow[] {
 
 /* ══════════════════════════════ GENEL PARA BİRİMİ (P0-2) ══════════════════════
  *
+ * TEK KAYNAK: `src/lib/money.ts`. Bu dosya yalnız geriye dönük uyum için
+ * yeniden dışa aktarır; ayrı bir parser GÖVDESİ BURADA TUTULMAZ.
+ *
  * NEDEN: ayrıştırıcılar yalnız `parseTry` (TL) ve `parseUsd` ($) biliyordu.
  * Global ölçekte her ülkenin KENDİ biçimi var ve tek yanlış varsayım fiyatı
- * uydurur:
- *   • DE  „ab 27,99 €“   → virgül ONDALIK (27.99)
- *   • US  „$1,299.00“    → nokta ONDALIK
- *   • IN  „₹1,299“ / „₹12,34,567“ → Hint gruplaması (binlik ayırıcı)
- *   • JP  „4,180 円“      → binlik ayırıcı, ondalık YOK
- *   • PL  „1 299,00 zł“   → boşluk gruplama + virgül ondalık
- * Bu yüzden sayı çözümü TEK bir yerde (burada) ve ayırıcının ANLAMINI konumdan
- * çıkarır; hiçbir ülkeye özel varsayım yapmaz.
+ * uydurur (DE „27,99 €“, US „$1,299.00“, IN „₹12,34,567“,
+ * JP „4,180 円“, PL „1 299,00 zł“). Sayı çözümü tek yerde ve ayırıcının
+ * ANLAMINI konumdan çıkarır.
  */
-
-/**
- * Sembol → ISO kodu.
- *
- * SIRA ÖNEMLİ: `R$` `$`dan, `zł` tek başına `ł`den ÖNCE denenir (aksi hâlde
- * BRL `$` = USD, PLN tek harfe düşerdi). `TL` de burada: TR sayfaları tutarı
- * hem `₺` hem `TL` ile yazar (eski hat `parseTry` ile aynı sonucu vermeli).
- */
-export const CURRENCY_BY_SYMBOL: Readonly<Record<string, string>> = {
-  "R$": "BRL",
-  "zł": "PLN",
-  "TL": "TRY",
-  "₺": "TRY",
-  "€": "EUR",
-  "£": "GBP",
-  "¥": "JPY",
-  "円": "JPY",
-  "₹": "INR",
-  "₩": "KRW",
-  "$": "USD",
-};
-
-const MONEY_SYMBOLS = Object.keys(CURRENCY_BY_SYMBOL);
-
-/** Sayı ayırıcılarının ANLAMINI konumdan çıkarır; bilinmeyeni `null` yapar. */
-export function parseAmount(raw: string): number | null {
-  const cleaned = String(raw ?? "")
-    .replace(/[\s\u00A0\u202F]/g, "")
-    .replace(/[^\d.,]/g, "");
-  if (!cleaned) return null;
-  const separators = (cleaned.match(/[.,]/g) ?? []).length;
-  const lastDot = cleaned.lastIndexOf(".");
-  const lastComma = cleaned.lastIndexOf(",");
-  let normalized: string;
-  if (separators === 0) {
-    normalized = cleaned;
-  } else if (lastDot >= 0 && lastComma >= 0) {
-    // İKİ ayırıcı varsa SONUNCUSU ondalıktır (uluslararası kural).
-    normalized =
-      lastComma > lastDot
-        ? cleaned.replace(/\./g, "").replace(",", ".")
-        : cleaned.replace(/,/g, "");
-  } else {
-    const separator = lastDot >= 0 ? "." : ",";
-    const parts = cleaned.split(separator);
-    const tail = parts[parts.length - 1] ?? "";
-    // Tek ayırıcı + 1-2 hane = ondalık („27,99“) · 3+ hane/çoklu ayırıcı = binlik
-    // („4,180“ JPY, „12,34,567“ INR, „1.299“ TR). Yanlış tarafa düşmek fiyatı
-    // 100 katına çıkarırdı, bu yüzden kural açıkça burada.
-    if (parts.length === 2 && tail.length > 0 && tail.length <= 2) {
-      normalized = separator === "." ? cleaned : cleaned.replace(",", ".");
-    } else {
-      normalized = parts.join("");
-    }
-  }
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value <= 0 || value >= 100_000_000) return null;
-  return Math.round(value * 100) / 100;
-}
+export { CURRENCY_BY_SYMBOL, parseAmount };
 
 /**
  * Metinden ÖLÇÜLMÜŞ tutar + para birimi. Sembol sayının önünde de arkasında da
  * olabilir (`€ 27,99` / `27,99 €`). Bulunamazsa `null` — tahmin YOK.
  */
 export function parseMoney(text: string): { amount: number; currency: string } | null {
-  const src = String(text ?? "");
-  let best: { at: number; amount: number; currency: string } | null = null;
-  for (const symbol of MONEY_SYMBOLS) {
-    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const after = new RegExp(`${escaped}\\s*([0-9][0-9.,\\u00A0 ]{0,15})`);
-    const before = new RegExp(`([0-9][0-9.,\\u00A0 ]{0,15})\\s*${escaped}`);
-    const mAfter = after.exec(src);
-    const mBefore = before.exec(src);
-    const candidates: { match: RegExpExecArray; at: number }[] = [];
-    if (mAfter) candidates.push({ match: mAfter, at: mAfter.index });
-    if (mBefore) candidates.push({ match: mBefore, at: mBefore.index });
-    for (const { match, at } of candidates) {
-      const amount = parseAmount(match[1]);
-      const currency = CURRENCY_BY_SYMBOL[symbol];
-      if (amount === null || !currency) continue;
-      // METİNDEKİ EN ERKEN tutar kazanır: Flipkart'ta „₹579 ₹809“ yazıyor ve
-      // güncel fiyat İLK olandır; sembol tablosu sırasına göre seçmek yanlış
-      // tutarı (liste fiyatını) fiyat sayardı.
-      if (!best || at < best.at) best = { at, amount, currency };
-    }
-  }
-  return best ? { amount: best.amount, currency: best.currency } : null;
+  return parseMoneyText(text);
 }
 
 /* ══════════════ YEREL PAZARYERİ SATIRI (DE / IN / JP) (P0-1) ══════════════════

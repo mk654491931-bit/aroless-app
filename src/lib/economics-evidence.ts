@@ -24,33 +24,11 @@
 //   "—" gösterir (0 göstermez). `money()`/`parseUsd()` gibi yardımcıların
 //   `|| 0` varsayılanı bu katmanın YOK sayıldığı içindir.
 // ============================================================================
+import { parseAmount } from "./money";
 
 /** Ölçülmüş para: `"$5"`, `"5,00"`, `5` → sayı. Boş/çöp/0/negatif → `null`. */
 export function measuredMoney(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  if (!text) return null;
-  // Binlik ayırıcı olan biçimler de okunur: "$1,299.00", "1.299,00".
-  const normalized = text.replace(/[^\d.,-]/g, "");
-  if (!normalized) return null;
-  const m = normalized.match(/-?\d[\d.,]*/);
-  if (!m) return null;
-  const raw = m[0];
-  const lastComma = raw.lastIndexOf(",");
-  const lastDot = raw.lastIndexOf(".");
-  let numeric: string;
-  if (lastComma === -1 && lastDot === -1) {
-    numeric = raw;
-  } else if (lastComma > lastDot) {
-    // Avrupa/TR: ondalık ",", binlik "."  →  ondalık noktaya çevir.
-    numeric = raw.replace(/\./g, "").replace(",", ".");
-  } else {
-    // ABD/JS: ondalık ".", binlik "," →  binlik ayırıcıyı at.
-    numeric = raw.replace(/,/g, "");
-  }
-  const n = Number(numeric);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return parseAmount(value);
 }
 
 /** Kartın maliyet kalemi (klasik hattın `CostBreakdown` ile aynı yüzey). */

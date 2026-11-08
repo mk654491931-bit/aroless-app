@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WinningProduct } from "./gemini.functions";
+import { parseMoneyNumber } from "./money";
 
 export type ProductRow = {
   id: string;
@@ -27,11 +28,7 @@ const InsertInput = z.object({
 });
 
 function parseMoney(s: string | undefined): number {
-  if (!s) return 0;
-  const m = String(s).match(/[\d,.]+/);
-  if (!m) return 0;
-  const n = Number(m[0].replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
+  return parseMoneyNumber(s);
 }
 
 export const insertProductsFromAnalysis = createServerFn({ method: "POST" })

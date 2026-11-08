@@ -14,6 +14,7 @@
 //
 // Everything here is a pure function — client-safe and testable.
 // ============================================================================
+import { parseMoneyNumber } from "./money";
 
 export type EconomicsBenchmark = {
   /** Hangi katman: Sektör / Ülke / Pazaryeri / Reklam / Lojistik. */
@@ -79,13 +80,9 @@ export type RealEconomicsInput = {
   category?: string;
 };
 
+/** Tek para parserına delege; `"12.033,41"` artık 12.03341 değil 12033.41. */
 export function money(v: unknown): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const m = String(v ?? "")
-    .replace(/,/g, "")
-    .match(/-?\d+(\.\d+)?/);
-  const n = m ? Number(m[0]) : NaN;
-  return Number.isFinite(n) ? n : 0;
+  return parseMoneyNumber(v);
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));

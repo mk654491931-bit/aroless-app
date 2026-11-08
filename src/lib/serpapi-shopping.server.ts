@@ -21,6 +21,7 @@
 // ============================================================================
 
 import type { RawProduct } from "./product-discovery.types";
+import { detectCurrency, parseAmount } from "./money";
 // NOT: `product-discovery-sources.server` bu dosyayı dinamik olarak import
 // eder; buradan da onu statik import etmek ÇEVRİMMLİ bir bağımlılık olurdu.
 // Oysa gürültü kapısı zaten fiyat üzerinden uygulanmış durumda: fiyatı
@@ -148,40 +149,20 @@ export function extractPrice(item: SerpShoppingResult): {
   if (Number.isFinite(extracted) && extracted > 0) {
     return {
       amount: Math.round(extracted * 100) / 100,
-      currency: currencyFromText(String(item?.price ?? "")),
+      currency: detectCurrency(String(item?.price ?? "")) ?? "",
       display: String(item?.price ?? extracted),
     };
   }
   const text = String(item?.price ?? "").trim();
   if (!text) return null;
-  // "12,99 €", "$12.99", "USD 12.99" → sayı.
-  const match = text.replace(/\s/g, "").match(/(\d[\d.,]*)/);
-  if (!match) return null;
-  const raw = match[1];
-  const lastComma = raw.lastIndexOf(",");
-  const lastDot = raw.lastIndexOf(".");
-  let numeric: string;
-  if (lastComma === -1 && lastDot === -1) numeric = raw;
-  else if (lastComma > lastDot)
-    numeric = `${raw.slice(0, lastComma).replace(/\./g, "")}.${raw.slice(lastComma + 1)}`;
-  else numeric = raw.replace(/,/g, "");
-  const n = Number(numeric);
-  if (!Number.isFinite(n) || n <= 0) return null;
+  // "12,99 €", "$12.99", "USD 12.99" → tek para parserı.
+  const amount = parseAmount(text);
+  if (amount === null) return null;
   return {
-    amount: Math.round(n * 100) / 100,
-    currency: currencyFromText(text),
+    amount,
+    currency: detectCurrency(text) ?? "",
     display: text,
   };
-}
-
-function currencyFromText(text: string): string {
-  if (/€|\bEUR\b/i.test(text)) return "EUR";
-  if (/£|\bGBP\b/i.test(text)) return "GBP";
-  if (/\bTRY\b|₺/i.test(text)) return "TRY";
-  if (/\bR\$|\bBRL\b/i.test(text)) return "BRL";
-  if (/\bJPY\b|¥/i.test(text)) return "JPY";
-  if (/\$|\bUSD\b/i.test(text)) return "USD";
-  return "";
 }
 
 /** Puan + değerlendirme sayısı. Ölçülmemişse `null`. */

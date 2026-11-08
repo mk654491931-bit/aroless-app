@@ -325,7 +325,7 @@ export function marketBriefBlock(platforms: Platform[], code: string | undefined
       : "",
     `HARD RULES:`,
     `- Demand evidence (search interest, best-seller ranks, viral posts) must come from the ${country.name} market, not a generic global average.`,
-    `- Prices must be realistic for ${country.name} shoppers and quoted in ${country.currency} (keep a USD figure in parentheses when the currency is not USD).`,
+    `- All numeric JSON price fields are USD. Prices must be realistic for ${country.name} shoppers; if you mention a local-currency price in prose, label it as ${country.currency} and keep the USD figure in the matching *_usd field. Never put a ${country.currency} amount in a field whose name ends in _usd.`,
     `- Apply the real commission range above for the top channel in cost_breakdown, plus ${country.vat_pct}% ${country.vat_label} and local last-mile shipping.`,
     `- Drop any product that is blocked, restricted or needs certification that a small seller cannot obtain in ${country.name} (e.g. certification, customs or packaging-registration barriers listed above). If you keep it, state the barrier explicitly in risks.`,
     `- platform_fit must only contain channels that actually work in ${country.name}.`,

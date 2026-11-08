@@ -1,11 +1,9 @@
 import type { WinningProduct } from "@/lib/gemini.functions";
+import { parseNumber } from "@/lib/money";
 
-/** "$24.99", "24,99 USD", 24.99 -> 24.99 */
+/** "$24.99", "24,99 USD", "₺12.033,41", 24.99 -> 24.99 (tek parser). */
 export function num(v: unknown, fallback = 0): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v !== "string") return fallback;
-  const m = v.replace(/,/g, ".").match(/-?\d+(\.\d+)?/);
-  return m ? parseFloat(m[0]) : fallback;
+  return parseNumber(v) ?? fallback;
 }
 
 const usd = (n: number) =>

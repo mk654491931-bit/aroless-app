@@ -3,6 +3,7 @@ import { hasMeasuredNetProfit, measuredMarginPct } from "@/lib/economics-evidenc
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { enrichProduct, NOT_MEASURED } from "@/lib/recommendation";
 import { parseMoney, MIN_NET_MARGIN_PCT } from "@/lib/unit-economics";
+import { parseNumber } from "@/lib/money";
 
 export function toCsv(list: WinningProduct[]): string {
   const head = [
@@ -63,9 +64,8 @@ export function slugify(s: string): string {
 }
 
 function parsePriceNumber(s: string | undefined): string {
-  if (!s) return "";
-  const m = s.replace(/,/g, "").match(/(\d+(\.\d+)?)/);
-  return m ? m[1] : "";
+  const n = parseNumber(s);
+  return n !== null && n > 0 ? String(n) : "";
 }
 
 export function buildShopifyCsv(products: WinningProduct[]): string {

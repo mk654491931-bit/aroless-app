@@ -354,7 +354,7 @@ Brief:
 - Starting capital / budget: ${data.budget}
 - MARKETPLACE FOCUS: ${
     data.marketplace === "turkey"
-      ? "Turkey — source and price for Trendyol and Hepsiburada. Give prices in TRY (Turkish Lira), apply real Trendyol/Hepsiburada commission rates (10-22%) and local cargo costs in cost_breakdown, and score demand against Turkish local search/sales data."
+      ? "Turkey — source and price for Trendyol and Hepsiburada. ALL monetary fields (selling_price_usd, supplier_price_usd, startup_cost_usd, every cost_breakdown value, competitor_prices[].price, and all *_usd fields) MUST be USD amounts. If you know the local TRY price, mention it only in prose with the TRY label; NEVER put a TRY amount in a *_usd field. Apply real Trendyol/Hepsiburada commission rates (10-22%) and local cargo costs in cost_breakdown, and score demand against Turkish local search/sales data."
       : "Global sourcing from AliExpress/Alibaba, but every demand and price claim must be validated for the target country below."
   }
 ${marketBrief}
@@ -718,7 +718,13 @@ JSON shape:
       "The AI could not return verified products for this niche. Try a more specific niche — your credit was refunded.",
     );
   }
-  const normalized = products.map((prod) =>
+  // PARA BİRİMİ KAPISI: AI bir *_usd alanına açıkça yerel tutar yazdıysa
+  // (ör. "₺12.033,41") gerçek FX kuruyla USD'ye çevir; sembolsüz tutarı
+  // USD varsayma. Dönüşüm normalizasyondan ÖNCE olmalı ki marj/real_economics
+  // aynı USD fiyatı görsün.
+  const { convertProductMoneyToUsd } = await import("@/lib/currency-contract.server");
+  const fxProducts = await Promise.all(products.map((prod) => convertProductMoneyToUsd(prod)));
+  const normalized = fxProducts.map((prod) =>
     normalizeProduct(prod, {
       country: data.target_country,
       category: data.category && data.category !== "Any" ? data.category : data.niche,

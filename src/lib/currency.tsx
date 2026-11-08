@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { countryByCode } from "@/lib/countries";
 import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
+import { parseNumber } from "@/lib/money";
 
 export type FxPayload = {
   base: "USD";
@@ -33,10 +34,9 @@ export function useFxRates() {
 export function parseUsd(v: string | number | undefined | null): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (!v) return 0;
-  const m = String(v)
-    .replace(/,/g, "")
-    .match(/-?\d+(\.\d+)?/);
-  return m ? Number(m[0]) : 0;
+  // Aralık metinlerinde İLK tutar kazanır; böylece "~$8–10" 810 olmaz.
+  const first = String(v).split(/[–—-]/).find((part) => /\d/.test(part)) ?? String(v);
+  return parseNumber(first) ?? 0;
 }
 
 const COUNTRY_KEY = "aroless:target-country";

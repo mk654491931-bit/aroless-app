@@ -8,6 +8,7 @@
 // show up in search results or receive a high score.
 // ============================================================================
 import type { ProductSignals } from "@/lib/hot-products";
+import { parseMoneyNumber } from "@/lib/money";
 
 export const MIN_NET_MARGIN_PCT = 15;
 
@@ -23,15 +24,9 @@ export type UnitEconomics = {
   disqualified: boolean;
 };
 
+/** Tek para parserı: `"12.033,41"`, `"$1,299.00"`, `"1.299,00 TL"` aynı okunur. */
 export function parseMoney(v: unknown): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = parseFloat(
-    String(v ?? "")
-      .replace(/[^0-9.,-]/g, "")
-      .replace(/,(?=\d{3}\b)/g, "")
-      .replace(",", "."),
-  );
-  return Number.isFinite(n) ? n : 0;
+  return parseMoneyNumber(v);
 }
 
 /** Platform commission by marketplace, realistic ranges. */

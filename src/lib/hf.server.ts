@@ -4,6 +4,7 @@
 import { extractJson } from "@/lib/ai.server";
 import { hfEnvKeys } from "./ai-keys.server";
 import { withEstimationRules } from "./ai-guidance";
+import { parseNumber } from "./money";
 
 export const HF_MODELS = {
   qwen: "Qwen/Qwen2.5-7B-Instruct",
@@ -364,7 +365,7 @@ export function buildHfPrompt(input: {
       : "Move fast: prioritise sharp, sellable picks with punchy marketing angles.";
   const marketRule =
     input.marketplace === "turkey"
-      ? `MARKETPLACE FOCUS: Turkey. Source and price for Trendyol and Hepsiburada. Give supplierPrice/sellingPrice in TRY (Turkish Lira) and factor Trendyol/Hepsiburada commissions (typically 10-22%) plus local shipping into profitMargin. demandScore must reflect Turkish local demand.`
+      ? `MARKETPLACE FOCUS: Turkey. Source and price for Trendyol and Hepsiburada. ALL monetary fields (supplierPrice, sellingPrice, profitMargin inputs, budgets) MUST be USD. If you know the local TRY price, mention it only in prose (e.g. description/whyWinning) with the TRY label; never put a TRY amount in a USD field. Factor Trendyol/Hepsiburada commissions (typically 10-22%) plus local shipping into profitMargin. demandScore must reflect Turkish local demand.`
       : `MARKETPLACE FOCUS: Global. Source from AliExpress/Alibaba and benchmark retail against Amazon. Prices in USD.`;
   const langName = LANG_NAMES[input.lang ?? "en"] ?? "English";
   return `${depth}
@@ -435,13 +436,10 @@ Return STRICT JSON only, exactly this shape:
 }
 
 const money = (v: unknown): string => {
-  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) && n > 0 ? `$${n.toFixed(2)}` : "$0.00";
+  const n = parseNumber(v);
+  return n !== null && n > 0 ? `$${n.toFixed(2)}` : "$0.00";
 };
-const num = (v: unknown, fallback = 0): number => {
-  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : fallback;
-};
+const num = (v: unknown, fallback = 0): number => parseNumber(v) ?? fallback;
 
 /** Keeps a model-provided array only when it really is a non-empty array. */
 const arr = <T>(v: unknown, max = 8): T[] | undefined =>
