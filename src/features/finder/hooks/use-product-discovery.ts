@@ -37,6 +37,7 @@ import {
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 import type {
   Consensus,
+  FilterStats,
   ProductDiscoveryInput,
   ProductDiscoveryStatus,
   TopProduct,
@@ -76,6 +77,12 @@ export type DiscoveryRun = {
   products: DiscoveryWinner[];
   consensus: Consensus[];
   /**
+   * Sunucunun ilk adımda ölçtüğü kaynak/filtre sayaçları. Sonuç ekranındaki
+   * "hangi kaynak çağrıldı / anahtarsız / hata verdi" panelinin TEK kaynağı;
+   * yoksa panel gösterilmez.
+   */
+  stats: FilterStats | null;
+  /**
    * Nihai ürünlerin sözleşmesi (`top_products`, varsayılan 5 / üst sınır 10). Sunucu tarafında kalıcı sonuca
    * yazıldığı için TÜM taşıyıcılarda (qstash / arka plan / yoklama) dolar;
    * eski koşularda boştur ve arayüz sessizce ürün kartlarına düşer.
@@ -98,6 +105,7 @@ const EMPTY: DiscoveryRun = {
   step: null,
   products: [],
   consensus: [],
+  stats: null,
   topProducts: [],
   error: null,
   note: null,
@@ -140,6 +148,7 @@ export function useProductDiscovery(): {
         status: "queued",
         progress: 10,
         step: "measured",
+        stats: null,
         note: "İş kaydı açılamadı; doğrudan ölçülmüş kazananlara geçiliyor.",
         measured: true,
       }));
@@ -178,6 +187,7 @@ export function useProductDiscovery(): {
           progress: 100,
           step: "measured",
           products: res.rows,
+          stats: null,
           note:
             "14 ajanlık konsey çalışmadı (kalıcı iş kaydı yok). Aşağıdaki ürünler " +
             "kazınmış fiyat, puan, satış ve kaynak kanıtıyla sıralandı; AI anahtarı " +
@@ -300,6 +310,7 @@ export function useProductDiscovery(): {
             step: res.step || null,
             products: res.result?.products ?? prev.products,
             consensus: res.result?.consensus ?? prev.consensus,
+            stats: res.stats ?? prev.stats,
             // Sözleşme yalnız terminal sonuçta gelir; ara yoklamada üstüne
             // yazılmaz ( aksi hâlde hazır olmayan bir liste üstüne yazılırdı ).
             topProducts: res.result?.topProducts.length ? res.result.topProducts : prev.topProducts,

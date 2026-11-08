@@ -34,12 +34,12 @@ import {
 import { DraggableCopilot } from "@/components/draggable-copilot";
 import { PageHero } from "@/components/page-hero";
 import { withProGate } from "@/components/pro-route-gate";
-import { DiscoveryProgress } from "@/features/finder/components/discovery-progress";
+import { DiscoveryProgress, DiscoveryStats } from "@/features/finder/components/discovery-progress";
 import { DiscoveryWinnerCard } from "@/features/finder/components/discovery-winner-card";
 import { useProductDiscovery } from "@/features/finder/hooks/use-product-discovery";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { TARGET_COUNTRIES } from "@/lib/countries";
-import type { Consensus, TopProduct } from "@/lib/product-discovery.types";
+import type { Consensus, FilterStats, TopProduct } from "@/lib/product-discovery.types";
 
 /**
  * Konseydeki ROL sayısı — payda. Oy SAYISI ölçülür, rol sayısı tasarımdır;
@@ -289,6 +289,7 @@ function DiscoverPage() {
           products={d.run.products}
           consensus={d.run.consensus}
           topProducts={d.run.topProducts}
+          stats={d.run.stats}
         />
       )}
     </div>
@@ -303,11 +304,14 @@ function DiscoveryResults({
   products,
   consensus,
   topProducts,
+  stats,
 }: {
   products: DiscoveryWinner[];
   consensus: Consensus[];
   /** `top_products` sözleşmesi — gerekçe metni buradan gelir. */
   topProducts: TopProduct[];
+  /** İlk adımın kaynak/filtre sayaçları; eski koşularda null olabilir. */
+  stats: FilterStats | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   // Uzlaşma tablosu parmak izine göre eşlenir; kart yalnızca kazanana bakar
@@ -375,6 +379,11 @@ function DiscoveryResults({
           {councilLabel}
         </span>
       </div>
+
+      {/* KAYNAK SAĞLIĞI — sonuç ekranında görünür. `DiscoveryStats` eski
+          sürümde hiçbir yere bağlı değildi; kullanıcı "hangi kaynak çağrıldı,
+          hangisi anahtarsız, hangisi gerçekten hata verdi" bilgisini göremiyordu. */}
+      {stats && <DiscoveryStats stats={stats} />}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
         <div className="space-y-4">

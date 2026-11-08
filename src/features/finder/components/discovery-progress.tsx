@@ -38,6 +38,29 @@ function stepIndex(step: string | null): number {
   return STEPS.findIndex((s) => s.key === step);
 }
 
+/** İç kaynak adlarını kullanıcıya gösterilecek adlara çevirir. */
+const SOURCE_LABELS: Record<string, string> = {
+  "bestbuy-api": "Best Buy",
+  "ebay-browse": "eBay",
+  "tavily-search": "Tavily",
+  "tr-marketplace": "ScraperAPI",
+  "google-shopping": "Google Shopping",
+  "youtube-attention": "YouTube",
+  "reddit-archive": "Reddit arşivi",
+  openfoodfacts: "Open Food Facts",
+  "aliexpress-reader": "AliExpress",
+  "made-in-china": "Made-in-China",
+  "web-reviews": "Web yorumları",
+  "bing-shopping": "Bing Shopping",
+  "hackernews-demand": "Hacker News",
+  "wikipedia-demand": "Wikipedia",
+  "github-repos": "GitHub",
+};
+
+function sourceLabel(name: string): string {
+  return SOURCE_LABELS[name] ?? name;
+}
+
 export function DiscoveryProgress({
   status,
   progress,
@@ -145,17 +168,17 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
       </div>
       {healthy.length > 0 && (
         <p className="text-muted-foreground">
-          • Çalışan kaynak: {healthy.map((s) => s.name).join(", ")}
+          • Çalışan kaynak: {healthy.map((s) => sourceLabel(s.name)).join(", ")}
         </p>
       )}
       {keyless.length > 0 && (
         <p className="text-amber-500/90" title={keyless.map((s) => s.error).join(" · ")}>
-          • Anahtarsız (çağrılmadı): {keyless.map((s) => s.name).join(", ")}
+          • Anahtarsız (çağrılmadı): {keyless.map((s) => sourceLabel(s.name)).join(", ")}
         </p>
       )}
       {broken.length > 0 && (
         <p className="text-amber-500/90" title={broken.map((s) => s.error).join(" · ")}>
-          • Çalışmayan: {broken.map((s) => s.name).join(", ")}
+          • Çalışmayan: {broken.map((s) => sourceLabel(s.name)).join(", ")}
         </p>
       )}
     </div>

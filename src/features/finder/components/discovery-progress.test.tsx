@@ -44,8 +44,8 @@ describe("DiscoveryStats — kaynak sağlığı", () => {
     );
 
     expect(html).toContain("Anahtarsız (çağrılmadı)");
-    expect(html).toContain("ebay-browse");
-    expect(html).toContain("tavily-search");
+    expect(html).toContain("eBay");
+    expect(html).toContain("Tavily");
     expect(html).not.toContain("Çalışmayan:");
   });
 
@@ -59,7 +59,7 @@ describe("DiscoveryStats — kaynak sağlığı", () => {
       />,
     );
 
-    expect(html).toContain("Anahtarsız (çağrılmadı): ebay-browse");
-    expect(html).toContain("Çalışmayan: openfoodfacts");
+    expect(html).toContain("Anahtarsız (çağrılmadı): eBay");
+    expect(html).toContain("Çalışmayan: Open Food Facts");
   });
 });

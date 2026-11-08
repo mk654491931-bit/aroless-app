@@ -147,11 +147,12 @@ Vercel fonksiyonu 300 sn'de öldürür (`504 FUNCTION_INVOCATION_TIMEOUT`). Bu y
 | Bütçeler | `src/lib/host-runtime.server.ts` | Platform algılama (Vercel / kendi Node sunucumuz) ve istek süresi üst sınırları tek kaynaktan. |
 | Teşhis | `GET /health` | Platform, istek bütçesi, arka plan kuyruğu ve önbellek sayaçları (sır içermez). |
 
-Ürün Bulucu, `/health` içindeki `sourceKeys` durumunu kullanır: **anahtarı
-tanımlı olmayan kaynak çağrılmaz** ve panelde "Çalışan kaynak" değil
-"Anahtarsız (çağrılmadı)" olarak gösterilir. Böylece 0 satır dönen bir kaynak
-"çalıştı" sanılmaz; eksik anahtar adı yalnız tooltip'te kalır, değeri asla
-istemciye gitmez.
+Ürün Bulucu, ilk adımın kaynak sayaçlarını `discovery_stats` alanında saklar
+ve sonuç ekranındaki **Tarama özeti** panelinde gösterir. `/health` içindeki
+`sourceKeys` ile birlikte: **anahtarı tanımlı olmayan kaynak çağrılmaz** ve
+panelde "Çalışan kaynak" değil "Anahtarsız (çağrılmadı)" olarak gösterilir.
+Böylece 0 satır dönen bir kaynak "çalıştı" sanılmaz; eksik anahtar adı yalnız
+tooltip'te kalır, değeri asla istemciye gitmez.
 
 İsteğe bağlı ayarlar — boş bırakılırsa akıllı varsayılanlar kullanılır:
 

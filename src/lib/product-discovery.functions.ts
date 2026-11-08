@@ -53,6 +53,7 @@ import {
   ProductDiscoveryInputSchema,
   TopProductSchema,
   discoveryBriefLine,
+  type FilterStats,
   type NormalizedProduct,
   type TopProduct,
 } from "@/lib/product-discovery.types";
@@ -291,6 +292,13 @@ export type DiscoveryRunStatus = {
    * ölçebilir.
    */
   updatedAt: number | null;
+  /**
+   * İlk adımın kaynak/filtre sayaçları. Terminal sonuçta da korunur; böylece
+   * "hangi kaynak çağrıldı, hangisi anahtarsız, hangisi gerçekten hata verdi"
+   * sonuç ekranında görünür. Eski koşularda null olabilir; arayüz paneli
+   * gizler ve ölçüm uydurmaz.
+   */
+  stats: FilterStats | null;
   /** Yalnız terminal durumda dolar: kazanan ürünler + uzlaşma + nihai 5'in gerekçesi. */
   result: {
     products: DiscoveryWinner[];
@@ -631,6 +639,7 @@ async function readRunSnapshot(
     progress: job.discoveryProgress,
     step: job.discoveryStep,
     updatedAt: job.updatedAt,
+    stats: job.stats,
     result,
     error: job.error,
   };

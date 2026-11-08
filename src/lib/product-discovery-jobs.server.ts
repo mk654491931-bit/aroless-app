@@ -31,6 +31,7 @@ import { JOB_TABLE, jobStore } from "./discovery-jobs.server";
 import { readSliceBook, type SliceBook } from "./product-discovery-slices.server";
 import {
   canTransition,
+  FilterStatsSchema,
   ProductDiscoveryInputSchema,
   type Consensus,
   type FilterStats,
@@ -171,10 +172,20 @@ function toRecord(row: Record<string, unknown>): DiscoveryJobRecord {
     discoveryProgress: Number(row["discovery_progress"] ?? 0),
     discoveryStep: String(row["discovery_step"] ?? ""),
     chargedCredits: Number(row["charged_credits"] ?? 0),
-    stats: (row["discovery_stats"] as FilterStats | null) ?? null,
+    // HAM JSON'A GÜVENME: eski bir koşunun `discovery_stats` gövdesi eksik
+    // alanlarla gelebilir. Şema varsayılanları uygular; ayrıştırılamayan
+    // gövde null olur ve arayüz paneli gizler (uydurma sayaç göstermez).
+    stats: readFilterStats(row["discovery_stats"]),
     error: (row["error"] as string | null) ?? null,
     updatedAt: parseTimestamp(row["updated_at"]),
   };
+}
+
+/** DB'deki serbest JSON `discovery_stats` → doğrulanmış `FilterStats` ya da null. */
+function readFilterStats(value: unknown): FilterStats | null {
+  if (value === null || typeof value !== "object") return null;
+  const parsed = FilterStatsSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 /** ISO/timestamptz → ms; okunamazsa `null` (çağıran "bilinmiyor" davranır). */
