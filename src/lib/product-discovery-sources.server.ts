@@ -33,6 +33,7 @@ import {
   googleShoppingProviderPlan,
   type GoogleShoppingProvider,
 } from "./google-shopping.server";
+export { KEYED_SOURCE_ENV, missingKeyedSources } from "./source-keys";
 
 /** Bir scraping kaynağının sözleşmesi. Yeni kaynak = bu arayüzü uygulamak. */
 export interface ProductSource {
@@ -3388,55 +3389,6 @@ export const youtubeAttentionSource: ProductSource = {
     ];
   },
 };
-
-/**
- * ANAHTAR GEREKTİREN KAYNAKLAR — "ölçülmedi" ile "sıfır ölçtü" ayrımı.
- *
- * NEDEN VAR (2026-11-08): anahtarsız koşuda bu kaynaklar 0 ms'de boş dönüyor
- * ve rapor `ok:true, items:0` yazıyordu. Kullanıcı "bu nişte yok" sanıyordu;
- * gerçek sebep anahtarın hiç tanımlı olmamasıydı. Anahtar DEĞERİ okunmaz,
- * yalnız var/yok durumu raporlanır.
- */
-export const KEYED_SOURCE_ENV: Readonly<Record<string, readonly string[]>> = {
-  "bestbuy-api": ["BESTBUY_API_KEY", "BEST_BUY_API_KEY"],
-  "ebay-browse": [
-    "EBAY_OAUTH_TOKEN",
-    "EBAY_BEARER_TOKEN",
-    "EBAY_ACCESS_TOKEN",
-    // Client ID tek başına yetmez: Browse jetonu için Secret (veya hazır
-    // Bearer) gerekir. ID'yi yeterli saymak "ölçüldü" yalanı üretirdi.
-    "EBAY_CLIENT_SECRET",
-    "EBAY_CERT_ID",
-  ],
-  "tavily-search": ["TAVILY_API_KEY", "TAVILY_KEY"],
-  "tr-marketplace": ["SCRAPERAPI_KEY", "SCRAPI_KEY", "SCRAP_API_KEY"],
-  // Tek koordinatör: bu anahtarlardan HERHANGİ biri varsa Google Shopping
-  // ölçülebilir. Sıra, kota genişliğine göre birincil sağlayıcıyı belirler.
-  "google-shopping": [
-    "SERPER_API_KEY",
-    "SERPER_KEY",
-    "SERPER_DEV_API_KEY",
-    "SEARCHAPI_KEY",
-    "SEARCHAPI_API_KEY",
-    "SEARCHAPI_IO_KEY",
-    "SERPAPI_KEY",
-    "SERP_API_KEY",
-    "SERPAPI_API_KEY",
-  ],
-  "youtube-attention": ["YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"],
-};
-
-/** Anahtarı tanımlı olmayan kaynaklar (ad + panelde istenecek ilk anahtar). */
-export function missingKeyedSources(
-  env: Record<string, string | undefined> = process.env,
-): { source: string; key: string }[] {
-  const out: { source: string; key: string }[] = [];
-  for (const [source, keys] of Object.entries(KEYED_SOURCE_ENV)) {
-    if (keys.some((key) => (env[key] ?? "").trim())) continue;
-    out.push({ source, key: keys[0] ?? "" });
-  }
-  return out;
-}
 
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ gerçek TR ürün satırları (Hepsiburada + n11; fiyat + puan + görsel).

@@ -72,6 +72,18 @@ describe("sunucu girişi / /health", () => {
     expect(res.headers.get("cache-control")).toContain("no-store");
   });
 
+  it("ürün kaynağı anahtarlarını var/yok olarak raporlar, değer sızdırmaz", async () => {
+    vi.stubEnv("SERPER_API_KEY", "health-source-secret");
+    vi.stubEnv("BESTBUY_API_KEY", "");
+    vi.stubEnv("YOUTUBE_API_KEY", "");
+    const res = await serverEntry.fetch(healthRequest(), {}, {});
+    const text = JSON.stringify(await res.json());
+
+    expect(text).toContain("sourceKeys");
+    expect(text).toContain("google-shopping");
+    expect(text).not.toContain("health-source-secret");
+  });
+
   it("AI havuzu sayaçlarını raporlar, anahtar değeri sızdırmaz", async () => {
     const res = await serverEntry.fetch(healthRequest(), {}, {});
     const body = (await res.json()) as {
