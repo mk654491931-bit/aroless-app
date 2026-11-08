@@ -113,6 +113,10 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
 
   const healthy = stats.perSource.filter((s) => s.ok);
   const failedSources = stats.perSource.filter((s) => !s.ok);
+  // ANAHTARSIZ ≠ ÇALIŞMADI: kaynak hiç çağrılmadıysa "çalışmayan" demek
+  // yanlış olur. İkisini ayrı gösteriyoruz; ikisinin de nedeni tooltip'te.
+  const keyless = failedSources.filter((s) => s.error.includes("anahtar tanımlı değil"));
+  const broken = failedSources.filter((s) => !s.error.includes("anahtar tanımlı değil"));
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 text-xs space-y-3">
@@ -144,9 +148,14 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
           • Çalışan kaynak: {healthy.map((s) => s.name).join(", ")}
         </p>
       )}
-      {failedSources.length > 0 && (
-        <p className="text-amber-500/90">
-          • Çalışmayan: {failedSources.map((s) => s.name).join(", ")}
+      {keyless.length > 0 && (
+        <p className="text-amber-500/90" title={keyless.map((s) => s.error).join(" · ")}>
+          • Anahtarsız (çağrılmadı): {keyless.map((s) => s.name).join(", ")}
+        </p>
+      )}
+      {broken.length > 0 && (
+        <p className="text-amber-500/90" title={broken.map((s) => s.error).join(" · ")}>
+          • Çalışmayan: {broken.map((s) => s.name).join(", ")}
         </p>
       )}
     </div>

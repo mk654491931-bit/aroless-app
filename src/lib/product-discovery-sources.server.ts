@@ -33,7 +33,9 @@ import {
   googleShoppingProviderPlan,
   type GoogleShoppingProvider,
 } from "./google-shopping.server";
-export { KEYED_SOURCE_ENV, missingKeyedSources } from "./source-keys";
+import { KEYED_SOURCE_ENV, missingKeyedSources } from "./source-keys";
+
+export { KEYED_SOURCE_ENV, missingKeyedSources };
 
 /** Bir scraping kaynağının sözleşmesi. Yeni kaynak = bu arayüzü uygulamak. */
 export interface ProductSource {
@@ -64,6 +66,32 @@ export type SourceReport = {
   ms: number;
   error: string;
 };
+
+/**
+ * ANAHTARI TANIMLI OLMAYAN KAYNAKLAR — çağrılmadan "unavailable" raporlanır.
+ *
+ * NEDEN: bu kaynaklar anahtarsız çağrıldığında `[]` dönüp `runSources`
+ * tarafından `ok:true, items:0` olarak işaretleniyordu. Arayüz de onları
+ * "Çalışan kaynak" listesinde gösteriyordu; oysa hiç ağ çağrısı yapılmamıştı.
+ * Bu, "kaynak sağlığı" iddiasını yanlışlıyordu. Artık:
+ *   • kaynak HİÇ çağrılmaz (boşuna bekleme/istek yok),
+ *   • rapor `ok:false` + açıklayıcı `error` taşır,
+ *   • arayüz onu "Anahtarsız (çağrılmadı)" olarak gösterir; anahtar adı
+ *     yalnız tooltip'te kalır.
+ */
+function unavailableKeyedSources(): Map<string, string> {
+  return new Map(missingKeyedSources().map(({ source, key }) => [source, key]));
+}
+
+function unavailableReport(name: string, key: string): SourceReport {
+  return {
+    name,
+    ok: false,
+    items: 0,
+    ms: 0,
+    error: `anahtar tanımlı değil: ${key}`,
+  };
+}
 
 /* ------------------------------------------------------------------ utils */
 
@@ -3509,9 +3537,12 @@ export async function runSourceRescue(
   const candidates = (opts.sources ?? PRODUCT_SOURCES).filter((source) =>
     RESCUE_SOURCE_NAMES.has(source.name),
   );
+  const unavailable = unavailableKeyedSources();
   const products: RawProduct[] = [];
   const reports: SourceReport[] = await Promise.all(
     candidates.map(async (source): Promise<SourceReport> => {
+      const missingKey = unavailable.get(source.name);
+      if (missingKey) return unavailableReport(source.name, missingKey);
       const startedAt = Date.now();
       const budgetMs = Math.max(1_000, Math.min(source.timeoutMs, cap));
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -3576,8 +3607,11 @@ export async function runSources(
     Number.isFinite(opts.capMs) && (opts.capMs as number) > 0
       ? Math.round(opts.capMs as number)
       : Number.POSITIVE_INFINITY;
+  const unavailable = unavailableKeyedSources();
   const reports: SourceReport[] = await Promise.all(
     sources.map(async (source): Promise<SourceReport> => {
+      const missingKey = unavailable.get(source.name);
+      if (missingKey) return unavailableReport(source.name, missingKey);
       const startedAt = Date.now();
       const budgetMs = Math.max(1_000, Math.min(source.timeoutMs, cap));
       let timer: ReturnType<typeof setTimeout> | undefined;

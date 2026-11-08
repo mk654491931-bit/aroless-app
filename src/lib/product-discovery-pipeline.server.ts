@@ -976,12 +976,21 @@ export async function runScrapeFilterStep(
   // KAPSAM GÖRÜNÜRLÜĞÜ: kaç kaynağın gerçekten koştuğu ve kaçının yanıt
   // verdiği tek satırda görünür. "Kaynak yok" ile "kaynak koştu ama boş"
   // ayrımı kaybolmaz; kullanıcı hangi kaynağın veri getirdiğini görebilir.
+  const keylessReports = reports.filter(
+    (r) => !r.ok && r.error.includes("anahtar tanımlı değil"),
+  );
+  const calledSources = reports.length - keylessReports.length;
   const answeredSources = reports.filter((r) => r.ok && r.items > 0).length;
   notes.push(
-    `Kaynak kapsamı: ${reports.length} kaynak koştu, ${answeredSources} kaynak ` +
+    `Kaynak kapsamı: ${reports.length} kaynak değerlendirildi, ${calledSources} kaynak ` +
+      `çağrıldı; ${answeredSources} kaynak ` +
       `${reports.reduce((sum, r) => sum + r.items, 0)} ham satır getirdi.`,
   );
-  const failed = reports.filter((r) => !r.ok).map((r) => `${r.name}: ${r.error}`);
+  // Anahtarsız kaynak "çalışmayan" listesine YAZILMAZ: hiç çağrılmadı. Ayrı
+  // notta anahtar adıyla görünür; böylece iki ayrı hata sınıfı karışmaz.
+  const failed = reports
+    .filter((r) => !r.ok && !r.error.includes("anahtar tanımlı değil"))
+    .map((r) => `${r.name}: ${r.error}`);
   if (failed.length) notes.push(`Çalışmayan kaynak(lar) — ${failed.join("; ")}`);
   // ANAHTARSIZ KAYNAK = ÖLÇÜLMEDİ. Sessiz `0 satır` ile "bu nişte yok"
   // arasındaki farkı korur; kullanıcı hangi anahtarın eksik olduğunu görür.
