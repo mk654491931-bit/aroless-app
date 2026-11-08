@@ -22,6 +22,64 @@ export function normalizeProductIdentity(name: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * BAŞLIK KİMLİĞİ — aynı ürünün iki mağaza yazımını yakalayan, TUTUCU anahtar.
+ *
+ * NEDEN GEREKLİ (canlı hata, 2026-11-08, "air fryer"/US): nihai 5'li listede
+ * aynı Cuisinart 2.6-Qt sepetli air fryer iki kez göründü:
+ *   "Cuisinart Basket Air Fryer, 2.6-Qt"
+ *   "Cuisinart® 2.6-Qt Basket Air Fryer, Black"
+ * GTIN/MPN/model kodu yoktu; `fingerprint` satıcıyı ve tam başlığı gömdüğü
+ * için iki mağaza yazımı ayrı düşüyordu. Renk/finish ve kelime sırası
+ * değişince aynı ürün iki kazanım slotu harcıyordu.
+ *
+ * KURAL: marka aynı + sayılar (kapasite/model!) aynı + anlamlı kelime kümesi
+ * aynı. Renk/finish ve dolgu kelimeleri atılır; sayılar ASLA atılmaz, böylece
+ * 5 Qt ile 8 Qt birleşmez. En az 4 anlamlı token yoksa anahtar üretilmez
+ * (genel başlıklar yanlış birleşme riski taşır).
+ */
+export function productTitleIdentityKey(title: string, brand: string): string {
+  const brandKey = normalizeProductIdentity(brand).replace(/\s+/g, "");
+  if (!brandKey) return "";
+  const raw = normalizeProductIdentity(title);
+  if (!raw) return "";
+  const noise = new Set([
+    "with",
+    "and",
+    "for",
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "from",
+    "new",
+    "black",
+    "white",
+    "silver",
+    "grey",
+    "gray",
+    "red",
+    "blue",
+    "green",
+    "pink",
+    "gold",
+    "chrome",
+  ]);
+  const tokens = raw
+    .split(" ")
+    .filter((t) => t && t !== brandKey && !noise.has(t))
+    // Tek harfli sayısal olmayan token gürültüdür; "2" ve "6" gibi sayılar
+    // kapasite/model kanıtıdır ve korunur.
+    .filter((t) => /\d/.test(t) || t.length >= 2);
+  if (tokens.length < 4) return "";
+  return `t:${brandKey}|${Array.from(new Set(tokens)).sort().join(" ")}`;
+}
+
 // ============================================================================
 // GTIN / EAN / UPC DOĞRULAMA (GS1 Mod-10) VE ÜLKE ÖNEK TABLOSU (SAF, $0).
 //

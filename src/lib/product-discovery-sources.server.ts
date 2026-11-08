@@ -930,10 +930,30 @@ export function itunesArtwork(url: string): string {
  * güvenilir). Yoksa kart içindeki `<img src>` denenir; logo, sprite, 1x1
  * izleyici ve veri-URI'leri elenir — vitrinde yanlış görsel göstermek,
  * görsel göstermemekten kötüdür.
+ *
+ * ÖLÇÜLEN EKSİK (2026-11-08, "air fryer"/US): 60 kartın 23'ünde `<img src>`
+ * yoktu ama ana görsel `br-offImg` kutusunda LAZY yükleniyor:
+ *   `<div class="br-offImg" …><div class="rms_iac" data-src="https://th.bing.com/th/id/OPHS…">`
+ * Bu yüzden `data-src` de okunur. Yalnız ana görsel kutusuna bakılır: kartın
+ * ilerisindeki hover/benzer ürün `data-src`leri BAŞKA ürünün görselidir ve
+ * yanlış eşleşme üretirdi.
  */
 export function imageFromShoppingCard(card: string): string {
   const murl = /"murl"\s*:\s*"(https:\/\/[^"]+)"/i.exec(card)?.[1];
   if (murl) return decode(murl);
+  const mainStart = card.search(/class="br-offImg"/i);
+  if (mainStart >= 0) {
+    // `pa_hover_container` kartın HOVER/benzer ürün görsellerini taşır; ana
+    // görsel kutusunun dışındadır ve kesinlikle okunmaz.
+    const mainBox = card.slice(mainStart, mainStart + 1_500).split("pa_hover_container")[0] ?? "";
+    const lazy = /data-src="(https:\/\/[^"]+)"/i.exec(mainBox)?.[1];
+    if (lazy) {
+      const url = decode(lazy);
+      if (!/(sprite|logo|blank|1x1|pixel|spacer|placeholder|\/beacon)/i.test(url) && url.length > 25) {
+        return url;
+      }
+    }
+  }
   for (const m of card.matchAll(/<img[^>]+src="(https:\/\/[^"]+)"/gi)) {
     const url = decode(m[1] ?? "");
     if (!/^https:\/\//i.test(url)) continue;
@@ -2284,6 +2304,27 @@ async function scrapeWithQueryVariants(
   return [];
 }
 
+/**
+ * Bing Shopping kartındaki GÜNCEL fiyat.
+ *
+ * ÖLÇÜLEN HATA (2026-11-08, "air fryer"/US): regex tam olarak
+ * `class="br-price"` arıyordu; gerçek HTML'de sınıf `br-price br-standardPrice`
+ * olarak geliyor ve 46 yerine 60 kartın tamamına yakınında fiyat kaçıyordu.
+ * Bu yüzden sınıf listesinde `br-price` geçen her kart okunur. Fiyat, aynı
+ * karttaki `br-standardPriceDemoted` (eski/liste fiyatı) DEĞİLDİR; ilk eşleşme
+ * her zaman güncel fiyattır. Fallback yalnız `br-offPrice` kutusunun içinden
+ * okur — karttaki taksit/kargo tutarları fiyat sanılmaz.
+ */
+export function bingShoppingPrice(card: string): number | null {
+  const direct = /class="[^"]*\bbr-price\b[^"]*"[^>]*>([\s\S]{0,60}?)<\/div>/i.exec(card)?.[1];
+  const price = priceFromText(direct ?? "");
+  if (price !== null) return price;
+  const box = /class="[^"]*\bbr-offPrice\b[^"]*"[^>]*>([\s\S]{0,400}?)<\/div>\s*<\/div>/i.exec(
+    card,
+  )?.[1];
+  return priceFromText(box ?? "");
+}
+
 export const bingShoppingSource: ProductSource = {
   name: "bing-shopping",
   timeoutMs: 6_000,
@@ -2306,9 +2347,7 @@ export const bingShoppingSource: ProductSource = {
         if (seen.has(key)) continue;
         seen.add(key);
 
-        const price = priceFromText(
-          /class="br-price"[^>]*>([\s\S]{0,40}?)<\/div>/.exec(card)?.[1] ?? "",
-        );
+        const price = bingShoppingPrice(card);
         const starRaw = /aria-label="Star Rating:\s*([0-9.]+)\s*out of 5/i.exec(card)?.[1];
         const rating = starRaw !== undefined ? Number(starRaw) : NaN;
         const countRaw = /class="sa_rt_num"[^>]*>\s*([0-9][0-9,]*)/.exec(card)?.[1];
@@ -2650,6 +2689,48 @@ export function firstUsdAmount(text: string): number | null {
 }
 
 /**
+ * DEAL BAŞLIĞINDAN KUPON/CASH-BACK TUTARLARINI TEMİZLER.
+ *
+ * ÖLÇÜLEN HATA (2026-11-08, canlı Slickdeals "air fryer"):
+ *   "6-Quart Gourmia Digital Air Fryer (GAF612) + **$15 Kohl's Cash** $50.39 …"
+ * satırında `firstUsdAmount` **$15**'i ürün fiyatı sandı. Gerçek fiyat $50.39'du;
+ * aynı hata ürün adını da `$15`de kesiyordu. "$100 get $30 KOHLS CASH" gibi
+ * başlıklarda ise ürün fiyatı hiç yoktur — o zaman fiyat açıklamadan okunur.
+ *
+ * Kural: cash-back / hediye çeki / kupon / "$X off" ifadeleri metinden ÇIKARILIR;
+ * kalan SON `$` tutarı ürün fiyatıdır (deal başlıklarında fiyat sonda yazılır).
+ */
+function stripDealCouponAmounts(title: string): string {
+  return String(title ?? "")
+    // "$100 get $30 KOHLS CASH" — baştaki iki tutar da fiyat DEĞİLDİR.
+    .replace(
+      /^\s*\$\s?\d[\d,]*(?:\.\d{1,2})?\s+get\s+\$\s?\d[\d,]*(?:\.\d{1,2})?\s+(?:Kohl'?s|Kohls)?\s*(?:Cash|Cash\s*Back)\s*:?/gi,
+      " ",
+    )
+    .replace(/\$?\s?\d[\d,]*(?:\.\d{1,2})?\s*(?:Kohl'?s|Kohls)\s*Cash/gi, " ")
+    .replace(
+      /\$?\s?\d[\d,]*(?:\.\d{1,2})?\s*(?:Cash\s*Back|Rewards?|Gift\s*Card|Store\s*Credit|Coupon|Promo\s*Code)/gi,
+      " ",
+    )
+    .replace(/\(?\s*\$?\s?\d[\d,]*(?:\.\d{1,2})?\s*off\s*\)?/gi, " ")
+    .replace(
+      /\b(?:after|with|using|via)\s+\$?\s?\d[\d,]*(?:\.\d{1,2})?\s*(?:coupon|promo|code|discount|rebate)\b/gi,
+      " ",
+    )
+    .replace(/^\s*free\s+ship(?:ping)?\s*:?\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Temizlenmiş deal başlığındaki SON `$` tutarı (fiyat sonda yazılır). */
+function lastUsdAmount(text: string): number | null {
+  const values = [...String(text ?? "").matchAll(/\$\s?([0-9][0-9,]*(?:\.\d{1,2})?)/g)]
+    .map((m) => Number(String(m[1]).replace(/,/g, "")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return values.length ? values[values.length - 1]! : null;
+}
+
+/**
  * SLICKDEALS ARAMA RSS'İ (anahtarsız) → GERÇEK indirimli ürün satırları.
  *
  * ÖLÇÜLDÜ (2026-10-16, bu ağdan):
@@ -2697,12 +2778,15 @@ export function parseDealFeed(xml: string, niche = ""): RawProduct[] {
     const link = rssText(item, "link");
     if (!/^https?:\/\//i.test(link)) continue;
     const description = rssText(item, "description");
-    // Fiyat başlıkta yoksa snippet'te aranır; ikisinde de yoksa satır atlanır.
-    const price = firstUsdAmount(rawTitle) ?? firstUsdAmount(description);
+    // Kupon/cash-back tutarları fiyat SANILMAZ; gerçek fiyat açıklamada yoksa
+    // başlıktaki temizlenmiş SON tutardır ("$15 Kohl's Cash $50.39" → $50.39).
+    const cleanedTitle = stripDealCouponAmounts(rawTitle);
+    const price = lastUsdAmount(cleanedTitle) ?? firstUsdAmount(description);
     if (price === null) continue;
     // Ürün adı: fiyat/kargo kuyruğu temizlenir ("… - $54.98", "… $17.99 + Free Shipping").
-    const name = rawTitle
+    const name = cleanedTitle
       .replace(/\s*[-–—]?\s*\$\s?[0-9][0-9,]*(?:\.\d{1,2})?[\s\S]*$/i, "")
+      .replace(/\s*[+\-–—]\s*$/g, "")
       .replace(/\s+/g, " ")
       .trim();
     const title = (name.length >= 8 ? name : rawTitle).slice(0, 160);
@@ -3214,6 +3298,42 @@ export const youtubeAttentionSource: ProductSource = {
     ];
   },
 };
+
+/**
+ * ANAHTAR GEREKTİREN KAYNAKLAR — "ölçülmedi" ile "sıfır ölçtü" ayrımı.
+ *
+ * NEDEN VAR (2026-11-08): anahtarsız koşuda bu kaynaklar 0 ms'de boş dönüyor
+ * ve rapor `ok:true, items:0` yazıyordu. Kullanıcı "bu nişte yok" sanıyordu;
+ * gerçek sebep anahtarın hiç tanımlı olmamasıydı. Anahtar DEĞERİ okunmaz,
+ * yalnız var/yok durumu raporlanır.
+ */
+export const KEYED_SOURCE_ENV: Readonly<Record<string, readonly string[]>> = {
+  "bestbuy-api": ["BESTBUY_API_KEY", "BEST_BUY_API_KEY"],
+  "ebay-browse": [
+    "EBAY_OAUTH_TOKEN",
+    "EBAY_BEARER_TOKEN",
+    "EBAY_ACCESS_TOKEN",
+    "EBAY_CLIENT_ID",
+  ],
+  "tavily-search": ["TAVILY_API_KEY", "TAVILY_KEY"],
+  "tr-marketplace": ["SCRAPERAPI_KEY", "SCRAPI_KEY", "SCRAP_API_KEY"],
+  "serpapi-shopping": ["SERPAPI_KEY", "SERP_API_KEY", "SERPAPI_API_KEY"],
+  "searchapi-shopping": ["SEARCHAPI_KEY", "SEARCHAPI_API_KEY", "SEARCHAPI_IO_KEY"],
+  "serper-shopping": ["SERPER_API_KEY", "SERPER_KEY", "SERPER_DEV_API_KEY"],
+  "youtube-attention": ["YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"],
+};
+
+/** Anahtarı tanımlı olmayan kaynaklar (ad + panelde istenecek ilk anahtar). */
+export function missingKeyedSources(
+  env: Record<string, string | undefined> = process.env,
+): { source: string; key: string }[] {
+  const out: { source: string; key: string }[] = [];
+  for (const [source, keys] of Object.entries(KEYED_SOURCE_ENV)) {
+    if (keys.some((key) => (env[key] ?? "").trim())) continue;
+    out.push({ source, key: keys[0] ?? "" });
+  }
+  return out;
+}
 
 export const PRODUCT_SOURCES: readonly ProductSource[] = [
   // ÜCRETSİZ gerçek TR ürün satırları (Hepsiburada + n11; fiyat + puan + görsel).

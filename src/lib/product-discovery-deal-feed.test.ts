@@ -67,7 +67,39 @@ describe("firstUsdAmount — ölçüm, tahmin değil", () => {
   });
 });
 
+/**
+ * CASH-BACK FIXTURE — canlı Slickdeals başlıkları (2026-11-08).
+ *
+ * Ölçülen hata: `$15 Kohl's Cash` ürün fiyatı sanıldı ve başlık orada kesildi.
+ * İkinci başlıkta ürün fiyatı HİÇ yok; gerçek fiyat yalnız açıklamada.
+ */
+const CASH_BACK_FIXTURE = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>6-Quart Gourmia Digital Air Fryer (GAF612) + $15 Kohl's Cash $50.39 + Free Shipping</title>
+    <link>https://slickdeals.net/f/20267544-gourmia-gaf612</link>
+    <description><![CDATA[Kohl's [kohls.com] has *6-Quart Gourmia Digital Air Fryer (GAF612)* on sale for $62.99 - extra 20% off w/ promo code SAVINGS = *$50.39 + $15 Kohl's Cash. **Shipping is...]]></description>
+  </item>
+  <item>
+    <title>$100 get $30 KOHLS CASH FREE SHIP: Gourmia French Door Digital Air Fryer Oven</title>
+    <link>https://slickdeals.net/f/20260000-gourmia-french-door</link>
+    <description><![CDATA[https://www.kohls.com/product/prd... code SAVINGS for $99.99 price]]></description>
+  </item>
+</channel></rss>`;
+
 describe("parseDealFeed — gerçek deal satırları", () => {
+  it("cash-back/kupon tutarını fiyat SANMAZ; gerçek fiyatı ve tam adı okur", () => {
+    const rows = parseDealFeed(CASH_BACK_FIXTURE, "air fryer");
+    expect(rows).toHaveLength(2);
+
+    const gourmia = rows.find((row) => /GAF612/.test(row.title))!;
+    expect(gourmia.priceUsd).toBe(50.39);
+    expect(gourmia.title).toBe("6-Quart Gourmia Digital Air Fryer (GAF612)");
+
+    // Başlıkta ürün fiyatı yok → açıklamadaki $99.99 okunur, $100/$30 değil.
+    const frenchDoor = rows.find((row) => /French Door/.test(row.title))!;
+    expect(frenchDoor.priceUsd).toBe(99.99);
+  });
   it("fiyat + görsel + satıcı + topluluk oyunu ölçülen alanlara yazar", () => {
     const rows = parseDealFeed(FIXTURE, "air fryer");
     expect(rows).toHaveLength(1);

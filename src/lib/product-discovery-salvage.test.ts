@@ -21,6 +21,7 @@ import { describe, expect, it, vi } from "vitest";
 const sourcesMock = vi.hoisted(() => ({
   runSources: vi.fn(),
   runSourceRescue: vi.fn(),
+  missingKeyedSources: () => [],
 }));
 vi.mock("./product-discovery-sources.server", () => sourcesMock);
 

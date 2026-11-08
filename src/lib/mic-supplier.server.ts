@@ -293,6 +293,121 @@ export function extractMicOffers(html: string): MicOffer[] {
   return [...best.values()];
 }
 
+/* --------------------------------------- Jina Markdown → MicOffer (yedek yol) */
+
+/**
+ * MIC arama sayfasının JINA MARKDOWN'INDAN toptan teklifleri okur.
+ *
+ * NEDEN VAR (ölçüldü 2026-11-08): doğrudan `made-in-china.com` isteği bu
+ * ortamdan **HTTP 403** döndürüyor; Jina Reader aynı sayfayı 200 + 209 KB
+ * Markdown olarak veriyor ve kartlarda FOB + `(MOQ)` + tedarikçi AYNIEN var.
+ * HTML'i (1,2 MB) Jina'ya okutmak yerine Markdown (209 KB) ayrıştırmak kota
+ * açısından ~6× daha verimli; bu yüzden ayrı, SAF bir ayrıştırıcıdır.
+ *
+ * Biçim (canlı):
+ *   `## [Ürün Başlığı](https://firma.../product/KOD/....html "Başlık")`
+ *   `**US$27.46-33.48**`
+ *   `1,368 Pieces(MOQ)`
+ *   `[Tedarikçi Adı](https://firma.en.made-in-china.com/ "…")`
+ *
+ * DÜRÜSTLÜK: `(MOQ)` ipucu olmayan sayı MOQ sayılmaz; fiyat yoksa `null`
+ * kalır. Ürün başlığı/URL'si olmayan blok teklif üretmez.
+ */
+export function extractMicOffersFromMarkdown(markdown: string): MicOffer[] {
+  const text = String(markdown ?? "");
+  if (text.length < 200) return [];
+  const lines = text.split("\n");
+  const best = new Map<string, MicOffer>();
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const head =
+      /^##\s+\[(.+)\]\((https:\/\/[^)\s]+\.made-in-china\.com\/product\/[^)\s]+\.html)(?:\s+"[^"]*")?\)/i.exec(
+        lines[i].trim(),
+      );
+    if (!head) continue;
+    const url = head[2];
+    const title = stripTags(head[1].replace(/\*\*/g, "")).replace(/\s+/g, " ").trim();
+    if (title.length < 4) continue;
+
+    let unitPriceUsd: number | null = null;
+    let unitPriceHighUsd: number | null = null;
+    let moqUnits: number | null = null;
+    let moqUnit = "";
+    let store = "";
+    let imageUrl = "";
+
+    // Başlıktan ÖNCE gelen görsel bu ürünün görselidir; yalnız başlıkla
+    // eşleşen (normalize edilmiş) görsel alınır, komşu ürününki değil.
+    const titleKey = title.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    for (let j = Math.max(0, i - 30); j < i; j += 1) {
+      const image = /!\[Image \d+: ([^\]]+)\]\((https:\/\/image\.made-in-china\.com\/[^)\s]+)\)/.exec(
+        lines[j],
+      );
+      if (!image) continue;
+      const altKey = image[1].toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (titleKey && (altKey === titleKey || altKey.includes(titleKey.slice(0, 30)))) {
+        imageUrl = image[2];
+        break;
+      }
+    }
+
+    // Kartın kuyruğu: sonraki ürün başlığına kadar en fazla 40 satır.
+    for (let j = i + 1; j < Math.min(lines.length, i + 40); j += 1) {
+      const line = lines[j].trim();
+      if (!line) continue;
+      if (/^##\s+\[/.test(line)) break;
+      if (unitPriceUsd === null) {
+        const price = /^\*\*US\$([\d.,]+)(?:-([\d.,]+))?\*\*$/i.exec(line);
+        if (price) {
+          unitPriceUsd = measuredMoney(price[1]);
+          unitPriceHighUsd = price[2] ? measuredMoney(price[2]) : null;
+        }
+      }
+      if (moqUnits === null) {
+        const moq =
+          /^([\d,]+)\s*(Pieces|Sets|Units|Pairs|Bags|Boxes)\s*\(MOQ\)/i.exec(line);
+        if (moq) {
+          const n = Number(moq[1].replace(/,/g, ""));
+          if (Number.isFinite(n) && n > 0) {
+            moqUnits = Math.round(n);
+            moqUnit = moq[2].toLowerCase();
+          }
+        }
+      }
+      if (!store) {
+        const supplier =
+          /^\[([^\]]{3,120})\]\((https?:\/\/[^)\s]+\.made-in-china\.com\/?(?:\s+"[^"]*")?)\)/.exec(
+            line,
+          );
+        if (supplier) store = stripTags(supplier[1]);
+      }
+      if (unitPriceUsd !== null && moqUnits !== null && store) break;
+    }
+
+    // Fiyat ve MOQ'nun ikisi de yoksa bu bir ürün kartı değildir.
+    if (unitPriceUsd === null && moqUnits === null) continue;
+
+    const offer: MicOffer = {
+      title: title.slice(0, 180),
+      unitPriceUsd,
+      unitPriceHighUsd:
+        unitPriceHighUsd !== null && unitPriceUsd !== null && unitPriceHighUsd > unitPriceUsd
+          ? unitPriceHighUsd
+          : null,
+      moqUnits,
+      moqUnit,
+      store,
+      shipFrom: "",
+      url,
+      imageUrl,
+    };
+    const previous = best.get(url);
+    if (!previous || measuredFields(offer) > measuredFields(previous)) best.set(url, offer);
+  }
+
+  return [...best.values()];
+}
+
 /* ------------------------------------------------------------------- Ağ katmanı */
 
 /** Niş → MIC arama terimi (İngilizce; çeviri `product-discovery-query`den). */
@@ -335,7 +450,7 @@ export async function fetchMicOffers(
   if (!url) return [];
 
   const { cacheGet, cacheKey, cacheSet } = await import("./ai-cache.server");
-  const key = await cacheKey("mic-supplier-offers-v2", [niche]);
+  const key = await cacheKey("mic-supplier-offers-v3", [niche]);
   const hit = await cacheGet<MicOffer[]>(key);
   if (hit) return hit;
 
@@ -345,19 +460,67 @@ export async function fetchMicOffers(
     return [];
   }
 
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 8_000),
-    headers: {
-      "user-agent": UA,
-      accept: "text/html,application/xhtml+xml",
-      "accept-language": "en-US,en;q=0.9",
-    },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const offers = extractMicOffers(await res.text());
-  if (offers.length) await cacheSet(key, "mic-supplier-offers-v2", offers, MIC_CACHE_TTL_MS);
-  return offers;
+  const budget = Math.max(2_000, opts.timeoutMs ?? 8_000);
+  const startedAt = Date.now();
+  let directError: unknown = null;
+  let directOffers: MicOffer[] = [];
+
+  // 1) Doğrudan istek — çalıştığı ortamda en ucuz yol (ağ çağrısı tek).
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(Math.min(4_000, budget)),
+      headers: {
+        "user-agent": UA,
+        accept: "text/html,application/xhtml+xml",
+        "accept-language": "en-US,en;q=0.9",
+      },
+      redirect: "follow",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    directOffers = extractMicOffers(await res.text());
+  } catch (error) {
+    directError = error;
+  }
+
+  if (directOffers.length) {
+    await cacheSet(key, "mic-supplier-offers-v3", directOffers, MIC_CACHE_TTL_MS);
+    return directOffers;
+  }
+
+  // 2) Jina Reader yedeği — ÖLÇÜLDÜ: doğrudan 403 olan ortamda 200 + Markdown
+  // ve 31/31 kartta FOB + MOQ + tedarikçi var. Kotayı korumak için HTML değil
+  // Markdown istenir; sayfa 24 saat önbelleğe yazılır.
+  const remaining = budget - (Date.now() - startedAt);
+  if (remaining < 1_500) {
+    if (directError) throw directError;
+    return [];
+  }
+  try {
+    const { readPage } = await import("./product-discovery-reader.server");
+    const markdown = await readPage(url, Math.min(8_000, remaining));
+    const offers = extractMicOffersFromMarkdown(markdown);
+    if (offers.length) {
+      await cacheSet(key, "mic-supplier-offers-v3", offers, MIC_CACHE_TTL_MS);
+      return offers;
+    }
+    if (directError) {
+      throw new Error(
+        `doğrudan ${directError instanceof Error ? directError.message : "okunamadı"}; reader 0 kart`,
+      );
+    }
+    return [];
+  } catch (error) {
+    // Doğrudan istek 403/başarısız + Reader de veremedi → HATA olarak bildir;
+    // sessiz `[]` "bu nişte teklif yok" sanılırdı.
+    if (directError) {
+      throw new Error(
+        `MIC okunamadı (doğrudan: ${
+          directError instanceof Error ? directError.message : "hata"
+        }; reader: ${error instanceof Error ? error.message : "hata"})`,
+      );
+    }
+    throw error;
+  }
 }
 
 /* ---------------- CJ DROPSHIPPING API v2 (`listV2`, isteğe bağlı, 50K puan/gün) */

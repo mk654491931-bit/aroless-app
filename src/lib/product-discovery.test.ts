@@ -1020,6 +1020,31 @@ describe("bingShoppingSource", () => {
     expect(row!.url).toBe("https://www.walmart.com/ip/air-fryer-pro?a123");
   });
 
+  it("çok sınıflı `br-price br-standardPrice` fiyatını okur", async () => {
+    // ÖLÇÜLEN HATA (2026-11-08, "air fryer"/US): canlı HTML'de sınıf tam
+    // `br-price` değil `br-price br-standardPrice`; eski tam-eşleşme regex'i
+    // fiyatı kaçırıyordu. Güncel fiyat, hemen ardından gelen eski fiyattan
+    // (`br-standardPriceDemoted`) ayrılmalı.
+    const card = shopCard(`
+      <div class="br-offTtl"><span title="Chefman Air Fryer 8QT Digital">Chefman Air Fryer 8QT Digital</span></div>
+      <div class="br-offPrice b_primtxt"><div class="br-price br-standardPrice">$87.99</div>
+      <div class="br-standardPriceDemoted">$299.99</div></div>`);
+    const [row] = await withShopHtml(shopHtml(card), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row!.priceUsd).toBe(87.99);
+  });
+
+  it("fiyat sınıfı farklı sırada gelse de güncel fiyatı okur", async () => {
+    const card = shopCard(`
+      <div class="br-offTtl"><span title="Ninja Air Fryer Pro 6QT Digital">Ninja Air Fryer Pro 6QT Digital</span></div>
+      <div class="br-offPrice"><div class="br-salePrice br-price">$53.99</div></div>`);
+    const [row] = await withShopHtml(shopHtml(card), () =>
+      bingShoppingSource.scrape("air fryer"),
+    );
+    expect(row!.priceUsd).toBe(53.99);
+  });
+
   it("puan yazmayan kartta puan UYDURMAZ, null bırakır", async () => {
     const [row] = await withShopHtml(shopHtml(withPriceOnly), () =>
       bingShoppingSource.scrape("air fryer"),

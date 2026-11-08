@@ -19,7 +19,7 @@
 import { z } from "zod";
 
 import { LaunchReadinessSchema } from "./launch-readiness";
-import { normalizeGtin } from "./product-identity";
+import { normalizeGtin, productTitleIdentityKey } from "./product-identity";
 import { SupplierEvidenceSchema } from "./supplier-economics";
 
 /* ------------------------------------------------------------- Raw product */
@@ -387,6 +387,11 @@ export function productIdentityKeys(input: {
   if (fp) keys.push(`f:${fp}`);
   const model = productModelKey({ title: input.title, brand: input.brand ?? "" });
   if (model) keys.push(`m:${model}`);
+  // RENK/FİNİŞ VE SATICI FARKI: GTIN/model yoksa bile aynı ürünün iki mağaza
+  // yazımı birleşsin. Anahtar yalnız marka + sayılar + anlamlı kelime kümesi
+  // tutarlıysa üretilir; sayı farkı (5 Qt ↔ 8 Qt) birleşmeyi ENGELLER.
+  const titleKey = productTitleIdentityKey(input.title, input.brand ?? "");
+  if (titleKey) keys.push(titleKey);
   return keys;
 }
 

@@ -50,6 +50,11 @@ describe("sözlük doğruluğu (yanlış çeviri = yanlış kategori)", () => {
     expect(englishProductQuery("kayak gözlüğü")).toBe("ski gozlugu");
   });
 
+  it("hava fritözü → air fryer (TR tedarik araması 0 eşleşme veriyordu)", () => {
+    expect(englishProductQuery("hava fritözü")).toBe("air fryer");
+    expect(productQueryVariants("hava fritözü", 2)).toEqual(["air fryer", "hava fritozu"]);
+  });
+
   it("Türkçe karakterli anahtarlar da eşleşir (kapı → door)", () => {
     // `kapı` anahtarı ASCII olmadığı için hiç eşleşmiyordu.
     expect(englishProductQuery("kapı kiliti")).toContain("door");

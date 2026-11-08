@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractMicOffers,
+  extractMicOffersFromMarkdown,
   micCardBlocks,
   micSearchQuery,
   micSearchUrl,
@@ -96,6 +97,37 @@ const ANNUAL_CAPACITY_CARD = `
  </a>
  <div class="company-name-wrapper"><div class="company-name-txt"><a href="https://fk-pet.en.made-in-china.com" class="compnay-name J-compnay-name">Hefei Fengkun Intelligent Technology Co., Ltd</a></div></div>
 </div></div></div>`;
+
+/**
+ * JINA MARKDOWN KARTI — canlı biçim (ölçüldü 2026-11-08).
+ *
+ * NEDEN AYRI FIXTURE: doğrudan MIC isteği bulut IP'sinden 403 dönerken Jina
+ * Reader aynı kartları Markdown olarak veriyor. Ayrıştırıcı HTML'e bağlı
+ * kalırsa bu yol sessizce 0 teklif üretirdi.
+ */
+const MD_CARD = `[![Image 24: Smart Dual-Function Stainless Steel Electric Air Fryer Oven](https://image.made-in-china.com/2f1j00FuDjEinqrkob/Smart-Dual-Function-Air-Fryer-Oven.jpg)](https://yuecheng2026.en.made-in-china.com/product/TuiUelIDsgWY/China-Smart-Dual-Function-Air-Fryer-Oven.html)
+
+## [Smart Dual-Function Stainless Steel Electric Air Fryer Oven](https://yuecheng2026.en.made-in-china.com/product/TuiUelIDsgWY/China-Smart-Dual-Function-Air-Fryer-Oven.html "Smart Dual-Function Stainless Steel Electric Air Fryer Oven")
+
+**US$18.00-22.50**
+
+1,368 Pieces(MOQ)
+
+[Guangdong Yuecheng Electric Appliance Co., Ltd.](https://yuecheng2026.en.made-in-china.com/ "Guangdong Yuecheng Electric Appliance Co., Ltd.")`;
+
+const MD_NO_MOQ = `## [Corrugated Cat Scratcher Board](https://rzcsmy.en.made-in-china.com/product/OrARagiZnWcd/China-Sustainable-Cat-Scratcher-Board.html "Corrugated Cat Scratcher Board")
+
+**US$0.89-1.12**
+
+[Ruizhou Trading Co., Ltd.](https://rzcsmy.en.made-in-china.com/ "Ruizhou Trading Co., Ltd.")`;
+
+const MD_ANNUAL = `## [Automatic Pet Water Fountain 2.5L](https://fk-pet.en.made-in-china.com/product/tpdYOrDAhFca/China-Automatic-Pet-Water-Fountain.html "Automatic Pet Water Fountain 2.5L")
+
+**US$29.69-35.69**
+
+50000pieces/Year
+
+[Hefei Fengkun Intelligent Technology Co., Ltd.](https://fk-pet.en.made-in-china.com/ "Hefei Fengkun Intelligent Technology Co., Ltd.")`;
 
 const page = (...cards: string[]) =>
   `<html><head><title>Air fryer, China air fryer catalog</title></head><body><div class="search-list"><div class="prod-list">${cards.join(
@@ -205,6 +237,36 @@ describe("extractMicOffers — toptan kart ayrıştırma (ağ YOK)", () => {
     expect(extractMicOffers("<html>kısa</html>")).toEqual([]);
   });
 
+  it("Jina Markdown kartından FOB aralığı, MOQ ve tedarikçiyi okur", () => {
+    const offers = extractMicOffersFromMarkdown(MD_CARD);
+    expect(offers).toHaveLength(1);
+    const [offer] = offers;
+    expect(offer.title).toBe("Smart Dual-Function Stainless Steel Electric Air Fryer Oven");
+    expect(offer.unitPriceUsd).toBe(18);
+    expect(offer.unitPriceHighUsd).toBe(22.5);
+    expect(offer.moqUnits).toBe(1368);
+    expect(offer.moqUnit).toBe("pieces");
+    expect(offer.store).toBe("Guangdong Yuecheng Electric Appliance Co., Ltd.");
+    expect(offer.imageUrl).toContain("image.made-in-china.com");
+  });
+
+  it("Markdown'da `(MOQ)` yoksa MOQ uydurmaz; yıllık kapasite MOQ sayılmaz", () => {
+    const noMoq = extractMicOffersFromMarkdown(MD_NO_MOQ);
+    expect(noMoq).toHaveLength(1);
+    expect(noMoq[0].moqUnits).toBeNull();
+    expect(noMoq[0].moqUnit).toBe("");
+    // MOQ yoksa bile tedarikçi adı ölçülmüşse taşınır (boş bırakılmaz).
+    expect(noMoq[0].store).toBe("Ruizhou Trading Co., Ltd.");
+    const annual = extractMicOffersFromMarkdown(MD_ANNUAL);
+    expect(annual[0].moqUnits).toBeNull();
+  });
+
+  it("Markdown'da aynı URL iki kez gelirse daha çok yuvası ölçülmüş kart kazanır", () => {
+    const offers = extractMicOffersFromMarkdown(`${MD_CARD}\n${MD_CARD}`);
+    expect(offers).toHaveLength(1);
+    expect(offers[0].moqUnits).toBe(1368);
+  });
+
   it("bölme mantığı: ana şemanın kart sayısı kadar blok üretir", () => {
     // Liste şeması (A) varsa yalnız o bölünür; vitrin (`prod-item`) ayrı kart
     // sayılmaz — ölçülen sebep: blokları ortadan bölüyordu.
@@ -241,11 +303,13 @@ describe("micSearchUrl — kaynak adresi kilitli (robots.txt uyumu)", () => {
   it("Türkçe niş sözlükteki karşılığıyla aranır (kaynak İngilizce arama yapar)", () => {
     expect(micSearchQuery("masa lambası")).toBe("desk lamp");
     expect(micSearchUrl("masa lambası")).toContain("desk_lamp.html");
+    expect(micSearchQuery("hava fritözü")).toBe("air fryer");
+    expect(micSearchUrl("hava fritözü")).toContain("air_fryer.html");
   });
 
   it("sözlükte olmayan Türkçe nişte de geçerli BİR adres üretir (patlamaz, boş sonuç fail-soft)", () => {
-    const url = micSearchUrl("hava fritözü");
-    expect(url).toContain("hava_fritozu.html");
+    const url = micSearchUrl("bilinmeyen urun");
+    expect(url).toContain("bilinmeyen_urun.html");
     expect(url.startsWith("https://www.made-in-china.com/products-search/")).toBe(true);
   });
 

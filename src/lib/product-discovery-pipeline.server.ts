@@ -584,7 +584,9 @@ export async function runScrapeFilterStep(
    */
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
-  const { runSources, runSourceRescue } = await import("./product-discovery-sources.server");
+  const { runSources, runSourceRescue, missingKeyedSources } = await import(
+    "./product-discovery-sources.server"
+  );
   const { buildShortlist, imageFillCapFor, salvageShortlist } =
     await import("./product-discovery-shortlist.server");
 
@@ -976,6 +978,16 @@ export async function runScrapeFilterStep(
   );
   const failed = reports.filter((r) => !r.ok).map((r) => `${r.name}: ${r.error}`);
   if (failed.length) notes.push(`Çalışmayan kaynak(lar) — ${failed.join("; ")}`);
+  // ANAHTARSIZ KAYNAK = ÖLÇÜLMEDİ. Sessiz `0 satır` ile "bu nişte yok"
+  // arasındaki farkı korur; kullanıcı hangi anahtarın eksik olduğunu görür.
+  const missingKeyed = missingKeyedSources();
+  if (missingKeyed.length) {
+    notes.push(
+      `Anahtar tanımlı olmadığı için ölçülmeyen kaynak(lar): ${missingKeyed
+        .map((row) => `${row.source} (${row.key})`)
+        .join(", ")}. Anahtar eklenince aynı hat bu kaynakları da ölçer.`,
+    );
+  }
 
   return {
     ok: true,

@@ -1369,6 +1369,12 @@ async function loadTrReader(q: string): Promise<RawProduct[]> {
       }),
     );
   }
+  // n11 TEK SAYFA — ÖLÇÜLDÜ (2026-11-08, "hava fritözü"): `&sayfa=2` isteği
+  // 200 / 16 KB dönüyor ama sayfa 1 ile AYNI ürünü veriyor (URL'ler birebir
+  // aynı); `&page=2` ise 810 karakterlik boş sayfa. Yani n11'de sayfalama
+  // YOK gibi davranıyor. İkinci isteği eklemek kotayı ikiye katlar, sıfır yeni
+  // satır getirir — bu yüzden n11 bilinçli olarak tek sayfadır. HB sayfaları
+  // ise gerçekten farklı ürünler döndürür ve `readerPageBudget` ile okunur.
   const jobs: Array<Promise<ReaderRow[]>> = [
     ...hbJobs,
     readPageWithEscalation(`https://www.n11.com/arama?q=${enc}`, PER_SITE_TIMEOUT_MS)

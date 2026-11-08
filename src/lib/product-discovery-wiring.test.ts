@@ -12,7 +12,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { brandFromTitle, ratingFromText } from "./product-discovery-sources.server";
+import {
+  brandFromTitle,
+  missingKeyedSources,
+  ratingFromText,
+} from "./product-discovery-sources.server";
 import { GEMINI_SHORTLIST_SIZE, runFinalRankStep } from "./product-discovery-pipeline.server";
 import {
   DiscoveryWinnerSchema,
@@ -25,8 +29,24 @@ import {
   productFingerprint,
   type NormalizedProduct,
 } from "./product-discovery.types";
+import { productTitleIdentityKey } from "./product-identity";
 
 /* ------------------------------------------------- 1. Kaynak yardımcıları */
+
+describe("kaynak anahtarı görünürlüğü", () => {
+  it("anahtarı olmayan kaynakları 'ölçülmedi' diye ayırır", () => {
+    const missing = missingKeyedSources({
+      BESTBUY_API_KEY: "bb",
+      EBAY_OAUTH_TOKEN: "ebay",
+      TAVILY_API_KEY: "tv",
+      // Diğer anahtarlar bilinçli olarak YOK.
+    });
+    expect(missing.map((row) => row.source)).not.toContain("bestbuy-api");
+    expect(missing.map((row) => row.source)).not.toContain("ebay-browse");
+    expect(missing.map((row) => row.source)).toContain("serpapi-shopping");
+    expect(missing.find((row) => row.source === "serpapi-shopping")?.key).toBe("SERPAPI_KEY");
+  });
+});
 
 describe("marka çıkarımı (başlıktan, uydurmadan)", () => {
   it("başlığın büyük harfle başlayan ilk kelimesini marka alır", () => {
@@ -181,6 +201,40 @@ describe("final adımı: uzlaşma + ürün birleşimi", () => {
     expect(result.products).toHaveLength(1);
     expect(result.consensus[0]!.councilScore).toBe(85);
     expect(result.notes.join(" ")).toContain("kopya satır");
+  });
+
+  it("renk/finish ve kelime sırası farklı AYNI ürünü tek kazanana indirir", () => {
+    // Canlı hata (2026-11-08): aynı Cuisinart 2.6-Qt sepetli air fryer iki kez
+    // listeye girdi; GTIN/model yoktu ve fingerprint satıcıyı gömdüğü için
+    // eşleşmiyordu. Başlık kimliği bunu yakalar.
+    const a = {
+      ...winnerProduct("Cuisinart Basket Air Fryer, 2.6-Qt"),
+      brand: "Cuisinart",
+      seller: "shop-a",
+      fingerprint: "cuisinart-basket-a",
+    };
+    const b = {
+      ...winnerProduct("Cuisinart® 2.6-Qt Basket Air Fryer, Black"),
+      brand: "Cuisinart",
+      seller: "shop-b",
+      fingerprint: "cuisinart-basket-b",
+    };
+    expect(a.fingerprint).not.toBe(b.fingerprint);
+    const byId = new Map([
+      [a.fingerprint, a],
+      [b.fingerprint, b],
+    ]);
+    const result = runFinalRankStep([consensusFor(a, 60), consensusFor(b, 80)], 5, byId);
+    expect(result.consensus).toHaveLength(1);
+    expect(result.products).toHaveLength(1);
+  });
+
+  it("başlık kimliği KAPASİTE farkını birleştirmez (5 Qt ≠ 8 Qt)", () => {
+    expect(productTitleIdentityKey("Cuisinart Basket Air Fryer, 5-Qt", "Cuisinart")).not.toBe(
+      productTitleIdentityKey("Cuisinart Basket Air Fryer, 8-Qt", "Cuisinart"),
+    );
+    // Marka yoksa anahtar üretilmez: genel başlıklar yanlış birleşme riski taşır.
+    expect(productTitleIdentityKey("Basket Air Fryer 2.6-Qt", "")).toBe("");
   });
 
   it("topN kadar keser", () => {

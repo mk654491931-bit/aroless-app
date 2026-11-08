@@ -42,6 +42,26 @@ describe("imageFromShoppingCard", () => {
     expect(imageFromShoppingCard(card)).toBe("https://th.bing.com/th?id=OIP.Ab3dEf9-1100-2000");
   });
 
+  it("`br-offImg` içindeki lazy `data-src` ana görselini okur", () => {
+    // CANLI YAPI (ölçüldü 2026-11-08, "air fryer"/US): 23/60 kartta `<img src>`
+    // yok; ana görsel `rms_iac` div'inde lazy `data-src` olarak duruyor.
+    const card =
+      '<div class="br-gOffCard"><div class="br-offImg" data-priority="2">' +
+      '<div class="rms_iac" data-src="https://th.bing.com/th/id/OPHS.hmxRfGCNAJBTAw474C474?w=180&amp;h=180"></div></div></div>';
+    expect(imageFromShoppingCard(card)).toBe(
+      "https://th.bing.com/th/id/OPHS.hmxRfGCNAJBTAw474C474?w=180&h=180",
+    );
+  });
+
+  it("hover/benzer ürün data-src'sini ANA görsel sanmaz", () => {
+    // Yalnız `br-offImg` kutusu okunur; kartın ilerisindeki slayt görselleri
+    // başka ürünündür ve yanlış eşleşme üretirdi.
+    const card =
+      '<div class="br-gOffCard"><div class="br-offImg"></div>' +
+      '<div class="pa_hover_container"><div data-src="https://th.bing.com/th/id/OPHS.relatedProduct474C474"></div></div></div>';
+    expect(imageFromShoppingCard(card)).toBe("");
+  });
+
   it("logo, sprite ve izleyici görsellerini eler", () => {
     const card =
       '<div class="br-gOffCard"><img src="https://bing.com/logo.png"/>' +

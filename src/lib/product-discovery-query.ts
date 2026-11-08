@@ -134,6 +134,13 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   // ev aletleri
   robot: "robot",
   supurge: "vacuum",
+  // ÖLÇÜLEN BOŞLUK (2026-11-08, "hava fritözü"/TR): sözlükte "hava" ve
+  // "fritöz" yoktu; `englishProductQuery` "hava fritozu" üretiyordu. Bu yüzden
+  // global pazaryeri toptan araması "hava fritozu" ile 60 alakasız teklif
+  // getiriyor, hiçbiri TR ürünleriyle eşleşmiyordu. "air fryer" iki kelimenin
+  // doğru karşılığıdır ve niş bandı eşleşmesini açar.
+  hava: "air",
+  fritoz: "fryer",
   klima: "air conditioner",
   buzdolabi: "refrigerator",
   firin: "oven",

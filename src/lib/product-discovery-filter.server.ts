@@ -35,7 +35,7 @@ import { brandFromTitle } from "./product-brand";
 import { inferProductCategory } from "./product-categories";
 import { looksLikeAccessory, shouldRejectAccessory } from "./product-accessory";
 import { cleanListingTitle } from "./product-title-clean";
-import { normalizeGtin } from "./product-identity";
+import { normalizeGtin, productTitleIdentityKey } from "./product-identity";
 import { isNonProductSource } from "./product-discovery-query";
 
 /** Minimum kabul edilebilir puan (5 üzerinden). */
@@ -454,6 +454,10 @@ function dedupKeys(p: NormalizedProduct): string[] {
   if (fp) keys.push(`f:${fp}`);
   const mk = productModelKey({ title: p.name, brand: p.brand });
   if (mk) keys.push(`m:${mk}`);
+  // Marka + sayılar + anlamlı kelime kümesi aynıysa renk/finish ve mağaza
+  // yazımı farkı tek ürünü iki aday yapmasın (bkz. `productTitleIdentityKey`).
+  const tk = productTitleIdentityKey(p.name, p.brand);
+  if (tk) keys.push(tk);
   // MPN + marka kombinasyonu da model anahtarı gibi davranır.
   const brandNorm = productFingerprint({ title: p.brand ?? "" });
   const mpnNorm = String(p.mpn ?? "")
