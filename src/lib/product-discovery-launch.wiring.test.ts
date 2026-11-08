@@ -57,6 +57,9 @@ describe("MIC kaynağı hatta BAĞLI (ölü kaynak değil)", () => {
     expect(src).toContain(
       "supplierMatchKind: row.supplier ? supplierMatchKind(row.supplier) : null",
     );
+    // LANDED modeli için ülke/platform/kategori HATTA bağlanmalı; yoksa kapı
+    // her üründe `unknown` kalır ve model ölü export olur.
+    expect(src).toContain("country,\n      platform,\n      category: row.category,");
     // Proxy sayısı nota yazılır: karar düşüşünün SEBEBİ görünmez kalmamalı.
     expect(src).toContain("Tedarik proxy'si:");
   });

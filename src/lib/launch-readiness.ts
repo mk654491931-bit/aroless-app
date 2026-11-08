@@ -24,6 +24,7 @@
 import { z } from "zod";
 
 import { measuredMoney } from "./economics-evidence";
+import { realEconomics } from "./real-economics";
 
 /* --------------------------------------------------------------- Politika */
 
@@ -71,6 +72,17 @@ export const LAUNCH_RISK_PATTERN =
 export const LAUNCH_MAX_FIRST_ORDER_USD = 1_500;
 
 /**
+ * MODEL LANDED-COST SONRASI ASGARİ PAY (USD).
+ *
+ * NEDEN AYRI: brüt marj ve reklam bütçesi kargo/komisyon ÖNCESİ hesaplanır.
+ * Ülke/platform benchmark'larıyla kargo + komisyon + ödeme + iade + paketleme
+ * düşüldükten sonra kalan pay, sıfıra yakınsa ürün "marjlı" görünse de
+ * gerçekte çalışmaz. $5 keyfî bir kâr hedefi değil, modelin yuvarlama ve
+ * vergi/gümrük hariç tutma payına karşı küçük bir güvenlik tamponudur.
+ */
+export const LAUNCH_MIN_LANDED_HEADROOM_USD = 5;
+
+/**
  * Satış fiyatı tabanı (USD).
  *
  * POLİTİKA: `winner-score.ts` $12 altı fiyata zaten ceza yazıyor; reklam
@@ -90,7 +102,14 @@ export const LAUNCH_MAX_COMPETITORS = 12;
 /* ------------------------------------------------------------------ Tipler */
 
 export type LaunchGateId =
-  "sourcing" | "firstOrder" | "adBudget" | "price" | "margin" | "competition" | "risk";
+  | "sourcing"
+  | "firstOrder"
+  | "adBudget"
+  | "price"
+  | "margin"
+  | "competition"
+  | "landed"
+  | "risk";
 export type LaunchGateState = "pass" | "fail" | "unknown";
 
 /**
@@ -102,7 +121,16 @@ export type LaunchGateState = "pass" | "fail" | "unknown";
  * "lansman kararı hesaplanmadı" sanır.
  */
 export const LaunchGateSchema = z.object({
-  id: z.enum(["sourcing", "firstOrder", "adBudget", "price", "margin", "competition", "risk"]),
+  id: z.enum([
+    "sourcing",
+    "firstOrder",
+    "adBudget",
+    "price",
+    "margin",
+    "competition",
+    "landed",
+    "risk",
+  ]),
   label: z.string(),
   state: z.enum(["pass", "fail", "unknown"]),
   value: z.string(),
@@ -144,6 +172,12 @@ export type LaunchInput = {
   moqUnit?: string;
   /** Aynı kohortta ölçülen benzer rakip satır sayısı. `null` = ölçülmedi. */
   cohortCompetitors?: number | null;
+  /** Hedef ülke (landed-cost modelinin kargo/vergi benchmark'ı). */
+  country?: string;
+  /** Hedef satış platformu (komisyon modeli). Boşsa landed kapısı `unknown`. */
+  platform?: string;
+  /** Ürün kategorisi (iade/dönüşüm benchmark'ı); boş olabilir. */
+  category?: string;
   /**
    * TEDARİK KANITININ TÜRÜ — kanıtın GÜCÜNÜ taşıyan alan.
    *
@@ -328,6 +362,91 @@ export function assessLaunch(input: LaunchInput): LaunchReadiness {
             detail: `Kargo/komisyon öncesi %${Math.round(margin)} < %${LAUNCH_MIN_GROSS_MARGIN_PCT} tabanı — kargo ve komisyon sonrası pay kalmaz.`,
           },
   );
+
+  // 6) LANDED COST — MODEL, ÖLÇÜM DEĞİL.
+  //
+  // Kargo, platform komisyonu, ödeme işlem ücreti ve iade benchmark'lardan
+  // modellenir; ürünün kendi kargo/komisyon teklifi DEĞİLDİR. Bu kapı yalnız
+  // VETO yönünde kullanılır: model "kalan pay yok" diyorsa ürün atılabilir
+  // sayılmaz. Model geçse bile bu bir ölçüm sayılmaz; `atılabilir` kararını
+  // yine tedarik/fiyat/marj/reklam bütçesi kapıları verir.
+  const platformName = String(input.platform ?? "").trim();
+  let landedGate: LaunchGate;
+  if (price === null || unitHigh === null) {
+    landedGate = {
+      id: "landed",
+      label: "Landed cost (model)",
+      state: "unknown",
+      value: NOT_MEASURED,
+      detail: "Fiyat/toptan fiyat ölçülmediği için kargo+komisyon modeli hesaplanamadı.",
+    };
+  } else if (proxySourcing) {
+    landedGate = {
+      id: "landed",
+      label: "Landed cost (model)",
+      state: "unknown",
+      value: NOT_MEASURED,
+      detail:
+        "Tedarik fiyatı niş bandı (proxy) olduğu için landed cost bu ürün adına hesaplanmaz; modelin çıktısı ürünün kendi maliyeti değildir.",
+    };
+  } else if (!platformName) {
+    landedGate = {
+      id: "landed",
+      label: "Landed cost (model)",
+      state: "unknown",
+      value: NOT_MEASURED,
+      detail: "Hedef platform seçilmediği için komisyon modeli uygulanamaz.",
+    };
+  } else {
+    try {
+      const econ = realEconomics({
+        selling_price_usd: price,
+        supplier_price_usd: unitHigh,
+        supplier_price_measured: true,
+        platform: platformName,
+        country: input.country,
+        category: input.category,
+      });
+      const landedCost =
+        econ.supplier +
+        econ.shipping +
+        econ.platform_fee +
+        econ.payment_fee +
+        econ.returns_cost +
+        econ.misc;
+      const headroom = price - landedCost;
+      const detail =
+        `MODEL (ölçüm değil): toptan ${money(econ.supplier)} + kargo ${money(econ.shipping)} ` +
+        `+ komisyon ${money(econ.platform_fee)} + ödeme ${money(econ.payment_fee)} ` +
+        `+ iade ${money(econ.returns_cost)} + paketleme ${money(econ.misc)} = ${money(landedCost)}. ` +
+        `KDV/gümrük hariç; ürünün kendi kargo/komisyon teklifi değildir.`;
+      landedGate =
+        headroom >= LAUNCH_MIN_LANDED_HEADROOM_USD
+          ? {
+              id: "landed",
+              label: "Landed cost (model)",
+              state: "pass",
+              value: money(Math.round(headroom * 100) / 100),
+              detail: `${detail} Perakende − model landed = ${money(Math.round(headroom * 100) / 100)}; tampon ${money(LAUNCH_MIN_LANDED_HEADROOM_USD)} üzerinde.`,
+            }
+          : {
+              id: "landed",
+              label: "Landed cost (model)",
+              state: "fail",
+              value: money(Math.round(headroom * 100) / 100),
+              detail: `${detail} Perakende − model landed = ${money(Math.round(headroom * 100) / 100)}; ${money(LAUNCH_MIN_LANDED_HEADROOM_USD)} tamponunun altında — kargo/komisyon gerçek teklifi istenmeli.`,
+            };
+    } catch {
+      landedGate = {
+        id: "landed",
+        label: "Landed cost (model)",
+        state: "unknown",
+        value: NOT_MEASURED,
+        detail: "Landed-cost modeli bu girdilerle hesaplanamadı; ölçüm uydurulmadı.",
+      };
+    }
+  }
+  gates.push(landedGate);
 
   gates.push(
     competitors === null

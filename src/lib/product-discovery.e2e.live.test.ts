@@ -135,7 +135,7 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
       // SÖZLEŞME: karar HER adayda taşınır (ölçüm yoksa da `unknown` kapılarla).
       for (const p of rows) {
         expect(p.launch).toBeTruthy();
-        expect(p.launch!.gates).toHaveLength(7);
+        expect(p.launch!.gates).toHaveLength(8);
         expect(typeof p.cohortCompetitors).toBe("number");
       }
 
@@ -195,7 +195,7 @@ describe.skipIf(!LIVE)("Product Discovery uçtan uca (canlı ağ)", () => {
       // Nihai liste kararı da taşır (arayüzün okuduğu yol).
       for (const p of ranked.products) {
         expect(p.launch).toBeTruthy();
-        expect(p.launch!.gates).toHaveLength(7);
+        expect(p.launch!.gates).toHaveLength(8);
       }
 
       expect(ranked.ok).toBe(true);

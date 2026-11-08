@@ -36,6 +36,9 @@ const healthy: LaunchInput = {
   moqUnits: 30,
   moqUnit: "pieces",
   cohortCompetitors: 2,
+  country: "US",
+  platform: "Shopify",
+  category: "Ev & Yaşam",
 };
 
 const gate = (r: ReturnType<typeof assessLaunch>, id: string) => r.gates.find((g) => g.id === id)!;
@@ -44,9 +47,10 @@ describe("assessLaunch — ölçülen kanıttan atılabilirlik kararı", () => {
   it("tüm kapılar ölçülmüş ve iyiyse 'atılabilir' der; sermaye MOQ × FOB'dur", () => {
     const r = assessLaunch(healthy);
     expect(r.launchable).toBe(true);
-    expect(r.gates).toHaveLength(7);
-    expect(r.passed).toBe(7);
+    expect(r.gates).toHaveLength(8);
+    expect(r.passed).toBe(8);
     expect(r.unknown).toBe(0);
+    expect(gate(r, "landed").detail).toContain("MODEL");
     expect(r.blockers).toEqual([]);
     expect(r.firstOrderUsd).toBe(660); // 30 × $22
     expect(r.summary).toContain("Atılabilir");
@@ -115,6 +119,35 @@ describe("assessLaunch — ölçülen kanıttan atılabilirlik kararı", () => {
       grossMarginPct: 58.3,
     });
     expect(gate(r, "adBudget").state).toBe("pass");
+  });
+
+  it("landed-cost modeli kargo+komisyon sonrası pay yoksa ENGELLER", () => {
+    // $20 perakende, $10 toptan + Avustralya kargo/Amazon komisyonu: model
+    // landed maliyeti perakendeyi aşıyor. Bu bir MODEL vetosudur; ölçüm değil.
+    const r = assessLaunch({
+      ...healthy,
+      priceUsd: 20,
+      supplierPriceUsd: 10,
+      grossMarginPct: 50,
+      platform: "Amazon",
+      country: "AU",
+    });
+    expect(gate(r, "landed").state).toBe("fail");
+    expect(gate(r, "landed").detail).toContain("MODEL");
+    expect(r.launchable).toBe(false);
+    expect(r.blockers.join(" ")).toContain("Landed cost");
+  });
+
+  it("platform yoksa landed kapısı 'unknown' kalır; model uydurulmaz", () => {
+    const r = assessLaunch({ ...healthy, platform: "" });
+    expect(gate(r, "landed").state).toBe("unknown");
+    expect(gate(r, "landed").value).toBe("—");
+  });
+
+  it("proxy tedarikte landed modeli hesaplanmaz (ürünün kendi maliyeti değil)", () => {
+    const r = assessLaunch({ ...healthy, supplierMatchKind: "niche" });
+    expect(gate(r, "landed").state).toBe("unknown");
+    expect(gate(r, "landed").detail).toContain("proxy");
   });
 
   it("satış fiyatı tabanın altındaysa fiyat kapısı ENGELLER", () => {
@@ -227,7 +260,7 @@ describe("assessLaunch — ölçülmemiş alan UYDURULMAZ", () => {
     expect(r.launchable).toBe(false);
     expect(r.passed).toBe(0);
     expect(r.failed).toBe(0);
-    expect(r.unknown).toBe(7);
+    expect(r.unknown).toBe(8);
     expect(r.firstOrderUsd).toBeNull();
     for (const g of r.gates) {
       expect(g.state).toBe("unknown");

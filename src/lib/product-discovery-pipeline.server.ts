@@ -575,7 +575,7 @@ export function cohortCompetitorCounts(names: readonly string[]): number[] {
 export async function runScrapeFilterStep(
   niche: string,
   country: string,
-  _platform: string,
+  platform: string,
   topN = DISCOVERY_TOP_N,
   /**
    * Kaynak tavanı (ms): adımın dilim bütçesine sığması için verilir. Kaynaklar
@@ -843,6 +843,11 @@ export async function runScrapeFilterStep(
       // KANITIN TÜRÜ karara girer: niş bandı (proxy) "atılabilir" SAYILMAZ
       // (bkz. `launch-readiness.ts` → `supplierMatchKind`).
       supplierMatchKind: row.supplier ? supplierMatchKind(row.supplier) : null,
+      // LANDED COST MODELİ: ülke/platform yalnız MODEL benchmark'ını seçer;
+      // ölçülmüş kargo/komisyon gibi sunulmaz, yalnız veto için kullanılır.
+      country,
+      platform,
+      category: row.category,
     });
     (survivors[i] as NormalizedProduct) = {
       ...row,

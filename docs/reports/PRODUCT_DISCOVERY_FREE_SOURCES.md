@@ -191,8 +191,9 @@ yoksa `null` kalır (0 yazılmaz).
 
 ## 5d. Lansman kapısı — ölçülen kanıttan “atılabilir mi?” kararı
 
-`src/lib/launch-readiness.ts` (saf fonksiyon) **yedi** kapıyı ölçer; ölçülmemiş
-kapı `unknown`dır ve **asla `pass` sayılmaz**:
+`src/lib/launch-readiness.ts` (saf fonksiyon) **sekiz** kapıyı ölçer; ölçülmemiş
+kapı `unknown`dır ve **asla `pass` sayılmaz**. Landed cost kapısı MODEL'dir;
+ölçüm gibi sunulmaz ve yalnız veto edebilir:
 
 | Kapı | Ölçüm | Politika eşiği |
 | --- | --- | --- |
@@ -201,18 +202,20 @@ kapı `unknown`dır ve **asla `pass` sayılmaz**:
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
 | Brüt marj | Ölçülen toptan − perakende | ≥ **%60** (kargo/komisyon öncesi) |
 | Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (ölçülen medyan CPA $38,99) |
+| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme | Model sonrası pay ≥ **$5**; KDV/gümrük hariç |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
 | Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü (VETO yönlü) | kelime yok |
 
 `launchable` = hiç `fail` yok **ve** tedarik · fiyat · marj · reklam bütçesi
-ÖLÇÜLMÜŞ ve geçmiş. Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run
+ÖLÇÜLMÜŞ ve geçmiş. Landed modeli `fail` derse karar ayrıca kapanır; modelin
+`pass` olması ölçüm sayılmaz. Canlı ölçüm (`MIC_LIVE=1 MIC_LIVE_NICHES="…" npx vitest run
 mic-supplier.live`, perakende = 3 × medyan FOB varsayımı):
 
 | Niş | Karar | Ölçülen sebep |
 | --- | --- | --- |
 | air fryer | ❌ Atılamaz | katkı $22,31 < $35 |
 | led desk lamp | ❌ Atılamaz | katkı $20,03 < $35 |
-| pet water fountain | ✅ Atılabilir | 5/7 kapı · ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
+| pet water fountain | ✅ Atılabilir | 5/7 ölçülen kapı · ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
 | yoga mat | ❌ Atılamaz | fiyat $14,97 < $15 · katkı $9,97 < $35 |
 
 ### 5e. ÖLÇÜLÜP DÜZELTİLEN karar hatası: niş bandı (proxy) “atılabilir” sayılıyordu

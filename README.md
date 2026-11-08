@@ -333,8 +333,8 @@ Canlı ölçüm (2026-10-16, anahtar YOK, izinli yol, istek başına ~1,2 MB / 0
 #### Lansman kapısı: “bu ürün gerçekten atılabilir mi?”
 
 Ölçülen tedarik kanıtı artık bir KARARA dönüşür (`src/lib/launch-readiness.ts`,
-saf fonksiyon). **Yedi kapı** vardır ve her biri ya ölçülmüştür ya `unknown`dır —
-**ölçülmemiş bir kapı asla `pass` sayılmaz**:
+saf fonksiyon). **Sekiz kapı** vardır; ölçülmemiş bir kapı asla `pass`
+sayılmaz, model çıktısı da ölçüm diye sunulmaz:
 
 | Kapı | Ölçüm | Eşik (POLİTİKA, ölçüm değil) |
 | --- | --- | --- |
@@ -343,6 +343,7 @@ saf fonksiyon). **Yedi kapı** vardır ve her biri ya ölçülmüştür ya `unkn
 | Satış fiyatı | Ölçülen perakende fiyat | ≥ $15 |
 | Brüt marj | Ölçülen toptan − perakende aritmetiği | ≥ **%60** (kargo/komisyon öncesi) |
 | Reklam bütçesi | Sipariş başına katkı (perakende − toptan) | ≥ **$35** (Meta medyan CPA ≈ $38,99) |
+| Landed cost (model) | Ülke/platform kargo + komisyon + ödeme + iade + paketleme modeli | Model sonrası pay ≥ **$5**; KDV/gümrük hariç |
 | Rakip yoğunluğu | Aynı havuzda ayırt edici kelimelerin ≥2/3'ünü paylaşan satır sayısı | ≤ 12 |
 | Mevzuat/IP | Başlıkta yasaklı kategori sözlüğü taraması (VETO yönlü) | kelime yok |
 
@@ -353,8 +354,14 @@ $35 katkı tabanı, ölçülmüş medyan CPA'nın ($38,99) altında bırakılmı
 marjdır. Mevzuat/IP kapısı **yalnız veto yönünde** çalışır: kelime bulunmazsa bu
 "hukuki temizlik" DEMEK DEĞİLDİR (kapı detayı bunu açıkça söyler).
 
-`Atılabilir` denmesi için üç şart birlikte gerekir: hiçbir kapı `fail` olmayacak,
-**tedarik · fiyat · marj · reklam bütçesi ÖLÇÜLMÜŞ olacak** ve hepsi geçecek.
+**Landed cost kapısı bilinçli olarak MODEL'dir, ölçüm değildir.** Ürünün kendi
+kargo/komisyon teklifi kaynaklarda yoksa ülke/platform benchmark'ı uygulanır;
+model yalnız **veto** edebilir (kalan pay yoksa ürün atılabilir sayılmaz), pass
+olması "ölçüldü" anlamına gelmez. KDV/gümrük modelin dışındadır.
+
+`Atılabilir` denmesi için dört çekirdek ölçüm birlikte gerekir: hiçbir kapı `fail`
+olmayacak, **tedarik · fiyat · marj · reklam bütçesi ÖLÇÜLMÜŞ olacak** ve hepsi
+geçecek. Landed modeli `fail` derse bu engel kararı ayrıca kapatır.
 Ürün kartında kapı kapı yeşil/kırmızı/kesik-çizgi olarak görünür; sunucuda
 hesaplanır (kohort rekabet sayısı yalnız orada bilinir) ve karar ürünle birlikte
 taşınır. Sıralamada da **eşit oy ve eşit kanıtta atılabilir ürün öne geçer**
@@ -380,7 +387,7 @@ perakende = 3 × medyan FOB varsayımıyla):
 | --- | --- | --- |
 | air fryer | ❌ Atılamaz | Reklam bütçesi: katkı $22,31 < $35 |
 | led desk lamp | ❌ Atılamaz | Reklam bütçesi: katkı $20,03 < $35 |
-| pet water fountain | ✅ Atılabilir | 5/7 kapı, ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
+| pet water fountain | ✅ Atılabilir | 5/7 ölçülen kapı, ilk sipariş ≈ $160 (2 kapı ölçülmedi) |
 | yoga mat | ❌ Atılamaz | Satış fiyatı $14,97 < $15 · katkı $9,97 < $35 |
 
 Yoga mat örneği, kapının neden gerekli olduğunun kanıtıdır: marj iyi olsa bile
