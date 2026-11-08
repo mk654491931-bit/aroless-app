@@ -60,7 +60,6 @@ import {
   estimateBand,
   formatIntegerBand,
   formatMoneyBand,
-  formatPercentBand,
 } from "../utils/ranges";
 
 /** Ölçülmemiş sayıyı "0,00" gibi gösterilemez — "—" yazılır. */
@@ -81,7 +80,7 @@ function moneyOrDash(
  * SADECE ÖLÇÜLENler yazılıyor:
  *   • birim fiyat medyanı + p25/p75 bandı + kaç teklifin desteklediği,
  *   • indirimli/etiket fiyat farkı (ölçülen indirim %),
- *   • ölçülen toplam satış adedi, tedarik mağazası, kargo çıkış ülkesi,
+ *   • ölçülen TEK TEKLİF satışı (`soldMax`), tedarik mağazası, kargo çıkış ülkesi,
  *   • BRÜT marj (iki ölçümün aritmetiği) ve kargoya kalan pay.
  *
  * NET MARJ GÖSTERİLMEZ: kargo, gümrük ve komisyon kaynakta ölçülmediği için
@@ -227,77 +226,52 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
 
 function DollarGap({ p }: { p: WinningProduct }) {
   const { money } = useMoney();
-  const re = p.real_economics;
   const cb = p.cost_breakdown;
-  // Maliyet kanıtı yoksa bu blok tamamen uydurma olur (ölçülen hata: her
-  // üründe "Koyarsın $0, Kazanırsın $0/adet"). Gösterilmez.
-  if (!hasMeasuredNetProfit(p)) return null;
-  const supplier = re
-    ? re.supplier
-    : Number(String(cb?.supplier_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const shipping = re
-    ? re.shipping
-    : Number(String(cb?.shipping_cost ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const ad = re ? re.cac : Number(String(cb?.ad_spend ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const netPerUnit = re
-    ? re.net_per_unit
-    : Number(String(cb?.net_profit ?? "0").replace(/[^0-9.]/g, "")) || 0;
+  // YALNIZ ÖLÇÜLMÜŞ MALİYET DÖKÜMÜ. `real_economics` bir modeldir; modelin
+  // tedarik/kargo/CAC/net değerlerini "Koyarsın/Kazanırsın" diye göstermek,
+  // ölçüm değil senaryo olduğunu saklar. Dört kalem de dolu değilse blok
+  // gösterilmez — eksik kalemi tahmin etmek uydurma olurdu.
+  const supplier = measuredMoney(cb?.supplier_cost);
+  const shipping = measuredMoney(cb?.shipping_cost);
+  const ad = measuredMoney(cb?.ad_spend);
+  const netPerUnit = measuredMoney(cb?.net_profit);
+  if (supplier === null || shipping === null || ad === null || netPerUnit === null) return null;
+  const invest = supplier + shipping + ad;
+  const sell = measuredMoney(p.selling_price_usd);
+  const netMargin = sell !== null && sell > 0 ? (netPerUnit / sell) * 100 : null;
   const breakeven =
     p.unit_economics?.breakeven_units ??
-    (netPerUnit > 0 ? Math.ceil((supplier + shipping) / Math.max(0.1, netPerUnit)) : 0);
-  const invest = supplier + shipping + ad;
-  if (!cb && !re) return null;
+    (netPerUnit > 0 ? Math.ceil((supplier + shipping) / netPerUnit) : null);
   return (
     <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] to-sky-500/[0.06] px-3 py-2.5 text-[11px]">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-300 font-semibold mb-1.5">
-        <DollarSign size={11} /> Dollar gap — ne koyar, ne kazanırsın
+        <DollarSign size={11} /> Dollar gap — ölçülen maliyet dökümü
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Koyarsın</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {formatMoneyBand(estimateBand(invest), (n) => money(n, { showUsd: false })) ??
-              money(invest, { showUsd: false })}
+            {money(invest, { showUsd: false })}
           </div>
           <div className="text-[9px] text-muted-foreground">tedarik+kargo+reklam</div>
         </div>
         <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
           <div className="text-[9px] uppercase text-emerald-300/80">Kazanırsın</div>
           <div className="text-xs font-bold text-emerald-300 mt-0.5">
-            {formatMoneyBand(estimateBand(netPerUnit), (n) => money(n, { showUsd: false })) ??
-              money(netPerUnit, { showUsd: false })}{" "}
-            / adet
+            {money(netPerUnit, { showUsd: false })} / adet
           </div>
           <div className="text-[9px] text-muted-foreground">
-            net marj{" "}
-            {formatPercentBand(re?.net_margin_pct ?? cb?.net_margin_pct ?? p.profit_margin_pct, 6) ??
-              "—"}
+            net marj {netMargin === null ? "—" : `%${netMargin.toFixed(0)}`}
           </div>
         </div>
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
           <div className="text-[9px] uppercase text-muted-foreground">Başabaş</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {breakeven
-              ? (formatIntegerBand(estimateBand(breakeven, 0.8, 1.3)) ?? String(breakeven)) + " adet"
-              : "—"}
+            {breakeven ? `${breakeven.toLocaleString("tr-TR")} adet` : "—"}
           </div>
-          <div className="text-[9px] text-muted-foreground">
-            {re
-              ? `${formatIntegerBand(estimateBand(re.monthly.units)) ?? re.monthly.units} adet/ay ölçek`
-              : "ilk siparişler"}
-          </div>
+          <div className="text-[9px] text-muted-foreground">ilk siparişler</div>
         </div>
       </div>
-      {re && (
-        <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
-          Gerçekçi aylık net:{" "}
-          <b className="text-emerald-300">
-            {money(re.monthly.low_usd, { compact: true, showUsd: false })} –{" "}
-            {money(re.monthly.high_usd, { compact: true, showUsd: false })}
-          </b>{" "}
-          · {re.context.country_label} · {re.context.category}
-        </div>
-      )}
     </div>
   );
 }
@@ -748,7 +722,10 @@ export function ProductCard({
           winner_score={p.winner_score}
           evidence_level={p.evidence_level}
           verdict={p.score_breakdown?.verdict}
-          net_margin_pct={measuredMarginPct(p) ?? p.real_economics?.net_margin_pct ?? undefined}
+          // Modelin net marjı ölçülmüş marj DEĞİLDİR; yalnız maliyet
+          // dökümünden gelen ölçüm gösterilir. Eskiden modelin %99'u karta
+          // "Net marj" diye yazılıyordu.
+          net_margin_pct={measuredMarginPct(p) ?? undefined}
           ad_budget_usd={p.real_economics?.monthly.ad_budget_usd}
         />
       </div>
@@ -1087,7 +1064,7 @@ export function ProductCard({
           {p.real_economics && (
             <div className="mt-2 space-y-1 border-t border-white/10 pt-2 text-[10px] text-muted-foreground">
               <div className="text-foreground/90">
-                Gerçekçi aylık net kâr:{" "}
+                Model senaryosu — aylık net (ölçüm değil):{" "}
                 <b className="text-emerald-300">
                   {enriched.monthly_net_low_usd === null || enriched.monthly_net_high_usd === null
                     ? NOT_MEASURED
