@@ -13,7 +13,8 @@
 // cümlesi kurulmaz. Tedarik/marj gibi ölçülmeyen alanlar `null` kalır.
 // ============================================================================
 
-import type { NormalizedProduct } from "./product-discovery.types";
+import { clusterBySharedKeys } from "./product-identity";
+import { productIdentityKeys, type NormalizedProduct } from "./product-discovery.types";
 import type { DiscoveryWinner } from "./product-discovery.functions";
 
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
@@ -39,6 +40,32 @@ export function isUsableMeasuredProduct(p: NormalizedProduct): boolean {
 
 function dedupeKey(p: NormalizedProduct): string {
   return p.fingerprint || p.name.toLocaleLowerCase("tr-TR");
+}
+
+/** Aynı ürünün tüm kimlik çapaları — GTIN, MPN, parmak izi ve model kodu. */
+function identityKeys(p: NormalizedProduct): string[] {
+  return productIdentityKeys({
+    title: p.name,
+    brand: p.brand,
+    seller: p.seller,
+    gtin: p.gtin,
+    mpn: p.mpn,
+    fingerprint: p.fingerprint,
+  });
+}
+
+/**
+ * Aynı kümede hangi kayıt kalır? Yüksek ön skor, eşitse daha zengin kanıt,
+ * eşitse daha çok kaynak. Ölçülmüş alanlar asla birleştirilmez (uydurulmaz).
+ */
+function isRicher(candidate: NormalizedProduct, incumbent: NormalizedProduct): boolean {
+  return (
+    candidate.preScore > incumbent.preScore ||
+    (candidate.preScore === incumbent.preScore &&
+      (candidate.dataCompleteness > incumbent.dataCompleteness ||
+        (candidate.dataCompleteness === incumbent.dataCompleteness &&
+          candidate.sources.length > incumbent.sources.length)))
+  );
 }
 
 /**
@@ -68,41 +95,43 @@ export function measuredWinnerRows(
    */
   rerank?: MeasuredRerank,
 ): DiscoveryWinner[] {
-  const best = new Map<string, NormalizedProduct>();
-  for (const p of products) {
-    if (!p || p.name.trim().length < 3) continue;
-    if (!isUsableMeasuredProduct(p)) continue;
-    const key = dedupeKey(p);
-    const incumbent = best.get(key);
-    if (!incumbent) {
-      best.set(key, p);
-      continue;
-    }
-    // Aynı ürün: daha yüksek skorlu, eşitse daha zengin kanıtlı kayıt kalır.
-    const better =
-      p.preScore > incumbent.preScore ||
-      (p.preScore === incumbent.preScore && p.dataCompleteness > incumbent.dataCompleteness);
-    if (better) best.set(key, p);
-  }
+  // TEKİLLEŞTİRME — yalnız parmak izi YETMEZ.
+  // Canlı hata: aynı ürünün iki mağaza yazımı ("… Q7 L5 …" / "… Q7L5 …")
+  // farklı parmak izi üretip nihai 5'li listeye iki kez giriyordu. Kayıtlar
+  // GTIN, marka+MPN, parmak izi ve model kodu anahtarlarıyla geçişli olarak
+  // kümelenir; her kümeden en zengin kayıt kalır.
+  const usable = products.filter(
+    (p) => p && p.name.trim().length >= 3 && isUsableMeasuredProduct(p),
+  );
+  const clusters = clusterBySharedKeys(usable, identityKeys).map((group) => {
+    let best = group[0]!;
+    for (const p of group.slice(1)) if (isRicher(p, best)) best = p;
+    return { best, members: group };
+  });
 
   const aiRank = new Map<string, number>();
   for (const [i, key] of (rerank?.order ?? []).entries()) {
     if (!aiRank.has(key)) aiRank.set(key, i);
   }
   const NO_AI_RANK = Number.MAX_SAFE_INTEGER;
-  const ranked = [...best.values()].sort((a, b) => {
-    const ra = aiRank.get(dedupeKey(a)) ?? NO_AI_RANK;
-    const rb = aiRank.get(dedupeKey(b)) ?? NO_AI_RANK;
+  const rankOf = (members: readonly NormalizedProduct[]): number => {
+    let rank = NO_AI_RANK;
+    for (const p of members) rank = Math.min(rank, aiRank.get(dedupeKey(p)) ?? NO_AI_RANK);
+    return rank;
+  };
+  const ranked = clusters.sort((a, b) => {
+    const ra = rankOf(a.members);
+    const rb = rankOf(b.members);
     return (
       ra - rb ||
-      b.preScore - a.preScore ||
-      b.dataCompleteness - a.dataCompleteness ||
-      b.sources.length - a.sources.length ||
-      a.name.localeCompare(b.name, "tr")
+      b.best.preScore - a.best.preScore ||
+      b.best.dataCompleteness - a.best.dataCompleteness ||
+      b.best.sources.length - a.best.sources.length ||
+      a.best.name.localeCompare(b.best.name, "tr")
     );
   });
 
-  return ranked.slice(0, Math.max(1, topN)).map((row) => {
+  return ranked.slice(0, Math.max(1, topN)).map(({ best: row }) => {
     const evidence: string[] = [];
     if (row.priceUsd !== null) evidence.push(`Fiyat: $${row.priceUsd.toFixed(2)}`);
     if (row.rating !== null) {

@@ -164,6 +164,25 @@ describe("final adımı: uzlaşma + ürün birleşimi", () => {
     expect(result.notes.join(" ")).toContain("taşınmadı");
   });
 
+  it("aynı ürünün iki konsensüs satırını tek kazanana indirir", () => {
+    // Canlı hata: aynı ürün (aynı model kodu) iki farklı başlık/candidateId
+    // ile nihai 5'li listeye iki kez girebiliyordu.
+    const a = winnerProduct("Casabrews CM5418 Compact Espresso Machine");
+    const b = winnerProduct("Casabrews CM5418 20 Bar Coffee Maker");
+    const byId = new Map([
+      [a.fingerprint, a],
+      [b.fingerprint, b],
+    ]);
+    expect(a.fingerprint).not.toBe(b.fingerprint);
+
+    const result = runFinalRankStep([consensusFor(a, 60), consensusFor(b, 85)], 5, byId);
+
+    expect(result.consensus).toHaveLength(1);
+    expect(result.products).toHaveLength(1);
+    expect(result.consensus[0]!.councilScore).toBe(85);
+    expect(result.notes.join(" ")).toContain("kopya satır");
+  });
+
   it("topN kadar keser", () => {
     const rows = ["A", "B", "C", "D", "E", "F"].map((n) => winnerProduct(n));
     const byId = new Map(rows.map((p) => [p.fingerprint, p]));

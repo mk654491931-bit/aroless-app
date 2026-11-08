@@ -114,6 +114,54 @@ describe("measuredWinnerRows — ölçülmüş kaynak satırı", () => {
     expect(rows[0]!.preScore).toBe(82);
     expect(rows[0]!.sources).toHaveLength(2);
   });
+
+  it("parmak izi farklı ama model kodu aynı olan yazımları tek üründe birleştirir", () => {
+    // Canlı hata: aynı ürünün iki mağaza başlığı iki ayrı parmak izi üretip
+    // nihai 5'li listeye iki kez giriyordu.
+    const rows = measuredWinnerRows(
+      [
+        product({
+          name: "CASABREWS CM5418 Compact Espresso Machine With Milk Frother",
+          brand: "CASABREWS",
+          fingerprint: "casabrews-cm5418-frother|casabrews|shop-a",
+          preScore: 61,
+          sources: ["aliexpress-reader"],
+        }),
+        product({
+          name: "Casabrews CM5418 20 Bar Espresso Machine And Coffee Maker",
+          brand: "Casabrews",
+          fingerprint: "casabrews-cm5418-20bar|casabrews|shop-b",
+          preScore: 80,
+          sources: ["bing-shopping", "aliexpress-reader"],
+        }),
+      ],
+      5,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.preScore).toBe(80);
+  });
+
+  it("GEÇERLİ GTIN aynıysa farklı başlıkları tek üründe birleştirir", () => {
+    const rows = measuredWinnerRows(
+      [
+        product({
+          name: "Ninja Air Fryer 5.5L",
+          fingerprint: "ninja-air-fryer-a|ninja|shop-a",
+          gtin: "0622356559775",
+          preScore: 55,
+        }),
+        product({
+          name: "Ninja AF150 Air Fryer",
+          fingerprint: "ninja-af150|ninja|shop-b",
+          gtin: "0622356559775",
+          preScore: 77,
+        }),
+      ],
+      5,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.name).toBe("Ninja AF150 Air Fryer");
+  });
 });
 
 describe("scoreDeterministically — NaN koruması", () => {

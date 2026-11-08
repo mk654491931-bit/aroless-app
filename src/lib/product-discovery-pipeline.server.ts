@@ -27,12 +27,14 @@ import { z } from "zod";
 import {
   canTransition,
   TopProductSchema,
+  productIdentityKeys,
   type Consensus,
   type NormalizedProduct,
   type ProductDiscoveryStatus,
   type RawProduct,
   type TopProduct,
 } from "./product-discovery.types";
+import { clusterBySharedKeys } from "./product-identity";
 import {
   candidateQuality,
   describeFunnel,
@@ -1485,7 +1487,48 @@ export function runFinalRankStep(
       b.councilScore - a.councilScore ||
       b.confidenceScore - a.confidenceScore,
   );
-  const candidates = ranked.slice(0, topN);
+
+  // TEK ÜRÜN, TEK SATIR — nihai 5'li listede aynı ürün iki kez görünemez.
+  // Konsey satırları `candidateId` ile gelir; aynı ürünün iki mağaza yazımı
+  // farklı candidateId alabiliyor (canlı hata: "Roborock Q7 L5" iki kez).
+  // Ürün kimliği (GTIN / marka+MPN / parmak izi / model kodu) paylaşılıyorsa
+  // satırlar geçişli olarak tek ürüne indirilir; en yüksek kaliteli satır kalır.
+  const rowIdentity = (row: Consensus): string[] => {
+    const p = productOf(row);
+    const keys = [`id:${row.candidateId}`];
+    if (p)
+      keys.push(
+        ...productIdentityKeys({
+          title: p.name,
+          brand: p.brand,
+          seller: p.seller,
+          gtin: p.gtin,
+          mpn: p.mpn,
+          fingerprint: p.fingerprint,
+        }),
+      );
+    return keys;
+  };
+  const uniqueRanked = clusterBySharedKeys(ranked, rowIdentity)
+    .map((group) =>
+      group.reduce((best, row) =>
+        qualityOf(row) > qualityOf(best) ||
+        (qualityOf(row) === qualityOf(best) &&
+          (Boolean(productOf(row)) !== Boolean(productOf(best))
+            ? Boolean(productOf(row))
+            : row.councilScore > best.councilScore))
+          ? row
+          : best,
+      ),
+    )
+    .sort(
+      (a, b) =>
+        qualityOf(b) - qualityOf(a) ||
+        b.councilScore - a.councilScore ||
+        b.confidenceScore - a.confidenceScore,
+    );
+  const mergedDuplicates = ranked.length - uniqueRanked.length;
+  const candidates = uniqueRanked.slice(0, topN);
 
   // KALİTE KAPISI: kanıtı olmayan + ajanların düşük puanladığı satır kazanan
   // diye sunulmaz. Kapı listeyi BOŞALTMAZ: en az `MIN_DELIVERED_WINNERS`
@@ -1554,6 +1597,9 @@ export function runFinalRankStep(
                 ? `; ${rescuedCount} tanesi liste boş kalmasın diye geri alındı ve kartta "kalite kapısı altı" olarak işaretlendi.`
                 : "."),
           ]
+        : []),
+      ...(mergedDuplicates > 0
+        ? [`${mergedDuplicates} kopya satır aynı ürün kimliğinde birleştirildi.`]
         : []),
       ...(missing > 0
         ? [`${missing} kazananın ürün kaydı taşınmadı (sadece oy satırı geldi).`]

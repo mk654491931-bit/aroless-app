@@ -148,3 +148,56 @@ export function gs1PrefixCountry(raw: unknown): string | null {
   return null;
 }
 
+/**
+ * Kayıtları PAYLAŞILAN anahtarlara göre kümelere ayırır (union-find).
+ *
+ * NEDEN GEREKLİ: bir ürünün birden çok kimlik çapası olabilir (GTIN, model
+ * kodu, parmak izi). İki kayıt farklı çapalarda buluşabilir; anahtar→grup
+ * eşlemesi tek başına yetmez (A ile B GTIN'de, B ile C model kodunda aynıysa
+ * üçü TEK üründür). Geçişli birleşim bunu doğru yakalar.
+ *
+ * Anahtarı olmayan kayıt kendi kümesinde kalır — asla başka bir ürüne
+ * bağlanmaz.
+ */
+export function clusterBySharedKeys<T>(
+  items: readonly T[],
+  keysOf: (item: T) => readonly string[],
+): T[][] {
+  const parent = items.map((_, i) => i);
+  const find = (start: number): number => {
+    let root = start;
+    while (parent[root] !== root) root = parent[root]!;
+    let cur = start;
+    while (parent[cur] !== cur) {
+      const next = parent[cur]!;
+      parent[cur] = root;
+      cur = next;
+    }
+    return root;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
+  const owner = new Map<string, number>();
+  items.forEach((item, i) => {
+    for (const key of keysOf(item)) {
+      if (!key) continue;
+      const prev = owner.get(key);
+      if (prev === undefined) owner.set(key, i);
+      else union(prev, i);
+    }
+  });
+
+  const groups = new Map<number, T[]>();
+  items.forEach((item, i) => {
+    const root = find(i);
+    const group = groups.get(root);
+    if (group) group.push(item);
+    else groups.set(root, [item]);
+  });
+  return [...groups.values()];
+}
+

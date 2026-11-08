@@ -1317,20 +1317,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
       fr: "Vente − gros = marge brute. La marge nette n'a pas été mesurée : livraison, douane et commission sont absents de cette source et n'ont pas été estimés.",
       ar: "البيع − الجملة = الهامش الإجمالي. لم يُقس الهامش الصافي لأن الشحن والجمارك وعمولة المنصة غير متوفرة في هذا المصدر ولم تُقدَّر.",
     },
-  "Koyarsın $0, Kazanırsın $0/adet": {
-    en: "You set $0, you earn $0/unit",
-    es: "Fijas $0, ganas $0/unidad",
-    de: "Du setzt $0, du verdienst $0/Stück",
-    fr: "Vous fixez 0 $, vous gagnez 0 $/unité",
-    ar: "تحدد 0$ وتكسب 0$ للوحدة",
-  },
-  "adet/ay ölçek": {
-    en: "units/month scale",
-    es: "escala unidades/mes",
-    de: "Stück/Monat-Skala",
-    fr: "échelle unités/mois",
-    ar: "مقياس وحدات/شهر",
-  },
   "ilk siparişler": {
     en: "first orders",
     es: "primeros pedidos",
@@ -2802,12 +2788,12 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Autre / unité",
     ar: "أخرى / وحدة",
   },
-  "Dollar gap — ne koyar, ne kazanırsın": {
-    en: "Dollar gap — what you put in, what you make",
-    es: "Brecha de dólares: qué pones y qué ganas",
-    de: "Dollar-Lücke — was du einsetzt, was du verdienst",
-    fr: "Écart en dollars — ce que vous mettez, ce que vous gagnez",
-    ar: "فجوة الدولار — ما تدفعه وما تربحه",
+  "Dollar gap — ölçülen maliyet dökümü": {
+    en: "Dollar gap — measured cost breakdown",
+    es: "Brecha de dólares: desglose de costes medidos",
+    de: "Dollar-Lücke — gemessene Kostenaufstellung",
+    fr: "Écart en dollars — ventilation des coûts mesurés",
+    ar: "فجوة الدولار — تفصيل التكاليف المقيسة",
   },
   "Dönüşüm kırıcıları": {
     en: "Conversion blockers",
@@ -3638,13 +3624,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     de: "nicht zugewiesen",
     fr: "non attribué",
     ar: "غير معيّن",
-  },
-  "Tedarik satışı": {
-    en: "Supply sales",
-    es: "Ventas de suministro",
-    de: "Lieferumsatz",
-    fr: "Ventes d'approvisionnement",
-    ar: "مبيعات التوريد",
   },
   "Tekrar üret": {
     en: "Regenerate",

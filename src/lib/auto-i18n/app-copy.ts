@@ -208,19 +208,12 @@ export const APP_COPY: Record<string, Copy> = {
     fr: "Preuve d'approvisionnement — fourchette mondiale des prix de gros du même créneau",
     ar: "دليل التوريد — نطاق أسعار الجملة العالمي في المجال نفسه",
   },
-  "Perakende fiyat ölçülmediği için marj hesaplanamadı.": {
-    en: "Margin could not be calculated because no retail price was measured.",
-    es: "No se pudo calcular el margen porque no se midió un precio minorista.",
-    de: "Die Marge konnte nicht berechnet werden, weil kein Endpreis gemessen wurde.",
-    fr: "La marge n'a pas pu être calculée faute de prix de détail mesuré.",
-    ar: "تعذر حساب الهامش لعدم قياس سعر التجزئة.",
-  },
-  "Perakende fiyat ölçülmediği için marj hesaplanamadı": {
-    en: "Margin could not be calculated because no retail price was measured",
-    es: "No se pudo calcular el margen porque no se midió un precio minorista",
-    de: "Die Marge konnte nicht berechnet werden, weil kein Endpreis gemessen wurde",
-    fr: "La marge n'a pas pu être calculée faute de prix de détail mesuré",
-    ar: "تعذر حساب الهامش لعدم قياس سعر التجزئة",
+  "Tedarik ya da perakende fiyatı ölçülmediği için marj hesaplanamadı.": {
+    en: "Margin could not be calculated because neither supplier nor retail price was measured.",
+    es: "No se pudo calcular el margen porque no se midió ni el precio mayorista ni el minorista.",
+    de: "Die Marge konnte nicht berechnet werden, weil weder Einkaufs- noch Endpreis gemessen wurde.",
+    fr: "La marge n'a pas pu être calculée faute de prix d'achat ou de détail mesuré.",
+    ar: "تعذر حساب الهامش لعدم قياس سعر التوريد أو سعر التجزئة.",
   },
   doğrulanamadı: {
     en: "unverified",

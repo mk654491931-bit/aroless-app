@@ -19,6 +19,7 @@
 import { z } from "zod";
 
 import { LaunchReadinessSchema } from "./launch-readiness";
+import { normalizeGtin } from "./product-identity";
 import { SupplierEvidenceSchema } from "./supplier-economics";
 
 /* ------------------------------------------------------------- Raw product */
@@ -344,6 +345,49 @@ export function productModelKey(input: { title: string; brand?: string }): strin
   // 0 kod → belirsiz. 1'den fazla kod → hangisi model kodu belirsiz.
   if (codes.size !== 1) return "";
   return `${brand}|${[...codes][0]}`;
+}
+
+/**
+ * ÜRÜN KİMLİK ANAHTARLARI — GTIN, marka+MPN, parmak izi ve model kodu.
+ *
+ * NEDEN (canlı hata): nihai 5'li liste, aynı ürünün iki farklı mağaza
+ * yazımını iki ayrı ürün sanıp iki kez gösteriyordu. `fingerprint` tam başlığı
+ * gömdüğü için "Roborock Q7 L5 … 8,000 Pa" ile "Roborock Q7L5 …" ayrı
+ * düşüyordu; GTIN ya da model kodu aynı olduğu hâlde.
+ *
+ * Bu fonksiyon tek bir kaydın BÜTÜN çapalarını döndürür; çağıran taraf bu
+ * anahtarlarla kayıtları kümeler (bkz. `clusterBySharedKeys`). Anahtar yoksa
+ * boş dizi döner — boş dizeyle sahte bir çapa üretilmez.
+ */
+export function productIdentityKeys(input: {
+  title: string;
+  brand?: string;
+  seller?: string;
+  gtin?: string;
+  mpn?: string;
+  fingerprint?: string;
+}): string[] {
+  const keys: string[] = [];
+  const gtin = normalizeGtin(input.gtin ?? "");
+  if (gtin) keys.push(`g:${gtin}`);
+  const brand = productFingerprint({ title: input.brand ?? "" });
+  const mpn = String(input.mpn ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  // MPN dört karakterden kısaysa model kodu değil, gürültüdür.
+  if (brand && mpn.length >= 4) keys.push(`mpn:${brand}|${mpn}`);
+  const fp =
+    String(input.fingerprint ?? "").trim() ||
+    productFingerprint({
+      title: input.title,
+      brand: input.brand ?? "",
+      seller: input.seller ?? "",
+    });
+  if (fp) keys.push(`f:${fp}`);
+  const model = productModelKey({ title: input.title, brand: input.brand ?? "" });
+  if (model) keys.push(`m:${model}`);
+  return keys;
 }
 
 /** Başlıktan marka tahmini — UYDURMA YAPMAZ, bilinmiyorsa boş döner. */

@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { marginLabel, measuredMoney } from "@/lib/economics-evidence";
-import { completeDeepDive, num } from "@/lib/deep-dive-complete";
+import { num } from "@/lib/deep-dive-complete";
 import {
   CheckItem,
   ChecklistProgress,
@@ -116,10 +116,25 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
+/**
+ * Modelin ürettiği sayı/plan bölümleri için DÜRÜSTLÜK ETİKETİ.
+ *
+ * Bu bölümler canlı kaynaktan ölçülmedi; eski sürüm eksikleri varsayılan
+ * projeksiyonlarla doldurup ölçüm gibi gösteriyordu. Artık varsayılan
+ * üretilmiyor, kalan AI içeriği de açıkça "tahmin" olarak işaretleniyor.
+ */
+function ModelNote() {
+  return (
+    <p className="text-[10px] text-amber-200/80">
+      AI tahmini — ölçüm değil. Canlı kaynak bu alanı doğrulamadı.
+    </p>
+  );
+}
+
 export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
-  // AI yanıtında eksik kalan 30/90 günlük strateji bölümleri ürünün kendi
-  // rakamlarından türetilerek tamamlanır — hiçbir bölüm boş kalmaz.
-  const p = useMemo(() => completeDeepDive(raw), [raw]);
+  // Eksik bölüm TAMAMLANMAZ: uydurma projeksiyon/tedarikçi/fiyat varsayılanı
+  // yerine bölüm hiç gösterilmez (dürüstlük kuralı).
+  const p = raw;
   const { done, toggle } = useChecklist(p.name ?? "urun");
   const planIds = useMemo(() => {
     const ids: string[] = [];
@@ -142,7 +157,13 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
       </div>
 
       <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
-        <ChecklistProgress total={planIds.length} completed={completed} />
+        {planIds.length > 0 ? (
+          <ChecklistProgress total={planIds.length} completed={completed} />
+        ) : (
+          <p className="text-[10px] text-muted-foreground">
+            Bu ürün için doğrulanmış lansman planı yok.
+          </p>
+        )}
         <ExportReport p={p} />
       </div>
 
@@ -200,10 +221,12 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <Factory size={10} /> Tedarik kaynağı
             </div>
             <div className="mt-1 font-semibold">
-              {p.supplier_shortlist?.[0]?.name ?? "AliExpress / 1688"}
+              {p.supplier_shortlist?.[0]?.name ?? "Ölçülmedi"}
             </div>
             <div className="text-[10px] text-muted-foreground">
-              {p.supplier_shortlist?.[0]?.region ?? p.sourcing?.shipping_method ?? "Çin / global"}
+              {p.supplier_shortlist?.[0]?.region ??
+                p.sourcing?.shipping_method ??
+                "Kaynak doğrulamadı"}
             </div>
           </div>
           <div className="rounded-md border border-sky-500/30 bg-sky-500/[0.06] p-2">
@@ -211,21 +234,21 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <Truck size={10} /> Teslimat
             </div>
             <div className="mt-1 font-semibold">
-              {trDuration(
-                p.sourcing?.lead_time_days ?? p.supplier_shortlist?.[0]?.lead_time ?? "12–25 gün",
-              )}
+              {p.sourcing?.lead_time_days || p.supplier_shortlist?.[0]?.lead_time
+                ? trDuration(p.sourcing?.lead_time_days ?? p.supplier_shortlist?.[0]?.lead_time)
+                : "Ölçülmedi"}
             </div>
             <div className="text-[10px] text-muted-foreground">
-              {p.sourcing?.shipping_method ?? "Hava kargo / ePacket"}
+              {p.sourcing?.shipping_method ?? "Ölçülmedi"}
             </div>
           </div>
           <div className="rounded-md border border-violet-500/30 bg-violet-500/[0.06] p-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300/90">
               <Store size={10} /> En iyi kanal
             </div>
-            <div className="mt-1 font-semibold">{p.platform_fit?.[0] ?? "Shopify"}</div>
+            <div className="mt-1 font-semibold">{p.platform_fit?.[0] ?? "Ölçülmedi"}</div>
             <div className="text-[10px] text-muted-foreground">
-              {(p.platform_fit ?? []).slice(1).join(" · ") || "Birincil lansman platformu"}
+              {(p.platform_fit ?? []).slice(1).join(" · ") || "Kaynak doğrulamadı"}
             </div>
           </div>
           <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2">
@@ -234,27 +257,33 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
             </div>
             <div className="mt-1 font-semibold text-emerald-300">
               {measuredMoney(p.cost_breakdown?.net_profit) === null
-                ? "—"
+                ? "Ölçülmedi"
                 : p.cost_breakdown?.net_profit}
             </div>
             {/* Ölçülmemiş marj "%0" DEĞİLDİR: brütse açıkça "brüt" etiketiyle,
-                hiç ölçülmediyse "—" gösterilir (0 ile 97'nin çelişmesi buradan
-                geliyordu). */}
-            <div className="text-[10px] text-muted-foreground">Marj {marginLabel(p, "—")}</div>
+                hiç ölçülmediyse "Ölçülmedi" gösterilir (0 ile 97'nin çelişmesi
+                buradan geliyordu). */}
+            <div className="text-[10px] text-muted-foreground">
+              Marj {marginLabel(p, "Ölçülmedi")}
+            </div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-teal-300/90">
               <Globe2 size={10} /> En iyi pazarlar
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
-              {(p.demand?.primary_markets ?? ["US", "UK", "DE"]).map((m, i) => (
-                <span
-                  key={i}
-                  className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5 flex items-center gap-1"
-                >
-                  <MapPin size={9} /> {m}
-                </span>
-              ))}
+              {(p.demand?.primary_markets ?? []).length === 0 ? (
+                <span className="text-[10px] text-muted-foreground">Ölçülmedi</span>
+              ) : (
+                (p.demand?.primary_markets ?? []).map((m, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5 flex items-center gap-1"
+                  >
+                    <MapPin size={9} /> {m}
+                  </span>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -270,7 +299,10 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Package size={10} /> Tedarik maliyeti
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd}
+                  {measuredMoney(p.cost_breakdown?.supplier_cost) === null &&
+                  measuredMoney(p.supplier_price_usd) === null
+                    ? "Ölçülmedi"
+                    : (p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd)}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -278,7 +310,9 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Truck size={10} /> Kargo
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {p.cost_breakdown?.shipping_cost ?? "—"}
+                  {measuredMoney(p.cost_breakdown?.shipping_cost) === null
+                    ? "Ölçülmedi"
+                    : p.cost_breakdown?.shipping_cost}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -286,7 +320,9 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Store size={10} /> Platform komisyonu
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {p.cost_breakdown?.platform_fee ?? "—"}
+                  {measuredMoney(p.cost_breakdown?.platform_fee) === null
+                    ? "Ölçülmedi"
+                    : p.cost_breakdown?.platform_fee}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -294,7 +330,9 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Clapperboard size={10} /> Reklam gideri / CAC
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {p.cost_breakdown?.ad_spend ?? "—"}
+                  {measuredMoney(p.cost_breakdown?.ad_spend) === null
+                    ? "Ölçülmedi"
+                    : p.cost_breakdown?.ad_spend}
                 </td>
               </tr>
               <tr className="border-b border-white/5 bg-white/[0.02]">
@@ -309,10 +347,10 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-emerald-300">
                   {measuredMoney(p.cost_breakdown?.net_profit) === null
-                    ? "—"
+                    ? "Ölçülmedi"
                     : p.cost_breakdown?.net_profit}{" "}
                   <span className="text-[10px] font-normal opacity-80">
-                    ({marginLabel(p, "—")})
+                    ({marginLabel(p, "Ölçülmedi")})
                   </span>
                 </td>
               </tr>
@@ -380,6 +418,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.unit_economics && (
         <Block icon={<BarChart3 size={11} />} title="Birim ekonomisi & başabaş">
+          <ModelNote />
           <Row k="Başabaş adedi" v={`${p.unit_economics.breakeven_units} adet`} />
           <Row k="Başabaş ROAS" v={`${p.unit_economics.breakeven_roas}x`} />
           <Row k="Maksimum CPA" v={p.unit_economics.target_cpa_usd} />
@@ -391,6 +430,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.sourcing && (
         <Block icon={<Boxes size={11} />} title="Tedarik & uyumluluk">
+          <ModelNote />
           <Row k="Minimum sipariş (MOQ)" v={p.sourcing.moq} />
           <Row k="Tedarik süresi" v={trDuration(p.sourcing.lead_time_days)} />
           <Row k="Numune maliyeti" v={p.sourcing.sample_cost_usd} />
@@ -441,6 +481,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.keyword_opportunities && p.keyword_opportunities.length > 0 && (
         <Block icon={<Search size={11} />} title="Anahtar kelime fırsatları">
+          <ModelNote />
           {p.keyword_opportunities.map((k, i) => (
             <div
               key={i}
@@ -488,6 +529,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.bundles && p.bundles.length > 0 && (
         <Block icon={<Boxes size={11} />} title="Paketler & sepet artırıcılar">
+          <ModelNote />
           {p.bundles.map((b, i) => (
             <div key={i} className="rounded border border-white/10 bg-white/[0.03] p-2">
               <div className="flex items-center justify-between gap-2">
@@ -524,6 +566,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           icon={<Target size={11} />}
           title={`30 günlük lansman yol haritası (${p.launch_roadmap.length} faz)`}
         >
+          <ModelNote />
           <div className="max-h-72 overflow-y-auto pr-1 space-y-2">
             {p.launch_roadmap.map((ph, i) => (
               <div key={i} className="relative pl-4 border-l border-white/10 pb-2 last:pb-0">
@@ -578,6 +621,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.market_saturation && (
         <Block icon={<Gauge size={11} />} title="Pazar doygunluğu" defaultOpen>
+          <ModelNote />
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Doygunluk</span>
@@ -605,6 +649,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.pricing_ladder && p.pricing_ladder.length > 0 && (
         <Block icon={<Tags size={11} />} title="Test edilecek fiyat basamakları">
+          <ModelNote />
           {p.pricing_ladder.map((t, i) => (
             <div key={i} className="rounded border border-white/10 bg-white/[0.03] p-2">
               <div className="flex items-center justify-between gap-2">
@@ -647,6 +692,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.supplier_shortlist && p.supplier_shortlist.length > 0 && (
         <Block icon={<Factory size={11} />} title="Tedarikçi kısa listesi">
+          <ModelNote />
           {p.supplier_shortlist.map((s, i) => (
             <div key={i} className="rounded border border-white/10 bg-white/[0.03] p-2 space-y-0.5">
               <div className="flex items-center justify-between gap-2">
@@ -664,6 +710,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {p.financial_projection && p.financial_projection.length > 0 && (
         <Block icon={<LineChart size={11} />} title="90 günlük finansal projeksiyon" defaultOpen>
+          <ModelNote />
           <div className="max-h-56 overflow-y-auto pr-1">
             <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground border-b border-white/10 pb-1 sticky top-0 bg-[oklch(0.19_0.03_255)]">
               <span>Ay</span>
@@ -706,9 +753,12 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
         </Block>
       )}
 
-      <Block icon={<SlidersHorizontal size={11} />} title="Senaryo simülatörü & risk analizi">
-        <ScenarioSimulator p={p} />
-      </Block>
+      {p.financial_projection && p.financial_projection.length > 0 && (
+        <Block icon={<SlidersHorizontal size={11} />} title="Senaryo simülatörü & risk analizi">
+          <ModelNote />
+          <ScenarioSimulator p={p} />
+        </Block>
+      )}
 
       {p.content_calendar && p.content_calendar.length > 0 && (
         <Block

@@ -242,7 +242,17 @@ export function conversionTone(per1000: number) {
 
 /**
  * Repairs internally inconsistent AI output so the UI never shows contradicting numbers.
- * Only derives missing/impossible values — never invents new facts.
+ *
+ * DÜRÜSTLÜK KURALI (2026-11): bu fonksiyon artık HİÇBİR bölümü "boş kalmasın"
+ * diye doldurmaz. Eski gövde pazar doygunluğu ("2.000+ satıcı"), fiyat
+ * basamakları, tedarikçi kısa listesi, 90 günlük finansal projeksiyon, içerik
+ * takvimi ve reklam brifinglerini ürünün kendi rakamlarından TÜRETİYORDU;
+ * arayüz bunları araştırma sonucu gibi gösteriyordu. Artık yalnız:
+ *   • mevcut alanların sınır/çelişki onarımı,
+ *   • açıkça "benchmark modeli" etiketli dönüşüm tahmini,
+ *   • `real_economics` (ayrı ve model olduğu işaretli senaryo)
+ * üretilir. Kaynak/AI bir bölümü vermediyse o bölüm BOŞ kalır ve arayüz
+ * "ölçülmedi" der — uydurma sayı göstermez.
  */
 export function normalizeProduct(
   p: WinningProduct,
@@ -290,16 +300,6 @@ export function normalizeProduct(
     };
   }
 
-  // ---------------- Deterministic enrichment ----------------
-  // Fills every optional section with sensible, price-aware defaults so tables
-  // in the UI never render "—" or empty. Values are derived, never invented.
-  const sell = parseMoneyNum(out.selling_price_usd) || 25;
-  const sup = parseMoneyNum(out.supplier_price_usd) || Math.max(1, sell * 0.28);
-  const trend = out.trend_score ?? 60;
-  const comp = out.competition_level ?? "Medium";
-  const fmt = (n: number) => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
-  const platform = out.platform_fit?.[0] ?? "Shopify";
-
   // ---- Gerçek dünya birim ekonomisi (AYRI MODEL — ölçüm değil) ----
   //
   // Ölçülen hata: bu modelin çıktısı `cost_breakdown` ve `supplier_price_usd`
@@ -307,13 +307,14 @@ export function normalizeProduct(
   // Model tedarik fiyatı yoksa perakendenin ~%30'unu varsayar; bu bir senaryo
   // varsayımıdır, sayfadan ölçülmüş fiyat değildir. Artık model yalnız
   // `real_economics` içinde KALIR; ölçüm alanlarına dokunmaz.
+  const platform = out.platform_fit?.[0] ?? "Shopify";
   const re = realEconomics({
     selling_price_usd: out.selling_price_usd,
     supplier_price_usd: out.supplier_price_usd ?? out.cost_breakdown?.supplier_cost,
     shipping_cost: out.cost_breakdown?.shipping_cost,
     competition_level: out.competition_level,
     platform,
-    trend_score: trend,
+    trend_score: out.trend_score ?? 60,
     cvr_pct: out.conversion?.cvr_pct,
     startup_cost_usd: out.startup_cost_usd,
     country: ctx?.country,
@@ -323,415 +324,6 @@ export function normalizeProduct(
     supplier_price_measured: false,
   });
   out.real_economics = re;
-
-  // sourcing
-  if (!out.sourcing) {
-    out.sourcing = {
-      moq: "50-100 units (AliExpress dropship) · 500+ (1688/Alibaba)",
-      lead_time_days: "12-20 days air · 30-45 days sea",
-      sample_cost_usd: fmt(Math.max(5, sup * 1.5)),
-      quality_checkpoints: [
-        "Verify materials & finish vs listing photos",
-        "Test packaging drop resistance",
-        "Check size/weight matches spec",
-        "Random 5% batch inspection",
-      ],
-      shipping_method: sup < 15 ? "ePacket / air (light parcels)" : "Air express or FBA-forwarding",
-      customs_notes: "Confirm HS code, no restricted materials; add CE/FCC labeling if electronic.",
-    };
-  }
-
-  // personas: category-aware buyer archetypes
-  if (!out.personas || out.personas.length === 0) {
-    const cat = (ctx?.category ?? out.name ?? "").toLowerCase();
-    const isBeauty = /beauty|cilt|kozmetik|skin|hair|saç/.test(cat);
-    const isTech = /tech|elektronik|gadget|accessory|aksesuar/.test(cat);
-    out.personas = isBeauty
-      ? [
-          {
-            name: "Skincare Newbie",
-            age_range: "22-32",
-            pain: "Overwhelmed by 10-step routines",
-            trigger: "Before/after transformation reel",
-            where_to_find: "r/SkincareAddiction, TikTok #skintok",
-          },
-          {
-            name: "Gift Buyer",
-            age_range: "30-45",
-            pain: "Needs a premium-looking gift under $30",
-            trigger: "Holiday gifting guide",
-            where_to_find: "Instagram explore, Etsy",
-          },
-        ]
-      : isTech
-        ? [
-            {
-              name: "Early Adopter",
-              age_range: "18-30",
-              pain: "Wants the latest gadget before friends",
-              trigger: "Unboxing video on YouTube",
-              where_to_find: "r/gadgets, TikTok #techfinds",
-            },
-            {
-              name: "Practical Parent",
-              age_range: "28-42",
-              pain: "Needs reliable, affordable tech for kids",
-              trigger: "Back-to-school deals",
-              where_to_find: "Facebook Groups, Amazon",
-            },
-          ]
-        : [
-            {
-              name: "Impulse Scroller",
-              age_range: "20-35",
-              pain: "Wants quick wins for daily life",
-              trigger: "15s life hack video",
-              where_to_find: "TikTok FYP, Instagram Reels",
-            },
-            {
-              name: "Research Buyer",
-              age_range: "25-40",
-              pain: "Hates buying something that breaks in a week",
-              trigger: "Detailed comparison blog",
-              where_to_find: "Google Shopping, Reddit reviews",
-            },
-          ];
-  }
-
-  // keyword_opportunities: category-derived search terms
-  if (!out.keyword_opportunities || out.keyword_opportunities.length === 0) {
-    const baseName = (out.name ?? "product").split(" ").slice(0, 3).join(" ").toLowerCase();
-    out.keyword_opportunities = [
-      {
-        keyword: `${baseName} buy`,
-        monthly_volume: "5K-15K",
-        difficulty: "Low",
-        intent: "Transactional — ready to purchase",
-      },
-      {
-        keyword: `${baseName} review`,
-        monthly_volume: "3K-10K",
-        difficulty: "Low",
-        intent: "Commercial investigation — comparing options",
-      },
-      {
-        keyword: `best ${baseName} 2025`,
-        monthly_volume: "2K-8K",
-        difficulty: "Medium",
-        intent: "Commercial — looking for the best option",
-      },
-      {
-        keyword: `${baseName} alternative`,
-        monthly_volume: "1K-5K",
-        difficulty: "Low",
-        intent: "Consideration — comparing alternatives",
-      },
-    ];
-  }
-
-  // review_pain_points: derive from competition level
-  if (!out.review_pain_points || out.review_pain_points.length === 0) {
-    out.review_pain_points = [
-      {
-        complaint: "Quality not matching listing photos",
-        fix: "Add real-life UGC photos and video proof in listing",
-      },
-      {
-        complaint: "Slow shipping / wrong item delivered",
-        fix: "Use reliable fulfillment with tracking + branded packaging",
-      },
-      {
-        complaint: "Hard to figure out how to use",
-        fix: "Include quick-start card and QR-linked tutorial video",
-      },
-    ];
-  }
-
-  // differentiation
-  if (!out.differentiation || out.differentiation.length === 0) {
-    out.differentiation = [
-      "Upgraded unboxing: branded box + thank-you card + QR to tutorial",
-      "Bundle a fast-shipping variant (US warehouse) at +$5 for impulse buyers",
-      "365-day guarantee to crush the #1 objection",
-      "Own the 'how to use it' content angle competitors ignore",
-    ];
-  }
-
-  // review_pain_points: only real, review-sourced complaints are displayed.
-
-  // bundles
-  if (!out.bundles || out.bundles.length === 0) {
-    out.bundles = [
-      {
-        name: "Starter",
-        contents: "1x product + quick-start guide",
-        price_usd: fmt(sell),
-        why: "Entry point that matches your ad price",
-      },
-      {
-        name: "Pro pack",
-        contents: "2x product + accessories",
-        price_usd: fmt(sell * 1.7),
-        why: "Volume discount lifts AOV ~35%",
-      },
-      {
-        name: "Gift bundle",
-        contents: "1x product + gift wrap + card",
-        price_usd: fmt(sell * 1.25),
-        why: "Captures gifting demand in Q4",
-      },
-    ];
-  }
-
-  // risks
-  if (!out.risks || out.risks.length === 0) {
-    out.risks = [
-      {
-        risk: "Fast saturation from copycats",
-        severity: comp === "High" ? "High" : "Medium",
-        mitigation: "Move on brand + content moat within 30 days",
-      },
-      {
-        risk: "Ad platform policy on claims/before-after",
-        severity: "Medium",
-        mitigation: "Use soft claims, UGC voiceovers, keep receipts",
-      },
-      {
-        risk: "Supplier quality drift on reorder",
-        severity: "Medium",
-        mitigation: "Order sample from every new batch, dual-source",
-      },
-    ];
-  }
-
-  // launch_roadmap
-  if (!out.launch_roadmap || out.launch_roadmap.length === 0) {
-    out.launch_roadmap = [
-      {
-        phase: "Validate",
-        days: "Day 1-5",
-        actions: ["Order 2 samples", "Film 3 UGC hooks", "Set up Shopify + pixel"],
-        budget_usd: "$120",
-        kpi: "3 shootable creatives ready",
-      },
-      {
-        phase: "Launch",
-        days: "Day 6-14",
-        actions: [
-          "Run $20/day TikTok + Meta test",
-          "Iterate winning hook",
-          "Collect first 20 reviews",
-        ],
-        budget_usd: "$300",
-        kpi: "CPA under target, ROAS ≥ 1.5",
-      },
-      {
-        phase: "Scale",
-        days: "Day 15-30",
-        actions: [
-          "3x budget on winner",
-          "Launch email/SMS flows",
-          "Negotiate supplier price at 200+ units",
-        ],
-        budget_usd: "$800",
-        kpi: "$3k+ revenue, ROAS ≥ 1.8",
-      },
-    ];
-  }
-  if (!out.scaling_playbook) {
-    out.scaling_playbook =
-      "Once ROAS ≥ 1.8 for 5 straight days, double ad budget every 48h while CPA holds. Add creator whitelisting, launch 3-color variants, and roll out email/SMS post-purchase flows. Renegotiate supplier at 500 units, then move to a US 3PL to cut delivery to 3-5 days.";
-  }
-  if (!out.exit_criteria || out.exit_criteria.length === 0) {
-    out.exit_criteria = [
-      "ROAS < 1.1 for 10 straight days after 3 creative iterations",
-      "Return rate > 12%",
-      "CPM doubles with no CTR improvement",
-    ];
-  }
-
-  // market_saturation: estimated from competition level
-  if (!out.market_saturation) {
-    const satScore = comp === "High" ? 72 : comp === "Medium" ? 48 : 25;
-    out.market_saturation = {
-      score: satScore,
-      active_sellers:
-        comp === "High"
-          ? "500+ listings"
-          : comp === "Medium"
-            ? "100-300 listings"
-            : "Under 100 listings",
-      ad_activity:
-        comp === "High"
-          ? "Heavy — multiple brands running active ads"
-          : comp === "Medium"
-            ? "Moderate — a few brands with consistent spend"
-            : "Low — mostly organic listings",
-      entry_window:
-        satScore > 60
-          ? "Narrow — act fast or differentiate hard"
-          : satScore > 35
-            ? "Open — solid entry window with differentiation"
-            : "Wide — low saturation, easy entry",
-      verdict:
-        satScore > 60
-          ? "Crowded market — requires strong differentiation"
-          : "Manageable competition — good opportunity window",
-    };
-  }
-
-  // pricing_ladder
-  if (!out.pricing_ladder || out.pricing_ladder.length === 0) {
-    out.pricing_ladder = [
-      {
-        tier: "Entry",
-        price_usd: fmt(sell * 0.85),
-        positioning: "Impulse-buy price for cold traffic",
-        expected_cvr_pct: 2.8,
-      },
-      {
-        tier: "Core",
-        price_usd: fmt(sell),
-        positioning: "Standard offer with strong margin",
-        expected_cvr_pct: 2.1,
-      },
-      {
-        tier: "Premium",
-        price_usd: fmt(sell * 1.35),
-        positioning: "Bundle with accessories for warm audiences",
-        expected_cvr_pct: 1.4,
-      },
-    ];
-  }
-
-  // ad_creatives
-  if (!out.ad_creatives || out.ad_creatives.length === 0) {
-    out.ad_creatives = [
-      {
-        platform: "TikTok",
-        format: "UGC 15s vertical",
-        hook: "POV: you finally found the fix for [problem]…",
-        script_beats: [
-          "0-2s: hook + product reveal",
-          "2-6s: fast problem demo",
-          "6-12s: solution in action",
-          "12-15s: 'link in bio' CTA",
-        ],
-        cta: "Tap to grab yours — 30% off today",
-      },
-      {
-        platform: "Meta",
-        format: "Static carousel",
-        hook: "The 3 reasons customers keep reordering this",
-        script_beats: [
-          "Slide 1: Big benefit headline",
-          "Slide 2-4: 3 proof points",
-          "Slide 5: 5-star review",
-          "Slide 6: Offer + CTA",
-        ],
-        cta: "Shop now — free shipping over $50",
-      },
-      {
-        platform: "Instagram Reels",
-        format: "Before/after 20s",
-        hook: "I didn't believe this worked until day 7…",
-        script_beats: [
-          "Before shot",
-          "Voiceover intro",
-          "Using the product",
-          "After shot",
-          "CTA on-screen",
-        ],
-        cta: "Link in bio",
-      },
-    ];
-  }
-
-  // supplier_shortlist: derive from cost structure
-  if (!out.supplier_shortlist || out.supplier_shortlist.length === 0) {
-    out.supplier_shortlist = [
-      {
-        name: "CJ Dropshipping",
-        region: "China (Guangzhou)",
-        unit_price_usd: fmt(sup),
-        moq: "1 unit (dropship)",
-        lead_time: "7-15 days",
-        notes: "Fast processing, US/EU warehouses available",
-      },
-      {
-        name: "1688 Direct",
-        region: "China (Yiwu)",
-        unit_price_usd: fmt(sup * 0.85),
-        moq: "50 units",
-        lead_time: "15-30 days",
-        notes: "Best unit price for bulk — requires agent",
-      },
-      {
-        name: "Alibaba Verified",
-        region: "China (Fujian)",
-        unit_price_usd: fmt(sup * 0.92),
-        moq: "100 units",
-        lead_time: "20-40 days",
-        notes: "Trade assurance + quality inspection",
-      },
-    ];
-  }
-
-  // supplier_shortlist / financial_projection: only ever shown when the live
-  // research returned real suppliers and real projections — never templated.
-
-  // content_calendar
-  if (!out.content_calendar || out.content_calendar.length === 0) {
-    out.content_calendar = [
-      {
-        week: "Week 1",
-        theme: "Problem-aware hooks",
-        posts: [
-          "UGC 'day in the life' before shot",
-          "3-second problem demo",
-          "Behind-the-scenes unboxing",
-        ],
-      },
-      {
-        week: "Week 2",
-        theme: "Solution reveal",
-        posts: [
-          "Time-lapse using product",
-          "Testimonial from a beta buyer",
-          "Compare-to-alternative reel",
-        ],
-      },
-      {
-        week: "Week 3",
-        theme: "Social proof",
-        posts: ["5-star review carousel", "Customer transformation video", "Founder Q&A"],
-      },
-      {
-        week: "Week 4",
-        theme: "Offer + urgency",
-        posts: ["Flash-sale countdown", "Bundle showcase", "'Last chance' story"],
-      },
-    ];
-  }
-
-  // financial_projection: gerçek birim ekonomisine göre 3 aylık gerçekçi rampa
-  {
-    const ramp = [0.6, 1, 1.35];
-    out.financial_projection = ramp.map((k, i) => {
-      const units = Math.max(3, Math.round(re.monthly.units * k));
-      const ad = Math.round(re.monthly.ad_budget_usd * k);
-      const net = Math.round(
-        units * re.net_per_unit + re.monthly.organic_units * k * re.cac - re.monthly.overhead_usd,
-      );
-      return {
-        month: `Month ${i + 1}`,
-        units,
-        revenue_usd: fmt(units * re.retail),
-        ad_spend_usd: fmt(ad),
-        net_profit_usd: fmt(net),
-      };
-    });
-  }
 
   return out;
 }
