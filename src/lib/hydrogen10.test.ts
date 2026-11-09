@@ -167,6 +167,18 @@ describe("Hidrojen10 filtreleri", () => {
       "3",
     ]);
   });
+
+  it("yerel kuruşu USD fiyat gibi kullanmaz", () => {
+    const localOnly = product({
+      id: "4",
+      title: "D",
+      bestPriceUsd: null,
+      bestPriceLocalMinor: 3000,
+      bestPriceCurrency: "TRY",
+    });
+    expect(filterH10Products([localOnly], { maxPriceUsd: 50 })).toEqual([]);
+    expect(filterH10Products([localOnly], { minPriceUsd: 1 })).toEqual([]);
+  });
 });
 
 describe("Hidrojen10 para biçimleme", () => {

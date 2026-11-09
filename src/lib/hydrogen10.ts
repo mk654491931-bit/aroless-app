@@ -450,7 +450,9 @@ export const H10_DEFAULT_FILTERS: H10Filters = {
 };
 
 function priceOf(product: H10Product): number | null {
-  return product.bestPriceUsd ?? product.bestPriceLocalMinor;
+  // Filtreler USD cinsindendir. `bestPriceLocalMinor` yerel para biriminin
+  // kuruşudur; USD fiyat yoksa onu USD sanıp karşılaştırmayız.
+  return product.bestPriceUsd;
 }
 
 function freshnessOf(product: H10Product): number {
