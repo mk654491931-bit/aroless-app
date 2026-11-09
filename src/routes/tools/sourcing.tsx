@@ -6,6 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
+import { firstValidationError, requirePositive, requireText } from "@/lib/tool-validation";
+
+const SECTIONS = [
+  { id: "supplier-negotiator", label: "Tedarikçi Pazarlığı" },
+  { id: "offer-analyzer", label: "Teklif Analizi" },
+  { id: "legitimacy-detector", label: "Güvenilirlik" },
+  { id: "review-spec-sheet", label: "Yorum → Şartname" },
+  { id: "compliance-check", label: "Uyum & Gating" },
+] as const;
 
 export const Route = createFileRoute("/tools/sourcing")({
   ssr: false,
@@ -47,13 +56,22 @@ function SourcingHub() {
       emoji="📦"
       title="Sourcing & Factory Hub"
       subtitle="Fabrika pazarlığından tedarikçi doğrulamaya kadar tüm sourcing sürecini AI ile yönet."
+      sections={SECTIONS}
     >
       <ToolCard
+        id="supplier-negotiator"
         icon={Handshake}
         title="AI Supplier Negotiator"
         description="Hedef fiyat ve MOQ'ya göre İngilizce + Çince pazarlık mesajı üretir."
         runLabel="Generate Pitch (EN/CN)"
         onRun={() => callTool("supplier-negotiator", neg)}
+        validate={() =>
+          firstValidationError(
+            requireText(neg.product, "Ürün", 3),
+            requirePositive(neg.targetPrice, "Hedef birim fiyat"),
+            requirePositive(neg.moq, "Hedef MOQ"),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -91,11 +109,13 @@ function SourcingHub() {
       </ToolCard>
 
       <ToolCard
+        id="offer-analyzer"
         icon={FileSearch}
         title="Supplier Offer Analyzer"
         description="Tedarikçi e-postasını yapıştır; gizli navlun kalemleri ve Incoterm risklerini çıkarır."
         runLabel="Teklifi Denetle"
         onRun={() => callTool("offer-analyzer", { offer })}
+        validate={() => requireText(offer, "Teklif metni", 20)}
       >
         <Field label="Tedarikçi e-postası / teklif metni">
           <Textarea
@@ -108,11 +128,13 @@ function SourcingHub() {
       </ToolCard>
 
       <ToolCard
+        id="legitimacy-detector"
         icon={ShieldQuestion}
         title="Supplier Legitimacy Detector"
         description="Alibaba/1688 profil linkini analiz eder: gerçek fabrika mı, ticaret firması mı?"
         runLabel="Tedarikçiyi Doğrula"
         onRun={() => callTool("legitimacy-detector", legit)}
+        validate={() => requireText(legit.url, "Profil URL veya firma adı", 3)}
       >
         <Field label="Alibaba / 1688 profil URL veya firma adı">
           <Input
@@ -132,11 +154,18 @@ function SourcingHub() {
       </ToolCard>
 
       <ToolCard
+        id="review-spec-sheet"
         icon={ClipboardList}
         title="Negative Review ➔ Spec Sheet"
         description="Rakibin 1 yıldızlı yorumlarını fabrikaya gönderilecek üretim şartnamesine çevirir."
         runLabel="Spec Sheet Üret"
         onRun={() => callTool("review-spec-sheet", spec)}
+        validate={() =>
+          firstValidationError(
+            requireText(spec.product, "Ürün", 2),
+            requireText(spec.reviews, "1 yıldızlı yorumlar", 30),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -156,11 +185,13 @@ function SourcingHub() {
       </ToolCard>
 
       <ToolCard
+        id="compliance-check"
         icon={BadgeCheck}
         title="Pazaryeri Uyum & Gating Denetçisi"
         description="Satışa almadan önce kısıtlı kategori, gating ve zorunlu sertifika riskini (CPC/FCC/FDA/CE/GPSR) çıkarır."
         runLabel="Uyumu Denetle"
         onRun={() => callTool("compliance-check", comp)}
+        validate={() => requireText(comp.product, "Ürün", 3)}
       >
         <Field label="Ürün (malzeme ve kullanım amacıyla)">
           <Input

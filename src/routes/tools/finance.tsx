@@ -6,6 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
+import { firstValidationError, requirePositive, requireText } from "@/lib/tool-validation";
+import {
+  capitalPlan,
+  desiPlan,
+  landedCostPlan,
+  milestonePlan,
+  reverseCostPlan,
+  todayIso,
+} from "@/lib/tool-calculators";
+
+const SECTIONS = [
+  { id: "reverse-cost", label: "Tersine Maliyet" },
+  { id: "landed-cost", label: "Landed Cost" },
+  { id: "capital-planner", label: "Sermaye Planı" },
+  { id: "desi-optimizer", label: "Desi / Ambalaj" },
+  { id: "milestone-shield", label: "Ödeme Kalkanı" },
+  { id: "hs-classifier", label: "HS & Gümrük" },
+] as const;
 
 export const Route = createFileRoute("/tools/finance")({
   ssr: false,
@@ -51,7 +69,53 @@ function Stat({
 }
 
 const n = (v: string) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const usd = (v: number) => `$${(Math.round(v * 100) / 100).toLocaleString("en-US")}`;
+const usd = (v: number) =>
+  `$${(Math.round(v * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const dateLabel = (iso: string) =>
+  new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+function ModelBreakdown({
+  title,
+  source,
+  rows,
+}: {
+  title: string;
+  source: string;
+  rows: { label: string; amount: number; kind?: "fee" | "profit" }[];
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>{title}</span>
+        <span className="rounded border border-[var(--accent-active)]/25 px-1.5 py-0.5 text-[9px] text-[var(--accent-active)]">
+          model
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-baseline justify-between gap-2 text-[11px]">
+            <span className="truncate text-muted-foreground">{row.label}</span>
+            <span
+              className={`shrink-0 font-mono ${
+                row.kind === "profit" ? "text-[var(--profit)]" : "text-foreground/75"
+              }`}
+            >
+              {usd(row.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
+        Varsayım kaynağı: {source}. Hesaplanan model değeri; ölçülmüş teklif değil.
+      </p>
+    </div>
+  );
+}
 
 function FinanceHub() {
   const [rev, setRev] = useState({
@@ -97,30 +161,51 @@ function FinanceHub() {
     cost: "7.40",
   });
 
-  const maxCost = n(rev.retail) * (1 - n(rev.margin) / 100) - n(rev.retail) * 0.15 - 3.9;
-  const landedUnit =
-    n(land.qty) > 0
-      ? (n(land.unit) * n(land.qty) * (1 + n(land.duty) / 100) + n(land.freight) + n(land.extra)) /
-        n(land.qty)
-      : 0;
-  const minCapital = n(cap.units) * n(cap.unit) + n(cap.freight) + n(cap.ads) * n(cap.leadTime);
-  const stockoutDays = n(cap.velocity) > 0 ? Math.round(n(cap.units) / n(cap.velocity)) : 0;
-  const volumetric = (n(dim.l) * n(dim.w) * n(dim.h)) / 5000;
-  const billable = Math.max(volumetric, n(dim.weight));
-  const deposit = n(ms.amount) * 0.3;
+  const revPlan = reverseCostPlan({
+    retail: rev.retail,
+    marginPct: rev.margin,
+    channel: rev.channel,
+  });
+  const landPlan = landedCostPlan({
+    unit: land.unit,
+    qty: land.qty,
+    freight: land.freight,
+    dutyPct: land.duty,
+    extra: land.extra,
+  });
+  const capPlan = capitalPlan({
+    units: cap.units,
+    unit: cap.unit,
+    freight: cap.freight,
+    adsPerDay: cap.ads,
+    velocity: cap.velocity,
+    leadTime: cap.leadTime,
+    today: todayIso(),
+  });
+  const dimPlan = desiPlan({ l: dim.l, w: dim.w, h: dim.h, weight: dim.weight });
+  const msPlan = milestonePlan({ amount: ms.amount, leadTime: ms.leadTime });
 
   return (
     <HubShell
       emoji="💰"
       title="Financial & Cost Engine"
       subtitle="Depoziti göndermeden önce gerçek maliyeti, gereken sermayeyi ve ödeme riskini hesapla."
+      sections={SECTIONS}
     >
       <ToolCard
+        id="reverse-cost"
         icon={Calculator}
         title="Reverse Cost Engineer"
         description="Hedef satış fiyatı ve marjdan geriye doğru maksimum tedarikçi maliyetini bulur."
-        runLabel="Maks. Maliyeti Hesapla"
+        runLabel="AI ile Stratejiyi Derinleştir"
         onRun={() => callTool("reverse-cost", rev)}
+        validate={() =>
+          firstValidationError(
+            requireText(rev.product, "Ürün", 2),
+            requirePositive(rev.retail, "Hedef perakende fiyat"),
+            requirePositive(rev.margin, "Hedef marj"),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -151,22 +236,41 @@ function FinanceHub() {
             onChange={(e) => setRev({ ...rev, channel: e.target.value })}
           />
         </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Stat label="Kaba maks. COGS" value={usd(Math.max(maxCost, 0))} tone="profit" />
+        <div className="grid grid-cols-3 gap-2">
           <Stat
-            label="Tahmini kanal kesintisi"
-            value={usd(n(rev.retail) * 0.15 + 3.9)}
-            tone="warning"
+            label="Maks. COGS"
+            value={revPlan.feasible ? usd(revPlan.maxCogs) : "Ulaşılamaz"}
+            tone={revPlan.feasible ? "profit" : "warning"}
           />
+          <Stat label="Kanal kesintisi" value={usd(revPlan.fees)} tone="warning" />
+          <Stat label="Hedef net kâr" value={usd(revPlan.targetProfit)} tone="action" />
         </div>
+        <ModelBreakdown
+          title={`${revPlan.profile.label} maliyet dökümü`}
+          source={revPlan.profile.source}
+          rows={revPlan.breakdown}
+        />
+        {!revPlan.feasible && (
+          <p className="rounded-lg border border-[var(--warning)]/25 bg-[var(--warning)]/10 p-2 text-[11px] text-[var(--warning)]">
+            Bu fiyat/marj kombinasyonunda kanal kesintileri hedef kârı aşıyor. Fiyatı yükselt, marjı
+            düşür veya daha düşük komisyonlu kanalı seç.
+          </p>
+        )}
       </ToolCard>
 
       <ToolCard
+        id="landed-cost"
         icon={Ship}
         title="Landed Cost Calculator"
         description="EXW/FOB + navlun + gümrük ile gerçek kapıdan kapıya birim maliyet."
-        runLabel="Landed Cost Analizi"
+        runLabel="AI ile Maliyeti Düşür"
         onRun={() => callTool("landed-cost", land)}
+        validate={() =>
+          firstValidationError(
+            requirePositive(land.unit, "Birim maliyet"),
+            requirePositive(land.qty, "Adet"),
+          )
+        }
       >
         <div className="grid grid-cols-2 gap-3">
           <Field label="EXW/FOB birim ($)">
@@ -212,17 +316,31 @@ function FinanceHub() {
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Birim landed cost" value={usd(landedUnit)} tone="profit" />
-          <Stat label="Toplam yatırım" value={usd(landedUnit * n(land.qty))} />
+          <Stat label="Birim landed cost" value={usd(landPlan.perUnit)} tone="profit" />
+          <Stat label="Toplam yatırım" value={usd(landPlan.total)} />
+          <Stat label="Gümrük vergisi" value={usd(landPlan.duty)} tone="warning" />
+          <Stat label="Navlun / birim" value={usd(landPlan.freightPerUnit)} />
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          Mal bedeli {usd(landPlan.goods)} · navlun {usd(landPlan.freight)} · ek{" "}
+          {usd(landPlan.extra)}. Landed çarpanı: {landPlan.effectiveLandedMultiple}×.
+        </p>
       </ToolCard>
 
       <ToolCard
+        id="capital-planner"
         icon={Wallet}
         title="Minimum Capital Planner"
         description="Stok, navlun ve reklam bütçesini birlikte planla — stoksuz kalma riskini önle."
-        runLabel="Sermaye Planı Oluştur"
+        runLabel="AI ile Nakit Akışını Planla"
         onRun={() => callTool("capital-planner", cap)}
+        validate={() =>
+          firstValidationError(
+            requirePositive(cap.units, "İlk stok adedi"),
+            requirePositive(cap.unit, "Birim maliyet"),
+            requirePositive(cap.velocity, "Günlük satış"),
+          )
+        }
       >
         <div className="grid grid-cols-2 gap-3">
           <Field label="İlk stok adedi">
@@ -273,21 +391,39 @@ function FinanceHub() {
           />
         </Field>
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Min. sermaye" value={usd(minCapital)} tone="action" />
+          <Stat label="Min. sermaye" value={usd(capPlan.total)} tone="action" />
           <Stat
             label="Stok tükenme"
-            value={`${stockoutDays} gün`}
-            tone={stockoutDays < n(cap.leadTime) ? "warning" : "profit"}
+            value={`${capPlan.stockoutDays} gün`}
+            tone={capPlan.stockoutDays < n(cap.leadTime) ? "warning" : "profit"}
           />
+          <Stat
+            label="Sipariş tarihi"
+            value={capPlan.reorderInDays <= 0 ? "Bugün / gecikmiş" : dateLabel(capPlan.reorderDate)}
+            tone={capPlan.reorderInDays <= 0 ? "warning" : "neutral"}
+          />
+          <Stat label="Emniyet stoğu" value={`${capPlan.safetyStock} adet`} />
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          Stok {usd(capPlan.inventory)} · navlun {usd(capPlan.freight)} · tedarik süresi reklamı{" "}
+          {usd(capPlan.adsDuringLeadTime)}. Emniyet stoğu, tedarik süresi talebinin %20'si.
+        </p>
       </ToolCard>
 
       <ToolCard
+        id="desi-optimizer"
         icon={Boxes}
         title="Packaging & Desi Optimizer"
         description="Ölçüleri gir; bir alt FBA/kargo kademesine düşürecek ambalaj önerileri al."
-        runLabel="Ambalajı Optimize Et"
+        runLabel="AI ile Ambalajı Küçült"
         onRun={() => callTool("desi-optimizer", dim)}
+        validate={() =>
+          firstValidationError(
+            requirePositive(dim.l, "Uzunluk"),
+            requirePositive(dim.w, "Genişlik"),
+            requirePositive(dim.h, "Yükseklik"),
+          )
+        }
       >
         <div className="grid grid-cols-3 gap-3">
           <Field label="Uzunluk (cm)">
@@ -328,21 +464,29 @@ function FinanceHub() {
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Hacimsel ağırlık" value={`${volumetric.toFixed(2)} kg`} />
+          <Stat label="Hacimsel ağırlık" value={`${dimPlan.volumetricKg} kg`} />
           <Stat
             label="Ücretlendirilecek"
-            value={`${billable.toFixed(2)} kg`}
-            tone={billable > n(dim.weight) ? "warning" : "profit"}
+            value={`${dimPlan.billableKg} kg`}
+            tone={dimPlan.isVolumetric ? "warning" : "profit"}
           />
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          Formül: cm³ ÷ {dimPlan.divisor}.{" "}
+          {dimPlan.isVolumetric
+            ? "Hacim baskın; kutu küçültme doğrudan kargo kademesini düşürebilir."
+            : "Gerçek ağırlık baskın; kutu küçültmek tek başına kademe düşürmeyebilir."}
+        </p>
       </ToolCard>
 
       <ToolCard
+        id="milestone-shield"
         icon={ShieldCheck}
         title="Supplier Milestone Shield"
         description="30/70 ödeme planını görselleştirir ve kur riski uyarısı üretir."
-        runLabel="Ödeme Planını Koru"
+        runLabel="AI ile Ödeme Planını Koru"
         onRun={() => callTool("milestone-shield", ms)}
+        validate={() => requirePositive(ms.amount, "Sipariş tutarı")}
       >
         <div className="grid grid-cols-2 gap-3">
           <Field label="Sipariş tutarı ($)">
@@ -379,20 +523,20 @@ function FinanceHub() {
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
             <div>
-              <div className="font-semibold text-[var(--accent-active)]">%30 Depozito</div>
-              <div className="text-muted-foreground">Gün 0 · {usd(deposit)}</div>
+              <div className="font-semibold text-[var(--accent-active)]">
+                %{msPlan.depositPct} Depozito
+              </div>
+              <div className="text-muted-foreground">Gün 0 · {usd(msPlan.deposit)}</div>
             </div>
             <div>
               <div className="font-semibold text-[var(--warning)]">Üretim/QC</div>
-              <div className="text-muted-foreground">
-                Gün {Math.round(n(ms.leadTime) * 0.7)} · foto + rapor
-              </div>
+              <div className="text-muted-foreground">Gün {msPlan.qcDay} · foto + rapor</div>
             </div>
             <div className="text-right">
-              <div className="font-semibold text-[var(--profit)]">%70 Bakiye</div>
-              <div className="text-muted-foreground">
-                B/L öncesi · {usd(n(ms.amount) - deposit)}
+              <div className="font-semibold text-[var(--profit)]">
+                %{Math.round(100 - msPlan.depositPct)} Bakiye
               </div>
+              <div className="text-muted-foreground">B/L öncesi · {usd(msPlan.balance)}</div>
             </div>
           </div>
           <div className="mt-3 rounded-lg border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-2 text-[11px] text-[var(--warning)]">
@@ -403,11 +547,19 @@ function FinanceHub() {
       </ToolCard>
 
       <ToolCard
+        id="hs-classifier"
         icon={Landmark}
         title="HS Kodu & Gümrük Vergisi Bulucu"
         description="Ürünün HS/HTS kodunu, hedef pazar gümrük vergisini, VAT'ını ve zorunlu sertifikalarını çıkarır."
         runLabel="Kodu ve Vergiyi Çıkar"
         onRun={() => callTool("hs-classifier", hs)}
+        validate={() =>
+          firstValidationError(
+            requireText(hs.product, "Ürün", 3),
+            requireText(hs.material, "Malzeme", 2),
+            requireText(hs.destination, "Hedef pazar", 2),
+          )
+        }
       >
         <Field label="Ürün (mümkünse malzeme ve kullanım amacıyla)">
           <Input

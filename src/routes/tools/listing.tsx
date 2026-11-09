@@ -6,6 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
+import { firstValidationError, requirePositive, requireText } from "@/lib/tool-validation";
+
+const SECTIONS = [
+  { id: "listing-seo", label: "SEO Listing" },
+  { id: "listing-visual", label: "Görsel & A+" },
+  { id: "review-sentiment", label: "Yorum Sentiment" },
+  { id: "price-strategy", label: "Fiyat & Buy Box" },
+] as const;
 
 export const Route = createFileRoute("/tools/listing")({
   ssr: false,
@@ -45,13 +53,21 @@ function ListingHub() {
       emoji="📝"
       title="Listing & Conversion Studio"
       subtitle="Trafiği satışa çeviren katman: arama görünürlüğü, görsel hikâye, yorum sinyalleri ve fiyat konumlandırma."
+      sections={SECTIONS}
     >
       <ToolCard
+        id="listing-seo"
         icon={Tags}
         title="Listing SEO Optimizer"
         description="Başlık, bullet, arka plan anahtar kelimeleri ve açıklamayı kanala göre üretir."
         runLabel="Listing Üret"
         onRun={() => callTool("listing-seo", seo)}
+        validate={() =>
+          firstValidationError(
+            requireText(seo.product, "Ürün", 2),
+            requireText(seo.keywords, "Hedef anahtar kelimeler", 3),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -77,11 +93,18 @@ function ListingHub() {
       </ToolCard>
 
       <ToolCard
+        id="listing-visual"
         icon={ImagePlus}
         title="Görsel & A+ İçerik Brief"
         description="7 görsellik set + A+ modül planını, çekim talimatlarıyla birlikte hazırlar."
         runLabel="Brief Oluştur"
         onRun={() => callTool("listing-visual", img)}
+        validate={() =>
+          firstValidationError(
+            requireText(img.product, "Ürün", 2),
+            requireText(img.usp, "Öne çıkan fayda (USP)", 5),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -107,11 +130,18 @@ function ListingHub() {
       </ToolCard>
 
       <ToolCard
+        id="review-sentiment"
         icon={MessageSquareHeart}
         title="Yorum Sentiment Radarı"
         description="Rakip yorumlarından dönüşüm engellerini ve kullanılacak sosyal kanıt cümlelerini çıkarır."
         runLabel="Yorumları Analiz Et"
         onRun={() => callTool("review-sentiment", rev)}
+        validate={() =>
+          firstValidationError(
+            requireText(rev.product, "Ürün", 2),
+            requireText(rev.reviews, "Yorumlar", 30),
+          )
+        }
       >
         <Field label="Ürün">
           <Input
@@ -130,11 +160,18 @@ function ListingHub() {
       </ToolCard>
 
       <ToolCard
+        id="price-strategy"
         icon={LineChart}
         title="Fiyat & Buy Box Stratejisi"
         description="Rakip fiyatlarına göre kâr koruyan fiyat bandı, kupon ve bundle stratejisi."
         runLabel="Fiyat Stratejisi Üret"
         onRun={() => callTool("price-strategy", price)}
+        validate={() =>
+          firstValidationError(
+            requireText(price.product, "Ürün", 2),
+            requirePositive(price.cost, "Landed cost"),
+          )
+        }
       >
         <Field label="Ürün">
           <Input

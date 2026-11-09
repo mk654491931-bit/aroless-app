@@ -14,6 +14,7 @@ import {
 import { useEntitlements, FREE_ITEMS } from "@/hooks/use-entitlements";
 import { usePlanUsage } from "@/hooks/use-plan-usage";
 import { planLabelFor, usageLabelFor } from "@/lib/plan-usage";
+import { isSidebarItemActive } from "@/lib/sidebar-active";
 import {
   Package,
   Coins,
@@ -55,6 +56,8 @@ type Item = {
   key: string;
   title: string;
   url: string;
+  /** Aynı hub rotasındaki araç bölümü; sidebar tıklaması doğrudan oraya gider. */
+  hash?: string;
   icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -92,30 +95,35 @@ const GROUPS: {
         key: "negotiator",
         title: "AI Supplier Negotiator",
         url: "/tools/sourcing",
+        hash: "supplier-negotiator",
         icon: Handshake,
       },
       {
         key: "offer_analyzer",
         title: "Supplier Offer Analyzer",
         url: "/tools/sourcing",
+        hash: "offer-analyzer",
         icon: FileSearch,
       },
       {
         key: "legitimacy",
         title: "Legitimacy Detector",
         url: "/tools/sourcing",
+        hash: "legitimacy-detector",
         icon: ShieldQuestion,
       },
       {
         key: "spec_sheet",
         title: "Review ➔ Spec Sheet",
         url: "/tools/sourcing",
+        hash: "review-spec-sheet",
         icon: ClipboardList,
       },
       {
         key: "compliance_check",
         title: "Pazaryeri Uyum & Gating Denetçisi",
         url: "/tools/sourcing",
+        hash: "compliance-check",
         icon: BadgeCheck,
       },
     ],
@@ -131,21 +139,42 @@ const GROUPS: {
         key: "reverse_cost",
         title: "Reverse Cost Engineer",
         url: "/tools/finance",
+        hash: "reverse-cost",
         icon: Calculator,
       },
-      { key: "landed_cost", title: "Landed Cost Calculator", url: "/tools/finance", icon: Ship },
+      {
+        key: "landed_cost",
+        title: "Landed Cost Calculator",
+        url: "/tools/finance",
+        hash: "landed-cost",
+        icon: Ship,
+      },
       {
         key: "capital_planner",
         title: "Minimum Capital Planner",
         url: "/tools/finance",
+        hash: "capital-planner",
         icon: Wallet,
       },
-      { key: "desi", title: "Packaging & Desi Optimizer", url: "/tools/finance", icon: Boxes },
-      { key: "milestone", title: "Milestone Shield", url: "/tools/finance", icon: ShieldCheck },
+      {
+        key: "desi",
+        title: "Packaging & Desi Optimizer",
+        url: "/tools/finance",
+        hash: "desi-optimizer",
+        icon: Boxes,
+      },
+      {
+        key: "milestone",
+        title: "Milestone Shield",
+        url: "/tools/finance",
+        hash: "milestone-shield",
+        icon: ShieldCheck,
+      },
       {
         key: "hs_classifier",
         title: "HS Kodu & Gümrük Vergisi",
         url: "/tools/finance",
+        hash: "hs-classifier",
         icon: Landmark,
       },
     ],
@@ -157,15 +186,46 @@ const GROUPS: {
     emoji: "🚀",
     icon: Rocket,
     items: [
-      { key: "consensus", title: "Multi-AI Consensus Score", url: "/tools/growth", icon: Gauge },
-      { key: "bundle", title: "Bundle & AOV Booster", url: "/tools/growth", icon: PackagePlus },
-      { key: "lead_time", title: "Lead-Time Countdown", url: "/tools/growth", icon: CalendarClock },
-      { key: "arbitrage", title: "Arbitrage Matrix", url: "/tools/growth", icon: Globe2 },
-      { key: "ad_hooks", title: "Ad Hook Extractor", url: "/tools/growth", icon: Megaphone },
+      {
+        key: "consensus",
+        title: "Multi-AI Consensus Score",
+        url: "/tools/growth",
+        hash: "consensus",
+        icon: Gauge,
+      },
+      {
+        key: "bundle",
+        title: "Bundle & AOV Booster",
+        url: "/tools/growth",
+        hash: "bundle-booster",
+        icon: PackagePlus,
+      },
+      {
+        key: "lead_time",
+        title: "Lead-Time Countdown",
+        url: "/tools/growth",
+        hash: "lead-time",
+        icon: CalendarClock,
+      },
+      {
+        key: "arbitrage",
+        title: "Arbitrage Matrix",
+        url: "/tools/growth",
+        hash: "arbitrage-matrix",
+        icon: Globe2,
+      },
+      {
+        key: "ad_hooks",
+        title: "Ad Hook Extractor",
+        url: "/tools/growth",
+        hash: "ad-hook-extractor",
+        icon: Megaphone,
+      },
       {
         key: "competitor_intel",
         title: "Rakip İlan İstihbaratı",
         url: "/tools/growth",
+        hash: "competitor-intel",
         icon: Swords,
       },
     ],
@@ -177,18 +237,32 @@ const GROUPS: {
     emoji: "📝",
     icon: FileText,
     items: [
-      { key: "listing_seo", title: "Listing SEO Optimizer", url: "/tools/listing", icon: Tags },
-      { key: "listing_visual", title: "Görsel & A+ Brief", url: "/tools/listing", icon: ImagePlus },
+      {
+        key: "listing_seo",
+        title: "Listing SEO Optimizer",
+        url: "/tools/listing",
+        hash: "listing-seo",
+        icon: Tags,
+      },
+      {
+        key: "listing_visual",
+        title: "Görsel & A+ Brief",
+        url: "/tools/listing",
+        hash: "listing-visual",
+        icon: ImagePlus,
+      },
       {
         key: "review_sentiment",
         title: "Yorum Sentiment Radarı",
         url: "/tools/listing",
+        hash: "review-sentiment",
         icon: MessageSquareHeart,
       },
       {
         key: "price_strategy",
         title: "Fiyat & Buy Box Stratejisi",
         url: "/tools/listing",
+        hash: "price-strategy",
         icon: LineChart,
       },
     ],
@@ -220,7 +294,13 @@ const GROUPS: {
     items: [
       { key: "win_radar", title: "Kazanan Ürün Radarı", url: "/radar", icon: Radar },
       { key: "discovery", title: "Niş Tarama", url: "/discover", icon: Sparkles },
-      { key: "growth_plan", title: "90 Günlük Büyüme Planı", url: "/tools/growth", icon: Rocket },
+      {
+        key: "growth_plan",
+        title: "90 Günlük Büyüme Planı",
+        url: "/tools/growth",
+        hash: "growth-plan",
+        icon: Rocket,
+      },
       { key: "roi_panel", title: "Kâr / ROI Paneli", url: "/roi", icon: Wallet },
       { key: "store_audit", title: "AI Mağaza Denetçisi", url: "/audit", icon: ShieldCheck },
       { key: "creative_studio", title: "Reklam Kreatif Stüdyosu", url: "/studio", icon: Megaphone },
@@ -244,7 +324,10 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const iconOnly = collapsed && !isMobile;
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { pathname, hash } = useRouterState({
+    select: (s) => ({ pathname: s.location.pathname, hash: s.location.hash }),
+  });
+  const currentHash = hash.replace(/^#/, "");
   const { isPaid, isAdmin, tier } = useEntitlements();
   const planUsage = usePlanUsage();
 
@@ -274,7 +357,12 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
     }
     return (
       <SidebarMenuButton asChild tooltip={tooltip} isActive={isActive}>
-        <Link to={item.url} className="hover:bg-white/5">
+        <Link
+          to={item.url}
+          hash={item.hash}
+          className="hover:bg-white/5"
+          onClick={() => setOpenMobile(false)}
+        >
           <item.icon className="h-4 w-4 text-accent-active" />
           {!iconOnly && <span className="text-xs">{tooltip}</span>}
         </Link>
@@ -391,17 +479,17 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
                       { ...g.items[0], icon: g.icon },
                       t(`nav.${g.key}`, { defaultValue: g.label }),
                       true,
-                      pathname === g.items[0].url,
+                      isSidebarItemActive(g.items[0], { pathname, hash: currentHash }, 0),
                     )}
                   </SidebarMenuItem>
                 ) : (
-                  g.items.map((item) => (
+                  g.items.map((item, index) => (
                     <SidebarMenuItem key={item.title}>
                       {renderItem(
                         item,
                         t(`nav.${item.key}`, { defaultValue: item.title }),
                         iconOnly,
-                        pathname === item.url,
+                        isSidebarItemActive(item, { pathname, hash: currentHash }, index),
                       )}
                     </SidebarMenuItem>
                   ))

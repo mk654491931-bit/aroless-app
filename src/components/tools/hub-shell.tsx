@@ -1,19 +1,60 @@
-import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Cpu, Layers, ShieldCheck } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ArrowLeft, Cpu, Layers, ListTree, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
+export type HubSection = {
+  /** ToolCard'ın DOM id'si; sidebar hash'i ile aynı olmalı. */
+  id: string;
+  label: string;
+};
+
+function currentHash(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return decodeURIComponent(window.location.hash.replace(/^#/, ""));
+  } catch {
+    return window.location.hash.replace(/^#/, "");
+  }
+}
+
+/**
+ * MODÜL KABUĞU — her araç merkezinin ortak üst gezinmesi.
+ *
+ * `sections` verilirse sayfa içi "modül haritası" çıkar. Sidebar bağlantıları
+ * aynı id'lere `#hash` ile gider; böylece "Landed Cost" tıklayan kullanıcı
+ * modülün başına değil, doğrudan ilgili araca düşer.
+ */
 export function HubShell({
   emoji,
   title,
   subtitle,
+  sections,
   children,
 }: {
   emoji: string;
   title: string;
   subtitle: string;
+  sections?: readonly HubSection[];
   children: ReactNode;
 }) {
+  const routerHash = useRouterState({ select: (s) => s.location.hash });
+  const [activeId, setActiveId] = useState(() => currentHash() || sections?.[0]?.id || "");
+
+  useEffect(() => {
+    if (!sections?.length) return;
+    let id = routerHash.replace(/^#/, "");
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      /* bozuk yüzde kodlaması: ham kimliği kullan */
+    }
+    setActiveId(id || sections[0].id);
+    // Router hash-only geçişlerde de doğru karta kaydır; ilk yüklemede
+    // tarayıcı React'ten önce davrandığı için içerik sonrası bir kez daha.
+    if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView());
+  }, [routerHash, sections]);
+
   return (
     <div className="min-h-screen">
       <header className="glass top-light sticky top-0 z-40 border-b border-white/10">
@@ -52,6 +93,44 @@ export function HubShell({
             </span>
           </div>
         </section>
+
+        {sections && sections.length > 0 && (
+          <nav
+            aria-label="Modül araçları"
+            className="sticky top-[57px] z-30 mt-4 rounded-xl border border-white/10 bg-background/85 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md"
+          >
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              <span className="ms-1 me-1 hidden shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:inline-flex">
+                <ListTree size={12} /> Modül haritası
+              </span>
+              {sections.map((section, index) => {
+                const active = activeId === section.id;
+                return (
+                  <a
+                    key={section.id}
+                    href={`#${section.id}`}
+                    onClick={() => setActiveId(section.id)}
+                    aria-current={active ? "true" : undefined}
+                    className={`group inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors ${
+                      active
+                        ? "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/15 text-[var(--accent-active)]"
+                        : "border-transparent text-muted-foreground hover:border-white/10 hover:bg-white/5 hover:text-foreground"
+                    }`}
+                  >
+                    <span
+                      className={`font-mono text-[10px] ${
+                        active ? "opacity-80" : "opacity-45 group-hover:opacity-70"
+                      }`}
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {section.label}
+                  </a>
+                );
+              })}
+            </div>
+          </nav>
+        )}
 
         <div className="stagger-in mt-7 grid gap-4 lg:grid-cols-2">{children}</div>
       </main>

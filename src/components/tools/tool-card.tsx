@@ -1,5 +1,5 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Loader2,
   Sparkles,
@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouterState } from "@tanstack/react-router";
 import { apiFetch } from "@/lib/api-client";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { CreditCost } from "@/components/credit-cost";
@@ -44,7 +45,6 @@ export type ToolResult = {
   providers?: string[];
   confidence?: number;
 };
-
 export async function callTool(tool: string, input: Record<string, string>): Promise<ToolResult> {
   const res = await apiFetch("/api/public/tool", {
     method: "POST",
@@ -142,6 +142,8 @@ export function ToolCard({
   onRun,
   runLabel = "AI ile Analiz Et",
   disabled,
+  id,
+  validate,
   creditCost = 1,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -151,6 +153,10 @@ export function ToolCard({
   onRun: () => Promise<ToolResult>;
   runLabel?: string;
   disabled?: boolean;
+  /** Sidebar hash hedefi; modül haritası ve derin bağlantı bu id'yi kullanır. */
+  id?: string;
+  /** Boş/eksik girdiyi AI çağrısından ÖNCE yakalar; kredi harcanmaz. */
+  validate?: () => string | null;
   /**
    * Bu aracın jeton fiyatı (`credit-costs.ts` ile aynı sayı). Kullanıcı
    * düğmeye basmadan önce ne harcadığını görür; önbellekten dönen yanıt
@@ -163,9 +169,28 @@ export function ToolCard({
   const [result, setResult] = useState<ToolResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [highlighted, setHighlighted] = useState(false);
   const qc = useQueryClient();
+  const routerHash = useRouterState({ select: (s) => s.location.hash });
+  const validationHint = validate?.() ?? null;
+
+  useEffect(() => {
+    if (!id) return;
+    const raw = routerHash.replace(/^#/, "");
+    try {
+      setHighlighted(decodeURIComponent(raw) === id);
+    } catch {
+      setHighlighted(raw === id);
+    }
+  }, [id, routerHash]);
 
   const run = async () => {
+    const invalid = validate?.();
+    if (invalid) {
+      setError(invalid);
+      toast.error("Eksik bilgi", { description: invalid });
+      return;
+    }
     setLoading(true);
     setError(null);
     setStage(0);
@@ -203,190 +228,201 @@ export function ToolCard({
   };
 
   return (
-    <Card
-      className={`group premium-card live-card relative overflow-hidden border-transparent bg-transparent transition-colors ${loading ? "card-shimmer" : ""}`}
-    >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-active)]/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3">
-            <Icon size={15} className="text-[var(--accent-active)]" />
-          </span>
-          {title}
-          <CreditCost amount={creditCost} className="ms-auto" />
-        </CardTitle>
-        <CardDescription className="text-xs">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {children}
-        <Button
-          onClick={run}
-          disabled={loading || disabled}
-          className={`press w-full gap-2 ${loading || disabled ? "" : "edge-light"}`}
-        >
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-          {loading ? "Hibrit AI çalışıyor…" : runLabel}
-        </Button>
+    <section id={id} className="min-w-0 scroll-mt-32">
+      <Card
+        className={`group premium-card live-card relative overflow-hidden border-transparent bg-transparent transition-all ${loading ? "card-shimmer" : ""} ${
+          highlighted ? "ring-2 ring-[var(--accent-active)]/45" : ""
+        }`}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-active)]/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3">
+              <Icon size={15} className="text-[var(--accent-active)]" />
+            </span>
+            {title}
+            <CreditCost amount={creditCost} className="ms-auto" />
+          </CardTitle>
+          <CardDescription className="text-xs">{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {children}
+          {validationHint && !loading && (
+            <p className="rounded-lg border border-[var(--warning)]/20 bg-[var(--warning)]/5 px-2.5 py-2 text-[11px] text-[var(--warning)]/90">
+              {validationHint}
+            </p>
+          )}
+          <Button
+            onClick={run}
+            disabled={loading || disabled}
+            className={`press w-full gap-2 ${loading || disabled ? "" : "edge-light"}`}
+          >
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+            {loading ? "Hibrit AI çalışıyor…" : runLabel}
+          </Button>
 
-        {loading && (
-          <div className="animate-fade-in space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="flex items-center gap-2 text-[11px] text-[var(--accent-active)]">
-              <Cpu size={12} className="animate-pulse" /> {STAGES[stage]}
-            </div>
-            <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
-              <div className="h-full w-1/3 animate-[slide-in-right_1.6s_ease-in-out_infinite] rounded-full bg-[var(--accent-active)]/70" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-10 rounded-lg border border-white/5 bg-white/5"
-                  style={{ opacity: 0.5 + (i % 2) * 0.2 }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-start gap-2 rounded-lg border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-2.5 text-xs text-[var(--warning)]">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}
-          </div>
-        )}
-
-        {result && !loading && (
-          <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                {result.verdict && (
-                  <Badge className="mb-1.5 border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 text-[10px] text-[var(--accent-active)]">
-                    {result.verdict}
-                  </Badge>
-                )}
-                {result.headline && (
-                  <p className="text-sm font-semibold leading-snug">{result.headline}</p>
-                )}
+          {loading && (
+            <div className="animate-fade-in space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2 text-[11px] text-[var(--accent-active)]">
+                <Cpu size={12} className="animate-pulse" /> {STAGES[stage]}
               </div>
-              {(result.score ?? 0) > 0 && <ScoreRing value={result.score ?? 0} label="skor" />}
-            </div>
-
-            {result.metrics.length > 0 && (
+              <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
+                <div className="h-full w-1/3 animate-[slide-in-right_1.6s_ease-in-out_infinite] rounded-full bg-[var(--accent-active)]/70" />
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                {result.metrics.map((m, i) => (
+                {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m.tone ?? "neutral"]}`}
-                  >
-                    <div className="text-[10px] uppercase tracking-wider opacity-70">{m.label}</div>
-                    <div className="mt-0.5 text-sm font-bold">{m.value}</div>
-                  </div>
+                    className="h-10 rounded-lg border border-white/5 bg-white/5"
+                    style={{ opacity: 0.5 + (i % 2) * 0.2 }}
+                  />
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {result.table && result.table.rows.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border border-white/10">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-white/10 hover:bg-transparent">
-                      {result.table.columns.map((c, i) => (
-                        <TableHead key={i} className="text-[11px] whitespace-nowrap">
-                          {c}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.table.rows.map((r, i) => (
-                      <TableRow key={i} className="border-white/5">
-                        {r.map((cell, j) => (
-                          <TableCell key={j} className="text-xs">
-                            {cell}
-                          </TableCell>
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-2.5 text-xs text-[var(--warning)]">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}
+            </div>
+          )}
+
+          {result && !loading && (
+            <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {result.verdict && (
+                    <Badge className="mb-1.5 border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 text-[10px] text-[var(--accent-active)]">
+                      {result.verdict}
+                    </Badge>
+                  )}
+                  {result.headline && (
+                    <p className="text-sm font-semibold leading-snug">{result.headline}</p>
+                  )}
+                </div>
+                {(result.score ?? 0) > 0 && <ScoreRing value={result.score ?? 0} label="skor" />}
+              </div>
+
+              {result.metrics.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {result.metrics.map((m, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-lg border p-2 transition-transform hover:scale-[1.02] ${toneClass[m.tone ?? "neutral"]}`}
+                    >
+                      <div className="text-[10px] uppercase tracking-wider opacity-70">
+                        {m.label}
+                      </div>
+                      <div className="mt-0.5 text-sm font-bold">{m.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result.table && result.table.rows.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-white/10">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10 hover:bg-transparent">
+                        {result.table.columns.map((c, i) => (
+                          <TableHead key={i} className="text-[11px] whitespace-nowrap">
+                            {c}
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {result.bullets.length > 0 && (
-              <ul className="space-y-1.5">
-                {result.bullets.map((b, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-muted-foreground">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--accent-active)]" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <ListBlock
-              icon={ShieldAlert}
-              title="Riskler"
-              items={result.risks ?? []}
-              tone="warning"
-            />
-            <ListBlock
-              icon={ListChecks}
-              title="Aksiyon planı"
-              items={result.actions ?? []}
-              tone="profit"
-            />
-            <ListBlock
-              icon={Info}
-              title="Varsayımlar"
-              items={result.assumptions ?? []}
-              tone="action"
-            />
-
-            {result.document && (
-              <div className="space-y-2">
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-[11px] leading-relaxed">
-                  {result.document}
-                </pre>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" className="gap-1.5" onClick={copyDoc}>
-                    {copied ? <Check size={13} /> : <Copy size={13} />} Kopyala
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={download}>
-                    İndir
-                  </Button>
+                    </TableHeader>
+                    <TableBody>
+                      {result.table.rows.map((r, i) => (
+                        <TableRow key={i} className="border-white/5">
+                          {r.map((cell, j) => (
+                            <TableCell key={j} className="text-xs">
+                              {cell}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
-              {(result.providers ?? []).map((p) => (
+              {result.bullets.length > 0 && (
+                <ul className="space-y-1.5">
+                  {result.bullets.map((b, i) => (
+                    <li key={i} className="flex gap-2 text-xs text-muted-foreground">
+                      <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--accent-active)]" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <ListBlock
+                icon={ShieldAlert}
+                title="Riskler"
+                items={result.risks ?? []}
+                tone="warning"
+              />
+              <ListBlock
+                icon={ListChecks}
+                title="Aksiyon planı"
+                items={result.actions ?? []}
+                tone="profit"
+              />
+              <ListBlock
+                icon={Info}
+                title="Varsayımlar"
+                items={result.assumptions ?? []}
+                tone="action"
+              />
+
+              {result.document && (
+                <div className="space-y-2">
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-[11px] leading-relaxed">
+                    {result.document}
+                  </pre>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" className="gap-1.5" onClick={copyDoc}>
+                      {copied ? <Check size={13} /> : <Copy size={13} />} Kopyala
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={download}>
+                      İndir
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-2">
+                {(result.providers ?? []).map((p) => (
+                  <Badge
+                    key={p}
+                    variant="outline"
+                    className="border-white/10 text-[10px] text-muted-foreground"
+                  >
+                    <Cpu size={10} className="mr-1" /> {p}
+                  </Badge>
+                ))}
                 <Badge
-                  key={p}
                   variant="outline"
                   className="border-white/10 text-[10px] text-muted-foreground"
                 >
-                  <Cpu size={10} className="mr-1" /> {p}
+                  {result.provider}
                 </Badge>
-              ))}
-              <Badge
-                variant="outline"
-                className="border-white/10 text-[10px] text-muted-foreground"
-              >
-                {result.provider}
-              </Badge>
-              {typeof result.confidence === "number" && result.confidence > 0 && (
-                <Badge
-                  variant="outline"
-                  className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
-                >
-                  <TrendingUp size={10} className="mr-1" /> güven %{result.confidence}
-                </Badge>
-              )}
+                {typeof result.confidence === "number" && result.confidence > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="border-[var(--profit)]/30 text-[10px] text-[var(--profit)]"
+                  >
+                    <TrendingUp size={10} className="mr-1" /> güven %{result.confidence}
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        <AiDisclaimer />
-      </CardContent>
-    </Card>
+          )}
+          <AiDisclaimer />
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
