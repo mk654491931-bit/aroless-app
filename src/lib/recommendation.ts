@@ -55,6 +55,16 @@ export function enrichProduct(p: WinningProduct): EnrichedScores {
   // hattın her ürünü uydurma %0 marj yüzünden kırmızı "Avoid" rozeti alıyordu.
   if (measuredMargin === null && recommendation === "Avoid") recommendation = "Watch";
 
+  // TEK KARAR KURALI: `winner_score` varsa öneri onunla AYNI eşikleri
+  // kullanmalı. Ölçülen çelişki (kullanıcı ekran görüntüsü): aynı kartta
+  // "Kazan" rozeti ile "Uzak Dur · Winner 48/100" yan yana görünüyordu; biri
+  // fırsat modeline, diğeri ağırlıklı kanıt puanına bakıyordu. İki ayrı karar
+  // aynı ürün için aynı anda gösterilemez. Puan varsa tek otorite odur:
+  // >=70 Test Et, >=50 Daha Fazla Doğrula, <50 Uzak Dur.
+  if (typeof p.winner_score === "number" && Number.isFinite(p.winner_score)) {
+    recommendation = p.winner_score >= 70 ? "Launch" : p.winner_score >= 50 ? "Watch" : "Avoid";
+  }
+
   // Gerçek dünya modeli: reklam bütçesiyle sınırlı hacim, gerçek komisyon/CAC/iade.
   //
   // KAPI: maliyet girdisi hiç yoksa model ÇALIŞTIRILMAZ. `realEconomics`

@@ -31,7 +31,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { marginLabel, measuredMoney } from "@/lib/economics-evidence";
+import { marginLabel, measuredGrossMarginPct, measuredMoney } from "@/lib/economics-evidence";
+import { supplierMatchKind } from "@/lib/supplier-economics";
 import { num } from "@/lib/deep-dive-complete";
 import {
   CheckItem,
@@ -148,6 +149,61 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
   }, [p]);
   const completed = planIds.filter((id) => done[id]).length;
 
+  // ÖLÇÜLMÜŞ TEDARİK KANITI — "Tek bakışta" paneli eskiden yalnız modelin
+  // `supplier_shortlist` alanına bakıyordu. Ölçümlü hatta o alan HİÇ
+  // doldurulmuyor; sonuç: kanıt varken bile "Tedarik kaynağı Ölçülmedi"
+  // yazıyordu. Aşağıdaki değerler doğrudan `supplier_evidence`ten gelir.
+  const supplier = p.supplier_evidence;
+  const supplierKind = supplier ? supplierMatchKind(supplier) : null;
+  const supplierMatched = supplierKind === "product";
+  const hasSupplierEvidence = Boolean(supplier && supplier.samples > 0);
+  const supplierBand =
+    supplier && supplier.supplierLowUsd !== null && supplier.supplierHighUsd !== null
+      ? supplier.supplierHighUsd > supplier.supplierLowUsd
+        ? `$${supplier.supplierLowUsd.toFixed(2)} – $${supplier.supplierHighUsd.toFixed(2)}`
+        : `$${supplier.supplierLowUsd.toFixed(2)}`
+      : null;
+  const supplierName = hasSupplierEvidence
+    ? supplierMatched
+      ? supplier?.store || "Ölçülen toptan teklif"
+      : "Niş bandı (ürün eşleşmedi)"
+    : (p.supplier_shortlist?.[0]?.name ?? "Ölçülmedi");
+  const supplierSub = hasSupplierEvidence
+    ? [
+        supplierMatched && supplier?.shipFrom ? `Kargo çıkışı ${supplier.shipFrom}` : "",
+        `${supplier?.samples ?? 0} toptan teklif`,
+        supplierMatched ? "birebir ürün" : "aynı niş",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : (p.supplier_shortlist?.[0]?.region ?? p.sourcing?.shipping_method ?? "Kaynak doğrulamadı");
+  const deliveryMain =
+    p.sourcing?.lead_time_days || p.supplier_shortlist?.[0]?.lead_time
+      ? trDuration(p.sourcing?.lead_time_days ?? p.supplier_shortlist?.[0]?.lead_time)
+      : supplier?.shipFrom
+        ? `Kargo çıkışı: ${supplier.shipFrom}`
+        : "Kaynakta yok";
+  const deliverySub = p.sourcing?.shipping_method
+    ? `${p.sourcing.shipping_method} · ölçüldü`
+    : supplier?.shipFrom
+      ? "Süre kaynakta yayınlanmıyor"
+      : "Teslimat süresi ölçülmedi";
+  const channel = p.platform_fit?.[0];
+  const sellUsd = measuredMoney(p.selling_price_usd);
+  const supplierCostUsd =
+    measuredMoney(p.cost_breakdown?.supplier_cost) ?? measuredMoney(p.supplier_price_usd);
+  const grossProfitUsd =
+    sellUsd !== null && supplierCostUsd !== null && sellUsd > supplierCostUsd
+      ? Math.round((sellUsd - supplierCostUsd) * 100) / 100
+      : measuredMoney(p.fee_budget_usd);
+  const netProfitUsd = measuredMoney(p.cost_breakdown?.net_profit);
+  const hasNetProfit = netProfitUsd !== null;
+  const grossMarginPct =
+    measuredGrossMarginPct(p) ??
+    (sellUsd !== null && supplierCostUsd !== null && sellUsd > supplierCostUsd
+      ? Math.round(((sellUsd - supplierCostUsd) / sellUsd) * 1000) / 10
+      : null);
+
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_255)]">
@@ -220,35 +276,39 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-300/90">
               <Factory size={10} /> Tedarik kaynağı
             </div>
-            <div className="mt-1 font-semibold">
-              {p.supplier_shortlist?.[0]?.name ?? "Ölçülmedi"}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              {p.supplier_shortlist?.[0]?.region ??
-                p.sourcing?.shipping_method ??
-                "Kaynak doğrulamadı"}
-            </div>
+            <div className="mt-1 font-semibold">{supplierName}</div>
+            <div className="text-[10px] text-muted-foreground">{supplierSub}</div>
+            {supplierBand && (
+              <div className="mt-0.5 text-[10px] text-emerald-300/90">
+                {supplierMatched ? "Toptan bandı" : "Niş bandı"}: {supplierBand}
+              </div>
+            )}
+            {supplier?.url && supplierMatched && (
+              <a
+                href={supplier.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-[10px] text-emerald-300 hover:underline"
+              >
+                Teklifi aç <ExternalLink size={9} />
+              </a>
+            )}
           </div>
           <div className="rounded-md border border-sky-500/30 bg-sky-500/[0.06] p-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300/90">
               <Truck size={10} /> Teslimat
             </div>
-            <div className="mt-1 font-semibold">
-              {p.sourcing?.lead_time_days || p.supplier_shortlist?.[0]?.lead_time
-                ? trDuration(p.sourcing?.lead_time_days ?? p.supplier_shortlist?.[0]?.lead_time)
-                : "Ölçülmedi"}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              {p.sourcing?.shipping_method ?? "Ölçülmedi"}
-            </div>
+            <div className="mt-1 font-semibold">{deliveryMain}</div>
+            <div className="text-[10px] text-muted-foreground">{deliverySub}</div>
           </div>
           <div className="rounded-md border border-violet-500/30 bg-violet-500/[0.06] p-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300/90">
               <Store size={10} /> En iyi kanal
             </div>
-            <div className="mt-1 font-semibold">{p.platform_fit?.[0] ?? "Ölçülmedi"}</div>
+            <div className="mt-1 font-semibold">{channel ?? "Ölçülmedi"}</div>
             <div className="text-[10px] text-muted-foreground">
-              {(p.platform_fit ?? []).slice(1).join(" · ") || "Kaynak doğrulamadı"}
+              {(p.platform_fit ?? []).slice(1).join(" · ") ||
+                (channel ? "Ölçülen satış kaynağı" : "Kaynak doğrulamadı")}
             </div>
           </div>
           <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2">
@@ -256,15 +316,22 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <DollarSign size={10} /> Adet başı kâr
             </div>
             <div className="mt-1 font-semibold text-emerald-300">
-              {measuredMoney(p.cost_breakdown?.net_profit) === null
-                ? "Ölçülmedi"
-                : p.cost_breakdown?.net_profit}
+              {hasNetProfit
+                ? `$${netProfitUsd!.toFixed(2)}`
+                : grossProfitUsd !== null
+                  ? `$${grossProfitUsd.toFixed(2)}`
+                  : "Ölçülmedi"}
             </div>
             {/* Ölçülmemiş marj "%0" DEĞİLDİR: brütse açıkça "brüt" etiketiyle,
                 hiç ölçülmediyse "Ölçülmedi" gösterilir (0 ile 97'nin çelişmesi
-                buradan geliyordu). */}
+                buradan geliyordu). Net kâr yoksa brüt kâr gösterilir ve etiketi
+                bunu saklamaz. */}
             <div className="text-[10px] text-muted-foreground">
-              Marj {marginLabel(p, "Ölçülmedi")}
+              {hasNetProfit
+                ? `Net marj ${marginLabel(p, "Ölçülmedi")}`
+                : grossProfitUsd !== null && grossMarginPct !== null
+                  ? `Brüt marj %${grossMarginPct}`
+                  : "Marj ölçülmedi"}
             </div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
@@ -299,10 +366,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Package size={10} /> Tedarik maliyeti
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.supplier_cost) === null &&
-                  measuredMoney(p.supplier_price_usd) === null
-                    ? "Ölçülmedi"
-                    : (p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd)}
+                  {supplierCostUsd !== null
+                    ? `$${supplierCostUsd.toFixed(2)}`
+                    : hasSupplierEvidence
+                      ? "Ürün eşleşmedi"
+                      : "Ölçülmedi"}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -310,9 +378,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Truck size={10} /> Kargo
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.shipping_cost) === null
-                    ? "Ölçülmedi"
-                    : p.cost_breakdown?.shipping_cost}
+                  {measuredMoney(p.cost_breakdown?.shipping_cost) === null ? (
+                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
+                  ) : (
+                    p.cost_breakdown?.shipping_cost
+                  )}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -320,9 +390,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Store size={10} /> Platform komisyonu
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.platform_fee) === null
-                    ? "Ölçülmedi"
-                    : p.cost_breakdown?.platform_fee}
+                  {measuredMoney(p.cost_breakdown?.platform_fee) === null ? (
+                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
+                  ) : (
+                    p.cost_breakdown?.platform_fee
+                  )}
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -330,9 +402,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Clapperboard size={10} /> Reklam gideri / CAC
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.ad_spend) === null
-                    ? "Ölçülmedi"
-                    : p.cost_breakdown?.ad_spend}
+                  {measuredMoney(p.cost_breakdown?.ad_spend) === null ? (
+                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
+                  ) : (
+                    p.cost_breakdown?.ad_spend
+                  )}
                 </td>
               </tr>
               <tr className="border-b border-white/5 bg-white/[0.02]">
@@ -341,16 +415,29 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 </td>
                 <td className="px-2 py-1.5 text-right font-semibold">{p.selling_price_usd}</td>
               </tr>
+              {grossProfitUsd !== null && !hasNetProfit && (
+                <tr className="border-b border-white/5">
+                  <td className="px-2 py-1.5 font-semibold text-emerald-300 flex items-center gap-1.5">
+                    <DollarSign size={10} /> Brüt kâr / adet
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-semibold text-emerald-300">
+                    ${grossProfitUsd.toFixed(2)}{" "}
+                    <span className="text-[10px] font-normal opacity-80">
+                      ({marginLabel(p, "Ölçülmedi")})
+                    </span>
+                  </td>
+                </tr>
+              )}
               <tr className="bg-emerald-500/[0.06]">
                 <td className="px-2 py-1.5 font-semibold text-emerald-300 flex items-center gap-1.5">
                   <DollarSign size={10} /> Net kâr / adet
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-emerald-300">
-                  {measuredMoney(p.cost_breakdown?.net_profit) === null
-                    ? "Ölçülmedi"
-                    : p.cost_breakdown?.net_profit}{" "}
+                  {hasNetProfit ? `$${netProfitUsd!.toFixed(2)}` : "Ölçülmedi"}{" "}
                   <span className="text-[10px] font-normal opacity-80">
-                    ({marginLabel(p, "Ölçülmedi")})
+                    (
+                    {hasNetProfit ? marginLabel(p, "Ölçülmedi") : "kargo/komisyon/CAC kaynakta yok"}
+                    )
                   </span>
                 </td>
               </tr>

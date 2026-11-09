@@ -56,11 +56,7 @@ import {
 import { useMoney } from "@/lib/currency";
 import { netMarginView } from "../utils/export";
 import { useCardProductImage } from "../utils/product-image";
-import {
-  estimateBand,
-  formatIntegerBand,
-  formatMoneyBand,
-} from "../utils/ranges";
+import { estimateBand, formatIntegerBand, formatMoneyBand } from "../utils/ranges";
 
 /** Ölçülmemiş sayıyı "0,00" gibi gösterilemez — "—" yazılır. */
 function moneyOrDash(
@@ -156,9 +152,7 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
             <span className="text-muted-foreground flex items-center gap-1">
               <Radar size={10} /> En çok satan teklif
             </span>
-            <span className="text-right font-semibold">
-              {sold.toLocaleString("tr-TR")} adet
-            </span>
+            <span className="text-right font-semibold">{sold.toLocaleString("tr-TR")} adet</span>
           </>
         )}
 
@@ -901,8 +895,9 @@ export function ProductCard({
               <MetricPill
                 label="Revenue"
                 value={
-                  formatMoneyBand(revenueBand, (n) => money(n, { compact: true, showUsd: false })) ??
-                  NOT_MEASURED
+                  formatMoneyBand(revenueBand, (n) =>
+                    money(n, { compact: true, showUsd: false }),
+                  ) ?? NOT_MEASURED
                 }
                 title="Model tahmini ciro aralığı (ölçülen satış fiyatı × tahmini adet)"
               />
@@ -922,7 +917,7 @@ export function ProductCard({
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/5 border border-white/10 p-2">
           <div className="text-[10px] uppercase text-muted-foreground">
-            {supplierMatchKind(p.supplier_evidence) === "niche" ? "Tedarik bandı" : "Supplier"}
+            {supplierMatchKind(p.supplier_evidence) === "niche" ? "Niş bandı" : "Supplier"}
           </div>
           <div className="text-xs font-semibold mt-0.5">
             {(() => {
@@ -944,6 +939,14 @@ export function ProductCard({
               return moneyOrDash(p.supplier_price_usd, money);
             })()}
           </div>
+          {supplierMatchKind(p.supplier_evidence) === "niche" && (
+            <div
+              className="text-[9px] text-muted-foreground"
+              title="Birebir ürün teklifi yok; bant aynı nişteki ölçülmüş tekliflerden. Bu banddan marj hesaplanmaz."
+            >
+              ürün eşleşmedi
+            </div>
+          )}
           {currency !== "USD" && measuredMoney(p.supplier_price_usd) !== null && (
             <div className="text-[9px] text-muted-foreground">{p.supplier_price_usd}</div>
           )}
@@ -965,11 +968,12 @@ export function ProductCard({
             // etiketiyle gösteriyoruz. İkisi de yoksa hücreyi boş bırakıyoruz.
             const gross = measuredGrossMarginPct(p);
             if (gross === null) {
+              const niche = supplierMatchKind(p.supplier_evidence) === "niche";
               return (
                 <div className="rounded-lg bg-white/05 border border-white/10 p-2">
                   <div className="text-[10px] uppercase text-muted-foreground">Margin</div>
                   <div className="text-xs font-semibold mt-0.5 text-muted-foreground">
-                    {NOT_MEASURED}
+                    {niche ? "Ürün eşleşmedi" : NOT_MEASURED}
                   </div>
                 </div>
               );

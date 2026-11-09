@@ -87,6 +87,17 @@ export type MarginEvidence = {
 export const SUPPLIER_MIN_RELEVANCE = 0.66;
 
 /**
+ * Toptan birim fiyatın perakendeye göre ALT sınırı.
+ *
+ * Ölçülen hata: aynı başlık ailesindeki tekli parçalar (1,09 $) tam set
+ * ürünün (45,99 $) tedarikçisi sanılıyor ve %97,6 brüt marj üretiyordu.
+ * %8, normal bir fiziksel ürünün toptan/perakende oranının altındadır;
+ * altında kalan teklif farklı ürün/adedi işaret eder. Bu bir TAHMİN değil,
+ * iki ölçülmüş fiyatın tutarlılık kapısıdır — eşleşme yoksa marj da yoktur.
+ */
+export const SUPPLIER_MIN_PRICE_RATIO = 0.08;
+
+/**
  * NİŞ SEVİYESİ eşleşmesinin sabit alakalılığı (birebir ürün eşleşmesi DEĞİL).
  *
  * NEDEN VAR (ölçülen kayıp, 2026-10-14): tedarik teklifleri AliExpress'ten
@@ -223,6 +234,22 @@ const GENERIC_WORDS = new Set([
   "store",
   "shop",
   "item",
+  // OTOMOTİV BAŞLIKLARI: "Full Set Universal Front Seat Covers" gibi
+  // başlıklarda bu sıfatlar SONDA olduğu için `keyTokens` ürün adını değil
+  // "front/back/universal" gibi her ilanda geçen kelimeleri seçiyordu.
+  // Ölçülen sonuç: 45,99 dolarlık tam set koltuğun tedarikçisi 1,09 dolarlık
+  // tekli bir parça sanılıyordu. Bu kelimeler hâlâ eşleştirmede kullanılır
+  // ama "ayırt edici üç kelime"yi kaplamaz.
+  "front",
+  "rear",
+  "back",
+  "universal",
+  "full",
+  "complete",
+  "quality",
+  "accessories",
+  "accessory",
+  "interior",
 ]);
 
 /**
@@ -479,7 +506,15 @@ function priceSane(candidate: SupplierCandidateLike, offer: SupplierOfferLike): 
   const retail = measuredMoney(candidate.priceUsd);
   const unit = measuredMoney(offer.unitPriceUsd);
   if (retail === null || unit === null) return true; // karşılaştıracak ölçüm yok
-  return unit < retail;
+  // ALT SINIR — ölçülen "absürt marj" kapısı (2026-11-09).
+  //
+  // Kullanıcı ekran görüntüsünde 45,99 dolarlık tam set oto koltuk kılıfının
+  // "toptan fiyatı" 1,09 dolar, brüt marjı %97,6 görünüyordu. İki sayı da
+  // sayfadan okunmuştu ama AYNI ÜRÜN DEĞİLDİ: 1,09 dolar tekli bir parçanın
+  // fiyatıdır. Yalnız üst sınır (toptan < perakende) bu tuzağı yakalamıyor.
+  // Perakendenin %8'inin altındaki birim fiyat, bu ürünün toptan teklifi
+  // olarak kullanılmaz; kanıt uydurmak yerine ürün eşleşmesi boş kalır.
+  return unit < retail && unit >= retail * SUPPLIER_MIN_PRICE_RATIO;
 }
 
 /* ------------------------------------------------------------------ */
@@ -586,6 +621,17 @@ export function specMap(title: string): SpecMap {
  * çifti kullanılır — çok paketli başlıklarda birden çok sayı olabilir.
  */
 export function specConflict(a: string, b: string, tolerance = SPEC_CONFLICT_TOLERANCE): boolean {
+  // SET / TEKLİ PARÇA ÇELİŞMESİ — sayısal ölçü kapısının görmediği durum.
+  //
+  // "Full Set" ve "7'li Set" başlıklarında adet sayısı yazmadığı için
+  // `specMap` bir çelişki görmüyordu; 1 adetlik teklif tam setin tedarikçisi
+  // sayılıyordu. Bu kapı yalnız AÇIKÇA çok parçalı ürün ile AÇIKÇA tekli
+  // teklifi ayırır; belirsiz başlıklarda karar vermez (uydurmaz).
+  const multi =
+    /(full\s+set|complete\s+set|set\s+of\s+\d+|takim|takım|\d+\s*(?:'|’)?\s*(?:li|lı|lu|lü)\s*set)/i;
+  const single = /\b(?:1\s*(?:pc|pcs|piece|adet)|single|one\s+piece|tekli)\b/i;
+  if ((multi.test(a) && single.test(b)) || (multi.test(b) && single.test(a))) return true;
+
   const left = specMap(a);
   const right = specMap(b);
   for (const kind of Object.keys(left) as Array<keyof SpecMap>) {
@@ -809,8 +855,7 @@ export function buildEconomics(
       sellUsd: candidate.priceUsd,
       // NİŞ BANDI MARJ ÜRETMEZ: `supplierPriceUsd` yalnız birebir ürün
       // eşleşmesinde doludur; yine de niyet açıkça burada kilitlenir.
-      supplierUsd:
-        supplierMatchKind(supplier) === "product" ? supplier.supplierPriceUsd : null,
+      supplierUsd: supplierMatchKind(supplier) === "product" ? supplier.supplierPriceUsd : null,
     }),
   };
 }

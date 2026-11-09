@@ -70,6 +70,15 @@ describe("enrichProduct", () => {
     expect(enriched.recommendation).toBe("Launch");
   });
 
+  it("winner_score varsa öneriyi onunla hizalar (Kazan/Uzak Dur çelişkisi olmaz)", () => {
+    // Aynı kartta "Kazan" rozeti ile "Uzak Dur · Winner 48/100" görünüyordu;
+    // ikisi ayrı eşik kullanıyordu. Puan varsa tek karar kuralı geçerlidir.
+    const base = makeProduct({ trend_score: 95, profit_margin_pct: 60, competition_level: "Low" });
+    expect(enrichProduct({ ...base, winner_score: 48 }).recommendation).toBe("Avoid");
+    expect(enrichProduct({ ...base, winner_score: 55 }).recommendation).toBe("Watch");
+    expect(enrichProduct({ ...base, winner_score: 72 }).recommendation).toBe("Launch");
+  });
+
   it("gives Avoid recommendation for high competition + low margin", () => {
     const product = makeProduct({
       trend_score: 30,

@@ -233,6 +233,43 @@ const PRODUCT_WORD_EN: Record<string, string> = {
   dayanikli: "durable",
   profesyonel: "professional",
   ayarlanabilir: "adjustable",
+  // OTOMOTİV — ölçülen boşluk (2026-11-09, kullanıcı ekran görüntüleri):
+  // "oto koltuk kılıfı" sözlükte hiç yoktu; İngilizce toptan araması
+  // "oto koltuk kilifi" olarak gidiyor ve AliExpress 1–6 dolarlık tekli/
+  // alakasız parçalar döndürüyordu. Bu yüzden kartta 45,99 dolarlık bir
+  // ürünün "toptan fiyatı" 1,09 dolar, brüt marjı %97,6 görünüyordu.
+  // Doğru İngilizce ürün adı, aynı teklif havuzunu tam set ürünlere çevirir;
+  // fiyat yine yalnız sayfada yazandan okunur, tahmin edilmez.
+  oto: "car",
+  otomobil: "car",
+  otomotiv: "automotive",
+  arac: "car",
+  araba: "car",
+  bagaj: "trunk",
+  koltuk: "seat",
+  kilif: "cover",
+  kaplama: "cover",
+  minder: "cushion",
+  minderi: "cushion",
+  yastik: "pillow",
+  koruyucu: "protector",
+  aksesuar: "accessory",
+  organizator: "organizer",
+  duz: "flat",
+  fermuarli: "zipper",
+  sabitlemeli: "fastening",
+  kulp: "handle",
+  cepli: "pocket",
+  terletmez: "breathable",
+  kumas: "fabric",
+  desenli: "patterned",
+  uyumlu: "compatible",
+  takim: "set",
+  takimi: "set",
+  seti: "set",
+  arka: "rear",
+  sirt: "back",
+  baslik: "headrest",
   dokunmatik: "touch",
   usbli: "usb",
   // malzeme / renk / boyut

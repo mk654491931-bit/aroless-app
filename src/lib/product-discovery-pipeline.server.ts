@@ -480,7 +480,9 @@ async function attachSupplierEconomics(
     if (cjResult.status === "fulfilled") {
       sources.push(`cj-dropshipping ${cjOffers.length} teklif`);
     } else {
-      sources.push(`cj-dropshipping HATA (${cjResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`);
+      sources.push(
+        `cj-dropshipping HATA (${cjResult.reason?.message?.slice(0, 60) ?? "bilinmeyen"})`,
+      );
     }
   }
 
@@ -584,10 +586,9 @@ export async function runScrapeFilterStep(
    */
   opts: { sourceCapMs?: number } = {},
 ): Promise<DiscoveryStepResult> {
-  const { runSources, runSourceRescue, missingKeyedSources } = await import(
-    "./product-discovery-sources.server"
-  );
-  const { buildShortlist, imageFillCapFor, salvageShortlist } =
+  const { runSources, runSourceRescue, missingKeyedSources } =
+    await import("./product-discovery-sources.server");
+  const { buildShortlist, imageFillCapFor, salvageShortlist, toLlmProduct } =
     await import("./product-discovery-shortlist.server");
 
   // 1) Kaynaklar (fail-soft, paralel, kaynak başına tavan — dilime kırpılır).
@@ -617,10 +618,7 @@ export async function runScrapeFilterStep(
     // Birincil turdan kalan bütçe; en az 1,5 sn, en çok 6 sn. Dilim tavanı
     // aşılmadan yalnız hızlı kaynakların şansı korunur.
     const elapsed = Date.now() - sourceStartedAt;
-    const rescueCapMs = Math.max(
-      1_500,
-      Math.min(6_000, (opts.sourceCapMs ?? 6_000) - elapsed),
-    );
+    const rescueCapMs = Math.max(1_500, Math.min(6_000, (opts.sourceCapMs ?? 6_000) - elapsed));
     const rescue = await runSourceRescue(niche, country, { capMs: rescueCapMs });
     if (rescue.products.length) {
       // SİNYAL SATIRLARINI KORU: havuzda yalnız Wikipedia/GitHub sinyali
@@ -821,6 +819,30 @@ export async function runScrapeFilterStep(
   //    teklif ÜRETİR; retail satırlarıyla eşleştirilmesi gerekir.
   const supplierStats = await attachSupplierEconomics(survivors, niche, country);
 
+  // 4a) ÜRÜN SAYFASI PUANI — liste sayfası puan vermediyse ürünün KENDİ
+  // sayfasındaki `aggregateRating` okunur. Ölçülen boşluk: Bing Shopping
+  // kartında puan/değerlendirme olmayınca kartta "Puan —" ve "Talep kanıtı —"
+  // kalıyordu. Yalnız eksik alan doldurulur; ağ hatası hat düşürmez.
+  try {
+    const { enrichProductPageEvidence } = await import("./product-page-evidence.server");
+    const pageEvidence = await enrichProductPageEvidence(survivors, {
+      // Nihai 5'lik liste bu adayların içinden çıkar; 75 adayın tamamına
+      // istek atmak gecikmeyi ve maliyeti gereksiz büyütür.
+      limit: Math.min(survivors.length, 12),
+      country,
+    });
+    if (pageEvidence.enriched > 0) {
+      // Yeni ölçüm ön skoru yükseltti: sıralamayı da güncelle ki en iyi
+      // kanıtlı ürünler kısa listenin başında kalsın.
+      survivors = [...pageEvidence.products].sort((a, b) => b.preScore - a.preScore);
+      // LLM kısa listesi de aynı ölçümü görsün: puan/değerlendirme seçim
+      // gerekçesine girebilir. Alan sırası `toLlmProduct` sözleşmesiyle aynı.
+      products = survivors.map(toLlmProduct);
+    }
+  } catch (error) {
+    console.warn(`[discovery] ürün sayfası puanı okunamadı: ${String(error).slice(0, 120)}`);
+  }
+
   // 4b) ATILABİLİRLİK KARARI — "bu ürün GERÇEKTEN atılabilir mi?".
   //
   // Üç ölçüm burada birleşir: MOQ × FOB = ilk sipariş sermayesi, ölçülen brüt
@@ -976,9 +998,7 @@ export async function runScrapeFilterStep(
   // KAPSAM GÖRÜNÜRLÜĞÜ: kaç kaynağın gerçekten koştuğu ve kaçının yanıt
   // verdiği tek satırda görünür. "Kaynak yok" ile "kaynak koştu ama boş"
   // ayrımı kaybolmaz; kullanıcı hangi kaynağın veri getirdiğini görebilir.
-  const keylessReports = reports.filter(
-    (r) => !r.ok && r.error.includes("anahtar tanımlı değil"),
-  );
+  const keylessReports = reports.filter((r) => !r.ok && r.error.includes("anahtar tanımlı değil"));
   const calledSources = reports.length - keylessReports.length;
   const answeredSources = reports.filter((r) => r.ok && r.items > 0).length;
   notes.push(

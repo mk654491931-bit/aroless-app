@@ -55,6 +55,14 @@ describe("sözlük doğruluğu (yanlış çeviri = yanlış kategori)", () => {
     expect(productQueryVariants("hava fritözü", 2)).toEqual(["air fryer", "hava fritozu"]);
   });
 
+  it("otomotiv nişini İngilizce ürün aramasına çevirir (1–6 dolarlık alakasız teklifleri önler)", () => {
+    // Ölçülen hata: sözlükte oto/koltuk/kılıf yokken sorgu "oto koltuk kilifi"
+    // olarak gidiyor, AliExpress tekli parçaları döndürüyordu.
+    expect(englishProductQuery("oto koltuk kılıfı")).toBe("car seat cover");
+    expect(englishProductQuery("oto bagaj organizer")).toBe("car trunk organizer");
+    expect(englishProductQuery("oto koltuk minderi seti")).toBe("car seat cushion set");
+  });
+
   it("Türkçe karakterli anahtarlar da eşleşir (kapı → door)", () => {
     // `kapı` anahtarı ASCII olmadığı için hiç eşleşmiyordu.
     expect(englishProductQuery("kapı kiliti")).toContain("door");

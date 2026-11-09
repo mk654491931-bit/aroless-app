@@ -473,7 +473,7 @@ export function buildShortlist(
  * `buildShortlist`/`salvageShortlist`tir. Bu ayrım sayesinde iki yol da
  * AYNI alan adlarını ve sırasını üretir — model istemi bozulmaz.
  */
-function toLlmProduct(p: NormalizedProduct): LlmShortlistProduct {
+export function toLlmProduct(p: NormalizedProduct): LlmShortlistProduct {
   return {
     id: shortlistId(p),
     title: p.name,

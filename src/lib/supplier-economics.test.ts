@@ -67,6 +67,25 @@ describe("matchSupplierOffer", () => {
     expect(hit).toBeNull();
   });
 
+  it("perakendenin %8'inin altındaki birim fiyatı farklı ürün sayar (absürt marj kapısı)", () => {
+    // Ölçülen hata: 45,99 dolarlık tam set oto koltuk kılıfının “toptan
+    // fiyatı” 1,09 dolar, brüt marjı %97,6 görünüyordu. İki fiyat da gerçekti
+    // ama aynı ürün değildi; tekli parça tam setin tedarikçisi olamaz.
+    expect(
+      matchSupplierOffer({ name: "Car Seat Covers Full Set", priceUsd: 45.99 }, [
+        offer({ title: "1pc Car Seat Cover Universal", unitPriceUsd: 1.09 }),
+      ]),
+    ).toBeNull();
+  });
+
+  it("açıkça çok parçalı ürün ile tekli teklifi eşleştirmez", () => {
+    expect(
+      matchSupplierOffer({ name: "Car Seat Covers Full Set", priceUsd: 45.99 }, [
+        offer({ title: "1pc Car Seat Cover Universal", unitPriceUsd: 12 }),
+      ]),
+    ).toBeNull();
+  });
+
   it("EŞİT alakalılıkta BAŞLATILABİLİR teklifi seçer (düşük MOQ, kaynak sırası değil)", () => {
     // Ölçülen sorun: aynı nişte MOQ 10 olan teklif varken MOQ 1.000 olan teklif
     // kanıta yazılıyordu, yani "ilk sipariş 26.360 dolar" görünüyordu.
