@@ -86,10 +86,56 @@ export function normalizeH10Platform(input: unknown): H10Platform {
     .toLowerCase()
     .replace(/\s+/g, "_");
   return (
-    H10_PLATFORMS.find(
-      (platform) => platform.id === raw || platform.label.toLowerCase() === raw,
-    ) ?? H10_PLATFORMS.find((platform) => platform.id === H10_DEFAULT_PLATFORM)!
+    H10_PLATFORMS.find((platform) => platform.id === raw || platform.label.toLowerCase() === raw) ??
+    H10_PLATFORMS.find((platform) => platform.id === H10_DEFAULT_PLATFORM)!
   );
+}
+
+/* --------------------------------------------------------- Platform eşleşmesi */
+
+/**
+ * Ham kaynak satırının seçilen pazaryerine ait olup olmadığını söyler.
+ *
+ * `general` her satırı kabul eder. Diğer platformlarda URL, kaynak adı,
+ * satıcı ve notlar birlikte okunur; kanıt yoksa satır platforma ait sayılmaz.
+ * Bu fonksiyon ağ/DB bilmez; platform filtresi burada tek yerde tanımlıdır.
+ */
+export function h10RowMatchesPlatform(
+  input: { source?: unknown; url?: unknown; seller?: unknown; notes?: unknown },
+  platform: unknown,
+): boolean {
+  const id = normalizeH10Platform(platform).id;
+  if (id === "general") return true;
+  const haystack = [input.source, input.url, input.seller, input.notes]
+    .map((value) => String(value ?? ""))
+    .join(" ")
+    .toLowerCase();
+  switch (id) {
+    case "amazon":
+      return /\bamazon\b|amazon\.|amzn\.to/.test(haystack);
+    case "walmart":
+      return /\bwalmart\b|walmart\./.test(haystack);
+    case "ebay":
+      return /\bebay\b|ebay\./.test(haystack);
+    case "trendyol":
+      return /\btrendyol\b|trendyol\./.test(haystack);
+    case "hepsiburada":
+      return /\bhepsiburada\b|hepsiburada\./.test(haystack);
+    case "n11":
+      return /\bn11\b|n11\.com/.test(haystack);
+    case "aliexpress":
+      return /\baliexpress\b|aliexpress\./.test(haystack);
+    case "etsy":
+      return /\betsy\b|etsy\./.test(haystack);
+    case "tiktok_shop":
+      return /tiktok\.com|tiktokshop|tiktok[\s_.-]*shop/.test(haystack);
+    case "shopify":
+      return /shopify|myshopify\.com/.test(haystack);
+    case "woocommerce":
+      return /woocommerce|woo-storefront|wc\/store\/v1/.test(haystack);
+    default:
+      return true;
+  }
 }
 
 /* --------------------------------------------------------- Niş anahtarı */
@@ -182,14 +228,22 @@ export function isH10Fresh(
   return time > (typeof now === "number" ? now : now.getTime());
 }
 
+/**
+ * Cache kararı tek yerde: `last_scraped_at` yoksa miss; taze ise fresh;
+ * değilse stale. Sunucu fonksiyonu ağa/DB'ye gitmeden önce bunu kullanır.
+ */
+export function h10CacheDecision(
+  niche: { fresh_until?: string | null; last_scraped_at?: string | null } | null | undefined,
+  now: Date | number = Date.now(),
+): "fresh" | "stale" | "miss" {
+  if (!niche?.last_scraped_at) return "miss";
+  const freshUntil = niche.fresh_until ?? h10FreshUntil(niche.last_scraped_at);
+  return isH10Fresh(freshUntil, now) ? "fresh" : "stale";
+}
+
 /* --------------------------------------------------------- Kaynak sağlığı */
 
-export type H10SourceStatus =
-  | "ok"
-  | "no_results"
-  | "partial"
-  | "not_configured"
-  | "failed";
+export type H10SourceStatus = "ok" | "no_results" | "partial" | "not_configured" | "failed";
 
 export type H10SourceHealth = {
   source: string;
@@ -429,7 +483,8 @@ export function isH10ProductDetail(
 
 /* --------------------------------------------------------------- Filtreler */
 
-export type H10Sort = "price_asc" | "rating_desc" | "reviews_desc" | "sources_desc" | "freshness_desc";
+export type H10Sort =
+  "price_asc" | "rating_desc" | "reviews_desc" | "sources_desc" | "freshness_desc";
 
 export type H10Filters = {
   minPriceUsd: number | null;
@@ -472,14 +527,19 @@ export function filterH10Products(
   const merged = { ...H10_DEFAULT_FILTERS, ...filters };
   return products
     .filter((product) => {
-      if (merged.source !== "all" && !product.offers.some((offer) => offer.source === merged.source)) {
+      if (
+        merged.source !== "all" &&
+        !product.offers.some((offer) => offer.source === merged.source)
+      ) {
         return false;
       }
       if (merged.inStockOnly && product.inStock !== true) return false;
       if (merged.minRating !== null && (product.bestRating ?? 0) < merged.minRating) return false;
       const price = priceOf(product);
-      if (merged.minPriceUsd !== null && (price === null || price < merged.minPriceUsd)) return false;
-      if (merged.maxPriceUsd !== null && (price === null || price > merged.maxPriceUsd)) return false;
+      if (merged.minPriceUsd !== null && (price === null || price < merged.minPriceUsd))
+        return false;
+      if (merged.maxPriceUsd !== null && (price === null || price > merged.maxPriceUsd))
+        return false;
       return true;
     })
     .sort((a, b) => {

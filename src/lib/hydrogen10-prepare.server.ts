@@ -22,8 +22,10 @@ import {
 } from "./product-discovery.types";
 import type { SourceReport } from "./product-discovery-sources.server";
 import {
+  h10RowMatchesPlatform,
   h10SourceSlug,
   h10SourceStatus,
+  normalizeH10Platform,
   type H10SourceHealth,
   type H10SourceStatus,
 } from "./hydrogen10";
@@ -145,10 +147,7 @@ type Eligibility = { eligible: boolean; reason: string | null };
  */
 export function h10Eligibility(product: NormalizedProduct): Eligibility {
   if (product.inStock === false) return { eligible: false, reason: "out_of_stock" };
-  if (
-    product.priceUsd !== null &&
-    (!Number.isFinite(product.priceUsd) || product.priceUsd <= 0)
-  ) {
+  if (product.priceUsd !== null && (!Number.isFinite(product.priceUsd) || product.priceUsd <= 0)) {
     return { eligible: false, reason: "invalid_price" };
   }
   if (
@@ -205,10 +204,12 @@ function localMinorFor(currency: string, priceUsd: number | null): number | null
 export function prepareH10Run(
   raw: readonly RawProduct[],
   reports: readonly SourceReport[],
-  market: { currency: string },
+  market: { currency: string; platform?: string },
   now: Date = new Date(),
 ): H10PreparedRun {
   const observedAt = now.toISOString();
+  const platform = normalizeH10Platform(market.platform).id;
+  let platformFiltered = 0;
   const products = new Map<string, H10PreparedProduct>();
   const offerByKey = new Map<string, { offer: H10PreparedOffer; richness: number }>();
   const observations: H10PreparedObservation[] = [];
@@ -228,9 +229,10 @@ export function prepareH10Run(
     // Sözleşme "her kazınan veri" der: seçilmiş alanlar değil, kaynağın
     // döndürdüğü satırın TAMAMI arşivlenir (kategori, görsel, not, talep
     // sinyalleri dahil). JSONB'ye yazılamayan değerler JSON'a indirgenir.
-    const rawSnapshot: Record<string, unknown> = JSON.parse(
-      JSON.stringify(input),
-    ) as Record<string, unknown>;
+    const rawSnapshot: Record<string, unknown> = JSON.parse(JSON.stringify(input)) as Record<
+      string,
+      unknown
+    >;
     const baseIngest = {
       source,
       title: rawTitle,
@@ -242,6 +244,19 @@ export function prepareH10Run(
       raw: rawSnapshot,
       observedAt,
     };
+
+    // Platform filtresi: seçilen pazaryerine ait olmayan satır da arşive
+    // yazılır ama ürün/gözlem üretmez. Böylece "her kazınan veri" korunur,
+    // Amazon seçilirken Trendyol satırı ürün gibi gösterilmez.
+    if (!h10RowMatchesPlatform(input, platform)) {
+      platformFiltered += 1;
+      ingestRows.push({
+        ...baseIngest,
+        eligible: false,
+        rejectionReason: "platform_mismatch",
+      });
+      continue;
+    }
 
     const parsed = RawProductSchema.safeParse(input);
     if (!parsed.success || parsed.data.title.trim() === "") {
@@ -388,7 +403,9 @@ export function prepareH10Run(
     if (product) product.offers.push(value.offer);
   }
   for (const product of products.values()) {
-    product.offers.sort((a, b) => (a.priceUsd ?? Number.POSITIVE_INFINITY) - (b.priceUsd ?? Number.POSITIVE_INFINITY));
+    product.offers.sort(
+      (a, b) => (a.priceUsd ?? Number.POSITIVE_INFINITY) - (b.priceUsd ?? Number.POSITIVE_INFINITY),
+    );
   }
 
   const sourceHealth: H10SourceHealth[] = [];
@@ -438,9 +455,7 @@ export function prepareH10Run(
 
   const successful = sourceHealth.filter(
     (health) =>
-      health.status === "ok" ||
-      health.status === "no_results" ||
-      health.status === "partial",
+      health.status === "ok" || health.status === "no_results" || health.status === "partial",
   );
   const failed = sourceHealth.filter((health) => health.status === "failed");
   const notConfigured = sourceHealth.filter((health) => health.status === "not_configured");
@@ -459,6 +474,12 @@ export function prepareH10Run(
       `${sourceHealth.filter((health) => health.status !== "not_configured").length} çağrıldı, ` +
       `${sourceHealth.filter((health) => health.items > 0).length} satır getirdi.`,
   ];
+  if (platform !== "general") {
+    notes.push(
+      `Platform filtresi (${platform}): ${platformFiltered} satır arşivlendi, ` +
+        `ürün listesine alınmadı.`,
+    );
+  }
   if (invalidCount > 0) {
     notes.push(
       `Ürün olmayan/geçersiz ${invalidCount} satır ürün tablosuna yazılmadı; ` +
@@ -468,7 +489,10 @@ export function prepareH10Run(
   if (notConfigured.length > 0) {
     notes.push(
       `Yapılandırılmadığı için ölçülmeyen ${notConfigured.length} kaynak: ` +
-        `${notConfigured.map((health) => health.displayName).slice(0, 6).join(" · ")}` +
+        `${notConfigured
+          .map((health) => health.displayName)
+          .slice(0, 6)
+          .join(" · ")}` +
         `${notConfigured.length > 6 ? " …" : ""}.`,
     );
   }

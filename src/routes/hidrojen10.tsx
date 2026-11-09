@@ -32,11 +32,30 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   H10_COUNTRIES,
@@ -147,7 +166,10 @@ function ProductThumb({ product, size = "md" }: { product: H10Product; size?: "m
 function StockBadge({ value }: { value: boolean | null }) {
   if (value === true) {
     return (
-      <Badge variant="outline" className="border-[var(--profit)]/35 bg-[var(--profit)]/10 text-[var(--profit)]">
+      <Badge
+        variant="outline"
+        className="border-[var(--profit)]/35 bg-[var(--profit)]/10 text-[var(--profit)]"
+      >
         Var
       </Badge>
     );
@@ -188,8 +210,18 @@ function CacheLine({ data }: { data: Extract<H10SearchResult, { ok: true }> }) {
   const notConfigured = data.sourceHealth.filter(
     (source) => source.status === "not_configured",
   ).length;
-  const tone = data.status === "failed" ? "text-red-300" : data.stale ? "text-[var(--warning)]" : "text-[var(--profit)]";
-  const dot = data.status === "failed" ? "bg-red-300" : data.stale ? "bg-[var(--warning)]" : "bg-[var(--profit)]";
+  const tone =
+    data.status === "failed"
+      ? "text-red-300"
+      : data.stale
+        ? "text-[var(--warning)]"
+        : "text-[var(--profit)]";
+  const dot =
+    data.status === "failed"
+      ? "bg-red-300"
+      : data.stale
+        ? "bg-[var(--warning)]"
+        : "bg-[var(--profit)]";
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
       <span className={cn("inline-flex items-center gap-1.5", tone)}>
@@ -319,7 +351,9 @@ function ProductTable({
                     <div className="flex items-start gap-3">
                       <ProductThumb product={product} />
                       <div className="min-w-0">
-                        <p className="line-clamp-2 text-xs font-bold leading-snug">{product.title}</p>
+                        <p className="line-clamp-2 text-xs font-bold leading-snug">
+                          {product.title}
+                        </p>
                         <p className="mt-1 line-clamp-1 text-[10px] text-muted-foreground">
                           {[product.brand, product.category].filter(Boolean).join(" · ") ||
                             "Marka/kategori ölçülmedi"}
@@ -374,7 +408,9 @@ function ProductTable({
                     </div>
                   </TableCell>
                   <TableCell className="py-3">
-                    <p className="text-[10px] text-muted-foreground">{h10AgeLabel(product.lastSeenAt)}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {h10AgeLabel(product.lastSeenAt)}
+                    </p>
                     <p className="mt-0.5 text-[9px] text-[var(--profit)]">Ölçüldü</p>
                   </TableCell>
                   <TableCell className="py-3">
@@ -444,7 +480,9 @@ function FiltersBar({
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-4">
           <div>
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Min $</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              Min $
+            </Label>
             <Input
               value={filters.minPriceUsd ?? ""}
               onChange={(event) =>
@@ -460,7 +498,9 @@ function FiltersBar({
             />
           </div>
           <div>
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Max $</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              Max $
+            </Label>
             <Input
               value={filters.maxPriceUsd ?? ""}
               onChange={(event) =>
@@ -476,7 +516,9 @@ function FiltersBar({
             />
           </div>
           <div>
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Puan</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              Puan
+            </Label>
             <Select
               value={filters.minRating === null ? "all" : String(filters.minRating)}
               onValueChange={(value) =>
@@ -495,7 +537,9 @@ function FiltersBar({
             </Select>
           </div>
           <div>
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Sırala</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              Sırala
+            </Label>
             <Select
               value={filters.sort}
               onValueChange={(value) => onChange({ ...filters, sort: value as H10Sort })}
@@ -513,7 +557,9 @@ function FiltersBar({
             </Select>
           </div>
           <div>
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Kaynak</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              Kaynak
+            </Label>
             <Select
               value={filters.source}
               onValueChange={(value) => onChange({ ...filters, source: value })}
@@ -541,7 +587,12 @@ function FiltersBar({
             </div>
           </div>
           <div className="flex items-end pb-0.5">
-            <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-[11px]" onClick={onClear}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2 text-[11px]"
+              onClick={onClear}
+            >
               <X size={12} /> Temizle
             </Button>
           </div>
@@ -555,7 +606,10 @@ function EmptySearch({ onPick }: { onPick: (query: string) => void }) {
   return (
     <div className="premium-card overflow-hidden p-6 md:p-10">
       <div className="relative z-10 max-w-3xl">
-        <Badge variant="outline" className="border-[var(--accent-active)]/35 bg-[var(--accent-active)]/10 text-[var(--accent-active)]">
+        <Badge
+          variant="outline"
+          className="border-[var(--accent-active)]/35 bg-[var(--accent-active)]/10 text-[var(--accent-active)]"
+        >
           Global pazar laboratuvarı
         </Badge>
         <h2 className="mt-3 max-w-xl text-2xl font-black tracking-tight md:text-3xl">
@@ -612,12 +666,18 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
                 {data.sourceHealth.length} kaynak
               </Badge>
               {failed > 0 && (
-                <Badge variant="outline" className="border-red-400/30 bg-red-400/10 text-[10px] text-red-300">
+                <Badge
+                  variant="outline"
+                  className="border-red-400/30 bg-red-400/10 text-[10px] text-red-300"
+                >
                   {failed} hata
                 </Badge>
               )}
               {notConfigured > 0 && (
-                <Badge variant="outline" className="border-white/12 bg-white/5 text-[10px] text-muted-foreground">
+                <Badge
+                  variant="outline"
+                  className="border-white/12 bg-white/5 text-[10px] text-muted-foreground"
+                >
                   {notConfigured} anahtarsız
                 </Badge>
               )}
@@ -628,7 +688,10 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {data.sourceHealth.map((source) => (
-              <div key={source.source} className="rounded-lg border border-white/8 bg-white/[0.02] p-2.5">
+              <div
+                key={source.source}
+                className="rounded-lg border border-white/8 bg-white/[0.02] p-2.5"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-[11px] font-semibold">{source.displayName}</p>
@@ -638,7 +701,12 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
                       {source.latencyMs} ms
                     </p>
                   </div>
-                  <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[9px]", h10StatusTone(source.status))}>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded border px-1.5 py-0.5 text-[9px]",
+                      h10StatusTone(source.status),
+                    )}
+                  >
                     {h10StatusLabel(source.status)}
                   </span>
                 </div>
@@ -660,9 +728,14 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
           <div className="mt-3 space-y-2">
             {data.recentRuns.map((run) => {
               const okCount = run.sourceStats.filter((source) => source.status === "ok").length;
-              const failedCount = run.sourceStats.filter((source) => source.status === "failed").length;
+              const failedCount = run.sourceStats.filter(
+                (source) => source.status === "failed",
+              ).length;
               return (
-                <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2">
+                <div
+                  key={run.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2"
+                >
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
@@ -674,7 +747,9 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
                             : "bg-[var(--profit)]",
                       )}
                     />
-                    <span className="text-[10px] font-semibold">{new Date(run.startedAt).toLocaleString("tr-TR")}</span>
+                    <span className="text-[10px] font-semibold">
+                      {new Date(run.startedAt).toLocaleString("tr-TR")}
+                    </span>
                     <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
                       {run.triggeredBy === "manual"
                         ? "manuel"
@@ -700,7 +775,13 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
                         ),
                       )}
                     >
-                      {h10StatusLabel(run.status === "completed" ? "ok" : run.status === "failed" ? "failed" : "partial")}
+                      {h10StatusLabel(
+                        run.status === "completed"
+                          ? "ok"
+                          : run.status === "failed"
+                            ? "failed"
+                            : "partial",
+                      )}
                     </span>
                   </div>
                   {run.error && <p className="w-full text-[9px] text-red-300/80">{run.error}</p>}
@@ -724,12 +805,18 @@ function HealthPanel({ data }: { data: Extract<H10SearchResult, { ok: true }> })
               ["Durum", h10StatusLabel(data.status)],
               ["Veri kaynağı", data.dataSource === "db" ? "Veritabanı" : "Canlı tarama"],
               ["Son tarama", h10AgeLabel(data.lastScrapedAt)],
-              ["Taze bitişi", data.freshUntil ? new Date(data.freshUntil).toLocaleString("tr-TR") : "—"],
+              [
+                "Taze bitişi",
+                data.freshUntil ? new Date(data.freshUntil).toLocaleString("tr-TR") : "—",
+              ],
               ["Gözlem", formatH10Count(data.rowCount)],
               ["Kanonik ürün", formatH10Count(data.productCount)],
               ["Kaynak", String(data.sourceHealth.length)],
             ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-2 border-b border-white/6 pb-1.5 last:border-0 last:pb-0">
+              <div
+                key={label}
+                className="flex items-center justify-between gap-2 border-b border-white/6 pb-1.5 last:border-0 last:pb-0"
+              >
                 <dt className="text-muted-foreground">{label}</dt>
                 <dd className="text-right font-mono text-white/80">{value}</dd>
               </div>
@@ -784,20 +871,36 @@ function PriceHistory({ observations }: { observations: H10Observation[] }) {
   const sx = (x: number) => pad + ((x - minX) / Math.max(1, maxX - minX)) * (width - pad * 2);
   const sy = (y: number) =>
     height - pad - ((y - minY) / Math.max(0.01, maxY - minY)) * (height - pad * 2);
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${sx(point.x)},${sy(point.y)}`).join(" ");
+  const path = points
+    .map((point, index) => `${index === 0 ? "M" : "L"}${sx(point.x)},${sy(point.y)}`)
+    .join(" ");
   return (
     <div>
       <div className="rounded-lg border border-white/8 bg-black/15 p-2">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-28 w-full overflow-visible" role="img" aria-label="Fiyat geçmişi">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-28 w-full overflow-visible"
+          role="img"
+          aria-label="Fiyat geçmişi"
+        >
           <path d={path} fill="none" stroke="var(--accent-active)" strokeWidth="2" />
           {points.map((point, index) => (
-            <circle key={`${point.x}-${index}`} cx={sx(point.x)} cy={sy(point.y)} r="3" fill="var(--profit)" />
+            <circle
+              key={`${point.x}-${index}`}
+              cx={sx(point.x)}
+              cy={sy(point.y)}
+              r="3"
+              fill="var(--profit)"
+            />
           ))}
         </svg>
       </div>
       <div className="mt-1 flex justify-between text-[9px] text-muted-foreground">
         <span>min {formatH10Usd(minY)}</span>
-        <span>{new Date(minX).toLocaleDateString("tr-TR")} → {new Date(maxX).toLocaleDateString("tr-TR")}</span>
+        <span>
+          {new Date(minX).toLocaleDateString("tr-TR")} →{" "}
+          {new Date(maxX).toLocaleDateString("tr-TR")}
+        </span>
         <span>max {formatH10Usd(maxY)}</span>
       </div>
     </div>
@@ -842,7 +945,8 @@ function OfferRow({ offer }: { offer: H10Offer }) {
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
-          <Star size={10} className="fill-amber-300 text-amber-300" /> {formatH10Rating(offer.rating)}
+          <Star size={10} className="fill-amber-300 text-amber-300" />{" "}
+          {formatH10Rating(offer.rating)}
         </span>
         <span>{formatH10Count(offer.ratingCount)} yorum</span>
         <StockBadge value={offer.inStock} />
@@ -897,7 +1001,8 @@ function ProductSheet({
               <div className="min-w-0">
                 <h3 className="text-sm font-bold leading-snug">{product.title}</h3>
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  {[product.brand, product.category].filter(Boolean).join(" · ") || "Marka/kategori ölçülmedi"}
+                  {[product.brand, product.category].filter(Boolean).join(" · ") ||
+                    "Marka/kategori ölçülmedi"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   <Badge variant="outline" className="border-white/12 bg-white/5 text-[9px]">
@@ -931,7 +1036,8 @@ function ProductSheet({
             <>
               <section>
                 <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <TrendingUp size={13} className="text-[var(--accent-active)]" /> Fiyat geçmişi · 90 gün
+                  <TrendingUp size={13} className="text-[var(--accent-active)]" /> Fiyat geçmişi ·
+                  90 gün
                 </h4>
                 <div className="mt-2">
                   <PriceHistory observations={observations} />
@@ -962,11 +1068,21 @@ function ProductSheet({
                     ["GTIN", detailData.product.gtin ?? "—"],
                     ["MPN", detailData.product.mpn ?? "—"],
                     ["Gözlem sayısı", `${observations.length} (son 90 gün)`],
-                    ["İlk görülme", detailData.product.createdAt ? new Date(detailData.product.createdAt).toLocaleString("tr-TR") : "—"],
+                    [
+                      "İlk görülme",
+                      detailData.product.createdAt
+                        ? new Date(detailData.product.createdAt).toLocaleString("tr-TR")
+                        : "—",
+                    ],
                   ].map(([label, value]) => (
-                    <div key={label} className="flex items-start justify-between gap-3 border-b border-white/6 pb-1 last:border-0">
+                    <div
+                      key={label}
+                      className="flex items-start justify-between gap-3 border-b border-white/6 pb-1 last:border-0"
+                    >
                       <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="max-w-[65%] break-all text-right font-mono text-white/70">{value}</dd>
+                      <dd className="max-w-[65%] break-all text-right font-mono text-white/70">
+                        {value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -977,23 +1093,30 @@ function ProductSheet({
                   Son gözlemler
                 </h4>
                 <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {[...observations].reverse().slice(0, 30).map((observation) => (
-                    <div key={observation.id} className="flex items-center justify-between gap-2 rounded border border-white/8 bg-white/[0.02] px-2 py-1.5 text-[10px]">
-                      <span className="truncate text-muted-foreground">
-                        {new Date(observation.observedAt).toLocaleString("tr-TR")} · {observation.source}
-                      </span>
-                      <span className="shrink-0 font-mono">
-                        {observation.priceLocalMinor !== null
-                          ? formatH10Minor(observation.priceLocalMinor, observation.currency)
-                          : formatH10Usd(observation.priceUsd)}
-                        {!observation.eligible && (
-                          <span className="ml-1 text-[9px] text-[var(--warning)]">
-                            {observation.rejectionReason ?? "filtre"}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
+                  {[...observations]
+                    .reverse()
+                    .slice(0, 30)
+                    .map((observation) => (
+                      <div
+                        key={observation.id}
+                        className="flex items-center justify-between gap-2 rounded border border-white/8 bg-white/[0.02] px-2 py-1.5 text-[10px]"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {new Date(observation.observedAt).toLocaleString("tr-TR")} ·{" "}
+                          {observation.source}
+                        </span>
+                        <span className="shrink-0 font-mono">
+                          {observation.priceLocalMinor !== null
+                            ? formatH10Minor(observation.priceLocalMinor, observation.currency)
+                            : formatH10Usd(observation.priceUsd)}
+                          {!observation.eligible && (
+                            <span className="ml-1 text-[9px] text-[var(--warning)]">
+                              {observation.rejectionReason ?? "filtre"}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
                   {!observations.length && (
                     <p className="text-[11px] text-muted-foreground">Gözlem yok.</p>
                   )}
@@ -1069,7 +1192,8 @@ function Hydrogen10Page() {
         setManualError(data.message);
       }
     },
-    onError: (error) => setManualError(error instanceof Error ? error.message : "Yenileme başarısız."),
+    onError: (error) =>
+      setManualError(error instanceof Error ? error.message : "Yenileme başarısız."),
   });
 
   const submit = (nextQuery = query) => {
@@ -1094,7 +1218,8 @@ function Hydrogen10Page() {
     [success, filters],
   );
   const sources = success?.sourceHealth ?? [];
-  const totalOffers = success?.products.reduce((sum, product) => sum + product.offers.length, 0) ?? 0;
+  const totalOffers =
+    success?.products.reduce((sum, product) => sum + product.offers.length, 0) ?? 0;
 
   return (
     <div className="min-h-screen">
@@ -1146,7 +1271,10 @@ function Hydrogen10Page() {
               className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_180px_190px_auto]"
             >
               <div className="relative">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -1185,7 +1313,11 @@ function Hydrogen10Page() {
                 className="h-11 gap-2 bg-[var(--accent-active)] px-6 text-black hover:bg-[var(--accent-active)]/90"
                 disabled={query.trim().length < 2 || resultQuery.isFetching}
               >
-                {resultQuery.isFetching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                {resultQuery.isFetching ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Search size={14} />
+                )}
                 {resultQuery.isFetching ? "Taranıyor" : "Ara"}
               </Button>
             </form>
@@ -1251,14 +1383,20 @@ function Hydrogen10Page() {
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-bold">
-                    {success.query} <span className="font-normal text-muted-foreground">· {success.country} · {success.platform}</span>
+                    {success.query}{" "}
+                    <span className="font-normal text-muted-foreground">
+                      · {success.country} · {success.platform}
+                    </span>
                   </h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {formatH10Count(success.products.length)} ürün · {formatH10Count(totalOffers)} teklif ·{" "}
-                    {formatH10Count(success.rowCount)} gözlem
+                    {formatH10Count(success.products.length)} ürün · {formatH10Count(totalOffers)}{" "}
+                    teklif · {formatH10Count(success.rowCount)} gözlem
                   </p>
                 </div>
-                <Badge variant="outline" className={cn("text-[10px]", h10StatusTone(success.status))}>
+                <Badge
+                  variant="outline"
+                  className={cn("text-[10px]", h10StatusTone(success.status))}
+                >
                   {h10StatusLabel(success.status)}
                 </Badge>
               </div>
@@ -1287,7 +1425,8 @@ function Hydrogen10Page() {
               {!success.products.length && (
                 <div className="premium-card p-4">
                   <h3 className="flex items-center gap-2 text-xs font-bold">
-                    <AlertTriangle size={13} className="text-[var(--warning)]" /> Bu nişte ürün bulunamadı
+                    <AlertTriangle size={13} className="text-[var(--warning)]" /> Bu nişte ürün
+                    bulunamadı
                   </h3>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                     Kaynaklardan ürün satırı gelmedi. Bu bir “0 ürün” iddiası değildir; hangi
@@ -1310,7 +1449,9 @@ function Hydrogen10Page() {
               <CheckCircle2 size={11} className="text-[var(--profit)]" />
               Fiyat, stok, puan ve yorum sayısı yalnız kaynaktan ölçülür; AI üretmez.
             </span>
-            <span className="font-mono text-[9px] text-muted-foreground/60">{success.canonicalKey}</span>
+            <span className="font-mono text-[9px] text-muted-foreground/60">
+              {success.canonicalKey}
+            </span>
           </div>
         )}
 

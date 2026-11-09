@@ -11,11 +11,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { tierLevel } from "@/lib/plans";
-import {
-  isH10Fresh,
-  resolveH10Market,
-  type H10SearchResult,
-} from "@/lib/hydrogen10";
+import { h10CacheDecision, resolveH10Market, type H10SearchResult } from "@/lib/hydrogen10";
 import {
   H10BusyError,
   H10SchemaError,
@@ -23,7 +19,6 @@ import {
   persistH10Run,
   readH10Payload,
   readH10ProductDetail,
-  type NicheRow,
 } from "@/lib/hydrogen10-store.server";
 import { runInBackground } from "@/lib/job-runner.server";
 
@@ -149,7 +144,12 @@ async function scrapeMarket(input: {
 
 async function readAfterScrape(
   canonicalKey: string,
-  options: { dataSource: "db" | "live"; refreshing?: boolean; message?: string | null; notes?: string[] },
+  options: {
+    dataSource: "db" | "live";
+    refreshing?: boolean;
+    message?: string | null;
+    notes?: string[];
+  },
 ): Promise<H10SearchResult> {
   const niche = await findH10Niche(canonicalKey);
   if (!niche) {
@@ -189,14 +189,15 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
 
     try {
       const niche = await findH10Niche(market.canonicalKey);
-      if (niche && niche.last_scraped_at && isH10Fresh(niche.fresh_until)) {
+      const cacheDecision = h10CacheDecision(niche);
+      if (niche && cacheDecision === "fresh") {
         return readH10Payload(niche, {
           dataSource: "db",
           message: "24 saat cache geçerli; aynı niş için kaynaklara gidilmedi.",
         });
       }
 
-      if (niche && niche.last_scraped_at) {
+      if (niche && cacheDecision === "stale") {
         // BAYAT: eski veri hemen görünür. Yenileme kalıcı süreçte arka planda;
         // sunucusuz ortamda başlatılamazsa kullanıcıya açıkça söylenir.
         let refreshing = false;
@@ -318,11 +319,3 @@ export const getHydrogen10Product = createServerFn({ method: "GET" })
       };
     }
   });
-
-/** Test/teşhis için: cache kararını DB'ye gitmeden hesaplar. */
-export function h10CacheDecision(
-  niche: Pick<NicheRow, "fresh_until" | "last_scraped_at">,
-): "fresh" | "stale" | "miss" {
-  if (!niche.last_scraped_at) return "miss";
-  return isH10Fresh(niche.fresh_until) ? "fresh" : "stale";
-}

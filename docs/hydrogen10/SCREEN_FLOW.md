@@ -86,6 +86,9 @@ Kurallar:
 - Aynı sorgu + ülke + platform = aynı niş.
 - Aynı niş tekrar aranırsa DB’den gelir.
 - Ülke/platform değişirse yeni niş açılır; bu açıkça gösterilir.
+- `General` tüm pazaryerlerini kabul eder. Belirli platform seçilirse yalnız
+  kaynak/URL/satıcı/not kanıtı o pazaryerini gösteren satırlar ürün olur;
+  eşleşmeyen ham satırlar ingest arşivinde kalır.
 - Boş sorgu gönderilmez.
 
 ### 3.2 Cache durum satırı

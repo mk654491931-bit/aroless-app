@@ -15,12 +15,13 @@
 -- Tasarım notları:
 --   • Ortak cache tabloları istemciye açılmaz; yalnız service role/server
 --     function erişir. RLS açılır ve policy EKLENMEZ.
---   • Fiyatlar yerel para biriminin en küçük biriminde tam sayı tutulur.
+--   • Yerel fiyat yapılandırılmış olarak geliyorsa en küçük birimde tam sayı
+--     tutulur; gelmiyorsa NULL kalır. USD normalize ayrı alandadır.
 --   • `h10_observations` ve `h10_ingest_rows` append-only'dir; UPDATE/DELETE
 --     akışı yoktur.
 --   • Bir niş için aynı anda yalnız bir aktif run olabilir.
---   • Kaynak kaydı olmayan bir kaynak kalıcı cache'e yazılmaz; uygulama
---     kaynakları `h10_sources` tablosuna upsert eder.
+--   • Uygulama kaynakları `h10_sources` tablosuna upsert eder; kaynak
+--     politikaları (`cache_allowed`, `retention_days`) burada tutulur.
 -- ============================================================================
 
 begin;
@@ -396,15 +397,16 @@ alter table public.h10_ingest_rows enable row level security;
 --   • Watchlist/alarm tabloları ileride user_id + RLS ile ayrı migration'da gelir.
 
 -- Service role için açık tablo/sequence yetkileri (RLS bypass ayrıdır).
+-- Append-only tablolarda UPDATE/DELETE yetkisi VERİLMEZ.
 grant usage on schema public to service_role;
-grant select, insert, update, delete on public.h10_sources to service_role;
-grant select, insert, update, delete on public.h10_niches to service_role;
-grant select, insert, update, delete on public.h10_products to service_role;
-grant select, insert, update, delete on public.h10_runs to service_role;
-grant select, insert, update, delete on public.h10_source_runs to service_role;
+grant select, insert, update on public.h10_sources to service_role;
+grant select, insert, update on public.h10_niches to service_role;
+grant select, insert, update on public.h10_products to service_role;
+grant select, insert, update on public.h10_runs to service_role;
+grant select, insert on public.h10_source_runs to service_role;
 grant select, insert, update, delete on public.h10_offers to service_role;
-grant select, insert, update, delete on public.h10_observations to service_role;
-grant select, insert, update, delete on public.h10_ingest_rows to service_role;
+grant select, insert on public.h10_observations to service_role;
+grant select, insert on public.h10_ingest_rows to service_role;
 grant usage, select on sequence public.h10_observations_id_seq to service_role;
 grant usage, select on sequence public.h10_ingest_rows_id_seq to service_role;
 

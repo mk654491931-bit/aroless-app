@@ -28,10 +28,7 @@ import {
   type H10SourceHealth,
   type H10SourceStatus,
 } from "./hydrogen10";
-import {
-  prepareH10Run,
-  type H10PreparedRun,
-} from "./hydrogen10-prepare.server";
+import { prepareH10Run, type H10PreparedRun } from "./hydrogen10-prepare.server";
 import type { RawProduct } from "./product-discovery.types";
 import type { SourceReport } from "./product-discovery-sources.server";
 
@@ -238,15 +235,13 @@ function buildProducts(products: ProductRow[], offers: OfferRow[]): H10Product[]
       bestRating: ratings.length ? Math.max(...ratings) : null,
       bestRatingCount: counts.length ? Math.max(...counts) : null,
       inStock,
-      lastSeenAt: lastSeenTimes.length
-        ? new Date(Math.max(...lastSeenTimes)).toISOString()
-        : null,
+      lastSeenAt: lastSeenTimes.length ? new Date(Math.max(...lastSeenTimes)).toISOString() : null,
     });
   }
   return result.sort(
     (a, b) =>
       b.sourceCount - a.sourceCount ||
-      (new Date(b.lastSeenAt ?? 0).getTime() - new Date(a.lastSeenAt ?? 0).getTime()) ||
+      new Date(b.lastSeenAt ?? 0).getTime() - new Date(a.lastSeenAt ?? 0).getTime() ||
       a.title.localeCompare(b.title),
   );
 }
@@ -308,7 +303,9 @@ export async function readH10Payload(
   if (offerError) rethrowH10(offerError, "Hidrojen10 teklifleri okunamadı");
   const offers = (offerData ?? []) as OfferRow[];
 
-  const productIds = [...new Set(offers.map((offer) => asString(offer["product_id"])))].filter(Boolean);
+  const productIds = [...new Set(offers.map((offer) => asString(offer["product_id"])))].filter(
+    Boolean,
+  );
   let productRows: ProductRow[] = [];
   if (productIds.length) {
     // UUID listesini tek URL'e sığdırmamak için parçalı oku.
@@ -496,7 +493,12 @@ export async function persistH10Run(input: H10ScrapeInput): Promise<H10ScrapeRes
   if (scanningError) rethrowH10(scanningError, "Hidrojen10 tarama durumu yazılamadı");
 
   try {
-    const prepared = prepareH10Run(input.raw, input.reports, { currency: input.currency }, now);
+    const prepared = prepareH10Run(
+      input.raw,
+      input.reports,
+      { currency: input.currency, platform: input.platform },
+      now,
+    );
 
     // HAM SATIR ARŞİVİ: ürün olmayan/geçersiz satırlar da burada kalır.
     // `h10_observations` yalnız ürünle eşleşen satırları taşır; bu tablo
@@ -563,7 +565,9 @@ export async function persistH10Run(input: H10ScrapeInput): Promise<H10ScrapeRes
 
     const { data: existingOffers, error: existingError } = await admin
       .from("h10_offers")
-      .select("id, product_id, source, price_usd, price_local_minor, rating, rating_count, in_stock")
+      .select(
+        "id, product_id, source, price_usd, price_local_minor, rating, rating_count, in_stock",
+      )
       .eq("niche_id", nicheId);
     if (existingError) rethrowH10(existingError, "Mevcut Hidrojen10 teklifleri okunamadı");
     const previousByKey = new Map(
@@ -617,9 +621,7 @@ export async function persistH10Run(input: H10ScrapeInput): Promise<H10ScrapeRes
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
     for (let i = 0; i < observations.length; i += 250) {
-      const { error } = await admin
-        .from("h10_observations")
-        .insert(observations.slice(i, i + 250));
+      const { error } = await admin.from("h10_observations").insert(observations.slice(i, i + 250));
       if (error) rethrowH10(error, "Hidrojen10 gözlemleri yazılamadı");
     }
 
@@ -628,25 +630,27 @@ export async function persistH10Run(input: H10ScrapeInput): Promise<H10ScrapeRes
       if (!productId) return [];
       // Filtreye takılan (stok yok/düşük puan/kanıtsız) teklifler yalnız
       // gözlem ve ingest arşivinde kalır; "güncel teklif" tablosuna yazılmaz.
-      return product.offers.filter((offer) => offer.eligible).map((offer) => ({
-        niche_id: nicheId,
-        product_id: productId,
-        source: offer.source,
-        seller: offer.seller,
-        source_item_id: offer.sourceItemId,
-        currency: offer.currency,
-        price_local_minor: offer.priceLocalMinor,
-        price_usd: offer.priceUsd,
-        fx_rate: null,
-        fx_at: null,
-        rating: offer.rating,
-        rating_count: offer.ratingCount,
-        in_stock: offer.inStock,
-        source_url: offer.sourceUrl,
-        evidence: offer.evidence,
-        observed_at: offer.observedAt,
-        last_seen_at: nowIso,
-      }));
+      return product.offers
+        .filter((offer) => offer.eligible)
+        .map((offer) => ({
+          niche_id: nicheId,
+          product_id: productId,
+          source: offer.source,
+          seller: offer.seller,
+          source_item_id: offer.sourceItemId,
+          currency: offer.currency,
+          price_local_minor: offer.priceLocalMinor,
+          price_usd: offer.priceUsd,
+          fx_rate: null,
+          fx_at: null,
+          rating: offer.rating,
+          rating_count: offer.ratingCount,
+          in_stock: offer.inStock,
+          source_url: offer.sourceUrl,
+          evidence: offer.evidence,
+          observed_at: offer.observedAt,
+          last_seen_at: nowIso,
+        }));
     });
     if (offerRows.length) {
       const { error } = await admin
@@ -666,9 +670,7 @@ export async function persistH10Run(input: H10ScrapeInput): Promise<H10ScrapeRes
       prepared.sourceHealth
         .filter(
           (health) =>
-            health.status === "ok" ||
-            health.status === "no_results" ||
-            health.status === "partial",
+            health.status === "ok" || health.status === "no_results" || health.status === "partial",
         )
         .map((health) => health.source),
     );

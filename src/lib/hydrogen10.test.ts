@@ -5,7 +5,9 @@ import {
   filterH10Products,
   formatH10Minor,
   formatH10Usd,
+  h10CacheDecision,
   h10FreshUntil,
+  h10RowMatchesPlatform,
   h10SourceStatus,
   h10StatusLabel,
   isH10Fresh,
@@ -72,13 +74,63 @@ describe("Hidrojen10 niş anahtarı", () => {
   });
 });
 
+describe("Hidrojen10 platform eşleşmesi", () => {
+  it("general tüm satırları kabul eder", () => {
+    expect(h10RowMatchesPlatform({ source: "bing-shopping" }, "general")).toBe(true);
+  });
+
+  it("Amazon satırını URL/kaynak/satıcıdan tanır, Trendyol satırını dışlar", () => {
+    expect(
+      h10RowMatchesPlatform(
+        { source: "serpapi-shopping", url: "https://www.amazon.com/dp/B000", seller: "Amazon" },
+        "amazon",
+      ),
+    ).toBe(true);
+    expect(
+      h10RowMatchesPlatform(
+        { source: "tr-reader", url: "https://www.trendyol.com/urun", seller: "Trendyol" },
+        "amazon",
+      ),
+    ).toBe(false);
+  });
+
+  it("yerel pazaryerlerini alan adına göre ayırır", () => {
+    expect(h10RowMatchesPlatform({ url: "https://www.trendyol.com/x" }, "trendyol")).toBe(true);
+    expect(h10RowMatchesPlatform({ url: "https://www.hepsiburada.com/x" }, "hepsiburada")).toBe(
+      true,
+    );
+    expect(h10RowMatchesPlatform({ url: "https://www.n11.com/x" }, "n11")).toBe(true);
+    expect(h10RowMatchesPlatform({ url: "https://www.etsy.com/x" }, "etsy")).toBe(true);
+  });
+});
+
 describe("Hidrojen10 cache tazeliği", () => {
   it("24 saat sınırını doğru hesaplar", () => {
     const last = "2026-11-08T10:00:00.000Z";
     expect(h10FreshUntil(last)).toBe("2026-11-09T10:00:00.000Z");
     expect(isH10Fresh("2026-11-09T10:00:00.000Z", new Date("2026-11-08T10:00:00.000Z"))).toBe(true);
-    expect(isH10Fresh("2026-11-09T10:00:00.000Z", new Date("2026-11-09T10:00:00.000Z"))).toBe(false);
+    expect(isH10Fresh("2026-11-09T10:00:00.000Z", new Date("2026-11-09T10:00:00.000Z"))).toBe(
+      false,
+    );
     expect(isH10Fresh(null)).toBe(false);
+  });
+
+  it("DB-first kararı miss/fresh/stale olarak tek yerde verir", () => {
+    const now = new Date("2026-11-08T12:00:00.000Z");
+    expect(h10CacheDecision(null, now)).toBe("miss");
+    expect(h10CacheDecision({ last_scraped_at: null }, now)).toBe("miss");
+    expect(
+      h10CacheDecision(
+        { last_scraped_at: "2026-11-08T10:00:00.000Z", fresh_until: "2026-11-09T10:00:00.000Z" },
+        now,
+      ),
+    ).toBe("fresh");
+    expect(
+      h10CacheDecision(
+        { last_scraped_at: "2026-11-07T10:00:00.000Z", fresh_until: "2026-11-08T10:00:00.000Z" },
+        now,
+      ),
+    ).toBe("stale");
   });
 });
 

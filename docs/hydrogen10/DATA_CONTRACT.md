@@ -47,6 +47,7 @@ Bu belge hukuki bir sözleşme değildir. Teknik veri sözleşmesidir.
 | Terim | Anlam |
 |---|---|
 | **Pazar** | Ülke + platform + yerel para birimi. Ör. `US + amazon + USD`. |
+| **Platform filtresi** | `general` tüm kaynakları kabul eder; diğer seçimlerde yalnız kaynak/URL/satıcı/not kanıtı seçilen pazaryerini gösteren satırlar ürüne çevrilir. Eşleşmeyen satır yine `h10_ingest_rows` arşivine yazılır. |
 | **Niş** | Normalize edilmiş arama sorgusu + pazar. Ör. `air fryer / US / amazon`. |
 | **Run** | Bir niş için başlatılan tek kazıma işi. |
 | **Source run** | Bir run içindeki tek kaynağın sonucu. |
@@ -104,7 +105,9 @@ tablosuyla eklenebilir. Yanlış cache, eksik cache’ten daha kötüdür.
 - Aynı sorgunun farklı ülkelerdeki sonucu ayrı niştir.
 - Bir kaynak her ülkede çalışmıyorsa `not_configured` olur; “sonuç yok” sayılmaz.
 - Aynı ürün farklı ülkelerde `h10_products` üzerinden birleşebilir; teklifler ayrıdır.
-- Yerel fiyat her zaman korunur; USD karşılığı çekim anındaki kurla türetilir.
+- Kaynak yapılandırılmış yerel fiyat sağlıyorsa korunur; sağlamıyorsa
+  `priceLocalMinor` `null` kalır. USD karşılığı çekim anındaki kurla türetilir
+  ve ayrı alanda tutulur.
 
 ---
 
@@ -146,14 +149,16 @@ Her kaynak kaydı şunları taşır:
 - `attributionRequired` — kaynak atfı gerekli mi?
 - `enabled` — kaynak şu an kullanılabilir mi?
 
-Kaynak kalıcı saklamaya izin vermiyorsa Hidrojen10 o kaynağı kalıcı cache’e
-yazmaz. Bu durumda ürün kapsamı UI’da açıkça belirtilir; sözleşme ihlal edilmez.
+MVP’de kaynaklar `cacheAllowed = true` varsayılanıyla oluşturulur; alanlar
+politika genişlemesi için hazırdır. Kaynak yasaklayıcı bir politika
+tanımlarsa yazma katmanı bu kaynağı kalıcı cache’e almamalıdır; bu kontrol
+Faz 2’de `h10_sources` okumasıyla etkinleştirilecektir.
 
 ### 5.3 Geçersiz satır
 
 - `title` boşsa satır ürüne dönüştürülemez.
 - Satır atılmazsa `invalidItems` sayılır; source run `partial` olur.
-- Geçersiz satırın ham nedeni hata günlüğüne yazılır.
+- Geçersiz satırın ham nedeni `h10_ingest_rows.rejection_reason` alanına yazılır.
 - Geçersiz satır için sahte ürün kaydı üretilmez.
 
 ---
@@ -199,11 +204,11 @@ listesi Faz 2'dir; bu yüzden `h10_offers` tekliliği
 |---|---|---|---|
 | `source` | string | hayır | Sabit kaynak adı |
 | `seller` | string | boş olabilir | Ürün kimliğine girmez |
-| `priceLocalMinor` | bigint | evet | Para biriminin en küçük birimi |
-| `currency` | string | hayır | ISO 4217 |
+| `priceLocalMinor` | bigint | evet | Kaynak yerel fiyatı yapılandırılmış verdiyse; USD pazarında dolar kuruşu |
+| `currency` | string | hayır | ISO 4217 pazar para birimi |
 | `priceUsd` | numeric | evet | Çekim anındaki kurla türetilir |
-| `fxRate` | numeric | evet | Kur |
-| `fxAt` | timestamp | evet | Kurun zamanı |
+| `fxRate` | numeric | evet | Kaynak kur oranını yapılandırılmış verdiyse; yoksa `null` |
+| `fxAt` | timestamp | evet | Kurun zamanı; yoksa `null` |
 | `rating` | numeric | evet | 0–5; yoksa `null` |
 | `ratingCount` | integer | evet | Yoksa `null` |
 | `inStock` | boolean | evet | Bilinmiyorsa `null` |
@@ -215,9 +220,11 @@ listesi Faz 2'dir; bu yüzden `h10_offers` tekliliği
 ### 6.4 Para kuralı
 
 - Para için kayan noktalı `float` kullanılmaz.
-- Yerel fiyat, ilgili para biriminin en küçük biriminde tam sayı saklanır.
+- Kaynak yapılandırılmış yerel fiyat veriyorsa ilgili para biriminin en küçük
+  biriminde tam sayı saklanır; vermiyorsa `priceLocalMinor` `null` olur.
 - USD karşılığı ayrı alandır; yerel fiyatın üzerine yazılmaz.
-- Kur ve kur zamanı birlikte saklanır; geçmiş kayıt bugünkü kurla yeniden hesaplanmaz.
+- Kaynak kur oranı/zamanı veriyorsa saklanır; vermiyorsa `null` kalır ve
+  `priceUsd` yalnız çekim anındaki hesap olarak işaretlenir.
 - `priceLocalMinor = 0` gerçekten sıfır fiyat demektir; bilinmeyen fiyat `null` olur.
 
 ### 6.5 Ölçüm türü
@@ -237,12 +244,16 @@ doldurmaz.
   başlıksız veya normalize edilemeyen satırlar da `eligible = false` ve
   `rejectionReason` ile burada kalır.
 - `h10_observations` ürünle eşleşen her satırı ayrıca append-only saklar.
-- Her run + ürün + kaynak için bir gözlem yazılır.
+- Her geçerli ham ürün satırı için bir gözlem yazılır.
 - Filtreye takılan ürün satırları da yazılır; `eligible = false` ve
   `rejectionReason` taşır.
 - Aynı veri tekrar gelse bile yeni `observedAt` kaydı oluşur.
 - Ürün kaybolursa geçmiş silinmez; `lastSeenAt` güncellenir.
-- `h10_offers` yalnız güncel, uygun teklifi temsil eder; geçmiş ve filtrelenen\n  satırlar `h10_observations` / `h10_ingest_rows` içindedir.\n- Kaynağı bu turda tamamlanmış (`ok` / `no_results` / `partial`) ama satırı\n  artık dönmemiş teklifler güncel tablodan silinir. `failed` / `not_configured`\n  kaynağın önceki teklifleri korunur.
+- `h10_offers` yalnız güncel, uygun teklifi temsil eder; geçmiş ve filtrelenen
+  satırlar `h10_observations` / `h10_ingest_rows` içindedir.
+- Kaynağı bu turda tamamlanmış (`ok` / `no_results` / `partial`) ama satırı
+  artık dönmemiş teklifler güncel tablodan silinir. `failed` / `not_configured`
+  kaynağın önceki teklifleri korunur.
 
 ---
 

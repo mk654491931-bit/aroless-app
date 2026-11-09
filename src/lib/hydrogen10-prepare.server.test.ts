@@ -7,12 +7,7 @@ import type { RawProduct } from "./product-discovery.types";
 const NOW = new Date("2026-11-08T10:00:00.000Z");
 const GTIN = "4006381333931";
 
-function report(
-  name: string,
-  items: number,
-  ok = true,
-  error = "",
-): SourceReport {
+function report(name: string, items: number, ok = true, error = ""): SourceReport {
   return { name, ok, items, ms: 120, error };
 }
 
@@ -108,9 +103,9 @@ describe("prepareH10Run", () => {
     expect(run.invalidCount).toBe(2); // 1 tr geçersiz + 1 wikipedia sinyali
     expect(run.products).toHaveLength(5);
     expect(run.products.some((product) => product.title.includes("Wikipedia"))).toBe(false);
-    expect(
-      run.ingestRows.find((row) => row.title.includes("Wikipedia"))?.rejectionReason,
-    ).toBe("non_product");
+    expect(run.ingestRows.find((row) => row.title.includes("Wikipedia"))?.rejectionReason).toBe(
+      "non_product",
+    );
   });
 
   it("aynı GTIN'i tek kanonik üründe birleştirir, satıcıyı kimliğe katmaz", () => {
@@ -124,14 +119,14 @@ describe("prepareH10Run", () => {
   });
 
   it("null fiyatı korur, 0 fiyatı geçerli fiyat gibi yazmaz", () => {
-    const noPriceProduct = run.products.find((product) =>
-      product.title.includes("Ölçülmemiş"),
-    );
+    const noPriceProduct = run.products.find((product) => product.title.includes("Ölçülmemiş"));
     expect(noPriceProduct).toBeTruthy();
     expect(noPriceProduct?.offers[0]?.priceUsd).toBeNull();
     expect(noPriceProduct?.offers[0]?.priceLocalMinor).toBeNull();
 
-    const bad = run.observations.find((observation) => observation.rejectionReason === "invalid_price");
+    const bad = run.observations.find(
+      (observation) => observation.rejectionReason === "invalid_price",
+    );
     expect(bad).toBeTruthy();
     expect(bad?.priceUsd).toBeNull();
     expect(bad?.eligible).toBe(false);
@@ -179,10 +174,54 @@ describe("prepareH10Run", () => {
   });
 
   it("gözlem zamanı ve para birimi tek kaynaktan gelir", () => {
-    expect(run.observations.every((observation) => observation.observedAt === NOW.toISOString())).toBe(
-      true,
-    );
+    expect(
+      run.observations.every((observation) => observation.observedAt === NOW.toISOString()),
+    ).toBe(true);
     expect(run.observations.every((observation) => observation.currency === "USD")).toBe(true);
     expect(run.observations.every((observation) => observation.evidence === "measured")).toBe(true);
+  });
+
+  it("seçilen platforma ait olmayan satırı arşivler ama ürüne çevirmez", () => {
+    const rows: RawProduct[] = [
+      {
+        title: "Amazon Air Fryer 5L",
+        brand: "Acme",
+        seller: "Amazon",
+        source: "serpapi-shopping",
+        url: "https://www.amazon.com/dp/B000TEST01",
+        imageUrl: "https://example.com/amazon.jpg",
+        priceUsd: 89.99,
+        rating: 4.6,
+        ratingCount: 200,
+        inStock: true,
+      },
+      {
+        title: "Trendyol Air Fryer 5L",
+        brand: "Acme",
+        seller: "Trendyol",
+        source: "tr-reader",
+        url: "https://www.trendyol.com/urun",
+        imageUrl: "https://example.com/trendyol.jpg",
+        priceUsd: 79.99,
+        rating: 4.5,
+        ratingCount: 150,
+        inStock: true,
+      },
+    ];
+    const filtered = prepareH10Run(
+      rows,
+      [report("serpapi-shopping", 1), report("tr-reader", 1)],
+      { currency: "USD", platform: "amazon" },
+      NOW,
+    );
+
+    expect(filtered.products).toHaveLength(1);
+    expect(filtered.products[0]?.title).toContain("Amazon");
+    expect(filtered.observations).toHaveLength(1);
+    expect(filtered.ingestRows).toHaveLength(2);
+    expect(filtered.ingestRows.find((row) => row.title.includes("Trendyol"))?.rejectionReason).toBe(
+      "platform_mismatch",
+    );
+    expect(filtered.notes.some((note) => note.includes("Platform filtresi"))).toBe(true);
   });
 });
