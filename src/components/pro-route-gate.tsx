@@ -41,7 +41,7 @@ export function ProRouteGate({ children }: { children: React.ReactNode }) {
     <main className="min-h-[70vh] px-4 py-16">
       <LockedPanel
         onUpgrade={() => setShowPricing(true)}
-        title="Bu modül PRO paketlere özel"
+        title="Bu modül ücretli paketlere özel"
         note="Ücretsiz plan yalnızca Ürün Bulucu'yu ve 2 hoş geldin kredisini kapsar. 14'lü AI Konsey ve diğer 13 gelişmiş AI aracı Starter, Pro ve Business paketlerinde açılır."
       />
       <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />

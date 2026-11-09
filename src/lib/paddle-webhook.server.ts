@@ -42,11 +42,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function handlePaddleWebhook(request: Request): Promise<Response> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const {
-    paddleSettings,
     verifyPaddleWebhook,
     mapPaddleEvent,
     appliedDiscountId,
     creditGrantDecision,
+    paddleWebhookSettings,
     planForAsset,
     planForAmount,
     resolvePaddleEntitlement,
@@ -62,18 +62,13 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
 
   try {
     // 1. Configuration guard — fail loudly (Paddle retries with backoff).
-    const settings = paddleSettings();
+    const settings = paddleWebhookSettings();
     if (!settings) {
       console.error("[Paddle Webhook] Missing Paddle configuration");
       return text("Paddle not configured", 500);
     }
-    // Webhook kendi sırrına muhtaçtır; tarayıcı token'ı EKSİK OLSA BİLE çalışır.
-    // Sır yoksa imza doğrulanamaz → yapılandırma hatası olarak 500 dön (Paddle
-    // yeniden dener, kurulum eksikliği logda adıyla görünür).
-    if (!settings.webhookSecret) {
-      console.error("[Paddle Webhook] Missing PADDLE_WEBHOOK_SECRET_KEY");
-      return text("Paddle webhook secret not configured", 500);
-    }
+    // Webhook kendi sırrına muhtaçtır; tarayıcı token'ı ve API anahtarı EKSİK
+    // OLSA BİLE imza doğrulanabilir. `paddleWebhookSettings` sırrı garanti eder.
 
     // 2. Payload size guard (DoS protection).
     const declaredLength = Number(request.headers.get("content-length") ?? 0);

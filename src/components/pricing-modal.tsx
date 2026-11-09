@@ -90,50 +90,53 @@ export function PricingModal({
    * yüzeyler (initialPlan) da bu tek yolu kullanır — böylece ödeme davranışı
    * iki yerde ayrışamaz.
    */
-  const subscribe = useCallback(async (plan: PlanId) => {
-    setLoading(plan);
-    // Kalıcı işaret: kullanıcı sekmeyi yenilese/başka sayfaya geçse bile
-    // uygulama kabuğu (AppTopbar → usePlanSync) paketi Paddle'dan tazelemeye
-    // devam eder. Önceden bu bilgi yalnız açık modalın belleğindeydi.
-    markPlanPurchasePending();
-    let opened = false;
-    let email: string | null | undefined;
+  const subscribe = useCallback(
+    async (plan: PlanId) => {
+      setLoading(plan);
+      // Kalıcı işaret: kullanıcı sekmeyi yenilese/başka sayfaya geçse bile
+      // uygulama kabuğu (AppTopbar → usePlanSync) paketi Paddle'dan tazelemeye
+      // devam eder. Önceden bu bilgi yalnız açık modalın belleğindeydi.
+      markPlanPurchasePending();
+      let opened = false;
+      let email: string | null | undefined;
 
-    // Hesaba bağlı kod (kayıt sırasında veya `?promo=` linkiyle) ödeme ekranına
-    // ön-doldurulur: kullanıcı kodu ikinci kez yazmaz. Okunamazsa (oturum yok /
-    // geçici hata) ödeme akışı etkilenmez — kod olmadan devam edilir.
-    const promo = await promoFn().catch(() => null);
+      // Hesaba bağlı kod (kayıt sırasında veya `?promo=` linkiyle) ödeme ekranına
+      // ön-doldurulur: kullanıcı kodu ikinci kez yazmaz. Okunamazsa (oturum yok /
+      // geçici hata) ödeme akışı etkilenmez — kod olmadan devam edilir.
+      const promo = await promoFn().catch(() => null);
 
-    try {
-      // Önce server transaction'ı kullanılır; userId + plan metadata'sı
-      // güvenilir biçimde webhook'a taşınır.
-      const session = await checkout({ data: { plan } });
-      email = session.email;
-      opened = await openPaddleOverlay(
-        {
-          transactionId: session.transactionId,
-          clientToken: session.clientToken,
-          environment: session.environment,
-          priceId: session.priceId,
-          email: session.email,
-        },
-        { email: session.email, plan, promo, onEvent: onCheckoutEvent },
-      );
-    } catch (error) {
-      console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
-    }
+      try {
+        // Önce server transaction'ı kullanılır; userId + plan metadata'sı
+        // güvenilir biçimde webhook'a taşınır.
+        const session = await checkout({ data: { plan } });
+        email = session.email;
+        opened = await openPaddleOverlay(
+          {
+            transactionId: session.transactionId,
+            clientToken: session.clientToken,
+            environment: session.environment,
+            priceId: session.priceId,
+            email: session.email,
+          },
+          { email: session.email, plan, promo, onEvent: onCheckoutEvent },
+        );
+      } catch (error) {
+        console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
+      }
 
-    // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
-    // doğrudan ilgili planın public price ID'siyle açılır.
-    if (!opened) {
-      opened = await openPaddlePlanCheckout(plan, { email, promo, onEvent: onCheckoutEvent });
-    }
+      // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
+      // doğrudan ilgili planın public price ID'siyle açılır.
+      if (!opened) {
+        opened = await openPaddlePlanCheckout(plan, { email, promo, onEvent: onCheckoutEvent });
+      }
 
-    if (!opened) {
-      toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
-    }
-    setLoading(null);
-  }, [checkout, promoFn, onCheckoutEvent]);
+      if (!opened) {
+        toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
+      }
+      setLoading(null);
+    },
+    [checkout, promoFn, onCheckoutEvent],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -225,6 +228,9 @@ export function PricingModal({
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">
                     {p.credits} kredi / ay
+                  </span>
+                  <span className="rounded-full border border-[oklch(0.68_0.15_255)]/25 bg-[oklch(0.68_0.15_255)]/10 px-2 py-0.5 font-semibold text-[oklch(0.82_0.1_255)]">
+                    {p.hydrogen10Runs.toLocaleString("tr-TR")} Hidrojen10 / ay
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">
                     Tüm modüller açık

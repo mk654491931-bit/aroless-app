@@ -18,6 +18,7 @@
  *                                       PADDLE_PRODUCT_ID are still honoured for backwards compatibility.
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
 import { PLAN_BY_ID, PLAN_CREDIT_GRANTS, PLANS } from "@/lib/plans";
 
@@ -100,10 +101,10 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
  * variables) when the integration is not configured — callers decide how to fail.
  *
  * KATALOG KISMİ OLUR (ölçülen hatanın kaynağı): `apiKey`/`webhookSecret`/
- * `clientToken` BİRDEN zorunlu tutuluyordu; webhook'un tarayıcı token'ına
- * ihtiyacı YOKTUR. Ayarlar artık yalnız API anahtarı yoksa null döner; webhook
- * sırrı eksikse webhook noktası, tarayıcı token'ı eksikse yalnız checkout
- * açıkça reddedilir.
+ * `clientToken` BİRDEN zorunlu tutuluyordu; webhook'un tarayıcı token'ına ve
+ * API anahtarına ihtiyacı YOKTUR. İki ayrı kapı vardır: `paddleSettings`
+ * (checkout + API) API anahtarını, `paddleWebhookSettings` yalnız webhook
+ * sırrını zorunlu tutar. Eksik olan yol açıkça reddedilir, diğeri çalışır.
  * Fiyat ID'leri ise ZORUNLU DEĞİLDİR: bir planın fiyat ID'si eksik olduğünde
  * önceden tüm entegrasyon `null` dönüyordu. Bunun ölçülen sonucu şuydu:
  * checkout sunucu yolundan düşüyor, tarayıcı `customData`sız ham fiyat
@@ -114,8 +115,8 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
  * Artık yalnız gerçekten konuşulamaz durumda `null` döner; eksik fiyat ID'leri
  * loglanır ve yalnız O planın checkout'u reddedilir.
  */
-export function paddleSettings(): PaddleSettings | null {
-  const apiKey = process.env["PADDLE_API_KEY"];
+function readPaddleSettings(): PaddleSettings | null {
+  const apiKey = process.env["PADDLE_API_KEY"] ?? "";
   const webhookSecret = firstDefined("PADDLE_WEBHOOK_SECRET_KEY", "PADDLE_WEBHOOK_SECRET");
   // Client tokens and price IDs are public Vite configuration. Keep the
   // server-only API key and webhook secret on their unprefixed names.
@@ -147,15 +148,11 @@ export function paddleSettings(): PaddleSettings | null {
   // Webhook sırrı ya da tarayıcı token'ı TEK BAŞINA eksikse entegrasyonu
   // tümden kapatma: yalnız o yol çalışmaz. Kullanıcı ödemesi webhook'suz da
   // kurtarılabilir (tazeleme + Paddle API) ve checkout tarayıcı token'sız da
-  // sunucudan açılabilir. Entegrasyon yalnız API anahtarı yoksa kapalıdır.
-  if (!apiKey || (!webhookSecret && !clientToken)) {
-    const missing = [
-      ...(!apiKey ? ["PADDLE_API_KEY"] : []),
-      ...(!webhookSecret && !clientToken
-        ? ["PADDLE_WEBHOOK_SECRET_KEY veya PADDLE_CLIENT_TOKEN"]
-        : []),
-    ];
-    console.error(`[Paddle] Missing environment variable(s): ${missing.join(", ")}`);
+  // sunucudan açılabilir. Entegrasyon, iki yoldan hiçbiri yoksa kapalıdır.
+  if (!webhookSecret && !clientToken) {
+    console.error(
+      "[Paddle] Missing environment variable(s): PADDLE_WEBHOOK_SECRET_KEY veya PADDLE_CLIENT_TOKEN",
+    );
     return null;
   }
   if (!webhookSecret) {
@@ -175,6 +172,40 @@ export function paddleSettings(): PaddleSettings | null {
     priceIds,
     productIds,
   };
+}
+
+/**
+ * Sunucu ödeme yolu (checkout + tazeleme) için ayarlar: API anahtarı ZORUNLU.
+ * Paddle API'si olmadan transaction oluşturulamaz veya okunamaz.
+ */
+export function paddleSettings(): PaddleSettings | null {
+  const settings = readPaddleSettings();
+  if (!settings) return null;
+  if (!settings.apiKey) {
+    console.error("[Paddle] Missing environment variable(s): PADDLE_API_KEY");
+    return null;
+  }
+  return settings;
+}
+
+/**
+ * WEBHOOK yolunun ayarları — API anahtarı ZORUNLU DEĞİLDİR.
+ *
+ * İmza doğrulama yalnız webhook sırrını gerektirir. Plan, olaydaki fiyat/ürün
+ * ID'sinden ya da `transaction.completed` tutarından çözülebilir. API anahtarı
+ * yokken abonelik olayının tutarı okunamaz; bu durumda fiyat ID'si olan
+ * kurulumlar çalışmaya devam eder, olmayanlar `reconcile` ile kurtarılır.
+ * ÖNEMLİ: API anahtarı eksik diye webhook'u tümden kapatmak, ödeme alınıp
+ * aboneliğin hiç yazılmamasına yol açıyordu — bu yol artık ayrı değerlendirilir.
+ */
+export function paddleWebhookSettings(): PaddleSettings | null {
+  const settings = readPaddleSettings();
+  if (!settings) return null;
+  if (!settings.webhookSecret) {
+    console.error("[Paddle] Missing environment variable(s): PADDLE_WEBHOOK_SECRET_KEY");
+    return null;
+  }
+  return settings;
 }
 
 /**
@@ -307,9 +338,9 @@ const paddleClients = new Map<string, Paddle>();
 /** Memoized Paddle API client for the current env/key pair. */
 export function getPaddleClient(): Paddle {
   const settings = paddleSettings();
-  if (!settings) {
+  if (!settings?.apiKey) {
     throw new Error(
-      "Paddle yapılandırılmamış. PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET_KEY, PADDLE_CLIENT_TOKEN ve plan price ID'leri eksik.",
+      "Paddle API yapılandırılmamış. PADDLE_API_KEY ve en az bir ödeme yolu (webhook sırrı veya tarayıcı token'ı) gerekli.",
     );
   }
   const cacheKey = `${settings.environment}:${settings.apiKey}`;
@@ -1170,6 +1201,53 @@ export async function fetchLastCompletedTransaction(
  * official SDK. Returns the parsed event (id/type/timestamp/data) and throws
  * when the signature is invalid or the event is stale.
  */
+/**
+ * Paddle-Signature doğrulaması — SDK istemcisi GEREKTİRMEZ.
+ *
+ * NEDEN AYRI: `getPaddleClient()` API anahtarı olmadan oluşturulamaz; imza
+ * doğrulaması ise yalnız webhook sırrı + ham gövde ile yapılır. SDK'nın
+ * `webhooks.unmarshal` yolunu kullanmak, API anahtarı eksik bir dağıtımda
+ * webhook'u tümden çalışmaz hâle getiriyordu. Burada SDK'nın doğrulama
+ * kuralları birebir uygulanır: `ts=...;h1=...`, `${ts}:${rawBody}` üzerinden
+ * HMAC-SHA256 ve 5 saniyelik tazelik penceresi. Karşılaştırma zamanlama
+ * saldırılarına karşı `timingSafeEqual` ile yapılır.
+ */
+export function verifyPaddleSignature(
+  rawBody: string,
+  secret: string,
+  signatureHeader: string,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!secret || !signatureHeader) return false;
+  const hashes: string[] = [];
+  let tsRaw = "";
+  for (const part of signatureHeader.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (key === "ts" && !tsRaw) tsRaw = value;
+    else if (key === "h1" && value) hashes.push(value);
+  }
+  const ts = Number.parseInt(tsRaw, 10);
+  if (!Number.isFinite(ts) || hashes.length === 0) return false;
+  // Paddle SDK ile aynı pencere: eski imza replay sayılır.
+  if (nowMs > (ts + 5) * 1000) return false;
+  const expected = Buffer.from(
+    createHmac("sha256", secret).update(`${ts}:${rawBody}`).digest("hex"),
+    "hex",
+  );
+  return hashes.some((hash) => {
+    const actual = Buffer.from(hash, "hex");
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  });
+}
+
+/**
+ * Verify the Paddle-Signature header against the raw request body.
+ * Returns the parsed event (id/type/timestamp/data) and throws when the
+ * signature is invalid.
+ */
 export async function verifyPaddleWebhook(
   rawBody: string,
   paddleSignature: string,
@@ -1181,25 +1259,34 @@ export async function verifyPaddleWebhook(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
 }> {
-  const settings = paddleSettings();
+  const settings = paddleWebhookSettings();
   if (!settings) {
-    throw new Error("Paddle yapılandırılmamış (webhook secret eksik).");
-  }
-  if (!settings.webhookSecret) {
     throw new Error("Paddle webhook sırrı eksik (PADDLE_WEBHOOK_SECRET_KEY). İmza doğrulanamaz.");
   }
   if (!paddleSignature) {
     throw new Error("Missing paddle-signature header.");
   }
-  const event = await getPaddleClient().webhooks.unmarshal(
-    rawBody,
-    settings.webhookSecret,
-    paddleSignature,
-  );
+  if (!verifyPaddleSignature(rawBody, settings.webhookSecret, paddleSignature)) {
+    throw new Error("[Paddle] Webhook signature verification failed");
+  }
+  let parsed: {
+    event_id?: unknown;
+    event_type?: unknown;
+    occurred_at?: unknown;
+    data?: unknown;
+  };
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    throw new Error("[Paddle] Invalid webhook payload");
+  }
+  if (!parsed || typeof parsed.event_id !== "string" || typeof parsed.event_type !== "string") {
+    throw new Error("[Paddle] Invalid webhook payload");
+  }
   return {
-    eventId: event.eventId,
-    eventType: event.eventType,
-    occurredAt: event.occurredAt,
-    data: event.data,
+    eventId: parsed.event_id,
+    eventType: parsed.event_type,
+    occurredAt: typeof parsed.occurred_at === "string" ? parsed.occurred_at : "",
+    data: parsed.data ?? {},
   };
 }

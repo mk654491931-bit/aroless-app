@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { PageHero } from "@/components/page-hero";
+import { usePlanUsage } from "@/hooks/use-plan-usage";
 import { withProGate } from "@/components/pro-route-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,7 @@ import {
   searchHydrogen10,
   refreshHydrogen10,
 } from "@/lib/hydrogen10.functions";
+import { usageLabelFor } from "@/lib/plan-usage";
 import { cn } from "@/lib/utils";
 
 type H10SearchParams = {
@@ -253,11 +255,12 @@ function CacheLine({ data }: { data: Extract<H10SearchResult, { ok: true }> }) {
 
 function MigrationNotice({ result }: { result: Extract<H10SearchResult, { ok: false }> }) {
   const schemaMissing = result.code === "schema_missing";
+  const planLimit = result.code === "plan_limit";
   return (
     <div
       className={cn(
         "premium-card border p-5",
-        schemaMissing
+        schemaMissing || planLimit
           ? "border-[var(--warning)]/35 bg-[var(--warning)]/[0.06]"
           : "border-red-400/30 bg-red-400/[0.05]",
       )}
@@ -266,7 +269,7 @@ function MigrationNotice({ result }: { result: Extract<H10SearchResult, { ok: fa
         <span
           className={cn(
             "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-            schemaMissing
+            schemaMissing || planLimit
               ? "border-[var(--warning)]/30 bg-[var(--warning)]/10 text-[var(--warning)]"
               : "border-red-400/30 bg-red-400/10 text-red-300",
           )}
@@ -275,9 +278,21 @@ function MigrationNotice({ result }: { result: Extract<H10SearchResult, { ok: fa
         </span>
         <div className="min-w-0">
           <h2 className="text-sm font-bold">
-            {schemaMissing ? "Veritabanı migration'ı bekleniyor" : "İstek tamamlanamadı"}
+            {schemaMissing
+              ? "Veritabanı migration'ı bekleniyor"
+              : planLimit
+                ? "Hidrojen10 hakkın doldu"
+                : "İstek tamamlanamadı"}
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{result.message}</p>
+          {planLimit && (
+            <Link
+              to="/pricing"
+              className="mt-3 inline-flex items-center gap-1 rounded-lg border border-[var(--warning)]/30 bg-[var(--warning)]/10 px-3 py-1.5 text-[11px] font-semibold text-[var(--warning)] hover:bg-[var(--warning)]/15"
+            >
+              Paketleri gör <ChevronRight size={12} />
+            </Link>
+          )}
           {schemaMissing && (
             <div className="mt-3 space-y-2 text-[11px] leading-relaxed text-muted-foreground">
               <p>
@@ -1144,6 +1159,20 @@ function Hydrogen10Page() {
   const [selectedProduct, setSelectedProduct] = useState<H10Product | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
 
+  // Aylık Hidrojen10 hakkı — üst bar ve ayarlar ile AYNI sayaçtan okunur.
+  const planUsage = usePlanUsage();
+  const h10Row = planUsage.rows.find((row) => row.kind === "hydrogen10Runs");
+  const h10Label = h10Row
+    ? usageLabelFor({
+        used: h10Row.used,
+        limit: h10Row.limit,
+        disabled: h10Row.disabled,
+        measured: planUsage.measured,
+        loading: planUsage.loading,
+      })
+    : "…";
+  const h10Exhausted = !!h10Row && h10Row.exhausted && !h10Row.disabled;
+
   useEffect(() => {
     setQuery(search.q);
     setCountry(search.country);
@@ -1212,6 +1241,15 @@ function Hydrogen10Page() {
 
   const data = resultQuery.data;
   const success = isH10SearchSuccess(data) ? data : null;
+  const lastScrapedAt = success?.lastScrapedAt ?? null;
+
+  // Canlı tarama bittiğinde aylık hak rozeti kendiliğinden düşsün. Yalnız
+  // `lastScrapedAt` DEĞİŞTİĞİNDE çalışır: cache polling'i sayacı boşa
+  // tazelemez, tarama tamamlanınca bir kez tazeler.
+  useEffect(() => {
+    if (!lastScrapedAt) return;
+    void queryClient.invalidateQueries({ queryKey: ["plan-usage"] });
+  }, [lastScrapedAt, queryClient]);
   const failure = isH10SearchFailure(data) ? data : null;
   const filtered = useMemo(
     () => (success ? filterH10Products(success.products, filters) : []),
@@ -1239,15 +1277,31 @@ function Hydrogen10Page() {
               <Badge variant="outline" className="border-white/12 bg-white/5 text-[10px]">
                 <Database size={10} className="mr-1" /> DB-first
               </Badge>
+              <Badge
+                variant="outline"
+                title={`Bu ay Hidrojen10 tarama hakkı: ${h10Label}. 24 saat cache'ten dönen aramalar hak harcamaz.`}
+                className={cn(
+                  "border-white/12 bg-white/5 text-[10px]",
+                  h10Exhausted &&
+                    "border-[var(--warning)]/35 bg-[var(--warning)]/10 text-[var(--warning)]",
+                )}
+              >
+                <Activity size={10} className="mr-1" /> Hidrojen10 {h10Label}
+              </Badge>
               <Button
                 variant="secondary"
                 size="sm"
                 className="gap-1.5"
                 onClick={() => {
-                  if (!canSearch) return;
+                  if (!canSearch || h10Exhausted) return;
                   refresh.mutate();
                 }}
-                disabled={!canSearch || refresh.isPending}
+                disabled={!canSearch || refresh.isPending || h10Exhausted}
+                title={
+                  h10Exhausted
+                    ? "Aylık Hidrojen10 hakkın doldu — cache'teki nişler görüntülenebilir."
+                    : "Aynı nişi 24 saatlik cache'i atlayarak yeniden tara"
+                }
               >
                 {refresh.isPending ? (
                   <Loader2 size={13} className="animate-spin" />
@@ -1322,12 +1376,35 @@ function Hydrogen10Page() {
               </Button>
             </form>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <ShieldCheck size={11} className="text-[var(--profit)]" />
-                24 saat cache · aynı nişte kazıma yapılmaz · PRO
-              </span>
+              {h10Exhausted ? (
+                <span className="inline-flex items-center gap-1.5 text-[var(--warning)]">
+                  <AlertTriangle size={11} />
+                  Aylık canlı tarama hakkın doldu; cache'teki nişleri görüntülemeye devam
+                  edebilirsin.
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <ShieldCheck size={11} className="text-[var(--profit)]" />
+                  24 saat cache · aynı nişte kazıma yapılmaz · PRO
+                </span>
+              )}
               <span>Ülke + platform + para birimi ayrı niş anahtarıdır.</span>
             </div>
+            {h10Exhausted && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--warning)]/25 bg-[var(--warning)]/[0.07] px-3 py-2 text-[11px] text-[var(--warning)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <AlertTriangle size={12} />
+                  Bu ay {h10Label} canlı tarama kullandın. Yeni niş taraması için paketini
+                  yükseltebilirsin.
+                </span>
+                <Link
+                  to="/pricing"
+                  className="inline-flex items-center gap-1 font-semibold hover:underline"
+                >
+                  Paketleri gör <ChevronRight size={12} />
+                </Link>
+              </div>
+            )}
             {success && <CacheLine data={success} />}
           </div>
         </div>

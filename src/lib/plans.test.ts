@@ -152,7 +152,7 @@ describe("quotaFor", () => {
     expect(quota.toolRuns).toBe(300);
     expect(quota.councilRuns).toBe(20);
     expect(quota.radarScans).toBe(60);
-    expect(quota.hydrogen10Runs).toBe(4500);
+    expect(quota.hydrogen10Runs).toBe(800);
   });
 
   it("quotas increase with level", () => {

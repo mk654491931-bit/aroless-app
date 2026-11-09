@@ -652,6 +652,9 @@ export function MarketingLanding() {
                     {p.credits} kredi / ay
                   </span>
                   <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+                    {p.hydrogen10Runs.toLocaleString("tr-TR")} Hidrojen10 / ay
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
                     Tüm modüller açık
                   </span>
                 </div>

@@ -494,12 +494,12 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Vérification de l'abonnement…",
     ar: "جارٍ التحقق من الاشتراك…",
   },
-  "Bu modül PRO paketlere özel": {
-    en: "This module is PRO-only",
-    es: "Este módulo es solo PRO",
-    de: "Dieses Modul ist nur für PRO",
-    fr: "Ce module est réservé à PRO",
-    ar: "هذه الوحدة متاحة لـPRO فقط",
+  "Bu modül ücretli paketlere özel": {
+    en: "This module is for paid plans",
+    es: "Este módulo es para planes de pago",
+    de: "Dieses Modul ist für kostenpflichtige Pakete",
+    fr: "Ce module est réservé aux offres payantes",
+    ar: "هذه الوحدة متاحة للخطط المدفوعة",
   },
   "Arkadaşını davet et": {
     en: "Invite a friend",

@@ -141,7 +141,7 @@ async function assertH10Access(context: {
     /* admin kimliği doğrulanamadı */
   }
 
-  const error = new Error("Hidrojen10 yalnız PRO paketlere açıktır.") as Error & {
+  const error = new Error("Hidrojen10 Starter, Pro ve Business paketlerine açıktır.") as Error & {
     statusCode: number;
   };
   error.statusCode = 403;
@@ -296,18 +296,21 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
                 platform: market.platform.id,
                 currency: market.country.currency,
                 triggeredBy: "stale_refresh",
-              }).then(() => undefined),
+              }).then(async (result) => {
+                // Hak YALNIZ tarama GERÇEKTEN veri getirdiyse yazılır. Önceden
+                // başlatma anında yazılıyordu; arka plan taraması tamamen
+                // başarısız olsa bile kullanıcı hakkını kaybediyordu.
+                if (result.prepared.status !== "failed") {
+                  await recordH10Use(accessContext(context), "hydrogen10-search", {
+                    canonicalKey: market.canonicalKey,
+                    source: "stale_refresh",
+                  });
+                }
+              }),
             { key: `h10:${market.canonicalKey}`, timeoutMs: 90_000 },
           );
-          refreshing = started.started || started.reason === "duplicate";
-          // Hak YALNIZ bu isteğin başlattığı gerçek tarama için yazılır.
           // `duplicate` = aynı niş zaten taranıyor; ikinci kez sayılmaz.
-          if (started.started) {
-            await recordH10Use(accessContext(context), "hydrogen10-search", {
-              canonicalKey: market.canonicalKey,
-              source: "stale_refresh",
-            });
-          }
+          refreshing = started.started || started.reason === "duplicate";
           message = refreshing
             ? "DB'deki eski veri gösteriliyor; arka planda yenileniyor."
             : "DB'deki eski veri gösteriliyor. Bu ortamda arka plan yenileme kapalı; Yenile'yi kullanın.";

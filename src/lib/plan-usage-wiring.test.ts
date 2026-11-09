@@ -151,3 +151,37 @@ describe("sol bar — modül kullanımı sayaçtan okunur", () => {
     expect(s).toContain("admin_exempt");
   });
 });
+
+describe("Hidrojen10 — aylık hak kapısı bağlı", () => {
+  it("taze cache kapıdan ÖNCE döner; canlı tarama hak sorar", () => {
+    const f = src("./hydrogen10.functions.ts");
+    expect(f).toContain("planUsageAllowance");
+    expect(f).toContain("recordPlanUsage");
+    // 24 saat cache isabeti hiçbir hak kapısına uğramaz: ödenmiş veriyi
+    // yeniden göstermek yeni kaynak maliyeti doğurmaz.
+    expect(f.indexOf('cacheDecision === "fresh"')).toBeLessThan(
+      f.indexOf('await requireH10Allowance(accessContext(context), "hydrogen10-search")'),
+    );
+    // Miss + bayat + manuel yenileme: üç canlı yol da kapıdan geçer.
+    expect(f.match(/await requireH10Allowance\(/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("tarama başarısızsa hak harcanmaz; arka planda bitince yazılır", () => {
+    const f = src("./hydrogen10.functions.ts");
+    const checks = f.match(/result\.prepared\.status !== "failed"/g) ?? [];
+    expect(checks.length).toBeGreaterThanOrEqual(3);
+    // Arka plan yolu hak yazımını BAŞLATMADAN hemen sonra değil, tarama
+    // sonucu geldikten sonra yapar.
+    const bgStart = f.indexOf("hydrogen10-refresh");
+    const bgRecord = f.indexOf('recordH10Use(accessContext(context), "hydrogen10-search"');
+    expect(bgRecord).toBeGreaterThan(bgStart);
+  });
+
+  it("H10 ekranı kalan hakkı gösterir, dolunca canlı yenilemeyi kapatır", () => {
+    const page = src("../routes/hidrojen10.tsx");
+    expect(page).toContain("usePlanUsage");
+    expect(page).toContain('row.kind === "hydrogen10Runs"');
+    expect(page).toContain("h10Exhausted");
+    expect(page).toContain("disabled={!canSearch || refresh.isPending || h10Exhausted}");
+  });
+});

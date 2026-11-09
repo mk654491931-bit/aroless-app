@@ -187,6 +187,9 @@ function PricingPage() {
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">
                     {p.credits} kredi / ay
                   </span>
+                  <span className="rounded-full border border-[oklch(0.68_0.15_255)]/25 bg-[oklch(0.68_0.15_255)]/10 px-2 py-0.5 font-semibold text-[oklch(0.82_0.1_255)]">
+                    {p.hydrogen10Runs.toLocaleString("tr-TR")} Hidrojen10 / ay
+                  </span>
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold">
                     Tüm modüller açık
                   </span>

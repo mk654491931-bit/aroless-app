@@ -155,7 +155,7 @@ describe("planUsageRows — paket limitleri plans.ts ile birebir", () => {
       planUsageRows(level, zero).find((r) => r.kind === "hydrogen10Runs")!.limit;
     expect(limitOf(1)).toBe(100);
     expect(limitOf(2)).toBe(200);
-    expect(limitOf(3)).toBe(4500);
+    expect(limitOf(3)).toBe(800);
   });
 
   it("admin her kalemde 250", () => {

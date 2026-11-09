@@ -12,7 +12,7 @@
 // ============================================================================
 import { afterEach, describe, expect, it } from "vitest";
 
-import { appliedDiscountId, paddleSettings } from "./paddle.server";
+import { appliedDiscountId, paddleSettings, paddleWebhookSettings } from "./paddle.server";
 
 const REQUIRED = {
   PADDLE_API_KEY: "k",
@@ -48,10 +48,26 @@ describe("paddleSettings — kısmi katalog", () => {
     expect(settings?.priceIds.Starter).toBe("pri_starter");
   });
 
-  it("yalnız apiKey yoksa entegrasyon kapanır", () => {
+  it("yalnız apiKey yoksa sunucu checkout kapanır ama webhook AYAKTA kalır", () => {
+    // API anahtarı Paddle API çağrıları içindir; imza doğrulama ve fiyat/tutar
+    // eşlemesi ondan bağımsızdır. Anahtar yok diye webhook'u kapatmak, ödeme
+    // alınıp aboneliğin hiç yazılmamasına yol açıyordu.
     process.env = { ...original, ...REQUIRED };
     delete process.env["PADDLE_API_KEY"];
     expect(paddleSettings()).toBeNull();
+
+    const webhook = paddleWebhookSettings();
+    expect(webhook).not.toBeNull();
+    expect(webhook?.apiKey).toBe("");
+    expect(webhook?.webhookSecret).toBe("s");
+    expect(webhook?.priceIds.Pro).toBe("pri_pro");
+  });
+
+  it("webhook sırrı yoksa webhook ayarları dönmez (imza doğrulanamaz)", () => {
+    process.env = { ...original, ...REQUIRED };
+    delete process.env["PADDLE_WEBHOOK_SECRET_KEY"];
+    delete process.env["PADDLE_WEBHOOK_SECRET"];
+    expect(paddleWebhookSettings()).toBeNull();
   });
 
   it("webhook sırrı ya da tarayıcı token'ı TEK BAŞINA eksikse yalnız o yol kapanır", () => {
