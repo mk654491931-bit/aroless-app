@@ -83,13 +83,13 @@ export function HubShell({
           <p className="relative mt-3 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>
           <div className="relative mt-4 flex flex-wrap gap-2 text-[11px]">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 px-2.5 py-1 text-[var(--accent-active)] transition-transform duration-200 hover:-translate-y-0.5">
-              <Cpu size={11} /> 3 motor paralel + sentez katmanı
+              <Cpu size={11} /> modül zorluğuna göre 1–3 motor
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--profit)]/25 bg-[var(--profit)]/10 px-2.5 py-1 text-[var(--profit)] transition-transform duration-200 hover:-translate-y-0.5">
-              <Layers size={11} /> risk · aksiyon · varsayım çıktısı
+              <Layers size={11} /> seçili modüllerde canlı FX · RSS · tedarikçi profili
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-muted-foreground transition-transform duration-200 hover:-translate-y-0.5">
-              <ShieldCheck size={11} /> otomatik anahtar rotasyonu
+              <ShieldCheck size={11} /> risk · aksiyon · varsayım çıktısı
             </span>
           </div>
         </section>

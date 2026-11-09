@@ -52,6 +52,7 @@ describe("araç prompt kayıt defteri", () => {
       // "sayısal, gerekçeli" çıktı sözleşmesinden kopar.
       expect(prompt.length, tool).toBeGreaterThan(500);
       expect(prompt, tool).toContain("OUTPUT LANGUAGE");
+      expect(prompt, tool).toContain(`Today (UTC): ${new Date().toISOString().slice(0, 10)}`);
     }
   });
 
@@ -100,6 +101,18 @@ describe("araç prompt kayıt defteri", () => {
     expect(plan).toContain("$1500");
     expect(plan).toContain("günlük 10 sipariş");
     expect(plan).toContain("0-30");
+  });
+
+  it("canlı kaynak ve güncellik sözleşmesini prompt'a taşır", () => {
+    const news = buildPrompt("news", { ...INPUTS, mode: "live" });
+    expect(news).toContain("canlı RSS");
+
+    const supplier = buildPrompt("legitimacy-detector", {
+      ...INPUTS,
+      url: "https://www.alibaba.com/company/123",
+    });
+    expect(supplier).toContain("canlı tedarikçi sayfası");
+    expect(supplier).toContain("doğrulanmadı");
   });
 
   it("boş girdide çökmez, '-' varsayılanını kullanır", () => {

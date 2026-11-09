@@ -35,9 +35,9 @@ export const TOOL_CACHE_TIERS = {
    */
   market: 3 * HOUR,
   /**
-   * YAPISAL (12 saat): hesaplayıcı niteliğindeki araçlar (landed cost, desi,
-   * sermaye planı, tedarikçi pazarlığı) aynı girdi için aynı sonucu verir;
-   * değişen şey kullanıcının verisidir, o da anahtardadır.
+   * YAPISAL (12 saat): canlı dış veri kullanmayan hesaplayıcılar (desi, lead
+   * time, tedarikçi pazarlığı) aynı girdi için aynı sonucu verir; değişen şey
+   * kullanıcının verisidir, o da anahtardadır.
    */
   structural: 12 * HOUR,
 } as const;
@@ -64,16 +64,20 @@ export const TOOL_CACHE_TTL_MS = {
   "compliance-check": TOOL_CACHE_TIERS.market,
   "competitor-intel": TOOL_CACHE_TIERS.market,
   "growth-plan": TOOL_CACHE_TIERS.market,
+  // Canlı FX veya tedarikçi sayfası kullanan araçlar artık "girdi aynıysa
+  // sonuç aynı" değildir: kur/profil değişince cevap da değişir. 12 saatlik
+  // yapısal önbellek bayat kanıtı taze gibi gösterirdi; 3 saatlik piyasa
+  // kademesine alındı.
+  "reverse-cost": TOOL_CACHE_TIERS.market,
+  "landed-cost": TOOL_CACHE_TIERS.market,
+  "capital-planner": TOOL_CACHE_TIERS.market,
+  "milestone-shield": TOOL_CACHE_TIERS.market,
+  "legitimacy-detector": TOOL_CACHE_TIERS.market,
   // --- YAPISAL ---
   "supplier-negotiator": TOOL_CACHE_TIERS.structural,
   "offer-analyzer": TOOL_CACHE_TIERS.structural,
-  "legitimacy-detector": TOOL_CACHE_TIERS.structural,
   "review-spec-sheet": TOOL_CACHE_TIERS.structural,
-  "reverse-cost": TOOL_CACHE_TIERS.structural,
-  "landed-cost": TOOL_CACHE_TIERS.structural,
-  "capital-planner": TOOL_CACHE_TIERS.structural,
   "desi-optimizer": TOOL_CACHE_TIERS.structural,
-  "milestone-shield": TOOL_CACHE_TIERS.structural,
   "bundle-booster": TOOL_CACHE_TIERS.structural,
   "lead-time": TOOL_CACHE_TIERS.structural,
   "ad-hook-extractor": TOOL_CACHE_TIERS.structural,

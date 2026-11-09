@@ -14,6 +14,41 @@ export type AppCopyExtraLang = "en" | "es" | "de" | "fr" | "ar";
 type Copy = Record<AppCopyExtraLang, string>;
 
 export const APP_COPY_EXTRA: Record<string, Copy> = {
+  "modül zorluğuna göre 1–3 motor": {
+    en: "1–3 engines based on module difficulty",
+    es: "1–3 motores según la dificultad del módulo",
+    de: "1–3 Engines je nach Modulschwierigkeit",
+    fr: "1 à 3 moteurs selon la difficulté du module",
+    ar: "1–3 محركات حسب صعوبة الوحدة",
+  },
+  "seçili modüllerde canlı FX · RSS · tedarikçi profili": {
+    en: "live FX, RSS and supplier profile in selected modules",
+    es: "FX, RSS y perfil de proveedor en vivo en módulos seleccionados",
+    de: "Live-FX, RSS und Lieferantenprofil in ausgewählten Modulen",
+    fr: "FX, RSS et profil fournisseur en direct dans certains modules",
+    ar: "أسعار صرف وRSS وملف مورد مباشرة في وحدات مختارة",
+  },
+  "AI motorları taslak hazırlıyor…": {
+    en: "AI engines are preparing drafts…",
+    es: "Los motores IA preparan borradores…",
+    de: "KI-Engines bereiten Entwürfe vor…",
+    fr: "Les moteurs IA préparent des brouillons…",
+    ar: "محركات الذكاء الاصطناعي تُعدّ المسودات…",
+  },
+  "Sayılar ve kaynaklar doğrulanıyor…": {
+    en: "Checking numbers and sources…",
+    es: "Verificando cifras y fuentes…",
+    de: "Zahlen und Quellen werden geprüft…",
+    fr: "Vérification des chiffres et des sources…",
+    ar: "جارٍ التحقق من الأرقام والمصادر…",
+  },
+  "Nihai rapor hazırlanıyor…": {
+    en: "Preparing the final report…",
+    es: "Preparando el informe final…",
+    de: "Abschlussbericht wird erstellt…",
+    fr: "Préparation du rapport final…",
+    ar: "جارٍ إعداد التقرير النهائي…",
+  },
   "Ürün Bulucu'ya git": {
     en: "Go to Product Finder",
     es: "Ir al Buscador",

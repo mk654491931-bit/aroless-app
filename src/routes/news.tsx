@@ -46,7 +46,10 @@ type NewsItem = {
   category: string;
   summary: string;
   impact: "high" | "medium" | "low";
-  explainer: { means: string; actions: string[]; risk: string };
+  url?: string;
+  /** false → AI yorumu değil, canlı RSS kaynak özeti. */
+  ai?: boolean;
+  explainer?: { means: string; actions: string[]; risk: string };
 };
 
 type LiveItem = {
@@ -58,6 +61,8 @@ type LiveItem = {
   summary: string;
   impact: "high" | "medium" | "low";
   action?: string;
+  url?: string;
+  ai?: boolean;
 };
 
 async function callNews<T>(input: Record<string, string>): Promise<T[]> {
@@ -120,28 +125,47 @@ function NewsCard({ item }: { item: NewsItem }) {
 
       <h3 className="mt-2.5 text-sm font-bold leading-snug">{item.title}</h3>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{item.summary}</p>
-      <span className="mt-2 text-[10px] text-muted-foreground/70">Kaynak: {item.source}</span>
+      <span className="mt-2 text-[10px] text-muted-foreground/70">
+        Kaynak: {item.source}
+        {item.url && (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="ms-1 text-[var(--accent-active)] hover:underline"
+          >
+            · aç
+          </a>
+        )}
+      </span>
 
-      <div className="mt-3 rounded-xl border border-[var(--ai)]/25 bg-[var(--ai)]/[0.07] p-3">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--ai)]">
-          <Target size={12} /> 🎯 AI Explainer
+      {item.explainer ? (
+        <div className="mt-3 rounded-xl border border-[var(--ai)]/25 bg-[var(--ai)]/[0.07] p-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--ai)]">
+            <Target size={12} /> 🎯 AI Explainer
+          </div>
+          <p className="mt-1.5 text-xs leading-relaxed">{item.explainer.means}</p>
+          {item.explainer.actions?.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {item.explainer.actions.map((a, i) => (
+                <li key={i} className="flex gap-2 text-[11px] text-muted-foreground">
+                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--profit)]" /> {a}
+                </li>
+              ))}
+            </ul>
+          )}
+          {item.explainer.risk && (
+            <p className="mt-2 rounded-lg border border-[var(--warning)]/25 bg-[var(--warning)]/10 p-2 text-[11px] text-[var(--warning)]">
+              ⚠ {item.explainer.risk}
+            </p>
+          )}
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed">{item.explainer?.means}</p>
-        {item.explainer?.actions?.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {item.explainer.actions.map((a, i) => (
-              <li key={i} className="flex gap-2 text-[11px] text-muted-foreground">
-                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--profit)]" /> {a}
-              </li>
-            ))}
-          </ul>
-        )}
-        {item.explainer?.risk && (
-          <p className="mt-2 rounded-lg border border-[var(--warning)]/25 bg-[var(--warning)]/10 p-2 text-[11px] text-[var(--warning)]">
-            ⚠ {item.explainer.risk}
-          </p>
-        )}
-      </div>
+      ) : item.ai === false ? (
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11px] text-muted-foreground">
+          <span className="font-semibold text-foreground/80">Kaynak özeti.</span> AI sağlayıcısı
+          tanımlı olduğunda bu başlık için satıcıya özel "bu senin için ne demek?" yorumu üretilir.
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -300,6 +324,13 @@ function NewsPage() {
             <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
               <Newspaper size={14} className="text-[var(--accent-active)]" /> Latest E-Com News
             </h2>
+
+            {!q.isLoading && (q.data ?? []).some((item) => item.ai === false) && (
+              <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[11px] text-muted-foreground">
+                AI sağlayıcısı yok: başlıklar canlı RSS kaynaklarından geliyor. Kaynak özeti
+                gösteriliyor; AI yorumu eklenmedi.
+              </p>
+            )}
 
             {q.isError && (
               <div className="mt-3 flex items-start gap-2 rounded-xl border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-3 text-xs text-[var(--warning)]">

@@ -41,7 +41,7 @@ describe("araç önbellek TTL politikası", () => {
     expect(TOOL_CACHE_TIERS.structural).toBeLessThanOrEqual(DAY);
   });
 
-  it("haberler canlı kademede, hesaplayıcılar yapısal kademede", () => {
+  it("haberler canlı, canlı veri kullananlar piyasa, saf hesaplayıcılar yapısal kademede", () => {
     // Haber 10 dakikadan uzun yaşarsa kullanıcı geçmiş haberi "şimdi" sanır.
     expect(toolCacheTtlMs("news")).toBe(TOOL_CACHE_TIERS.live);
     // Tarife/uyum/rakip verisi gün içinde değişir: canlı kademeye kapatılmaz ama
@@ -50,8 +50,11 @@ describe("araç önbellek TTL politikası", () => {
     expect(toolCacheTtlMs("compliance-check")).toBe(TOOL_CACHE_TIERS.market);
     expect(toolCacheTtlMs("competitor-intel")).toBe(TOOL_CACHE_TIERS.market);
     expect(toolCacheTtlMs("growth-plan")).toBe(TOOL_CACHE_TIERS.market);
-    // Landed cost aynı girdi için aynı sonucu verir; uzun önbellek doğrudur.
-    expect(toolCacheTtlMs("landed-cost")).toBe(TOOL_CACHE_TIERS.structural);
+    // Landed cost artık canlı FX kanıtı kullanır; 12 saatlik yapısal önbellek
+    // bayat kuru taze gibi gösterirdi.
+    expect(toolCacheTtlMs("landed-cost")).toBe(TOOL_CACHE_TIERS.market);
+    expect(toolCacheTtlMs("legitimacy-detector")).toBe(TOOL_CACHE_TIERS.market);
+    expect(toolCacheTtlMs("desi-optimizer")).toBe(TOOL_CACHE_TIERS.structural);
     expect(toolCacheTtlMs("price-strategy")).toBe(TOOL_CACHE_TIERS.market);
   });
 

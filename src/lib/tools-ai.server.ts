@@ -15,6 +15,12 @@ import { openRouterEnvKeys } from "./ai-keys.server";
 import { poolGroupAvailable } from "./ai-pool.server";
 import { withEstimationRules } from "./ai-guidance";
 
+export type ToolSource = {
+  label: string;
+  url?: string;
+  fetchedAt?: string;
+};
+
 export type ToolResult = {
   headline: string;
   metrics: { label: string; value: string; tone?: "profit" | "warning" | "action" | "neutral" }[];
@@ -36,6 +42,8 @@ export type ToolResult = {
   providers?: string[];
   /** 0-100 — engine agreement + coverage based confidence. */
   confidence?: number;
+  /** Prompt'a enjekte edilen canlı/ücretsiz kaynaklar (RSS, FX, tedarikçi sayfası). */
+  sources?: ToolSource[];
 };
 
 const EMPTY: Omit<ToolResult, "provider"> = {
@@ -162,9 +170,14 @@ export function orderToolProviders(
  * doğrulama sağlar hem de sağlayıcı kotalarını aynı anda yakmaz; son dalga
  * ağ geçidi/tam havuz süpürmesi içindir.
  */
-export function toolProviderWaves(order: Provider[], size = 3): Provider[][] {
+export function toolProviderWaves(
+  order: Provider[],
+  size = 3,
+  maxProviders = order.length,
+): Provider[][] {
+  const limit = Math.max(0, Math.min(order.length, Math.floor(maxProviders)));
   const waves: Provider[][] = [];
-  for (let i = 0; i < order.length; i += size) waves.push(order.slice(i, i + size));
+  for (let i = 0; i < limit; i += size) waves.push(order.slice(i, Math.min(i + size, limit)));
   return waves;
 }
 
@@ -217,19 +230,27 @@ function parseResult(text: string): Partial<ToolResult> | null {
 }
 
 /**
- * Hybrid execution — süre bütçesi korumalı, çok motorlu:
- *  1) Dalga 1: öncelik sırasına göre 3 motor PARALEL (müsait sağlayıcılar önce).
- *  2) Dalga 2/3: yeterli taslak çıkmadıysa sıradaki 3'lü gruplar; her dalga
+ * Hybrid execution — süre bütçesi korumalı, araç profiline göre ölçeklenen:
+ *  1) Dalga 1: `maxDrafts` kadar motor PARALEL (fast=1, balanced=2, deep=3).
+ *  2) Dalga 2/3: yeterli taslak çıkmadıysa sıradaki gruplar; her dalga
  *     `budgetMs`e sığmıyorsa hiç başlatılmaz (beklemek 504 demektir).
- *  3) Sentez: en az 2 taslak varsa ve sentez için süre kaldıysa tek editör turu.
+ *  3) Sentez: profil istiyorsa, en az 2 taslak varsa ve süre kaldıysa tek editör turu.
  * En geniş halinde 5+ anahtar havuzlu 6 sağlayıcı + ağ geçidi denenir; yani
  * hangi motor/anahtar o an müsaitse cevabı o verir.
  */
+export type ToolRunOptions = {
+  /** Hedef bağımsız taslak sayısı (fast=1, balanced=2, deep=3); varsayılan 3. */
+  maxDrafts?: number;
+  /** En az iki taslak varsa editör/sentez turu çalışsın mı? Varsayılan true. */
+  synthesize?: boolean;
+};
+
 export async function runTool(
   prompt: string,
   preferred: Provider = "gemini",
   temperature = 0.5,
   budgetMs = 38_000,
+  options: ToolRunOptions = {},
 ): Promise<ToolResult> {
   const started = Date.now();
   const budgetLeft = () => budgetMs - (Date.now() - started);
@@ -239,9 +260,25 @@ export async function runTool(
   const runners = buildRunners(full, temperature);
   // Tercih edilen motor + MÜSAİT olanlar öne: tanımlı anahtarı olmayan veya
   // devre dışı kalmış bir sağlayıcıya ilk dalgada sıra harcamayız.
-  const order = orderToolProviders(preferred);
+  const maxDrafts = Math.max(
+    1,
+    Math.min(PROVIDER_ORDER.length, Math.floor(options.maxDrafts ?? 3)),
+  );
+  // Tercih edilen sağlayıcının anahtarı yoksa onu ilk sıraya koymak, fast'te
+  // aracı boş bırakır; deep/balanced'da ise değerli bir paralel slotu boşa
+  // harcar. Bu yüzden tercih yalnız gerçekten müsaitse korunur.
+  const preferredAvailable = preferred === "lovable" || poolGroupAvailable(preferred);
+  const effectivePreferred = preferredAvailable
+    ? preferred
+    : (PROVIDER_ORDER.find((p) => p !== "lovable" && poolGroupAvailable(p)) ?? preferred);
+  const order = orderToolProviders(effectivePreferred);
   const perCallMs = Math.min(14_000, Math.max(8_000, Math.round(budgetMs / 3)));
-  const waves = toolProviderWaves(order);
+  const runSynthesis = options.synthesize !== false;
+  // Dalga boyu = hedef taslak sayısı: dengeli araç 2, derin araç 3 paralel çağrı
+  // yapar; fast yalnız 1. Sağlayıcı düşerse sonraki dalga hedefi tamamlar, ama
+  // başarılı taslak sayısı profildeki sınırı geçmez. Fast'te ek dalga yoktur:
+  // tek hızlı cevap, ardından kullanıcıya anlaşılır hata.
+  const waves = toolProviderWaves(order, maxDrafts, maxDrafts === 1 ? 1 : order.length);
 
   const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
     Promise.race([
@@ -254,8 +291,9 @@ export async function runTool(
   for (let w = 0; w < waves.length; w++) {
     const wave = waves[w];
     if (!wave.length) continue;
-    // 2 bağımsız taslak sentez için yeterli — daha fazla motor beklemeden devam.
-    if (good.length >= 2) break;
+    // Hedef taslak sayısına ulaştıysak sonraki dalgayı bekleme. `fast` profilde
+    // hedef 1'dir; `deep` profilde 3'e kadar çıkabilir.
+    if (good.length >= maxDrafts) break;
     // İlk dalga her zaman denenir; sonrakiler yalnızca süre kalırsa.
     if (w > 0 && budgetLeft() < perCallMs + SYNTHESIS_RESERVE_MS) break;
     const settled = await Promise.allSettled(wave.map((p) => withTimeout(runners[p](), perCallMs)));
@@ -277,7 +315,7 @@ export async function runTool(
   }
 
   const fused = fuse(good);
-  if (good.length < 2) return fused;
+  if (!runSynthesis || good.length < 2) return fused;
   // Sentez bütçe kaldıysa tek deneme — yoksa fuse yeterli, 504'ten iyidir.
   if (budgetLeft() < SYNTHESIS_RESERVE_MS) return fused;
 
@@ -509,7 +547,10 @@ export async function runConsensus(prompt: string) {
       return { score: 0, note: "Bu motor şu anda yanıt vermedi." };
     }
   };
-  const settleNamed = async (provider: Provider, fn: () => Promise<string>): Promise<ConsensusEntry> => {
+  const settleNamed = async (
+    provider: Provider,
+    fn: () => Promise<string>,
+  ): Promise<ConsensusEntry> => {
     const result = await settle(() => withConsensusTimeout(fn()));
     return { provider, ...result };
   };
@@ -531,9 +572,7 @@ export async function runConsensus(prompt: string) {
   // Gateway varsa son çare olarak ekle; yoksa çağrı zaten doğrudan havuzu süpürür.
   if (hasGateway()) runners.push(["lovable", () => callLovableAI(scoring, 0.4)]);
 
-  const results = await Promise.all(
-    runners.map(([provider, fn]) => settleNamed(provider, fn)),
-  );
+  const results = await Promise.all(runners.map(([provider, fn]) => settleNamed(provider, fn)));
   const aggregate = aggregateConsensus(results);
 
   const byProvider = new Map(results.map((r) => [r.provider, r]));

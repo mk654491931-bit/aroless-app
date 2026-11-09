@@ -11,6 +11,7 @@ import {
   Info,
   Cpu,
   TrendingUp,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export type ToolResult = {
   provider: string;
   providers?: string[];
   confidence?: number;
+  sources?: { label: string; url?: string; fetchedAt?: string }[];
 };
 export async function callTool(tool: string, input: Record<string, string>): Promise<ToolResult> {
   const res = await apiFetch("/api/public/tool", {
@@ -64,9 +66,9 @@ const toneClass: Record<string, string> = {
 };
 
 const STAGES = [
-  "3 motor paralel taslak üretiyor…",
-  "Sayısal çelişkiler karşılaştırılıyor…",
-  "Editör motoru nihai sentezi yazıyor…",
+  "AI motorları taslak hazırlıyor…",
+  "Sayılar ve kaynaklar doğrulanıyor…",
+  "Nihai rapor hazırlanıyor…",
 ];
 
 /** Small radial score ring. */
@@ -417,6 +419,35 @@ export function ToolCard({
                   </Badge>
                 )}
               </div>
+
+              {(result.sources ?? []).length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                    Canlı kaynak
+                  </span>
+                  {(result.sources ?? []).map((source) =>
+                    source.url ? (
+                      <a
+                        key={`${source.label}-${source.url}`}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 px-2 py-0.5 text-[10px] text-[var(--accent-active)] hover:bg-[var(--accent-active)]/20"
+                      >
+                        {source.label} <ExternalLink size={9} />
+                      </a>
+                    ) : (
+                      <Badge
+                        key={source.label}
+                        variant="outline"
+                        className="border-[var(--accent-active)]/25 text-[10px] text-[var(--accent-active)]"
+                      >
+                        {source.label}
+                      </Badge>
+                    ),
+                  )}
+                </div>
+              )}
             </div>
           )}
           <AiDisclaimer />

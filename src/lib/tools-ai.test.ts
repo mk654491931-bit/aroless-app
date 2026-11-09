@@ -152,4 +152,14 @@ describe("toolProviderWaves", () => {
     ]);
     expect(toolProviderWaves([])).toEqual([]);
   });
+
+  it("araç derinlik profili toplam motor sayısını sınırlar", () => {
+    const order = orderToolProviders("gemini", () => true);
+    expect(toolProviderWaves(order, 3, 1)).toEqual([["gemini"]]);
+    expect(toolProviderWaves(order, 3, 2)).toEqual([["gemini", "groq"]]);
+    expect(toolProviderWaves(order, 3, 3)).toEqual([["gemini", "groq", "openrouter"]]);
+    // Sınır sıfıra/negatife düşse bile hiç çağrı yapılmaz; `runTool` tarafında
+    // ayrıca en az 1'e kırpılır.
+    expect(toolProviderWaves(order, 3, 0)).toEqual([]);
+  });
 });

@@ -17,6 +17,8 @@ export const Route = createFileRoute("/api/public/tool")({
           if (!body) return jsonError(400, "Geçersiz veya çok büyük istek.");
           const tool = String(body.tool ?? "") as import("@/lib/tools-prompts.server").ToolId;
           if (!tool) return jsonError(400, "Araç seçilmedi.");
+          const { isKnownTool } = await import("@/lib/tools-cache.server");
+          if (!isKnownTool(tool)) return jsonError(400, "Bilinmeyen araç.");
 
           const raw = body.input ?? {};
           const input: Record<string, string> = {};
@@ -24,9 +26,27 @@ export const Route = createFileRoute("/api/public/tool")({
             input[String(k).slice(0, 40)] = String(v ?? "").slice(0, 6000);
           }
 
+          // Haberler için ücretsiz RSS yedeği: hem anahtar yokken hem de AI
+          // anahtarları kotaya takıldığında boş 503 yerine kaynaklı başlık dön.
+          const freeNews = async () => {
+            const { fetchFreeNews } = await import("@/lib/news-rss.server");
+            return fetchFreeNews(8);
+          };
+
           // Fail-fast: anahtar yoksa 25sn'lik havuz taramasına hiç girme — anında 503 dön.
           const { hasAnyAiProvider } = await import("@/lib/ai.server");
-          if (!hasAnyAiProvider()) {
+          const hasAi = hasAnyAiProvider();
+          if (!hasAi) {
+            if (tool === "news") {
+              const free = await freeNews();
+              if (free.items.length) {
+                return Response.json({
+                  items: free.items,
+                  sources: free.sources,
+                  fallback: true,
+                });
+              }
+            }
             return jsonError(
               503,
               "AI servisi şu anda yapılandırılmadı (anahtar yok). Yönetici panelinden AI anahtarlarını ekleyin.",
@@ -34,13 +54,31 @@ export const Route = createFileRoute("/api/public/tool")({
           }
 
           const { buildPrompt, TOOL_PROVIDER } = await import("@/lib/tools-prompts.server");
+          const { TOOL_AI_PROFILES } = await import("@/lib/tools-routing");
           const { runTool, runConsensus } = await import("@/lib/tools-ai.server");
           const { cacheGet, cacheKey, cacheSet } = await import("@/lib/ai-cache.server");
           const { isCacheableToolResult, toolCacheParts, toolCacheTtlMs } =
             await import("@/lib/tools-cache.server");
           const { chargeOrRespond, refundFeatureCredits } =
             await import("@/lib/credit-charge.server");
-          const prompt = buildPrompt(tool, input);
+          const basePrompt = buildPrompt(tool, input);
+          const profile = TOOL_AI_PROFILES[tool];
+
+          /**
+           * Ücretsiz canlı kaynakları yalnız önbellek boşken ve AI gerçekten
+           * çalışacakken yükle. Böylece önbellek isabetinde FX/RSS ağına
+           * gidilmez; sonuç ise kaynak etiketiyle birlikte saklanır.
+           */
+          const runGrounded = async <T>(run: (prompt: string) => Promise<T>): Promise<T> => {
+            const { buildToolContext } = await import("@/lib/tools-live-context.server");
+            const context = await buildToolContext(tool, input);
+            const prompt = context?.text ? `${basePrompt}\n\n${context.text}` : basePrompt;
+            const result = await run(prompt);
+            if (!context?.sources.length || !result || typeof result !== "object") return result;
+            const previous = (result as { sources?: unknown }).sources;
+            const existing = Array.isArray(previous) ? previous : [];
+            return { ...(result as object), sources: [...context.sources, ...existing] } as T;
+          };
 
           // Bütçe platformdan gelir (Vercel 300 sn → 90 sn'lik araç bütçesi),
           // yani çok motorlu tur koşabilir; üst sınır yine de 90 sn'dir ki
@@ -132,36 +170,68 @@ export const Route = createFileRoute("/api/public/tool")({
             gate.ok ? Response.json(gate.payload) : gate.response;
 
           if (tool === "consensus") {
-            return respond(await computeCached(() => withBudget(runConsensus(prompt))));
+            return respond(await computeCached(() => withBudget(runConsensus(basePrompt))));
           }
           if (tool === "news") {
             const { callGemini, callLovableAI, extractJson } = await import("@/lib/ai.server");
             const readItems = (text: string) => {
               const parsed = extractJson<{ items?: unknown[] }>(text, {});
-              return Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [];
+              const items = Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [];
+              // AI yolunda da `ai` işareti koy: istemci, RSS kaynak özetiyle
+              // AI özetini aynı "Kaynak özeti" kutusuna düşürmemeli.
+              return items.map((item) =>
+                item && typeof item === "object" ? { ...(item as object), ai: true } : item,
+              );
             };
             // Önce zeminli (arama yapabilen) Gemini; cevap vermezse tüm anahtar
-            // havuzunu süpüren yol — araç yine boş dönmez.
-            return respond(
-              await computeCached(async () => {
-                try {
-                  return {
-                    items: readItems(
-                      await withBudget(
-                        callGemini(prompt, undefined, 0.5, true),
-                        Math.round(budgetMs * 0.6),
-                      ),
-                    ),
-                  };
-                } catch {
-                  return { items: readItems(await withBudget(callLovableAI(prompt, 0.5))) };
-                }
-              }),
-            );
+            // havuzunu süpüren yol. computeCached hata durumunda jetonu iade
+            // eder; bu yüzden AI tümden düşerse RSS yedeğine geçmek güvenli.
+            try {
+              return respond(
+                await computeCached(() =>
+                  runGrounded(async (groundedPrompt) => {
+                    try {
+                      return {
+                        items: readItems(
+                          await withBudget(
+                            callGemini(groundedPrompt, undefined, 0.5, true),
+                            Math.round(budgetMs * 0.6),
+                          ),
+                        ),
+                      };
+                    } catch {
+                      return {
+                        items: readItems(await withBudget(callLovableAI(groundedPrompt, 0.5))),
+                      };
+                    }
+                  }),
+                ),
+              );
+            } catch (error) {
+              const free = await freeNews();
+              if (free.items.length) {
+                return Response.json({
+                  items: free.items,
+                  sources: free.sources,
+                  fallback: true,
+                });
+              }
+              throw error;
+            }
           }
           return respond(
             await computeCached(() =>
-              withBudget(runTool(prompt, TOOL_PROVIDER[tool] ?? "gemini", 0.5, budgetMs - 2_000)),
+              runGrounded((groundedPrompt) =>
+                withBudget(
+                  runTool(
+                    groundedPrompt,
+                    TOOL_PROVIDER[tool] ?? "gemini",
+                    profile.temperature,
+                    budgetMs - 2_000,
+                    { maxDrafts: profile.maxDrafts, synthesize: profile.synthesize },
+                  ),
+                ),
+              ),
             ),
           );
         } catch (e) {
