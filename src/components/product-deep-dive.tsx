@@ -277,6 +277,82 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           ? [countryName(p.hybrid.target_country)]
           : [];
 
+  // EKSİK ANALİZLER: eskiden bu bölümler koşul sağlamadığında tamamen
+  // kayboluyordu; kullanıcı "analiz bitti mi, eksik mi?" anlayamıyordu.
+  // Aşağıdaki adımlar eksik katmanı ve doğrulama yolunu söyler; sayı üretmez.
+  const verificationSteps: Array<{
+    title: string;
+    detail: string;
+    href?: string;
+    label?: string;
+  }> = [];
+  if (!hasSupplierEvidence) {
+    verificationSteps.push({
+      title: "Tedarik fiyatı, MOQ ve teslimat",
+      detail: supplierLinks[0]
+        ? `Canlı toptan havuzda birebir teklif yok. “${sourcingQuery}” aramasıyla fiyatı ve teslimatı doğrula.`
+        : "Canlı toptan havuzda birebir teklif yok; ürün adıyla tedarik araması yap.",
+      href: supplierLinks[0]?.url,
+      label: supplierLinks[0]?.label ?? "Tedarik ara",
+    });
+  }
+  if (!p.hybrid) {
+    verificationSteps.push({
+      title: "Hedef pazar ve lojistik puanı",
+      detail:
+        "Bu kayıt için Groq/Gemini hibrit puanı üretilmedi; kaynak sayfadaki pazar ve teslimat bilgisini doğrula.",
+      href: p.source_url,
+      label: "Kaynağı aç",
+    });
+  }
+  if (!p.demand) {
+    const measuredDemand = [
+      p.measured?.viewed90d !== null && p.measured?.viewed90d !== undefined
+        ? `90 gün görüntülenme ${p.measured.viewed90d.toLocaleString("tr-TR")}`
+        : "",
+      p.measured?.salesVolume !== null && p.measured?.salesVolume !== undefined
+        ? `satış ${p.measured.salesVolume.toLocaleString("tr-TR")}`
+        : "",
+    ].filter(Boolean);
+    verificationSteps.push({
+      title: "Talep ve mevsimsellik",
+      detail: measuredDemand.length
+        ? `Talep modeli yok; ölçülen sinyaller: ${measuredDemand.join(" · ")}. Kaynakta doğrula.`
+        : "Talep modeli yok; kaynaktaki 90 gün görüntülenme/satış sayısını doğrula.",
+      href: p.source_url,
+      label: "Kaynağı aç",
+    });
+  }
+  if (!p.consensus) {
+    verificationSteps.push({
+      title: "Çift model uzlaşısı",
+      detail:
+        "Bu kayıt tek kaynaklı; ikinci model doğrulaması yok. Yüksek bütçeli karardan önce kaynak sayfa ve tedarik teklifiyle doğrula.",
+      href: p.source_url,
+      label: "Kaynağı aç",
+    });
+  }
+  if (!p.review_pain_points?.length) {
+    verificationSteps.push({
+      title: "Müşteri şikâyetleri",
+      detail:
+        "Yorum analizi üretilmedi; kaynak sayfadaki yorumlardan en az 10 tekrar eden şikâyet çıkar.",
+      href: p.source_url,
+      label: "Yorumları aç",
+    });
+  }
+  if (!p.ad_creatives?.length) {
+    const angles = (p.ad_angles ?? []).filter(Boolean).slice(0, 3);
+    verificationSteps.push({
+      title: "Reklam kreatifi",
+      detail: angles.length
+        ? `Hazır reklam kreatifi yok; mevcut açılarla test et: ${angles.join(" · ")}.`
+        : "Reklam kreatifi üretilmedi; kaynak görsellerden 3 hook çıkarıp test et.",
+      href: p.source_url,
+      label: "Kaynağı aç",
+    });
+  }
+
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_255)]">
@@ -542,7 +618,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           </div>
         </div>
 
-        {p.unit_economics && (
+        {p.unit_economics ? (
           <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded border border-white/10 bg-white/[0.03] p-1.5">
               <div className="text-[9px] uppercase text-muted-foreground">Başabaş</div>
@@ -557,8 +633,56 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <div className="text-xs font-semibold">{p.unit_economics.ltv_usd}</div>
             </div>
           </div>
+        ) : (
+          <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed">
+            Başabaş, maks. CPA ve yaşam boyu değer; tedarik fiyatı ölçülünce hesaplanır. Şu an model
+            girdisi yok — 0 veya tahmini değer gösterilmiyor.
+          </p>
         )}
       </Block>
+
+      {verificationSteps.length > 0 && (
+        <Block
+          icon={<Flag size={11} />}
+          title={`Doğrulama sırası — ${verificationSteps.length} eksik analiz`}
+          defaultOpen
+        >
+          <p className="text-muted-foreground leading-relaxed">
+            Bu kayıt için üretilmeyen katmanlar sessizce gizlenmez. Aşağıdaki adımlar ölçümü
+            tamamlar; hiçbiri tahmini sayı değildir.
+          </p>
+          <div className="space-y-1.5">
+            {verificationSteps.map((step, index) => (
+              <div
+                key={step.title}
+                className="rounded-md border border-white/10 bg-white/[0.02] p-2"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border border-amber-500/40 bg-amber-500/10 text-[9px] font-semibold text-amber-300">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-foreground">{step.title}</div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground leading-relaxed">
+                      {step.detail}
+                    </div>
+                    {step.href && (
+                      <a
+                        href={step.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-[10px] text-sky-300 hover:underline"
+                      >
+                        {step.label ?? "Kaynağı aç"} <ExternalLink size={9} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Block>
+      )}
 
       {(!p.supplier_shortlist || p.supplier_shortlist.length === 0) && supplierLinks.length > 0 && (
         <Block
