@@ -2878,12 +2878,12 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Phase 0 · scraping du créneau AVANT les 14 agents",
     ar: "المرحلة 0 · استخراج المجال قبل الوكلاء الـ14",
   },
-  "Faz performansı (8 sn tavan)": {
-    en: "Phase performance (8 s cap)",
-    es: "Rendimiento por fase (máx. 8 s)",
-    de: "Phasen-Performance (8-s-Deckel)",
-    fr: "Performance par phase (plafond 8 s)",
-    ar: "أداء المراحل (سقف 8 ثوانٍ)",
+  "Faz performansı (ajan fazı 60 sn tavan)": {
+    en: "Phase performance (60 s agent-phase cap)",
+    es: "Rendimiento por fase (máx. 60 s para agentes)",
+    de: "Phasen-Performance (60-s-Deckel für Agenten)",
+    fr: "Performance par phase (plafond 60 s pour les agents)",
+    ar: "أداء المراحل (سقف 60 ثانية لمرحلة الوكلاء)",
   },
   "Firma A.Ş.": {
     en: "Company Inc.",
@@ -3816,13 +3816,13 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     ar: "جارٍ الاستعلام",
   },
   "Yöntem:": { en: "Method:", es: "Método:", de: "Methode:", fr: "Méthode :", ar: "الطريقة:" },
-  "14 ajan 4 fazda koşuyor; her faz 8 sn tavanlı ve adımlar arası durum ortak `runId` ile veritabanında taşınıyor. Karne hazır olduğunda bu panel otomatik güncellenir ve sonuç doğrulanır.":
+  "14 ajan 4 fazda koşuyor; ajan fazı 60 sn tavanlı ve adımlar arası durum ortak `runId` ile veritabanında taşınıyor. Karne hazır olduğunda bu panel otomatik güncellenir ve sonuç doğrulanır.":
     {
-      en: "The 14 agents run in 4 phases; each phase is capped at 8 s and state moves between steps in the database under a shared `runId`. This panel updates itself and verifies the result when the report is ready.",
-      es: "Los 14 agentes corren en 4 fases; cada fase tiene un tope de 8 s y el estado viaja en la base de datos con un `runId` común. Este panel se actualiza solo y verifica el resultado al estar listo el informe.",
-      de: "Die 14 Agenten laufen in 4 Phasen; jede Phase ist auf 8 s begrenzt, der Status wandert über eine gemeinsame `runId` in der Datenbank. Dieses Panel aktualisiert sich selbst und prüft das Ergebnis, sobald der Bericht fertig ist.",
-      fr: "Les 14 agents tournent en 4 phases ; chaque phase est plafonnée à 8 s et l'état circule en base via un `runId` commun. Ce panneau se met à jour seul et vérifie le résultat dès que le rapport est prêt.",
-      ar: "يعمل الوكلاء الـ14 في 4 مراحل بسقف 8 ثوانٍ لكل مرحلة، وتنتقل الحالة بين الخطوات في قاعدة البيانات بمعرّف `runId` مشترك. تتحدث هذه اللوحة تلقائيًا وتتحقق من النتيجة عند جهوز التقرير.",
+      en: "The 14 agents run in 4 phases; the agent phase is capped at 60 s and state moves between steps in the database under a shared `runId`. This panel updates itself and verifies the result when the report is ready.",
+      es: "Los 14 agentes corren en 4 fases; la fase de agentes tiene un tope de 60 s y el estado viaja en la base de datos con un `runId` común. Este panel se actualiza solo y verifica el resultado al estar listo el informe.",
+      de: "Die 14 Agenten laufen in 4 Phasen; die Agentenphase ist auf 60 s begrenzt, der Status wandert über eine gemeinsame `runId` in der Datenbank. Dieses Panel aktualisiert sich selbst und prüft das Ergebnis, sobald der Bericht fertig ist.",
+      fr: "Les 14 agents tournent en 4 phases ; la phase des agents est plafonnée à 60 s et l'état circule en base via un `runId` commun. Ce panneau se met à jour seul et vérifie le résultat dès que le rapport est prêt.",
+      ar: "يعمل الوكلاء الـ14 في 4 مراحل بسقف 60 ثانية لمرحلة الوكلاء، وتنتقل الحالة بين الخطوات في قاعدة البيانات بمعرّف `runId` مشترك. تتحدث هذه اللوحة تلقائيًا وتتحقق من النتيجة عند جهوز التقرير.",
     },
   "Canlı piyasa doğrulaması (Google Trends · tedarik fiyatı · pazaryeri ilanları) ürünler hazır olur olmaz ekranda gösterilir. Bu ekran yalnızca bekleme göstergesidir; kapatmanız aramayı durdurmaz.":
     {

@@ -481,11 +481,16 @@ export const PROVIDERS: Record<ProviderId, ProviderCall> = {
     try {
       // Gemini ÜCRETSİZ katmanı: `callGemini` burada ZEMİNSİZ (grounding kapalı)
       // çağrılır. Ajanlar zaten kazınmış kanıtı okuyor; Google Search aracı
-      // çağrıyı 5-15 sn'ye çıkarıp 8 sn'lik faz tavanında iptal ediyordu (yani
-      // yedek sağlayıcı hiç cevap veremiyordu) ve ayrı bir kota tüketiyordu.
-      // 5 Gemini anahtarı round-robin; QUOTA alan anahtar beklemeye alınır.
+      // çağrıyı 5-15 sn'ye çıkarıp faz tavanında iptal ediyordu (yani yedek
+      // sağlayıcı hiç cevap veremiyordu) ve ayrı bir kota tüketiyordu.
+      //
+      // SÜRE KRİTİK: `callGemini` imzasında AbortSignal yok; 5 anahtar × 2
+      // model sırayla denenirken 12 sn'lik dış zaman aşımını görmüyordu. Bu
+      // yüzden gruba AÇIK bir deadline veriyoruz: ilk anahtar/model penceresi
+      // dolunca kalan anahtarlar denenmez ve zincir sıradaki sağlayıcıya geçer.
+      const deadlineAt = Date.now() + 11_000;
       const text = await rotate("gemini", geminiKeyPool(), ["flash"], (key) =>
-        callGemini(prompt, key, temperature, false, GEMINI_FREE_MODELS),
+        callGemini(prompt, key, temperature, false, GEMINI_FREE_MODELS, deadlineAt),
       );
       markPoolGroupOutcome("gemini", 1, "ok");
       return text;
@@ -663,11 +668,24 @@ export async function executeAgentWithFallback(
   agentName: string,
   prompt: string,
   chain: ProviderId[],
-  opts: { temperature?: number; retries?: number; signal?: AbortSignal } = {},
+  opts: {
+    temperature?: number;
+    retries?: number;
+    signal?: AbortSignal;
+    /**
+     * Tek bir sağlayıcı denemesinin üst sınırı (ms).
+     *
+     * Varsayılan 45 sn, tek çağrılık işler için hâlâ geçerlidir. 14 ajanlı
+     * Velora fazı bunu 12 sn'ye indirir: yavaş bir sağlayıcı tüm fazı
+     * kilitleyemez, zincir sıradaki yedeğe geçebilir.
+     */
+    providerTimeoutMs?: number;
+  } = {},
 ): Promise<FallbackResult> {
   prompt = withEstimationRules(prompt);
   const temperature = opts.temperature ?? 0.3;
   const retries = opts.retries ?? 2; // zincir üzerinden tam tur sayısı
+  const providerTimeoutMs = Math.max(2_000, Math.round(opts.providerTimeoutMs ?? TIMEOUT_MS));
   const started = Date.now();
   let attempts = 0;
   let lastError = "";
@@ -685,7 +703,7 @@ export async function executeAgentWithFallback(
         continue;
       attempts++;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), providerTimeoutMs);
       // Dış sinyal iptal edilirse devam eden sağlayıcı isteği ANINDA kesilir.
       const onAbort = () => controller.abort();
       opts.signal?.addEventListener("abort", onAbort, { once: true });

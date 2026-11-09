@@ -64,8 +64,8 @@ export function VeloraDeepAnalysis({
     onError: (err: Error) => toast.error(err.message || "Velora analizi tamamlanamadı."),
   });
 
-  // ORKESTRE KOŞU: 14 ajan 4 fazda, her faz 8 sn tavanlı ve QStash ile kendine
-  // yayınlanan stateless adımlar. Yanıt ilk adımdır; karne durum ucundan gelir.
+  // ORKESTRE KOŞU: 14 ajan 4 fazda; ajan fazı 60 sn tavanlı, QStash yalnız
+  // Faz 0→1 devrini yapar. Yanıt ilk adımdır; karne durum ucundan gelir.
   const orchestrate = useMutation({
     mutationFn: () =>
       apiPost<OrchestratedDispatch>("/api/public/agent", {
@@ -466,7 +466,7 @@ export function VeloraDeepAnalysis({
           {payload && payload.phases.length > 0 && (
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
-                <Activity size={12} /> Faz performansı (8 sn tavan)
+                <Activity size={12} /> Faz performansı (ajan fazı 60 sn tavan)
               </div>
               <ul className="space-y-1">
                 {payload.phases.map((phase) => (
@@ -503,9 +503,9 @@ export function VeloraDeepAnalysis({
 
           {!dossier && !finished && (
             <p className="text-[11px] text-muted-foreground">
-              14 ajan 4 fazda koşuyor; her faz 8 sn tavanlı ve adımlar arası durum ortak `runId` ile
-              veritabanında taşınıyor. Karne hazır olduğunda bu panel otomatik güncellenir ve sonuç
-              doğrulanır.
+              14 ajan 4 fazda koşuyor; ajan fazı 60 sn tavanlı ve adımlar arası durum ortak `runId`
+              ile veritabanında taşınıyor. Karne hazır olduğunda bu panel otomatik güncellenir ve
+              sonuç doğrulanır.
             </p>
           )}
 
@@ -666,7 +666,9 @@ export function VeloraDeepAnalysis({
               {payload?.push && (
                 <p className="text-[11px] text-muted-foreground">
                   Push: {payload.push.ok ? `${payload.push.ids.length} kayıt yazıldı` : "başarısız"}
+                  {payload.push.fallback ? " · ai_cache yedeğine" : ""}
                   {payload.push.error ? ` · ${payload.push.error}` : ""}
+                  {payload.push.warning ? ` · ${payload.push.warning}` : ""}
                   {payload.recovered ? " · kalıcı kayıttan geri kuruldu" : ""}
                 </p>
               )}

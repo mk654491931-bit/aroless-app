@@ -8,10 +8,10 @@ import { appOrigin } from "@/lib/discovery-jobs.server";
  * POST — koşuyu başlatır. İki mod:
  *  - varsayılan: 14 ajanlı zincir tek blokta koşar (`velora-pipeline`).
  *  - `orchestrated: true`: ORTAK kanıt toplanır, finalist ürünler belirlenir ve
- *    14 ajan 4 FAZA bölünerek koşar. Her faz QStash ile KENDİNE yayınlanır
- *    (self-chaining fan-out), her adım 8 sn tavanlıdır ve durum ortak `runId`
- *    altında Supabase geçici kovasında taşınır. QStash yoksa fazlar aynı istek
- *    içinde koşar; toplam süre yine faz tavanlarıyla sınırlıdır.
+ *    14 ajan 4 FAZA bölünerek koşar. QStash yalnızca Faz 0→Faz 1 devrini yapar;
+ *    ajan fazı 60 sn tavanlıdır ve Faz 2-4 aynı istekte deterministik olarak
+ *    tamamlanır. Durum ortak `runId` altında Supabase geçici kovasında taşınır.
+ *    QStash yoksa bütün fazlar aynı istek içinde koşar.
  *    Yanıt ilk adımın sonucudur (`dispatched`), nihai karne DEĞİL.
  *
  * GET — `?runId=` ile koşu durumunu döner. Panel nihai karneyi bu uçtan yoklar;

@@ -1,4 +1,4 @@
-// VELORA 14 AJAN ORKESTRATÖRÜ — FAZ 0 kazıması, faz dilimleme, 8 sn tavanı,
+// VELORA 14 AJAN ORKESTRATÖRÜ — FAZ 0 kazıması, faz dilimleme, 60 sn ajan tavanı,
 // ajan başına uzmanlık kanıtı, 14 ajan ortalaması, QStash tekrar teslimi ve
 // panel yoklaması.
 //
@@ -6,7 +6,7 @@
 //  1. FAZ 0 (niş kazıması) 14 ajandan ÖNCE koşar, AI çağrısı yapmaz ve sonucu
 //     koşu durumuna yazar; aynı niş 24 saat içinde ikinci kez kazınmaz,
 //  2. 14 ajanın tamamı tek fazda eksiksiz dağıtılır (boşluksuz/çakışmasız),
-//  3. her faz KENDİ adımında koşar ve 8 sn tavanını ASLA aşamaz (asılı üye nötr döner),
+//  3. Faz 1 kendi 60 sn tavanını ASLA aşamaz (asılı üye nötr döner); Faz 2-4 deterministik checkpoint'tir,
 //  4. her ajan kendi UZMANLIK KANITINI ayrıca görür (CFO fiyatı, UX şikâyeti…),
 //  5. durum adımlar arasında geçici kovada taşınır, QStash devri sonraki fazı
 //     yayınlayıp anında döner ve AYNI fazın tekrar teslimi idempotenttir,
@@ -319,11 +319,14 @@ describe("faz planı (14 ajan → 4 faz)", () => {
   });
 
   it("tavan ücretsiz plan fonksiyon limitinin çok altındadır", () => {
-    expect(VELORA_PHASE_CEILING_MS).toBeLessThanOrEqual(8_000);
+    // 14 ajan + yedek sağlayıcı denemeleri 8 sn'ye sığmıyordu. 60 sn, 300 sn'lik
+    // Vercel fonksiyonunun altında kalır ve tüm ajanların gerçek yanıt vermesine
+    // zaman bırakır.
+    expect(VELORA_PHASE_CEILING_MS).toBeLessThanOrEqual(60_000);
     // Toplam istek-içi koşu yolu (5 adım) dar limitlerde bile 504 üretmez:
-    // 4 AI fazı 8 sn + kazıma fazı 12 sn = 44 sn (Vercel Hobby tavanı 300 sn).
+    // 60 sn ajan fazı + 12 sn kazıma + 3 deterministik checkpoint (5 sn) = 87 sn.
     const worstCase = VELORA_PHASES.reduce((total, phase) => total + phaseCeilingFor(phase.id), 0);
-    expect(worstCase).toBeLessThanOrEqual(48_000);
+    expect(worstCase).toBeLessThanOrEqual(90_000);
     // Kullanıcıya 14 ajan ortalamasına göre en iyi 5 ürün gösterilir; aday
     // havuzu daha geniş olmalı ki kalite kapısı eleyince de sıra doldurulsun.
     expect(VELORA_TOP_N).toBe(5);
@@ -650,7 +653,7 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
     expect(store.states.get(result.runId!)!.nicheSignals.sources.length).toBeGreaterThan(0);
   });
 
-  it("QStash geri çağrısı kaydedilmiş durumu yükleyip kalan fazları tamamlar", async () => {
+  it("QStash geri çağrısı Faz 1'i koşar, Faz 2-4'ü aynı istekte tamamlar", async () => {
     const store = fakeStore();
     const started = await startVeloraRun(
       { userQuery: "mini ice maker", country: "US" },
@@ -663,36 +666,28 @@ describe("startVeloraRun (uçtan uca orkestre koşu)", () => {
       runAgent: runAgentStub(stubRunner()),
       handoff: handoffStub,
     });
-    expect(councilPhase.status).toBe("dispatched");
-    expect(councilPhase.completedPhases).toBe(1);
+    expect(councilPhase.status).toBe("completed");
+    expect(councilPhase.completedPhases).toBe(5);
+    expect(councilPhase.dossier!.phases.map((p) => p.id)).toEqual([0, 1, 2, 3, 4]);
     expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(
       14,
     );
     // Ajan fazı kazımayı TEKRARLAMAZ.
     expect(mocks.harvestNicheSignalsCached).toHaveBeenCalledTimes(1);
 
-    const third = await resumeVeloraRun(started.runId!, 2, {
+    // Faz 2-4 için ayrı QStash teslimatı beklenmez: geç gelen bir teslimat
+    // yeni iş üretmeden mevcut karneyi döner.
+    const replay = await resumeVeloraRun(started.runId!, 2, {
       store,
       runAgent: runAgentStub(stubRunner()),
       handoff: handoffStub,
     });
-    expect(third.completedPhases).toBe(2);
-
-    const fourth = await resumeVeloraRun(started.runId!, 3, {
-      store,
-      runAgent: runAgentStub(stubRunner()),
-      handoff: handoffStub,
-    });
-    expect(fourth.completedPhases).toBe(3);
-
-    const last = await resumeVeloraRun(started.runId!, 4, {
-      store,
-      runAgent: runAgentStub(stubRunner()),
-      handoff: handoffStub,
-    });
-    expect(last.status).toBe("completed");
-    expect(last.dossier!.phases.map((p) => p.id)).toEqual([0, 1, 2, 3, 4]);
-    expect(last.selfTest!.verdict).toBe("PASS");
+    expect(replay.deduped).toBe(true);
+    expect(replay.status).toBe("completed");
+    expect(replay.completedPhases).toBe(5);
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(
+      14,
+    );
   });
 
   it("bilinmeyen runId için temiz hata döner (çökmez)", async () => {
@@ -1088,43 +1083,42 @@ describe("QStash tekrar teslimi (idempotent faz yönetimi)", () => {
     const store = fakeStore();
     const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
     const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
-    // Faz 0 bitti, sırada 1 (14 ajan) vardır: önce onu koştur.
+    // Faz 0 bitti, sırada 1 (14 ajan) vardır: önce onu koştur. Bu, 2-4'ü de
+    // aynı istekte bitirir.
     await resumeVeloraRun(started.runId!, 1, deps);
 
     const phaseTwoNames = agentNamesOf(2);
     const countPhaseTwo = () => prompts.filter((p) => phaseTwoNames.includes(p.agentName)).length;
     expect(countPhaseTwo()).toBe(0);
 
-    const first = await resumeVeloraRun(started.runId!, 2, deps);
-    expect(first.completedPhases).toBe(2);
-    expect(countPhaseTwo()).toBe(0);
-
-    // AYNI faz İKİNCİ kez teslim edildi (QStash retry): faz yeniden koşmadı.
+    // Geç/tekrarlanan QStash teslimatı yeni iş üretmez.
     const replay = await resumeVeloraRun(started.runId!, 2, deps);
     expect(countPhaseTwo()).toBe(0);
-    expect(replay.completedPhases).toBe(3);
-    // Faz kayıtları tekilleşti: 2 numaralı faz iki kez yazılmadı.
+    expect(replay.deduped).toBe(true);
+    expect(replay.completedPhases).toBe(5);
     const phases = store.states.get(started.runId!)!.phases.map((p) => p.id);
-    expect(phases).toEqual([0, 1, 2, 3]);
+    expect(phases).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("HÂLÂ koşan faz ikinci kez BAŞLATILMAZ (eşzamanlı teslim kilidi)", async () => {
     const store = fakeStore();
     const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
     const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
-    await resumeVeloraRun(started.runId!, 1, deps);
 
     const state = store.states.get(started.runId!)!;
-    state.runningPhase = { id: 2, startedAtMs: Date.now() };
+    // Faz 0 bitti; Faz 1 şu an başka bir teslim tarafından koşuyor.
+    state.runningPhase = { id: 1, startedAtMs: Date.now() };
     await store.saveState(state);
 
-    const result = await resumeVeloraRun(started.runId!, 2, deps);
+    const result = await resumeVeloraRun(started.runId!, 1, deps);
 
     expect(result.deduped).toBe(true);
     expect(result.status).toBe("dispatched");
-    // Faz 0 (kazıma) + Faz 1 (14 ajan) kayıtlıdır.
-    expect(result.completedPhases).toBe(2);
-    expect(prompts.filter((p) => agentNamesOf(2).includes(p.agentName))).toHaveLength(0);
+    // Faz 0 (kazıma) kayıtlıdır; 14 ajan ikinci kez çağrılmadı.
+    expect(result.completedPhases).toBe(1);
+    expect(prompts.filter((p) => COUNCIL_AGENTS.some((a) => a.name === p.agentName))).toHaveLength(
+      0,
+    );
   });
 
   it("tamamlanmış koşuya gelen tekrar teslim yeni iş üretmez, karneyi döner", async () => {
@@ -1157,20 +1151,18 @@ describe("veloraRunStatus (panel yoklaması)", () => {
     const deps = { store, runAgent: runAgentStub(stubRunner()), handoff: handoffStub };
     const started = await startVeloraRun({ userQuery: "mini ice maker", country: "US" }, deps);
 
-    await resumeVeloraRun(started.runId!, 1, deps);
+    // QStash yalnız Faz 0→1 devrini yapar: Faz 0 kayıtlı, ajan fazı sırada.
     const middle = await veloraRunStatus(started.runId!, { store });
     expect(middle.status).toBe("running");
-    // Faz 0 (kazıma) + Faz 1 (14 ajan) bitti, sırada 2.
-    expect(middle.completedPhases).toBe(2);
-    expect(middle.nextPhase).toBe(2);
+    expect(middle.completedPhases).toBe(1);
+    expect(middle.nextPhase).toBe(1);
     expect(middle.activePhase).toBeNull();
     expect(middle.dossier).toBeNull();
     expect(middle.stale).toBe(false);
     expect(middle.pollIntervalMs).toBeGreaterThan(0);
 
-    await resumeVeloraRun(started.runId!, 2, deps);
-    await resumeVeloraRun(started.runId!, 3, deps);
-    await resumeVeloraRun(started.runId!, 4, deps);
+    // Faz 1 teslimatı 14 ajanı koşar ve Faz 2-4'ü aynı istekte tamamlar.
+    await resumeVeloraRun(started.runId!, 1, deps);
 
     const done = await veloraRunStatus(started.runId!, { store });
     expect(done.status).toBe("completed");
@@ -1226,6 +1218,10 @@ describe("veloraRunStatus (panel yoklaması)", () => {
       handoff: handoffStub,
     });
     const state = store.states.get(started.runId!)!;
+    // Faz 2 teslimatı alınmış ama ilerleme yazılmamış gibi eski bir durum kur.
+    state.status = "running";
+    state.phases = state.phases.filter((phase) => phase.id <= 1);
+    state.runningPhase = { id: 2, startedAtMs: Date.now() - 10 * 60 * 1000 };
     state.updatedAtMs = Date.now() - 10 * 60 * 1000;
     await store.saveState(state);
 

@@ -10,7 +10,8 @@
  * Kredi tetikleyicide düşülür; iş burada başarısız olursa iade edilir.
  *
  * Desteklenen işler: `council` (14 üyeli konsey karnesi) ve `velora-phase`
- * (Velora 14 ajan orkestrasyonunun tek bir fazı — 8 sn tavanlı, stateless adım).
+ * (Velora 14 ajan orkestrasyonunun tek bir fazı — stateless adım; Faz 2-4
+ *  aynı istekte deterministik olarak tamamlanır).
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -51,8 +52,8 @@ export const Route = createFileRoute("/api/jobs")({
 
         // ---- VELORA 14 AJAN · FAZ FAN-OUT ----
         // Orkestratör her fazı bu uca yayınlar; her adım STATELESS'tir ve durumu
-        // Supabase geçici kovasından yükler. Faz tavanı 8 sn olduğu için bu uç
-        // her koşulda hızlı döner (504 üretmez).
+        // Supabase geçici kovasından yükler. Ajan fazı 60 sn tavanlıdır ve
+        // Faz 2-4 aynı istekte biter; Vercel'in 300 sn bütçesi içinde kalır.
         if (payload.kind === "velora-phase") {
           const runId = String(payload.runId ?? "").trim();
           const phase = Number(payload.phase);

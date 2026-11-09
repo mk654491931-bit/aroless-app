@@ -9,16 +9,17 @@
  *   1. 14 ajan TEK FAZDA, birbirinden bağımsız Promise.all yükünde başlar.
  *   2. AI analiz hattı aynı fazda aynı anda finalistleri puanlar. 14 ajanın
  *      tamamı ve bağımsız analiz turu aynı deadline'ı paylaşır.
- *   3. Fazın sert tavanı vardır: `VELORA_PHASE_CEILING_MS` (8 sn). Tavan
- *      aşılırsa faz yarıda kesilmez — tamamlanmayan üyeler NÖTR sonuçla döner,
- *      devam eden AI isteği GERÇEKTEN iptal edilir (AbortSignal) ve hat dürüstçe
- *      "kısmi" der. Hiçbir faz asla 8 sn'yi geçemez.
+ *   3. Ajan fazının sert tavanı vardır: `VELORA_PHASE_CEILING_MS` (60 sn).
+ *      Tavan aşılırsa faz yarıda kesilmez — tamamlanmayan üyeler NÖTR sonuçla
+ *      döner, devam eden AI isteği GERÇEKTEN iptal edilir (AbortSignal) ve hat
+ *      dürüstçe "kısmi" der. Hiçbir ajan fazı 60 sn'yi geçemez.
  *   4. Burst durumu Supabase'deki geçici kovada (`ai_cache`, scope
  *      `velora-orch`) `runId` ile taşınır → her adım STATELESS'tir ve herhangi bir
  *      instance'ta koşabilir. Aynı runId'nin tekrar teslimi (QStash retry)
  *      IDEMPOTENTTİR: kayıtlı faz yeniden koşmaz, koşan faz ikinci kez başlatılmaz.
- *   5. Burst tamamlanınca saf kalite kapısı, %70/%30 birleşimi ve sıralama çalışır;
- *      ek QStash zinciri yoktur.
+ *   5. Burst tamamlanınca saf kalite kapısı, %70/%30 birleşimi ve sıralama
+ *      çalışır. QStash yalnızca Faz 0→Faz 1 devrini yapar; deterministik
+ *      Faz 2-4 aynı istekte biter.
  *
  * İKİ BAĞIMSIZ KANIT HATTI: ürün analizi ve 14 ajanlı konsey, aynı anda kendi
  * trend radarı + canlı piyasa kazımasını başlatır. Snapshots ayrı state alanlarında
@@ -98,8 +99,32 @@ import {
 // Burst planı — 14 ajanın tamamı aynı anda paralel başlar; sonraki aşamalar safdır.
 // ---------------------------------------------------------------------------
 
-/** Burst'ın sert tavanı: ücretsiz plan fonksiyon limitinin ALTINDA kalır. */
-export const VELORA_PHASE_CEILING_MS = 8_000;
+/**
+ * Ajan fazının (Faz 1) sert tavanı.
+ *
+ * NEDEN 60 SN: ücretsiz sağlayıcılar 14 paralel istekte tek tek 8 sn'nin
+ * altında kalsa bile, bir sağlayıcı 429/5xx döndüğünde yedeğe geçmek ve
+ * yanıtı JSON'a çevirmek için gerçek zaman gerekir. Eski 8 sn tavanı, her
+ * ajanın ilk sağlayıcı denemesini iptal ediyordu; 14/14 ajan zaman aşımına
+ * uğruyordu. 60 sn, Vercel'in 300 sn fonksiyon bütçesinin çok altındadır ve
+ * Faz 0 (12 sn) + retriever (en fazla 30 sn) ile birlikte istek içi toplam
+ * ~102 sn kalır. QStash varsa yalnız Faz 0→Faz 1 devri yapılır; Faz 2-4
+ * deterministik checkpoint'lerdir ve aynı istekte tamamlanır.
+ */
+export const VELORA_PHASE_CEILING_MS = 60_000;
+
+/**
+ * Bir ajanın deneyeceği EN FAZLA sağlayıcı sayısı.
+ *
+ * 6 sağlayıcının tamamını sırayla denemek, ilk sağlayıcı yavaşsa ajanın
+ * bütçesini tüketiyordu. Her ajan kendi birincil sağlayıcısıyla başlar ve
+ * yalnızca 3 yedeğe düşer; 14 ajanın birincilleri 6 sağlayıcıya yayıldığı için
+ * tüm havuz yine kullanılır. 4 × 12 sn, 60 sn'lik faz tavanının içinde kalır.
+ */
+export const VELORA_AGENT_CHAIN_LIMIT = 4;
+
+/** Bir sağlayıcı denemesine ayrılan süre (ms). Yedeğe geçmek için üst sınır. */
+export const VELORA_PROVIDER_TIMEOUT_MS = 12_000;
 
 /**
  * FAZ 0 (niş kazıması) tavanı — AI çağrısı YOK, yalnız ağ.
@@ -129,7 +154,7 @@ export const VELORA_STEP_RETURN_MARGIN_MS = 250;
  * taramaya dayanıyordu. 12, her ajana makul bir bağlam bütçesi (≈3 KB metin)
  * bırakırken havuzu genişletir; 14 ajan × 12 ürün = 168 oy.
  *
- * Üst sınır bilinçlidir: bağlam penceresi ve 8 saniyelik faz tavanı korunur.
+ * Üst sınır bilinçlidir: bağlam penceresi ve 60 saniyelik ajan fazı tavanı korunur.
  * Havuz `VELORA_PIPELINE_TOP_N` ile kesişir, yani en az iki bağımsız hattın
  * ilk-N listesinin birleşimi garanti edilir.
  */
@@ -168,11 +193,12 @@ export const VELORA_MIN_PRODUCT_SCORE = 25;
 /**
  * Koşan bir fazın kilidi (ms). Aynı faz bu süre içinde tekrar teslim edilirse
  * ikinci kez BAŞLATILMAZ (QStash retry aynı işi iki kez harcayamaz).
+ * Faz tavanı 60 sn olduğu için kilit en az ondan büyük olmalı.
  */
-export const VELORA_PHASE_LEASE_MS = 90_000;
+export const VELORA_PHASE_LEASE_MS = 180_000;
 
 /** Bu süre boyunca hiç ilerleme yazılmadıysa koşu "bayat" sayılır ve panel yoklamayı bırakır. */
-export const VELORA_RUN_STALE_MS = 180_000;
+export const VELORA_RUN_STALE_MS = 300_000;
 
 export type VeloraPhaseId = 0 | 1 | 2 | 3 | 4;
 
@@ -228,7 +254,12 @@ export const VELORA_PHASES: readonly VeloraPhaseDefinition[] = [
 
 /** Bir fazın sert tavanı — Faz 0 (kazıma) AI çağrısı yapmadığı için geniştir. */
 export function phaseCeilingFor(id: VeloraPhaseId): number {
-  return id === 0 ? VELORA_HARVEST_CEILING_MS : VELORA_PHASE_CEILING_MS;
+  // Faz 2-4 model çağrısı yapmaz; deterministik checkpoint'ler milisaniyeler
+  // içinde biter. Onlara 60 sn tanımak, gerçek bir gecikme olursa sorunu
+  // gizlemek yerine kendi kısa tavanlarıyla raporlanmasını sağlar.
+  if (id === 0) return VELORA_HARVEST_CEILING_MS;
+  if (id === 1) return VELORA_PHASE_CEILING_MS;
+  return 5_000;
 }
 
 /** Planın kapsadığı üye sayısı — 14 ajanın tamamı olmalı (test bunu doğrular). */
@@ -284,6 +315,10 @@ export const VeloraPushResultSchema = z.object({
   ok: z.boolean(),
   ids: z.array(z.string()).default([]),
   error: z.string().optional(),
+  /** `radar_items` yoksa kayıt `ai_cache` kalıcı kovanına yazıldı. */
+  fallback: z.boolean().optional(),
+  /** Altyapı uyarısı — self-test'te FAIL değil, görünür bir not olur. */
+  warning: z.string().optional(),
 });
 export type VeloraPushResult = z.infer<typeof VeloraPushResultSchema>;
 
@@ -511,8 +546,8 @@ export type VeloraDispatchMode = "qstash" | "inline";
  *
  * Dönen `null`, "devir yapılamıyor" demektir: QStash yapılandırılmamış ya da
  * origin public değil. O durumda orkestratör fazları aynı istek içinde sürer
- * (yine her faz 8 sn tavanlı). QStash hiçbir koşulda zorunlu değildir; sadece
- * daha küçük adımlar sağlar.
+ * (yine her ajan fazı 60 sn tavanlı). QStash hiçbir koşulda zorunlu değildir;
+ * yalnızca Faz 0→Faz 1 devrini küçük adımlara böler.
  */
 export function veloraQStashHandoff(
   origin: string,
@@ -633,12 +668,18 @@ async function runOneAgent(
     // ajanları nötr puana düşürüyordu.
     const chain = deps.runAgent
       ? DEEP_CHAIN
-      : councilChainFor(councilIndex, configuredCouncilProviders());
+      : councilChainFor(councilIndex, configuredCouncilProviders()).slice(
+          0,
+          VELORA_AGENT_CHAIN_LIMIT,
+        );
     const result = await withCeiling(
       run(name, agentPrompt(agentKey, definition?.task ?? "", phase, state), chain, {
         temperature: 0.3,
         retries: 1,
         signal: controller.signal,
+        // Sağlayıcı başına üst sınır: yavaş bir uç, ajanın tüm faz bütçesini
+        // yiyip yedeklerin hiç denenmemesine yol açmasın.
+        providerTimeoutMs: VELORA_PROVIDER_TIMEOUT_MS,
       }),
       budget,
       `velora:${agentKey}`,
@@ -691,7 +732,7 @@ export async function runVeloraPhase(
    */
   const analysisLineTask =
     phase.id === 1 && state.analysisLine.length === 0 && state.candidates.length > 0
-      ? runAnalysisLine(state, deps)
+      ? runAnalysisLine(state, deps, deadlineAt)
       : null;
   const agents = await Promise.all(
     // `councilIndex` konsey içindeki GLOBAL sıradır, böylece sağlayıcı
@@ -1485,6 +1526,96 @@ export function runStateKey(runId: string): string {
  */
 export const VELORA_STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
+/** `radar_items` geçici olarak yoksa kazananları tutan kalıcı yedek kova. */
+const WINNER_LEDGER_SCOPE = "velora-winners";
+const WINNER_LEDGER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * PostgREST tabloyu şema önbelleğinde bulamadığında dönen hata.
+ *
+ * Bu, migration'ın production'a uygulanmadığı anlamına gelir; kodun doğru
+ * çalışması için tabloyu varmış gibi göstermek yerine kalıcı yedeğe geçilir.
+ * Hem `code` (PGRST205) hem de mesaj metni kontrol edilir; Supabase sürümleri
+ * arasında code alanı her zaman gelmeyebiliyor.
+ */
+function isMissingRadarTable(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST205") return true;
+  const message = String(error.message ?? "").toLowerCase();
+  return (
+    message.includes("radar_items") &&
+    (message.includes("schema cache") || message.includes("could not find the table"))
+  );
+}
+
+function friendlyRunId(runId: unknown): string {
+  return (
+    String(runId ?? "")
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 90) || "unknown"
+  );
+}
+
+function runIdOfWinnerRow(row: WinnerRow): string {
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  return friendlyRunId((payload as Record<string, unknown>)["run_id"]);
+}
+
+function looksLikeWinnerRow(value: unknown): value is WinnerRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row["title"] === "string" &&
+    typeof row["day"] === "string" &&
+    typeof row["winner_score"] === "number" &&
+    row["payload"] !== null &&
+    typeof row["payload"] === "object"
+  );
+}
+
+/**
+ * `radar_items` yokken kazananları tek tek `ai_cache`e yazar.
+ *
+ * Anahtar biçimi bilinçli: `velora-winner:<runId>:<gün>:<sıra>`. Böylece
+ * (a) bir koşunun tamamı runId ile, (b) bir günün kayıtları gün ile okunur.
+ * TTL 30 gündür; geçici koşu durumundan (24 saat) daha uzun yaşar.
+ */
+async function writeWinnerLedger(rows: WinnerRow[]): Promise<string[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const records = rows.map((row, index) => ({
+    cache_key: `velora-winner:${runIdOfWinnerRow(row)}:${row.day}:${index}`,
+    scope: WINNER_LEDGER_SCOPE,
+    payload: row as unknown as Json,
+    expires_at: new Date(Date.now() + WINNER_LEDGER_TTL_MS).toISOString(),
+  }));
+  const { data, error } = await supabaseAdmin
+    .from("ai_cache")
+    .upsert(records, { onConflict: "cache_key" })
+    .select("cache_key");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => String((row as { cache_key: string }).cache_key));
+}
+
+async function readWinnerLedger(filter: { runId: string } | { day: string }): Promise<WinnerRow[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // LIKE yerine kova + JS filtresi: PostgREST'in joker biçimi sürümler arasında
+  // değişebiliyor; 30 günlük kovanın tamamı en fazla birkaç yüz satırdır.
+  const { data, error } = await supabaseAdmin
+    .from("ai_cache")
+    .select("payload")
+    .eq("scope", WINNER_LEDGER_SCOPE)
+    .gt("expires_at", new Date().toISOString())
+    .limit(500);
+  if (error) throw new Error(error.message);
+  const wantedRunId = "runId" in filter ? friendlyRunId(filter.runId) : "";
+  return (data ?? [])
+    .map((entry) => entry.payload)
+    .filter(looksLikeWinnerRow)
+    .filter((row) =>
+      "day" in filter ? row.day === filter.day : runIdOfWinnerRow(row) === wantedRunId,
+    );
+}
+
 /** Varsayılan Supabase deposu: temp state `ai_cache`, kazananlar `radar_items`. */
 export function defaultVeloraStore(): VeloraStore {
   return {
@@ -1524,6 +1655,27 @@ export function defaultVeloraStore(): VeloraStore {
           .insert(rows as never)
           .select("id");
         if (error) {
+          // MIGRATION EKSİKSE satır satır denemek 5 kez aynı PGRST205 hatasını
+          // üretmekten başka işe yaramaz. Kalıcı `ai_cache` kovanına geç: koşu
+          // sonucu kaybolmaz, self-test gerçekten yazılanı geri okur ve panel
+          // altyapı sorununu FAIL yerine açık bir uyarı olarak gösterir.
+          if (isMissingRadarTable(error)) {
+            try {
+              const ids = await writeWinnerLedger(rows);
+              return {
+                ok: true,
+                ids,
+                fallback: true,
+                warning: `RADAR_TABLE_MISSING:${error.message}`,
+              };
+            } catch (fallbackError) {
+              return {
+                ok: false,
+                ids: [],
+                error: `${error.message} · LEDGER_FALLBACK_FAILED:${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+              };
+            }
+          }
           // Tek bir çakışma (aynı gün + aynı başlık) toplu yazımı düşürmesin:
           // satır satır dene, kaydedilebilenleri kaydet.
           const ids: string[] = [];
@@ -1552,7 +1704,12 @@ export function defaultVeloraStore(): VeloraStore {
         .select("*")
         .eq("day", day)
         .in("title", titles);
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (!isMissingRadarTable(error)) throw new Error(error.message);
+        const rows = await readWinnerLedger({ day });
+        const wanted = new Set(titles);
+        return rows.filter((row) => wanted.has(row.title));
+      }
       return (data ?? []) as unknown as WinnerRow[];
     },
 
@@ -1562,7 +1719,10 @@ export function defaultVeloraStore(): VeloraStore {
         .from("radar_items")
         .select("*")
         .filter("payload->>run_id", "eq", runId);
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (!isMissingRadarTable(error)) throw new Error(error.message);
+        return readWinnerLedger({ runId });
+      }
       return (data ?? []) as unknown as WinnerRow[];
     },
   };
@@ -1654,13 +1814,18 @@ Return at most ${VELORA_FINALIST_COUNT} products, each specific and buyable. Nev
   const named: Record<string, unknown>[] = [];
   const controller = new AbortController();
   try {
+    const retrieverCeiling = Math.min(
+      30_000,
+      Math.max(1, Math.floor((deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS) * 0.5)),
+    );
     const result = await withCeiling(
-      run("Product Retriever", prompt, DEEP_CHAIN, {
+      run("Product Retriever", prompt, DEEP_CHAIN.slice(0, VELORA_AGENT_CHAIN_LIMIT), {
         temperature: 0.35,
         retries: 1,
         signal: controller.signal,
+        providerTimeoutMs: VELORA_PROVIDER_TIMEOUT_MS,
       }),
-      Math.max(1, Math.floor((deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS) * 0.75)),
+      retrieverCeiling,
       "velora:retriever",
       () => controller.abort(),
     );
@@ -1742,7 +1907,11 @@ export function analysisScoreFor(
  * ZAMAN SÖZÜ: faz tavanına bağlıdır ve Faz 1 ajanlarıyla PARALEL yürür; tavan
  * dolarsa tur iptal edilir, formül puanı yazılır ve koşu ASLA düşmez.
  */
-async function runAnalysisLine(state: VeloraRunState, deps: VeloraOrchestratorDeps): Promise<void> {
+async function runAnalysisLine(
+  state: VeloraRunState,
+  deps: VeloraOrchestratorDeps,
+  deadlineAt?: number,
+): Promise<void> {
   const candidates = state.candidates.slice(0, VELORA_FINALIST_COUNT);
   if (candidates.length === 0) return;
 
@@ -1802,13 +1971,22 @@ Return ONLY JSON:
 
   const run = deps.runAgent ?? executeAgentWithFallback;
   const controller = new AbortController();
-  const ceiling = Math.max(500, deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS);
+  // Ajanlarla PARALEL başlar; kendi ayrı 60 sn penceresi değil, fazın kalan
+  // süresi kadar bekler. Aksi halde ajanlar bittikten sonra analiz hattı faz
+  // tavanını aşabiliyordu.
+  const ceiling = Math.max(
+    500,
+    deadlineAt !== undefined
+      ? deadlineAt - Date.now()
+      : (deps.phaseCeilingMs ?? VELORA_PHASE_CEILING_MS),
+  );
   try {
     const result = await withCeiling(
-      run("Analysis Line", prompt, DEEP_CHAIN, {
+      run("Analysis Line", prompt, DEEP_CHAIN.slice(0, VELORA_AGENT_CHAIN_LIMIT), {
         temperature: 0.25,
         retries: 1,
         signal: controller.signal,
+        providerTimeoutMs: VELORA_PROVIDER_TIMEOUT_MS,
       }),
       ceiling,
       "velora:analysis-line",
@@ -1946,21 +2124,14 @@ async function drive(
       state.updatedAtMs = Date.now();
       await deps.store.saveState(state);
 
-      if (id < 4 && deps.handoff) {
-        const nextPhase = (id + 1) as VeloraPhaseId;
-        const published = await deps.handoff({ runId: state.runId, phase: nextPhase });
-        if (published.ok) {
-          return {
-            runId: state.runId,
-            status: "dispatched",
-            completedPhases: id,
-            nextPhase,
-            dispatch: published,
-          };
-        }
-        // Yayın düştü: hattı ortada bırakmak yerine aynı istekte sürdür.
-        dispatch = published;
-      }
+      // FAZ 2-4 KENDİ İSTEĞİNDE TAMAMLANIR.
+      //
+      // Bu üç adım model çağrısı yapmayan deterministik checkpoint'lerdir.
+      // Onları ayrı QStash mesajlarına bölmek, teslimat düşerse koşuyu
+      // "Faz 1'de kaldı" hâlinde bırakıyordu (kullanıcının gördüğü "Faz 2-4
+      // hiç çalışmadı" hatası). QStash yalnızca yukarıdaki Faz 0→Faz 1
+      // devrini yapar; Faz 1 bittikten sonra 2-4 aynı istekte, sıfıra yakın
+      // maliyetle ve QStash teslimatına bağlı kalmadan koşar.
     }
 
     const dossier = buildWinnerDossier(state);
@@ -2399,7 +2570,7 @@ export async function veloraRunStatus(
 
 /**
  * Push sonrası teşhis: (1) kaydı geri okuyup alan bütünlüğünü doğrular,
- * (2) hiçbir fazın 8 sn tavanını aşmadığını ve 14 ajan alt çıktısının tamamının
+ * (2) hiçbir fazın kendi tavanını aşmadığını ve 14 ajan alt çıktısının tamamının
  * kayıtlı olduğunu kontrol eder.
  */
 export async function selfTestVeloraRun(
@@ -2454,6 +2625,10 @@ export async function selfTestVeloraRun(
   } else {
     notes.push("NO_SHARED_WINNERS:INTERSECTION_EMPTY");
   }
+  // Altyapı uyarısı verdict'i düşürmez: kayıt gerçekten yazıldı ve geri
+  // okundu. Kullanıcı yine de `radar_items` migration'ının uygulanması
+  // gerektiğini panelde görür.
+  if (args.push.warning) notes.push("PUSH_FALLBACK:AI_CACHE");
 
   if (agentsLogged !== expectedAgents)
     notes.push(`AGENT_COUNT_MISMATCH:${agentsLogged}/${expectedAgents}`);

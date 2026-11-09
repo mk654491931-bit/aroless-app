@@ -104,7 +104,13 @@ export type RunStatusPayload = {
   stale: boolean;
   pollIntervalMs: number;
   dossier: Dossier | null;
-  push: { ok: boolean; ids: string[]; error?: string } | null;
+  push: {
+    ok: boolean;
+    ids: string[];
+    error?: string;
+    fallback?: boolean;
+    warning?: string;
+  } | null;
   selfTest: {
     verdict: "PASS" | "FAIL";
     status: string;

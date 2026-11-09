@@ -785,7 +785,7 @@ export async function enqueueRemoteJob(args: {
  *
  * Velora orkestratörü 14 ajanlı hattı fazlara böler ve her fazı AYRI bir
  * QStash mesajı olarak kendine yayınlar (self-chaining fan-out). Böylece hiçbir
- * istek 8 saniyelik faz tavanını aşan bir iş yükünü taşımaz. Dedupe kimliği
+ * istek ajan fazının tavanını aşan bir iş yükünü taşımaz. Dedupe kimliği
  * aynı fazın iki kez koşmasını engeller; `x-job-secret` başlığı hedef ucun
  * doğrulaması için taşınır.
  */
