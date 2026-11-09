@@ -44,6 +44,9 @@ export function DiscoveryProgress({
   progress,
   step,
   stats,
+  runningLabel = "Kazananlar aranıyor…",
+  doneLabel = "Arama tamamlandı",
+  failedLabel = "Arama başarısız",
 }: {
   status: ProductDiscoveryStatus;
   progress: number;
@@ -53,6 +56,10 @@ export function DiscoveryProgress({
    * sağlığı bölümü hiç gösterilmez (olmayan bir ölçümü varmış gibi sunmayız).
    */
   stats?: FilterStats | null;
+  /** Aynı bileşen iki farklı işi anlatır: kazanan arama ve niş tarama. */
+  runningLabel?: string;
+  doneLabel?: string;
+  failedLabel?: string;
 }): React.JSX.Element {
   const effectiveStep = step ?? STATUS_TO_STEP[status] ?? "scrape_filter";
   const current = stepIndex(effectiveStep);
@@ -70,7 +77,7 @@ export function DiscoveryProgress({
           <Loader2 className="size-4 animate-spin text-primary" />
         )}
         <span className="text-sm font-medium">
-          {done ? "Arama tamamlandı" : failed ? "Arama başarısız" : "Kazananlar aranıyor…"}
+          {done ? doneLabel : failed ? failedLabel : runningLabel}
         </span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">{progress}%</span>
       </div>
@@ -153,15 +160,33 @@ export function SourceHealth({
           • Çalışmayan: {broken.map((s) => sourceLabel(s.name)).join(", ")}
         </p>
       )}
-      {!healthy.length && !keyless.length && !broken.length && (
-        <p>Bu koşuda kaynak raporu yok.</p>
-      )}
+      {!healthy.length && !keyless.length && !broken.length && <p>Bu koşuda kaynak raporu yok.</p>}
     </div>
   );
 }
 
-/** Filtre istatistikleri — "60'tan 5 kaldı, neden?" sorusunun cevabı. */
-export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Element {
+/**
+ * Filtre istatistikleri — "60'tan 5 kaldı, neden?" sorusunun cevabı.
+ *
+ * Ana Ürün Bulucu ve Niş Tarama aynı bileşeni kullanır. `status`/`step`
+ * verilirse dört adımlı hattın nerede olduğu da görünür; böylece kullanıcı
+ * yalnız ürün listesini değil, "hangi adımlardan geçti?" sorusunun cevabını
+ * da sonuç ekranında okur.
+ */
+export function DiscoveryStats({
+  stats,
+  status = "completed",
+  step = null,
+}: {
+  stats: FilterStats;
+  status?: ProductDiscoveryStatus;
+  step?: string | null;
+}): React.JSX.Element {
+  const completed = status === "completed";
+  const failed = status === "failed";
+  const current = completed
+    ? STEPS.length - 1
+    : stepIndex(step ?? STATUS_TO_STEP[status] ?? "scrape_filter");
   const rejected =
     stats.rejectedByRating +
     stats.rejectedByStock +
@@ -177,6 +202,38 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
         <Search className="size-3.5" />
         <span>Tarama özeti</span>
       </div>
+      <ol className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+        {STEPS.map((s, i) => {
+          const done = completed || (current > i && current >= 0);
+          const active = !completed && !failed && current === i;
+          return (
+            <li key={s.key} className="flex items-center gap-1.5">
+              <span
+                className={`flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px] ${
+                  done
+                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-500"
+                    : active
+                      ? "border-primary/50 bg-primary/15 text-primary"
+                      : "border-border text-muted-foreground/60"
+                }`}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              <span
+                className={
+                  done
+                    ? "text-foreground"
+                    : active
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground"
+                }
+              >
+                {s.label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-muted/50 py-2">
           <div className="text-lg font-semibold tabular-nums">{stats.inputCount}</div>
@@ -195,9 +252,7 @@ export function DiscoveryStats({ stats }: { stats: FilterStats }): React.JSX.Ele
         {stats.rejectedByRating > 0 && <p>• {stats.rejectedByRating} düşük puanlı</p>}
         {stats.rejectedByDuplicate > 0 && <p>• {stats.rejectedByDuplicate} yinelenen ürün</p>}
         {stats.rejectedByCompleteness > 0 && <p>• {stats.rejectedByCompleteness} kanıtsız</p>}
-        {stats.rejectedByAccessory > 0 && (
-          <p>• {stats.rejectedByAccessory} aksesuar/yedek parça</p>
-        )}
+        {stats.rejectedByAccessory > 0 && <p>• {stats.rejectedByAccessory} aksesuar/yedek parça</p>}
       </div>
       <SourceHealth stats={stats} />
     </div>

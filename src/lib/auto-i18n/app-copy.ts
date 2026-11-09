@@ -1084,7 +1084,7 @@ export const APP_COPY: Record<string, Copy> = {
   "Görsel & A+ Brief": { en: "Visual & A+ brief", es: "Brief visual y A+", de: "Visuelles & A+-Briefing", fr: "Brief visuel et A+", ar: "موجز مرئي وA+" },
   "Büyüme Suite": { en: "Growth suite", es: "Suite de crecimiento", de: "Wachstums-Suite", fr: "Suite de croissance", ar: "حزمة النمو" },
   "Kazanan Ürün Radarı": { en: "Winning product radar", es: "Radar de productos ganadores", de: "Gewinnerprodukt-Radar", fr: "Radar des produits gagnants", ar: "رادار المنتجات الرابحة" },
-  "Kanıtlı Ürün Keşfi": { en: "Evidence-backed product discovery", es: "Descubrimiento con pruebas", de: "Belegbasierte Produktsuche", fr: "Découverte fondée sur des preuves", ar: "اكتشاف منتجات مبني على الأدلة" },
+  "Niş Tarama": { en: "Niche scan", es: "Escaneo de nicho", de: "Nischen-Scan", fr: "Analyse de niche", ar: "فحص المجال" },
   "AI Mağaza Denetçisi": { en: "AI store auditor", es: "Auditor de tienda IA", de: "KI-Shop-Prüfer", fr: "Auditeur de boutique IA", ar: "مدقق المتجر بالذكاء الاصطناعي" },
   "Reklam Kreatif Stüdyosu": { en: "Ad creative studio", es: "Estudio creativo de anuncios", de: "Werbe-Kreativstudio", fr: "Studio créatif publicitaire", ar: "استوديو الإبداع الإعلاني" },
   "X araç çalıştırma / ay": { en: "X tool runs / month", es: "X ejecuciones / mes", de: "X Tool-Läufe / Monat", fr: "X exécutions / mois", ar: "X تشغيل شهريًا" },

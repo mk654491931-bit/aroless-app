@@ -17,6 +17,7 @@ import {
 import type { EngineId, MarketplaceId } from "@/lib/engines";
 import type { DeepSearchOptions } from "@/components/deep-search-panel";
 import type { RejectedCandidate } from "@/components/winner-score-panel";
+import type { FilterStats, ProductDiscoveryStatus } from "@/lib/product-discovery.types";
 import { attachWinnerScores } from "@/lib/winner-score";
 import { saveAnalysis } from "@/lib/analysis.functions";
 import { insertProductsFromAnalysis } from "@/lib/products.functions";
@@ -222,6 +223,18 @@ export function useFinderSearch(opts: {
    * der — aksi halde olmayan bir işi varmış gibi göstermiş olurdu.
    */
   const [councilPending, setCouncilPending] = useState(false);
+  /**
+   * Ana Ürün Bulucu'nun sonuç ekranında gösterilen GERÇEK tarama özeti.
+   *
+   * `getDiscoveryRun` her yoklamada ilk adımın kaynak/filtre sayaçlarını
+   * döndürür. Burada tutulmazsa kartlar yalnız ürün listesini gösterir ve
+   * kullanıcı "hangi kaynak çalıştı, kaç satır elendi?" sorusunun cevabını
+   * yalnız `/discover` ekranında görebilir. Değer yalnızca sunucunun yazdığı
+   * gerçek rapordur; tahmin/üretim yoktur.
+   */
+  const [scanStats, setScanStats] = useState<FilterStats | null>(null);
+  const [scanStatus, setScanStatus] = useState<ProductDiscoveryStatus>("queued");
+  const [scanStep, setScanStep] = useState<string | null>(null);
   /**
    * Hangi hat koşuyor? Arayüzün bekleme adımlarını HATTA GÖRE değiştirmesi
    * için gerekir: yeni hatta "kazıma → 75 → Gemini 25 → 14 ajan → ilk 5",
@@ -520,6 +533,9 @@ export function useFinderSearch(opts: {
         const state = await getDiscoveryRunFn({ data: { runId: started.runId } });
         // Sahiplik reddi (başkasının runId'si) veya satırın kaybolması.
         if (!state.ok) return { ok: false, fallback: true, reason: "run_not_visible", paid: false };
+        setScanStats(state.stats ?? null);
+        setScanStatus(state.status as ProductDiscoveryStatus);
+        setScanStep(state.step ?? null);
         if (state.status === "failed") {
           // HAT KOŞTU VE GERÇEKTEN BAŞARISIZ OLDU.
           //
@@ -578,6 +594,9 @@ export function useFinderSearch(opts: {
       if (!outcome.ok) {
         if (!outcome.fallback) {
           // HAT KOŞTU VE BAŞARISIZ OLDU — gerçek sebep gösterilir.
+          setScanStats(null);
+          setScanStep(null);
+          setScanStatus("failed");
           //
           // Önceden bu dal yoktu: sunucudaki hata metni atılıp kullanıcı
           // ikinci bir tam aramayı izliyor, o da bittiğinde ekranda yalnız
@@ -655,6 +674,8 @@ export function useFinderSearch(opts: {
         setFallbackNotice(
           "Kalıcı iş kaydı kurulumu tamam değil; arama canlı kaynaklardan ölçülerek yapılıyor. AI Konsey koşmayacak.",
         );
+        setScanStats(null);
+        setScanStep(null);
         measured.mutate({ ...vars, requestId: crypto.randomUUID() });
         return;
       }
@@ -749,6 +770,11 @@ export function useFinderSearch(opts: {
       setStillRunning(false);
       setEnriching(false);
       setCouncilPending(false);
+      // Ölçülmüş yedek yol kaynak/filtre raporu taşımaz: önceki hattın
+      // raporunu bu sonuçla eşleştirmek yanlış olur.
+      setScanStats(null);
+      setScanStep(null);
+      setScanStatus("queued");
       if (!res.ok) {
         if (res.reason === "no-credits") {
           toast.error("Kredi yok — paketini yükseltip devam edebilirsin.");
@@ -791,9 +817,7 @@ export function useFinderSearch(opts: {
         return;
       }
 
-      const products = attachWinnerScores(
-        toWinningProducts(res.rows, res.rows),
-      ).filter(
+      const products = attachWinnerScores(toWinningProducts(res.rows, res.rows)).filter(
         (p) =>
           p.name.trim().length > 0 &&
           (p.selling_price_usd !== "" ||
@@ -867,6 +891,10 @@ export function useFinderSearch(opts: {
       setSearchAttempt(nicheValue);
       setStalled(false);
       setStillRunning(false);
+      // Yeni arama: önceki koşunun kaynak/filtre raporu yeni sonuca karışmasın.
+      setScanStats(null);
+      setScanStep(null);
+      setScanStatus("queued");
       // Yeni arama başlatılıyor: önceki koşunun kalıcı kaydı temizlenir,
       // yoksa sayfa yenilenince YANLIŞ koşu devam ettirilirdi.
       writeStoredRun(null);
@@ -1021,6 +1049,9 @@ export function useFinderSearch(opts: {
           const state = await getDiscoveryRunFn({ data: { runId: stored.runId } });
           if (cancelled) return;
           if (!state.ok) break;
+          setScanStats(state.stats ?? null);
+          setScanStatus(state.status as ProductDiscoveryStatus);
+          setScanStep(state.step ?? null);
           if (state.status === "failed") {
             writeStoredRun(null);
             setStillRunning(false);
@@ -1080,6 +1111,10 @@ export function useFinderSearch(opts: {
     stalled,
     /** Hat sunucuda çalışmaya devam ediyor — hata değil, bilgi durumu. */
     stillRunning,
+    /** İlk adımın GERÇEK kaynak/filtre raporu; yoksa null (uydurulmaz). */
+    scanStats,
+    scanStatus,
+    scanStep,
     gen,
     runSearch,
     setSearchError,

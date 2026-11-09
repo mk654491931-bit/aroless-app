@@ -132,6 +132,7 @@ import { ProductCard } from "@/features/finder/components/product-card";
 import { SeoTab, CreativeTab, LibraryTab } from "@/features/finder/components/finder-tabs";
 import { sortProducts, type SortKey } from "@/features/finder/utils/sorting";
 import { requestRun } from "@/features/finder/utils/seo-creative-bridge";
+import { DiscoveryStats } from "@/features/finder/components/discovery-progress";
 
 export const Route = createFileRoute("/")({
   // SSR AÇIK: `/` sitenin girişi ve sitemap'te priority 1.0. Eskiden client-only
@@ -434,6 +435,9 @@ function Dashboard() {
     searchAttempt,
     stalled,
     stillRunning,
+    scanStats,
+    scanStatus,
+    scanStep,
     runSearch,
   } = useFinderSearch({
     platforms,
@@ -1301,6 +1305,15 @@ function Dashboard() {
                         ] as const;
                         return (
                           <>
+                            {scanStats && (
+                              <div className="mb-4">
+                                <DiscoveryStats
+                                  stats={scanStats}
+                                  status={scanStatus}
+                                  step={scanStep}
+                                />
+                              </div>
+                            )}
                             <FinderInsights products={filtered} />
                             <AdvancedFilters
                               products={results}

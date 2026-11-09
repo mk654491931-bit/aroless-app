@@ -1625,12 +1625,12 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
   şimdi: { en: "now", es: "ahora", de: "jetzt", fr: "maintenant", ar: "الآن" },
   ayırıcı: { en: "separator", es: "separador", de: "Trennzeichen", fr: "séparateur", ar: "فاصل" },
   Ülke: { en: "Country", es: "País", de: "Land", fr: "Pays", ar: "البلد" },
-  "Sonuç sayısı": {
-    en: "Number of results",
-    es: "Número de resultados",
-    de: "Anzahl der Ergebnisse",
-    fr: "Nombre de résultats",
-    ar: "عدد النتائج",
+  "Aday sayısı": {
+    en: "Number of candidates",
+    es: "Número de candidatos",
+    de: "Anzahl der Kandidaten",
+    fr: "Nombre de candidats",
+    ar: "عدد المرشحين",
   },
   "kazanan ürün": {
     en: "winning product",
@@ -1639,50 +1639,43 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "produit gagnant",
     ar: "منتج رابح",
   },
-  "6 ürün bulundu": {
-    en: "6 products found",
-    es: "6 productos encontrados",
-    de: "6 Produkte gefunden",
-    fr: "6 produits trouvés",
-    ar: "عُثر على 6 منتجات",
+  "Niş Tarama — Aroless": {
+    en: "Niche scan — Aroless",
+    es: "Escaneo de nicho — Aroless",
+    de: "Nischen-Scan — Aroless",
+    fr: "Analyse de niche — Aroless",
+    ar: "فحص المجال — Aroless",
   },
-  "kaç oy ölçüldü": {
-    en: "how many votes were measured",
-    es: "cuántos votos se midieron",
-    de: "wie viele Stimmen gemessen wurden",
-    fr: "combien de votes mesurés",
-    ar: "كم صوتًا جُمع",
-  },
-  "Kanıtlı Kazanan Ürün Keşfi — Aroless": {
-    en: "Evidence-backed winning product discovery — Aroless",
-    es: "Descubrimiento de productos ganadores con pruebas — Aroless",
-    de: "Belegbasierte Gewinnerprodukt-Suche — Aroless",
-    fr: "Découverte de produits gagnants fondée sur des preuves — Aroless",
-    ar: "اكتشاف منتجات رابحة بالأدلة — Aroless",
-  },
-  "Nişini gerçek kaynaklardan tara, sert filtrele, 14 ajanla puanla. Her adımda kanıtı ve gerekçesi görünür.":
+  "Bir nişin gerçek kaynaklardaki görünümünü tara: kaç aday ölçüldü, fiyatlar hangi bantta, hangi kategoriler ve kaynaklar baskın? Kazanan seçmez; karar için kanıt üretir.":
     {
-      en: "Scan your niche in real sources, filter hard, score with 14 agents. Evidence and reasoning are visible at every step.",
-      es: "Escanea tu nicho en fuentes reales, filtra fuerte y puntúa con 14 agentes. Pruebas y razones visibles en cada paso.",
-      de: "Scanne deine Nische in echten Quellen, filtere hart, bewerte mit 14 Agenten. Belege und Begründungen sind bei jedem Schritt sichtbar.",
-      fr: "Scannez votre créneau dans de vraies sources, filtrez durement, notez avec 14 agents. Preuves et raisons visibles à chaque étape.",
-      ar: "افحص مجالك في مصادر حقيقية وصفِّ بصرامة وقيّم بـ14 وكيلًا، مع إظهار الأدلة والأسباب في كل خطوة.",
+      en: "Scan a niche as it appears in real sources: how many candidates were measured, where prices sit, which categories and sources dominate. It does not pick a winner; it produces evidence for your decision.",
+      es: "Escanea un nicho tal como aparece en fuentes reales: cuántos candidatos se midieron, en qué banda están los precios y qué categorías y fuentes dominan. No elige un ganador; produce pruebas para tu decisión.",
+      de: "Scanne eine Nische so, wie sie in echten Quellen erscheint: wie viele Kandidaten gemessen wurden, in welchem Preisband sie liegen und welche Kategorien und Quellen dominieren. Es wird kein Gewinner gewählt; es entstehen Belege für deine Entscheidung.",
+      fr: "Analysez un créneau tel qu'il apparaît dans de vraies sources : combien de candidats ont été mesurés, dans quelle bande de prix, quelles catégories et sources dominent. L'outil ne choisit pas un gagnant ; il produit des preuves pour votre décision.",
+      ar: "افحص مجالًا كما يظهر في مصادر حقيقية: كم مرشحًا جرى قياسه، وفي أي نطاق سعري، وما الفئات والمصادر المهيمنة. لا يختار فائزًا؛ بل ينتج أدلة لقرارك.",
     },
-  "Kanıtlı Kazanan Ürün Keşfi": {
-    en: "Evidence-backed winning product discovery",
-    es: "Descubrimiento de productos ganadores con pruebas",
-    de: "Belegbasierte Gewinnerprodukt-Suche",
-    fr: "Découverte de produits gagnants fondée sur des preuves",
-    ar: "اكتشاف منتجات رابحة بالأدلة",
-  },
-  "Nişini 5 gerçek kaynaktan tara, sert filtrele, 14 ajanla puanla. Her adımda ne ölçüldüğünü gör.":
+  "Bir nişin gerçek kaynaklardaki pazar yapısını tara: ölçülen adaylar, fiyat bantları, kategoriler ve kaynak kapsamı. Kazanan ürün seçmez; karar için kanıt üretir.":
     {
-      en: "Scan your niche across 5 real sources, filter hard, score with 14 agents. See what was measured at every step.",
-      es: "Escanea tu nicho en 5 fuentes reales, filtra fuerte y puntúa con 14 agentes. Ve qué se midió en cada paso.",
-      de: "Scanne deine Nische in 5 echten Quellen, filtere hart, bewerte mit 14 Agenten. Sieh bei jedem Schritt, was gemessen wurde.",
-      fr: "Scannez votre créneau sur 5 sources réelles, filtrez durement, notez avec 14 agents. Voyez ce qui a été mesuré à chaque étape.",
-      ar: "افحص مجالك عبر 5 مصادر حقيقية وصفِّ بصرامة وقيّم بـ14 وكيلًا، وشاهد ما جرى قياسه في كل خطوة.",
+      en: "Scan a niche's market structure in real sources: measured candidates, price bands, categories and source coverage. It does not pick a winning product; it produces evidence for your decision.",
+      es: "Escanea la estructura de mercado de un nicho en fuentes reales: candidatos medidos, bandas de precio, categorías y cobertura de fuentes. No elige un producto ganador; produce pruebas para tu decisión.",
+      de: "Scanne die Marktstruktur einer Nische in echten Quellen: gemessene Kandidaten, Preisbänder, Kategorien und Quellenabdeckung. Es wird kein Gewinnerprodukt gewählt; es entstehen Belege für deine Entscheidung.",
+      fr: "Analysez la structure de marché d'un créneau dans de vraies sources : candidats mesurés, bandes de prix, catégories et couverture des sources. L'outil ne choisit pas de produit gagnant ; il produit des preuves pour votre décision.",
+      ar: "افحص بنية سوق مجال في مصادر حقيقية: المرشحون المقاسون، ونطاقات السعر، والفئات، وتغطية المصادر. لا يختار منتجًا رابحًا؛ بل ينتج أدلة لقرارك.",
     },
+  "Nişi tara": {
+    en: "Scan niche",
+    es: "Escanear nicho",
+    de: "Nische scannen",
+    fr: "Analyser le créneau",
+    ar: "افحص المجال",
+  },
+  "Taranacak niş": {
+    en: "Niche to scan",
+    es: "Nicho a escanear",
+    de: "Zu scannende Nische",
+    fr: "Créneau à analyser",
+    ar: "المجال المراد فحصه",
+  },
   "örn. space saving kitchen gadgets": {
     en: "e.g. space saving kitchen gadgets",
     es: "p. ej. utensilios de cocina que ahorran espacio",
@@ -1690,19 +1683,19 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "ex. accessoires de cuisine gain de place",
     ar: "مثال: أدوات مطبخ موفرة للمساحة",
   },
-  "Kazananları bul": {
-    en: "Find winners",
-    es: "Buscar ganadores",
-    de: "Gewinner finden",
-    fr: "Trouver des gagnants",
-    ar: "ابحث عن الرابحين",
+  "Niş tarama raporu": {
+    en: "Niche scan report",
+    es: "Informe de escaneo de nicho",
+    de: "Nischen-Scan-Bericht",
+    fr: "Rapport d'analyse de niche",
+    ar: "تقرير فحص المجال",
   },
-  "güven skoru neden bu?": {
-    en: "why is the confidence score this?",
-    es: "¿por qué esta puntuación de confianza?",
-    de: "warum dieser Konfidenz-Score?",
-    fr: "pourquoi ce score de confiance ?",
-    ar: "لماذا درجة الثقة هذه؟",
+  "Ölçülmüş adaylar": {
+    en: "Measured candidates",
+    es: "Candidatos medidos",
+    de: "Gemessene Kandidaten",
+    fr: "Candidats mesurés",
+    ar: "المرشحون المقاسون",
   },
   "14 ajan oyladı": {
     en: "14 agents voted",
@@ -2695,14 +2688,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Aucun produit gagnant trouvé pour ces critères",
     ar: "لم يُعثر على منتج رابح بهذه المعايير",
   },
-  "Bu niş için ölçülebilir kanıt bulunamadı. Daha dar bir niş dene (örn. “space saving kitchen gadgets” yerine “under sink organizer”).":
-    {
-      en: "No measurable evidence was found for this niche. Try a narrower one (e.g. “under sink organizer” instead of “space saving kitchen gadgets”).",
-      es: "No se encontró evidencia medible para este nicho. Prueba uno más concreto (p. ej. “organizador bajo el fregadero”).",
-      de: "Für diese Nische wurde kein messbarer Beleg gefunden. Versuche eine engere (z. B. „Organizer unter der Spüle“).",
-      fr: "Aucune preuve mesurable pour ce créneau. Essayez plus précis (ex. « organisateur sous évier »).",
-      ar: "لم يُعثر على أدلة قابلة للقياس لهذا المجال. جرّب مجالًا أضيق (مثل «منظم تحت الحوض»).",
-    },
   "Bu nişteki en iyi ürünleri bul": {
     en: "Find the best products in this niche",
     es: "Encuentra los mejores productos del nicho",

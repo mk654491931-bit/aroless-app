@@ -146,10 +146,13 @@ describe("nihai 5 — kalıcı sonuç ve istemci", () => {
     expect(fn).toContain("updatedAt: number | null");
   });
 
-  it("arayüz gerekçeyi kartlara geçirir", async () => {
+  it("arayüz aday gerekçesini kartlara geçirir", async () => {
+    // /discover artık kazanan seçmez; niş tarama raporunda konsey gerekçesini
+    // aday kanıtı olarak gösterir. `topProducts` sözleşmesi yine istemciye bağlı.
     const route = await read("src/routes/discover.tsx");
     expect(route).toContain("topProducts={d.run.topProducts}");
-    expect(route).toContain("reason={reasonFor(w)}");
+    expect(route).toContain("reasonFor(product)");
+    expect(route).toContain("Konsey gerekçesi:");
     const card = await read("src/features/finder/components/discovery-winner-card.tsx");
     expect(card).toContain("Neden seçildi:");
   });
