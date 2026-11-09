@@ -48,17 +48,41 @@ describe("paddleSettings — kısmi katalog", () => {
     expect(settings?.priceIds.Starter).toBe("pri_starter");
   });
 
-  it("apiKey / webhookSecret / clientToken eksikse hâlâ null döner", () => {
-    // Bunlar olmadan Paddle ile konuşulamaz; katalog kısmiyken de bu eşik korunur.
-    for (const key of [
-      "PADDLE_API_KEY",
-      "PADDLE_WEBHOOK_SECRET_KEY",
-      "PADDLE_CLIENT_TOKEN",
-    ] as const) {
-      process.env = { ...original, ...REQUIRED };
-      delete process.env[key];
-      expect(paddleSettings()).toBeNull();
-    }
+  it("yalnız apiKey yoksa entegrasyon kapanır", () => {
+    process.env = { ...original, ...REQUIRED };
+    delete process.env["PADDLE_API_KEY"];
+    expect(paddleSettings()).toBeNull();
+  });
+
+  it("webhook sırrı ya da tarayıcı token'ı TEK BAŞINA eksikse yalnız o yol kapanır", () => {
+    // ÖLÇÜLEN HATA: üç değişken birlikte zorunluydu. Sunucuda yalnız API key +
+    // webhook sırrı olan bir dağıtımda webhook 500 dönüyor, ödeme yapıldığı
+    // hâlde abonelik/kredi yazılmıyordu. Webhook tarayıcı token'ına muhtaç
+    // değildir; checkout da webhook sırrına muhtaç değildir.
+    process.env = { ...original, ...REQUIRED };
+    delete process.env["PADDLE_CLIENT_TOKEN"];
+    delete process.env["VITE_PADDLE_CLIENT_TOKEN"];
+    const noBrowserToken = paddleSettings();
+    expect(noBrowserToken).not.toBeNull();
+    expect(noBrowserToken?.clientToken).toBe("");
+    expect(noBrowserToken?.webhookSecret).toBe("s");
+
+    process.env = { ...original, ...REQUIRED };
+    delete process.env["PADDLE_WEBHOOK_SECRET_KEY"];
+    delete process.env["PADDLE_WEBHOOK_SECRET"];
+    const noWebhookSecret = paddleSettings();
+    expect(noWebhookSecret).not.toBeNull();
+    expect(noWebhookSecret?.webhookSecret).toBe("");
+    expect(noWebhookSecret?.clientToken).toBe("t");
+  });
+
+  it("webhook sırrı ve tarayıcı token'ının İKİSİ de yoksa null döner", () => {
+    process.env = { ...original, ...REQUIRED };
+    delete process.env["PADDLE_WEBHOOK_SECRET_KEY"];
+    delete process.env["PADDLE_WEBHOOK_SECRET"];
+    delete process.env["PADDLE_CLIENT_TOKEN"];
+    delete process.env["VITE_PADDLE_CLIENT_TOKEN"];
+    expect(paddleSettings()).toBeNull();
   });
 });
 

@@ -21,11 +21,14 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { serviceReadDb, type ReadDb } from "./supabase-read.server";
 import { ADMIN_QUOTA, adminTopUpAmount, tierLevel } from "./plans";
 import {
+  effectiveUsageLimit,
   emptyUsageCounts,
   monthRange,
   planUsageRows,
+  usageAllowance,
   usageKindForFeature,
   type UsageCounts,
+  type UsageKind,
   type UsageRow,
 } from "./plan-usage";
 
@@ -181,6 +184,123 @@ export async function monthUsage(
   } catch (e) {
     console.warn(`[usage] sayaç hatası: ${(e as Error).message.slice(0, 80)}`);
     return null;
+  }
+}
+
+/**
+ * AYLIK HAK KAPISI — jeton harcamayan ama sayılan işler için (Hidrojen10).
+ *
+ * Hidrojen10 taraması jeton cüzdanından değil, paketle gelen ayrı aylık
+ * tarama hakkından düşer. Kural tek kaynaktan gelir: `plans.ts` →
+ * `quotaFor` → `effectiveUsageLimit`. Burada ikinci bir limit listesi YOKTUR.
+ *
+ * FAIL-OPEN: kullanım/tier okunamazsa engellenmez; ölçülemeyen bir sayaç
+ * yüzünden ücretli müşteriyi kapıda bırakmak daha kötüdür.
+ */
+export type PlanUsageGate = {
+  ok: boolean;
+  reason: "ok" | "PLAN_LIMIT" | "UNAVAILABLE";
+  kind: UsageKind;
+  tier: string;
+  level: 0 | 1 | 2 | 3;
+  admin: boolean;
+  used: number | null;
+  limit: number | null;
+  remaining: number | null;
+};
+
+export async function planUsageAllowance(opts: {
+  userId: string;
+  /** `hydrogen10-search` | `hydrogen10-refresh` … (`usageKindForFeature` eşler). */
+  feature: string;
+  units?: number;
+  db?: ReadDb | null;
+  now?: Date;
+}): Promise<PlanUsageGate> {
+  const kind = usageKindForFeature(opts.feature);
+  const units = Math.max(1, Math.floor(opts.units ?? 1));
+  const client = opts.db ?? serviceReadDb();
+  if (!opts.userId || !client) {
+    return {
+      ok: false,
+      reason: "UNAVAILABLE",
+      kind,
+      tier: "Free",
+      level: 0,
+      admin: false,
+      used: null,
+      limit: null,
+      remaining: null,
+    };
+  }
+
+  let tier = "Free";
+  try {
+    const { data } = await client
+      .from("profiles")
+      .select("subscription_tier")
+      .eq("id", opts.userId)
+      .maybeSingle();
+    tier = (data as { subscription_tier?: string | null } | null)?.subscription_tier ?? "Free";
+  } catch {
+    /* tier okunamadı → Free; limit yine hesaplanır ama admin tanımı ayrıca sorulur */
+  }
+  const level = tierLevel(tier);
+  const admin = await isAdminUser(opts.userId, client);
+  const used = await monthUsage(opts.userId, opts.now ?? new Date(), client);
+  const usedForKind = used?.[kind] ?? null;
+  const limit = effectiveUsageLimit({
+    level,
+    kind,
+    isAdmin: admin,
+    used: usedForKind,
+    balance: null,
+  });
+  const decision = usageAllowance({ used: usedForKind, limit, units });
+  return {
+    ok: decision.allowed,
+    reason: decision.allowed ? "ok" : "PLAN_LIMIT",
+    kind,
+    tier,
+    level,
+    admin,
+    used: usedForKind,
+    limit,
+    remaining: decision.remaining,
+  };
+}
+
+/**
+ * Aylık hakka BİR kullanım yazar (jeton cüzdanına dokunmaz).
+ *
+ * `credit_usage_log.credits` burada "kullanım birimi"dir; `monthUsage` bu
+ * satırları `usageKindForFeature(tool)` ile doğru hakka sayar. Defter
+ * yazılamazsa iş DÜŞMEZ (fail-soft) — kota koruma amaçlıdır, faturalama değil.
+ */
+export async function recordPlanUsage(opts: {
+  userId: string;
+  feature: string;
+  units?: number;
+  db?: ReadDb | null;
+  meta?: Record<string, unknown>;
+}): Promise<boolean> {
+  const units = Math.max(1, Math.floor(opts.units ?? 1));
+  if (!opts.userId) return false;
+  try {
+    await recordAiUsage(
+      {
+        userId: opts.userId,
+        feature: opts.feature,
+        credits: units,
+        success: true,
+        meta: opts.meta,
+      },
+      opts.db ?? null,
+    );
+    return true;
+  } catch (e) {
+    console.warn(`[usage] ${opts.feature} kaydı atlandı: ${(e as Error).message.slice(0, 80)}`);
+    return false;
   }
 }
 

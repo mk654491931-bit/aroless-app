@@ -125,6 +125,7 @@ describe("quotaFor", () => {
     expect(quota.toolRuns).toBe(3);
     expect(quota.councilRuns).toBe(0);
     expect(quota.radarScans).toBe(1);
+    expect(quota.hydrogen10Runs).toBe(0);
   });
 
   it("returns Starter quotas for level 1", () => {
@@ -133,6 +134,7 @@ describe("quotaFor", () => {
     expect(quota.toolRuns).toBe(30);
     expect(quota.councilRuns).toBe(2);
     expect(quota.radarScans).toBe(6);
+    expect(quota.hydrogen10Runs).toBe(100);
   });
 
   it("returns Pro quotas for level 2", () => {
@@ -141,6 +143,7 @@ describe("quotaFor", () => {
     expect(quota.toolRuns).toBe(90);
     expect(quota.councilRuns).toBe(6);
     expect(quota.radarScans).toBe(20);
+    expect(quota.hydrogen10Runs).toBe(200);
   });
 
   it("returns Business quotas for level 3", () => {
@@ -149,6 +152,7 @@ describe("quotaFor", () => {
     expect(quota.toolRuns).toBe(300);
     expect(quota.councilRuns).toBe(20);
     expect(quota.radarScans).toBe(60);
+    expect(quota.hydrogen10Runs).toBe(4500);
   });
 
   it("quotas increase with level", () => {
@@ -168,6 +172,7 @@ describe("quotaFor", () => {
     expect(ADMIN_QUOTA.toolRuns).toBe(250);
     expect(ADMIN_QUOTA.councilRuns).toBe(250);
     expect(ADMIN_QUOTA.radarScans).toBe(250);
+    expect(ADMIN_QUOTA.hydrogen10Runs).toBe(250);
   });
 });
 

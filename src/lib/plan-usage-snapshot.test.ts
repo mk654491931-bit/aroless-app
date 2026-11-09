@@ -79,6 +79,7 @@ describe("planUsageSnapshot — kullanıcı istemcisiyle (servis anahtarı yok)"
       toolRuns: PLAN_BY_ID.Pro.toolRuns,
       councilRuns: PLAN_BY_ID.Pro.councilRuns,
       radarScans: PLAN_BY_ID.Pro.radarScans,
+      hydrogen10Runs: PLAN_BY_ID.Pro.hydrogen10Runs,
     });
     const used = Object.fromEntries(snap.rows.map((r) => [r.kind, r.used]));
     expect(used.toolRuns).toBe(3);
@@ -98,6 +99,6 @@ describe("planUsageSnapshot — kullanıcı istemcisiyle (servis anahtarı yok)"
       fakeDb({ tier: "Free" }) as never,
     );
     expect(snap.measured).toBe(true);
-    expect(snap.rows.map((r) => r.limit)).toEqual([2, 3, 0, 1]);
+    expect(snap.rows.map((r) => r.limit)).toEqual([2, 3, 0, 1, 0]);
   });
 });

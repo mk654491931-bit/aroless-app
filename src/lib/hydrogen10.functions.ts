@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { tierLevel } from "@/lib/plans";
+import { planLimitMessage } from "@/lib/plan-usage";
 import { h10CacheDecision, resolveH10Market, type H10SearchResult } from "@/lib/hydrogen10";
 import {
   H10BusyError,
@@ -24,6 +25,66 @@ import { runInBackground } from "@/lib/job-runner.server";
 
 /** Tek bir kaynak turunun üst sınırı — isteği 504'e taşırmamak için. */
 const H10_SOURCE_CAP_MS = 14_000;
+
+/**
+ * Aylık Hidrojen10 hakkı doldu — jeton yetersizliğinden AYRI hata.
+ *
+ * Kullanıcıya "bakiye yükle" değil "paketi yükselt" denmelidir; çünkü
+ * Hidrojen10 taraması jeton cüzdanından değil, paketin ayrı aylık tarama
+ * hakkından düşer (`plans.ts` → `hydrogen10Runs`).
+ */
+class H10PlanLimitError extends Error {
+  readonly code = "H10_PLAN_LIMIT";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "H10PlanLimitError";
+  }
+}
+
+/**
+ * Canlı tarama başlamadan ÖNCE aylık hakkı kontrol eder.
+ *
+ * Cache isabeti bu kapıdan GEÇMEZ: 24 saat içinde aynı niş DB'den dönüyorsa
+ * yeni kaynak taraması yapılmadığı için hak harcanmaz. Fail-open: sayaç
+ * okunamazsa engellenmez (kota koruması, müşteriyi kilitlemekten önce gelir).
+ */
+async function requireH10Allowance(
+  context: H10Context,
+  feature: "hydrogen10-search" | "hydrogen10-refresh",
+): Promise<void> {
+  const { planUsageAllowance } = await import("@/lib/plan-usage.server");
+  const gate = await planUsageAllowance({
+    userId: context.userId,
+    feature,
+    db: context.supabase as never,
+  });
+  if (gate.ok || gate.reason === "UNAVAILABLE") return;
+  throw new H10PlanLimitError(
+    gate.limit !== null
+      ? planLimitMessage("hydrogen10Runs", gate.limit, gate.tier)
+      : "Hidrojen10 aylık tarama hakkın doldu. Daha yüksek pakete geçerek artırabilirsin.",
+  );
+}
+
+/** Gerçekten yapılan canlı taramayı aylık hakka yazar (jeton harcamaz). */
+async function recordH10Use(
+  context: H10Context,
+  feature: "hydrogen10-search" | "hydrogen10-refresh",
+  meta?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { recordPlanUsage } = await import("@/lib/plan-usage.server");
+    await recordPlanUsage({
+      userId: context.userId,
+      feature,
+      db: context.supabase as never,
+      meta,
+    });
+  } catch {
+    // Ölçüm ikincil: tarama zaten yapıldı, kayıt hatası sonucu bozmaz.
+  }
+}
 
 const SearchInput = z.object({
   query: z.string().trim().min(2).max(160),
@@ -92,6 +153,13 @@ function accessContext(context: unknown): H10Context {
 }
 
 function failure(error: unknown): H10SearchResult {
+  if (error instanceof H10PlanLimitError) {
+    return {
+      ok: false,
+      code: "plan_limit",
+      message: error.message,
+    };
+  }
   if (error instanceof H10SchemaError) {
     return {
       ok: false,
@@ -200,6 +268,22 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
       if (niche && cacheDecision === "stale") {
         // BAYAT: eski veri hemen görünür. Yenileme kalıcı süreçte arka planda;
         // sunucusuz ortamda başlatılamazsa kullanıcıya açıkça söylenir.
+        //
+        // KOTA ÖNCE SORULUR: hak dolduysa arka plan taraması BAŞLATILMAZ, ama
+        // kullanıcı DB'deki mevcut veriyi yine görür (veri zaten ödenmiş
+        // cache'tir; yeni kaynak maliyeti doğmadığı için hak da harcanmaz).
+        try {
+          await requireH10Allowance(accessContext(context), "hydrogen10-search");
+        } catch (error) {
+          if (error instanceof H10PlanLimitError) {
+            return readH10Payload(niche, {
+              dataSource: "db",
+              refreshing: false,
+              message: `${error.message} DB'deki mevcut veri gösteriliyor; yeni tarama başlatılmadı.`,
+            });
+          }
+          throw error;
+        }
         let refreshing = false;
         let message = "DB'deki eski veri gösteriliyor.";
         try {
@@ -216,6 +300,14 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
             { key: `h10:${market.canonicalKey}`, timeoutMs: 90_000 },
           );
           refreshing = started.started || started.reason === "duplicate";
+          // Hak YALNIZ bu isteğin başlattığı gerçek tarama için yazılır.
+          // `duplicate` = aynı niş zaten taranıyor; ikinci kez sayılmaz.
+          if (started.started) {
+            await recordH10Use(accessContext(context), "hydrogen10-search", {
+              canonicalKey: market.canonicalKey,
+              source: "stale_refresh",
+            });
+          }
           message = refreshing
             ? "DB'deki eski veri gösteriliyor; arka planda yenileniyor."
             : "DB'deki eski veri gösteriliyor. Bu ortamda arka plan yenileme kapalı; Yenile'yi kullanın.";
@@ -232,7 +324,8 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
       }
 
       // MISS: gösterecek eski veri yok; ilk taramayı senkron yap. Sonuç DB'ye
-      // yazılır, sonraki aramalar cache'ten döner.
+      // yazılır, sonraki aramalar cache'ten döner. Canlı tarama aylık haktan düşer.
+      await requireH10Allowance(accessContext(context), "hydrogen10-search");
       const result = await scrapeMarket({
         ...market,
         country: market.country.code,
@@ -240,6 +333,13 @@ export const searchHydrogen10 = createServerFn({ method: "POST" })
         currency: market.country.currency,
         triggeredBy: "user",
       });
+      // Kaynaklar tamamen başarısızsa kullanıcı veri almadı → hak harcanmaz.
+      if (result.prepared.status !== "failed") {
+        await recordH10Use(accessContext(context), "hydrogen10-search", {
+          canonicalKey: market.canonicalKey,
+          source: "live",
+        });
+      }
       return readAfterScrape(market.canonicalKey, {
         dataSource: "live",
         message:
@@ -276,6 +376,7 @@ export const refreshHydrogen10 = createServerFn({ method: "POST" })
     }
 
     try {
+      await requireH10Allowance(accessContext(context), "hydrogen10-refresh");
       const result = await scrapeMarket({
         ...market,
         country: market.country.code,
@@ -283,6 +384,12 @@ export const refreshHydrogen10 = createServerFn({ method: "POST" })
         currency: market.country.currency,
         triggeredBy: "manual",
       });
+      if (result.prepared.status !== "failed") {
+        await recordH10Use(accessContext(context), "hydrogen10-refresh", {
+          canonicalKey: market.canonicalKey,
+          source: "manual",
+        });
+      }
       return readAfterScrape(market.canonicalKey, {
         dataSource: "live",
         message:

@@ -78,6 +78,27 @@ describe("Paddle webhook — imza doğrulama", () => {
     await expect(res.text()).resolves.toContain("Invalid signature");
   });
 
+  it("tarayıcı token'ı olmasa da webhook çalışır (yalnız checkout onu ister)", async () => {
+    // ÖLÇÜLEN HATA: üç env değişkeni birden zorunluydu. Sunucu tarafı kurulmuş
+    // ama tarayıcı token'ı eksik bir dağıtımda webhook kendi işini yapmadan 500
+    // dönüyor, Paddle yeniden deniyor, kullanıcı ödediği hâlde "Free" kalıyordu.
+    // Webhook'un tarayıcı token'ına ihtiyacı YOKTUR: imza yine doğrulanır.
+    delete process.env.PADDLE_CLIENT_TOKEN;
+    delete process.env.VITE_PADDLE_CLIENT_TOKEN;
+    const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+    const res = await handlePaddleWebhook(post());
+    expect(res.status).toBe(401);
+    await expect(res.text()).resolves.toContain("Invalid signature");
+  });
+
+  it("webhook sırrı yoksa imza yerine yapılandırma hatası verir", async () => {
+    delete process.env.PADDLE_WEBHOOK_SECRET_KEY;
+    delete process.env.PADDLE_WEBHOOK_SECRET;
+    const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+    const res = await handlePaddleWebhook(post());
+    expect(res.status).toBe(500);
+  });
+
   it("paddle-signature başlığı hiç yoksa da 401 döner", async () => {
     const { handlePaddleWebhook } = await import("./paddle-webhook.server");
     const res = await handlePaddleWebhook(

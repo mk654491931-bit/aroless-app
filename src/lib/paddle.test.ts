@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   creditGrantDecision,
   mapPaddleEvent,
+  planForAmount,
   planForAsset,
   refundSignal,
   SUBSCRIPTION_CREDIT_GRANTS,
@@ -185,6 +186,25 @@ describe("mapPaddleEvent — lifecycle events (refunds, cancels, out-of-order)",
   });
 });
 
+describe("planForAmount — ödenen tam tutardan plan çözümü (son savunma hattı)", () => {
+  it("katalog fiyatlarını doğru pakete eşler", () => {
+    expect(planForAmount(3900)).toBe("Starter");
+    expect(planForAmount(5900)).toBe("Pro");
+    expect(planForAmount(19900)).toBe("Business");
+  });
+
+  it("indirimli/yarım tutarı TAHMİNLE eşlemez (yanlış paket vermek daha kötü)", () => {
+    expect(planForAmount(1950)).toBeNull();
+    expect(planForAmount(2950)).toBeNull();
+  });
+
+  it("geçersiz tutarda null döner", () => {
+    expect(planForAmount(null)).toBeNull();
+    expect(planForAmount(0)).toBeNull();
+    expect(planForAmount(Number.NaN)).toBeNull();
+  });
+});
+
 describe("planForAsset — ürün ID'siyle plan çözümü", () => {
   it("fiyat ID'si eşleşmese bile ÜRÜN ID'siyle planı bulur", () => {
     // ÖLÇÜLEN HATA: env'de ürün ID'si tanımlı bir kurulumda webhook yalnız fiyat
@@ -214,6 +234,23 @@ describe("planForAsset — ürün ID'siyle plan çözümü", () => {
     expect(cmd!.tier).toBe("Pro");
     expect(cmd!.searchCredits).toBe(PRO_GRANT);
     expect(cmd!.productId).toBe("pro_pro");
+  });
+
+  it("kimlik ve customData yoksa TAM ödeme tutarından planı ve krediyi çözer", () => {
+    // Ölçülen hata: eski/yeniden adlandırılmış fiyat ID'si + customData'sız
+    // yenileme + API kesintisi birlikte geldiğinde tier null kalıyor, ödeme
+    // yapıldığı hâlde paket ve kredi tanımlanmıyordu.
+    const cmd = mapPaddleEvent(
+      settings(),
+      "transaction.completed",
+      completedPayment({
+        items: [{ price: { id: "pri_eski", productId: "pro_eski" } }],
+        customData: { userId: "11111111-1111-1111-1111-111111111111" },
+        details: { totals: { grandTotal: "3900" } },
+      }).data,
+    );
+    expect(cmd!.tier).toBe("Starter");
+    expect(cmd!.searchCredits).toBe(SUBSCRIPTION_CREDIT_GRANTS.Starter.search);
   });
 });
 
@@ -253,6 +290,29 @@ describe("creditGrantDecision — jeton talebi", () => {
       simCredits: 10,
     });
     expect(d).toMatchObject({ granted: true, search: PRO_GRANT });
+  });
+
+  it("abonelik olayı + gerçek işlem kimliği krediyi geçirir (yalnız abonelik webhook'u)", () => {
+    // Bazı kurulumlar yalnız `subscription.*` olaylarını dinler; o zaman
+    // `transaction.completed` hiç gelmez. Webhook aboneliğin son tamamlanmış
+    // işlemini bularak krediyi bu yoldan da verir; çift vermeyi defter engeller.
+    const d = creditGrantDecision({
+      eventType: "subscription.activated",
+      transactionId: "txn_123",
+      searchCredits: PRO_GRANT,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: true, search: PRO_GRANT, sim: 10 });
+  });
+
+  it("abonelik olayı işlem kimliği taşımıyorsa kredi doğurmaz", () => {
+    const d = creditGrantDecision({
+      eventType: "subscription.activated",
+      transactionId: null,
+      searchCredits: PRO_GRANT,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: false, reason: "not-paid" });
   });
 
   it("ödenmemiş durum güncellemesi kredi doğurmaz", () => {

@@ -56,6 +56,18 @@ describe("abonelik jetonları", () => {
     }
   });
 
+  it("Hidrojen10 hakkı paketle gelir (100 / 200 / 4500) ve metinde görünür", () => {
+    expect(PLANS.map((p) => [p.id, p.hydrogen10Runs])).toEqual([
+      ["Starter", 100],
+      ["Pro", 200],
+      ["Business", 4500],
+    ]);
+    for (const plan of PLANS) {
+      expect(plan.features).toContain(`${plan.hydrogen10Runs} Hidrojen10 taraması / ay`);
+      expect(limitFor(plan.level, "hydrogen10Runs")).toBe(plan.hydrogen10Runs);
+    }
+  });
+
   it("her AI özelliği dört haktan birine düşer (sahipsiz iş yok)", () => {
     const features = [
       "tool:listing-seo",

@@ -656,7 +656,7 @@ export function MarketingLanding() {
                   </span>
                 </div>
                 <ul className="mt-4 space-y-1.5 text-sm text-slate-400">
-                  {p.features.slice(0, 4).map((f) => (
+                  {p.features.slice(0, 5).map((f) => (
                     <li key={f} className="flex items-start gap-2">
                       <Check size={14} className="mt-0.5 shrink-0 text-emerald-400" /> {f}
                     </li>

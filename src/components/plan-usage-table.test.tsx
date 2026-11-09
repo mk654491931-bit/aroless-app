@@ -30,7 +30,7 @@ vi.mock("@tanstack/react-query", () => ({
 
 import { PlanUsageTable } from "./plan-usage-table";
 
-const USED = { credits: 3, toolRuns: 12, councilRuns: 1, radarScans: 0 };
+const USED = { credits: 3, toolRuns: 12, councilRuns: 1, radarScans: 0, hydrogen10Runs: 0 };
 
 function snapshot(measured = true) {
   return {
@@ -48,7 +48,7 @@ const html = () =>
   renderToStaticMarkup(<PlanUsageTable tier="Pro" credits={17} finderCredits={2} />);
 
 describe("PlanUsageTable", () => {
-  it("dört aylık hakkı, kullanımı, tavanı ve kalanı tablo olarak yazar", () => {
+  it("beş aylık hakkı, kullanımı, tavanı ve kalanı tablo olarak yazar", () => {
     state.snapshot = snapshot();
     const out = html();
     expect(out).toContain("Bu ayın kullanımı");
@@ -58,6 +58,7 @@ describe("PlanUsageTable", () => {
     expect(out).toContain("AI araç");
     expect(out).toContain("AI Konsey");
     expect(out).toContain("Trend radar");
+    expect(out).toContain("Hidrojen10");
     // Pro tavanları fiyat tablosuyla aynı olmalı (tek kaynak: plans.ts).
     expect(out).toContain("90");
     expect(out).toContain("20");

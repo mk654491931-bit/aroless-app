@@ -21,7 +21,7 @@
 import { ADMIN_QUOTA, quotaFor, tierLevel, type PlanId } from "./plans";
 
 /** Aylık hak türleri — `Plan` alanlarıyla BİREBİR aynı adlar. */
-export type UsageKind = "credits" | "toolRuns" | "councilRuns" | "radarScans";
+export type UsageKind = "credits" | "toolRuns" | "councilRuns" | "radarScans" | "hydrogen10Runs";
 
 export type UsageCounts = Record<UsageKind, number>;
 
@@ -42,6 +42,11 @@ export const USAGE_KIND_META: readonly UsageKindMeta[] = [
   { kind: "toolRuns", label: "AI araç", hint: "23 AI aracının her çalıştırması" },
   { kind: "councilRuns", label: "AI Konsey", hint: "14 ajanlı konsey oturumu" },
   { kind: "radarScans", label: "Trend radar", hint: "Trend radar taraması" },
+  {
+    kind: "hydrogen10Runs",
+    label: "Hidrojen10",
+    hint: "Canlı Hidrojen10 kaynak taraması (DB cache isabeti harcamaz)",
+  },
 ];
 
 /**
@@ -61,6 +66,7 @@ export const USAGE_KIND_META: readonly UsageKindMeta[] = [
  */
 export function usageKindForFeature(feature: string): UsageKind {
   const id = String(feature ?? "");
+  if (id.startsWith("hydrogen10")) return "hydrogen10Runs";
   if (id.startsWith("tool:")) return "toolRuns";
   if (id === "council") return "councilRuns";
   if (id === "radar-scan") return "radarScans";
@@ -69,7 +75,7 @@ export function usageKindForFeature(feature: string): UsageKind {
 }
 
 export function emptyUsageCounts(): UsageCounts {
-  return { credits: 0, toolRuns: 0, councilRuns: 0, radarScans: 0 };
+  return { credits: 0, toolRuns: 0, councilRuns: 0, radarScans: 0, hydrogen10Runs: 0 };
 }
 
 /** "2026-10" — ay kovası (raporlama/log için). */
@@ -180,6 +186,28 @@ export type UsageMeter = {
   /** Limit yok (0) → bu hak kapalı. */
   disabled: boolean;
 };
+
+/**
+ * Bir hakkın bu ay daha kaç kez kullanılabileceği — SAF karar.
+ *
+ * `limit === null` = limit okunamadı → fail-open (çağıran engellemez).
+ * `used === null` = kullanım okunamadı → fail-open. Böylece sayaç tablosu
+ * geçici olarak erişilemezse kullanıcı hakkını kaybetmez.
+ */
+export function usageAllowance(args: {
+  used: number | null;
+  limit: number | null;
+  units?: number;
+}): { allowed: boolean; remaining: number | null; reason: "ok" | "exhausted" | "unknown" } {
+  const units = Math.max(1, Math.floor(args.units ?? 1));
+  if (args.used === null || args.limit === null) {
+    return { allowed: true, remaining: null, reason: "unknown" };
+  }
+  const remaining = Math.max(0, Math.floor(args.limit) - Math.max(0, Math.floor(args.used)));
+  return remaining >= units
+    ? { allowed: true, remaining, reason: "ok" }
+    : { allowed: false, remaining, reason: "exhausted" };
+}
 
 export function usageMeter(used: number, limit: number): UsageMeter {
   const safeUsed = Number.isFinite(used) && used > 0 ? Math.floor(used) : 0;

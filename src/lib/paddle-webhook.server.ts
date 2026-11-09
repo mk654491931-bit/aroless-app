@@ -48,7 +48,9 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     appliedDiscountId,
     creditGrantDecision,
     planForAsset,
+    planForAmount,
     resolvePaddleEntitlement,
+    fetchLastCompletedTransaction,
     resolvePaddleCustomerEmail,
     resolveDiscountCode,
     refundSignal,
@@ -64,6 +66,13 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     if (!settings) {
       console.error("[Paddle Webhook] Missing Paddle configuration");
       return text("Paddle not configured", 500);
+    }
+    // Webhook kendi sırrına muhtaçtır; tarayıcı token'ı EKSİK OLSA BİLE çalışır.
+    // Sır yoksa imza doğrulanamaz → yapılandırma hatası olarak 500 dön (Paddle
+    // yeniden dener, kurulum eksikliği logda adıyla görünür).
+    if (!settings.webhookSecret) {
+      console.error("[Paddle Webhook] Missing PADDLE_WEBHOOK_SECRET_KEY");
+      return text("Paddle webhook secret not configured", 500);
     }
 
     // 2. Payload size guard (DoS protection).
@@ -170,9 +179,11 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     //     Paddle'ın kendi kaydı tek yetkili kaynaktır: oradan okunan
     //     fiyat/ürün kimliğiyle plan kesin çözülür.
     //
-    //     Yalnız GEREKTİĞİNDE çağrılır (tier çözülemediyse) — normal
-    //     akışta ek bir ağ gecikmesi yaratmaz.
-    if (!command.tier || command.tier === "Free") {
+    //     Yalnız GEREKTİĞİNDE çağrılır (`tier` NULL ise) — normal akışta ek
+    //     bir ağ gecikmesi yaratmaz. `Free` BİLİNÇLİ bir indirmedir (iptal/
+    //     past_due/paused): Paddle API'den paket okuyup onu GERİ YÜKSELTMEK,
+    //     iptal eden kullanıcıya ücretli yetki vermek olurdu.
+    if (!command.tier) {
       const entitlement = await resolvePaddleEntitlement(settings, {
         transactionId: command.transactionId,
         subscriptionId: command.paddleSubscriptionId,
@@ -183,7 +194,17 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
         if (!command.paddleSubscriptionId && entitlement.subscriptionId)
           command.paddleSubscriptionId = entitlement.subscriptionId;
         if (!command.priceId && entitlement.priceId) command.priceId = entitlement.priceId;
-        const plan = entitlement.plan ?? planForAsset(settings, command.priceId, command.productId);
+        let plan =
+          entitlement.plan ??
+          planForAsset(settings, command.priceId, command.productId) ??
+          planForAmount(command.amountCents);
+        // Abonelik olaylarında tutar olay gövdesinde YOKTUR. Paddle'ın son
+        // tamamlanmış işlemi okunup TAM tutardan plan çözülür: fiyat ID'si
+        // env ile eşleşmese bile `subscription.activated` doğru paketi yazar.
+        if (!plan && command.paddleSubscriptionId) {
+          const lastTransaction = await fetchLastCompletedTransaction(command.paddleSubscriptionId);
+          plan = planForAmount(lastTransaction?.amountCents);
+        }
         if (plan) {
           command.tier = plan;
           command.searchCredits = SUBSCRIPTION_CREDIT_GRANTS[plan].search;
@@ -192,6 +213,31 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
             `[Paddle Webhook] ${event.eventType}: plan Paddle API'sinden çözüldü → ${plan}`,
           );
         }
+      }
+    }
+
+    // 5c. ABONELİK OLAYINDAN KREDİ — Paddle yalnız abonelik olayları
+    //     gönderecek şekilde yapılandırılmışsa `transaction.completed` hiç
+    //     gelmez ve kredi hiç verilmezdi. Aboneliğin SON TAMAMLANMIŞ işlemi
+    //     okunur; kredi o işlem kimliğiyle talep edilir. Aynı işlem daha sonra
+    //     `transaction.completed` ile gelirse `credit_ledger` anahtarı
+    //     (`paddle:<işlem kimliği>`) ikinci kez eklemeyi engeller — çift kredi
+    //     yoktur, tek başına abonelik olayıyla kredi kaybı da yoktur.
+    if (
+      command.eventType.startsWith("subscription.") &&
+      command.tier &&
+      command.tier !== "Free" &&
+      command.paddleSubscriptionId &&
+      !command.transactionId
+    ) {
+      const lastTransaction = await fetchLastCompletedTransaction(command.paddleSubscriptionId);
+      if (lastTransaction?.transactionId) {
+        command.transactionId = lastTransaction.transactionId;
+        command.amountCents = command.amountCents ?? lastTransaction.amountCents;
+        command.currency = command.currency ?? lastTransaction.currency;
+        const grants = SUBSCRIPTION_CREDIT_GRANTS[command.tier];
+        command.searchCredits = Math.max(command.searchCredits, grants.search);
+        command.simCredits = Math.max(command.simCredits, grants.sim);
       }
     }
 
@@ -250,9 +296,13 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
         .eq("id", userId as never)
         .maybeSingle();
       const currentTier = (profile as { subscription_tier?: string } | null)?.subscription_tier;
-      const planKey = (["Starter", "Pro", "Business"] as const).find(
-        (p) => p.toLowerCase() === String(currentTier ?? "").toLowerCase(),
-      );
+      // Sıra: profildeki mevcut plan → ödenen TAM tutar. Tutar son savunma
+      // hattıdır: eski fiyat ID'si, eksik customData ve API kesintisi birlikte
+      // gelse bile 39/59/199 USD'lik ödeme doğru pakete bağlanır.
+      const planKey =
+        (["Starter", "Pro", "Business"] as const).find(
+          (p) => p.toLowerCase() === String(currentTier ?? "").toLowerCase(),
+        ) ?? planForAmount(command.amountCents);
       if (planKey) {
         command.tier = planKey;
         command.searchCredits = SUBSCRIPTION_CREDIT_GRANTS[planKey].search;

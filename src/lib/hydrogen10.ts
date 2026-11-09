@@ -414,7 +414,7 @@ export type H10SearchSuccess = {
 
 export type H10SearchFailure = {
   ok: false;
-  code: "schema_missing" | "busy" | "no_sources" | "failed" | "invalid_input";
+  code: "schema_missing" | "busy" | "no_sources" | "failed" | "invalid_input" | "plan_limit";
   message: string;
   details?: string;
 };

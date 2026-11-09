@@ -11,6 +11,7 @@ import {
   planLabelFor,
   planLimitMessage,
   planUsageRows,
+  usageAllowance,
   usageKindForFeature,
   usageLabelFor,
   usageMeter,
@@ -41,6 +42,39 @@ describe("usageKindForFeature — her AI işi doğru aylık hakka yazılır", ()
     expect(usageKindForFeature("radar-scan")).toBe("radarScans");
     expect(usageKindForFeature("agent-pipeline")).toBe("credits");
     expect(usageKindForFeature("trend-analysis")).toBe("credits");
+  });
+
+  it("Hidrojen10 canlı taramaları kendi aylık hakkına gider", () => {
+    expect(usageKindForFeature("hydrogen10-search")).toBe("hydrogen10Runs");
+    expect(usageKindForFeature("hydrogen10-refresh")).toBe("hydrogen10Runs");
+    expect(usageKindForFeature("hydrogen10")).toBe("hydrogen10Runs");
+  });
+});
+
+describe("usageAllowance — aylık hak kapısı", () => {
+  it("kalan hak işin birimini karşılıyorsa geçer", () => {
+    expect(usageAllowance({ used: 98, limit: 100 })).toMatchObject({
+      allowed: true,
+      remaining: 2,
+      reason: "ok",
+    });
+  });
+
+  it("hak dolduysa engeller (sınır dahil)", () => {
+    expect(usageAllowance({ used: 100, limit: 100 })).toMatchObject({
+      allowed: false,
+      remaining: 0,
+      reason: "exhausted",
+    });
+    expect(usageAllowance({ used: 99, limit: 100, units: 2 }).allowed).toBe(false);
+  });
+
+  it("sayaç/limit okunamazsa fail-open (hakkı sessizce silmez)", () => {
+    expect(usageAllowance({ used: null, limit: 100 })).toMatchObject({
+      allowed: true,
+      reason: "unknown",
+    });
+    expect(usageAllowance({ used: 5, limit: null }).allowed).toBe(true);
   });
 });
 
@@ -104,14 +138,24 @@ describe("planUsageRows — paket limitleri plans.ts ile birebir", () => {
       toolRuns: PLAN_BY_ID.Starter.toolRuns,
       councilRuns: PLAN_BY_ID.Starter.councilRuns,
       radarScans: PLAN_BY_ID.Starter.radarScans,
+      hydrogen10Runs: PLAN_BY_ID.Starter.hydrogen10Runs,
     });
     expect(limitFor(2, "toolRuns")).toBe(90);
     expect(limitFor(3, "credits")).toBe(50);
   });
 
-  it("ücretsiz plan: 2 bulucu / 3 araç / 0 konsey / 1 radar", () => {
+  it("ücretsiz plan: 2 bulucu / 3 araç / 0 konsey / 1 radar / 0 Hidrojen10", () => {
     const rows = planUsageRows(0, emptyUsageCounts());
-    expect(rows.map((r) => r.limit)).toEqual([2, 3, 0, 1]);
+    expect(rows.map((r) => r.limit)).toEqual([2, 3, 0, 1, 0]);
+  });
+
+  it("Hidrojen10 hakkı paketle birlikte artar", () => {
+    const zero = emptyUsageCounts();
+    const limitOf = (level: 1 | 2 | 3) =>
+      planUsageRows(level, zero).find((r) => r.kind === "hydrogen10Runs")!.limit;
+    expect(limitOf(1)).toBe(100);
+    expect(limitOf(2)).toBe(200);
+    expect(limitOf(3)).toBe(4500);
   });
 
   it("admin her kalemde 250", () => {

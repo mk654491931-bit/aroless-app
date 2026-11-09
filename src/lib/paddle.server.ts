@@ -100,7 +100,10 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
  * variables) when the integration is not configured — callers decide how to fail.
  *
  * KATALOG KISMİ OLUR (ölçülen hatanın kaynağı): `apiKey`/`webhookSecret`/
- * `clientToken` olmadan Paddle ile konuşulamaz, bu yüzden bunlar ZORUNLUDUR.
+ * `clientToken` BİRDEN zorunlu tutuluyordu; webhook'un tarayıcı token'ına
+ * ihtiyacı YOKTUR. Ayarlar artık yalnız API anahtarı yoksa null döner; webhook
+ * sırrı eksikse webhook noktası, tarayıcı token'ı eksikse yalnız checkout
+ * açıkça reddedilir.
  * Fiyat ID'leri ise ZORUNLU DEĞİLDİR: bir planın fiyat ID'si eksik olduğünde
  * önceden tüm entegrasyon `null` dönüyordu. Bunun ölçülen sonucu şuydu:
  * checkout sunucu yolundan düşüyor, tarayıcı `customData`sız ham fiyat
@@ -141,21 +144,34 @@ export function paddleSettings(): PaddleSettings | null {
     );
   }
 
-  if (!apiKey || !webhookSecret || !clientToken) {
+  // Webhook sırrı ya da tarayıcı token'ı TEK BAŞINA eksikse entegrasyonu
+  // tümden kapatma: yalnız o yol çalışmaz. Kullanıcı ödemesi webhook'suz da
+  // kurtarılabilir (tazeleme + Paddle API) ve checkout tarayıcı token'sız da
+  // sunucudan açılabilir. Entegrasyon yalnız API anahtarı yoksa kapalıdır.
+  if (!apiKey || (!webhookSecret && !clientToken)) {
     const missing = [
       ...(!apiKey ? ["PADDLE_API_KEY"] : []),
-      ...(!webhookSecret ? ["PADDLE_WEBHOOK_SECRET_KEY"] : []),
-      ...(!clientToken ? ["PADDLE_CLIENT_TOKEN"] : []),
+      ...(!webhookSecret && !clientToken
+        ? ["PADDLE_WEBHOOK_SECRET_KEY veya PADDLE_CLIENT_TOKEN"]
+        : []),
     ];
     console.error(`[Paddle] Missing environment variable(s): ${missing.join(", ")}`);
     return null;
+  }
+  if (!webhookSecret) {
+    console.warn(
+      "[Paddle] PADDLE_WEBHOOK_SECRET_KEY eksik — webhook imzası doğrulanamaz; ödemeler yalnız tazeleme ile yazılabilir.",
+    );
+  }
+  if (!clientToken) {
+    console.warn("[Paddle] PADDLE_CLIENT_TOKEN eksik — tarayıcı ödeme penceresi açılamaz.");
   }
 
   return {
     apiKey,
     environment: resolvePaddleEnvironment(),
-    clientToken,
-    webhookSecret,
+    clientToken: clientToken ?? "",
+    webhookSecret: webhookSecret ?? "",
     priceIds,
     productIds,
   };
@@ -226,6 +242,31 @@ export function appliedDiscountId(data: unknown): string | null {
 /** Bir planın tanımlı fiyat ID'si (yoksa `null`). */
 export function priceIdForPlan(settings: PaddleSettings, plan: PlanId): string | null {
   return settings.priceIds[plan] ?? null;
+}
+
+/**
+ * ÖDEME TUTARINDAN PLAN — son savunma hattı.
+ *
+ * NEDEN GEREKLİ: plan çözümü fiyat ID'si → ürün ID'si → `customData.plan` →
+ * Paddle API sırasıyla yapılır. Eski/yeniden adlandırılmış bir fiyat ID'si,
+ * `customData` kopyalanmamış bir yenileme ya da API kesintisi olduğunda bu
+ * zincirin TAMAMI boş dönebilir; o zaman webhook paketi tanımlamaz ve kullanıcı
+ * ödediği hâlde "Free" kalır. Katalog fiyatı TAM eşleşiyorsa plan buradan
+ * kesin olarak çözülür.
+ *
+ * İNDİRİMLİ TUTAR BİLİNÇLİ OLARAK EŞLENMEZ: 29,50 USD hem %50 indirimli Pro
+ * hem de farklı bir kampanya olabilir; tahminle yanlış paket vermek, paket
+ * vermemekten daha kötüdür. İndirimli işlemlerde öncelikli kaynaklar
+ * (`customData`, Paddle API) zaten devrededir.
+ */
+export function planForAmount(amountCents: number | null | undefined): PlanId | null {
+  const cents = Number(amountCents);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+  const exact = Math.round(cents);
+  const entry = (Object.entries(PLAN_PRICE_CENTS) as [PlanId, number][]).find(
+    ([, price]) => price === exact,
+  );
+  return entry?.[0] ?? null;
 }
 
 /** Yalnız fiyat ID'siyle eşleştirir (geriye dönük uyum için korunur). */
@@ -311,6 +352,11 @@ export async function createPaddleCheckoutSession(opts: {
   if (!settings) {
     throw new Error(
       "Ödeme sağlayıcısı yapılandırılmamış (Paddle env değişkenleri eksik). Lütfen yöneticiyle iletişime geçin.",
+    );
+  }
+  if (!settings.clientToken) {
+    throw new Error(
+      "Paddle tarayıcı token'ı eksik (PADDLE_CLIENT_TOKEN / VITE_PADDLE_CLIENT_TOKEN). Ödeme penceresi açılamaz.",
     );
   }
 
@@ -760,8 +806,14 @@ export function mapPaddleEvent(
       data?.billingPeriod && typeof data.billingPeriod === "object" ? data.billingPeriod : null;
 
     // Tier is taken from the active price, then customData (copied to renewals by
-    // Paddle), then left null so the DB preserves the user's current plan.
-    const tier: PlanId | null = planForAsset(settings, priceId, productId) ?? requestedPlan ?? null;
+    // Paddle), then the exact paid amount, then left null so the DB preserves
+    // the user's current plan. Amount is the last line of defence for legacy
+    // price IDs / missing customData: without it a paid renewal can stay "Free".
+    const tier: PlanId | null =
+      planForAsset(settings, priceId, productId) ??
+      requestedPlan ??
+      planForAmount(amountCents) ??
+      null;
 
     // Out-of-order guard: a refund/reversal that arrives with a positive
     // grandTotal due to Paddle's eventual consistency still must not mint
@@ -855,7 +907,13 @@ export function creditGrantDecision(args: {
   // Tazeleme de ödeme yoludur: webhook kaçtığında jetonun verildiği tek yer
   // burasıdır. Tek seferlik olmasını `credit_ledger` anahtarı sağlar.
   const reconcileEvent = args.eventType.startsWith("reconcile.");
-  const paid = paidEvent || reconcileEvent;
+  // ABONELİK OLAYI + GERÇEK İŞLEM: Paddle yalnız abonelik olayları gönderen
+  // bir kurulumda `transaction.completed` hiç gelmez. Webhook, aboneliğin son
+  // tamamlanmış işlemini bulup `transactionId` doldurduysa kredi bu yoldan da
+  // verilebilir. Çift vermeyi `credit_ledger` işlem anahtarı engeller.
+  const subscriptionPayment =
+    args.eventType.startsWith("subscription.") && Boolean(args.transactionId);
+  const paid = paidEvent || reconcileEvent || subscriptionPayment;
   if (!paid) {
     // Durum bildirimi (ör. `ready` → `completed`), yeni bir satın alma değildir.
     return { ...none, reason: "not-paid" };
@@ -987,7 +1045,10 @@ export function reconcileCommand(args: {
   occurredAt: string;
 }): PaddleEventCommand | null {
   const { settings, snapshot, transaction, userId, occurredAt } = args;
-  const plan = planForSnapshot(settings, snapshot);
+  // Plan: gerçek fiyat/ürün → customData → tam ödeme tutarı. Tutar son
+  // savunma hattıdır (eski fiyat ID'si / eksik customData); indirimli tutarlar
+  // bilinçli olarak eşlenmez.
+  const plan = planForSnapshot(settings, snapshot) ?? planForAmount(transaction?.amountCents);
   if (!plan) return null;
   const grants = SUBSCRIPTION_CREDIT_GRANTS[plan];
   return {
@@ -1123,6 +1184,9 @@ export async function verifyPaddleWebhook(
   const settings = paddleSettings();
   if (!settings) {
     throw new Error("Paddle yapılandırılmamış (webhook secret eksik).");
+  }
+  if (!settings.webhookSecret) {
+    throw new Error("Paddle webhook sırrı eksik (PADDLE_WEBHOOK_SECRET_KEY). İmza doğrulanamaz.");
   }
   if (!paddleSignature) {
     throw new Error("Missing paddle-signature header.");

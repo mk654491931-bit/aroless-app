@@ -33,7 +33,7 @@ export type ChargeOutcome =
       reason: "NO_CREDITS" | "UNAVAILABLE" | "PLAN_LIMIT";
       charged: number;
       /** PLAN_LIMIT için: hangi aylık hak ve kaç adet. */
-      kind?: "credits" | "toolRuns" | "councilRuns" | "radarScans";
+      kind?: UsageKind;
       limit?: number;
       tier?: string;
     };

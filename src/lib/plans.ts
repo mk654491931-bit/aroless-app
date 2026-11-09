@@ -31,6 +31,14 @@ export type Plan = {
   councilRuns: number;
   /** Aylık trend radar taraması. */
   radarScans: number;
+  /**
+   * Aylık Hidrojen10 taraması — ayrı bir KULLANIM HAKKI, jeton değil.
+   *
+   * Hidrojen10 kaynak taraması (canlı kazıma) pahalı bir iştir; bu yüzden
+   * jeton cüzdanından harcanmaz, paketle gelen ayrı aylık tarama hakkından
+   * düşer. 24 saatlik DB cache'inden dönen aynı niş hak HARCAMAZ.
+   */
+  hydrogen10Runs: number;
   features: string[];
 };
 
@@ -48,12 +56,14 @@ export const PLANS: Plan[] = [
     toolRuns: 30,
     councilRuns: 2,
     radarScans: 6,
+    hydrogen10Runs: 100,
     features: [
       "Tüm 9 modül açık",
       "10 ürün bulucu kredisi / ay",
       "30 AI araç çalıştırma / ay",
       "2 AI Konsey oturumu / ay",
       "6 trend radar taraması / ay",
+      "100 Hidrojen10 taraması / ay",
       "Akademi ve simülatör dahil",
     ],
   },
@@ -67,12 +77,14 @@ export const PLANS: Plan[] = [
     toolRuns: 90,
     councilRuns: 6,
     radarScans: 20,
+    hydrogen10Runs: 200,
     features: [
       "Tüm 9 modül açık",
       "20 ürün bulucu kredisi / ay",
       "90 AI araç çalıştırma / ay",
       "6 AI Konsey oturumu / ay",
       "20 trend radar taraması / ay",
+      "200 Hidrojen10 taraması / ay",
       "Öncelikli üretim kuyruğu",
     ],
   },
@@ -86,12 +98,14 @@ export const PLANS: Plan[] = [
     toolRuns: 300,
     councilRuns: 20,
     radarScans: 60,
+    hydrogen10Runs: 4500,
     features: [
       "Tüm 9 modül açık",
       "50 ürün bulucu kredisi / ay",
       "300 AI araç çalıştırma / ay",
       "20 AI Konsey oturumu / ay",
       "60 trend radar taraması / ay",
+      "4500 Hidrojen10 taraması / ay",
       "Öncelikli destek",
     ],
   },
@@ -105,7 +119,7 @@ export const PLAN_BY_ID: Record<PlanId, Plan> = {
 
 /** Aylık kullanım tablosunun satırları — paket alanlarıyla birebir. */
 export const USAGE_ROWS: {
-  key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
+  key: keyof Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans" | "hydrogen10Runs">;
   label: string;
   unit: string;
 }[] = [
@@ -113,6 +127,7 @@ export const USAGE_ROWS: {
   { key: "toolRuns", label: "AI araç çalıştırma", unit: "/ ay" },
   { key: "councilRuns", label: "14'lü AI Konsey oturumu", unit: "/ ay" },
   { key: "radarScans", label: "Trend radar taraması", unit: "/ ay" },
+  { key: "hydrogen10Runs", label: "Hidrojen10 taraması", unit: "/ ay" },
 ];
 
 /**
@@ -171,7 +186,11 @@ export const ADMIN_QUOTA = {
   toolRuns: 250,
   councilRuns: 250,
   radarScans: 250,
-} as const satisfies Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans">;
+  hydrogen10Runs: 250,
+} as const satisfies Pick<
+  Plan,
+  "credits" | "toolRuns" | "councilRuns" | "radarScans" | "hydrogen10Runs"
+>;
 
 /**
  * Admin bakiyesini 250'ye tamamlamak için gereken miktar.
@@ -189,14 +208,16 @@ export function adminTopUpAmount(credits: number | null | undefined): number {
 /** Aylık kullanım kotaları; ücretsiz hesap Find Winner'da 2 jeton (klasik düzen). */
 export function quotaFor(
   level: 0 | 1 | 2 | 3,
-): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans"> {
-  if (level === 0) return { credits: 2, toolRuns: 3, councilRuns: 0, radarScans: 1 };
+): Pick<Plan, "credits" | "toolRuns" | "councilRuns" | "radarScans" | "hydrogen10Runs"> {
+  if (level === 0)
+    return { credits: 2, toolRuns: 3, councilRuns: 0, radarScans: 1, hydrogen10Runs: 0 };
   const p = planForLevel(level);
   return {
     credits: p.credits,
     toolRuns: p.toolRuns,
     councilRuns: p.councilRuns,
     radarScans: p.radarScans,
+    hydrogen10Runs: p.hydrogen10Runs,
   };
 }
 
