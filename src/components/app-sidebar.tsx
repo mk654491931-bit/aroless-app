@@ -19,6 +19,7 @@ import {
   Coins,
   Rocket,
   Newspaper,
+  Atom,
   Handshake,
   FileSearch,
   ShieldQuestion,
@@ -231,7 +232,10 @@ const GROUPS: {
     label: "E-Com News Explainer",
     emoji: "📰",
     icon: Newspaper,
-    items: [{ key: "news", title: "News & AI Explainer", url: "/news", icon: Target }],
+    items: [
+      { key: "news", title: "News & AI Explainer", url: "/news", icon: Target },
+      { key: "hydrogen10", title: "Hidrojen10", url: "/hidrojen10", icon: Atom },
+    ],
   },
 ];
 
@@ -381,7 +385,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
             )}
             <SidebarGroupContent>
               <SidebarMenu>
-                {iconOnly ? (
+                {iconOnly && g.id !== "news" ? (
                   <SidebarMenuItem>
                     {renderItem(
                       { ...g.items[0], icon: g.icon },
@@ -396,7 +400,7 @@ export function AppSidebar({ onUpgrade }: { onUpgrade: () => void }) {
                       {renderItem(
                         item,
                         t(`nav.${item.key}`, { defaultValue: item.title }),
-                        false,
+                        iconOnly,
                         pathname === item.url,
                       )}
                     </SidebarMenuItem>
