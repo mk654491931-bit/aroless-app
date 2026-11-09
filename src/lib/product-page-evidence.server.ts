@@ -10,6 +10,7 @@
  * satırından gelen bir URL iç ağa yönlendirme aracı olamaz.
  */
 
+import { cached } from "./ai-cache.server";
 import type { NormalizedProduct } from "./product-discovery.types";
 import { evidenceCompleteness } from "./product-discovery-filter.server";
 import { fetchThroughScraperApi } from "./product-image.server";
@@ -20,6 +21,8 @@ const UA =
 
 const PAGE_TIMEOUT_MS = 4_000;
 const MAX_REDIRECTS = 2;
+/** Aynı ürün sayfası 6 saat içinde tekrar okunmaz: Jina/ScraperAPI tekrar harcanmaz. */
+const PAGE_EVIDENCE_TTL_MS = 6 * 60 * 60 * 1000;
 
 /** Puan/değerlendirme okuyabildiğimiz pazaryerleri. */
 const ALLOWED_HOST_SUFFIXES = [
@@ -83,17 +86,35 @@ async function fetchDirect(url: string): Promise<string | null> {
 
 /**
  * Tek ürün sayfasını okur. Fail-soft: ağ/ayrıştırma hatasında `null`.
- * Önce ScraperAPI (anahtar varsa), sonra doğrudan istek denenir.
+ * Önce ScraperAPI (anahtar varsa), sonra Jina Reader, en son doğrudan istek.
+ *
+ * `allowReader=false` yalnız doğrudan isteği dener: Jina token bütçesini
+ * sıralamada geride kalan adaylara harcamamak için kullanılır.
  */
 export async function readProductPageEvidence(
   url: string,
-  opts: { country?: string } = {},
+  opts: { country?: string; allowReader?: boolean } = {},
 ): Promise<{ rating: number | null; ratingCount: number | null } | null> {
   if (!isAllowedProductPageUrl(url)) return null;
   const countryCode = /^[A-Za-z]{2}$/.test(opts.country ?? "")
     ? (opts.country as string).toLowerCase()
     : "tr";
+  const { data } = await cached<{
+    value: { rating: number | null; ratingCount: number | null } | null;
+  }>(
+    "product-page-evidence-v1",
+    [url, countryCode, opts.allowReader !== false ? "reader" : "direct"],
+    async () => ({ value: await readProductPageEvidenceUncached(url, countryCode, opts) }),
+    PAGE_EVIDENCE_TTL_MS,
+  );
+  return data.value;
+}
 
+async function readProductPageEvidenceUncached(
+  url: string,
+  countryCode: string,
+  opts: { allowReader?: boolean },
+): Promise<{ rating: number | null; ratingCount: number | null } | null> {
   let html: string | null = null;
   try {
     html = await fetchThroughScraperApi(url, {
@@ -102,6 +123,19 @@ export async function readProductPageEvidence(
     });
   } catch {
     html = null;
+  }
+  // Vercel'de ScraperAPI anahtarı yoksa/biterse Jina Reader havuzunu kullan.
+  // Ürün sayfası markdown döner; `extractProductPageEvidence` JSON-LD ve metin
+  // kalıplarını okuyabildiği için puan/değerlendirme yine gerçek sayfadan gelir.
+  if (!html && opts.allowReader !== false) {
+    try {
+      const { readPage } = await import("./product-discovery-reader.server");
+      // Tarayıcı motoruna yükseltme YOK: ürün sayfası başına 20 sn'lik
+      // yükseltme bütçeyi tüketir. `direct` + alternatif sağlayıcı yeterli.
+      html = await readPage(url, PAGE_TIMEOUT_MS, "direct");
+    } catch {
+      html = null;
+    }
   }
   if (!html) html = await fetchDirect(url);
   if (!html) return null;
@@ -117,13 +151,19 @@ export async function readProductPageEvidence(
  */
 export async function enrichProductPageEvidence(
   products: readonly NormalizedProduct[],
-  opts: { limit?: number; country?: string } = {},
+  opts: {
+    limit?: number;
+    country?: string;
+    /** Jina Reader ile okunacak en fazla aday (token bütçesi). */
+    readerLimit?: number;
+  } = {},
 ): Promise<{
   products: NormalizedProduct[];
   attempted: number;
   enriched: number;
 }> {
   const limit = Math.max(1, Math.min(opts.limit ?? 10, products.length));
+  const readerLimit = Math.max(0, Math.min(opts.readerLimit ?? 6, limit));
   const targets = products
     .slice(0, limit)
     .filter(
@@ -135,9 +175,12 @@ export async function enrichProductPageEvidence(
   if (!targets.length) return { products: [...products], attempted: 0, enriched: 0 };
 
   const settled = await Promise.allSettled(
-    targets.map(async (p) => ({
+    targets.map(async (p, index) => ({
       product: p,
-      evidence: await readProductPageEvidence(p.url, { country: opts.country }),
+      evidence: await readProductPageEvidence(p.url, {
+        country: opts.country,
+        allowReader: index < readerLimit,
+      }),
     })),
   );
 
