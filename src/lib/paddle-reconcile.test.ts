@@ -162,6 +162,15 @@ describe("reconcileEventKey — idempotentlik anahtarı", () => {
     const canceled = reconcileEventKey(snapshot({ status: "canceled" }));
     expect(canceled).not.toBe(active);
   });
+
+  it("işlem göründüğünde YENİ anahtar üretir (ilk tazeleme jetonu bloke etmez)", () => {
+    const beforeTransaction = reconcileEventKey(snapshot());
+    const withTransaction = reconcileEventKey(snapshot(), "txn_1");
+    expect(withTransaction).not.toBe(beforeTransaction);
+    expect(withTransaction).toContain("txn_1");
+    // Aynı işlem tekrar tazelenirse anahtar değişmez → kredi ikinci kez yazılmaz.
+    expect(reconcileEventKey(snapshot(), "txn_1")).toBe(withTransaction);
+  });
 });
 
 describe("reconcileCommand — DB komutuna dönüşüm", () => {
@@ -175,7 +184,7 @@ describe("reconcileCommand — DB komutuna dönüşüm", () => {
     });
     expect(cmd).not.toBeNull();
     expect(cmd!.eventType).toBe("reconcile.subscription");
-    expect(cmd!.eventId).toBe(reconcileEventKey(snapshot()));
+    expect(cmd!.eventId).toBe(reconcileEventKey(snapshot(), "txn_1"));
     expect(cmd!.tier).toBe("Pro");
     expect(cmd!.status).toBe("active");
     expect(cmd!.userId).toBe("user-1");
@@ -211,7 +220,7 @@ describe("reconcileCommand — DB komutuna dönüşüm", () => {
     });
   });
 
-  it("işlem yoksa kredi yine haritalanır ama işlem kimliği null kalır", () => {
+  it("işlem yoksa kredi haritalanır ama işlem kimliği null kalır (karar kredi vermez)", () => {
     const cmd = reconcileCommand({
       settings: settings(),
       snapshot: snapshot(),
@@ -220,7 +229,8 @@ describe("reconcileCommand — DB komutuna dönüşüm", () => {
       occurredAt: "2026-10-08T00:00:00.000Z",
     });
     expect(cmd!.transactionId).toBeNull();
-    // İşlem kimliği olmadığı için çağıran krediyi tekilleştiremez → karar onun.
+    // İşlem kimliği olmadığı için çağıran krediyi tekilleştiremez → karar onun
+    // ve `creditGrantDecision` bu durumda granted=false döner (çift kredi yok).
     expect(cmd!.searchCredits).toBe(SUBSCRIPTION_CREDIT_GRANTS.Pro.search);
   });
 

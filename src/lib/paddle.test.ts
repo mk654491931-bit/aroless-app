@@ -305,6 +305,28 @@ describe("creditGrantDecision — jeton talebi", () => {
     expect(d).toMatchObject({ granted: true, search: PRO_GRANT, sim: 10 });
   });
 
+  it("tazeleme gerçek işlem kimliğiyle krediyi geçirir", () => {
+    const d = creditGrantDecision({
+      eventType: "reconcile.subscription",
+      transactionId: "txn_123",
+      searchCredits: PRO_GRANT,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: true, search: PRO_GRANT, sim: 10 });
+  });
+
+  it("tazeleme işlem kimliği olmadan kredi doğurmaz (çift kredi koruması)", () => {
+    // İşlem okunamadıysa tazeleme kendi olay anahtarıyla jeton verirse, sonradan
+    // gelen transaction.completed AYNI ödeme için ikinci kez jeton eklerdi.
+    const d = creditGrantDecision({
+      eventType: "reconcile.subscription",
+      transactionId: null,
+      searchCredits: PRO_GRANT,
+      simCredits: 10,
+    });
+    expect(d).toMatchObject({ granted: false, reason: "not-paid" });
+  });
+
   it("abonelik olayı işlem kimliği taşımıyorsa kredi doğurmaz", () => {
     const d = creditGrantDecision({
       eventType: "subscription.activated",

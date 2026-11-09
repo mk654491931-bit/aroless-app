@@ -936,8 +936,12 @@ export function creditGrantDecision(args: {
    */
   const paidEvent = args.eventType === "transaction.completed" || status === "completed";
   // Tazeleme de ödeme yoludur: webhook kaçtığında jetonun verildiği tek yer
-  // burasıdır. Tek seferlik olmasını `credit_ledger` anahtarı sağlar.
-  const reconcileEvent = args.eventType.startsWith("reconcile.");
+  // burasıdır. ANCAK kredi yalnız GERÇEK işlem kimliği varsa verilir: aksi
+  // hâlde defter anahtarı `paddle:reconcile:*` olur ve aynı ödeme için sonradan
+  // gelen `transaction.completed` `paddle:<txn>` anahtarıyla İKİNCİ kez jeton
+  // ekler (çift kredi). İşlem okunamadıysa tazeleme yalnız yetkiyi yazar;
+  // krediyi işlem kimliğini bilen webhook veya sonraki tazeleme verir.
+  const reconcileEvent = args.eventType.startsWith("reconcile.") && Boolean(args.transactionId);
   // ABONELİK OLAYI + GERÇEK İŞLEM: Paddle yalnız abonelik olayları gönderen
   // bir kurulumda `transaction.completed` hiç gelmez. Webhook, aboneliğin son
   // tamamlanmış işlemini bulup `transactionId` doldurduysa kredi bu yoldan da
@@ -1030,11 +1034,23 @@ export function planForSnapshot(
 }
 
 /**
- * Tazeleme olayının kimliği — aynı durum için aynı, dönem/durum değişince yeni.
- * Kimlik çakışırsa veritabanı tekilleştirmesi devreye girer (idempotent).
+ * Tazeleme olayının kimliği — aynı durum+işlem için aynı; dönem, durum ya da
+ * işlem değişince yeni. Kimlik çakışırsa veritabanı tekilleştirmesi devreye
+ * girer (idempotent).
  */
-export function reconcileEventKey(snapshot: PaddleSubscriptionSnapshot): string {
-  return `reconcile:${snapshot.subscriptionId}:${snapshot.status ?? "-"}:${snapshot.periodEnd ?? "-"}`;
+export function reconcileEventKey(
+  snapshot: PaddleSubscriptionSnapshot,
+  transactionId?: string | null,
+): string {
+  // İŞLEM KİMLİĞİ anahtarın parçasıdır. İlk tazeleme Paddle işlemini henüz
+  // göremediğinde (eventual consistency) olay yalnız yetkiyi yazar; işlem
+  // göründükten sonraki tazeleme AYNI anahtarla "duplicate" sayılıp jetonu
+  // sonsuza kadar kaybetmesin diye anahtar işlemle birlikte değişir. Aynı
+  // işlem tekrar tazelenirse anahtar aynı kalır → kredi bir kez verilir.
+  const txn = transactionId ? `:${transactionId}` : "";
+  return `reconcile:${snapshot.subscriptionId}:${snapshot.status ?? "-"}:${
+    snapshot.periodEnd ?? "-"
+  }${txn}`;
 }
 
 /** Aboneliğin son tamamlanmış işlemi (kredi idempotansı + ciro kaydı için). */
@@ -1083,7 +1099,7 @@ export function reconcileCommand(args: {
   if (!plan) return null;
   const grants = SUBSCRIPTION_CREDIT_GRANTS[plan];
   return {
-    eventId: reconcileEventKey(snapshot),
+    eventId: reconcileEventKey(snapshot, transaction?.transactionId ?? null),
     // Olay tipi bilinçli olarak "reconcile.*": kayıtlarda (processed_webhook_events,
     // transactions.provider_event) kaynağın webhook DEĞİL tazeleme olduğu görülür.
     eventType: "reconcile.subscription",
