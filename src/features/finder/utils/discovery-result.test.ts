@@ -75,6 +75,32 @@ describe("toWinningProducts — ölçülmüş talep sinyalleri", () => {
     expect(product.measured?.viewed90d).toBeNull();
   });
 
+  // ÖLÇÜLEN HATA: kart metni "tr-reader", "bing-shopping" gibi ham kaynak
+  // kimlikleriyle doluydu. Teknik kimlik kullanıcıya bir şey söylemez; üstelik
+  // "14 ajan puanı … · tr-reader" cümlesi bozuk görünüyordu.
+  it("ham kaynak kimliklerini kullanıcı diline çevirir", () => {
+    const [product] = toWinningProducts([
+      row({
+        sources: ["tr-reader"],
+        notes: "tr-reader · $40.66",
+        evidence: ["CMO Agent: Talep sinyali 50/100 · tr-reader"],
+      }),
+    ]);
+
+    expect(product.description).toContain("Türkiye okuyucu");
+    expect(product.description).not.toContain("tr-reader");
+    expect(product.why_winning).toContain("Türkiye okuyucu");
+    expect(product.why_winning).not.toContain("tr-reader");
+  });
+
+  it("aynı kanıt cümlesini iki kez yazmaz", () => {
+    const [product] = toWinningProducts([
+      row({ evidence: ["CFO Agent: Marj sinyali 80/100", "CFO Agent: Marj sinyali 80/100"] }),
+    ]);
+
+    expect(product.why_winning.match(/Marj sinyali 80\/100/g)).toHaveLength(1);
+  });
+
   it("NİŞ bandı ürün maliyeti/marjı olarak TAŞINMAZ — yalnız band kanıtı kalır", () => {
     const evidence = {
       samples: 3,
@@ -127,7 +153,9 @@ describe("toWinningProducts — ölçülmüş talep sinyalleri", () => {
     expect(product.gross_margin_pct).toBe(56.9);
     expect(product.fee_budget_usd).toBe(23.14);
     expect(product.cost_breakdown?.supplier_cost).toBe("17.52");
-    expect(product.supplier_links).toEqual(["https://www.aliexpress.com/item/3256809985321027.html"]);
+    expect(product.supplier_links).toEqual([
+      "https://www.aliexpress.com/item/3256809985321027.html",
+    ]);
   });
 });
 

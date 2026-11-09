@@ -45,7 +45,12 @@ import {
 import { supplierMatchKind } from "@/lib/supplier-economics";
 import { buildProductCostBreakdown } from "@/lib/product-cost-breakdown";
 import { completeDeepDive } from "@/lib/deep-dive-complete";
-import { marketplaceSearchLinks, sourcingSearchLinks } from "@/lib/sourcing-links";
+import {
+  marketplaceSearchLinks,
+  productSearchQuery,
+  sourcingSearchLinks,
+} from "@/lib/sourcing-links";
+import { sourceLabel } from "../utils/source-label";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
@@ -125,6 +130,7 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
   const feeBudget = p.fee_budget_usd ?? null;
   const supplierPrice = measuredMoney(p.supplier_price_usd);
   const nicheMatch = supplierMatchKind(s) === "niche";
+  const query = productSearchQuery(p.name);
   const bandLow = s?.supplierLowUsd ?? null;
   const bandHigh = s?.supplierHighUsd ?? null;
   const band =
@@ -161,8 +167,9 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           <span className="text-right text-muted-foreground">Havuzda eşleşme yok</span>
         </div>
         <p className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground leading-relaxed">
-          Bu ürün için toptan teklif eşleşmedi. Aşağıdaki aramalarla fiyatı, MOQ'yu ve teslimatı
-          doğrula. Ölçülmeyen tedarik fiyatı 0 sayılmaz; marj da bu yüzden gösterilmez.
+          Bu ürün için toptan teklif eşleşmedi. Aşağıdaki aramalar
+          {query ? ` “${query}” ` : " "}sorgusuyla açılır; fiyatı, MOQ'yu ve teslimatı doğrula.
+          Ölçülmeyen tedarik fiyatı 0 sayılmaz; marj da bu yüzden gösterilmez.
         </p>
         <SearchLinkRow label="Toptan ara:" links={links} />
       </div>
@@ -283,10 +290,15 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
         </a>
       )}
       {(!s.url || nicheMatch) && (
-        <SearchLinkRow
-          label={nicheMatch ? "Birebir ürün ara:" : "Alternatif toptan ara:"}
-          links={links}
-        />
+        <>
+          {query && (
+            <div className="mt-1.5 text-[9px] text-muted-foreground">Arama sorgusu: “{query}”</div>
+          )}
+          <SearchLinkRow
+            label={nicheMatch ? "Birebir ürün ara:" : "Alternatif toptan ara:"}
+            links={links}
+          />
+        </>
       )}
     </div>
   );
@@ -644,7 +656,19 @@ export function ProductCard({
       ? "text-emerald-400"
       : p.competition_level === "Medium"
         ? "text-amber-400"
-        : "text-rose-400";
+        : p.competition_level === "High"
+          ? "text-rose-400"
+          : "text-muted-foreground";
+  // ÖLÇÜLEN ABSÜRT ÇIKTI: competition_level boşsa kart "undefined competition"
+  // yazıyordu. Ölçülmeyen alan 0/uydurma değil, açık bir durum cümlesi alır.
+  const competitionText =
+    p.competition_level === "Low"
+      ? "Düşük rekabet"
+      : p.competition_level === "Medium"
+        ? "Orta rekabet"
+        : p.competition_level === "High"
+          ? "Yüksek rekabet"
+          : "Rekabet düzeyi ölçülmedi";
   const cb = p.cost_breakdown;
   const enriched = enrichProduct(p);
   // Plan/projeksiyon bölümleri eksikse model çıktısıyla tamamlanır. Kartta
@@ -710,6 +734,30 @@ export function ProductCard({
     const { kept, dropped } = auditNumericClaims(raw, allowed);
     return dropped.length > 0 && kept.trim() !== "" ? kept : raw;
   }, [p.description, criteriaInput]);
+
+  // GEREKÇE METNİ: bazı ölçümlü kayıtlar `why_winning` göndermiyor; ikonun
+  // yanında boş bir satır kalıyordu. Metin yoksa ÖLÇÜLEN alanlardan okunur bir
+  // özet kurulur — uydurma cümle değil, kartın zaten taşıdığı kanıt.
+  const whyText = useMemo(() => {
+    const raw = p.why_winning?.trim();
+    if (raw) return raw;
+    const bits = [
+      criteriaInput.rating !== null ? `Puan ${criteriaInput.rating}/5` : "",
+      criteriaInput.ratingCount !== null
+        ? `${criteriaInput.ratingCount.toLocaleString("tr-TR")} değerlendirme`
+        : "",
+      criteriaInput.salesVolume !== null
+        ? `${criteriaInput.salesVolume.toLocaleString("tr-TR")} satış`
+        : "",
+      criteriaInput.viewed90d !== null
+        ? `${criteriaInput.viewed90d.toLocaleString("tr-TR")} görüntülenme`
+        : "",
+      criteriaInput.priceUsd !== null ? `fiyat $${criteriaInput.priceUsd}` : "",
+    ].filter(Boolean);
+    return bits.length
+      ? `Ölçülen sinyaller: ${bits.join(" · ")}.`
+      : "Kaynak gerekçe metni göndermedi; kart yalnız doğrulanabilir alanları gösterir.";
+  }, [p.why_winning, criteriaInput]);
 
   return (
     <article
@@ -779,6 +827,17 @@ export function ProductCard({
             <span className="text-[10px] leading-tight text-muted-foreground/70">
               Kaynaktan doğrulanabilir fotoğraf gelmediği için görsel gösterilmiyor.
             </span>
+            {p.source_url && (
+              <a
+                href={p.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="mt-1 inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-2 py-1 text-[10px] text-sky-300 transition hover:bg-white/[0.12] hover:text-sky-200"
+              >
+                <ExternalLink size={10} /> Fotoğrafı kaynak sayfada aç
+              </a>
+            )}
           </div>
         )}
         {!shownImage && (
@@ -839,11 +898,25 @@ export function ProductCard({
           </button>
         </div>
       </div>
-      <h3 className="font-bold text-lg leading-tight">{p.name}</h3>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
+      <h3 className="font-bold text-lg leading-tight">{p.name?.trim() || "İsimsiz ürün"}</h3>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <WinnerBadge score={p.winner_score} level={p.evidence_level} />
+        {p.source_url && (
+          <a
+            href={p.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ürünün ölçüldüğü kaynak sayfa"
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-sky-300/90 transition hover:bg-white/10 hover:text-sky-200"
+          >
+            <ExternalLink size={10} /> Kaynağı aç
+          </a>
+        )}
       </div>
-      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{auditedDescription}</p>
+      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+        {auditedDescription.trim() ||
+          "Kaynak açıklama göndermedi; bu kartta yalnız doğrulanabilir alanlar gösterilir."}
+      </p>
       <WinnerCriteriaChips input={criteriaInput} className="mt-2" />
       <div className="mt-2">
         <DecisionStrip
@@ -1285,7 +1358,7 @@ export function ProductCard({
         <div className="mt-3 space-y-2 text-xs">
           <div className="flex gap-2">
             <Sparkles size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
-            <span className="text-muted-foreground">{p.why_winning}</span>
+            <span className="text-muted-foreground">{whyText}</span>
           </div>
           {/* BOŞ SATIR YOK: ölçümlü hatta hedef kitle ölçülmediği için bu alan
             boş gelir ve ikonun yanında boş bir çizgi çiziyordu. */}
@@ -1297,7 +1370,7 @@ export function ProductCard({
           )}
           <div className="flex gap-2">
             <DollarSign size={14} className="text-[oklch(0.68_0.15_255)] shrink-0 mt-0.5" />
-            <span className={compColor}>{p.competition_level} competition</span>
+            <span className={compColor}>{competitionText}</span>
           </div>
           {p.platform_strategy && (
             <div className="flex gap-2">
@@ -1340,9 +1413,10 @@ export function ProductCard({
                   {p.data_sources.slice(0, 3).map((s, i) => (
                     <span
                       key={i}
+                      title={s}
                       className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5"
                     >
-                      {s}
+                      {sourceLabel(s)}
                     </span>
                   ))}
                 </div>
@@ -1419,8 +1493,13 @@ export function ProductCard({
 
         {p.competitor_prices && p.competitor_prices.length > 0 && (
           <div className="mt-3">
-            <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">
-              <DollarSign size={11} /> Price Comparison
+            <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">
+              <span className="flex items-center gap-1">
+                <DollarSign size={11} /> Price Comparison
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-normal normal-case tracking-normal">
+                {p.competitor_prices.length} ölçülmüş ilan
+              </span>
             </div>
             <div className="space-y-1">
               {p.competitor_prices.map((cp, i) => {
@@ -1464,7 +1543,17 @@ export function ProductCard({
                 (link) =>
                   !listed.some((cp) => cp.store.toLowerCase().includes(link.label.toLowerCase())),
               );
-              return <SearchLinkRow label="Diğer pazaryerlerinde ara:" links={links} />;
+              return (
+                <>
+                  {listed.length <= 1 && (
+                    <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                      Tek ölçülmüş ilan var. Fiyat konumunu görmek için aşağıdaki pazaryerlerinde
+                      aynı ürünü ara; ölçülmeyen fiyat 0 sayılmaz.
+                    </p>
+                  )}
+                  <SearchLinkRow label="Diğer pazaryerlerinde ara:" links={links} />
+                </>
+              );
             })()}
           </div>
         )}

@@ -3,6 +3,7 @@ import { Check, Download, FileDown, FileText, RotateCcw, SlidersHorizontal } fro
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { num } from "@/lib/deep-dive-complete";
 import { buildProductCostBreakdown } from "@/lib/product-cost-breakdown";
+import { sourceLabel } from "@/features/finder/utils/source-label";
 import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -298,6 +299,121 @@ function buildRows(p: WinningProduct): string[][] {
     "",
   ]);
   rows.push(["Ürün", p.name ?? "", p.target_audience ?? "", p.selling_price_usd ?? ""]);
+
+  // ÖLÇÜLEN VERİ — kaynakta gerçekten okunan alanlar. Boş alan "0" değil,
+  // "ölçülmedi" olarak yazılır; rapor da kartla aynı dürüstlük kuralını taşır.
+  const measuredRows: Array<[string, unknown]> = [
+    ["Satış fiyatı", p.selling_price_usd || "ölçülmedi"],
+    ["Puan", p.measured?.rating ? `${p.measured.rating.toFixed(1)}/5` : "ölçülmedi"],
+    ["Değerlendirme sayısı", p.measured?.ratingCount ?? "ölçülmedi"],
+    ["Satış adedi", p.measured?.salesVolume ?? "ölçülmedi"],
+    ["90 gün görüntülenme", p.measured?.viewed90d ?? "ölçülmedi"],
+    ["Tedarik fiyatı", p.supplier_price_usd || "ölçülmedi"],
+    [
+      "Brüt marj",
+      p.gross_margin_pct !== null && p.gross_margin_pct !== undefined
+        ? `%${p.gross_margin_pct}`
+        : "ölçülmedi",
+    ],
+    ["Kargoya kalan pay", p.fee_budget_usd ?? "ölçülmedi"],
+  ];
+  measuredRows.forEach(([label, value]) => rows.push(["Ölçülen veri", label, String(value), ""]));
+  rows.push([
+    "Kaynaklar",
+    "Veri kaynakları",
+    (p.data_sources ?? []).map(sourceLabel).join(", ") || "ölçülmedi",
+    p.source_url ?? "",
+  ]);
+
+  // MALİYET DÖKÜMÜ — her kalemin kaynağı ve ölçüm/hesap durumu raporda kalır.
+  const costs = buildProductCostBreakdown(p);
+  const costRows = [
+    ["Tedarik maliyeti", costs.supplier],
+    ["Kargo", costs.shipping],
+    ["Platform komisyonu", costs.platformFee],
+    ["Reklam / CAC", costs.adSpend],
+    ["Brüt kâr", costs.grossProfit],
+    ["Net kâr", costs.netProfit],
+  ] as const;
+  costRows.forEach(([label, row]) =>
+    rows.push([
+      "Maliyet dökümü",
+      label,
+      row.usd === null ? row.source : `$${row.usd.toFixed(2)}`,
+      row.basis === "measured"
+        ? `ölçüldü · ${row.source}`
+        : row.basis === "model"
+          ? `hesaplandı · ${row.source}`
+          : "ölçülmedi",
+    ]),
+  );
+  if (costs.grossMarginPct !== null)
+    rows.push(["Maliyet dökümü", "Brüt marj", `%${costs.grossMarginPct}`, "ölçülen fiyatlardan"]);
+  if (costs.netMarginPct !== null)
+    rows.push([
+      "Maliyet dökümü",
+      "Net marj",
+      `%${costs.netMarginPct}`,
+      costs.netProfit.basis === "measured" ? "ölçüldü" : "hesaplandı",
+    ]);
+  if (costs.delivery) {
+    rows.push([
+      "Maliyet dökümü",
+      "Teslimat",
+      costs.delivery.min === costs.delivery.max
+        ? `${costs.delivery.min} gün`
+        : `${costs.delivery.min}-${costs.delivery.max} gün`,
+      costs.delivery.basis === "measured"
+        ? `ölçüldü · ${costs.delivery.source}`
+        : `hesaplandı · ${costs.delivery.source}`,
+    ]);
+  }
+
+  (p.competitor_prices ?? []).forEach((cp) =>
+    rows.push([
+      "Fiyat karşılaştırması",
+      cp.store,
+      cp.note || "ölçülmüş ilan",
+      `${cp.price}${cp.url ? ` · ${cp.url}` : ""}`,
+    ]),
+  );
+
+  if (p.demand) {
+    rows.push([
+      "Talep",
+      "Trend",
+      p.demand.trend_direction,
+      `Aylık arama: ${p.demand.monthly_search_volume}`,
+    ]);
+    if (p.demand.primary_markets?.length)
+      rows.push(["Talep", "Öne çıkan pazarlar", p.demand.primary_markets.join(", "), ""]);
+    if (p.demand.seasonality) rows.push(["Talep", "Mevsimsellik", p.demand.seasonality, ""]);
+  }
+
+  if (p.market_verdict) {
+    rows.push([
+      "Pazar kararı",
+      p.market_verdict.country_name,
+      p.market_verdict.summary,
+      p.market_verdict.channels.map((channel) => channel.platform).join(" · "),
+    ]);
+  }
+
+  (p.differentiation ?? []).forEach((item, index) =>
+    rows.push(["Farklılaşma", `${index + 1}. madde`, item, ""]),
+  );
+  (p.risks ?? []).forEach((risk) =>
+    rows.push(["Riskler", risk.risk, risk.mitigation, `Şiddet: ${risk.severity}`]),
+  );
+  (p.keyword_opportunities ?? []).forEach((keyword) =>
+    rows.push([
+      "Anahtar kelimeler",
+      keyword.keyword,
+      keyword.intent,
+      `${keyword.monthly_volume} · ${keyword.difficulty} zorluk`,
+    ]),
+  );
+
   (p.financial_projection ?? []).forEach((f) =>
     rows.push([
       "Finansal projeksiyon (model)",

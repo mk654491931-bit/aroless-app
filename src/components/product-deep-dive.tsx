@@ -34,7 +34,8 @@ import type { WinningProduct } from "@/lib/gemini.functions";
 import { supplierMatchKind } from "@/lib/supplier-economics";
 import { buildProductCostBreakdown, type CostValue } from "@/lib/product-cost-breakdown";
 import { completeDeepDive, num } from "@/lib/deep-dive-complete";
-import { sourcingSearchLinks } from "@/lib/sourcing-links";
+import { productSearchQuery, sourcingSearchLinks } from "@/lib/sourcing-links";
+import { countryName } from "@/lib/countries";
 import {
   CheckItem,
   ChecklistProgress,
@@ -179,6 +180,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
   // yazıyordu. Aşağıdaki değerler doğrudan `supplier_evidence`ten gelir.
   const supplier = p.supplier_evidence;
   const supplierLinks = sourcingSearchLinks(p.name);
+  const sourcingQuery = productSearchQuery(p.name);
   const supplierKind = supplier ? supplierMatchKind(supplier) : null;
   const supplierMatched = supplierKind === "product";
   const hasSupplierEvidence = Boolean(supplier && supplier.samples > 0);
@@ -234,31 +236,46 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
   const netMeasured = costs.netProfit.basis === "measured";
   const grossMarginPct = costs.grossMarginPct;
   const netMarginPct = costs.netMarginPct;
+  // TESLİMAT BOŞLUĞU: tedarikçi teklifi yoksa hücre "Teslimat ölçülmedi"de
+  // kalıyordu. Elimizde platform/lojistik MODELİ varsa o gösterilir (etiketli);
+  // hiçbiri yoksa ölçülmüş gibi davranmadan bir SONRAKİ adım yazılır.
+  const hybridDays =
+    typeof p.hybrid?.estimated_shipping_days === "number" && p.hybrid.estimated_shipping_days > 0
+      ? p.hybrid.estimated_shipping_days
+      : null;
   const deliveryMain = costs.delivery
     ? costs.delivery.min === costs.delivery.max
       ? `${costs.delivery.min} gün`
       : `${costs.delivery.min}–${costs.delivery.max} gün`
     : p.supplier_shortlist?.[0]?.lead_time
       ? trDuration(p.supplier_shortlist[0].lead_time)
-      : supplier?.shipFrom
-        ? `Kargo çıkışı ${supplier.shipFrom}`
-        : "Teslimat ölçülmedi";
+      : hybridDays !== null
+        ? `~${hybridDays} gün`
+        : supplier?.shipFrom
+          ? `Kargo çıkışı ${supplier.shipFrom}`
+          : "Tedarikçide ölçülür";
   const deliverySub = costs.delivery
     ? costs.delivery.basis === "measured"
       ? `${p.sourcing?.shipping_method || costs.delivery.source} · ölçüldü`
       : `${costs.delivery.source}${
           supplier?.shipFrom ? ` · tedarikçi çıkışı ${supplier.shipFrom}` : ""
         }`
-    : supplier?.shipFrom
-      ? `Kargo çıkışı ${supplier.shipFrom}`
-      : "Platform teslimat tarifesi yok";
+    : p.supplier_shortlist?.[0]?.lead_time
+      ? "Tedarik planı · model"
+      : hybridDays !== null
+        ? "Pazar/lojistik modeli — hesaplandı"
+        : supplier?.shipFrom
+          ? `Kargo çıkışı ${supplier.shipFrom}; süre teklifte belirtilir`
+          : "Tedarikçi teklifinde teslimat aralığı belirtilir";
   const bestMarkets = p.demand?.primary_markets?.length
     ? p.demand.primary_markets
     : p.real_economics?.context?.country_label
       ? [p.real_economics.context.country_label]
       : p.market_verdict?.country_name
         ? [p.market_verdict.country_name]
-        : [];
+        : p.hybrid?.target_country
+          ? [countryName(p.hybrid.target_country)]
+          : [];
 
   return (
     <div className="mt-3 space-y-2">
@@ -372,6 +389,16 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
             </div>
             <div className="mt-1 font-semibold">{deliveryMain}</div>
             <div className="text-[10px] text-muted-foreground">{deliverySub}</div>
+            {!costs.delivery && hybridDays === null && supplierLinks[0] && (
+              <a
+                href={supplierLinks[0].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-0.5 text-[9px] text-sky-300 hover:underline"
+              >
+                Teslimat aralığını {supplierLinks[0].label}&apos;te gör <ExternalLink size={8} />
+              </a>
+            )}
           </div>
           <div className="rounded-md border border-violet-500/30 bg-violet-500/[0.06] p-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300/90">
@@ -392,7 +419,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 ? `$${netProfitUsd.toFixed(2)}`
                 : grossProfitUsd !== null
                   ? `$${grossProfitUsd.toFixed(2)}`
-                  : "Tedarik fiyatı yok"}
+                  : "Tedarik bekleniyor"}
             </div>
             {/* Ölçülmemiş marj "%0" DEĞİLDİR: net/brüt ayrımı açıkça yazılır.
                 Net kâr hesabı modelle yapıldıysa "hesaplandı" denir; ölçüm
@@ -402,7 +429,9 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 ? `Net marj %${netMarginPct ?? 0}${netMeasured ? "" : " · hesaplandı"}`
                 : grossProfitUsd !== null && grossMarginPct !== null
                   ? `Brüt marj %${grossMarginPct}`
-                  : "Tedarik fiyatı ölçülmeden net kâr hesaplanmaz"}
+                  : num(p.selling_price_usd) > 0
+                    ? `Satış $${num(p.selling_price_usd).toFixed(2)} · toptan fiyat ölçülünce net hesaplanır`
+                    : "Tedarik fiyatı ölçülmeden net kâr hesaplanmaz"}
             </div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
@@ -538,9 +567,10 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           defaultOpen
         >
           <p className="text-muted-foreground leading-relaxed">
-            Bu ürün için canlı toptan havuzda birebir teklif eşleşmedi. Aşağıdaki aramalarla fiyatı,
-            MOQ'yu ve teslimatı kendin doğrula. Ölçülmeyen tedarik fiyatı 0 sayılmaz; net kâr ve
-            marj bu yüzden hesaplanmaz.
+            Bu ürün için canlı toptan havuzda birebir teklif eşleşmedi. Aşağıdaki aramalar
+            {sourcingQuery ? ` “${sourcingQuery}” ` : " "}sorgusuyla açılır; fiyatı, MOQ&apos;yu ve
+            teslimatı kendin doğrula. Ölçülmeyen tedarik fiyatı 0 sayılmaz; net kâr ve marj bu
+            yüzden hesaplanmaz.
           </p>
           <div className="space-y-1.5">
             {supplierLinks.map((link) => (
@@ -960,6 +990,55 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               </div>
             );
           })()}
+        </Block>
+      )}
+
+      {/* PROJEKSİYON YOKSA SESSİZ KALMA: eski kart, tedarik fiyatı olmadığı
+          için projeksiyonu hiç göstermiyordu; kullanıcı "neden yok?" sorusuna
+          cevap alamıyordu. Bu blok eksik GİRDİYİ ve doğrulama yolunu yazar;
+          sayı üretmez. */}
+      {(!p.financial_projection || p.financial_projection.length === 0) && (
+        <Block
+          icon={<LineChart size={11} />}
+          title="Finansal projeksiyon — girdi bekleniyor"
+          defaultOpen
+        >
+          <p className="text-muted-foreground leading-relaxed">
+            Model projeksiyonu yalnız ölçülmüş satış fiyatı ve tedarik fiyatıyla üretilir;
+            ölçülmemiş bir girdiyi 0 veya tahminle doldurmuyoruz. Eksik olan:{" "}
+            <span className="text-amber-200">
+              {[
+                num(p.selling_price_usd) > 0 ? "" : "satış fiyatı",
+                costs.supplier.usd !== null ? "" : "tedarik fiyatı",
+              ]
+                .filter(Boolean)
+                .join(" ve ") || "model girdisi"}
+              .
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {supplierLinks.slice(0, 2).map((link) => (
+              <a
+                key={link.label}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-emerald-300/90 transition hover:bg-white/10"
+              >
+                {link.label}&apos;de tedarik fiyatını doğrula <ExternalLink size={9} />
+              </a>
+            ))}
+            {p.source_url && (
+              <a
+                href={p.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-sky-300/90 transition hover:bg-white/10"
+              >
+                Kaynak sayfada fiyatı doğrula <ExternalLink size={9} />
+              </a>
+            )}
+          </div>
         </Block>
       )}
 

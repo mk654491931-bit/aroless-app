@@ -42,6 +42,21 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
     const lowComp = products.filter((p) => p.competition_level === "Low").length;
     const rising = products.filter((p) => (p.market_evidence?.trend_momentum_pct ?? 0) > 0).length;
 
+    // ÖLÇÜM KAPSAMI: hangi alanın kaç üründe GERÇEKTEN ölçüldüğü. Bu satır,
+    // "—" ile boş bırakılan özet hücrelerinin nedenini görünür kılar ve
+    // ölçülmemiş alanı 0 gibi göstermez.
+    const coverage = {
+      price: products.filter((p) => parseMoneyNum(p.selling_price_usd) > 0).length,
+      rating: products.filter((p) => (p.measured?.rating ?? 0) > 0).length,
+      demand: products.filter(
+        (p) =>
+          (p.measured?.salesVolume ?? 0) > 0 ||
+          (p.measured?.viewed90d ?? 0) > 0 ||
+          (p.measured?.ratingCount ?? 0) > 0,
+      ).length,
+      supplier: products.filter((p) => parseMoneyNum(p.supplier_price_usd) > 0).length,
+    };
+
     const buckets = [0, 0, 0, 0, 0]; // 0-39, 40-54, 55-69, 70-84, 85+
     scores.forEach((s) => {
       if (s >= 85) buckets[4]++;
@@ -60,6 +75,7 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
       verified,
       lowComp,
       rising,
+      coverage,
       buckets,
       max: Math.max(1, ...buckets),
     };
@@ -72,12 +88,17 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
     {
       icon: <DollarSign size={13} />,
       label: "Ort. marj",
-      value: stats.avgMargin === null ? "—" : `%${stats.avgMargin}`,
+      value: stats.avgMargin === null ? "Tedarik yok" : `%${stats.avgMargin}`,
+      title:
+        stats.avgMargin === null
+          ? "Marj yalnız ölçülmüş tedarik fiyatı olan ürünlerden ortalanır; ölçülmeyen marj 0 sayılmaz."
+          : "Ölçülmüş marjların ortalaması",
     },
     {
       icon: <Boxes size={13} />,
       label: "Medyan fiyat",
-      value: stats.medPrice ? `$${stats.medPrice}` : "—",
+      value: stats.medPrice ? `$${stats.medPrice}` : "Fiyat yok",
+      title: stats.medPrice ? "Ölçülmüş satış fiyatlarının medyanı" : "Ölçülmüş satış fiyatı yok.",
     },
     {
       icon: <ShieldCheck size={13} />,
@@ -104,6 +125,7 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
         {cards.map((c) => (
           <div
             key={c.label}
+            title={c.title}
             className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
           >
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -125,6 +147,50 @@ export function FinderInsights({ products }: { products: WinningProduct[] }) {
             <span className="text-[10px] text-muted-foreground">{labels[i]}</span>
           </div>
         ))}
+      </div>
+
+      {/* VERİ KAPSAMI — "hangi alan kaç üründe ölçüldü?". Ölçülmemiş alan
+          burada da 0 gibi gösterilmez; pay ve oran birlikte yazılır. */}
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+          <ShieldCheck size={11} /> Ölçülen veri kapsamı
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {(
+            [
+              ["Fiyat", stats.coverage.price, "Kaynakta ölçülen satış fiyatı"],
+              ["Puan", stats.coverage.rating, "Kaynakta ölçülen yıldız puanı"],
+              ["Talep", stats.coverage.demand, "Satış, değerlendirme veya görüntülenme"],
+              ["Tedarik", stats.coverage.supplier, "Birebir eşleşen toptan fiyatı"],
+            ] as const
+          ).map(([label, count, hint]) => {
+            const pct = Math.round((count / products.length) * 100);
+            return (
+              <div
+                key={label}
+                title={`${hint} · ${count}/${products.length} ürün`}
+                className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5"
+              >
+                <div className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-semibold tabular-nums">
+                    {count}/{products.length}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-emerald-400/70"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+          Eksik alanlar kartlarda “ölçülmedi” olarak işaretlenir; 0 sayılmaz. Tedarik kapsamı 0 ise
+          marj/net kâr hesaplanmaz.
+        </p>
       </div>
     </div>
   );

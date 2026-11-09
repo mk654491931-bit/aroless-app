@@ -22,6 +22,22 @@
 import type { WinningProduct } from "@/lib/gemini.functions";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
 import { supplierMatchKind } from "@/lib/supplier-economics";
+import { sourceLabel } from "./source-label";
+
+/**
+ * Ham kaynak kimliklerini ("tr-reader", "bing-shopping") kullanıcı diline
+ * çevirir. Metnin TAMAMINI değiştirmez; yalnız bilinen kimlikleri etiketler.
+ * Böylece "CFO Agent: … · tr-reader" gibi teknik bir döküm karta sızmaz.
+ */
+function humanizeSources(text: string, sources: readonly string[]): string {
+  let out = String(text ?? "");
+  for (const source of sources) {
+    const id = String(source ?? "").trim();
+    if (!id) continue;
+    out = out.split(id).join(sourceLabel(id));
+  }
+  return out;
+}
 
 /** Deterministik rekabet sinyalini arayüzün üç seviyeli etiketine çevirir. */
 function competitionLabel(score: number): WinningProduct["competition_level"] {
@@ -50,7 +66,12 @@ export function toWinningProducts(
       row.rating !== null
         ? `· ${row.rating.toFixed(1)} puan${row.ratingCount ? ` (${row.ratingCount} değerlendirme)` : ""}`
         : "· puan ölçülemedi";
-    const evidence = row.evidence.slice(0, 2).join(" ");
+    // KANIT METNİ: ajan gerekçeleri ham kaynak kimliği taşıyabilir ("tr-reader").
+    // Kullanıcıya teknik kimlik değil, okunur kaynak adı gösterilir. En çok iki
+    // gerekçe alınır; aynı cümle iki kez yazılmaz.
+    const evidence = [...new Set(row.evidence.map((note) => humanizeSources(note, row.sources)))]
+      .slice(0, 2)
+      .join(" · ");
     // PUANIN KAYNAĞI: 14 ajan oyu ile ölçülmüş sinyal aynı cümleyle
     // sunulmamalı. `measured` yolunda konsey hiç koşmadı; "14 ajan" yazmak
     // ölçülmemiş bir şeyi ölçülmüş gibi göstermek olurdu.
@@ -80,9 +101,9 @@ export function toWinningProducts(
 
     return {
       name: row.name,
-      description:
-        row.notes ||
-        `${row.sources.join(", ") || "kaynak"} üzerinden kazındı · ${row.dataCompleteness}/5 alan doğrulandı`,
+      description: row.notes
+        ? humanizeSources(row.notes, row.sources)
+        : `${row.sources.map(sourceLabel).join(", ") || "kaynak"} üzerinden tarandı · ${row.dataCompleteness}/5 alan doğrulandı`,
       why_winning: whyWinning,
       // GERÇEK ÜRÜN GÖRSELİ. Kazıma JSON-LD/Steam/Bing kartından görseli
       // ölçüyor ve kayıtta taşıyordu; bu şema onu DÜŞÜRÜYORDU, kart da
