@@ -397,7 +397,15 @@ alter table public.h10_ingest_rows enable row level security;
 --   • Watchlist/alarm tabloları ileride user_id + RLS ile ayrı migration'da gelir.
 
 -- Service role için açık tablo/sequence yetkileri (RLS bypass ayrıdır).
--- Append-only tablolarda UPDATE/DELETE yetkisi VERİLMEZ.
+-- Append-only tablolarda UPDATE/DELETE yetkisi VERİLMEZ. Daha önce
+-- çalıştırılmış bir migration'dan kalan geniş yetkiler de geri alınır.
+revoke update, delete on public.h10_observations from service_role;
+revoke update, delete on public.h10_ingest_rows from service_role;
+revoke update, delete on public.h10_source_runs from service_role;
+revoke delete on public.h10_sources from service_role;
+revoke delete on public.h10_niches from service_role;
+revoke delete on public.h10_products from service_role;
+revoke delete on public.h10_runs from service_role;
 grant usage on schema public to service_role;
 grant select, insert, update on public.h10_sources to service_role;
 grant select, insert, update on public.h10_niches to service_role;

@@ -49,7 +49,9 @@ describe("Hidrojen10 migration sözleşmesi", () => {
       expect(sql).toContain(`alter table public.${table} enable row level security;`);
     }
     expect(sql).toContain("grant select, insert, update on public.h10_niches to service_role;");
-    expect(sql).toContain("grant select, insert, update, delete on public.h10_offers to service_role;");
+    expect(sql).toContain(
+      "grant select, insert, update, delete on public.h10_offers to service_role;",
+    );
     expect(sql).toContain("grant select, insert on public.h10_observations to service_role;");
     expect(sql).toContain("grant select, insert on public.h10_ingest_rows to service_role;");
     expect(sql).toContain("grant select, insert on public.h10_source_runs to service_role;");
@@ -58,7 +60,9 @@ describe("Hidrojen10 migration sözleşmesi", () => {
     expect(sql).toContain("grant usage, select on sequence public.h10_ingest_rows_id_seq");
   });
 
-  it("append-only arşivlerde UPDATE/DELETE yetkisi vermez", () => {
+  it("append-only arşivlerde UPDATE/DELETE yetkisi vermez ve eski yetkileri geri alır", () => {
+    expect(sql).toContain("revoke update, delete on public.h10_observations from service_role;");
+    expect(sql).toContain("revoke update, delete on public.h10_ingest_rows from service_role;");
     expect(sql).not.toContain(
       "grant select, insert, update, delete on public.h10_observations to service_role;",
     );
