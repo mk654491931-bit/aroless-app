@@ -173,20 +173,6 @@ export const APP_COPY: Record<string, Copy> = {
     fr: "(avant expédition)",
     ar: "(قبل الشحن)",
   },
-  Koyarsın: {
-    en: "You set",
-    es: "Tú fijas",
-    de: "Du setzt",
-    fr: "Vous fixez",
-    ar: "أنت تحدد",
-  },
-  Kazanırsın: {
-    en: "You earn",
-    es: "Ganas",
-    de: "Du verdienst",
-    fr: "Vous gagnez",
-    ar: "أنت تكسب",
-  },
   "Margin (brüt)": {
     en: "Margin (gross)",
     es: "Margen (bruto)",

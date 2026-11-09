@@ -1345,21 +1345,7 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
       fr: "Vente − gros = marge brute. La marge nette n'a pas été mesurée : livraison, douane et commission sont absents de cette source et n'ont pas été estimés.",
       ar: "البيع − الجملة = الهامش الإجمالي. لم يُقس الهامش الصافي لأن الشحن والجمارك وعمولة المنصة غير متوفرة في هذا المصدر ولم تُقدَّر.",
     },
-  "ilk siparişler": {
-    en: "first orders",
-    es: "primeros pedidos",
-    de: "erste Bestellungen",
-    fr: "premières commandes",
-    ar: "أول الطلبات",
-  },
   Aşama: { en: "Stage", es: "Etapa", de: "Phase", fr: "Étape", ar: "المرحلة" },
-  "$20 bütçe": {
-    en: "$20 budget",
-    es: "presupuesto de $20",
-    de: "$20 Budget",
-    fr: "budget de 20 $",
-    ar: "ميزانية 20$",
-  },
   "Analiz hattı puanı ile 14 ajanlı AI Konsey puanı eşit ortaklıkla birleşir. Karne yoksa yalnızca analiz hattı kararı geçerlidir.":
     {
       en: "The analysis pipeline score and the 14-agent AI Council score combine with equal weight. Without a council report, only the pipeline decision applies.",
@@ -2801,13 +2787,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Autre / unité",
     ar: "أخرى / وحدة",
   },
-  "Dollar gap — ölçülen maliyet dökümü": {
-    en: "Dollar gap — measured cost breakdown",
-    es: "Brecha de dólares: desglose de costes medidos",
-    de: "Dollar-Lücke — gemessene Kostenaufstellung",
-    fr: "Écart en dollars — ventilation des coûts mesurés",
-    ar: "فجوة الدولار — تفصيل التكاليف المقيسة",
-  },
   "Dönüşüm kırıcıları": {
     en: "Conversion blockers",
     es: "Bloqueos de conversión",
@@ -3134,7 +3113,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Crédits gagnés",
     ar: "أرصدة مكتسبة",
   },
-  Kazanırsın: { en: "you earn", es: "ganas", de: "du verdienst", fr: "vous gagnez", ar: "تربح" },
   "Kendi kodunla kendi hesabından alım yapmak (kendine atıf) yasaktır; tespit edilirse komisyon ödenmez. Vergi/mükellefiyet yükümlülüğü katılımcıya aittir.":
     {
       en: "Buying from your own account with your own code (self-referral) is prohibited; detected cases earn no commission. Tax obligations rest with the participant.",
@@ -3215,7 +3193,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Positionnement",
     ar: "التموضع",
   },
-  Koyarsın: { en: "you put in", es: "pones", de: "du setzt ein", fr: "vous mettez", ar: "تدفع" },
   "Kötüye Kullanım Uyarıları": {
     en: "Abuse alerts",
     es: "Alertas de abuso",

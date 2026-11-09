@@ -33,7 +33,8 @@ import {
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { supplierMatchKind } from "@/lib/supplier-economics";
 import { buildProductCostBreakdown, type CostValue } from "@/lib/product-cost-breakdown";
-import { num } from "@/lib/deep-dive-complete";
+import { completeDeepDive, num } from "@/lib/deep-dive-complete";
+import { sourcingSearchLinks } from "@/lib/sourcing-links";
 import {
   CheckItem,
   ChecklistProgress,
@@ -142,9 +143,9 @@ function CostCell({ row }: { row: CostValue }) {
 /**
  * Modelin ürettiği sayı/plan bölümleri için DÜRÜSTLÜK ETİKETİ.
  *
- * Bu bölümler canlı kaynaktan ölçülmedi; eski sürüm eksikleri varsayılan
- * projeksiyonlarla doldurup ölçüm gibi gösteriyordu. Artık varsayılan
- * üretilmiyor, kalan AI içeriği de açıkça "tahmin" olarak işaretleniyor.
+ * Bu bölümler canlı kaynaktan ölçülmedi; projeksiyon, plan ve fiyat
+ * basamakları model çıktısıdır. Eksik bölüm artık sessizce varsayılanla
+ * doldurulmuyor: üretilen her bölüm bu etiketle "tahmin" olduğunu söylüyor.
  */
 function ModelNote() {
   return (
@@ -155,9 +156,10 @@ function ModelNote() {
 }
 
 export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
-  // Eksik bölüm TAMAMLANMAZ: uydurma projeksiyon/tedarikçi/fiyat varsayılanı
-  // yerine bölüm hiç gösterilmez (dürüstlük kuralı).
-  const p = raw;
+  // Eski sürüm eksik plan bölümlerini SESSİZ varsayılanlarla dolduruyordu.
+  // Yeni tamamlama yalnız kaynak etiketli model çıktısı üretir; tedarikçi
+  // adı/fiyatı uydurmaz ve her bölüm ModelNote taşır.
+  const p = useMemo(() => completeDeepDive(raw), [raw]);
   const { done, toggle } = useChecklist(p.name ?? "urun");
   const planIds = useMemo(() => {
     const ids: string[] = [];
@@ -176,6 +178,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
   // doldurulmuyor; sonuç: kanıt varken bile "Tedarik kaynağı Ölçülmedi"
   // yazıyordu. Aşağıdaki değerler doğrudan `supplier_evidence`ten gelir.
   const supplier = p.supplier_evidence;
+  const supplierLinks = sourcingSearchLinks(p.name);
   const supplierKind = supplier ? supplierMatchKind(supplier) : null;
   const supplierMatched = supplierKind === "product";
   const hasSupplierEvidence = Boolean(supplier && supplier.samples > 0);
@@ -193,7 +196,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
         : "Niş bandı (birebir eşleşme yok)"
     : p.supplier_shortlist?.[0]?.name
       ? `${p.supplier_shortlist[0].name} · model önerisi`
-      : "Tedarik teklifi eşleşmedi";
+      : "Tedarik araştırması gerekli";
   const supplierSub = hasSupplierEvidence
     ? [
         supplierMatched && supplier?.shipFrom ? `Kargo çıkışı ${supplier.shipFrom}` : "",
@@ -211,7 +214,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
     : (p.supplier_shortlist?.[0]?.region ??
       (p.sourcing?.shipping_method
         ? `${p.sourcing.shipping_method} · model`
-        : "Canlı toptan kaynakta eşleşme yok"));
+        : "Canlı toptan kaynakta birebir teklif yok; arama bağlantıları aşağıda"));
 
   // MALİYET DÖKÜMÜ: ölçülmüş değer varsa o; yoksa platform/ülke
   // tarifelerinden hesaplanmış değer. Boş bırakmak yerine kaynağı görünen
@@ -222,7 +225,10 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
       (row) => row.basis === "measured",
     ) &&
     (costs.delivery === null || costs.delivery.basis === "measured");
-  const channel = p.platform_fit?.[0];
+  const channel =
+    p.platform_fit?.[0] ??
+    p.real_economics?.context?.platform ??
+    p.market_verdict?.channels?.[0]?.platform;
   const grossProfitUsd = costs.grossProfit.usd;
   const netProfitUsd = costs.netProfit.usd;
   const netMeasured = costs.netProfit.basis === "measured";
@@ -236,7 +242,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
       ? trDuration(p.supplier_shortlist[0].lead_time)
       : supplier?.shipFrom
         ? `Kargo çıkışı ${supplier.shipFrom}`
-        : "Platform bilgisi yok";
+        : "Teslimat ölçülmedi";
   const deliverySub = costs.delivery
     ? costs.delivery.basis === "measured"
       ? `${p.sourcing?.shipping_method || costs.delivery.source} · ölçüldü`
@@ -245,7 +251,14 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
         }`
     : supplier?.shipFrom
       ? `Kargo çıkışı ${supplier.shipFrom}`
-      : "Platform teslimat bilgisi yok";
+      : "Platform teslimat tarifesi yok";
+  const bestMarkets = p.demand?.primary_markets?.length
+    ? p.demand.primary_markets
+    : p.real_economics?.context?.country_label
+      ? [p.real_economics.context.country_label]
+      : p.market_verdict?.country_name
+        ? [p.market_verdict.country_name]
+        : [];
 
   return (
     <div className="mt-3 space-y-2">
@@ -260,7 +273,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           <ChecklistProgress total={planIds.length} completed={completed} />
         ) : (
           <p className="text-[10px] text-muted-foreground">
-            Bu ürün için doğrulanmış lansman planı yok.
+            Bu ürün için plan üretilemedi; ürün adı ve fiyatı olmadan model planı oluşturulmaz.
           </p>
         )}
         <ExportReport p={p} />
@@ -336,6 +349,22 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 Teklifi aç <ExternalLink size={9} />
               </a>
             )}
+            {(!supplierMatched || !supplier?.url) && supplierLinks.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {supplierLinks.slice(0, 2).map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={link.note}
+                    className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] text-emerald-300/90 hover:bg-white/10"
+                  >
+                    {link.label} <ExternalLink size={8} />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
           <div className="rounded-md border border-sky-500/30 bg-sky-500/[0.06] p-2">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300/90">
@@ -348,10 +377,10 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300/90">
               <Store size={10} /> En iyi kanal
             </div>
-            <div className="mt-1 font-semibold">{channel ?? "Ölçülmedi"}</div>
+            <div className="mt-1 font-semibold">{channel ?? "Kanal seçilmedi"}</div>
             <div className="text-[10px] text-muted-foreground">
               {(p.platform_fit ?? []).slice(1).join(" · ") ||
-                (channel ? "Ölçülen satış kaynağı" : "Kaynak doğrulamadı")}
+                (channel ? "Ölçülen satış kaynağı" : "Hedef kanal bu aramada seçilmedi")}
             </div>
           </div>
           <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2">
@@ -363,7 +392,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 ? `$${netProfitUsd.toFixed(2)}`
                 : grossProfitUsd !== null
                   ? `$${grossProfitUsd.toFixed(2)}`
-                  : "Tedarik eşleşmedi"}
+                  : "Tedarik fiyatı yok"}
             </div>
             {/* Ölçülmemiş marj "%0" DEĞİLDİR: net/brüt ayrımı açıkça yazılır.
                 Net kâr hesabı modelle yapıldıysa "hesaplandı" denir; ölçüm
@@ -373,7 +402,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 ? `Net marj %${netMarginPct ?? 0}${netMeasured ? "" : " · hesaplandı"}`
                 : grossProfitUsd !== null && grossMarginPct !== null
                   ? `Brüt marj %${grossMarginPct}`
-                  : costs.netProfit.source}
+                  : "Tedarik fiyatı ölçülmeden net kâr hesaplanmaz"}
             </div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
@@ -381,10 +410,12 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <Globe2 size={10} /> En iyi pazarlar
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
-              {(p.demand?.primary_markets ?? []).length === 0 ? (
-                <span className="text-[10px] text-muted-foreground">Ölçülmedi</span>
+              {bestMarkets.length === 0 ? (
+                <span className="text-[10px] text-muted-foreground">
+                  Hedef pazar bu aramada seçilmedi; ülke seçerek yeniden çalıştır.
+                </span>
               ) : (
-                (p.demand?.primary_markets ?? []).map((m, i) => (
+                bestMarkets.map((m, i) => (
                   <span
                     key={i}
                     className="text-[10px] rounded-full bg-white/5 border border-white/10 px-2 py-0.5 flex items-center gap-1"
@@ -439,7 +470,9 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 <td className="px-2 py-1.5 font-semibold flex items-center gap-1.5">
                   <Tags size={10} /> Satış fiyatı
                 </td>
-                <td className="px-2 py-1.5 text-right font-semibold">{p.selling_price_usd}</td>
+                <td className="px-2 py-1.5 text-right font-semibold">
+                  {p.selling_price_usd || "Ölçülmedi"}
+                </td>
               </tr>
               {grossProfitUsd !== null && (
                 <tr className="border-b border-white/5">
@@ -497,6 +530,44 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           </div>
         )}
       </Block>
+
+      {(!p.supplier_shortlist || p.supplier_shortlist.length === 0) && supplierLinks.length > 0 && (
+        <Block
+          icon={<Factory size={11} />}
+          title="Tedarikçi araştırması — canlı teklif yok"
+          defaultOpen
+        >
+          <p className="text-muted-foreground leading-relaxed">
+            Bu ürün için canlı toptan havuzda birebir teklif eşleşmedi. Aşağıdaki aramalarla fiyatı,
+            MOQ'yu ve teslimatı kendin doğrula. Ölçülmeyen tedarik fiyatı 0 sayılmaz; net kâr ve
+            marj bu yüzden hesaplanmaz.
+          </p>
+          <div className="space-y-1.5">
+            {supplierLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 rounded border border-white/10 bg-white/[0.03] px-2 py-1.5 transition hover:bg-white/[0.07]"
+              >
+                <span>
+                  <span className="font-semibold">{link.label}</span>
+                  <span className="ml-1 text-[10px] text-muted-foreground">
+                    {link.note} · fiyat, MOQ ve teslimatı doğrula
+                  </span>
+                </span>
+                <ExternalLink size={11} className="shrink-0 text-muted-foreground" />
+              </a>
+            ))}
+          </div>
+          <div className="rounded border border-amber-500/20 bg-amber-500/[0.06] p-2 text-[10px] text-muted-foreground">
+            <span className="font-semibold text-amber-200">Aramada kontrol et:</span> ürünün ayırt
+            edici 3 kelimesi · birim fiyat · MOQ · numune maliyeti · teslimat aralığı. Bulduğun
+            teklifi bu ürünle aynı model/ölçü olduğundan emin olduktan sonra maliyet hesabına al.
+          </div>
+        </Block>
+      )}
 
       {p.demand && (
         <Block icon={<TrendingUp size={11} />} title="Talep & mevsimsellik" defaultOpen>
@@ -724,6 +795,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
 
       {(p.scaling_playbook || (p.exit_criteria && p.exit_criteria.length > 0)) && (
         <Block icon={<Flag size={11} />} title="Ölçekleme & çıkış kriterleri">
+          <ModelNote />
           {p.scaling_playbook && (
             <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
               {p.scaling_playbook}
@@ -833,6 +905,12 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
       {p.financial_projection && p.financial_projection.length > 0 && (
         <Block icon={<LineChart size={11} />} title="90 günlük finansal projeksiyon" defaultOpen>
           <ModelNote />
+          <p className="text-[9px] text-muted-foreground">
+            {supplierMatched
+              ? "Tedarik fiyatı ölçüldü; diğer maliyetler yayınlanmış tarifelerden hesaplandı."
+              : "Tedarik fiyatı ölçülmediği için bu tablo model tedarik varsayımıyla hesaplandı; ölçülmüş kâr değildir."}{" "}
+            Net kâr, CAC/reklam dahil birim kârdan hesaplanır; reklam sütunu plan bütçesidir.
+          </p>
           <div className="max-h-56 overflow-y-auto pr-1">
             <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground border-b border-white/10 pb-1 sticky top-0 bg-[oklch(0.19_0.03_255)]">
               <span>Ay</span>
@@ -847,7 +925,13 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 <span className="text-right tabular-nums">{f.units}</span>
                 <span className="text-right tabular-nums">{f.revenue_usd}</span>
                 <span className="text-right tabular-nums text-rose-300/90">{f.ad_spend_usd}</span>
-                <span className="text-right tabular-nums text-emerald-300">{f.net_profit_usd}</span>
+                <span
+                  className={`text-right tabular-nums ${
+                    num(f.net_profit_usd) >= 0 ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {f.net_profit_usd}
+                </span>
               </div>
             ))}
           </div>
@@ -868,7 +952,11 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 <span className="text-right tabular-nums">{t.units}</span>
                 <span className="text-right tabular-nums">{m(t.rev)}</span>
                 <span className="text-right tabular-nums text-rose-300/90">{m(t.ad)}</span>
-                <span className="text-right tabular-nums text-emerald-300">{m(t.net)}</span>
+                <span
+                  className={`text-right tabular-nums ${t.net >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                >
+                  {m(t.net)}
+                </span>
               </div>
             );
           })()}
@@ -887,6 +975,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
           icon={<CalendarDays size={11} />}
           title={`${p.content_calendar.length} haftalık içerik takvimi`}
         >
+          <ModelNote />
           <div className="max-h-80 overflow-y-auto pr-1 space-y-2">
             {p.content_calendar.map((w, i) => (
               <div key={i} className="rounded border border-white/10 bg-white/[0.03] p-2">

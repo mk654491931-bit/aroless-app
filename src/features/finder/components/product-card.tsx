@@ -43,6 +43,9 @@ import {
   measuredMoney,
 } from "@/lib/economics-evidence";
 import { supplierMatchKind } from "@/lib/supplier-economics";
+import { buildProductCostBreakdown } from "@/lib/product-cost-breakdown";
+import { completeDeepDive } from "@/lib/deep-dive-complete";
+import { marketplaceSearchLinks, sourcingSearchLinks } from "@/lib/sourcing-links";
 import { logoForStore } from "@/lib/platform-logos";
 import { checkConsistency, buyersPer1000, conversionTone, type Issue } from "@/lib/consistency";
 import { councilAgentSummary, hybridBadge } from "@/lib/consensus-types";
@@ -66,6 +69,37 @@ function moneyOrDash(
   return measuredMoney(value) === null
     ? NOT_MEASURED
     : money(value as string | number, { showUsd: false });
+}
+
+/**
+ * Ölçülmemiş tedarik/fiyat alanını boş bırakmak yerine DIŞ ARAMA bağlantısı.
+ * Bağlantı bir fiyat iddiası değildir; kullanıcı kaynağı kendi açar.
+ */
+function SearchLinkRow({
+  label,
+  links,
+}: {
+  label: string;
+  links: Array<{ label: string; url: string; note?: string }>;
+}) {
+  if (!links.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+      <span className="text-muted-foreground">{label}</span>
+      {links.map((link) => (
+        <a
+          key={link.label}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={link.note}
+          className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-sky-300 transition hover:bg-white/[0.09] hover:text-sky-200"
+        >
+          {link.label} <ExternalLink size={8} />
+        </a>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -99,7 +133,41 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
         ? `${money(bandLow, { showUsd: false })} – ${money(bandHigh, { showUsd: false })}`
         : money(bandLow, { showUsd: false })
       : null;
-  if (!s || (supplierPrice === null && gross === null && band === null)) return null;
+  const links = sourcingSearchLinks(p.name);
+
+  // TEDARİK EŞLEŞMEDİ DİYE PANELİ YOK ETMEK, kullanıcıya "bu üründe hiçbir
+  // tedarik bilgisi yok" dedirtiyordu. Panel artık durumu ve sonraki aramayı
+  // gösterir; fiyat/marj UYDURMAZ.
+  if (!s || (supplierPrice === null && gross === null && band === null)) {
+    return (
+      <div className="mt-3 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.07] to-violet-500/[0.04] px-3 py-2.5 text-[11px]">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300 font-semibold mb-2">
+          <Package size={11} /> Tedarik kanıtı — canlı kaynakta birebir teklif yok
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <Package size={10} /> Toptan birim
+          </span>
+          <span className="text-right font-semibold text-muted-foreground">Ölçülmedi</span>
+          <span className="text-muted-foreground flex items-center gap-1">
+            <Percent size={10} /> Marj
+          </span>
+          <span className="text-right text-muted-foreground">
+            Tedarik fiyatı olmadan hesaplanamaz
+          </span>
+          <span className="text-muted-foreground flex items-center gap-1">
+            <ShieldCheck size={10} /> Eşleşme
+          </span>
+          <span className="text-right text-muted-foreground">Havuzda eşleşme yok</span>
+        </div>
+        <p className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground leading-relaxed">
+          Bu ürün için toptan teklif eşleşmedi. Aşağıdaki aramalarla fiyatı, MOQ'yu ve teslimatı
+          doğrula. Ölçülmeyen tedarik fiyatı 0 sayılmaz; marj da bu yüzden gösterilmez.
+        </p>
+        <SearchLinkRow label="Toptan ara:" links={links} />
+      </div>
+    );
+  }
   // KANITIN GÜCÜ: birebir ürün eşleşmesi mi, yoksa aynı nişteki global band mı?
   // Ayrımı KAPATMAK yanıltıcı olurdu: niş bandı ürünün kendi toptan fiyatı
   // değildir ve panel bunu söylemek zorundadır (bkz. `supplier-economics.ts`).
@@ -214,57 +282,118 @@ function SupplierEconomics({ p }: { p: WinningProduct }) {
           <ExternalLink size={10} /> Toptan teklifi aç
         </a>
       )}
+      {(!s.url || nicheMatch) && (
+        <SearchLinkRow
+          label={nicheMatch ? "Birebir ürün ara:" : "Alternatif toptan ara:"}
+          links={links}
+        />
+      )}
     </div>
   );
 }
 
-function DollarGap({ p }: { p: WinningProduct }) {
+function CostSummary({ p }: { p: WinningProduct }) {
   const { money } = useMoney();
-  const cb = p.cost_breakdown;
-  // YALNIZ ÖLÇÜLMÜŞ MALİYET DÖKÜMÜ. `real_economics` bir modeldir; modelin
-  // tedarik/kargo/CAC/net değerlerini "Koyarsın/Kazanırsın" diye göstermek,
-  // ölçüm değil senaryo olduğunu saklar. Dört kalem de dolu değilse blok
-  // gösterilmez — eksik kalemi tahmin etmek uydurma olurdu.
-  const supplier = measuredMoney(cb?.supplier_cost);
-  const shipping = measuredMoney(cb?.shipping_cost);
-  const ad = measuredMoney(cb?.ad_spend);
-  const netPerUnit = measuredMoney(cb?.net_profit);
-  if (supplier === null || shipping === null || ad === null || netPerUnit === null) return null;
-  const invest = supplier + shipping + ad;
+  const costs = buildProductCostBreakdown(p);
   const sell = measuredMoney(p.selling_price_usd);
-  const netMargin = sell !== null && sell > 0 ? (netPerUnit / sell) * 100 : null;
+  // Satış fiyatı yoksa model çalışmaz; panel gizlenir (0 varsayımı yapılmaz).
+  if (sell === null) return null;
+
+  const supplier = costs.supplier.usd;
+  const shipping = costs.shipping.usd;
+  const platform = costs.platformFee.usd;
+  const ad = costs.adSpend.usd;
+  const net = costs.netProfit.usd;
+  const operating =
+    shipping !== null || platform !== null || ad !== null
+      ? (shipping ?? 0) + (platform ?? 0) + (ad ?? 0)
+      : null;
+  const modelRows = [costs.shipping, costs.platformFee, costs.adSpend].filter(
+    (row) => row.basis === "model",
+  ).length;
+  const netMargin = costs.netMarginPct;
+  const supplierSub =
+    costs.supplier.basis === "measured"
+      ? "ölçüldü"
+      : supplierMatchKind(p.supplier_evidence) === "niche"
+        ? "niş bandı var, ürün eşleşmedi"
+        : "canlı teklif yok";
   const breakeven =
     p.unit_economics?.breakeven_units ??
-    (netPerUnit > 0 ? Math.ceil((supplier + shipping) / netPerUnit) : null);
+    (supplier !== null && net !== null && net > 0
+      ? Math.ceil((supplier + (operating ?? 0)) / net)
+      : null);
+
   return (
     <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] to-sky-500/[0.06] px-3 py-2.5 text-[11px]">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-300 font-semibold mb-1.5">
-        <DollarSign size={11} /> Dollar gap — ölçülen maliyet dökümü
+      <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-emerald-300 font-semibold mb-1.5">
+        <span className="flex items-center gap-1.5">
+          <DollarSign size={11} /> Maliyet özeti
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[8px] font-normal normal-case tracking-normal text-muted-foreground">
+          ölçüldü / hesaplandı
+        </span>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
-          <div className="text-[9px] uppercase text-muted-foreground">Koyarsın</div>
+          <div className="text-[9px] uppercase text-muted-foreground">Tedarik</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {money(invest, { showUsd: false })}
+            {supplier !== null ? money(supplier, { showUsd: false }) : "Eşleşmedi"}
           </div>
-          <div className="text-[9px] text-muted-foreground">tedarik+kargo+reklam</div>
-        </div>
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2">
-          <div className="text-[9px] uppercase text-emerald-300/80">Kazanırsın</div>
-          <div className="text-xs font-bold text-emerald-300 mt-0.5">
-            {money(netPerUnit, { showUsd: false })} / adet
-          </div>
-          <div className="text-[9px] text-muted-foreground">
-            net marj {netMargin === null ? "—" : `%${netMargin.toFixed(0)}`}
-          </div>
+          <div className="text-[9px] text-muted-foreground">{supplierSub}</div>
         </div>
         <div className="rounded-lg bg-white/[0.04] border border-white/10 p-2">
-          <div className="text-[9px] uppercase text-muted-foreground">Başabaş</div>
+          <div className="text-[9px] uppercase text-muted-foreground">Kargo + komisyon + CAC</div>
           <div className="text-xs font-bold text-foreground mt-0.5">
-            {breakeven ? `${breakeven.toLocaleString("tr-TR")} adet` : "—"}
+            {operating !== null ? money(operating, { showUsd: false }) : "Ölçülmedi"}
           </div>
-          <div className="text-[9px] text-muted-foreground">ilk siparişler</div>
+          <div className="text-[9px] text-muted-foreground">
+            {modelRows > 0 ? "hesaplandı" : "ölçüldü"}
+          </div>
         </div>
+        <div
+          className={`rounded-lg border p-2 ${
+            net !== null && net < 0
+              ? "border-rose-500/20 bg-rose-500/10"
+              : "border-emerald-500/20 bg-emerald-500/10"
+          }`}
+        >
+          <div
+            className={`text-[9px] uppercase ${
+              net !== null && net < 0 ? "text-rose-300/80" : "text-emerald-300/80"
+            }`}
+          >
+            Net / adet
+          </div>
+          <div
+            className={`text-xs font-bold mt-0.5 ${
+              net !== null && net < 0 ? "text-rose-300" : "text-emerald-300"
+            }`}
+          >
+            {net !== null ? money(net, { showUsd: false }) : "Tedarik bekleniyor"}
+          </div>
+          <div className="text-[9px] text-muted-foreground">
+            {net === null
+              ? "toptan fiyat ölçülmedi"
+              : netMargin === null
+                ? "net marj hesaplanamadı"
+                : `net marj %${netMargin.toFixed(0)} · ${costs.netProfit.basis === "model" ? "hesaplandı" : "ölçüldü"}`}
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-white/10 pt-1.5 text-[10px] text-muted-foreground">
+        <span>
+          {supplier === null
+            ? "Net kâr, toptan fiyat ölçülene kadar hesaplanmaz. Kargo/komisyon/CAC modeli yine de gösterilir."
+            : modelRows > 0
+              ? "Kargo/komisyon/CAC yayınlanmış tarifelerden hesaplandı; tedarik ölçüldü."
+              : "Tüm maliyet kalemleri ölçüldü."}
+        </span>
+        {breakeven !== null && (
+          <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5">
+            Başabaş ~{breakeven.toLocaleString("tr-TR")} adet
+          </span>
+        )}
       </div>
     </div>
   );
@@ -290,16 +419,18 @@ function SevenDayPlan({ p }: { p: WinningProduct }) {
       if (days.length >= 4 || d > 7) break;
     }
   }
-  // FABRİKASYON YOK: eski kod, AI roadmap üretmemişse kendi kendine 7 günlük
-  // plan UYDURUYORDU ("$20 bütçe", "CTR ≥%1", "ROAS ≥2.2"). Ölçümlü
-  // keşif hattında bu blok uydurma sayılarla dolu bir ekran demekti. Artık
-  // yalnız model gerçekten yol haritası ürettiyse basılır.
+  // MODEL PLANI: eksikse `completeDeepDive` kaynak etiketli model planı üretir.
+  // Blokta "Model planı — ölçüm değil" notu gösterilir; sahte ölçüm sayısı
+  // yazılmaz. Tedarik/fiyat ölçülmemişse plan yine aksiyon verir, sayı uydurmaz.
   if (!days.length) return null;
   return (
     <div className="mt-3 rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.07] to-indigo-500/[0.06] p-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300 font-semibold mb-2">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-violet-300 font-semibold mb-1">
         <CalendarDays size={11} /> 7 günlük test planı — ilk hafta ne yaparsın
       </div>
+      <p className="mb-2 text-[9px] text-amber-200/70">
+        Model planı — ölçüm değil. Bütçe ve KPI değerleri ölçülmüş performans değildir.
+      </p>
       <div className="space-y-1.5">
         {days.slice(0, 3).map((d, i) => (
           <div
@@ -516,6 +647,9 @@ export function ProductCard({
         : "text-rose-400";
   const cb = p.cost_breakdown;
   const enriched = enrichProduct(p);
+  // Plan/projeksiyon bölümleri eksikse model çıktısıyla tamamlanır. Kartta
+  // yalnız plan gösteriminde kullanılır; ölçülmüş maliyet alanları değişmez.
+  const completed = useMemo(() => completeDeepDive(p), [p]);
   const { money, currency } = useMoney();
   const rec = recommendationStyle(enriched.recommendation);
   // GÖRSEL — DOĞRULANMIŞ fotoğraf ya da AÇIK "doğrulanamadı" durumu.
@@ -936,7 +1070,8 @@ export function ProductCard({
                   </span>
                 );
               }
-              return moneyOrDash(p.supplier_price_usd, money);
+              const text = moneyOrDash(p.supplier_price_usd, money);
+              return text === NOT_MEASURED ? "Eşleşmedi" : text;
             })()}
           </div>
           {supplierMatchKind(p.supplier_evidence) === "niche" && (
@@ -973,7 +1108,7 @@ export function ProductCard({
                 <div className="rounded-lg bg-white/05 border border-white/10 p-2">
                   <div className="text-[10px] uppercase text-muted-foreground">Margin</div>
                   <div className="text-xs font-semibold mt-0.5 text-muted-foreground">
-                    {niche ? "Ürün eşleşmedi" : NOT_MEASURED}
+                    {niche ? "Ürün eşleşmedi" : "Tedarik yok"}
                   </div>
                 </div>
               );
@@ -1009,7 +1144,7 @@ export function ProductCard({
 
       <SupplierEconomics p={p} />
 
-      <DollarGap p={p} />
+      <CostSummary p={p} />
       <div className="mt-3 flex items-center justify-center">
         {locked ? (
           <button
@@ -1133,7 +1268,7 @@ export function ProductCard({
         </div>
       )}
 
-      <SevenDayPlan p={p} />
+      <SevenDayPlan p={completed} />
       <button
         type="button"
         aria-expanded={detailsOpen}
@@ -1323,6 +1458,14 @@ export function ProductCard({
                 );
               })}
             </div>
+            {(() => {
+              const listed = p.competitor_prices ?? [];
+              const links = marketplaceSearchLinks(p.name).filter(
+                (link) =>
+                  !listed.some((cp) => cp.store.toLowerCase().includes(link.label.toLowerCase())),
+              );
+              return <SearchLinkRow label="Diğer pazaryerlerinde ara:" links={links} />;
+            })()}
           </div>
         )}
 
@@ -1369,7 +1512,7 @@ export function ProductCard({
           ))}
         </div>
 
-        <ProductDeepDive p={p} />
+        <ProductDeepDive p={completed} />
         <BuyerSimulation p={p} />
       </div>
 

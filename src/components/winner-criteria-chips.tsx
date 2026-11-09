@@ -18,6 +18,9 @@ export function WinnerCriteriaChips({
   className?: string;
 }) {
   const report = useMemo(() => winnerCriteria(input), [input]);
+  const missing = report.criteria
+    .filter((criterion) => criterion.status === "unmeasured")
+    .map((criterion) => criterion.label);
   const tone =
     report.verdict === "kanitli"
       ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
@@ -49,6 +52,14 @@ export function WinnerCriteriaChips({
           </span>
         ))}
       </div>
+      {missing.length > 0 && (
+        <p
+          className="mt-1 text-[9px] leading-tight text-muted-foreground/80"
+          title={report.summary}
+        >
+          Eksik: {missing.join(", ")} — ölçülmedi, 0 sayılmadı.
+        </p>
+      )}
     </div>
   );
 }

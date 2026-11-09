@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Download, FileDown, FileText, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
 import { num } from "@/lib/deep-dive-complete";
+import { buildProductCostBreakdown } from "@/lib/product-cost-breakdown";
 import { getBrandedItem, setBrandedItem } from "@/lib/brand-storage";
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -97,16 +98,27 @@ type SimRow = { month: string; units: number; revenue: number; ad: number; net: 
 
 export function useScenario(p: WinningProduct) {
   const base = useMemo(() => {
-    const sell = num(p.selling_price_usd, 29.9);
-    const cost = num(p.cost_breakdown?.supplier_cost ?? p.supplier_price_usd, sell * 0.3);
-    const ship = num(p.cost_breakdown?.shipping_cost, sell * 0.08);
-    const fee = num(p.cost_breakdown?.platform_fee, sell * 0.06);
+    // Simülasyonun maliyet kalemleri, kart/derin analizle AYNI kaynak
+    // etiketli modelden gelir. Eski kod tedarik yoksa `sell * 0.3` gibi
+    // sessiz varsayımlar kullanıyordu; artık modelin kendi supplier/shipping/
+    // platform/returns değerleri alınır ve blokta "ModelNote" gösterilir.
+    const costs = buildProductCostBreakdown(p);
+    const model = costs.model;
+    const sell = num(p.selling_price_usd);
+    const cost = costs.supplier.usd ?? model?.supplier ?? 0;
+    const ship = costs.shipping.usd ?? model?.shipping ?? 0;
+    const fee =
+      (costs.platformFee.usd ?? model?.platform_fee ?? 0) +
+      (model?.payment_fee ?? 0) +
+      (model?.returns_cost ?? 0) +
+      (model?.misc ?? 0);
+    const overhead = model?.monthly.overhead_usd ?? 0;
     const rows = (p.financial_projection ?? []).map((f, i) => ({
       month: f.month ?? `${i + 1}. Ay`,
       units: Number(f.units) || 0,
       ad: num(f.ad_spend_usd),
     }));
-    return { sell, cost, ship, fee, rows };
+    return { sell, cost, ship, fee, overhead, rows };
   }, [p]);
 
   const [priceMul, setPriceMul] = useState(1);
@@ -123,7 +135,7 @@ export function useScenario(p: WinningProduct) {
       units,
       revenue: units * price,
       ad,
-      net: units * (price - base.cost - base.ship - base.fee) - ad,
+      net: units * (price - base.cost - base.ship - base.fee) - ad - base.overhead,
     };
   });
 
@@ -278,10 +290,17 @@ function SimStat({
 
 function buildRows(p: WinningProduct): string[][] {
   const rows: string[][] = [["Bölüm", "Başlık", "Detay", "Ek"]];
+  // Dışa aktarılan raporda model planı/ölçüm ayrımı kaybolmasın.
+  rows.push([
+    "Kaynak notu",
+    "Plan ve projeksiyon",
+    "Lansman, içerik ve finansal projeksiyon bölümleri model çıktısıdır; ölçülmüş mağaza performansı değildir.",
+    "",
+  ]);
   rows.push(["Ürün", p.name ?? "", p.target_audience ?? "", p.selling_price_usd ?? ""]);
   (p.financial_projection ?? []).forEach((f) =>
     rows.push([
-      "Finansal projeksiyon",
+      "Finansal projeksiyon (model)",
       String(f.month ?? ""),
       `Adet: ${f.units} | Ciro: ${f.revenue_usd}`,
       `Reklam: ${f.ad_spend_usd} | Net: ${f.net_profit_usd}`,
@@ -289,18 +308,23 @@ function buildRows(p: WinningProduct): string[][] {
   );
   (p.launch_roadmap ?? []).forEach((ph) =>
     rows.push([
-      "Lansman planı",
+      "Lansman planı (model)",
       `${ph.phase} (${ph.days})`,
       (ph.actions ?? []).join(" • "),
       `Bütçe: ${ph.budget_usd} | KPI: ${ph.kpi}`,
     ]),
   );
   (p.content_calendar ?? []).forEach((w) =>
-    rows.push(["İçerik takvimi", `${w.week} — ${w.theme}`, (w.posts ?? []).join(" • "), ""]),
+    rows.push([
+      "İçerik takvimi (model)",
+      `${w.week} — ${w.theme}`,
+      (w.posts ?? []).join(" • "),
+      "",
+    ]),
   );
   (p.supplier_shortlist ?? []).forEach((s) =>
     rows.push([
-      "Tedarikçi",
+      "Tedarikçi (model)",
       s.name ?? "",
       `${s.region ?? ""} | MOQ ${s.moq ?? ""} | ${s.lead_time ?? ""}`,
       s.unit_price_usd ?? "",
@@ -352,7 +376,7 @@ table{width:100%;border-collapse:collapse;font-size:11px}
 th{text-align:left;background:#1b1f38;color:#b9b9d8;padding:6px 8px}
 td{padding:6px 8px;border-top:1px solid #262a45;vertical-align:top}
 tr:nth-child(even) td{background:#14172a}</style>
-<h1>${esc(p.name ?? "Ürün")} — 90 günlük strateji raporu</h1>
+<h1>${esc(p.name ?? "Ürün")} — 90 günlük model strateji raporu</h1>
 <h2>Aroless · ${new Date().toLocaleDateString("tr-TR")}</h2>
 <table><thead><tr>${rows[0]!.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
 <tbody>${rows
