@@ -71,6 +71,12 @@ export type SupplierOffer = {
   store: string;
   /** Ölçülen kargo çıkış ülkesi kodu (örn. "CN", "US"). Boş olabilir. */
   shipFrom: string;
+  /** Sayfadaki `delivery_info`dan ölçülen en hızlı teslimat (gün). */
+  deliveryMinDays: number | null;
+  /** Sayfadaki `delivery_info`dan ölçülen en yavaş teslimat (gün). */
+  deliveryMaxDays: number | null;
+  /** Kartta "Free shipping" etiketi varsa true; etiket yoksa null (bilinmiyor). */
+  freeShipping: boolean | null;
   url: string;
   imageUrl: string;
 };
@@ -137,6 +143,34 @@ function soldFromText(value: unknown): number | null {
 }
 
 /**
+ * `trace.utLogMap.delivery_info` → gerçek teslimat aralığı.
+ *
+ * Canlı biçim: `"5,11,2026-11-13,2026-11-19"` = en hızlı 5, en yavaş 11 gün.
+ * Boş `",,,"` ise ölçüm yoktur; `null` döner.
+ */
+function deliveryDaysOf(card: AeCard): { min: number | null; max: number | null } {
+  const raw = str(obj(obj(card.trace).utLogMap).delivery_info);
+  const parts = raw.split(",");
+  const min = Number(parts[0]);
+  const max = Number(parts[1]);
+  if (!Number.isFinite(min) || min <= 0) return { min: null, max: null };
+  return {
+    min: Math.round(min),
+    max: Number.isFinite(max) && max >= min ? Math.round(max) : Math.round(min),
+  };
+}
+
+/** Kartın `sellingPoints` etiketlerinde açık "Free shipping" var mı? */
+function freeShippingOf(card: AeCard): boolean | null {
+  const points = Array.isArray(card.sellingPoints) ? card.sellingPoints : [];
+  for (const point of points) {
+    const tag = str(obj(obj(point).tagContent).tagText);
+    if (/free\s+shipping/i.test(tag)) return true;
+  }
+  return null;
+}
+
+/**
  * Bir `itemList.content` kartını `SupplierOffer`'a indirger.
  *
  * `null`, kart gerçekten ölçülebilir başlık/fiyat taşımıyorsa döner; kart
@@ -159,6 +193,7 @@ function toOffer(card: unknown): SupplierOffer | null {
   const discount = num(sale.discount);
   const rating = num(obj(row.evaluation).starRating);
   const img = str(obj(row.image).imgUrl);
+  const delivery = deliveryDaysOf(row);
 
   return {
     title,
@@ -171,6 +206,9 @@ function toOffer(card: unknown): SupplierOffer | null {
     rating: rating !== null && rating > 0 && rating <= 5 ? rating : null,
     store: storeOf(row),
     shipFrom: shipFromOf(row),
+    deliveryMinDays: delivery.min,
+    deliveryMaxDays: delivery.max,
+    freeShipping: freeShippingOf(row),
     url: `https://www.aliexpress.com/item/${productId}.html`,
     imageUrl: img.startsWith("//") ? `https:${img}` : img,
   };

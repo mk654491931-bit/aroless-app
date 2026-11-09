@@ -466,13 +466,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Ce module est réservé à PRO",
     ar: "هذه الوحدة متاحة لـPRO فقط",
   },
-  "DEĞİLDİR: brütse açıkça": {
-    en: "IS NOT: if it is gross, explicitly",
-    es: "NO ES: si es bruto, se indica",
-    de: "IST NICHT: wenn brutto, dann ausdrücklich",
-    fr: "N'EST PAS : si brut, clairement indiqué",
-    ar: "ليس: وإن كان إجماليًا فيُذكر صراحة",
-  },
   "Arkadaşını davet et": {
     en: "Invite a friend",
     es: "Invita a un amigo",

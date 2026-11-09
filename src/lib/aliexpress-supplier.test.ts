@@ -48,8 +48,18 @@ const LIVE_CARD = {
       p4pExtendParam:
         '{"company_name":"\\u6613\\u9060\\u9054\\u8cbf\\u6613\\u6709\\u9650\\u516c\\u53f8","store_name":"PETRAEL Local Store"}',
     },
-    utLogMap: { real_trade_count: "695", formatted_price: "US $26.36" },
+    utLogMap: {
+      real_trade_count: "695",
+      formatted_price: "US $26.36",
+      delivery_info: "5,11,2026-11-13,2026-11-19",
+    },
   },
+  sellingPoints: [
+    {
+      tagContent: { displayTagType: "text", tagText: "Free shipping" },
+      source: "Free_Shipping_atm",
+    },
+  ],
 };
 
 /**
@@ -76,6 +86,9 @@ describe("extractSupplierOffers — canlı yapı", () => {
     expect(offer!.rating).toBe(4.9);
     expect(offer!.store).toBe("PETRAEL Local Store");
     expect(offer!.shipFrom).toBe("US");
+    expect(offer!.deliveryMinDays).toBe(5);
+    expect(offer!.deliveryMaxDays).toBe(11);
+    expect(offer!.freeShipping).toBe(true);
     expect(offer!.url).toBe("https://www.aliexpress.com/item/3256809985321027.html");
     expect(offer!.imageUrl.startsWith("https://")).toBe(true);
   });
@@ -95,6 +108,21 @@ describe("extractSupplierOffers — canlı yapı", () => {
     };
     const [offer] = extractSupplierOffers(page([card]));
     expect(offer!.sold).toBeNull();
+  });
+
+  it("teslimat etiketi yoksa gün/ücretsiz kargo UYDURMAZ", () => {
+    const card = {
+      ...LIVE_CARD,
+      sellingPoints: [],
+      trace: {
+        ...LIVE_CARD.trace,
+        utLogMap: { ...LIVE_CARD.trace.utLogMap, delivery_info: ",,," },
+      },
+    };
+    const [offer] = extractSupplierOffers(page([card]));
+    expect(offer!.deliveryMinDays).toBeNull();
+    expect(offer!.deliveryMaxDays).toBeNull();
+    expect(offer!.freeShipping).toBeNull();
   });
 
   it("USD olmayan fiyatı ÖLÇÜM saymaz", () => {

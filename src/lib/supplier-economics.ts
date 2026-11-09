@@ -39,6 +39,11 @@ export type SupplierOfferLike = {
   rating: number | null;
   store: string;
   shipFrom: string;
+  /** Teklifin sayfasında ölçülen teslimat aralığı (gün). Yoksa null. */
+  deliveryMinDays?: number | null;
+  deliveryMaxDays?: number | null;
+  /** Teklifte "ücretsiz kargo" etiketi ölçüldüyse true; bilinmiyorsa null. */
+  freeShipping?: boolean | null;
   url: string;
   /**
    * FOB ARALIĞININ ÜST UCU (varsa). Toptan ilanlarda fiyat miktar kademesine
@@ -373,6 +378,16 @@ export const SupplierEvidenceSchema = z.object({
    */
   moqUnits: z.number().int().min(1).nullable().optional().catch(null),
   moqUnit: z.string().optional().catch(""),
+  /**
+   * TESLİMAT KANITI — teklif kartında ölçüldüyse taşınır.
+   *
+   * AliExpress kartı `delivery_info` alanı ve "Free shipping" etiketi
+   * yayınlıyor; bunlar ürün sayfasından değil teklif kartından okunan gerçek
+   * değerlerdir. Yoksa `null` kalır, tahmin edilmez.
+   */
+  freeShipping: z.boolean().nullable().optional().catch(null),
+  deliveryMinDays: z.number().int().min(0).nullable().optional().catch(null),
+  deliveryMaxDays: z.number().int().min(0).nullable().optional().catch(null),
 });
 
 /**
@@ -397,6 +412,9 @@ export function emptySupplierEvidence(): SupplierEvidence {
     soldMax: null,
     store: "",
     shipFrom: "",
+    freeShipping: null,
+    deliveryMinDays: null,
+    deliveryMaxDays: null,
     url: "",
   };
 }
@@ -816,6 +834,13 @@ function buildEvidenceFromPool(
     // `""` döner, birleşik havuzdaki MIC tedarikçi adı kullanılmadan kaybolurdu.
     store: topSold?.store || bestOffer.store || "",
     shipFrom: topSold?.shipFrom || bestOffer.shipFrom,
+    // TESLİMAT: en alakalı teklifin ölçülen aralığı. Havuzdaki başka bir
+    // teklif daha hızlı olsa bile bu ürünle eşleşen teklifin değeri gösterilir.
+    freeShipping: bestOffer.freeShipping === true ? true : null,
+    deliveryMinDays:
+      typeof bestOffer.deliveryMinDays === "number" ? bestOffer.deliveryMinDays : null,
+    deliveryMaxDays:
+      typeof bestOffer.deliveryMaxDays === "number" ? bestOffer.deliveryMaxDays : null,
     url: bestOffer.url,
   };
 }

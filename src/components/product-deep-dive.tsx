@@ -31,8 +31,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { WinningProduct } from "@/lib/gemini.functions";
-import { marginLabel, measuredGrossMarginPct, measuredMoney } from "@/lib/economics-evidence";
 import { supplierMatchKind } from "@/lib/supplier-economics";
+import { buildProductCostBreakdown, type CostValue } from "@/lib/product-cost-breakdown";
 import { num } from "@/lib/deep-dive-complete";
 import {
   CheckItem,
@@ -117,6 +117,28 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
+/** Maliyet hücresi: değeri ve "ölçüldü / hesaplandı" kaynağını birlikte gösterir. */
+function CostCell({ row }: { row: CostValue }) {
+  if (row.usd === null) {
+    return <span className="text-[10px] text-muted-foreground">{row.source}</span>;
+  }
+  const title = [row.source, row.detail].filter(Boolean).join(" · ");
+  return (
+    <span className="inline-flex items-center justify-end gap-1" title={title}>
+      ${row.usd.toFixed(2)}
+      <span
+        className={`rounded-full border px-1 py-0 text-[8px] font-normal ${
+          row.basis === "measured"
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300/80"
+            : "border-amber-500/30 bg-amber-500/10 text-amber-200/80"
+        }`}
+      >
+        {row.basis === "measured" ? "ölçüldü" : "hesaplandı"}
+      </span>
+    </span>
+  );
+}
+
 /**
  * Modelin ürettiği sayı/plan bölümleri için DÜRÜSTLÜK ETİKETİ.
  *
@@ -166,43 +188,64 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
   const supplierName = hasSupplierEvidence
     ? supplierMatched
       ? supplier?.store || "Ölçülen toptan teklif"
-      : "Niş bandı (ürün eşleşmedi)"
-    : (p.supplier_shortlist?.[0]?.name ?? "Ölçülmedi");
+      : supplierBand
+        ? `Niş bandı ${supplierBand}`
+        : "Niş bandı (birebir eşleşme yok)"
+    : p.supplier_shortlist?.[0]?.name
+      ? `${p.supplier_shortlist[0].name} · model önerisi`
+      : "Tedarik teklifi eşleşmedi";
   const supplierSub = hasSupplierEvidence
     ? [
         supplierMatched && supplier?.shipFrom ? `Kargo çıkışı ${supplier.shipFrom}` : "",
+        supplierMatched && supplier?.freeShipping ? "ücretsiz kargo" : "",
+        supplierMatched &&
+        typeof supplier?.deliveryMinDays === "number" &&
+        typeof supplier?.deliveryMaxDays === "number"
+          ? `teslimat ${supplier.deliveryMinDays}-${supplier.deliveryMaxDays} gün`
+          : "",
         `${supplier?.samples ?? 0} toptan teklif`,
         supplierMatched ? "birebir ürün" : "aynı niş",
       ]
         .filter(Boolean)
         .join(" · ")
-    : (p.supplier_shortlist?.[0]?.region ?? p.sourcing?.shipping_method ?? "Kaynak doğrulamadı");
-  const deliveryMain =
-    p.sourcing?.lead_time_days || p.supplier_shortlist?.[0]?.lead_time
-      ? trDuration(p.sourcing?.lead_time_days ?? p.supplier_shortlist?.[0]?.lead_time)
-      : supplier?.shipFrom
-        ? `Kargo çıkışı: ${supplier.shipFrom}`
-        : "Kaynakta yok";
-  const deliverySub = p.sourcing?.shipping_method
-    ? `${p.sourcing.shipping_method} · ölçüldü`
-    : supplier?.shipFrom
-      ? "Süre kaynakta yayınlanmıyor"
-      : "Teslimat süresi ölçülmedi";
+    : (p.supplier_shortlist?.[0]?.region ??
+      (p.sourcing?.shipping_method
+        ? `${p.sourcing.shipping_method} · model`
+        : "Canlı toptan kaynakta eşleşme yok"));
+
+  // MALİYET DÖKÜMÜ: ölçülmüş değer varsa o; yoksa platform/ülke
+  // tarifelerinden hesaplanmış değer. Boş bırakmak yerine kaynağı görünen
+  // bir sayı gösterilir.
+  const costs = buildProductCostBreakdown(p);
+  const allCostsMeasured =
+    [costs.supplier, costs.shipping, costs.platformFee, costs.adSpend, costs.netProfit].every(
+      (row) => row.basis === "measured",
+    ) &&
+    (costs.delivery === null || costs.delivery.basis === "measured");
   const channel = p.platform_fit?.[0];
-  const sellUsd = measuredMoney(p.selling_price_usd);
-  const supplierCostUsd =
-    measuredMoney(p.cost_breakdown?.supplier_cost) ?? measuredMoney(p.supplier_price_usd);
-  const grossProfitUsd =
-    sellUsd !== null && supplierCostUsd !== null && sellUsd > supplierCostUsd
-      ? Math.round((sellUsd - supplierCostUsd) * 100) / 100
-      : measuredMoney(p.fee_budget_usd);
-  const netProfitUsd = measuredMoney(p.cost_breakdown?.net_profit);
-  const hasNetProfit = netProfitUsd !== null;
-  const grossMarginPct =
-    measuredGrossMarginPct(p) ??
-    (sellUsd !== null && supplierCostUsd !== null && sellUsd > supplierCostUsd
-      ? Math.round(((sellUsd - supplierCostUsd) / sellUsd) * 1000) / 10
-      : null);
+  const grossProfitUsd = costs.grossProfit.usd;
+  const netProfitUsd = costs.netProfit.usd;
+  const netMeasured = costs.netProfit.basis === "measured";
+  const grossMarginPct = costs.grossMarginPct;
+  const netMarginPct = costs.netMarginPct;
+  const deliveryMain = costs.delivery
+    ? costs.delivery.min === costs.delivery.max
+      ? `${costs.delivery.min} gün`
+      : `${costs.delivery.min}–${costs.delivery.max} gün`
+    : p.supplier_shortlist?.[0]?.lead_time
+      ? trDuration(p.supplier_shortlist[0].lead_time)
+      : supplier?.shipFrom
+        ? `Kargo çıkışı ${supplier.shipFrom}`
+        : "Platform bilgisi yok";
+  const deliverySub = costs.delivery
+    ? costs.delivery.basis === "measured"
+      ? `${p.sourcing?.shipping_method || costs.delivery.source} · ölçüldü`
+      : `${costs.delivery.source}${
+          supplier?.shipFrom ? ` · tedarikçi çıkışı ${supplier.shipFrom}` : ""
+        }`
+    : supplier?.shipFrom
+      ? `Kargo çıkışı ${supplier.shipFrom}`
+      : "Platform teslimat bilgisi yok";
 
   return (
     <div className="mt-3 space-y-2">
@@ -316,22 +359,21 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
               <DollarSign size={10} /> Adet başı kâr
             </div>
             <div className="mt-1 font-semibold text-emerald-300">
-              {hasNetProfit
-                ? `$${netProfitUsd!.toFixed(2)}`
+              {netProfitUsd !== null
+                ? `$${netProfitUsd.toFixed(2)}`
                 : grossProfitUsd !== null
                   ? `$${grossProfitUsd.toFixed(2)}`
-                  : "Ölçülmedi"}
+                  : "Tedarik eşleşmedi"}
             </div>
-            {/* Ölçülmemiş marj "%0" DEĞİLDİR: brütse açıkça "brüt" etiketiyle,
-                hiç ölçülmediyse "Ölçülmedi" gösterilir (0 ile 97'nin çelişmesi
-                buradan geliyordu). Net kâr yoksa brüt kâr gösterilir ve etiketi
-                bunu saklamaz. */}
+            {/* Ölçülmemiş marj "%0" DEĞİLDİR: net/brüt ayrımı açıkça yazılır.
+                Net kâr hesabı modelle yapıldıysa "hesaplandı" denir; ölçüm
+                gibi gösterilmez. */}
             <div className="text-[10px] text-muted-foreground">
-              {hasNetProfit
-                ? `Net marj ${marginLabel(p, "Ölçülmedi")}`
+              {netProfitUsd !== null
+                ? `Net marj %${netMarginPct ?? 0}${netMeasured ? "" : " · hesaplandı"}`
                 : grossProfitUsd !== null && grossMarginPct !== null
                   ? `Brüt marj %${grossMarginPct}`
-                  : "Marj ölçülmedi"}
+                  : costs.netProfit.source}
             </div>
           </div>
           <div className="rounded-md border border-teal-500/30 bg-teal-500/[0.06] p-2 col-span-2">
@@ -366,11 +408,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Package size={10} /> Tedarik maliyeti
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {supplierCostUsd !== null
-                    ? `$${supplierCostUsd.toFixed(2)}`
-                    : hasSupplierEvidence
-                      ? "Ürün eşleşmedi"
-                      : "Ölçülmedi"}
+                  <CostCell row={costs.supplier} />
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -378,11 +416,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Truck size={10} /> Kargo
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.shipping_cost) === null ? (
-                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
-                  ) : (
-                    p.cost_breakdown?.shipping_cost
-                  )}
+                  <CostCell row={costs.shipping} />
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -390,11 +424,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Store size={10} /> Platform komisyonu
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.platform_fee) === null ? (
-                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
-                  ) : (
-                    p.cost_breakdown?.platform_fee
-                  )}
+                  <CostCell row={costs.platformFee} />
                 </td>
               </tr>
               <tr className="border-b border-white/5">
@@ -402,11 +432,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <Clapperboard size={10} /> Reklam gideri / CAC
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
-                  {measuredMoney(p.cost_breakdown?.ad_spend) === null ? (
-                    <span title="Kaynak bu alanı yayınlamıyor; tahmin edilmedi">Kaynakta yok</span>
-                  ) : (
-                    p.cost_breakdown?.ad_spend
-                  )}
+                  <CostCell row={costs.adSpend} />
                 </td>
               </tr>
               <tr className="border-b border-white/5 bg-white/[0.02]">
@@ -415,7 +441,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                 </td>
                 <td className="px-2 py-1.5 text-right font-semibold">{p.selling_price_usd}</td>
               </tr>
-              {grossProfitUsd !== null && !hasNetProfit && (
+              {grossProfitUsd !== null && (
                 <tr className="border-b border-white/5">
                   <td className="px-2 py-1.5 font-semibold text-emerald-300 flex items-center gap-1.5">
                     <DollarSign size={10} /> Brüt kâr / adet
@@ -423,7 +449,7 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <td className="px-2 py-1.5 text-right font-semibold text-emerald-300">
                     ${grossProfitUsd.toFixed(2)}{" "}
                     <span className="text-[10px] font-normal opacity-80">
-                      ({marginLabel(p, "Ölçülmedi")})
+                      ({grossMarginPct !== null ? `%${grossMarginPct} brüt` : "kargo öncesi"})
                     </span>
                   </td>
                 </tr>
@@ -433,16 +459,25 @@ export function ProductDeepDive({ p: raw }: { p: WinningProduct }) {
                   <DollarSign size={10} /> Net kâr / adet
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-emerald-300">
-                  {hasNetProfit ? `$${netProfitUsd!.toFixed(2)}` : "Ölçülmedi"}{" "}
+                  {netProfitUsd !== null ? `$${netProfitUsd.toFixed(2)}` : "Tedarik eşleşmedi"}{" "}
                   <span className="text-[10px] font-normal opacity-80">
                     (
-                    {hasNetProfit ? marginLabel(p, "Ölçülmedi") : "kargo/komisyon/CAC kaynakta yok"}
+                    {netProfitUsd !== null
+                      ? `net marj %${netMarginPct ?? 0}${netMeasured ? "" : " · hesaplandı"}`
+                      : costs.netProfit.source}
                     )
                   </span>
                 </td>
               </tr>
             </tbody>
           </table>
+          <div className="border-t border-white/5 px-2 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
+            Ölçülen kalemler “ölçüldü”, türetilen kalemler “hesaplandı” rozetiyle işaretlenir.
+            Hesaplanan kargo/komisyon/CAC; ülke kargo benchmark’ı, platform komisyon tarifesi ve
+            pazaryeri TACoS/CPC modeline dayanır; yayınlanmış tarifelerin ürün fiyatına uygulanmış
+            hâlidir.
+            {allCostsMeasured ? " Tüm kalemler doğrudan ürün kaynağından ölçüldü." : ""}
+          </div>
         </div>
 
         {p.unit_economics && (

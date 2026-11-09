@@ -174,6 +174,16 @@ describe("buildSupplierEvidence", () => {
     );
   });
 
+  it("teklifte ölçülen ücretsiz kargo ve teslimat aralığını kanıta taşır", () => {
+    const evidence = buildSupplierEvidence(
+      { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
+      [offer({ freeShipping: true, deliveryMinDays: 5, deliveryMaxDays: 11 })],
+    );
+    expect(evidence.freeShipping).toBe(true);
+    expect(evidence.deliveryMinDays).toBe(5);
+    expect(evidence.deliveryMaxDays).toBe(11);
+  });
+
   it("satış adedi ölçülmemişse null kalır", () => {
     const evidence = buildSupplierEvidence(
       { name: "Cat Tree with Scratching Post", priceUsd: 97.99 },
