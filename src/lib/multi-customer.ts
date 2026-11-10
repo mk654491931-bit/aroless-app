@@ -60,6 +60,16 @@ export type MultiCustomerProduct = {
   source?: string;
 };
 
+/** Baz üründen yalnızca test edilen sinyalleri değiştiren what-if katmanı. */
+export type MultiCustomerScenario = {
+  sellingPriceUsd?: number | null;
+  rating?: number | null;
+  ratingCount?: number | null;
+  platform?: string;
+  competitionLevel?: string | null;
+  trendScore?: number | null;
+};
+
 export type PersonaFactor = {
   label: string;
   delta: number;
@@ -150,6 +160,26 @@ export type MultiCustomerResult = {
   buyerExamples: Persona[];
   nonBuyerExamples: Persona[];
   narrative: string;
+};
+
+export type ScenarioSegmentDelta = {
+  label: string;
+  total: number;
+  baselineBuyers: number;
+  scenarioBuyers: number;
+  buyersDelta: number;
+  baselineRatePct: number;
+  scenarioRatePct: number;
+  rateDeltaPct: number;
+};
+
+export type MultiCustomerComparison = {
+  buyersDelta: number;
+  nonBuyersDelta: number;
+  penetrationDeltaPct: number;
+  gainedPersonas: Persona[];
+  lostPersonas: Persona[];
+  segmentDeltas: ScenarioSegmentDelta[];
 };
 
 export type DistributionKey =
@@ -495,6 +525,21 @@ function competitionScoreFor(level?: string | null): number {
   return 50;
 }
 
+/** Baz ürünü bozmadan senaryo sinyallerini uygular. */
+export function applyMultiCustomerScenario(
+  product: MultiCustomerProduct,
+  scenario: MultiCustomerScenario,
+): MultiCustomerProduct {
+  const next: MultiCustomerProduct = { ...product };
+  if (scenario.sellingPriceUsd !== undefined) next.sellingPriceUsd = scenario.sellingPriceUsd;
+  if (scenario.rating !== undefined) next.rating = scenario.rating;
+  if (scenario.ratingCount !== undefined) next.ratingCount = scenario.ratingCount;
+  if (scenario.platform !== undefined) next.platform = scenario.platform;
+  if (scenario.competitionLevel !== undefined) next.competitionLevel = scenario.competitionLevel;
+  if (scenario.trendScore !== undefined) next.trendScore = scenario.trendScore;
+  return next;
+}
+
 export function buildProductProfile(product: MultiCustomerProduct): ProductProfile {
   const price =
     typeof product.sellingPriceUsd === "number" &&
@@ -780,7 +825,9 @@ function evaluatePersona(
 
 export function generatePersonas(product: MultiCustomerProduct): Persona[] {
   const profile = buildProductProfile(product);
-  const random = mulberry32(hashString(`${product.name}|${product.sellingPriceUsd ?? ""}`));
+  // Panel kimliği ürünün kimliğine bağlıdır; fiyat/puan senaryosu karakterleri
+  // değiştirmemeli. Aksi halde iki senaryo farklı insanları karşılaştırırdı.
+  const random = mulberry32(hashString(`${product.name}|${product.source ?? ""}`));
   const ages = fillAges(random);
   const styles = fillBag(DECISION_STYLES, random);
   const incomes = fillBag(INCOME_BANDS, random);
@@ -920,9 +967,13 @@ function diverseExamples(personas: Persona[], buy: boolean, limit = 6): Persona[
   return result;
 }
 
-export function simulateMultiCustomer(product: MultiCustomerProduct): MultiCustomerResult {
-  const profile = buildProductProfile(product);
-  const personas = generatePersonas(product);
+export function simulateMultiCustomer(
+  product: MultiCustomerProduct,
+  scenario?: MultiCustomerScenario,
+): MultiCustomerResult {
+  const effectiveProduct = scenario ? applyMultiCustomerScenario(product, scenario) : product;
+  const profile = buildProductProfile(effectiveProduct);
+  const personas = generatePersonas(effectiveProduct);
   const buyers = personas.filter((persona) => persona.buy).length;
   const nonBuyers = personas.length - buyers;
   const penetrationPct = (buyers / personas.length) * 100;
@@ -990,6 +1041,53 @@ export function simulateMultiCustomer(product: MultiCustomerProduct): MultiCusto
     buyerExamples: diverseExamples(personas, true),
     nonBuyerExamples: diverseExamples(personas, false),
     narrative,
+  };
+}
+
+/** İki aynı panelin (baz vs senaryo) kazanan/kaybedenlerini ve segment farkını çıkarır. */
+export function compareMultiCustomerResults(
+  baseline: MultiCustomerResult,
+  scenario: MultiCustomerResult,
+): MultiCustomerComparison {
+  const baselineById = new Map(baseline.personas.map((persona) => [persona.id, persona]));
+  const gainedPersonas = scenario.personas.filter(
+    (persona) => persona.buy && !baselineById.get(persona.id)?.buy,
+  );
+  const lostPersonas = scenario.personas.filter(
+    (persona) => !persona.buy && baselineById.get(persona.id)?.buy,
+  );
+  const baselineSegments = new Map(
+    baseline.distributions.decisionStyle.map((row) => [row.label, row]),
+  );
+  const segmentDeltas = scenario.distributions.decisionStyle
+    .map((row) => {
+      const baseRow = baselineSegments.get(row.label);
+      const baselineBuyers = baseRow?.buyers ?? 0;
+      return {
+        label: row.label,
+        total: row.total,
+        baselineBuyers,
+        scenarioBuyers: row.buyers,
+        buyersDelta: row.buyers - baselineBuyers,
+        baselineRatePct: baseRow?.ratePct ?? 0,
+        scenarioRatePct: row.ratePct,
+        rateDeltaPct: row.ratePct - (baseRow?.ratePct ?? 0),
+      };
+    })
+    .sort(
+      (a, b) =>
+        Math.abs(b.buyersDelta) - Math.abs(a.buyersDelta) ||
+        Math.abs(b.rateDeltaPct) - Math.abs(a.rateDeltaPct) ||
+        a.label.localeCompare(b.label, "tr"),
+    );
+
+  return {
+    buyersDelta: scenario.buyers - baseline.buyers,
+    nonBuyersDelta: scenario.nonBuyers - baseline.nonBuyers,
+    penetrationDeltaPct: scenario.penetrationPct - baseline.penetrationPct,
+    gainedPersonas,
+    lostPersonas,
+    segmentDeltas,
   };
 }
 

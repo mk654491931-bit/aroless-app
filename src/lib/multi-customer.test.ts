@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DISTRIBUTION_DIMENSIONS,
   PANEL_SIZE,
+  applyMultiCustomerScenario,
   buildProductProfile,
+  compareMultiCustomerResults,
   distribution,
   generatePersonas,
   simulateMultiCustomer,
@@ -102,6 +104,42 @@ describe("multi-customer simulation", () => {
       expect(row.total).toBe(row.buyers + row.nonBuyers);
       expect(row.ratePct).toBeCloseTo((row.buyers / row.total) * 100, 5);
     }
+  });
+
+  it("senaryo aynı 1.000 kişiyi kullanır ve fiyat etkisini ölçer", () => {
+    const baseline = simulateMultiCustomer(strongProduct);
+    const scenario = simulateMultiCustomer(strongProduct, { sellingPriceUsd: 19.9 });
+
+    expect(scenario.personas.map((persona) => persona.id)).toEqual(
+      baseline.personas.map((persona) => persona.id),
+    );
+    expect(scenario.personas.map((persona) => persona.incomeBand)).toEqual(
+      baseline.personas.map((persona) => persona.incomeBand),
+    );
+    expect(scenario.buyers).toBeGreaterThan(baseline.buyers);
+
+    const comparison = compareMultiCustomerResults(baseline, scenario);
+    expect(comparison.buyersDelta).toBe(scenario.buyers - baseline.buyers);
+    expect(comparison.gainedPersonas.length - comparison.lostPersonas.length).toBe(
+      comparison.buyersDelta,
+    );
+    expect(comparison.gainedPersonas.every((persona) => persona.buy)).toBe(true);
+    expect(comparison.lostPersonas.every((persona) => !persona.buy)).toBe(true);
+    expect(comparison.segmentDeltas.reduce((sum, row) => sum + row.buyersDelta, 0)).toBe(
+      comparison.buyersDelta,
+    );
+  });
+
+  it("senaryo yalnızca verilen sinyali değiştirir", () => {
+    const merged = applyMultiCustomerScenario(strongProduct, { rating: 4.9 });
+    expect(merged.rating).toBe(4.9);
+    expect(merged.sellingPriceUsd).toBe(strongProduct.sellingPriceUsd);
+    expect(merged.platform).toBe(strongProduct.platform);
+    expect(merged.ratingCount).toBe(strongProduct.ratingCount);
+
+    const cleared = applyMultiCustomerScenario(strongProduct, { sellingPriceUsd: null });
+    expect(cleared.sellingPriceUsd).toBeNull();
+    expect(cleared.rating).toBe(strongProduct.rating);
   });
 
   it("Ürün Bulucu kartını köprüye taşırken ölçülmeyen alanları uydurmaz", () => {

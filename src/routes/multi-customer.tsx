@@ -12,6 +12,7 @@ import {
   Download,
   ExternalLink,
   Filter,
+  FlaskConical,
   Loader2,
   RefreshCw,
   Search,
@@ -27,9 +28,13 @@ import { Badge } from "@/components/ui/badge";
 import { CreditCost } from "@/components/credit-cost";
 import {
   DISTRIBUTION_DIMENSIONS,
+  compareMultiCustomerResults,
   simulateMultiCustomer,
+  type Channel,
   type DistributionRow,
+  type MultiCustomerComparison,
   type MultiCustomerResult,
+  type MultiCustomerScenario,
   type Persona,
 } from "@/lib/multi-customer";
 import {
@@ -85,6 +90,305 @@ function Kpi({
       <div className={`mt-1 text-2xl font-black tabular-nums ${tone}`}>{value}</div>
       {hint && <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{hint}</div>}
     </div>
+  );
+}
+
+const SCENARIO_CHANNELS: Channel[] = ["TikTok", "Instagram", "YouTube", "Amazon", "Etsy", "Google"];
+
+function DeltaStat({
+  label,
+  before,
+  after,
+  delta,
+  positive,
+}: {
+  label: string;
+  before: string;
+  after: string;
+  delta: string;
+  positive: boolean | null;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-1.5">
+        <span className="text-sm text-muted-foreground line-through">{before}</span>
+        <span className="text-lg font-black tabular-nums">{after}</span>
+        <span
+          className={`text-[10px] font-bold ${
+            positive === null
+              ? "text-muted-foreground"
+              : positive
+                ? "text-emerald-300"
+                : "text-rose-300"
+          }`}
+        >
+          {delta}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ScenarioLab({
+  baseline,
+  active,
+  result,
+  comparison,
+  onChange,
+}: {
+  baseline: MultiCustomerResult;
+  active: MultiCustomerScenario | null;
+  result: MultiCustomerResult;
+  comparison: MultiCustomerComparison | null;
+  onChange: (scenario: MultiCustomerScenario | null) => void;
+}) {
+  const basePrice = baseline.product.priceUsd;
+  const price = typeof active?.sellingPriceUsd === "number" ? active.sellingPriceUsd : basePrice;
+  const priceValue = price ?? 30;
+  const priceMax = Math.max(100, Math.ceil((basePrice ?? priceValue) * 2));
+  const rating = active?.rating !== undefined ? active.rating : baseline.product.rating;
+  const ratingValue = rating ?? 4.5;
+  const platform = active?.platform ?? baseline.product.platformChannel ?? "";
+  const hasActive = active !== null;
+
+  const patch = (next: MultiCustomerScenario) => onChange({ ...(active ?? {}), ...next });
+
+  const setPlatform = (value: string) => {
+    const next: MultiCustomerScenario = { ...(active ?? {}) };
+    if (value) next.platform = value;
+    else delete next.platform;
+    onChange(Object.keys(next).length > 0 ? next : null);
+  };
+
+  const winners = comparison?.segmentDeltas
+    .filter((segment) => segment.buyersDelta > 0)
+    .slice(0, 2);
+  const losers = comparison?.segmentDeltas.filter((segment) => segment.buyersDelta < 0).slice(0, 2);
+
+  return (
+    <section className="premium-card mb-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold">
+            <FlaskConical size={15} className="text-[var(--accent-active)]" /> What-if laboratuvarı
+          </h2>
+          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
+            Fiyatı, puanı veya keşif kanalını değiştir; aynı 1.000 karakter anında yeniden karar
+            verir. Amaç tahmin değil, hangi kolun kaç kişiyi çevirdiğini görmek.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={`text-[9px] ${
+              hasActive
+                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-300"
+                : "border-white/15 bg-white/5 text-muted-foreground"
+            }`}
+          >
+            {hasActive ? "Senaryo aktif" : "Baz senaryo"}
+          </Badge>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[10px]"
+            onClick={() => onChange(null)}
+            disabled={!hasActive}
+          >
+            <RefreshCw size={11} /> Baza dön
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+          <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span>Fiyat</span>
+            <span className="normal-case tracking-normal text-muted-foreground/80">
+              Baz: {basePrice !== null ? `$${basePrice.toFixed(2)}` : "ölçülmedi"}
+            </span>
+          </div>
+          <div className="mt-1 text-lg font-black tabular-nums">${priceValue.toFixed(2)}</div>
+          <input
+            type="range"
+            min={1}
+            max={priceMax}
+            step={1}
+            value={priceValue}
+            onChange={(event) => patch({ sellingPriceUsd: Number(event.target.value) })}
+            className="mt-1 w-full accent-[var(--accent-active)]"
+            aria-label="Senaryo fiyatı"
+          />
+          <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+            <span>$1</span>
+            <span>${priceMax}</span>
+          </div>
+          {basePrice !== null && (
+            <button
+              type="button"
+              onClick={() => patch({ sellingPriceUsd: Number((basePrice * 0.9).toFixed(2)) })}
+              className="mt-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] hover:bg-white/10"
+            >
+              −%10 fiyat
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+          <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span>Puan</span>
+            <span className="normal-case tracking-normal text-muted-foreground/80">
+              Baz:{" "}
+              {baseline.product.rating !== null ? baseline.product.rating.toFixed(1) : "ölçülmedi"}
+            </span>
+          </div>
+          <div className="mt-1 text-lg font-black tabular-nums">{ratingValue.toFixed(1)}</div>
+          <input
+            type="range"
+            min={1}
+            max={5}
+            step={0.1}
+            value={ratingValue}
+            onChange={(event) => patch({ rating: Number(event.target.value) })}
+            className="mt-1 w-full accent-[var(--accent-active)]"
+            aria-label="Senaryo ürün puanı"
+          />
+          <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+            <span>1.0</span>
+            <span>5.0</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => patch({ rating: 4.7 })}
+            className="mt-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] hover:bg-white/10"
+          >
+            4.7 puan
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Keşif kanalı
+          </div>
+          <div className="mt-1 text-sm font-bold">{platform || "Ölçülmedi / baz kanal"}</div>
+          <select
+            value={platform}
+            onChange={(event) => setPlatform(event.target.value)}
+            className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] outline-none focus:border-[var(--accent-active)]"
+          >
+            <option value="" className="bg-[oklch(0.20_0.035_255)]">
+              Baz / ölçülmedi
+            </option>
+            {SCENARIO_CHANNELS.map((channel) => (
+              <option key={channel} value={channel} className="bg-[oklch(0.20_0.035_255)]">
+                {channel}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setPlatform("TikTok")}
+            className="mt-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] hover:bg-white/10"
+          >
+            TikTok'ta dene
+          </button>
+        </div>
+      </div>
+
+      {comparison ? (
+        <div className="mt-3 rounded-xl border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/[0.045] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-active)]">
+              Baz → senaryo farkı
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              {comparison.gainedPersonas.length + comparison.lostPersonas.length} kişi karar
+              değiştirdi · aynı panel
+            </span>
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <DeltaStat
+              label="Alıcı"
+              before={String(baseline.buyers)}
+              after={String(result.buyers)}
+              delta={`${comparison.buyersDelta >= 0 ? "+" : ""}${comparison.buyersDelta}`}
+              positive={comparison.buyersDelta === 0 ? null : comparison.buyersDelta > 0}
+            />
+            <DeltaStat
+              label="Penetrasyon"
+              before={fmtPct(baseline.penetrationPct)}
+              after={fmtPct(result.penetrationPct)}
+              delta={`${comparison.penetrationDeltaPct >= 0 ? "+" : ""}${comparison.penetrationDeltaPct.toFixed(1)} puan`}
+              positive={
+                comparison.penetrationDeltaPct === 0 ? null : comparison.penetrationDeltaPct > 0
+              }
+            />
+            <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Karar değiştiren
+              </div>
+              <div className="mt-1 flex flex-wrap items-baseline gap-1.5">
+                <span className="text-lg font-black tabular-nums text-emerald-300">
+                  +{comparison.gainedPersonas.length}
+                </span>
+                <span className="text-[10px] text-muted-foreground">kazanan</span>
+                <span className="text-sm text-muted-foreground">/</span>
+                <span className="text-lg font-black tabular-nums text-rose-300">
+                  −{comparison.lostPersonas.length}
+                </span>
+                <span className="text-[10px] text-muted-foreground">kaybeden</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                {comparison.gainedPersonas.length === comparison.lostPersonas.length
+                  ? "Karar değişimi dengede"
+                  : comparison.gainedPersonas.length > comparison.lostPersonas.length
+                    ? "Net kazanç"
+                    : "Net kayıp"}
+              </div>
+            </div>
+          </div>
+          {(winners?.length || losers?.length) && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-2.5">
+                <div className="text-[10px] font-semibold text-emerald-300">
+                  En çok kazanan segment
+                </div>
+                {winners && winners.length > 0 ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {winners
+                      .map((segment) => `${segment.label} +${segment.buyersDelta}`)
+                      .join(" · ")}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-muted-foreground">Kazanan segment yok.</p>
+                )}
+              </div>
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-2.5">
+                <div className="text-[10px] font-semibold text-amber-300">
+                  En çok kaybeden segment
+                </div>
+                {losers && losers.length > 0 ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {losers.map((segment) => `${segment.label} ${segment.buyersDelta}`).join(" · ")}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-muted-foreground">Kaybeden segment yok.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-white/10 p-2.5 text-[10px] text-muted-foreground">
+          Bir kontrolü değiştir; baz ve senaryo farkı burada kişi kişi hesaplanır. Senaryo da AI
+          çağrısı yapmaz ve kredi harcamaz.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -209,6 +513,51 @@ function PersonaCard({ persona }: { persona: Persona }) {
           style={{ width: `${Math.max(2, Math.min(100, persona.propensity * 100))}%` }}
         />
       </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[9px] text-muted-foreground">
+        <span>
+          Eğilim {fmtPct(persona.propensity * 100, 0)} · eşik {fmtPct(persona.threshold * 100, 0)}
+        </span>
+        <span className={persona.buy ? "text-emerald-300" : "text-amber-300"}>
+          {persona.buy ? "eşiği geçti" : "eşiğin altında"}
+        </span>
+      </div>
+      <details className="mt-2 rounded-lg border border-white/10 bg-black/10 p-2">
+        <summary className="cursor-pointer text-[10px] font-semibold text-muted-foreground">
+          Karar faktörleri ({persona.positive.length + persona.negative.length})
+        </summary>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
+          <div>
+            <div className="text-[9px] font-semibold text-emerald-300">Artılar</div>
+            {persona.positive.length > 0 ? (
+              persona.positive.slice(0, 3).map((factor) => (
+                <p
+                  key={factor.label}
+                  className="mt-0.5 text-[9px] leading-relaxed text-muted-foreground"
+                >
+                  +{factor.delta} · {factor.label}
+                </p>
+              ))
+            ) : (
+              <p className="mt-0.5 text-[9px] text-muted-foreground">Yok</p>
+            )}
+          </div>
+          <div>
+            <div className="text-[9px] font-semibold text-amber-300">Eksiler</div>
+            {persona.negative.length > 0 ? (
+              persona.negative.slice(0, 3).map((factor) => (
+                <p
+                  key={factor.label}
+                  className="mt-0.5 text-[9px] leading-relaxed text-muted-foreground"
+                >
+                  {factor.delta} · {factor.label}
+                </p>
+              ))
+            ) : (
+              <p className="mt-0.5 text-[9px] text-muted-foreground">Yok</p>
+            )}
+          </div>
+        </div>
+      </details>
       <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
         <span
           className={
@@ -685,13 +1034,24 @@ function MultiCustomerContent() {
   const [recent, setRecent] = useState<StoredSimulationProduct[]>(() => getMultiCustomerProducts());
   const [ai, setAi] = useState<MultiCustomerAiInsight | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [scenario, setScenario] = useState<MultiCustomerScenario | null>(null);
   const [showAllDimensions, setShowAllDimensions] = useState(false);
   const aiFn = useServerFn(explainMultiCustomer);
   const aiRequestId = useRef(0);
 
-  const result = useMemo(
+  const baseline = useMemo(
     () => (selected ? simulateMultiCustomer(selected.product) : null),
     [selected],
+  );
+  const scenarioResult = useMemo(
+    () => (selected && scenario ? simulateMultiCustomer(selected.product, scenario) : null),
+    [scenario, selected],
+  );
+  const result = scenarioResult ?? baseline;
+  const comparison = useMemo(
+    () =>
+      baseline && scenarioResult ? compareMultiCustomerResults(baseline, scenarioResult) : null,
+    [baseline, scenarioResult],
   );
 
   type AiInput = {
@@ -719,8 +1079,18 @@ function MultiCustomerContent() {
     if (!next) return;
     // Devam eden AI isteği eski ürüne ait olabilir; yanıtı artık kabul etme.
     aiRequestId.current += 1;
+    setScenario(null);
     setSelected(next);
     setRecent(getMultiCustomerProducts());
+    setAi(null);
+    setAiError(null);
+    aiMut.reset();
+  };
+
+  const applyScenario = (next: MultiCustomerScenario | null) => {
+    // Eski senaryonun AI yorumu yeni sonuca yapışmasın.
+    aiRequestId.current += 1;
+    setScenario(next);
     setAi(null);
     setAiError(null);
     aiMut.reset();
@@ -733,7 +1103,7 @@ function MultiCustomerContent() {
       {
         productName: selected.product.name,
         priceUsd: result.product.priceUsd,
-        platform: selected.product.platform ?? "",
+        platform: scenario?.platform ?? selected.product.platform ?? "",
         audience: selected.product.targetAudience ?? "",
         buyers: result.buyers,
         nonBuyers: result.nonBuyers,
@@ -786,7 +1156,7 @@ function MultiCustomerContent() {
     );
   }
 
-  if (!result) return null;
+  if (!baseline || !result) return null;
   const overallRate = result.penetrationPct;
 
   return (
@@ -811,6 +1181,14 @@ function MultiCustomerContent() {
       />
 
       <ProductSummary selected={selected} recent={recent} onSelect={choose} />
+
+      <ScenarioLab
+        baseline={baseline}
+        active={scenario}
+        result={result}
+        comparison={comparison}
+        onChange={applyScenario}
+      />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
