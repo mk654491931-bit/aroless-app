@@ -632,6 +632,7 @@ export function ProductCard({
   onCreative,
   onReport,
   onOpen: onOpenRaw,
+  onSimulate,
   locked = false,
   onUpgrade = () => {},
   selected = false,
@@ -644,6 +645,7 @@ export function ProductCard({
   onCreative: (name: string) => void;
   onReport: () => void;
   onOpen: () => void;
+  onSimulate?: () => void;
   locked?: boolean;
   onUpgrade?: () => void;
   selected?: boolean;
@@ -1621,6 +1623,15 @@ export function ProductCard({
           {locked && <span className="text-amber-300">· Kilitli</span>}
         </button>
       </div>
+      {onSimulate && (
+        <button
+          onClick={() => (locked ? onUpgrade() : onSimulate())}
+          className="mt-2 w-full rounded-lg border border-sky-400/35 bg-gradient-to-r from-sky-500/15 to-violet-500/15 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:from-sky-500/25 hover:to-violet-500/25 flex items-center justify-center gap-1.5"
+        >
+          {locked ? <Lock size={12} className="text-amber-300" /> : <Users size={12} />} Multi
+          Customer · 1.000 kişi {locked && <span className="text-amber-300">· Kilitli</span>}
+        </button>
+      )}
       <button
         onClick={onOpen}
         className="mt-2 rounded-lg bg-gradient-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] px-3 py-2 text-xs font-semibold text-white w-full flex items-center justify-center gap-1.5"

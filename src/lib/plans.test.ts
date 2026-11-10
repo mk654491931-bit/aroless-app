@@ -46,8 +46,8 @@ describe("PLANS", () => {
     expect(PLANS[1].usd).toBeLessThan(PLANS[2].usd);
   });
 
-  it("ALL_MODULES is 9", () => {
-    expect(ALL_MODULES).toBe(9);
+  it("ALL_MODULES is 10 (Multi Customer dahil)", () => {
+    expect(ALL_MODULES).toBe(10);
   });
 });
 

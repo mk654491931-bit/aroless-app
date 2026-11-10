@@ -22,6 +22,7 @@ import { Route as CouncilRouteImport } from './routes/council'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DiscoverRouteImport } from './routes/discover'
 import { Route as Hidrojen10RouteImport } from './routes/hidrojen10'
+import { Route as MultiCustomerRouteImport } from './routes/multi-customer'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -128,6 +129,11 @@ const DiscoverRoute = DiscoverRouteImport.update({
 const Hidrojen10Route = Hidrojen10RouteImport.update({
   id: '/hidrojen10',
   path: '/hidrojen10',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MultiCustomerRoute = MultiCustomerRouteImport.update({
+  id: '/multi-customer',
+  path: '/multi-customer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NewsRoute = NewsRouteImport.update({
@@ -359,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/discover': typeof DiscoverRoute
   '/hidrojen10': typeof Hidrojen10Route
+  '/multi-customer': typeof MultiCustomerRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -416,6 +423,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/discover': typeof DiscoverRoute
   '/hidrojen10': typeof Hidrojen10Route
+  '/multi-customer': typeof MultiCustomerRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -474,6 +482,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/discover': typeof DiscoverRoute
   '/hidrojen10': typeof Hidrojen10Route
+  '/multi-customer': typeof MultiCustomerRoute
   '/news': typeof NewsRoute
   '/notifications': typeof NotificationsRoute
   '/pricing': typeof PricingRoute
@@ -533,6 +542,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/discover'
     | '/hidrojen10'
+    | '/multi-customer'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -590,6 +600,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/discover'
     | '/hidrojen10'
+    | '/multi-customer'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -647,6 +658,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/discover'
     | '/hidrojen10'
+    | '/multi-customer'
     | '/news'
     | '/notifications'
     | '/pricing'
@@ -705,6 +717,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DiscoverRoute: typeof DiscoverRoute
   Hidrojen10Route: typeof Hidrojen10Route
+  MultiCustomerRoute: typeof MultiCustomerRoute
   NewsRoute: typeof NewsRoute
   NotificationsRoute: typeof NotificationsRoute
   PricingRoute: typeof PricingRoute
@@ -839,6 +852,13 @@ declare module '@tanstack/react-router' {
       path: '/hidrojen10'
       fullPath: '/hidrojen10'
       preLoaderRoute: typeof Hidrojen10RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/multi-customer': {
+      id: '/multi-customer'
+      path: '/multi-customer'
+      fullPath: '/multi-customer'
+      preLoaderRoute: typeof MultiCustomerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/news': {
@@ -1162,6 +1182,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DiscoverRoute: DiscoverRoute,
   Hidrojen10Route: Hidrojen10Route,
+  MultiCustomerRoute: MultiCustomerRoute,
   NewsRoute: NewsRoute,
   NotificationsRoute: NotificationsRoute,
   PricingRoute: PricingRoute,

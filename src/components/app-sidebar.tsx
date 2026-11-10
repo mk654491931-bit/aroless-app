@@ -45,6 +45,7 @@ import {
   Target,
   Radar,
   Sparkles,
+  Users,
   LayoutDashboard,
   Scale,
   Bell,
@@ -304,6 +305,16 @@ const GROUPS: {
       { key: "roi_panel", title: "Kâr / ROI Paneli", url: "/roi", icon: Wallet },
       { key: "store_audit", title: "AI Mağaza Denetçisi", url: "/audit", icon: ShieldCheck },
       { key: "creative_studio", title: "Reklam Kreatif Stüdyosu", url: "/studio", icon: Megaphone },
+    ],
+  },
+  {
+    id: "multi_customer",
+    key: "g_multi_customer",
+    label: "Müşteri Simülasyonu",
+    emoji: "🧑‍🤝‍🧑",
+    icon: Users,
+    items: [
+      { key: "multi_customer", title: "Multi Customer", url: "/multi-customer", icon: Users },
     ],
   },
   {

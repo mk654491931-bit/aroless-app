@@ -78,6 +78,7 @@ import { LockedPanel } from "@/components/upgrade-gate";
 import { CreditCost } from "@/components/credit-cost";
 import { creditBalances, creditBreakdownLabel, type CreditProfile } from "@/lib/credits";
 import { hasSimulatorProgress } from "@/lib/simulator-state";
+import { rememberMultiCustomerProduct } from "@/lib/multi-customer-store";
 import {
   AdvancedFilters,
   DEFAULT_FILTERS,
@@ -1398,6 +1399,10 @@ function Dashboard() {
                                   }}
                                   onReport={() => setReportProduct(p)}
                                   onOpen={() => setDeepDiveProduct(p)}
+                                  onSimulate={() => {
+                                    rememberMultiCustomerProduct(p);
+                                    nav({ to: "/multi-customer" });
+                                  }}
                                   locked={false}
                                   onUpgrade={() => setShowPricing(true)}
                                 />

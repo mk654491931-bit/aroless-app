@@ -43,7 +43,7 @@ export type Plan = {
 };
 
 /** Tüm paketlerde açık olan modül grupları. */
-export const ALL_MODULES = 9;
+export const ALL_MODULES = 10;
 
 export const PLANS: Plan[] = [
   {
@@ -58,7 +58,7 @@ export const PLANS: Plan[] = [
     radarScans: 6,
     hydrogen10Runs: 100,
     features: [
-      "Tüm 9 modül açık",
+      "Tüm 10 modül açık",
       "10 ürün bulucu kredisi / ay",
       "30 AI araç çalıştırma / ay",
       "2 AI Konsey oturumu / ay",
@@ -79,7 +79,7 @@ export const PLANS: Plan[] = [
     radarScans: 20,
     hydrogen10Runs: 200,
     features: [
-      "Tüm 9 modül açık",
+      "Tüm 10 modül açık",
       "20 ürün bulucu kredisi / ay",
       "90 AI araç çalıştırma / ay",
       "6 AI Konsey oturumu / ay",
@@ -100,7 +100,7 @@ export const PLANS: Plan[] = [
     radarScans: 60,
     hydrogen10Runs: 800,
     features: [
-      "Tüm 9 modül açık",
+      "Tüm 10 modül açık",
       "50 ürün bulucu kredisi / ay",
       "300 AI araç çalıştırma / ay",
       "20 AI Konsey oturumu / ay",
