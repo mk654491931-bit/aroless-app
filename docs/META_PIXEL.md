@@ -102,7 +102,9 @@ CAPI `Purchase` tek bir `fetch` ile gönderilmez. Akış:
    (en fazla 8 deneme).
 4. 400/401/403 gibi kalıcı hatalar tekrar denenmez (`failed`).
 5. Günlük cron (`/api/cron/radar-refresh`) kuyruğu işler ve 30 günden eski
-   kayıtları siler. `?job=meta-capi` yalnız kuyruğu çalıştırır.
+   kayıtları siler. Tek koşuda en fazla 25 kayıt ve en fazla 60 saniye
+   harcanır; radar işine de süre kalır. `?job=meta-capi` yalnız kuyruğu
+   çalıştırır.
 6. 46 saatten eski kayıtlar Meta'nın tekilleştirme penceresi dışına çıktığı
    için GÖNDERİLMEZ; `failed` olarak görünür kalır.
 
@@ -113,7 +115,9 @@ gelmiş bekleyen kayıt yeniden denenir.
 
 > **Migration gerekir:** `supabase/migrations/20261124120000_meta_capi_outbox.sql`
 > uygulanmadan RPC'ler yoktur. Kod bu durumda doğrudan gönderime düşer ve
-> uyarı loglar; kalıcı retry devreye girmez.
+> uyarı loglar; kalıcı retry devreye girmez. Geçici DB hatalarında da aynı
+> güvenli geri dönüş vardır: olay doğrudan gönderilir, `event_id` sayesinde
+> sonraki kuyruk denemesi çift `Purchase` üretmez.
 
 ## Conversions API kurulumu
 
@@ -136,8 +140,10 @@ gelmiş bekleyen kayıt yeniden denenir.
 4. Domain doğrulaması: Events Manager → **Settings** → **Domain verification**
    (DNS veya meta etiketi). Tarayıcı pikseli için önerilir.
 
-Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pikseli
-çalışmaya devam eder ve ödeme akışı etkilenmez.
+Token yoksa satın alma yine de kuyruğa yazılır; gönderim `missing_token`
+olarak ertelenir ve token eklendiğinde cron tarafından denenir. Böylece
+geçici bir yapılandırma boşluğu ölçümü kalıcı olarak kaybettirmez. Tarayıcı
+pikseli çalışmaya devam eder ve ödeme akışı hiçbir durumda etkilenmez.
 
 ## Production kontrol listesi
 
@@ -148,7 +154,9 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
   değeri buradan üretilir.
 - `VITE_META_PIXEL_DISABLED` **tanımlı olmamalı**; tanımlıysa tarayıcı pikseli
   hiç yüklenmez.
-- `META_CAPI_ACCESS_TOKEN` tanımlı olmalı; yoksa sunucu `Purchase` göndermez.
+- `META_CAPI_ACCESS_TOKEN` tanımlı olmalı; yoksa `Purchase` kuyruğa yazılır
+  ama gönderilmez. Token eklendiğinde cron bekleyen kaydı gönderir (46 saat
+  tekilleştirme penceresi içinde).
 - `CRON_SECRET` (veya `JOB_WORKER_SECRET`) tanımlı olmalı; yoksa cron ucu 503
   döner ve outbox retry'ları planlanan biçimde koşmaz.
 - `meta_capi_outbox` migration'ı uygulanmış olmalı; aksi hâlde kalıcı retry ve

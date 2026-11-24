@@ -61,7 +61,12 @@ const fakes = vi.hoisted(() => {
           return { data: "enqueued", error: null };
         }
         if (name === "claim_meta_capi_outbox") {
-          return { data: [...outboxRows.values()], error: null };
+          const eventId = args["_event_id"] ? String(args["_event_id"]) : null;
+          const limit = Math.max(1, Math.min(Number(args["_limit"] ?? 20), 100));
+          const rows = [...outboxRows.values()].filter(
+            (row) => !eventId || row["event_id"] === eventId,
+          );
+          return { data: rows.slice(0, limit), error: null };
         }
         if (name === "finish_meta_capi_outbox") {
           return { data: "sent", error: null };
@@ -137,6 +142,7 @@ beforeEach(() => {
   process.env.PADDLE_BUSINESS_PRICE_ID = priceFor.Business;
   // API anahtarı BİLİNÇLİ olarak yok: imza ve plan çözümü ona muhtaç değil.
   fakes.rpcCalls.length = 0;
+  fakes.outboxRows.clear();
   fakes.userMetadata.cookie_marketing_consent = true;
 });
 

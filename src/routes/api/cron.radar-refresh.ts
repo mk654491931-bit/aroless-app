@@ -65,9 +65,11 @@ async function run(request: Request): Promise<Response> {
   try {
     const { createSupabaseMetaCapiOutbox } = await import("@/lib/meta-capi-outbox.server");
     const outbox = createSupabaseMetaCapiOutbox();
-    // Her olay en fazla 10 sn sürebilir; Vercel'in 300 sn fonksiyon tavanı
-    // içinde radar işine de yer kalsın diye tek koşuda en fazla 10 kayıt.
-    const drained = await outbox.drain(10);
+    // Her olay en fazla 10 sn sürebilir. Vercel'in 300 sn fonksiyon tavanı
+    // içinde radar işine de yer kalsın diye: en fazla 25 kayıt VE en fazla
+    // 60 sn. Meta sağlıklıyken 25 kayıt saniyeler içinde biter; yavaş/hatalı
+    // yanıtlarda süre bütçesi radar işini korur.
+    const drained = await outbox.drain(25, { deadlineMs: 60_000 });
     const cleaned = await outbox.cleanup();
     metaCapi = { ...drained, cleaned };
   } catch (err) {

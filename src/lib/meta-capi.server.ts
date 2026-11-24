@@ -266,9 +266,10 @@ function isOutboxUnavailable(error: unknown): boolean {
  * başarısızlıkta üstel geri çekilmeyle yeniden denenir. `event_id` hem satırda
  * UNIQUE hem Meta'ya giden olayda aynıdır → aynı Purchase iki kez sayılmaz.
  *
- * Migration uygulanmamışsa (RPC yok) sistem ÇALIŞMAYA DEVAM EDER: doğrudan
- * gönderime düşülür ve durum açıkça loglanır. Bu bir geri dönüş (fallback)
- * yolu, tercih edilen yol değildir.
+ * Outbox yazılamazsa (migration yok, DB geçici olarak erişilemez) sistem
+ * ÇALIŞMAYA DEVAM EDER: doğrudan gönderime düşülür ve durum açıkça loglanır.
+ * `event_id` değişmediği için yarıda kalan bir kuyruk kaydı cron tarafından
+ * yeniden denense bile Meta aynı satın almayı iki kez saymaz.
  *
  * `transactionId` zorunludur: tekilleştirme kimliği buradan türetilir.
  * Yenilemelerde işlem kimliği farklı olduğu için her tahsilat ayrı sayılır.
@@ -286,10 +287,11 @@ export async function sendMetaPurchase(
   },
   deps: { outbox?: MetaCapiOutboxLike } = {},
 ): Promise<MetaCapiResult> {
-  if (!isMetaCapiConfigured()) {
-    logMissingCapiTokenOnce();
-    return { sent: false, skipped: "missing_token" };
-  }
+  // Token YOKSA da olay kuyruğa yazılır: dağıtım sırasında env geçici olarak
+  // eksik olabilir. `missing_token` yeniden denenebilir bir hatadır; token
+  // eklendiğinde cron olayı gönderir. Böylece yapılandırma boşluğu satış
+  // ölçümünü kalıcı olarak kaybetmez.
+  if (!isMetaCapiConfigured()) logMissingCapiTokenOnce();
 
   const eventId = purchaseEventId(input.transactionId);
   if (!eventId) return { sent: false, error: "missing_event_id" };
@@ -330,16 +332,20 @@ export async function sendMetaPurchase(
     const result = await outbox.dispatch(eventId);
     return enqueue === "duplicate" ? { ...result, deduplicated: true } : result;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     if (isOutboxUnavailable(error)) {
       console.warn(
         "[Meta CAPI] outbox kullanılamıyor (migration uygulanmamış olabilir) — doğrudan gönderime düşülüyor.",
       );
-      return sendMetaCapiEvent(event);
+    } else {
+      console.warn(
+        "[Meta CAPI] outbox yazılamadı — doğrudan gönderime düşülüyor:",
+        message.slice(0, 200),
+      );
     }
-    console.warn(
-      "[Meta CAPI] outbox yazılamadı:",
-      error instanceof Error ? error.message : String(error),
-    );
-    return { sent: false, error: "outbox" };
+    // Geçici DB hatasında olayı kaybetme. Enqueue yazıldıysa ama dispatch
+    // düştüyse cron aynı `event_id` ile yeniden dener; Meta bu kimliği
+    // tekilleştirdiği için çift `Purchase` sayılmaz.
+    return sendMetaCapiEvent(event);
   }
 }

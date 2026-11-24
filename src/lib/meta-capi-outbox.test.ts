@@ -189,8 +189,10 @@ describe("kuyruk", () => {
 
   it("drain toplu işler ve sayıları döner", async () => {
     const rows = [row({ id: "a" }), row({ id: "b", event_id: "purchase-txn_2" }), row({ id: "c" })];
+    // Drain artık tek tek sahiplenir: aynı satırı tekrar vermeyen bir kuyruk.
+    const queue = [...rows];
     const { rpc } = rpcWith({
-      claim_meta_capi_outbox: () => rows,
+      claim_meta_capi_outbox: () => (queue.length ? [queue.shift()] : []),
       finish_meta_capi_outbox: () => "ok",
     });
     const responses = [
@@ -210,6 +212,31 @@ describe("kuyruk", () => {
       retried: 1,
       dead: 1,
     });
+  });
+
+  it("deadline dolunca yeni kayıt sahiplenmez", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-24T12:00:00.000Z"));
+    const queue = [row({ id: "a" }), row({ id: "b", event_id: "purchase-txn_2" })];
+    const { rpc } = rpcWith({
+      claim_meta_capi_outbox: () => (queue.length ? [queue.shift()] : []),
+      finish_meta_capi_outbox: () => "sent",
+    });
+    const send = vi.fn(async () => {
+      // Tek bir gönderim süre bütçesini aşsın.
+      vi.setSystemTime(new Date("2026-11-24T12:00:02.000Z"));
+      return { sent: true };
+    });
+    const outbox = createSupabaseMetaCapiOutbox({ rpc, send });
+
+    await expect(outbox.drain(10, { deadlineMs: 1_000 })).resolves.toEqual({
+      claimed: 1,
+      sent: 1,
+      retried: 0,
+      dead: 0,
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue).toHaveLength(1);
   });
 
   it("finish RPC hatası gönderimi düşürmez; yalnız uyarır", async () => {

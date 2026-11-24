@@ -281,17 +281,22 @@ describe("sendMetaPurchase (outbox)", () => {
     expect(result).toEqual({ sent: true, deduplicated: true });
   });
 
-  it("token yoksa kuyruğa yazmaz", async () => {
+  it("token yoksa da kuyruğa yazar; gönderim retry'a bırakılır", async () => {
     vi.stubEnv("META_CAPI_ACCESS_TOKEN", "");
-    const enqueue = vi.fn();
-    const dispatch = vi.fn();
+    const enqueue = vi.fn(async () => "enqueued" as const);
+    const dispatch = vi.fn(async () => ({
+      sent: false,
+      queued: true,
+      error: "missing_token",
+    }));
 
     const result = await sendMetaPurchase(
       { transactionId: "txn_abc", value: 59, currency: "USD" },
-      { outbox: fakeOutbox(enqueue as never, dispatch as never) },
+      { outbox: fakeOutbox(enqueue, dispatch) },
     );
-    expect(result).toEqual({ sent: false, skipped: "missing_token" });
-    expect(enqueue).not.toHaveBeenCalled();
+    expect(result).toEqual({ sent: false, queued: true, error: "missing_token" });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith("purchase-txn_abc");
   });
 
   it("outbox migration'ı yoksa doğrudan gönderime düşer", async () => {
@@ -316,6 +321,45 @@ describe("sendMetaPurchase (outbox)", () => {
     const body = JSON.parse(call[1].body) as CapiPayload;
     expect(body.data[0]?.event_id).toBe("purchase-txn_abc");
     expect(body.data[0]?.user_data?.em).toEqual([sha256Hex("buyer@example.com")]);
+  });
+
+  it("outbox DB hatasında olayı kaybetmez; doğrudan gönderir", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendMetaPurchase(
+      { transactionId: "txn_db", email: "buyer@example.com", value: 59, currency: "USD" },
+      {
+        outbox: fakeOutbox(async () => {
+          throw new Error("connection refused");
+        }, vi.fn() as never),
+      },
+    );
+
+    expect(result).toEqual({ sent: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatch hatasında da doğrudan gönderir; kuyruk kaydı cron'a kalır", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendMetaPurchase(
+      { transactionId: "txn_dispatch", value: 39, currency: "USD" },
+      {
+        outbox: fakeOutbox(
+          async () => "enqueued" as const,
+          async () => {
+            throw new Error("claim failed");
+          },
+        ),
+      },
+    );
+
+    expect(result).toEqual({ sent: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("işlem kimliği yoksa göndermez", async () => {

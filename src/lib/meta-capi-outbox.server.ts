@@ -68,9 +68,20 @@ export type MetaCapiRpc = (
 
 export type MetaCapiSend = (input: MetaCapiEventInput) => Promise<MetaCapiResult>;
 
+export type MetaCapiDrainOptions = {
+  /**
+   * Bu süreden sonra YENİ kayıt sahiplenilmez. Sunucu fonksiyonunun toplam
+   * süresini aşmamak için kullanılır; sahiplenilmiş satırlar tamamlanır.
+   */
+  deadlineMs?: number;
+};
+
 export type MetaCapiOutbox = MetaCapiOutboxLike & {
   /** Cron/elle tetikleme için toplu işleme. */
-  drain(limit?: number): Promise<{
+  drain(
+    limit?: number,
+    options?: MetaCapiDrainOptions,
+  ): Promise<{
     claimed: number;
     sent: number;
     retried: number;
@@ -185,15 +196,27 @@ export function createSupabaseMetaCapiOutbox(
     return { sent: false, error };
   }
 
-  async function drain(limit = 50) {
-    const rows = await claim(limit, null);
-    const summary = { claimed: rows.length, sent: 0, retried: 0, dead: 0 };
-    for (const row of rows) {
-      const { outcome } = await processRow(row);
+  async function drain(limit = 50, options: MetaCapiDrainOptions = {}) {
+    const max = Math.max(1, Math.min(Math.floor(limit), 100));
+    const deadline =
+      options.deadlineMs === undefined
+        ? Number.POSITIVE_INFINITY
+        : Date.now() + Math.max(0, options.deadlineMs);
+    const summary = { claimed: 0, sent: 0, retried: 0, dead: 0 };
+
+    // TEK TEK sahiplenme: süre dolduğunda "sahiplenildi ama işlenmedi" satır
+    // bırakmamak için. Toplu claim, deadline aşıldığında kalan satırların
+    // deneme hakkını boşa harcardı (10 dakika sonra geri alınana kadar).
+    while (summary.claimed < max && Date.now() < deadline) {
+      const rows = await claim(1, null);
+      if (rows.length === 0) break;
+      summary.claimed += 1;
+      const { outcome } = await processRow(rows[0] as MetaCapiOutboxRow);
       if (outcome === "sent") summary.sent += 1;
       else if (outcome === "retry") summary.retried += 1;
       else summary.dead += 1;
     }
+
     return summary;
   }
 
