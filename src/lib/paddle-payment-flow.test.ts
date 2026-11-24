@@ -164,4 +164,29 @@ describe("Paddle ödeme → hesap açma + jeton", () => {
     expect(args["_search_credits"]).toBe(0);
     expect(args["_sim_credits"]).toBe(0);
   });
+
+  it("başarılı ödemede Meta'ya işlem kimliğiyle Purchase bildirir", async () => {
+    process.env.META_CAPI_ACCESS_TOKEN = "test-token";
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+      const res = await handlePaddleWebhook(requestFor(paymentBody("Pro")));
+      expect(res.status).toBe(200);
+
+      const calls = fetchMock.mock.calls as unknown as Array<[string, { body: string }]>;
+      const call = calls.find(([url]) => String(url).includes("/1144034978511312/events"));
+      expect(call).toBeDefined();
+      const body = JSON.parse(call![1].body) as { data: Array<Record<string, unknown>> };
+      expect(body.data[0]).toMatchObject({
+        event_name: "Purchase",
+        event_id: "purchase-txn_Pro",
+        custom_data: { value: 59, currency: "USD", content_name: "Pro", content_type: "product" },
+      });
+    } finally {
+      delete process.env.META_CAPI_ACCESS_TOKEN;
+      delete process.env.META_TEST_EVENT_CODE;
+      vi.unstubAllGlobals();
+    }
+  });
 });

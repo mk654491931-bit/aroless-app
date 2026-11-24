@@ -7,6 +7,7 @@ import { useFxRates } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
 import { publicPageHead } from "@/lib/seo";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/pricing")({
   head: () => {
@@ -77,6 +78,11 @@ function PricingPage() {
   // kullanılır; /pricing eski sürümde yalnız /auth'a yönlendiriyordu ve
   // buradan satın almak MÜMKÜN DEĞİLDİ.
   const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
+
+  // Fiyatları görüntüleyenler, Meta tarafında yeniden pazarlama kitlesine girer.
+  useEffect(() => {
+    trackMetaEvent("ViewContent", { content_name: "Pricing", content_type: "product" });
+  }, []);
 
   useEffect(() => {
     try {

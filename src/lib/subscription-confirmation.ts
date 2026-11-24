@@ -70,6 +70,44 @@ export function isCheckoutCompleted(event: unknown): boolean {
 }
 
 /**
+ * Paddle.js olayındaki işlem kimliği (`txn_...`).
+ *
+ * Meta Pixel ile Conversions API'nin aynı satın almayı ÇİFT SAYMAMASI için
+ * tekilleştirme kimliği buradan türetilir. `data.id` checkout kimliğidir
+ * (`che_...`), işlem kimliği DEĞİLDİR — bu yüzden yalnız `transaction_id`
+ * okunur.
+ */
+export function paddleTransactionId(event: unknown): string | null {
+  if (!event || typeof event !== "object") return null;
+  const data = (event as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  const raw = record["transaction_id"] ?? record["transactionId"];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+/**
+ * Ödenen gerçek tutar (indirim/vergi dahil) ve para birimi.
+ *
+ * Paddle.js `checkout.completed` → `data.totals.total` (ondalık birim, ör. 59)
+ * ve `data.currency_code`. Bulunamazsa `null` döner ve çağıran liste fiyatına
+ * düşer; böylece Meta'ya yanlış bir tutar gönderilmez.
+ */
+export function paddleCheckoutValue(event: unknown): { value: number; currency: string } | null {
+  if (!event || typeof event !== "object") return null;
+  const data = (event as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  const totals = record["totals"];
+  if (!totals || typeof totals !== "object") return null;
+  const total = (totals as Record<string, unknown>)["total"];
+  const value = typeof total === "number" ? total : Number(total);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const currency = typeof record["currency_code"] === "string" ? record["currency_code"] : "USD";
+  return { value, currency };
+}
+
+/**
  * Doğrulama adımı — SAF, ağ/React yok, doğrudan test edilebilir.
  *
  * SIRA ÖNEMLİ: önce "zaten ücretli mi?" sorusu. Aksi hâlde ücretli bir

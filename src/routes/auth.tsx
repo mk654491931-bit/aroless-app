@@ -33,6 +33,7 @@ import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { ExampleReviews, type ExampleReview } from "@/components/landing/sections";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -200,10 +201,7 @@ function AuthPage() {
   // kaldığı sürece) affiliate atfı kaybolurdu.
   const [promoCode, setPromoCode] = useState(() => {
     if (typeof window === "undefined") return "";
-    const fromUrl = new URLSearchParams(window.location.search)
-      .get("promo")
-      ?.trim()
-      .toUpperCase();
+    const fromUrl = new URLSearchParams(window.location.search).get("promo")?.trim().toUpperCase();
     if (fromUrl) return fromUrl;
     return (getBrandedItem("aroless.promo") ?? "").trim().toUpperCase();
   });
@@ -345,6 +343,8 @@ function AuthPage() {
         }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Hesap GERÇEKTEN açıldı (e-posta doğrulandı + oturum kuruldu).
+        trackMetaEvent("CompleteRegistration", { content_name: "Aroless", status: true });
         if (referralCode) {
           // Profil satırı girişten hemen sonra oluşmayabilir; tekrar denemek
           // için kodu localStorage'da birak (index.tsx bu işi tamamlar).

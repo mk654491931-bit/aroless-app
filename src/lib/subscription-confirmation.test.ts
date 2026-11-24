@@ -13,6 +13,8 @@ import {
   confirmationStep,
   isCheckoutCompleted,
   isPaidTier,
+  paddleCheckoutValue,
+  paddleTransactionId,
   shouldReconcile,
   type ConfirmationStatus,
 } from "./subscription-confirmation";
@@ -194,5 +196,39 @@ describe("ödeme sonrası dönüş kullanıcıya geri bildirim verir", () => {
     const src = await read("src/routes/api/public/webhook/paddle.ts");
     expect(src).toContain("GET:");
     expect(src).toContain("configured");
+  });
+});
+
+describe("Paddle.js checkout.completed — Meta Purchase verisi", () => {
+  const completed = {
+    name: "checkout.completed",
+    data: {
+      id: "che_123",
+      transaction_id: "txn_123",
+      currency_code: "USD",
+      totals: { total: 59, tax: 9, subtotal: 50 },
+    },
+  };
+
+  it("işlem kimliğini okur — checkout kimliğini (che_) KULLANMAZ", () => {
+    expect(paddleTransactionId(completed)).toBe("txn_123");
+    expect(paddleTransactionId({ name: "checkout.completed", data: { id: "che_123" } })).toBeNull();
+    expect(paddleTransactionId(null)).toBeNull();
+    expect(paddleTransactionId("checkout.completed")).toBeNull();
+  });
+
+  it("ödenen gerçek tutarı ve para birimini döndürür", () => {
+    expect(paddleCheckoutValue(completed)).toEqual({ value: 59, currency: "USD" });
+  });
+
+  it("tutar yoksa/geçersizse null döner (uydurma değer gönderilmez)", () => {
+    expect(paddleCheckoutValue({ name: "checkout.completed", data: { totals: {} } })).toBeNull();
+    expect(
+      paddleCheckoutValue({ name: "checkout.completed", data: { totals: { total: "abc" } } }),
+    ).toBeNull();
+    expect(
+      paddleCheckoutValue({ name: "checkout.completed", data: { totals: { total: -1 } } }),
+    ).toBeNull();
+    expect(paddleCheckoutValue(null)).toBeNull();
   });
 });

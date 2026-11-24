@@ -36,6 +36,7 @@ import { DeviceGuard } from "@/components/device-guard";
 import { AppTopbar } from "@/components/app-topbar";
 import { DraggableSettingsBar } from "@/components/draggable-settings";
 import { CookieBanner } from "@/components/cookie-banner";
+import { MetaPixel } from "@/components/meta-pixel";
 import { SiteFooter } from "@/components/site-footer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { useAuth } from "@/hooks/use-auth";
@@ -103,20 +104,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Aroless — Find Winning Products" },
+      { title: "Aroless — E-ticaret ürün araştırma platformu" },
       {
         name: "description",
         content:
-          "AI-powered winning product research for e-commerce. Discover trending products, ad angles, and target audiences with Gemini.",
+          "Ürün bulucu, trend radarı, kâr hesabı ve rakip analizi tek çalışma alanında. Kaynağı görünen verilerle daha bilinçli ürün kararları verin.",
       },
       { name: "theme-color", content: "#0b0f1a" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Aroless" },
-      { property: "og:title", content: "Aroless — Find Winning Products" },
+      { property: "og:title", content: "Aroless — E-ticaret ürün araştırma platformu" },
       {
         property: "og:description",
-        content: "AI-powered winning product research for e-commerce.",
+        content:
+          "Ürün bulucu, trend radarı, kâr hesabı ve rakip analizi tek çalışma alanında. Kaynağı görünen verilerle daha bilinçli ürün kararları verin.",
       },
       { property: "og:type", content: "website" },
       { property: "og:image", content: "https://aroless.tech/og-image.jpg" },
@@ -132,7 +134,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap",
       },
     ],
   }),
@@ -286,7 +288,9 @@ function RootComponent() {
       {chromeless ? (
         <>
           {/* Sürüklenebilir dil / palet / tema / imleç çubuğu — tüm sayfalarda aynı, konum kalıcı */}
-          <DraggableSettingsBar>
+          {/* Landing kendi açık/kurumsal kabuğunu çiziyor; ayar çubuğu başlığın
+              üstüne binmesin diye vitrin sayfasında sağ alta alınır. */}
+          <DraggableSettingsBar anchor={pathname === "/" ? "bottom-right" : "top-right"}>
             <LanguageSwitcher />
             <PaletteToggle />
             <ThemeToggle />
@@ -328,6 +332,7 @@ function RootComponent() {
 
       <PricingModal open={showPricing} onClose={() => setShowPricing(false)} />
       <CookieBanner />
+      <MetaPixel pathname={pathname} />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

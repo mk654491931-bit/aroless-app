@@ -6,12 +6,19 @@ import { useServerFn } from "@tanstack/react-start";
 import { createCheckout, reconcileMySubscription } from "@/lib/paddle.functions";
 import { getMyPromoCode } from "@/lib/promo.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
-import { isCheckoutCompleted, useSubscriptionConfirmation } from "@/lib/subscription-confirmation";
+import {
+  isCheckoutCompleted,
+  paddleCheckoutValue,
+  paddleTransactionId,
+  useSubscriptionConfirmation,
+} from "@/lib/subscription-confirmation";
+import { purchaseEventId } from "@/lib/meta-config";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 import { clearPlanPurchasePending, markPlanPurchasePending } from "@/lib/plan-sync";
 import { getFullProfile } from "@/lib/analysis.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown } from "lucide-react";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLAN_BY_ID, PLANS, type PlanId } from "@/lib/plans";
 
 const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
@@ -34,6 +41,10 @@ export function PricingModal({
   const [paid, setPaid] = useState(false);
   const qc = useQueryClient();
   const autoRan = useRef<PlanId | null>(null);
+  /** Meta Pixel `Purchase` — paket, tutar ve tekilleştirme kimliği. */
+  const pendingPlan = useRef<PlanId | null>(null);
+  const purchaseId = useRef<string | null>(null);
+  const purchaseValue = useRef<{ value: number; currency: string } | null>(null);
 
   /**
    * Ödeme bitti olayı — indirimli de indirimsiz de aynı olayla gelir.
@@ -46,6 +57,9 @@ export function PricingModal({
    */
   const onCheckoutEvent = useCallback((event: unknown) => {
     if (!isCheckoutCompleted(event)) return;
+    // Sunucu (Conversions API) aynı işlem için aynı kimliği gönderir → çift sayım yok.
+    purchaseId.current = purchaseEventId(paddleTransactionId(event)) ?? purchaseId.current;
+    purchaseValue.current = paddleCheckoutValue(event) ?? purchaseValue.current;
     setPaid(true);
   }, []);
 
@@ -68,6 +82,20 @@ export function PricingModal({
       return res.ok ? res.tier : null;
     },
     onConfirmed: () => {
+      const plan = pendingPlan.current;
+      if (plan) {
+        const paid = purchaseValue.current;
+        trackMetaEvent(
+          "Purchase",
+          {
+            content_name: plan,
+            content_type: "product",
+            value: paid?.value ?? PLAN_BY_ID[plan].usd,
+            currency: paid?.currency ?? "USD",
+          },
+          purchaseId.current,
+        );
+      }
       // Bekleyen ödeme işareti temizlenir: paket göründü, artık yoklama yok.
       clearPlanPurchasePending();
       void qc.invalidateQueries({ queryKey: ["profile"] });
@@ -93,6 +121,9 @@ export function PricingModal({
   const subscribe = useCallback(
     async (plan: PlanId) => {
       setLoading(plan);
+      pendingPlan.current = plan;
+      purchaseId.current = null;
+      purchaseValue.current = null;
       // Kalıcı işaret: kullanıcı sekmeyi yenilese/başka sayfaya geçse bile
       // uygulama kabuğu (AppTopbar → usePlanSync) paketi Paddle'dan tazelemeye
       // devam eder. Önceden bu bilgi yalnız açık modalın belleğindeydi.
@@ -110,6 +141,7 @@ export function PricingModal({
         // güvenilir biçimde webhook'a taşınır.
         const session = await checkout({ data: { plan } });
         email = session.email;
+        purchaseId.current = purchaseEventId(session.transactionId) ?? purchaseId.current;
         opened = await openPaddleOverlay(
           {
             transactionId: session.transactionId,
@@ -130,7 +162,14 @@ export function PricingModal({
         opened = await openPaddlePlanCheckout(plan, { email, promo, onEvent: onCheckoutEvent });
       }
 
-      if (!opened) {
+      if (opened) {
+        trackMetaEvent("InitiateCheckout", {
+          content_name: plan,
+          content_type: "product",
+          value: PLAN_BY_ID[plan].usd,
+          currency: "USD",
+        });
+      } else {
         toast.error("Ödeme penceresi açılamadı. Paddle ayarlarınızı kontrol edin.");
       }
       setLoading(null);
@@ -155,6 +194,9 @@ export function PricingModal({
       // bir abonelik iddiası olurdu.
       setPaid(false);
       autoRan.current = null;
+      pendingPlan.current = null;
+      purchaseId.current = null;
+      purchaseValue.current = null;
     };
   }, [open, onClose]);
 

@@ -10,45 +10,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  getBrandedItem,
-  setBrandedItem,
-  BRAND_EVENTS,
-  addBrandedEventListener,
-  dispatchBrandedEvent,
-} from "@/lib/brand-storage";
+import { BRAND_EVENTS, addBrandedEventListener, dispatchBrandedEvent } from "@/lib/brand-storage";
+import { COOKIE_CONSENT_EVENT, readCookieConsent, saveCookieConsent } from "@/lib/cookie-consent";
 
-export const COOKIE_KEY = "aroless_cookie_consent";
+// Geriye dönük uyumluluk: sabitler artık `@/lib/cookie-consent` içinde.
+export { COOKIE_KEY, COOKIE_CONSENT_EVENT } from "@/lib/cookie-consent";
+export type { CookieConsent } from "@/lib/cookie-consent";
 export const OPEN_COOKIE_PREFS = "aroless:open-cookie-preferences";
 
 // Legacy aliases — keep exported for any external importers still using velora names
 export const LEGACY_COOKIE_KEY = "velora_cookie_consent";
 export const LEGACY_OPEN_COOKIE_PREFS = "velora:open-cookie-preferences";
 
-export type CookieConsent = {
-  essential: true;
-  analytics: boolean;
-  marketing: boolean;
-  decidedAt: string;
-};
-
 export function openCookiePreferences() {
   dispatchBrandedEvent(BRAND_EVENTS.cookiePrefs.new, BRAND_EVENTS.cookiePrefs.legacy, undefined);
-}
-
-function read(): CookieConsent | null {
-  try {
-    const raw = getBrandedItem(COOKIE_KEY);
-    return raw ? (JSON.parse(raw) as CookieConsent) : null;
-  } catch {
-    return null;
-  }
-}
-
-function save(c: Omit<CookieConsent, "essential" | "decidedAt">) {
-  const value: CookieConsent = { essential: true, decidedAt: new Date().toISOString(), ...c };
-  setBrandedItem(COOKIE_KEY, JSON.stringify(value));
-  return value;
 }
 
 export function CookieBanner() {
@@ -58,7 +33,7 @@ export function CookieBanner() {
   const [marketing, setMarketing] = useState(false);
 
   useEffect(() => {
-    const existing = read();
+    const existing = readCookieConsent();
     if (!existing) setVisible(true);
     else {
       setAnalytics(existing.analytics);
@@ -74,11 +49,12 @@ export function CookieBanner() {
   }, []);
 
   const decide = (a: boolean, m: boolean) => {
-    save({ analytics: a, marketing: m });
+    saveCookieConsent({ analytics: a, marketing: m });
     setAnalytics(a);
     setMarketing(m);
     setVisible(false);
     setPrefsOpen(false);
+    window.dispatchEvent(new Event(COOKIE_CONSENT_EVENT));
   };
 
   return (

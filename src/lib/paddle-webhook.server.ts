@@ -432,6 +432,45 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
       }
     }
 
+    // 9b. META CONVERSIONS API — sunucu tarafı `Purchase`.
+    //
+    //     Tarayıcı pikseli reklam engelleyici / ITP / çerez reddi yüzünden olayı
+    //     kaybedebilir. Aynı satın alma sunucudan da bildirilir; `event_id`
+    //     Paddle İŞLEM kimliğinden türetildiği için tarayıcının gönderdiği
+    //     kopyayla Meta tarafında tekilleşir (yenilemelerde kimlik değişir →
+    //     her tahsilat ayrı sayılır).
+    //
+    //     Hata ödeme akışını ASLA düşürmez: token yoksa modül sessizce
+    //     devre dışı kalır ve bu blok yalnızca loglar.
+    if (
+      result !== "duplicate" &&
+      event.eventType === "transaction.completed" &&
+      command.transactionId
+    ) {
+      try {
+        const { data: profileRow } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id" as never, userId as never)
+          .maybeSingle();
+        const email = (profileRow as { email?: string | null } | null)?.email ?? null;
+        const { sendMetaPurchase } = await import("@/lib/meta-capi.server");
+        const meta = await sendMetaPurchase({
+          transactionId: command.transactionId,
+          email,
+          userId,
+          value: Math.max(0, command.amountCents ?? 0) / 100,
+          currency: command.currency,
+          plan: command.tier && command.tier !== "Free" ? command.tier : null,
+        });
+        if (meta.sent) {
+          console.log(`[Meta CAPI] Purchase gönderildi (${command.transactionId})`);
+        }
+      } catch (metaError) {
+        console.warn("[Meta CAPI] Purchase gönderilemedi:", metaError);
+      }
+    }
+
     // 10. AFFİLİATE KOMİSYONU + BİLDİRİM.
     //
     //     İKİ YOL BİRDİR ve çakışmazlar:
