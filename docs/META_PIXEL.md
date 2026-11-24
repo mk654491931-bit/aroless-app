@@ -7,7 +7,7 @@ Pixel kimliği: **1144034978511312**.
 | Olay                   | Nerede                                       | Amaç                                      |
 | ---------------------- | -------------------------------------------- | ----------------------------------------- |
 | `PageView`             | Her rota değişimi (SPA)                      | Ziyaret ölçümü, yeniden pazarlama kitlesi |
-| `ViewContent`          | `/pricing` açılışı                           | Fiyatları inceleyen sıcak kitle           |
+| `ViewContent`          | `/pricing`, `/hot/:id`, derin analiz modalı  | Fiyat/ürün inceleyen sıcak kitle          |
 | `CompleteRegistration` | E-posta doğrulaması + oturum kurulduğunda    | Kayıt dönüşümü                            |
 | `InitiateCheckout`     | Paddle ödeme penceresi gerçekten açıldığında | Ödeme başlangıcı                          |
 | `Purchase`             | Ödeme onaylandığında / webhook'ta            | Ciro ölçümü, ROAS                         |
@@ -20,6 +20,25 @@ Pixel kimliği: **1144034978511312**.
 İki kanal aynı `event_id` değerini kullanır: `purchase-<Paddle işlem kimliği>`.
 Meta bu sayede aynı satın almayı **iki kez saymaz**. Yenilemelerde işlem kimliği
 değiştiği için her tahsilat ayrı `Purchase` olur.
+
+### `Lead` neden yok?
+
+Bu uygulamada ücretsiz **deneme (trial)** akışı yok; ücretsiz başlangıç Free
+plana kayıtla oluyor ve bu `CompleteRegistration` olarak gönderiliyor. Ayrı bir
+`Lead` olayı göndermek aynı dönüşümü iki kez saymak olurdu. İleride deneme
+başlatan bir akış eklenirse tek çağrı yeterli:
+
+```ts
+trackMetaEvent("Lead", { content_name: "Free trial" });
+```
+
+### Fiyatlar
+
+Tutarlar `src/lib/plans.ts` → `PLAN_BY_ID` üzerinden gelir (Starter **$39**, Pro
+**$59**, Business **$199**). Paddle ödemesinde gerçek ödenen tutar
+`checkout.completed` olayındaki `totals.total` ve webhook'taki `grandTotal`
+dan okunur; böylece indirim/vergi farkı varsa Meta'ya doğru tutar gider.
+Fiyatlar bu entegrasyon kapsamında **değiştirilmedi**.
 
 ## Çerez izni
 
@@ -56,6 +75,23 @@ anında uyum sağlar. İzin geri çekilirse sonraki olaylar gönderilmez.
 
 Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pikseli
 çalışmaya devam eder ve ödeme akışı etkilenmez.
+
+## Test / production ayrımı
+
+- **Tarayıcı pikselini kapatmak:** önizleme/staging ortamında
+  `VITE_META_PIXEL_DISABLED=1` verin; piksel hiç yüklenmez ve hiçbir tarayıcı
+  olayı gitmez.
+- **Test Events kodu:** `META_TEST_EVENT_CODE` yalnızca **production dışındaki**
+  dağıtımlarda kullanılır. Vercel `VERCEL_ENV=production` iken env'de dursa bile
+  yok sayılır; böylece canlı veri yanlışlıkla test verisine karışmaz.
+- **Ayrı token'lar:** production ve preview ortamlarına farklı
+  `META_CAPI_ACCESS_TOKEN` değerleri tanımlamak en temiz ayrımdır.
+
+## Mimari notu
+
+Bu proje **TanStack Start (React 19 + Vite)** kullanır; Next.js App Router
+yoktur. Piksel istemci tarafında kök bileşene bağlıdır ve TanStack Router'ın
+`pathname` değeriyle SPA geçişlerini izler; Next.js'e özgü bir kod gerekmez.
 
 ## Test
 

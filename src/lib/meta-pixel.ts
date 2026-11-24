@@ -39,6 +39,20 @@ declare global {
 
 let pixelInitialized = false;
 
+/**
+ * Preview/staging'de pikseli tamamen kapatma anahtarı.
+ *
+ * Production verisini test trafiğiyle kirletmemek için önizleme ortamında
+ * `VITE_META_PIXEL_DISABLED=1` verilir. Tanımsızsa piksel normal çalışır.
+ */
+function pixelDisabled(): boolean {
+  try {
+    return String(import.meta.env.VITE_META_PIXEL_DISABLED ?? "") === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Resmi snippet'teki `fbq` kuyruğunu kurar ve `fbevents.js`'i bir kez yükler. */
 function getFbq(): FbqFunction | null {
   if (typeof window === "undefined" || typeof document === "undefined") return null;
@@ -70,6 +84,7 @@ function getFbq(): FbqFunction | null {
 
 /** Pikseli başlatır — izin yoksa hiçbir şey yapmaz ve `false` döner. */
 export function initMetaPixel(): boolean {
+  if (pixelDisabled()) return false;
   if (!hasMarketingConsent()) return false;
   if (pixelInitialized) return true;
   const fbq = getFbq();
@@ -91,6 +106,7 @@ export function trackMetaEvent(
   params?: MetaEventParams,
   eventId?: string | null,
 ): void {
+  if (pixelDisabled()) return;
   if (!hasMarketingConsent()) return;
   if (!initMetaPixel()) return;
   const fbq = getFbq();

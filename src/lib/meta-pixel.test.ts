@@ -37,6 +37,7 @@ function consentStored(marketing: boolean) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.resetModules();
 });
 
@@ -89,6 +90,23 @@ describe("fbq olay gönderimi", () => {
 
     const w = window as unknown as { fbq?: unknown };
     expect(w.fbq).toBeUndefined();
+    expect(appended).toHaveLength(0);
+  });
+
+  it("VITE_META_PIXEL_DISABLED=1 ise izin olsa da yüklenmez", async () => {
+    stubLocalStorage(consentStored(true));
+    vi.stubEnv("VITE_META_PIXEL_DISABLED", "1");
+    const appended: unknown[] = [];
+    vi.stubGlobal("document", {
+      getElementById: () => null,
+      createElement: () => ({}),
+      head: { appendChild: (el: unknown) => appended.push(el) },
+    });
+
+    const { trackMetaEvent } = await import("./meta-pixel");
+    trackMetaEvent("PageView");
+
+    expect((window as unknown as { fbq?: unknown }).fbq).toBeUndefined();
     expect(appended).toHaveLength(0);
   });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +28,7 @@ import { CountryInfoBox } from "@/components/country-info-box";
 import { CountryFlag } from "@/components/country-flag";
 import { Sparkline } from "@/components/sparkline";
 import { getMarketIntel } from "@/lib/market-data.functions";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 import { useCountryMeta, useUsdRate } from "@/lib/rest-countries";
 import { TARGET_COUNTRIES, countryByCode } from "@/lib/countries";
 
@@ -102,6 +103,8 @@ export function ProductDeepDiveModal({
   onSendToSimulator?: (p: WinningProduct) => void;
 }) {
   const nav = useNavigate();
+  /** Meta Pixel: aynı ürün için modal yeniden çizilse bile tek ViewContent. */
+  const trackedProduct = useRef<string | null>(null);
   const [country, setCountry] = useState(product?.hybrid?.target_country ?? "GLOBAL");
   const c = countryByCode(country);
   const meta = useCountryMeta(country);
@@ -192,6 +195,26 @@ export function ProductDeepDiveModal({
     }
     setAutoFilled(true);
   }, [sourcing, autoFilled]);
+
+  /**
+   * Ürün derin analizi açıldığında `ViewContent`.
+   *
+   * Modal kapalıyken `product` null olur ve sayaç sıfırlanır; böylece aynı ürün
+   * yeniden açıldığında yeni bir görüntüleme olarak sayılır, açıkken yapılan
+   * yeniden render'lar ise tekrar gönderilmez.
+   */
+  useEffect(() => {
+    if (!product) {
+      trackedProduct.current = null;
+      return;
+    }
+    if (trackedProduct.current === product.name) return;
+    trackedProduct.current = product.name;
+    trackMetaEvent("ViewContent", {
+      content_name: product.name,
+      content_type: "product",
+    });
+  }, [product]);
 
   if (!product) return null;
   const { vat, net, marginPct } = calculateProfit({

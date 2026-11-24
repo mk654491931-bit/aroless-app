@@ -51,6 +51,20 @@ export type MetaCapiEventInput = {
 
 let warnedMissingToken = false;
 
+/**
+ * Gerçek production dağıtımı mı?
+ *
+ * Vercel `VERCEL_ENV` verir (production/preview/development). Vercel dışı
+ * kurulumlarda `NODE_ENV=production` ölçüt alınır. Test olay kodu yalnız
+ * production DIŞINDA kullanılır; böylece canlı veri yanlışlıkla "test"
+ * sayılmaz.
+ */
+export function isProductionDeployment(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV?.trim();
+  if (vercelEnv) return vercelEnv === "production";
+  return process.env.NODE_ENV === "production";
+}
+
 /** Meta'nın beklediği biçim: küçük harf, kırpılmış, SHA-256 hex. */
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -103,7 +117,7 @@ export function buildMetaCapiPayload(input: MetaCapiEventInput): Record<string, 
 
   const payload: Record<string, unknown> = { data: [event] };
   const testEventCode = process.env.META_TEST_EVENT_CODE?.trim();
-  if (testEventCode) payload.test_event_code = testEventCode;
+  if (testEventCode && !isProductionDeployment()) payload.test_event_code = testEventCode;
   return payload;
 }
 

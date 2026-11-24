@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { COOKIE_CONSENT_EVENT, hasMarketingConsent } from "@/lib/cookie-consent";
 import { trackMetaEvent } from "@/lib/meta-pixel";
@@ -14,6 +14,7 @@ import { trackMetaEvent } from "@/lib/meta-pixel";
  */
 export function MetaPixel({ pathname }: { pathname: string }) {
   const [allowed, setAllowed] = useState(false);
+  const lastPath = useRef<string | null>(null);
 
   useEffect(() => {
     const sync = () => setAllowed(hasMarketingConsent());
@@ -27,7 +28,16 @@ export function MetaPixel({ pathname }: { pathname: string }) {
   }, []);
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed) {
+      // İzin geri çekilirse sayaç sıfırlanır: yeniden izin verildiğinde
+      // aynı sayfa için PageView tekrar gönderilebilsin.
+      lastPath.current = null;
+      return;
+    }
+    // Aynı yol için tekrar gönderim yok (React StrictMode / yeniden render).
+    // A → B → A gezintisinde son yol farklı olduğu için her görüntüleme sayılır.
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
     trackMetaEvent("PageView");
   }, [allowed, pathname]);
 

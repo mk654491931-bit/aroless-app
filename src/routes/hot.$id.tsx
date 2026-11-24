@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { fetchHotProducts, HOT_FEED_QUERY_KEY } from "@/lib/hot-products";
 import { BrandLogo } from "@/components/brand-logo";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/hot/$id")({
   ssr: false,
@@ -67,6 +69,18 @@ function HotProductPage() {
     staleTime: 60 * 60 * 1000,
   });
   const p = data?.items.find((x) => x.id === id);
+  /** Aynı ürün sayfası yeniden çizilirse ViewContent tekrarlanmaz. */
+  const trackedId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!p) return;
+    if (trackedId.current === p.id) return;
+    trackedId.current = p.id;
+    trackMetaEvent("ViewContent", {
+      content_name: p.name,
+      content_type: "product",
+    });
+  }, [p]);
 
   return (
     <div className="min-h-screen bg-background">

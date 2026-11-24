@@ -62,9 +62,17 @@ describe("buildMetaCapiPayload", () => {
   });
 
   it("test event kodu yalnız tanımlıysa eklenir", () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("META_TEST_EVENT_CODE", "TEST42");
     const payload = buildMetaCapiPayload({ eventName: "PageView" }) as unknown as CapiPayload;
     expect(payload.test_event_code).toBe("TEST42");
+  });
+
+  it("production dağıtımında test event kodunu YOK SAYAR", () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("META_TEST_EVENT_CODE", "TEST42");
+    const payload = buildMetaCapiPayload({ eventName: "PageView" }) as unknown as CapiPayload;
+    expect(payload.test_event_code).toBeUndefined();
   });
 });
 
