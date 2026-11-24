@@ -68,6 +68,15 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
    `purchase-txn_...` biçiminde olmalı; aynı olay hem tarayıcı hem sunucudan
    geldiyse Meta tek satır gösterir.
 
+## Uyumluluk notu
+
+Tarayıcı pikseli pazarlama çerez iznine bağlıdır. **Conversions API ise
+sunucudan çalışır ve çerez gerektirmez**; e-posta ve kullanıcı kimliği Meta'ya
+sadece SHA-256 özetiyle gider. Sunucu taraflı ölçümün KVKK aydınlatma metni ve
+gizlilik politikasında belirtilmesi gerekir. Kullanıcı bazında sunucu tarafı
+izin kapısı istiyorsanız çerez tercihinin profile yazılması ve webhook'ta
+okunması gerekir — mevcut akışta tercih yalnızca tarayıcıda saklanıyor.
+
 ## Sınırlamalar
 
 - Google ile hızlı kayıt akışı `CompleteRegistration` göndermez (yalnızca
