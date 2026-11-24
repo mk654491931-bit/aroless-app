@@ -84,6 +84,39 @@ export function isMetaCapiConfigured(): boolean {
 }
 
 /**
+ * Pazarlama izni — üç durumlu normalize.
+ *
+ * Hesap metadata'sı boolean, Paddle `customData` ise string taşır. Bilinmeyen
+ * değer "unknown" olur; CAPI kapısı varsayılan olarak REDDEDER.
+ */
+export type MetaConsentState = "granted" | "denied" | "unknown";
+
+export function normalizeMetaConsent(value: unknown): MetaConsentState {
+  if (value === true) return "granted";
+  if (value === false) return "denied";
+  if (typeof value !== "string") return "unknown";
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "granted" || normalized === "true" || normalized === "1") return "granted";
+  if (normalized === "denied" || normalized === "false" || normalized === "0") return "denied";
+  return "unknown";
+}
+
+/**
+ * Sunucu taraflı `Purchase` için izin kapısı.
+ *
+ * İKİ KAYNAK: hesap metadata'sı (banner tercihi, geri çekme dahil) ve Paddle
+ * transaction `customData` değeri (checkout anındaki tercih, yenilemelere
+ * kopyalanır). Herhangi biri açıkça "denied" ise gönderim YOKTUR; yalnız en az
+ * bir açık "granted" varsa gönderilir. İki kaynak da yoksa varsayılan HAYIR'dır.
+ */
+export function hasMetaCapiConsent(input: { account?: unknown; checkout?: unknown }): boolean {
+  const account = normalizeMetaConsent(input.account);
+  const checkout = normalizeMetaConsent(input.checkout);
+  if (account === "denied" || checkout === "denied") return false;
+  return account === "granted" || checkout === "granted";
+}
+
+/**
  * İstek gövdesini üretir (SAF — ağ yok, test edilebilir).
  *
  * `event_id` verilmişse aynı olayın tarayıcı kopyasıyla tekilleştirilir.
@@ -147,11 +180,9 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<Meta
       body: JSON.stringify(buildMetaCapiPayload(input)),
     });
     if (!res.ok) {
-      // Yanıt gövdesi PII içermez; yine de yalnız kısa bir kesit loglanır.
-      const detail = await res.text().catch(() => "");
-      console.warn(
-        `[Meta CAPI] ${input.eventName} reddedildi (${res.status}): ${detail.slice(0, 300)}`,
-      );
+      // Yanıt gövdesi loglanmaz: hata ayrıntısı istekteki kişisel verileri
+      // yansıtabilir. Durum kodu teşhis için yeterlidir.
+      console.warn(`[Meta CAPI] ${input.eventName} reddedildi (${res.status})`);
       return { sent: false, error: `http_${res.status}` };
     }
     return { sent: true };

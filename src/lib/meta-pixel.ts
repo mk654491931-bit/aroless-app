@@ -40,6 +40,25 @@ declare global {
 let pixelInitialized = false;
 
 /**
+ * Meta'nın tarayıcıda bıraktığı pazarlama çerezlerini siler.
+ *
+ * İzin geri çekildiğinde yalnız yeni olayları durdurmak yetmez: daha önce
+ * yazılmış `_fbp`/`_fbc` çerezleri de pazarlama verisidir. Script'i geri
+ * yüklemek mümkün değildir; ancak bundan sonraki olaylar kapıda durur ve
+ * mevcut çerezler temizlenir.
+ */
+export function clearMetaBrowserCookies(): void {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
+  const host = window.location.hostname;
+  const domains = ["", host, `.${host}`];
+  for (const name of ["_fbp", "_fbc"]) {
+    for (const domain of domains) {
+      document.cookie = `${name}=; Max-Age=0; path=/;` + (domain ? ` domain=${domain};` : "");
+    }
+  }
+}
+
+/**
  * Preview/staging'de pikseli tamamen kapatma anahtarı.
  *
  * Production verisini test trafiğiyle kirletmemek için önizleme ortamında

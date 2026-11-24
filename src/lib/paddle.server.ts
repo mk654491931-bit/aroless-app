@@ -377,6 +377,14 @@ export async function createPaddleCheckoutSession(opts: {
   userId: string;
   email?: string | null;
   plan?: PlanId;
+  /**
+   * Checkout anındaki pazarlama çerez izni.
+   *
+   * Paddle `customData` sunucuda yazılır ve yenileme işlemlerine kopyalanır;
+   * webhook CAPI `Purchase` gönderirken bunu hesap metadata'sıyla birlikte
+   * okur. Gönderilmezse varsayılan **denied** olur (izin yoksa ölçüm yok).
+   */
+  marketingConsent?: boolean;
 }): Promise<CheckoutSession> {
   const plan = isPlanId(opts.plan) ? opts.plan : "Pro";
   const settings = paddleSettings();
@@ -409,7 +417,12 @@ export async function createPaddleCheckoutSession(opts: {
   try {
     const transaction = await paddle.transactions.create({
       items: [{ priceId, quantity: 1 }],
-      customData: { userId: opts.userId, plan, source: "aroless-web" },
+      customData: {
+        userId: opts.userId,
+        plan,
+        source: "aroless-web",
+        marketingConsent: opts.marketingConsent === true ? "granted" : "denied",
+      },
     });
 
     if (!transaction?.id) {
@@ -1243,12 +1256,15 @@ export function verifyPaddleSignature(
     const key = part.slice(0, eq).trim();
     const value = part.slice(eq + 1).trim();
     if (key === "ts" && !tsRaw) tsRaw = value;
-    else if (key === "h1" && value) hashes.push(value);
+    else if (key === "h1" && /^[0-9a-f]{64}$/i.test(value)) hashes.push(value);
   }
+  if (!/^\d+$/.test(tsRaw) || hashes.length === 0) return false;
   const ts = Number.parseInt(tsRaw, 10);
-  if (!Number.isFinite(ts) || hashes.length === 0) return false;
-  // Paddle SDK ile aynı pencere: eski imza replay sayılır.
-  if (nowMs > (ts + 5) * 1000) return false;
+  if (!Number.isFinite(ts)) return false;
+  // Paddle SDK ile aynı 5 saniyelik pencere: hem eski imza (replay) hem de
+  // geleceğe tarihlenmiş imza reddedilir.
+  const nowSec = Math.floor(nowMs / 1000);
+  if (Math.abs(nowSec - ts) > 5) return false;
   const expected = Buffer.from(
     createHmac("sha256", secret).update(`${ts}:${rawBody}`).digest("hex"),
     "hex",

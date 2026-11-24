@@ -12,6 +12,7 @@ import {
   paddleTransactionId,
   useSubscriptionConfirmation,
 } from "@/lib/subscription-confirmation";
+import { hasMarketingConsent } from "@/lib/cookie-consent";
 import { purchaseEventId } from "@/lib/meta-config";
 import { trackMetaEvent } from "@/lib/meta-pixel";
 import { clearPlanPurchasePending, markPlanPurchasePending } from "@/lib/plan-sync";
@@ -43,6 +44,8 @@ export function PricingModal({
   const autoRan = useRef<PlanId | null>(null);
   /** Meta Pixel `Purchase` — paket, tutar ve tekilleştirme kimliği. */
   const pendingPlan = useRef<PlanId | null>(null);
+  /** Doğrulamanın beklediği paket (React state: ref okuması render'da yapılmaz). */
+  const [expectedTier, setExpectedTier] = useState<PlanId | null>(null);
   const purchaseId = useRef<string | null>(null);
   const purchaseValue = useRef<{ value: number; currency: string } | null>(null);
 
@@ -74,6 +77,9 @@ export function PricingModal({
    */
   const confirmation = useSubscriptionConfirmation({
     enabled: paid,
+    // Zaten ücretli bir kullanıcı yeni paketi satın aldığında eski planı
+    // "onaylandı" saymayız; webhook yeni paketi yazana kadar beklenir.
+    expectedTier,
     refetch: profileFn,
     // Webhook gecikirse Paddle'ın kendi kaydından yazdır: "Paddle başladı
     // diyor ama uygulamada başlamıyor" belirtisi böylece kalıcı olarak çözülür.
@@ -83,17 +89,21 @@ export function PricingModal({
     },
     onConfirmed: () => {
       const plan = pendingPlan.current;
-      if (plan) {
-        const paid = purchaseValue.current;
+      const paid = purchaseValue.current;
+      const eventId = purchaseId.current;
+      // Değer veya işlem kimliği yoksa UYDURMA Purchase gönderme: CAPI aynı
+      // satın almayı gerçek tutarla zaten gönderir. Bu, indirimli bir ödemede
+      // liste fiyatını ciro gibi göstermeyi de engeller.
+      if (plan && paid && eventId) {
         trackMetaEvent(
           "Purchase",
           {
             content_name: plan,
             content_type: "product",
-            value: paid?.value ?? PLAN_BY_ID[plan].usd,
-            currency: paid?.currency ?? "USD",
+            value: paid.value,
+            currency: paid.currency,
           },
-          purchaseId.current,
+          eventId,
         );
       }
       // Bekleyen ödeme işareti temizlenir: paket göründü, artık yoklama yok.
@@ -121,7 +131,9 @@ export function PricingModal({
   const subscribe = useCallback(
     async (plan: PlanId) => {
       setLoading(plan);
+      setPaid(false);
       pendingPlan.current = plan;
+      setExpectedTier(plan);
       purchaseId.current = null;
       purchaseValue.current = null;
       // Kalıcı işaret: kullanıcı sekmeyi yenilese/başka sayfaya geçse bile
@@ -139,7 +151,9 @@ export function PricingModal({
       try {
         // Önce server transaction'ı kullanılır; userId + plan metadata'sı
         // güvenilir biçimde webhook'a taşınır.
-        const session = await checkout({ data: { plan } });
+        const session = await checkout({
+          data: { plan, marketingConsent: hasMarketingConsent() },
+        });
         email = session.email;
         purchaseId.current = purchaseEventId(session.transactionId) ?? purchaseId.current;
         opened = await openPaddleOverlay(
@@ -195,6 +209,7 @@ export function PricingModal({
       setPaid(false);
       autoRan.current = null;
       pendingPlan.current = null;
+      setExpectedTier(null);
       purchaseId.current = null;
       purchaseValue.current = null;
     };

@@ -26,6 +26,32 @@ export function openCookiePreferences() {
   dispatchBrandedEvent(BRAND_EVENTS.cookiePrefs.new, BRAND_EVENTS.cookiePrefs.legacy, undefined);
 }
 
+/**
+ * Pazarlama tercihini HESABA da yazar.
+ *
+ * NEDEN: Meta Conversions API sunucudan çalışır ve webhook isteğinde tarayıcı
+ * çerezi yoktur. Tercih yalnız localStorage'da kalırsa sunucu izni bilemez ve
+ * izin verilmemişken bile `Purchase` gönderebilir. Bu yazma, izni hesap
+ * metadata'sına taşır; geri çekme de aynı yolla anında yansır. Oturum yoksa
+ * sessizce atlanır (checkout sırasında Paddle customData yedeği devrededir).
+ */
+function syncMarketingConsentToAccount(marketing: boolean): void {
+  void import("@/integrations/supabase/client")
+    .then(async ({ supabase }) => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
+      await supabase.auth.updateUser({
+        data: {
+          cookie_marketing_consent: marketing,
+          cookie_marketing_consent_at: new Date().toISOString(),
+        },
+      });
+    })
+    .catch(() => {
+      /* Tercih yerelde kaydedildi; hesap eşitlemesi ödeme akışını durdurmaz. */
+    });
+}
+
 export function CookieBanner() {
   const [visible, setVisible] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
@@ -50,6 +76,7 @@ export function CookieBanner() {
 
   const decide = (a: boolean, m: boolean) => {
     saveCookieConsent({ analytics: a, marketing: m });
+    syncMarketingConsentToAccount(m);
     setAnalytics(a);
     setMarketing(m);
     setVisible(false);

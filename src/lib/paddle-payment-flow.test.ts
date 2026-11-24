@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fakes = vi.hoisted(() => {
   const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
   const result = { data: null as unknown, error: null as { message: string } | null };
+  const userMetadata: Record<string, unknown> = { cookie_marketing_consent: true };
   const chain: Record<string, unknown> = {};
   for (const method of ["select", "eq", "ilike", "is", "update", "order", "limit"]) {
     chain[method] = () => chain;
@@ -27,8 +28,17 @@ const fakes = vi.hoisted(() => {
   chain["then"] = (resolve: (value: unknown) => unknown) => resolve(result);
   return {
     rpcCalls,
+    userMetadata,
     admin: {
       from: () => chain,
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: { user: { user_metadata: userMetadata } },
+            error: null,
+          }),
+        },
+      },
       rpc: async (name: string, args: Record<string, unknown>) => {
         rpcCalls.push({ name, args });
         return { data: "ok", error: null };
@@ -49,7 +59,10 @@ const amountFor = { Starter: "3900", Pro: "5900", Business: "19900" } as const;
 const sign = (body: string) =>
   `ts=${NOW_SEC};h1=${createHmac("sha256", SECRET).update(`${NOW_SEC}:${body}`).digest("hex")}`;
 
-function paymentBody(plan: keyof typeof priceFor) {
+function paymentBody(
+  plan: keyof typeof priceFor,
+  marketingConsent: "granted" | "denied" = "granted",
+) {
   return JSON.stringify({
     event_id: `evt_pay_${plan}`,
     event_type: "transaction.completed",
@@ -63,7 +76,7 @@ function paymentBody(plan: keyof typeof priceFor) {
       details: { totals: { grandTotal: amountFor[plan] } },
       billingPeriod: { startsAt: "2026-11-09T00:00:00Z", endsAt: "2026-12-09T00:00:00Z" },
       items: [{ price: { id: priceFor[plan], productId: `pro_${plan}` } }],
-      customData: { userId: USER_ID, plan },
+      customData: { userId: USER_ID, plan, marketingConsent },
     },
   });
 }
@@ -99,6 +112,7 @@ beforeEach(() => {
   process.env.PADDLE_BUSINESS_PRICE_ID = priceFor.Business;
   // API anahtarı BİLİNÇLİ olarak yok: imza ve plan çözümü ona muhtaç değil.
   fakes.rpcCalls.length = 0;
+  fakes.userMetadata.cookie_marketing_consent = true;
 });
 
 afterEach(() => {
@@ -163,6 +177,24 @@ describe("Paddle ödeme → hesap açma + jeton", () => {
     expect(args["_status"]).toBe("canceled");
     expect(args["_search_credits"]).toBe(0);
     expect(args["_sim_credits"]).toBe(0);
+  });
+
+  it("pazarlama izni yoksa Meta CAPI'ye Purchase GÖNDERMEZ", async () => {
+    process.env.META_CAPI_ACCESS_TOKEN = "test-token";
+    fakes.userMetadata.cookie_marketing_consent = false;
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+      const res = await handlePaddleWebhook(requestFor(paymentBody("Pro", "granted")));
+      expect(res.status).toBe(200);
+
+      const calls = fetchMock.mock.calls as unknown as Array<[string]>;
+      expect(calls.some(([url]) => String(url).includes("/1144034978511312/events"))).toBe(false);
+    } finally {
+      delete process.env.META_CAPI_ACCESS_TOKEN;
+      vi.unstubAllGlobals();
+    }
   });
 
   it("başarılı ödemede Meta'ya işlem kimliğiyle Purchase bildirir", async () => {

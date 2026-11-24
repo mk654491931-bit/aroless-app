@@ -14,8 +14,14 @@ Pixel kimliği: **1144034978511312**.
 
 `Purchase` iki kanaldan gider:
 
-- **Tarayıcı:** `checkout.completed` olayından sonra, abonelik doğrulanınca.
-- **Sunucu (Conversions API):** Paddle `transaction.completed` webhook'u veritabanına yazdıktan sonra.
+- **Tarayıcı:** Yalnız `PricingModal` akışında, `checkout.completed` geldikten ve
+  abonelik webhook/tazeleme ile **gerçekten ücretli** göründükten sonra.
+- **Sunucu (Conversions API):** Paddle `transaction.completed` webhook'u
+  veritabanına yazdıktan sonra, tutar ve işlem kimliği doğrulanmışsa.
+
+`pricing-card` bileşeni artık `checkout.completed` anında `Purchase`
+göndermez; bu, gecikmeli tahsilatta doğrulanmamış ciro yazmayı önler. O yüzeyde
+dönüşüm sunucu CAPI'den gelir.
 
 İki kanal aynı `event_id` değerini kullanır: `purchase-<Paddle işlem kimliği>`.
 Meta bu sayede aynı satın almayı **iki kez saymaz**. Yenilemelerde işlem kimliği
@@ -50,7 +56,26 @@ verilmeden:
 - hiçbir olay gönderilmez.
 
 İzin aynı sekmede banner'dan veya başka sekmede değiştirilirse piksel buna
-anında uyum sağlar. İzin geri çekilirse sonraki olaylar gönderilmez.
+anında uyum sağlar. İzin geri çekilirse sonraki olaylar gönderilmez ve daha
+önce Meta tarafından yazılmış `_fbp`/`_fbc` çerezleri silinir.
+
+### Sunucu tarafı (CAPI) izin kapısı
+
+CAPI webhook isteğinde tarayıcı çerezi yoktur. Bu yüzden izin iki sunucu
+kaynağından okunur:
+
+- **Hesap metadata'sı:** Banner kararı, oturum açıksa
+  `cookie_marketing_consent` alanına yazılır; geri çekme de aynı yolla anında
+  yansır.
+- **Paddle `customData`:** Checkout anındaki tercih `marketingConsent` olarak
+  sunucuda transaction'a yazılır ve Paddle tarafından yenilemelere kopyalanır.
+
+Kural: kaynaklardan biri açıkça `denied` ise **gönderim yoktur**. Yalnız en az
+bir açık `granted` varsa gönderilir. İki kaynak da yoksa varsayılan **HAYIR**dır.
+Bu nedenle izin vermemiş bir kullanıcı için CAPI `Purchase` üretilmez.
+
+İzin vermeden önce yapılan bir satın almanın yenilemesi, sonradan izin
+verilmediği sürece CAPI'ye gitmez; bu bilinçli ve güvenli varsayılandır.
 
 ## Conversions API kurulumu
 
@@ -75,6 +100,24 @@ anında uyum sağlar. İzin geri çekilirse sonraki olaylar gönderilmez.
 
 Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pikseli
 çalışmaya devam eder ve ödeme akışı etkilenmez.
+
+## Production kontrol listesi
+
+- `VITE_META_PIXEL_DISABLED` **tanımlı olmamalı**; tanımlıysa tarayıcı pikseli
+  hiç yüklenmez.
+- `META_CAPI_ACCESS_TOKEN` tanımlı olmalı; yoksa sunucu `Purchase` göndermez.
+- `META_TEST_EVENT_CODE` production'da **boş** olmalı. Vercel'de
+  `VERCEL_ENV=production`, Freebuff/Nitro'da `NODE_ENV=production` iken kod
+  zaten yok sayılır; yine de yanlışlıkla test verisi üretmemek için kaldırın.
+- Paddle webhook için `PADDLE_WEBHOOK_SECRET_KEY` (veya eski adı
+  `PADDLE_WEBHOOK_SECRET`) zorunlu; eksikse imza doğrulanamaz ve webhook 500
+  döner.
+- `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN` ve Starter/Pro/Business fiyat veya
+  ürün kimliklerinden en az biri tanımlı olmalı.
+- Paddle panelindeki webhook adresi `/api/public/webhook/paddle` olmalı;
+  `/api/webhooks/paddle` uyumluluk için açıktır.
+- Meta Events Manager'da domain doğrulaması ve (varsa) CAPI kalite kontrolü
+  yapılmalı.
 
 ## Test / production ayrımı
 
@@ -106,12 +149,15 @@ yoktur. Piksel istemci tarafında kök bileşene bağlıdır ve TanStack Router'
 
 ## Uyumluluk notu
 
-Tarayıcı pikseli pazarlama çerez iznine bağlıdır. **Conversions API ise
-sunucudan çalışır ve çerez gerektirmez**; e-posta ve kullanıcı kimliği Meta'ya
-sadece SHA-256 özetiyle gider. Sunucu taraflı ölçümün KVKK aydınlatma metni ve
-gizlilik politikasında belirtilmesi gerekir. Kullanıcı bazında sunucu tarafı
-izin kapısı istiyorsanız çerez tercihinin profile yazılması ve webhook'ta
-okunması gerekir — mevcut akışta tercih yalnızca tarayıcıda saklanıyor.
+Tarayıcı pikseli pazarlama çerez iznine bağlıdır. **Conversions API sunucudan
+çalışır ve tarayıcı çerezi gerektirmez**; ancak hesap metadata'sı ve Paddle
+`customData` üzerinden **izin kapısına** tabidir. E-posta ve kullanıcı kimliği
+Meta'ya sadece SHA-256 özetiyle gider; ödeme kartı bilgileri hiçbir zaman
+gönderilmez.
+
+KVKK Aydınlatma Metni ve Çerez Politikası'nda Meta Pixel/Conversions API,
+Meta Platforms ile paylaşılan veri ve SHA-256 özetleme açıkça belirtilir.
+Webhook loglarında e-posta adresi yazılmaz; CAPI hata gövdesi de loglanmaz.
 
 ## Sınırlamalar
 
@@ -120,3 +166,8 @@ okunması gerekir — mevcut akışta tercih yalnızca tarayıcıda saklanıyor.
   “kayıt” sayılmaması için bilinçli bir tercihtir.
 - `noscript` görseli yoktur: izin kontrolü yapamadan çalışacağı için pazarlama
   rızasını delen bir istek üretirdi.
+- CAPI `Purchase` şu anda `fbp`/`fbc`, istemci IP'si ve user-agent taşımaz;
+  eşleşme e-posta özeti + kullanıcı kimliğiyle yapılır. Daha yüksek eşleşme
+  kalitesi için bu alanların checkout'ta toplanıp webhook'a taşınması gerekir.
+- `PricingCard` yüzeyinde tarayıcı `Purchase` yoktur; dönüşüm sunucu CAPI'den
+  gelir. Bu bileşen şu anda uygulamada kullanılmıyor.

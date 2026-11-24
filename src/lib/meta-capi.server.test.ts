@@ -11,6 +11,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildMetaCapiPayload,
+  hasMetaCapiConsent,
+  normalizeMetaConsent,
   sendMetaCapiEvent,
   sendMetaPurchase,
   sha256Hex,
@@ -31,6 +33,31 @@ type CapiPayload = {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+
+describe("CAPI pazarlama izni", () => {
+  it("boolean ve string değerleri normalize eder", () => {
+    expect(normalizeMetaConsent(true)).toBe("granted");
+    expect(normalizeMetaConsent("GRANTED")).toBe("granted");
+    expect(normalizeMetaConsent(false)).toBe("denied");
+    expect(normalizeMetaConsent("denied")).toBe("denied");
+    expect(normalizeMetaConsent(undefined)).toBe("unknown");
+  });
+
+  it("izin yoksa veya iki kaynak da bilinmiyorsa REDDEDER", () => {
+    expect(hasMetaCapiConsent({})).toBe(false);
+    expect(hasMetaCapiConsent({ account: undefined, checkout: undefined })).toBe(false);
+  });
+
+  it("en az bir açık izin varsa kabul eder", () => {
+    expect(hasMetaCapiConsent({ account: true })).toBe(true);
+    expect(hasMetaCapiConsent({ checkout: "granted" })).toBe(true);
+  });
+
+  it("açık bir RED varsa diğer kaynak izin verse bile göndermez", () => {
+    expect(hasMetaCapiConsent({ account: false, checkout: "granted" })).toBe(false);
+    expect(hasMetaCapiConsent({ account: true, checkout: "denied" })).toBe(false);
+  });
 });
 
 describe("buildMetaCapiPayload", () => {

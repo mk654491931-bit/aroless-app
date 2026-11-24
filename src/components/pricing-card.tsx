@@ -1,17 +1,13 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { apiFetch } from "@/lib/api-client";
 import { getMyPromoCode } from "@/lib/promo.functions";
 import { openPaddleOverlay, openPaddlePlanCheckout } from "@/lib/paddle-checkout";
-import {
-  isCheckoutCompleted,
-  paddleCheckoutValue,
-  paddleTransactionId,
-} from "@/lib/subscription-confirmation";
+import { isCheckoutCompleted } from "@/lib/subscription-confirmation";
 import { PLAN_BY_ID } from "@/lib/plans";
-import { purchaseEventId } from "@/lib/meta-config";
+import { hasMarketingConsent } from "@/lib/cookie-consent";
 import { trackMetaEvent } from "@/lib/meta-pixel";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -59,9 +55,6 @@ export function PricingCard({ className }: { className?: string }) {
   const [loading, setLoading] = useState(false);
   const qc = useQueryClient();
   const promoFn = useServerFn(getMyPromoCode);
-  const purchaseId = useRef<string | null>(null);
-  const purchaseValue = useRef<{ value: number; currency: string } | null>(null);
-  const purchaseTracked = useRef(false);
 
   /**
    * Ödeme bitti olayı — indirim durumundan BAĞIMSIZ.
@@ -75,34 +68,18 @@ export function PricingCard({ className }: { className?: string }) {
    */
   const onCheckoutEvent = (event: unknown) => {
     if (!isCheckoutCompleted(event)) return;
-    purchaseId.current = purchaseEventId(paddleTransactionId(event)) ?? purchaseId.current;
-    purchaseValue.current = paddleCheckoutValue(event) ?? purchaseValue.current;
     void qc.invalidateQueries({ queryKey: ["profile"] });
     toast.success("Ödeme alındı — aboneliğin aktifleşmesini doğruluyoruz…", {
       description: "Paket, ödeme kaydı tamamlandığında otomatik yükselir.",
     });
-    // `checkout.completed` birden çok kez gelebilir; Purchase TEK kez sayılır.
-    if (!purchaseTracked.current) {
-      purchaseTracked.current = true;
-      const paid = purchaseValue.current;
-      trackMetaEvent(
-        "Purchase",
-        {
-          content_name: "Pro",
-          content_type: "product",
-          value: paid?.value ?? PLAN_BY_ID.Pro.usd,
-          currency: paid?.currency ?? "USD",
-        },
-        purchaseId.current,
-      );
-    }
+    // BURADA `Purchase` GÖNDERİLMEZ. `checkout.completed` Paddle'ın başarılı
+    // checkout olayıdır ama yetki/ödeme kaydı webhook ile doğrulanmadan Meta'ya
+    // ciro yazmak, gecikmeli tahsilatta yanlış dönüşüm üretir. Sunucu CAPI
+    // `transaction.completed` + veritabanı yazımı sonrasında tek kez gönderir.
   };
 
   async function upgrade() {
     setLoading(true);
-    purchaseId.current = null;
-    purchaseValue.current = null;
-    purchaseTracked.current = false;
     let opened = false;
 
     // Hesaba bağlı kod (varsa) ödeme ekranına ön-doldurulur. Oturum yoksa
@@ -113,7 +90,7 @@ export function PricingCard({ className }: { className?: string }) {
       const resp = await apiFetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "Pro" }),
+        body: JSON.stringify({ plan: "Pro", marketingConsent: hasMarketingConsent() }),
       });
       const json = (await resp.json()) as {
         transactionId?: string;
@@ -124,7 +101,6 @@ export function PricingCard({ className }: { className?: string }) {
         error?: string;
       };
       if (resp.ok && json.transactionId) {
-        purchaseId.current = purchaseEventId(json.transactionId) ?? purchaseId.current;
         opened = await openPaddleOverlay(
           {
             transactionId: json.transactionId,

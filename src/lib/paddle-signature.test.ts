@@ -68,6 +68,11 @@ describe("verifyPaddleSignature", () => {
     expect(verifyPaddleSignature(BODY, SECRET, sign(BODY, old), NOW)).toBe(false);
   });
 
+  it("geleceğe tarihlenmiş imzayı reddeder (saat sıçraması)", () => {
+    const future = NOW_SEC + 30;
+    expect(verifyPaddleSignature(BODY, SECRET, sign(BODY, future), NOW)).toBe(false);
+  });
+
   it("anahtar rotasyonundaki birden çok h1'den geçerli olanı kabul eder", () => {
     const header = `ts=${NOW_SEC};h1=${"0".repeat(64)};h1=${createHmac("sha256", SECRET)
       .update(`${NOW_SEC}:${BODY}`)

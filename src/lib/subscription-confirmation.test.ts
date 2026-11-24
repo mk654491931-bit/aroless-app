@@ -74,6 +74,28 @@ describe("confirmationStep — bekleme ve zaman aşımı", () => {
     expect(step).toEqual({ status: "confirmed", delayMs: null, done: true });
   });
 
+  it("zaten ücretli ama BAŞKA paketteyse yeni transaction'ı bekler", () => {
+    // Pro → Business yükseltmesinde eski Pro planı "onaylandı" sayılmamalı;
+    // aksi hâlde webhook yazmadan Meta'ya Purchase giderdi.
+    const step = confirmationStep({
+      ...base,
+      tier: "Pro",
+      expectedTier: "Business",
+      attempt: 0,
+    });
+    expect(step).toEqual({ status: "pending", delayMs: 1500, done: false });
+  });
+
+  it("beklenen pakete ulaşınca doğrular", () => {
+    const step = confirmationStep({
+      ...base,
+      tier: "business",
+      expectedTier: "Business",
+      attempt: 1,
+    });
+    expect(step).toEqual({ status: "confirmed", delayMs: null, done: true });
+  });
+
   it("plan Free ise tekrar dener", () => {
     const step = confirmationStep({ ...base, tier: "Free", attempt: 0 });
     expect(step).toEqual({ status: "pending", delayMs: 1500, done: false });

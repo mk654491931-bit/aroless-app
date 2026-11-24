@@ -115,11 +115,25 @@ export function paddleCheckoutValue(event: unknown): { value: number; currency: 
  */
 export function confirmationStep(args: {
   tier: string | null | undefined;
+  /**
+   * Bu checkout'ta satın alınan paket. Verilirse profil YALNIZ bu pakete
+   * ulaştığında onaylanır. Aksi hâlde zaten ücretli bir kullanıcı (ör. Pro →
+   * Business yükseltmesi) webhook beklemeden "onaylandı" sayılırdı.
+   */
+  expectedTier?: string | null;
   attempt: number;
   maxAttempts: number;
   intervalMs: number;
 }): { status: ConfirmationStatus; delayMs: number | null; done: boolean } {
-  if (isPaidTier(args.tier)) return { status: "confirmed", delayMs: null, done: true };
+  const current = String(args.tier ?? "")
+    .trim()
+    .toLowerCase();
+  const expected = String(args.expectedTier ?? "")
+    .trim()
+    .toLowerCase();
+  const matchesExpected = !expected || expected === "free" || current === expected;
+  if (isPaidTier(args.tier) && matchesExpected)
+    return { status: "confirmed", delayMs: null, done: true };
   if (args.attempt >= args.maxAttempts) return { status: "timeout", delayMs: null, done: true };
   return { status: "pending", delayMs: args.intervalMs, done: false };
 }
@@ -129,6 +143,8 @@ export type SubscriptionConfirmationOptions = {
   enabled: boolean;
   /** Mevcut plan (profil sorgusundan). */
   tier?: string | null;
+  /** Checkout'ta satın alınan paket; verilirse eşleşme zorunludur. */
+  expectedTier?: string | null;
   /** Profili yeniden oku. Önbellek ATLANIR — sunucudan taze veri şart. */
   refetch: () => Promise<unknown>;
   /**
@@ -184,7 +200,7 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
   status: ConfirmationStatus;
   attempts: number;
 } {
-  const { enabled, tier, refetch, onConfirmed, onTimeout, reconcile } = opts;
+  const { enabled, tier, expectedTier, refetch, onConfirmed, onTimeout, reconcile } = opts;
   const maxAttempts = opts.maxAttempts ?? 10;
   const intervalMs = opts.intervalMs ?? 1_500;
   const maxReconciles = opts.maxReconciles ?? 3;
@@ -229,6 +245,7 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
           lastError = null;
           const step = confirmationStep({
             tier: fresh?.subscription_tier,
+            expectedTier,
             attempt,
             maxAttempts,
             intervalMs,
@@ -260,7 +277,7 @@ export function useSubscriptionConfirmation(opts: SubscriptionConfirmationOption
           await new Promise((r) => setTimeout(r, step.delayMs ?? intervalMs));
         } catch (e) {
           lastError = e;
-          const step = confirmationStep({ tier, attempt, maxAttempts, intervalMs });
+          const step = confirmationStep({ tier, expectedTier, attempt, maxAttempts, intervalMs });
           if (step.status === "timeout") return stop("error");
           await new Promise((r) => setTimeout(r, step.delayMs ?? intervalMs));
         }

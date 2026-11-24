@@ -6,6 +6,8 @@ import { guardAuthed } from "@/lib/api-guard.server";
 
 const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
+  /** Checkout anındaki pazarlama çerez tercihi; yoksa varsayılan HAYIR. */
+  marketingConsent: z.boolean().optional(),
 });
 
 function json(payload: unknown, status: number) {
@@ -53,6 +55,7 @@ export const Route = createFileRoute("/api/checkout")({
             userId: userData.user.id,
             email: userData.user.email,
             plan: parsed.data.plan,
+            marketingConsent: parsed.data.marketingConsent === true,
           });
 
           return json(

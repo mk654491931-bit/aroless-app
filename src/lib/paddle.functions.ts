@@ -10,6 +10,8 @@ import {
 
 const InputSchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
+  /** Checkout anındaki pazarlama çerez tercihi; yoksa varsayılan HAYIR. */
+  marketingConsent: z.boolean().optional(),
 });
 
 /**
@@ -36,6 +38,7 @@ export const createCheckout = createServerFn({ method: "POST" })
       userId: context.userId,
       email: profile?.email ?? null,
       plan: data.plan,
+      marketingConsent: data.marketingConsent === true,
     });
 
     return {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COOKIE_CONSENT_EVENT, hasMarketingConsent } from "@/lib/cookie-consent";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { clearMetaBrowserCookies, trackMetaEvent } from "@/lib/meta-pixel";
 
 /**
  * Meta Pixel'in yaşam döngüsü:
@@ -30,8 +30,10 @@ export function MetaPixel({ pathname }: { pathname: string }) {
   useEffect(() => {
     if (!allowed) {
       // İzin geri çekilirse sayaç sıfırlanır: yeniden izin verildiğinde
-      // aynı sayfa için PageView tekrar gönderilebilsin.
+      // aynı sayfa için PageView tekrar gönderilebilsin. Daha önce yazılmış
+      // `_fbp`/`_fbc` pazarlama çerezleri de silinir.
       lastPath.current = null;
+      clearMetaBrowserCookies();
       return;
     }
     // Aynı yol için tekrar gönderim yok (React StrictMode / yeniden render).

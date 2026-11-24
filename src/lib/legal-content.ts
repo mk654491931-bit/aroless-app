@@ -129,6 +129,7 @@ export const KVKK: LegalDoc = {
         "İşlem güvenliği verileri: IP adresi, oturum kayıtları, cihaz ve tarayıcı bilgisi, giriş zamanları.",
         "Müşteri işlem verileri: abonelik ve kredi hareketleri, fatura bilgileri, destek talepleri.",
         "Kullanım verileri: platform içi analiz geçmişi, kaydedilen ürün ve tedarikçi listeleri.",
+        "Reklam ölçümü verileri: pazarlama izni verilmesi hâlinde Meta Pixel/Conversions API aracılığıyla toplanan ziyaret ve dönüşüm olayları; e-posta ve kullanıcı kimliği yalnızca SHA-256 özetiyle işlenir.",
       ],
     },
     {
@@ -139,7 +140,8 @@ export const KVKK: LegalDoc = {
         "Abonelik ve kredi yönetimi, faturalandırma ve muhasebe süreçleri,",
         "Platform güvenliğinin sağlanması, kötüye kullanım ve dolandırıcılığın önlenmesi,",
         "Destek taleplerinin karşılanması ve hizmet kalitesinin iyileştirilmesi,",
-        "Açık rıza verilmesi hâlinde ticari elektronik ileti gönderimi ve kampanya duyuruları.",
+        "Açık rıza verilmesi hâlinde ticari elektronik ileti gönderimi ve kampanya duyuruları,",
+        "Açık rıza verilmesi hâlinde Meta Pixel/Conversions API ile reklam kampanyalarının ölçümlenmesi.",
       ],
     },
     {
@@ -157,6 +159,7 @@ export const KVKK: LegalDoc = {
       heading: "5. Yurt İçi ve Yurt Dışına Aktarım",
       body: [
         "Kişisel veriler; barındırma, veritabanı, e-posta gönderimi, ödeme altyapısı ve yapay zekâ model sağlayıcıları gibi hizmet sağlayıcılarla, yalnızca hizmetin sunulması amacıyla ve sözleşmesel güvenceler altında paylaşılır.",
+        "Pazarlama izni verilmesi hâlinde reklam ölçümü için Meta Platforms ile sınırlı veri (SHA-256 özetli e-posta/kullanıcı kimliği ve olay bilgisi) paylaşılır; ödeme kartı bilgileri paylaşılmaz.",
         "Bazı hizmet sağlayıcıların sunucuları yurt dışında bulunabilir. Bu durumda aktarım, KVKK m.9 kapsamında standart sözleşme hükümleri veya açık rızaya dayanılarak gerçekleştirilir.",
         "Yasal talep hâlinde yetkili kamu kurum ve kuruluşlarıyla paylaşım yapılabilir.",
       ],
@@ -299,6 +302,7 @@ export const COOKIES: LegalDoc = {
         "Zorunlu çerezler: Oturum açma, güvenlik ve yük dengeleme için gereklidir; devre dışı bırakılamaz. (Örn. kimlik doğrulama tokenı, velora_cookie_consent)",
         "Analitik çerezler: Sayfa görüntüleme ve özellik kullanımını anonimleştirilmiş şekilde ölçer; ürünü iyileştirmek için kullanılır.",
         "Pazarlama çerezleri: Kampanya performansının ölçülmesi ve ilgi alanına dayalı iletişim için kullanılır; yalnızca açık rıza ile etkinleşir.",
+        "Meta Pixel ve Conversions API: Pazarlama izni verdiğinizde Meta Platforms (Facebook/Instagram) reklamlarının ölçümü için ziyaret ve dönüşüm olayları gönderilir. E-posta adresi ve kullanıcı kimliği Meta'ya yalnızca geri döndürülemez SHA-256 özetiyle iletilir; ödeme kartı bilgileri paylaşılmaz.",
         "Tercih çerezleri: Dil, tema (gece/gündüz) ve para birimi gibi ayarlarınızı hatırlar.",
       ],
     },

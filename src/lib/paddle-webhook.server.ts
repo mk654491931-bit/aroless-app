@@ -261,9 +261,8 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
           .maybeSingle();
         if (byEmail?.id) {
           userId = byEmail.id as string;
-          console.log(
-            `[Paddle Webhook] ${event.eventType}: ödeme e-posta ile sahiplendirildi (${email})`,
-          );
+          // E-posta adresi LOGLANMAZ (KVKK): yalnız eşleşmenin yapıldığı bilgisi.
+          console.log(`[Paddle Webhook] ${event.eventType}: ödeme e-posta ile sahiplendirildi`);
         }
       }
     }
@@ -454,17 +453,68 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
           .eq("id" as never, userId as never)
           .maybeSingle();
         const email = (profileRow as { email?: string | null } | null)?.email ?? null;
-        const { sendMetaPurchase } = await import("@/lib/meta-capi.server");
-        const meta = await sendMetaPurchase({
-          transactionId: command.transactionId,
-          email,
-          userId,
-          value: Math.max(0, command.amountCents ?? 0) / 100,
-          currency: command.currency,
-          plan: command.tier && command.tier !== "Free" ? command.tier : null,
-        });
-        if (meta.sent) {
-          console.log(`[Meta CAPI] Purchase gönderildi (${command.transactionId})`);
+
+        const { hasMetaCapiConsent, sendMetaPurchase } = await import("@/lib/meta-capi.server");
+
+        // SUNUCU TARAFI İZİN KAPISI.
+        //
+        // Webhook isteğinde tarayıcı çerezi yoktur; bu yüzden izin iki
+        // sunucu kaynağından okunur:
+        //   1. hesap metadata'sı — banner tercihi, geri çekme dahil günceldir,
+        //   2. Paddle customData — checkout anındaki tercih, yenilemelere kopyalanır.
+        // Herhangi biri "denied" ise gönderim yoktur; iki kaynak da yoksa
+        // varsayılan HAYIR'dır. Böylece izin verilmemiş kullanıcı için CAPI
+        // `Purchase` üretilmez.
+        let accountConsent: unknown;
+        try {
+          const adminAuth = (
+            supabaseAdmin as unknown as {
+              auth?: {
+                admin?: {
+                  getUserById?: (id: string) => Promise<{
+                    data?: {
+                      user?: { user_metadata?: Record<string, unknown> | null } | null;
+                    } | null;
+                    error?: unknown;
+                  }>;
+                };
+              };
+            }
+          ).auth?.admin;
+          if (adminAuth?.getUserById) {
+            const { data: authUser } = await adminAuth.getUserById(userId);
+            accountConsent = authUser?.user?.user_metadata?.["cookie_marketing_consent"];
+          }
+        } catch (consentError) {
+          // İzin okunamazsa GÖNDERME: güvenli taraf "hayır"dır.
+          console.warn(
+            "[Meta CAPI] hesap izni okunamadı:",
+            consentError instanceof Error ? consentError.message : String(consentError),
+          );
+        }
+        const checkoutConsent = (
+          event.data as { customData?: Record<string, unknown> } | null | undefined
+        )?.customData?.["marketingConsent"];
+
+        if (!hasMetaCapiConsent({ account: accountConsent, checkout: checkoutConsent })) {
+          console.log(
+            `[Meta CAPI] Purchase atlandı — pazarlama izni yok (${command.transactionId})`,
+          );
+        } else if (typeof command.amountCents !== "number") {
+          // Tutar bilinmiyorsa sıfır uydurma; CAPI'ye yanlış ciro yazma.
+          console.warn(`[Meta CAPI] Purchase atlandı — tutar yok (${command.transactionId})`);
+        } else {
+          const meta = await sendMetaPurchase({
+            transactionId: command.transactionId,
+            email,
+            userId,
+            value: Math.max(0, command.amountCents) / 100,
+            currency: command.currency,
+            plan: command.tier && command.tier !== "Free" ? command.tier : null,
+          });
+          if (meta.sent) {
+            console.log(`[Meta CAPI] Purchase gönderildi (${command.transactionId})`);
+          }
         }
       } catch (metaError) {
         console.warn("[Meta CAPI] Purchase gönderilemedi:", metaError);

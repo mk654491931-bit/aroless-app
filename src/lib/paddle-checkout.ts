@@ -7,6 +7,7 @@
  */
 
 import { paddlePrefillDiscountCode } from "@/lib/affiliate";
+import { hasMarketingConsent } from "@/lib/cookie-consent";
 import type { PlanId } from "@/lib/plans";
 
 export type CheckoutSessionClient = {
@@ -191,6 +192,10 @@ export async function openPaddleOverlay(
     const plan = options?.plan;
     const customData: Record<string, string> = { source: "aroless-web" };
     if (plan) customData["plan"] = plan;
+    // Sunucu transaction'ı customData'yı zaten taşır; burada yalnız ham fiyat
+    // yedeğinde yazılır. İzin yoksa açıkça "denied" gönderilir — webhook'un
+    // CAPI kapısı varsayılan olarak reddeder.
+    customData["marketingConsent"] = hasMarketingConsent() ? "granted" : "denied";
     const userId = await currentUserId();
     if (userId) customData["userId"] = userId;
     // Kullanıcı kimliği alınamadıysa bile plan bilgisi paketin doğru
@@ -204,7 +209,9 @@ export async function openPaddleOverlay(
 
     paddle.Checkout.open({
       ...checkout,
-      customData,
+      // Mevcut transaction'ın customData'sı sunucuda yazıldı; istemciden
+      // yeniden göndermek onu gölgeleyebilir. Yalnız fiyat checkout'unda taşı.
+      ...(session.transactionId ? {} : { customData }),
       // Kod varsa ön-doldurulur; Paddle kodun geçerliliğine kendisi karar verir.
       // `allowDiscountRemoval: true` yanlış bir kodun satın almayı kilitlemesini
       // önler (müşteri kodu kaldırıp devam edebilir).
