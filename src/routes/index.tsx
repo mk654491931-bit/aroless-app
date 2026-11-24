@@ -141,9 +141,9 @@ export const Route = createFileRoute("/")({
   // istemcinin İLK karesi aynı ağacı üretir (aşağıdaki `loading || !user`
   // dalı landing'i çizer), oturum doğrulanınca panel yerini alır.
   head: () => {
-    const title = "Aroless — Winning Product Finder";
+    const title = "Aroless — E-ticaret ürün araştırma platformu";
     const description =
-      "Discover real trending e-commerce products with supplier prices, profit margins, viral scripts, and Shopify-ready exports.";
+      "Ürün bulucu, trend radarı, kâr hesabı ve rakip analizi tek çalışma alanında. Kaynağı görünen verilerle daha bilinçli ürün kararları verin.";
     const shared = publicPageHead({ path: "/", title, description });
     return {
       meta: [{ title }, { name: "description", content: description }, ...shared.meta],

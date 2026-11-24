@@ -235,27 +235,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     fr: "Limite",
     ar: "على الحد",
   },
-  "Simülasyon referansı": {
-    en: "Simulation reference",
-    es: "Referencia de simulación",
-    de: "Simulationsreferenz",
-    fr: "Référence de simulation",
-    ar: "مرجع المحاكاة",
-  },
-  "Lokal simülasyon": {
-    en: "Local simulation",
-    es: "Simulación local",
-    de: "Lokale Simulation",
-    fr: "Simulation locale",
-    ar: "محاكاة محلية",
-  },
-  "Simülasyon senaryosu": {
-    en: "Simulation scenario",
-    es: "Escenario de simulación",
-    de: "Simulationsszenario",
-    fr: "Scénario de simulation",
-    ar: "سيناريو المحاكاة",
-  },
   "E-ticaret operatörü · İstanbul": {
     en: "E-commerce operator · Istanbul",
     es: "Operador de e-commerce · Estambul",
@@ -297,20 +276,6 @@ export const APP_COPY_EXTRA: Record<string, Copy> = {
     de: "Shop-Prüfer · Bursa",
     fr: "Auditeur de boutiques · Bursa",
     ar: "مدقق متاجر · بورصة",
-  },
-  "Kaynak bazlı kanıt": {
-    en: "Source-backed evidence",
-    es: "Pruebas con fuentes",
-    de: "Quellenbasierte Belege",
-    fr: "Preuves sourcées",
-    ar: "أدلة موثّقة المصدر",
-  },
-  "Supabase RLS ile satır düzeyi güvenlik": {
-    en: "Row-level security with Supabase RLS",
-    es: "Seguridad a nivel de fila con Supabase RLS",
-    de: "Zeilensicherheit mit Supabase RLS",
-    fr: "Sécurité au niveau des lignes avec Supabase RLS",
-    ar: "أمان على مستوى الصفوف مع Supabase RLS",
   },
   "Kayıt anında hoş geldin kredisi": {
     en: "Welcome credits at signup",

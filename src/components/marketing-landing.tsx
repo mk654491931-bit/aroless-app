@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  ArrowUpRight,
   BadgeCheck,
-  Bot,
   Check,
   CircleDollarSign,
   FileText,
@@ -10,41 +10,31 @@ import {
   Layers,
   LineChart,
   Lock,
-  Megaphone,
-  Network,
-  Rocket,
+  Menu,
   Search,
   ShieldCheck,
-  Sparkles,
-  Users,
-  Wallet,
+  Smartphone,
+  TrendingUp,
   Workflow,
-  Zap,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
-import { AgentConsole } from "@/components/landing/agent-console";
-import { CapabilitySimulator } from "@/components/landing/capability-simulator";
-import { AgentTopology } from "@/components/landing/agent-topology";
-import { CountUp } from "@/components/landing/count-up";
 import {
-  ExampleReviews,
-  FaqSection,
-  type ExampleReview,
-  type FaqItem,
-} from "@/components/landing/sections";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { PLANS } from "@/lib/plans";
+import "./landing/landing.css";
 
 const ECOSYSTEMS = [
+  "Trendyol",
   "Amazon",
   "TikTok Shop",
   "Shopify",
-  "Trendyol",
+  "Hepsiburada",
   "eBay",
   "Etsy",
   "Zalando",
-  "Allegro",
-  "Cdiscount",
-  "Hepsiburada",
 ];
 
 const BENTO = [
@@ -52,174 +42,55 @@ const BENTO = [
     icon: Layers,
     title: "Ürün Bulucu",
     text: "Tek aramada veri kaynakları taranır; talep, rekabet ve gerçek birim maliyet (tedarik + kargo + komisyon + KDV) aynı kartta birleşir.",
-    span: "lg:col-span-2",
   },
   {
     icon: ShieldCheck,
     title: "Trend Radar",
     text: "20+ platformdaki talep ve fiyat hareketleri izlenir; trend herkese görünmeden önce raporlanır.",
-    span: "lg:col-span-2",
   },
   {
     icon: Workflow,
     title: "14'lü AI Konsey",
     text: "Farklı uzman roller aynı ürünü ayrı ayrı tartışır; risk, aksiyon ve varsayımlar ayrıştırılmış tek bir raporda toplanır.",
-    span: "lg:col-span-3",
   },
   {
     icon: CircleDollarSign,
     title: "Denetçi & ROI motoru",
     text: "Rakip mağazalar ve listingler denetlenir; fiyat, stok ve kampanya senaryolarının kârlılığı önceden simüle edilir.",
-    span: "lg:col-span-1",
   },
 ];
 
-const METRICS = [
-  {
-    value: <CountUp end={99.9} decimals={1} suffix="%" />,
-    label: "Demo: eşleşme doğruluğu",
-    sim: true,
-    note: "Simülasyon referansı",
-  },
-  {
-    value: <CountUp end={50} prefix="<" suffix="ms" />,
-    label: "Demo: ajan yanıt süresi",
-    sim: true,
-    note: "Lokal simülasyon",
-  },
-  {
-    value: <CountUp end={10} suffix="k+" />,
-    label: "Demo: işlenen olay sayısı",
-    sim: true,
-    note: "Demo verisi",
-  },
-  {
-    value: <CountUp end={312} prefix="+" suffix="%" />,
-    label: "Demo: simülasyon ROI artışı",
-    sim: true,
-    note: "Simülasyon senaryosu",
-  },
-];
-
-/**
- * Affiliate programı — landing'de görünür olmalı.
- *
- * NEDEN BURADA: program uçtan uca kodluydu ama landing sayfasında tek bir
- * işaret yoktu; ziyaretçi affiliate sayfasının varlığını ancak footer'dan
- * görebiliyordu. Metinler kampanyanın GERÇEK kurallarıdır (%30 oran, bir
- * müşteri için en fazla 12 ay, 30 gün bekleme, $75 eşiği) ve affiliate /
- * ödeme kaydı ekranlarındaki sayılarla aynı kaynaktan gelir.
- */
-const AFFILIATE_STEPS = [
-  {
-    icon: Users,
-    title: "1 · Başvur",
-    text: "Kitleni ve kanallarını beyan et, şartları kabul et; başvurun admin onayına düşer.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "2 · Kodunu al",
-    text: "Onaydan sonra hesabına özel affiliate kodu tanımlanır; paylaşacağın link /auth?promo=KOD biçimindedir.",
-  },
-  {
-    icon: Megaphone,
-    title: "3 · Paylaş, komisyon biriksin",
-    text: "Kodunla gelen müşteri aboneliğini sürdürdükçe her yenileme ödemesinden komisyon yazılır.",
-  },
-  {
-    icon: Wallet,
-    title: "4 · Ödemeni al",
-    text: "Ödenebilir bakiyen $75'i geçince Wise veya IBAN ile ödeme yapılır; her komisyon 30 gün bekletilir.",
-  },
-];
-
-/** Affiliate kuralları — affiliate sayfası ve ödeme kaydıyla aynı sayılar. */
-const AFFILIATE_RULES = ["%30 oran", "En fazla 12 ay", "30 gün bekleme", "$75 eşiği"];
-
-/* What we do — animated capability cards (hover-follow spotlight) */
 const WHAT_WE_DO = [
   {
     icon: Search,
     step: "01",
     title: "Piyasayı analist gibi tara",
     text: "20+ platform ve ülke ekonomisi izlenir; talep sıçramaları, sezon kaymaları ve marj bozulmaları herkes fark etmeden önce yüzeye çıkar.",
-    accent: "indigo",
   },
   {
     icon: Gauge,
     step: "02",
     title: "Ürünü gerçek ekonomi ile puanla",
     text: "Ödül puanı yalnız talebi değil gerçek birim ekonomisini de okur: tedarik, kargo, komisyon, KDV, iade ve reklam. %420 trend, -%12 marjı gizleyemez.",
-    accent: "emerald",
   },
   {
     icon: Workflow,
     step: "03",
     title: "Sınırsız deneme: eğitim simülatörü",
     text: "Karar vermeden önce sezon ve kampanya senaryolarını simüle et. Yaptığın hatanın bedelini gerçek stokla değil, simülasyonda öde.",
-    accent: "indigo",
   },
   {
     icon: LineChart,
     step: "04",
     title: "Kanıtı ve aksiyonu birlikte al",
     text: "14'lü AI Konsey her ürün için riski, aksiyonu ve varsayımları ayrı ayrı yazar. Hangi veriye dayandığını görürsün — kara kutu yok.",
-    accent: "emerald",
   },
 ];
 
-/**
- * Temsilî örnek yorumlar — GERÇEK müşteri yorumu DEĞİLDİR.
- * Arayüzde hem bölüm hem kart seviyesinde "örnek" olarak etiketlenir
- * (bkz. sections.tsx → ExampleReviews).
- */
-const EXAMPLE_REVIEWS: ExampleReview[] = [
+const FAQ_ITEMS = [
   {
-    name: "Elif Kaya",
-    role: "E-ticaret operatörü · İstanbul",
-    market: "TR",
-    initials: "EK",
-    quote:
-      "Üç ürünü trend zirvesine çıkmadan radar üzerinden lansmana aldık. Kâr tablosu, ikinci en çok satan ürünümüzü sessizce öldürecek komisyon yapısını yakaladı.",
-  },
-  {
-    name: "Ahmet Demir",
-    role: "İhracatçı · Gaziantep",
-    market: "TR",
-    initials: "AD",
-    quote:
-      "Altı ülkeye ihracat yapıyorum, ekonomiyi eskiden Excel'de tutuyordum. Şimdi ülke başına kapıya maliyeti saniyeler içinde görüyorum.",
-  },
-  {
-    name: "Merve Aksoy",
-    role: "Dropshipping · İzmir",
-    market: "TR",
-    initials: "MA",
-    quote:
-      "Simülatörde sezon oynarken öğrendiklerim, geçen yıl iki kez para kaybettiren hatayı tekrarlamamı engelledi.",
-  },
-  {
-    name: "Can Yılmaz",
-    role: "Ajans kurucusu · Ankara",
-    market: "TR",
-    initials: "CY",
-    quote:
-      "Müşterilerimize ülke + platform bazında net kâr projeksiyonu çıkaran tek araç. Konsey raporları sunumlarımızın yıldızı oldu.",
-  },
-  {
-    name: "Zeynep Şahin",
-    role: "Mağaza denetçisi · Bursa",
-    market: "TR",
-    initials: "ZŞ",
-    quote:
-      "Mağaza denetçisiyle rakiplerimizin zayıf noktalarını haftalar öncesinden görüyoruz. SEO kiti ile ürünleri aynı gün pazara taşıyoruz.",
-  },
-];
-
-const FAQ_ITEMS: FaqItem[] = [
-  {
-    q: "Landing'deki demolar gerçek mi, simülasyon mu?",
-    a: "Demolar deterministik ve yerel veriyle çalışır; dış servise istek gitmez. Ürünün içinde aynı hat gerçek piyasa verisiyle çalışır ve her adımı inceleyebilirsin.",
+    q: "Veriler nereden geliyor?",
+    a: "Platform ve pazar yeri kaynakları tek hatta toplanır; her skorun yanında kaynağı ve ölçüm tarihi gösterilir. Bir kaynağa erişilemediğinde sonuç doğrulanmamış olarak işaretlenir.",
   },
   {
     q: "Hangi platform ve ülkeleri kapsıyor?",
@@ -243,611 +114,608 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-/**
- * Aroless — enterprise dark landing page.
- * All interactive demos stream deterministic, pre-loaded local simulation
- * payloads: zero external API calls, zero network latency, no accounts needed.
- */
-export function MarketingLanding() {
+const PLAN_DESCRIPTIONS: Record<string, string> = {
+  Starter: "Tek başına araştırma yapan satıcılar için.",
+  Pro: "Büyüyen mağazalar ve küçük ekipler için.",
+  Business: "Birden fazla kanalı yöneten ekipler için.",
+};
+
+function ProductPreview() {
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#050608] font-sans text-slate-200 antialiased">
-      {/* Page atmosphere */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[52rem] overflow-hidden"
-      >
-        <div className="ent-orb ent-orb-a" />
-        <div className="ent-orb ent-orb-b" />
-        <div className="ent-grid-bg" />
-        <div className="absolute left-1/2 top-0 h-px w-[min(72rem,92%)] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+    <div className="al-preview" aria-label="Örnek ürün analiz raporu">
+      <div className="al-preview-top">
+        <span className="al-preview-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className="al-preview-url">app.aroless.com / ürün-raporu</span>
+        <span className="al-preview-tag">Örnek görünüm</span>
       </div>
 
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050608]/92">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link to="/" className="shrink-0">
-            <BrandLogo />
+      <div className="al-preview-body">
+        <div className="al-preview-head">
+          <div className="al-product">
+            <span className="al-product-icon" aria-hidden="true">
+              <Smartphone size={18} strokeWidth={1.6} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <p className="al-preview-kicker">Ürün raporu · 12 Kasım</p>
+              <h3>Manyetik telefon tutucu</h3>
+              <p>Ev &amp; Yaşam · Trendyol + TikTok Shop</p>
+            </div>
+          </div>
+          <div>
+            <div className="al-score">
+              <svg viewBox="0 0 72 72" aria-hidden="true">
+                <circle
+                  cx="36"
+                  cy="36"
+                  r="30"
+                  fill="none"
+                  stroke="var(--al-sage-2)"
+                  strokeWidth="5"
+                />
+                <circle
+                  cx="36"
+                  cy="36"
+                  r="30"
+                  fill="none"
+                  stroke="var(--al-green)"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray="188.5"
+                  strokeDashoffset="30.2"
+                  transform="rotate(-90 36 36)"
+                />
+              </svg>
+              <div>
+                <strong>84</strong>
+                <small>/100</small>
+              </div>
+            </div>
+            <span className="al-score-label">Fırsat skoru</span>
+          </div>
+        </div>
+
+        <div className="al-metrics">
+          <div className="al-metric">
+            <span>Birim maliyet</span>
+            <strong>₺184</strong>
+            <small>Tedarik + kargo</small>
+          </div>
+          <div className="al-metric">
+            <span>Önerilen fiyat</span>
+            <strong>₺499</strong>
+            <small>Pazar ortalaması</small>
+          </div>
+          <div className="al-metric">
+            <span>Net marj</span>
+            <strong>%31</strong>
+            <small>Komisyon sonrası</small>
+          </div>
+        </div>
+
+        <div className="al-chart">
+          <div className="al-chart-head">
+            <span>Talep ivmesi</span>
+            <span className="al-chart-up">
+              <TrendingUp size={11} /> +38%
+            </span>
+          </div>
+          <svg viewBox="0 0 320 58" preserveAspectRatio="none" aria-hidden="true">
+            <path
+              d="M0 48 C 24 46, 36 42, 56 44 S 92 38, 112 36 S 146 39, 168 30 S 202 24, 224 26 S 260 18, 284 14 S 306 12, 320 6 L 320 58 L 0 58 Z"
+              fill="rgba(28, 90, 67, 0.08)"
+            />
+            <path
+              d="M0 48 C 24 46, 36 42, 56 44 S 92 38, 112 36 S 146 39, 168 30 S 202 24, 224 26 S 260 18, 284 14 S 306 12, 320 6"
+              fill="none"
+              stroke="var(--al-green)"
+              strokeLinecap="round"
+              strokeWidth="1.8"
+            />
+          </svg>
+          <div className="al-chart-axis">
+            <span>Eyl</span>
+            <span>Eki</span>
+            <span>Kas</span>
+          </div>
+        </div>
+
+        <div className="al-evidence">
+          <p className="al-evidence-title">Kanıtlar</p>
+          <div className="al-evidence-row">
+            <BadgeCheck size={12} strokeWidth={2} />
+            <span>Trendyol · son 30 gün</span>
+            <b>1.240 satış</b>
+          </div>
+          <div className="al-evidence-row">
+            <BadgeCheck size={12} strokeWidth={2} />
+            <span>TikTok Shop · içerik hacmi</span>
+            <b>18 video</b>
+          </div>
+          <div className="al-evidence-row">
+            <BadgeCheck size={12} strokeWidth={2} />
+            <span>Amazon · rekabet seviyesi</span>
+            <b>Orta</b>
+          </div>
+        </div>
+
+        <div className="al-verdict">
+          <span className="al-verdict-dot" aria-hidden="true" />
+          <span>Değerlendirme: test etmeye değer</span>
+          <span>3 kanıt doğrulandı</span>
+        </div>
+      </div>
+
+      <div className="al-preview-foot">
+        <Lock size={11} />
+        Veriler kaynak etiketiyle gösterilir; skorun arkasındaki kanıt açıktır.
+      </div>
+    </div>
+  );
+}
+
+export function MarketingLanding() {
+  return (
+    <div className="aroless-landing min-h-screen">
+      <header className="al-header">
+        <div className="al-container al-header-inner">
+          <Link to="/" className="al-brand" aria-label="Aroless ana sayfa">
+            <span className="al-mark">
+              <img src="/logo-mark.png" alt="" width={21} height={21} />
+            </span>
+            <span className="al-wordmark">
+              Aroless
+              <small>Ürün araştırma platformu</small>
+            </span>
           </Link>
-          <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
-            <a href="#platform" className="transition hover:text-slate-100">
+
+          <nav className="al-nav" aria-label="Ana menü">
+            <a href="#platform" className="al-nav-link">
+              Nasıl çalışır
+            </a>
+            <a href="#architecture" className="al-nav-link">
               Platform
             </a>
-            <a href="#architecture" className="transition hover:text-slate-100">
-              Architecture
+            <a href="#pricing" className="al-nav-link">
+              Fiyatlar
             </a>
-            <a href="#metrics" className="transition hover:text-slate-100">
-              Metrics
+            <a href="#faq" className="al-nav-link">
+              SSS
             </a>
-            <a href="#faq" className="transition hover:text-slate-100">
-              FAQ
-            </a>
-            <Link to="/tools" className="transition hover:text-slate-100">
+            <Link to="/tools" className="al-nav-link">
               Araçlar
             </Link>
-            <Link to="/affiliate" className="transition hover:text-slate-100">
+            <Link to="/affiliate" className="al-nav-link">
               Affiliate
             </Link>
-            <Link to="/pricing" className="transition hover:text-slate-100">
-              Pricing
-            </Link>
           </nav>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/auth"
-              className="hidden rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:border-white/25 hover:text-white sm:block"
-            >
-              Sign in
+
+          <div className="al-header-actions">
+            <Link to="/auth" className="al-header-signin">
+              Giriş yap
             </Link>
-            <Link
-              to="/auth"
-              search={{ mode: "signup" }}
-              className="rounded-lg bg-white px-3.5 py-1.5 text-sm font-semibold text-[#050608] transition hover:bg-slate-200"
-            >
-              Get access
+            <Link to="/auth" search={{ mode: "signup" }} className="al-btn al-btn-primary">
+              Ücretsiz başla
             </Link>
+            <details className="al-mobile-menu">
+              <summary aria-label="Menüyü aç">
+                <Menu size={18} />
+              </summary>
+              <div className="al-mobile-panel">
+                <a href="#platform">Nasıl çalışır</a>
+                <a href="#architecture">Platform</a>
+                <a href="#pricing">Fiyatlar</a>
+                <a href="#faq">SSS</a>
+                <Link to="/tools">Araçlar</Link>
+                <Link to="/affiliate">Affiliate</Link>
+                <Link to="/auth">Giriş yap</Link>
+                <Link to="/auth" search={{ mode: "signup" }} className="al-mobile-cta">
+                  Ücretsiz başla
+                </Link>
+              </div>
+            </details>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10">
-        {/* ── Hero ──────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 md:pt-24">
-          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
-                <Sparkles size={12} /> E-ticaret satıcıları için yapay zekâ
-              </div>
-              {/*
-                Başlık TEK metin düğümü olarak yazılır (renk geçişi h1'in
-                tamamına uygulanır). Sebep: başlık parçalara bölünürse
-                sözlük çevirisi parça parça uygulanır ve cümle sırası dile göre
-                bozulur ("Market signals profitable product decisions into.").
-                Tek düğüm, diller arası doğru cümleyi garanti eder.
-              */}
-              <h1 className="mt-5 bg-gradient-to-r from-indigo-300 via-white to-emerald-300 bg-clip-text text-4xl font-extrabold leading-[1.08] tracking-tight text-transparent sm:text-5xl xl:text-6xl">
-                Piyasa sinyallerini kârlı ürün kararlarına çevir.
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-                Aroless; Ürün Bulucu, Trend Radar, mağaza denetimi, finans motoru ve 14'lü AI
-                Konsey'i tek panelde birleştirir. Talep, rekabet ve gerçek maliyet aynı ekranda
-                hesaplanır — ve her skorun arkasındaki kanıt görünür.
-              </p>
+      <main>
+        {/* Hero */}
+        <section className="al-hero">
+          <div className="al-container">
+            <div className="al-hero-grid">
+              <div className="al-hero-copy">
+                <p className="al-eyebrow">E-ticaret ekipleri için karar platformu</p>
+                <h1 className="al-display">Piyasa sinyallerini kârlı ürün kararlarına çevir.</h1>
+                <p className="al-lead">
+                  Aroless; ürün bulucudan kâr hesabına, trend radarından reklam metnine kadar tüm
+                  araştırmanızı tek bir çalışma masasında toplar. Talep, rekabet ve gerçek maliyet
+                  aynı ekranda görünür; her skorun arkasındaki kaynak açıktır.
+                </p>
 
-              <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-300">
-                {[
-                  "Kaynak bazlı kanıt",
-                  "Supabase RLS ile satır düzeyi güvenlik",
-                  "Kayıt anında hoş geldin kredisi",
-                ].map((item) => (
-                  <li key={item} className="inline-flex items-center gap-1.5">
-                    <BadgeCheck size={15} className="text-emerald-400" /> {item}
+                <ul className="al-checks">
+                  {["Kaynağı görünen skorlar", "Ülke bazlı kâr hesabı", "Tek panelde tüm akış"].map(
+                    (item) => (
+                      <li key={item}>
+                        <Check size={14} strokeWidth={2.4} />
+                        {item}
+                      </li>
+                    ),
+                  )}
+                </ul>
+
+                <div className="al-actions">
+                  <Link to="/auth" search={{ mode: "signup" }} className="al-btn al-btn-primary">
+                    Ücretsiz başla
+                    <ArrowRight size={15} />
+                  </Link>
+                  <a href="#platform" className="al-btn al-btn-secondary">
+                    Nasıl çalışıyor?
+                  </a>
+                </div>
+
+                <ul className="al-microtrust">
+                  <li>
+                    <Check size={11} strokeWidth={2.4} />
+                    Kredi kullanımı — sürpriz fatura yok
                   </li>
+                  <li>
+                    <Check size={11} strokeWidth={2.4} />
+                    Başlamak için kredi kartı gerekmez
+                  </li>
+                  <li>
+                    <Check size={11} strokeWidth={2.4} />
+                    Kayıt sonrası hemen kullanılabilir
+                  </li>
+                </ul>
+              </div>
+
+              <div className="al-hero-visual">
+                <ProductPreview />
+                <div className="al-float-card" aria-hidden="true">
+                  <span className="al-float-icon">
+                    <TrendingUp size={14} strokeWidth={1.8} />
+                  </span>
+                  <div>
+                    <p>Trend radarı</p>
+                    <strong>Ev &amp; Yaşam · +24%</strong>
+                  </div>
+                  <span className="al-float-badge">Bu hafta</span>
+                </div>
+                <p className="al-hero-caption">Örnek ürün raporu · Aroless çalışma alanı</p>
+              </div>
+            </div>
+
+            <div className="al-logo-strip">
+              <p>Şu platformlar için modelleme yapılır</p>
+              <ul>
+                {ECOSYSTEMS.map((name) => (
+                  <li key={name}>{name}</li>
                 ))}
               </ul>
-
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Link
-                  to="/auth"
-                  search={{ mode: "signup" }}
-                  className="sweep-frame group rounded-xl"
-                >
-                  <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
-                    Ücretsiz başla
-                    <ArrowRight
-                      size={16}
-                      className="transition-transform group-hover:translate-x-0.5"
-                    />
-                  </span>
-                </Link>
-                <a
-                  href="#platform"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 px-5 text-sm font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/5"
-                >
-                  Nasıl çalışıyor?
-                </a>
-              </div>
-
-              <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1.5">
-                  <Zap size={13} className="text-indigo-300" /> Kredi kullanımı — sürpriz fatura yok
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Lock size={13} className="text-emerald-400" /> Başlamak için kredi kartı gerekmez
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Rocket size={13} className="text-slate-400" /> Kayıt sonrası hemen kullanılabilir
-                </span>
-              </div>
-            </div>
-
-            {/* Console */}
-            <div className="console-log-in">
-              <AgentConsole />
-              <p className="mt-3 text-center text-[11px] text-slate-600">
-                Deterministic local simulation — no live systems are touched.
-              </p>
-            </div>
-          </div>
-
-          {/* Ecosystem strip */}
-          <div className="mt-16">
-            <p className="text-center text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-600">
-              Şu platformlar için modelleme yapılır
-            </p>
-            <div className="mx-auto mt-4 flex max-w-3xl flex-wrap items-center justify-center gap-2">
-              {ECOSYSTEMS.map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400"
-                >
-                  {name}
-                </span>
-              ))}
             </div>
           </div>
         </section>
 
-        {/* ── What we do ─────────────────────────────────────────── */}
-        <section className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-              <Bot size={12} /> What we do
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Dört adım, tek sonuç: izlenebilir karar.
-            </h2>
-            <p className="mt-3 text-slate-400">
-              Aroless e-ticaret araştırmasını izlenebilir bir hatta dönüştürür — her adımın nasıl
-              çalıştığını görmek için kartların üzerine gel.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {WHAT_WE_DO.map((card, i) => (
-              <div
-                key={card.title}
-                onMouseMove={(e) => {
-                  const el = e.currentTarget;
-                  const r = el.getBoundingClientRect();
-                  el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-                  el.style.setProperty("--my", `${e.clientY - r.top}px`);
-                }}
-                className={`wwd-card group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/70 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1.5 ${
-                  card.accent === "emerald"
-                    ? "hover:border-emerald-400/40"
-                    : "hover:border-indigo-400/40"
-                }`}
-                style={{ animationDelay: `${i * 90}ms` }}
-              >
-                {/* hover-follow spotlight + glow wash */}
-                <span
-                  aria-hidden
-                  className={`pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 ${
-                    card.accent === "emerald"
-                      ? "bg-[radial-gradient(240px_circle_at_var(--mx,50%)_var(--my,50%),rgba(16,185,129,0.14),transparent_70%)]"
-                      : "bg-[radial-gradient(240px_circle_at_var(--mx,50%)_var(--my,50%),rgba(99,102,241,0.16),transparent_70%)]"
-                  }`}
-                />
-                <span
-                  aria-hidden
-                  className={`pointer-events-none absolute -right-14 -top-14 size-36 rounded-full blur-3xl transition duration-500 group-hover:opacity-90 ${
-                    card.accent === "emerald" ? "bg-emerald-500/10" : "bg-indigo-500/15"
-                  }`}
-                />
-
-                <div className="relative flex items-start justify-between">
-                  <span
-                    className={`grid size-11 place-items-center rounded-xl border transition duration-300 group-hover:scale-110 ${
-                      card.accent === "emerald"
-                        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-                        : "border-indigo-400/25 bg-indigo-400/10 text-indigo-300"
-                    }`}
-                  >
-                    <card.icon size={20} />
-                  </span>
-                  <span className="font-mono text-xs font-semibold tracking-widest text-slate-600 transition group-hover:text-slate-400">
-                    {card.step}
-                  </span>
-                </div>
-                <h3 className="relative mt-5 text-lg font-bold leading-snug text-white">
-                  {card.title}
-                </h3>
-                <p className="relative mt-2 text-sm leading-relaxed text-slate-400">{card.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Capabilities Simulator ────────────────────────────── */}
-        <section id="platform" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-              <Zap size={12} /> Instant value engine
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Motoru kurmadan dene. Kayıt yok, ağ yok.
-            </h2>
-            <p className="mt-3 text-slate-400">
-              Bir kategori seç ve çok adımlı hattı çalıştır. Tüm veri yerelde hazır olduğu için demo
-              anında ve tamamen deterministik çalışır.
-            </p>
-          </div>
-          <div className="mt-10">
-            <CapabilitySimulator />
-          </div>
-        </section>
-
-        {/* ── Architecture ───────────────────────────────────────── */}
-        <section id="architecture" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
-              <Network size={12} /> System architecture
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Uçtan uca izlenebilen bir hat
-            </h2>
-            <p className="mt-3 text-slate-400">
-              Veri toplama → kaynak doğrulama → puanlama → konsey raporu. Her adım deterministik ve
-              tekrarlanabilir.
-            </p>
-          </div>
-
-          <div className="mt-10">
-            <AgentTopology />
-          </div>
-
-          {/* Bento capability grid */}
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {BENTO.map((card) => (
-              <div
-                key={card.title}
-                className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/88 p-6 transition duration-300 hover:-translate-y-1 hover:border-white/20 ${
-                  card.span ?? ""
-                }`}
-              >
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-indigo-500/0 blur-3xl transition duration-500 group-hover:bg-indigo-500/15"
-                />
-                <div className="grid size-10 place-items-center rounded-xl border border-indigo-400/20 bg-indigo-400/10">
-                  <card.icon size={18} className="text-indigo-300" />
-                </div>
-                <h3 className="mt-4 font-semibold text-white">{card.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">{card.text}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Compliance banner */}
-          <div className="mt-4 flex flex-col items-start gap-5 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0F1117] via-[#0F1117]/90 to-[#0F1117] p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10">
-                <FileText size={18} className="text-emerald-300" />
-              </div>
+        {/* What we do */}
+        <section id="platform" className="al-section scroll-mt-24">
+          <div className="al-container">
+            <div className="al-section-head al-section-head-split">
               <div>
-                <p className="font-semibold text-white">Veri ve erişim</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Supabase RLS ile satır düzeyi yetkilendirme · KVKK aydınlatma ve veri işleme
-                  sözleşmesi · ödemeler Paddle üzerinden
-                </p>
+                <p className="al-eyebrow">Nasıl çalışır</p>
+                <h2 className="al-h2">Dört adım, tek sonuç: izlenebilir karar.</h2>
               </div>
+              <p className="al-section-sub">
+                Ürün araştırmasını tahminden çıkarıp izlenebilir bir akışa dönüştürür. Her adım aynı
+                çalışma alanında birbirine bağlanır.
+              </p>
             </div>
-            <Link
-              to="/legal/$slug"
-              params={{ slug: "kvkk-aydinlatma-metni" }}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-400/40 hover:text-emerald-300"
-            >
-              Yasal metinler <ArrowRight size={13} />
-            </Link>
+
+            <div className="al-step-grid">
+              {WHAT_WE_DO.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <article key={card.title} className="al-step">
+                    <div className="al-step-top">
+                      <span className="al-step-num">{card.step}</span>
+                      <span className="al-step-icon">
+                        <Icon size={16} strokeWidth={1.7} />
+                      </span>
+                    </div>
+                    <h3>{card.title}</h3>
+                    <p>{card.text}</p>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </section>
 
-        {/* ── Metrics ────────────────────────────────────────────── */}
-        <section id="metrics" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/88">
-            <div className="border-b border-white/10 px-6 py-5 text-center">
-              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                {" "}
-                Simülasyon referansları
-              </h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
-                Aşağıdaki değerler ürünün nasıl ölçtüğünü göstermek için yerel demo verisiyle
-                üretilir; gerçek sonuçlar kullanılan veri kaynağına göre değişir.
-              </p>
-              <p className="mx-auto mt-2 max-w-xl text-[11px] text-amber-300/80">
-                Aşağıdaki 4 değer <strong>simülasyon / demo referansıdır</strong> — gerçek üretim
-                metrikleri değil. Fiyatlandırmayla karıştırılmamalı.
+        {/* Platform modules */}
+        <section id="architecture" className="al-section al-section-dark scroll-mt-24">
+          <div className="al-container">
+            <div className="al-section-head al-section-head-split">
+              <div>
+                <p className="al-eyebrow">Platform</p>
+                <h2 className="al-h2">Uçtan uca izlenebilen bir hat</h2>
+              </div>
+              <p className="al-section-sub">
+                Veri toplama → kaynak doğrulama → puanlama → konsey raporu. Her adım deterministik
+                ve tekrarlanabilir.
               </p>
             </div>
-            <div className="grid grid-cols-2 divide-x divide-y divide-white/5 lg:grid-cols-4 lg:divide-y-0">
-              {METRICS.map((m) => (
-                <div key={m.label} className="relative px-6 py-8 text-center">
-                  {m.sim && (
-                    <span className="absolute right-3 top-3 rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
-                      Sim*
+
+            <div className="al-module-grid">
+              {BENTO.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <article key={card.title} className="al-module">
+                    <span className="al-module-icon">
+                      <Icon size={17} strokeWidth={1.7} />
                     </span>
-                  )}
-                  <div className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                    {m.value}
-                    {m.sim && <span className="align-super text-[10px] text-amber-300">*</span>}
-                  </div>
-                  <div className="mt-2 text-xs uppercase tracking-wide text-slate-500">
-                    {m.label}
-                  </div>
-                  {m.note && <div className="mt-1 text-[10px] text-slate-600">{m.note}</div>}
-                </div>
-              ))}
+                    <h3>{card.title}</h3>
+                    <p>{card.text}</p>
+                  </article>
+                );
+              })}
             </div>
-            <div className="border-t border-white/10 px-6 py-3 text-center text-[10px] leading-relaxed text-slate-500">
-              * <strong>Simülasyon değeri</strong> — lokal deterministik demo payload’ları üzerinden
-              ölçülmüştür. Canlı trafik, veri kaynağı ve kullanım profiline göre değişir.{" "}
+
+            <div className="al-compliance">
+              <div className="al-compliance-copy">
+                <FileText size={16} strokeWidth={1.7} />
+                <div>
+                  <strong>Veri ve erişim</strong>
+                  <p>
+                    Supabase RLS ile satır düzeyi yetkilendirme · KVKK aydınlatma ve veri işleme
+                    sözleşmesi · ödemeler Paddle üzerinden
+                  </p>
+                </div>
+              </div>
               <Link
-                to="/pricing"
-                className="underline decoration-slate-600 underline-offset-4 hover:text-slate-300"
+                to="/legal/$slug"
+                params={{ slug: "kvkk-aydinlatma-metni" }}
+                className="al-compliance-link"
               >
-                Gerçek fiyatlar için /pricing →
+                Yasal metinler <ArrowUpRight size={12} />
               </Link>
             </div>
           </div>
         </section>
 
-        {/* ── Pricing — Tek kaynak: PLANS (src/lib/plans.ts) ─────────── */}
-        <section id="pricing-preview" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
-              <CircleDollarSign size={12} /> Tek fiyat kaynağı — PLANS
+        {/* Editorial quote */}
+        <section className="al-quote-band">
+          <div className="al-container">
+            <span className="al-quote-mark" aria-hidden="true">
+              “
             </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Şeffaf fiyatlandırma. Tüm modüller açık.
-            </h2>
-            <p className="mt-3 text-sm text-slate-400 sm:text-base">
-              Fiyatlar yalnızca{" "}
-              <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">
-                src/lib/plans.ts → PLANS
-              </code>{" "}
-              üzerinden gelir. Landing, /pricing ve ödeme modalı aynı kaynağı okur — fiyat değişince
-              tek yer güncellenir.
-            </p>
-          </div>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {PLANS.map((p) => (
-              <div
-                key={p.id}
-                className={`relative overflow-hidden rounded-2xl border p-6 ${p.highlight ? "border-indigo-400/40 bg-gradient-to-b from-indigo-500/10 via-[#0F1117]/88 to-[#0F1117]/88 shadow-[0_0_40px_-20px_rgba(99,102,241,0.6)]" : "border-white/10 bg-[#0F1117]/88"}`}
-              >
-                {p.highlight && (
-                  <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                    En popüler
-                  </span>
-                )}
-                <h3 className="text-lg font-bold text-white">{p.label}</h3>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight text-white">
-                    ${p.usd}
-                  </span>
-                  <span className="text-sm text-slate-500">/ay</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
-                    {p.credits} kredi / ay
-                  </span>
-                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
-                    {p.hydrogen10Runs.toLocaleString("tr-TR")} Hidrojen10 / ay
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
-                    Tüm modüller açık
-                  </span>
-                </div>
-                <ul className="mt-4 space-y-1.5 text-sm text-slate-400">
-                  {p.features.slice(0, 5).map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <Check size={14} className="mt-0.5 shrink-0 text-emerald-400" /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/pricing"
-                  className={`mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-white text-[#050608] hover:bg-slate-200" : "border border-white/15 text-slate-200 hover:bg-white/5"}`}
-                >
-                  Detaylar <ArrowRight size={14} />
-                </Link>
-              </div>
-            ))}
-          </div>
-          <p className="mx-auto mt-4 max-w-2xl text-center text-[11px] leading-relaxed text-slate-500">
-            Görsel metriklerle fiyat ilişkisi yoktur —{" "}
-            <strong className="text-slate-300">%99.9 doğruluk / +%312 ROI</strong> gibi sayılar
-            simülasyon kartlarındaki yön gösterici değerlerdir, fatura değildir. Güncel ve bağlayıcı
-            fiyatlar her zaman{" "}
-            <Link to="/pricing" className="underline underline-offset-4 hover:text-slate-300">
-              /pricing
-            </Link>{" "}
-            ve ödeme adımında gösterilir.
-          </p>
-        </section>
-
-        {/* ── Affiliate programı ─────────────────────────────────── */}
-        <section id="affiliate" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-              <Megaphone size={12} /> Affiliate programı
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Aroless'u paylaş, aylık komisyon kazan.
-            </h2>
-            <p className="mt-3 text-slate-400">
-              Getirdiğin müşteri ücretli kaldığı sürece her yenilemeden %30 komisyon — bir müşteri
-              için en fazla 12 ay.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {AFFILIATE_STEPS.map((step) => (
-              <div
-                key={step.title}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F1117]/88 p-6 transition duration-300 hover:-translate-y-1 hover:border-emerald-400/30"
-              >
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -right-14 -top-14 size-36 rounded-full bg-emerald-500/0 blur-3xl transition duration-500 group-hover:bg-emerald-500/10"
-                />
-                <div className="grid size-10 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10">
-                  <step.icon size={18} className="text-emerald-300" />
-                </div>
-                <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">{step.text}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {AFFILIATE_RULES.map((rule) => (
-              <span
-                key={rule}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300"
-              >
-                {rule}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-8 flex flex-col items-center gap-3 text-center">
-            <Link to="/affiliate" className="sweep-frame group rounded-xl">
-              <span className="relative z-[1] flex h-11 items-center gap-2 rounded-[11px] bg-gradient-to-r from-emerald-500 to-emerald-400 px-6 text-sm font-semibold text-white transition group-hover:brightness-110">
-                Affiliate programını gör
-                <ArrowRight
-                  size={16}
-                  className="transition-transform group-hover:translate-x-0.5"
-                />
-              </span>
-            </Link>
-            <p className="max-w-xl text-[11px] text-slate-500">
-              Affiliate kodu indirim vermez; indirimler Paddle panelinden yönetilir.
-            </p>
+            <blockquote className="al-quote">
+              İyi karar, daha fazla veri değil; doğru veriyi doğru yerde göstermektir.
+            </blockquote>
+            <p className="al-quote-source">Aroless ürün ekibi</p>
           </div>
         </section>
 
-        {/* ── FAQ ────────────────────────────────────────────────── */}
-        <div id="faq" className="scroll-mt-24">
-          <FaqSection
-            items={FAQ_ITEMS}
-            title="Questions, answered"
-            subtitle="Everything teams ask before deploying Aroless — and how it actually works."
-          />
-        </div>
-
-        {/* ── Final CTA ──────────────────────────────────────────── */}
-        <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F1117]/92 px-6 py-14 text-center sm:px-12">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-24 right-0 h-48 w-96 rounded-full bg-emerald-500/10 blur-3xl"
-            />
-            <div className="relative">
-              <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                İlk analizini dakikalar içinde al.
-              </h2>
-              <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400 sm:text-base">
-                Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya da
-                kredi kartı gerekmez.
+        {/* Pricing */}
+        <section id="pricing" className="al-section scroll-mt-24">
+          <div className="al-container">
+            <div className="al-section-head al-section-head-split">
+              <div>
+                <p className="al-eyebrow">Fiyatlandırma</p>
+                <h2 className="al-h2">Şeffaf fiyatlandırma. Tüm modüller açık.</h2>
+              </div>
+              <p className="al-section-sub">
+                Modül ayrımı yok; paketler yalnızca aylık kullanım hacmini değiştirir. Güncel
+                fiyatlar ödeme adımında gösterilir.
               </p>
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                <Link
-                  to="/auth"
-                  search={{ mode: "signup" }}
-                  className="sweep-frame group rounded-xl"
+            </div>
+
+            <div className="al-pricing-grid">
+              {PLANS.map((plan) => (
+                <article
+                  key={plan.id}
+                  className={`al-plan ${plan.highlight ? "al-plan-featured" : ""}`}
                 >
-                  <span className="relative z-[1] flex h-12 items-center gap-2 rounded-[11px] bg-gradient-to-r from-indigo-500 to-indigo-400 px-7 text-sm font-semibold text-white transition group-hover:brightness-110">
-                    Ücretsiz başla
-                    <ArrowRight
-                      size={16}
-                      className="transition-transform group-hover:translate-x-0.5"
-                    />
-                  </span>
-                </Link>
-                <a
-                  href="#platform"
-                  className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/15 px-6 text-sm font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/5"
-                >
-                  Motoru dene
-                </a>
-              </div>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-xs text-slate-500">
-                {[
-                  "Kredi kartı gerekmez",
-                  "Kayıt anında hoş geldin kredisi",
-                  "İstediğin zaman iptal",
-                ].map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1.5">
-                    <Check size={13} className="text-emerald-400" /> {t}
-                  </span>
+                  <div className="al-plan-top">
+                    <h3 className="al-plan-label">{plan.label}</h3>
+                    {plan.highlight && <span className="al-plan-badge">En popüler</span>}
+                  </div>
+                  <div className="al-plan-price">
+                    <strong>${plan.usd}</strong>
+                    <span>/ay</span>
+                  </div>
+                  <p className="al-plan-desc">{PLAN_DESCRIPTIONS[plan.id]}</p>
+                  <div className="al-plan-rule" />
+                  <ul className="al-plan-list">
+                    {plan.features.slice(0, 5).map((feature) => (
+                      <li key={feature}>
+                        <Check size={12} strokeWidth={2.4} />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/pricing" className="al-plan-cta">
+                    Planı incele <ArrowRight size={12} />
+                  </Link>
+                </article>
+              ))}
+            </div>
+
+            <p className="al-pricing-note">
+              Güncel ve bağlayıcı fiyatlar her zaman{" "}
+              <Link to="/pricing" title="Gerçek fiyatlar için /pricing →">
+                fiyatlandırma sayfasında
+              </Link>{" "}
+              ve ödeme adımında gösterilir.
+            </p>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section id="faq" className="al-section scroll-mt-24">
+          <div className="al-container al-faq-grid">
+            <div className="al-faq-intro">
+              <p className="al-eyebrow">SSS</p>
+              <h2 className="al-h2">Sıkça sorulan sorular</h2>
+              <p>
+                Ürün, veri ve faturalandırma hakkında en sık sorulanlar. Aradığınız cevabı
+                bulamadıysanız destek ekibimize yazabilirsiniz.
+              </p>
+            </div>
+
+            <div className="al-faq-list">
+              <Accordion type="single" collapsible>
+                {FAQ_ITEMS.map((item, i) => (
+                  <AccordionItem key={item.q} value={`faq-${i}`} className="al-faq-item">
+                    <AccordionTrigger className="al-faq-trigger">{item.q}</AccordionTrigger>
+                    <AccordionContent className="al-faq-content">
+                      <p>{item.a}</p>
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
-              </div>
+              </Accordion>
             </div>
           </div>
         </section>
 
-        {/* ── Örnek yorumlar (temsilî — gerçek müşteri yorumu değil) ──── */}
-        <div id="examples" className="scroll-mt-24">
-          <ExampleReviews
-            items={EXAMPLE_REVIEWS}
-            title="Temsilî kullanıcı senaryoları"
-            subtitle="Ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış örnekler."
-          />
-        </div>
+        {/* Final CTA */}
+        <section className="al-cta">
+          <div className="al-container al-cta-inner">
+            <div className="al-cta-copy">
+              <h2>İlk analizini dakikalar içinde al.</h2>
+              <p>
+                Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya da
+                kredi kartı gerekmez.
+              </p>
+              <ul className="al-cta-checks">
+                {[
+                  "Kredi kartı gerekmez",
+                  "Kayıt anında hoş geldin kredisi",
+                  "İstediğin zaman iptal",
+                ].map((item) => (
+                  <li key={item}>
+                    <Check size={12} strokeWidth={2.4} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="al-cta-actions">
+              <Link to="/auth" search={{ mode: "signup" }} className="al-btn al-btn-light">
+                Ücretsiz başla
+                <ArrowRight size={15} />
+              </Link>
+              <Link to="/pricing" className="al-btn al-btn-ghost-light">
+                Fiyatları gör
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* ── Footer ───────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6">
-          <BrandLogo />
-          <p className="text-center text-[11px] text-slate-600">
-            © {new Date().getFullYear()} Aroless. All interactive demos run on deterministic local
-            simulation payloads.
-          </p>
-          <div className="flex items-center gap-4 text-xs text-slate-500">
-            <Link to="/auth" className="hover:text-slate-200">
-              Sign in
+      <footer className="al-footer">
+        <div className="al-container al-footer-main">
+          <div className="al-footer-brand">
+            <Link to="/" className="al-brand" aria-label="Aroless ana sayfa">
+              <span className="al-mark">
+                <img src="/logo-mark.png" alt="" width={21} height={21} />
+              </span>
+              <span className="al-wordmark">
+                Aroless
+                <small>Ürün araştırma platformu</small>
+              </span>
             </Link>
-            <Link to="/tools" className="hover:text-slate-200">
-              Araçlar
-            </Link>
-            <Link to="/affiliate" className="hover:text-slate-200">
-              Affiliate
-            </Link>
-            <Link to="/pricing" className="hover:text-slate-200">
-              Pricing
-            </Link>
-            <a href="#faq" className="hover:text-slate-200">
-              FAQ
-            </a>
-            <a href="#examples" className="hover:text-slate-200">
-              Örnekler
-            </a>
+            <p>
+              E-ticaret ekiplerinin ürün araştırmasını, kâr hesabını ve pazar kararlarını tek
+              çalışma alanında toplayan karar platformu.
+            </p>
+            <p className="al-footer-affiliate">
+              <Link to="/affiliate">Aroless'u paylaş, aylık komisyon kazan.</Link>
+            </p>
+            <p className="al-footer-affiliate-terms">
+              <span>%30 oran</span> · <span>En fazla 12 ay</span> · <span>30 gün bekleme</span> ·{" "}
+              <span>$75 eşiği</span>
+            </p>
+          </div>
+
+          <div className="al-footer-col">
+            <h3>Platform</h3>
+            <ul>
+              <li>
+                <a href="#platform">Nasıl çalışır</a>
+              </li>
+              <li>
+                <a href="#architecture">Platform</a>
+              </li>
+              <li>
+                <Link to="/tools">Araçlar</Link>
+              </li>
+              <li>
+                <Link to="/pricing">Fiyatlar</Link>
+              </li>
+            </ul>
+          </div>
+
+          <div className="al-footer-col">
+            <h3>Şirket</h3>
+            <ul>
+              <li>
+                <Link to="/affiliate">Affiliate programı</Link>
+              </li>
+              <li>
+                <a href="#faq">SSS</a>
+              </li>
+              <li>
+                <Link to="/auth">Giriş yap</Link>
+              </li>
+              <li>
+                <Link to="/auth" search={{ mode: "signup" }}>
+                  Ücretsiz başla
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div className="al-footer-col">
+            <h3>Yasal</h3>
+            <ul>
+              <li>
+                <Link to="/legal/$slug" params={{ slug: "kvkk-aydinlatma-metni" }}>
+                  KVKK aydınlatma metni
+                </Link>
+              </li>
+              <li>
+                <Link to="/legal/$slug" params={{ slug: "veri-isleme-sozlesmesi" }}>
+                  Veri işleme sözleşmesi
+                </Link>
+              </li>
+              <li>
+                <Link to="/legal/$slug" params={{ slug: "cerez-politikasi" }}>
+                  Çerez politikası
+                </Link>
+              </li>
+              <li>
+                <Link to="/legal/$slug" params={{ slug: "kullanim-kosullari" }}>
+                  Kullanım koşulları
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="al-container">
+          <div className="al-footer-bottom">
+            <span>© {new Date().getFullYear()} Aroless. Tüm hakları saklıdır.</span>
+            <div>
+              <Link to="/legal/$slug" params={{ slug: "kvkk-aydinlatma-metni" }}>
+                Gizlilik
+              </Link>
+              <Link to="/legal/$slug" params={{ slug: "kullanim-kosullari" }}>
+                Koşullar
+              </Link>
+              <Link to="/pricing">Fiyatlar</Link>
+            </div>
           </div>
         </div>
       </footer>

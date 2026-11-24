@@ -30,14 +30,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Plateforme",
     ar: "المنصة",
   },
-  Architecture: {
-    en: "Architecture",
-    es: "Arquitectura",
-    de: "Architektur",
-    fr: "Architecture",
-    ar: "البنية",
-  },
-  Metrics: { en: "Metrics", es: "Métricas", de: "Metriken", fr: "Métriques", ar: "المقاييس" },
   FAQ: {
     en: "FAQ",
     es: "Preguntas frecuentes",
@@ -46,14 +38,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     ar: "الأسئلة الشائعة",
   },
   Pricing: { en: "Pricing", es: "Precios", de: "Preise", fr: "Tarifs", ar: "الأسعار" },
-  "Sign in": {
-    en: "Sign in",
-    es: "Iniciar sesión",
-    de: "Anmelden",
-    fr: "Se connecter",
-    ar: "تسجيل الدخول",
-  },
-  Örnekler: { en: "Examples", es: "Ejemplos", de: "Beispiele", fr: "Exemples", ar: "أمثلة" },
   Affiliate: {
     en: "Affiliate",
     es: "Afiliados",
@@ -61,33 +45,12 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Affiliation",
     ar: "التسويق بالعمولة",
   },
-  "Get access": {
-    en: "Get access",
-    es: "Obtener acceso",
-    de: "Zugang erhalten",
-    fr: "Obtenir l'accès",
-    ar: "احصل على الوصول",
-  },
   "What we do": {
     en: "What we do",
     es: "Qué hacemos",
     de: "Was wir tun",
     fr: "Ce que nous faisons",
     ar: "ما نقوم به",
-  },
-  "Instant value engine": {
-    en: "Instant value engine",
-    es: "Motor de valor inmediato",
-    de: "Motor für sofortigen Nutzen",
-    fr: "Moteur de valeur immédiate",
-    ar: "محرك القيمة الفورية",
-  },
-  "System architecture": {
-    en: "System architecture",
-    es: "Arquitectura del sistema",
-    de: "Systemarchitektur",
-    fr: "Architecture système",
-    ar: "بنية النظام",
   },
   "Yasal metinler": {
     en: "Legal documents",
@@ -98,13 +61,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
   },
 
   /* ---------------- Hero ---------------- */
-  "E-ticaret satıcıları için yapay zekâ": {
-    en: "AI for e-commerce sellers",
-    es: "IA para vendedores de e-commerce",
-    de: "KI für E-Commerce-Verkäufer",
-    fr: "IA pour les vendeurs e-commerce",
-    ar: "ذكاء اصطناعي لبائعي التجارة الإلكترونية",
-  },
   "Piyasa sinyallerini kârlı ürün kararlarına çevir.": {
     en: "Turn market signals into profitable product decisions.",
     es: "Convierte las señales del mercado en decisiones rentables de producto.",
@@ -112,14 +68,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Transformez les signaux du marché en décisions produits rentables.",
     ar: "حوّل إشارات السوق إلى قرارات منتجات مربحة.",
   },
-  "Aroless; Ürün Bulucu, Trend Radar, mağaza denetimi, finans motoru ve 14'lü AI Konsey'i tek panelde birleştirir. Talep, rekabet ve gerçek maliyet aynı ekranda hesaplanır — ve her skorun arkasındaki kanıt görünür.":
-    {
-      en: "Aroless unites Product Finder, Trend Radar, store audit, financial engine and the 14-agent AI Council in one panel. Demand, competition and true cost are computed on the same screen — and the evidence behind every score is visible.",
-      es: "Aroless reúne el Buscador de productos, el Radar de tendencias, la auditoría de tienda, el motor financiero y el Consejo de IA de 14 agentes en un solo panel. La demanda, la competencia y el coste real se calculan en la misma pantalla, y la evidencia de cada puntuación es visible.",
-      de: "Aroless vereint Produktfinder, Trend-Radar, Shop-Audit, Finanzmotor und den 14-köpfigen KI-Rat in einem Panel. Nachfrage, Wettbewerb und echte Kosten werden auf demselben Bildschirm berechnet — und die Belege hinter jedem Score sind sichtbar.",
-      fr: "Aroless réunit le Chercheur de produits, le Radar de tendances, l'audit de boutique, le moteur financier et le Conseil IA à 14 agents dans un seul panneau. Demande, concurrence et coût réel sont calculés sur le même écran — et la preuve derrière chaque score est visible.",
-      ar: "يجمع Aroless مكتشف المنتجات ورادار الاتجاهات وتدقيق المتجر والمحرك المالي ومجلس الذكاء الاصطناعي المكوّن من 14 وكيلًا في لوحة واحدة. يُحسب الطلب والمنافسة والتكلفة الحقيقية على الشاشة نفسها، ويظهر الدليل وراء كل تقييم.",
-    },
   "Ücretsiz başla": {
     en: "Start free",
     es: "Empieza gratis",
@@ -155,13 +103,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Utilisable dès l'inscription",
     ar: "جاهز للاستخدام فور التسجيل",
   },
-  "Deterministic local simulation — no live systems are touched.": {
-    en: "Deterministic local simulation — no live systems are touched.",
-    es: "Simulación local determinista: no se toca ningún sistema real.",
-    de: "Deterministische lokale Simulation — es werden keine Livesysteme berührt.",
-    fr: "Simulation locale déterministe — aucun système réel n'est touché.",
-    ar: "محاكاة محلية حتمية — لا تُلمس أي أنظمة حقيقية.",
-  },
   "Şu platformlar için modelleme yapılır": {
     en: "Modelled for these platforms",
     es: "Modelado para estas plataformas",
@@ -178,14 +119,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Quatre étapes, un résultat : une décision traçable.",
     ar: "أربع خطوات ونتيجة واحدة: قرار قابل للتتبع.",
   },
-  "Aroless e-ticaret araştırmasını izlenebilir bir hatta dönüştürür — her adımın nasıl çalıştığını görmek için kartların üzerine gel.":
-    {
-      en: "Aroless turns e-commerce research into a traceable pipeline — hover the cards to see how each step works.",
-      es: "Aroless convierte la investigación de e-commerce en un proceso trazable: pasa el cursor por las tarjetas para ver cómo funciona cada paso.",
-      de: "Aroless macht E-Commerce-Recherche zu einer nachvollziehbaren Pipeline — fahre über die Karten, um jeden Schritt zu sehen.",
-      fr: "Aroless transforme la recherche e-commerce en un pipeline traçable — survolez les cartes pour voir chaque étape.",
-      ar: "يحوّل Aroless أبحاث التجارة الإلكترونية إلى مسار قابل للتتبع — مرّر المؤشر على البطاقات لترى كيف تعمل كل خطوة.",
-    },
   "Piyasayı analist gibi tara": {
     en: "Scan the market like an analyst",
     es: "Analiza el mercado como un analista",
@@ -247,37 +180,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
       ar: "حاكِ سيناريوهات الموسم والحملات قبل أن تقرر. ادفع ثمن أخطائك في المحاكاة لا بمخزون حقيقي.",
     },
 
-  /* ---------------- Platform / mimari ---------------- */
-  "Motoru kurmadan dene. Kayıt yok, ağ yok.": {
-    en: "Try the engine without setting it up. No sign-up, no network.",
-    es: "Prueba el motor sin configurarlo. Sin registro, sin red.",
-    de: "Teste den Motor ohne Einrichtung. Keine Registrierung, kein Netz.",
-    fr: "Essayez le moteur sans installation. Sans inscription, sans réseau.",
-    ar: "جرّب المحرك دون إعداد. بلا تسجيل وبلا شبكة.",
-  },
-  "Bir kategori seç ve çok adımlı hattı çalıştır. Tüm veri yerelde hazır olduğu için demo anında ve tamamen deterministik çalışır.":
-    {
-      en: "Pick a category and run the multi-step pipeline. Because all data is local, the demo runs instantly and fully deterministically.",
-      es: "Elige una categoría y ejecuta el proceso de varios pasos. Como todos los datos son locales, la demo se ejecuta al instante y de forma totalmente determinista.",
-      de: "Wähle eine Kategorie und starte die mehrstufige Pipeline. Da alle Daten lokal vorliegen, läuft die Demo sofort und vollständig deterministisch.",
-      fr: "Choisissez une catégorie et lancez le pipeline multi-étapes. Toutes les données étant locales, la démo s'exécute instantanément et de façon déterministe.",
-      ar: "اختر فئة وشغّل المسار متعدد الخطوات. ولأن كل البيانات محلية، يعمل العرض فورًا وبشكل حتمي تمامًا.",
-    },
-  "Demolar deterministik ve yerel veriyle çalışır; dış servise istek gitmez. Ürünün içinde aynı hat gerçek piyasa verisiyle çalışır ve her adımı inceleyebilirsin.":
-    {
-      en: "The demos run deterministically on local data; no request leaves for an external service. Inside the product the same pipeline runs on real market data and you can inspect every step.",
-      es: "Las demos funcionan de forma determinista con datos locales; no sale ninguna petición a un servicio externo. Dentro del producto, el mismo proceso usa datos de mercado reales y puedes revisar cada paso.",
-      de: "Die Demos laufen deterministisch mit lokalen Daten; es geht keine Anfrage an einen externen Dienst. Im Produkt läuft dieselbe Pipeline mit echten Marktdaten und du kannst jeden Schritt prüfen.",
-      fr: "Les démos tournent de façon déterministe sur des données locales ; aucune requête ne part vers un service externe. Dans le produit, le même pipeline utilise des données de marché réelles et chaque étape est inspectable.",
-      ar: "تعمل العروض بشكل حتمي على بيانات محلية، ولا يُرسل أي طلب إلى خدمة خارجية. وداخل المنتج يعمل المسار نفسه على بيانات سوق حقيقية ويمكنك فحص كل خطوة.",
-    },
-  "Landing'deki demolar gerçek mi, simülasyon mu?": {
-    en: "Are the landing demos real or simulated?",
-    es: "¿Las demos de la landing son reales o simuladas?",
-    de: "Sind die Landing-Demos echt oder simuliert?",
-    fr: "Les démos de la landing sont-elles réelles ou simulées ?",
-    ar: "هل عروض الصفحة الرئيسية حقيقية أم محاكاة؟",
-  },
   "Uçtan uca izlenebilen bir hat": {
     en: "A pipeline you can trace end to end",
     es: "Un proceso trazable de principio a fin",
@@ -377,86 +279,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
       ar: "تُنمذج اقتصادات أكثر من 20 دولة مع Amazon وTikTok Shop وShopify وTrendyol وHepsiburada وeBay وEtsy وZalando وغيرها. وتُدرج منطق العمولة والضريبة والشحن والشهادات لكل دولة في التقييم.",
     },
 
-  /* ---------------- Metrikler ---------------- */
-  "Simülasyon referansları": {
-    en: "Simulation references",
-    es: "Referencias de simulación",
-    de: "Simulationsreferenzen",
-    fr: "Références de simulation",
-    ar: "مراجع المحاكاة",
-  },
-  "Aşağıdaki değerler ürünün nasıl ölçtüğünü göstermek için yerel demo verisiyle üretilir; gerçek sonuçlar kullanılan veri kaynağına göre değişir.":
-    {
-      en: "The values below are produced with local demo data to show how the product measures; real results vary with the data source used.",
-      es: "Los valores siguientes se generan con datos de demo locales para mostrar cómo mide el producto; los resultados reales varían según la fuente de datos.",
-      de: "Die folgenden Werte entstehen mit lokalen Demodaten, um zu zeigen, wie das Produkt misst; echte Ergebnisse hängen von der Datenquelle ab.",
-      fr: "Les valeurs ci-dessous sont produites avec des données de démo locales pour montrer comment le produit mesure ; les résultats réels dépendent de la source de données.",
-      ar: "القيم أدناه مُنتَجة ببيانات عرض محلية لإظهار كيفية القياس؛ أما النتائج الفعلية فتختلف بحسب مصدر البيانات.",
-    },
-  "Aşağıdaki 4 değer": {
-    en: "The 4 values below",
-    es: "Los 4 valores siguientes",
-    de: "Die 4 Werte unten",
-    fr: "Les 4 valeurs ci-dessous",
-    ar: "القيم الأربع أدناه",
-  },
-  "simülasyon / demo referansıdır": {
-    en: "are simulation / demo references",
-    es: "son referencias de simulación / demo",
-    de: "sind Simulations-/Demo-Referenzen",
-    fr: "sont des références de simulation / démo",
-    ar: "هي مراجع محاكاة / عرض",
-  },
-  "— gerçek üretim metrikleri değil. Fiyatlandırmayla karıştırılmamalı.": {
-    en: "— not real production metrics. Must not be confused with pricing.",
-    es: "— no son métricas reales de producción. No deben confundirse con el precio.",
-    de: "— keine echten Produktionsmetriken. Nicht mit der Preisgestaltung verwechseln.",
-    fr: "— pas de vraies métriques de production. À ne pas confondre avec les tarifs.",
-    ar: "— وليست مقاييس إنتاج حقيقية. ويجب عدم الخلط بينها وبين التسعير.",
-  },
-  "Demo: eşleşme doğruluğu": {
-    en: "Demo: match accuracy",
-    es: "Demo: precisión de coincidencia",
-    de: "Demo: Treffgenauigkeit",
-    fr: "Démo : précision de correspondance",
-    ar: "عرض: دقة المطابقة",
-  },
-  "Demo: ajan yanıt süresi": {
-    en: "Demo: agent response time",
-    es: "Demo: tiempo de respuesta del agente",
-    de: "Demo: Antwortzeit des Agenten",
-    fr: "Démo : temps de réponse de l'agent",
-    ar: "عرض: زمن استجابة الوكيل",
-  },
-  "Demo: işlenen olay sayısı": {
-    en: "Demo: events processed",
-    es: "Demo: eventos procesados",
-    de: "Demo: verarbeitete Ereignisse",
-    fr: "Démo : événements traités",
-    ar: "عرض: الأحداث المعالَجة",
-  },
-  "Demo: simülasyon ROI artışı": {
-    en: "Demo: simulated ROI uplift",
-    es: "Demo: aumento de ROI simulado",
-    de: "Demo: simulierter ROI-Zuwachs",
-    fr: "Démo : hausse de ROI simulée",
-    ar: "عرض: زيادة العائد المحاكاة",
-  },
-  "Simülasyon değeri": {
-    en: "Simulation value",
-    es: "Valor de simulación",
-    de: "Simulationswert",
-    fr: "Valeur de simulation",
-    ar: "قيمة المحاكاة",
-  },
-  "— lokal deterministik demo payload’ları üzerinden ölçülmüştür. Canlı trafik, veri kaynağı ve kullanım profiline göre değişir.":
-    {
-      en: "— measured on local deterministic demo payloads. Varies with live traffic, data source and usage profile.",
-      es: "— medido sobre payloads de demo locales y deterministas. Varía según el tráfico real, la fuente de datos y el uso.",
-      de: "— gemessen an lokalen deterministischen Demo-Payloads. Variiert mit Live-Traffic, Datenquelle und Nutzungsprofil.",
-      fr: "— mesuré sur des payloads de démo locaux et déterministes. Varie selon le trafic réel, la source de données et l'usage.",
-      ar: "— مقيسة على حمولات عرض محلية حتمية. وتختلف بحسب الحركة الفعلية ومصدر البيانات ونمط الاستخدام.",
-    },
   "Gerçek fiyatlar için /pricing →": {
     en: "See real prices at /pricing →",
     es: "Precios reales en /pricing →",
@@ -466,13 +288,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
   },
 
   /* ---------------- Fiyat önizlemesi ---------------- */
-  "Tek fiyat kaynağı — PLANS": {
-    en: "Single price source — PLANS",
-    es: "Única fuente de precios — PLANS",
-    de: "Einzige Preisquelle — PLANS",
-    fr: "Source unique des tarifs — PLANS",
-    ar: "مصدر واحد للأسعار — PLANS",
-  },
   "Şeffaf fiyatlandırma. Tüm modüller açık.": {
     en: "Transparent pricing. Every module unlocked.",
     es: "Precios transparentes. Todos los módulos abiertos.",
@@ -494,36 +309,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Tous les modules ouverts",
     ar: "كل الوحدات مفتوحة",
   },
-  Detaylar: { en: "Details", es: "Detalles", de: "Details", fr: "Détails", ar: "التفاصيل" },
-  "Görsel metriklerle fiyat ilişkisi yoktur —": {
-    en: "Visual metrics bear no relation to price —",
-    es: "Las métricas visuales no guardan relación con el precio —",
-    de: "Visuelle Metriken haben keinen Bezug zum Preis —",
-    fr: "Les métriques visuelles n'ont aucun lien avec le tarif —",
-    ar: "لا علاقة بين المقاييس المرئية والسعر —",
-  },
-  "%99.9 doğruluk / +%312 ROI": {
-    en: "99.9% accuracy / +312% ROI",
-    es: "99,9% de precisión / +312% ROI",
-    de: "99,9 % Genauigkeit / +312 % ROI",
-    fr: "99,9 % de précision / +312 % de ROI",
-    ar: "دقة ‎99.9% / عائد ‎+312%",
-  },
-  "gibi sayılar simülasyon kartlarındaki yön gösterici değerlerdir, fatura değildir. Güncel ve bağlayıcı fiyatlar her zaman":
-    {
-      en: "numbers like these are directional values on simulation cards, not an invoice. Current and binding prices are always",
-      es: "cifras como estas son valores orientativos de las tarjetas de simulación, no una factura. Los precios vigentes y vinculantes están siempre",
-      de: "Zahlen wie diese sind Richtwerte auf Simulationskarten, keine Rechnung. Aktuelle und verbindliche Preise stehen immer",
-      fr: "des chiffres comme ceux-ci sont des valeurs indicatives des cartes de simulation, pas une facture. Les tarifs en vigueur et contractuels figurent toujours",
-      ar: "أرقام كهذه قيم إرشادية على بطاقات المحاكاة وليست فاتورة. أما الأسعار السارية والملزمة فهي دائمًا",
-    },
-  "ve ödeme adımında gösterilir.": {
-    en: "and at the checkout step.",
-    es: "y en el paso de pago.",
-    de: "und im Zahlungsschritt.",
-    fr: "et à l'étape de paiement.",
-    ar: "وفي خطوة الدفع.",
-  },
   "Kayıt ol ve hoş geldin kredinle Ürün Bulucu'yu dene. Kurulum, uzun entegrasyon ya da kredi kartı gerekmez.":
     {
       en: "Sign up and try Product Finder with your welcome credits. No setup, no long integration, no credit card.",
@@ -538,41 +323,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     de: "Erhalte deine erste Analyse in Minuten.",
     fr: "Obtenez votre première analyse en quelques minutes.",
     ar: "احصل على تحليلك الأول في دقائق.",
-  },
-  "Motoru dene": {
-    en: "Try the engine",
-    es: "Probar el motor",
-    de: "Motor testen",
-    fr: "Essayer le moteur",
-    ar: "جرّب المحرك",
-  },
-  "Temsilî kullanıcı senaryoları": {
-    en: "Illustrative user scenarios",
-    es: "Escenarios de usuario ilustrativos",
-    de: "Illustrative Nutzerszenarien",
-    fr: "Scénarios utilisateurs illustratifs",
-    ar: "سيناريوهات مستخدم توضيحية",
-  },
-  "Ürünün hangi sorunlara cevap verdiğini göstermek için yazılmış örnekler.": {
-    en: "Examples written to show which problems the product solves.",
-    es: "Ejemplos escritos para mostrar qué problemas resuelve el producto.",
-    de: "Beispiele, die zeigen, welche Probleme das Produkt löst.",
-    fr: "Exemples rédigés pour montrer quels problèmes le produit résout.",
-    ar: "أمثلة مكتوبة لإظهار المشكلات التي يحلّها المنتج.",
-  },
-  "Questions, answered": {
-    en: "Questions, answered",
-    es: "Preguntas, respondidas",
-    de: "Fragen, beantwortet",
-    fr: "Questions, réponses",
-    ar: "أسئلة وأجوبة",
-  },
-  "Everything teams ask before deploying Aroless — and how it actually works.": {
-    en: "Everything teams ask before deploying Aroless — and how it actually works.",
-    es: "Todo lo que los equipos preguntan antes de usar Aroless, y cómo funciona de verdad.",
-    de: "Alles, was Teams vor dem Einsatz von Aroless fragen — und wie es wirklich funktioniert.",
-    fr: "Tout ce que les équipes demandent avant d'adopter Aroless — et comment cela fonctionne vraiment.",
-    ar: "كل ما تسأل عنه الفرق قبل استخدام Aroless — وكيف يعمل فعليًا.",
   },
 
   /* ---------------- Landing FAQ ---------------- */
@@ -869,44 +619,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
     fr: "Partagez Aroless et gagnez une commission mensuelle.",
     ar: "شارك Aroless واكسب عمولة شهرية.",
   },
-  "Getirdiğin müşteri ücretli kaldığı sürece her yenilemeden %30 komisyon — bir müşteri için en fazla 12 ay.":
-    {
-      en: "30% commission on every renewal while your referred customer stays paid — for up to 12 months per customer.",
-      es: "30% de comisión en cada renovación mientras tu cliente siga de pago, hasta 12 meses por cliente.",
-      de: "30 % Provision auf jede Verlängerung, solange dein Kunde zahlt — bis zu 12 Monate pro Kunde.",
-      fr: "30 % de commission sur chaque renouvellement tant que votre client reste payant — jusqu'à 12 mois par client.",
-      ar: "عمولة ‎30% على كل تجديد ما دام عميلك مشتركًا مدفوعًا — حتى 12 شهرًا لكل عميل.",
-    },
-  "Kitleni ve kanallarını beyan et, şartları kabul et; başvurun admin onayına düşer.": {
-    en: "Declare your audience and channels, accept the terms; your application goes to admin review.",
-    es: "Declara tu audiencia y canales, acepta los términos; tu solicitud pasa a revisión del administrador.",
-    de: "Gib Zielgruppe und Kanäle an, akzeptiere die Bedingungen; deine Bewerbung geht zur Admin-Prüfung.",
-    fr: "Déclarez votre audience et vos canaux, acceptez les conditions ; votre candidature passe en validation admin.",
-    ar: "أفصح عن جمهورك وقنواتك واقبل الشروط؛ فيُحوَّل طلبك إلى مراجعة الإدارة.",
-  },
-  "Onaydan sonra hesabına özel affiliate kodu tanımlanır; paylaşacağın link /auth?promo=KOD biçimindedir.":
-    {
-      en: "After approval an affiliate code is assigned to your account; the link you share is /auth?promo=CODE.",
-      es: "Tras la aprobación se asigna un código de afiliado a tu cuenta; el enlace que compartes es /auth?promo=CÓDIGO.",
-      de: "Nach der Freigabe wird deinem Konto ein Partner-Code zugewiesen; dein Link lautet /auth?promo=CODE.",
-      fr: "Après validation, un code d'affiliation est attribué à votre compte ; le lien à partager est /auth?promo=CODE.",
-      ar: "بعد الموافقة يُسنَد رمز تسويق لحسابك؛ والرابط الذي تشاركه هو ‎/auth?promo=CODE.",
-    },
-  "Kodunla gelen müşteri aboneliğini sürdürdükçe her yenileme ödemesinden komisyon yazılır.": {
-    en: "As long as the customer who arrived with your code keeps the subscription, commission is credited on every renewal payment.",
-    es: "Mientras el cliente que llegó con tu código mantenga la suscripción, se abona comisión en cada pago de renovación.",
-    de: "Solange der mit deinem Code gewonnene Kunde das Abo behält, wird bei jeder Verlängerungszahlung Provision gutgeschrieben.",
-    fr: "Tant que le client arrivé avec votre code conserve son abonnement, une commission est créditée à chaque paiement de renouvellement.",
-    ar: "ما دام العميل الذي وصل برمزك محتفظًا باشتراكه، تُقيَّد العمولة على كل دفعة تجديد.",
-  },
-  "Ödenebilir bakiyen $75'i geçince Wise veya IBAN ile ödeme yapılır; her komisyon 30 gün bekletilir.":
-    {
-      en: "Once your payable balance passes $75, payment is made via Wise or IBAN; every commission is held for 30 days.",
-      es: "Cuando tu saldo pagable supera los 75 $, el pago se realiza por Wise o IBAN; cada comisión se retiene 30 días.",
-      de: "Übersteigt dein auszahlbarer Saldo 75 $, erfolgt die Auszahlung per Wise oder IBAN; jede Provision wird 30 Tage gehalten.",
-      fr: "Dès que votre solde payable dépasse 75 $, le paiement se fait par Wise ou IBAN ; chaque commission est retenue 30 jours.",
-      ar: "عندما يتجاوز رصيدك القابل للدفع ‎75$، يتم الدفع عبر Wise أو IBAN؛ ويُحتفظ بكل عمولة 30 يومًا.",
-    },
   "Affiliate programını gör": {
     en: "See the affiliate program",
     es: "Ver el programa de afiliados",
@@ -936,13 +648,6 @@ export const PUBLIC_COPY: Record<string, Copy> = {
       fr: "Ce ne sont pas de vrais avis clients ; ce sont des exemples illustratifs montrant quels problèmes le produit résout.",
       ar: "ليست هذه مراجعات عملاء حقيقية، بل أمثلة توضيحية كُتبت لإظهار المشكلات التي يحلّها المنتج.",
     },
-  "Affiliate kodu indirim vermez; indirimler Paddle panelinden yönetilir.": {
-    en: "An affiliate code grants no discount; discounts are managed from the Paddle dashboard.",
-    es: "Un código de afiliado no otorga descuento; los descuentos se gestionan desde el panel de Paddle.",
-    de: "Ein Partner-Code gewährt keinen Rabatt; Rabatte werden im Paddle-Dashboard verwaltet.",
-    fr: "Un code d'affiliation n'accorde aucune remise ; les remises se gèrent depuis le tableau de bord Paddle.",
-    ar: "رمز التسويق لا يمنح خصمًا؛ وتُدار الخصومات من لوحة Paddle.",
-  },
 
   /* ---------------- Public sayfa: araç merkezi (/tools) ---------------- */
   "Fiyatları gör": {
