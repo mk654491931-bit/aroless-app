@@ -141,6 +141,11 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
 
 ## Production kontrol listesi
 
+- `SUPABASE_SERVICE_ROLE_KEY` (ve `SUPABASE_URL`) tanımlı olmalı; outbox ve
+  attribution yalnız `service_role` ile yazılır. Anahtar yoksa kalıcı kuyruk ve
+  eşleştirme devre dışı kalır.
+- `APP_URL=https://www.aroless.tech` tanımlı olmalı; CAPI `event_source_url`
+  değeri buradan üretilir.
 - `VITE_META_PIXEL_DISABLED` **tanımlı olmamalı**; tanımlıysa tarayıcı pikseli
   hiç yüklenmez.
 - `META_CAPI_ACCESS_TOKEN` tanımlı olmalı; yoksa sunucu `Purchase` göndermez.
