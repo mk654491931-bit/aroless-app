@@ -34,11 +34,30 @@ export const createCheckout = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
+    // Meta eşleştirme verisi YALNIZ izin verildiyse okunur. Okuma başarısız
+    // olursa checkout düşmez; Purchase daha az alanla gönderilir.
+    let attribution = null;
+    if (data.marketingConsent === true) {
+      try {
+        const [{ getRequest }, { metaAttributionFromRequest }] = await Promise.all([
+          import("@tanstack/react-start/server"),
+          import("@/lib/meta-attribution.server"),
+        ]);
+        attribution = metaAttributionFromRequest(getRequest());
+      } catch (error) {
+        console.warn(
+          "[Meta CAPI] checkout eşleştirme verisi okunamadı:",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+
     const session = await createPaddleCheckoutSession({
       userId: context.userId,
       email: profile?.email ?? null,
       plan: data.plan,
       marketingConsent: data.marketingConsent === true,
+      attribution,
     });
 
     return {

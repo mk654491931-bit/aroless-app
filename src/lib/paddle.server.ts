@@ -20,6 +20,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
+import type { MetaCapiAttribution } from "@/lib/meta-capi.server";
 import { PLAN_BY_ID, PLAN_CREDIT_GRANTS, PLANS } from "@/lib/plans";
 
 export type PlanId = "Starter" | "Pro" | "Business";
@@ -97,6 +98,25 @@ export function resolvePaddleEnvironment(): PaddleEnvironment {
 }
 
 /**
+ * PREVIEW / PRODUCTION AYRIMI — yalnız uyarı, davranış değişmez.
+ *
+ * Vercel preview dağıtımları sandbox anahtarıyla çalışmalıdır. Preview ortamı
+ * production Paddle'a bağlıysa önizlemede yapılan bir test GERÇEK para
+ * çekebilir. `PADDLE_ENV`/`VITE_PADDLE_ENV` açıkça verilmişse kullanıcı bilinçli
+ * seçmiştir; yine de uyarı loglanır. Production'da uyarı üretilmez.
+ */
+export function paddlePreviewEnvironmentWarning(
+  environment: PaddleEnvironment,
+  vercelEnv: string | undefined = process.env.VERCEL_ENV,
+): string | null {
+  if ((vercelEnv ?? "").trim() !== "preview") return null;
+  if (environment !== "production") return null;
+  return "Preview ortamı Paddle PRODUCTION ortamına bağlı — testler için PADDLE_ENV=sandbox ve sandbox anahtarları kullanın.";
+}
+
+let warnedPreviewProduction = false;
+
+/**
  * Load and validate the Paddle configuration. Returns null (and logs the missing
  * variables) when the integration is not configured — callers decide how to fail.
  *
@@ -164,9 +184,16 @@ function readPaddleSettings(): PaddleSettings | null {
     console.warn("[Paddle] PADDLE_CLIENT_TOKEN eksik — tarayıcı ödeme penceresi açılamaz.");
   }
 
+  const environment = resolvePaddleEnvironment();
+  const previewWarning = paddlePreviewEnvironmentWarning(environment);
+  if (previewWarning && !warnedPreviewProduction) {
+    warnedPreviewProduction = true;
+    console.warn(`[Paddle] ${previewWarning}`);
+  }
+
   return {
     apiKey,
-    environment: resolvePaddleEnvironment(),
+    environment,
     clientToken: clientToken ?? "",
     webhookSecret: webhookSecret ?? "",
     priceIds,
@@ -385,6 +412,14 @@ export async function createPaddleCheckoutSession(opts: {
    * okur. Gönderilmezse varsayılan **denied** olur (izin yoksa ölçüm yok).
    */
   marketingConsent?: boolean;
+  /**
+   * Checkout isteğinden doğrulanmış Meta eşleştirme verisi.
+   *
+   * YALNIZ `marketingConsent === true` iken ve yalnız bu transaction için
+   * saklanır (`meta_capi_attribution`). Yenilemelere kopyalanmaz; IP/UA aylar
+   * sonraki bir tahsilata yanlışlıkla eklenmez.
+   */
+  attribution?: MetaCapiAttribution | null;
 }): Promise<CheckoutSession> {
   const plan = isPlanId(opts.plan) ? opts.plan : "Pro";
   const settings = paddleSettings();
@@ -427,6 +462,17 @@ export async function createPaddleCheckoutSession(opts: {
 
     if (!transaction?.id) {
       throw new Error("Paddle transaction oluşturulamadı (yanıtta id yok).");
+    }
+
+    // Eşleştirme verisi yalnız AÇIK izinle ve yalnız bu işlem için yazılır.
+    // Hata checkout'u düşürmez; Purchase daha az alanla gönderilir.
+    if (opts.marketingConsent === true && opts.attribution) {
+      const { saveMetaPurchaseAttribution } = await import("@/lib/meta-attribution.server");
+      await saveMetaPurchaseAttribution({
+        transactionId: transaction.id,
+        userId: opts.userId,
+        attribution: opts.attribution,
+      });
     }
 
     const amountCents = PLAN_PRICE_CENTS[plan];

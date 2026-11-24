@@ -439,13 +439,17 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
     //     kopyayla Meta tarafında tekilleşir (yenilemelerde kimlik değişir →
     //     her tahsilat ayrı sayılır).
     //
+    //     KALICI OUTBOX: `sendMetaPurchase` olayı önce DB kuyruğuna yazar,
+    //     sonra gönderir. Meta geçici hata döndürürse olay kaybolmaz; üstel geri
+    //     çekilmeyle yeniden denenir. Aynı işlem için `event_id` UNIQUE olduğu
+    //     için Paddle'ın ikinci bir olay göndermesi mükerrer satır AÇMAZ; yalnız
+    //     süresi gelmiş bekleyen kaydı yeniden dener. Bu yüzden `duplicate`
+    //     kontrolü BİLİNÇLİ olarak kaldırıldı: tekrar gelen webhook, CAPI
+    //     gönderiminin ikinci şansıdır.
+    //
     //     Hata ödeme akışını ASLA düşürmez: token yoksa modül sessizce
     //     devre dışı kalır ve bu blok yalnızca loglar.
-    if (
-      result !== "duplicate" &&
-      event.eventType === "transaction.completed" &&
-      command.transactionId
-    ) {
+    if (event.eventType === "transaction.completed" && command.transactionId) {
       try {
         const { data: profileRow } = await supabaseAdmin
           .from("profiles")
@@ -504,6 +508,13 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
           // Tutar bilinmiyorsa sıfır uydurma; CAPI'ye yanlış ciro yazma.
           console.warn(`[Meta CAPI] Purchase atlandı — tutar yok (${command.transactionId})`);
         } else {
+          // Eşleştirme verisi (fbp/fbc/IP/UA) YALNIZ izin kapısı geçildikten
+          // sonra okunur; `consentGranted: true` burada açıkça verilir.
+          const { loadMetaPurchaseAttribution } = await import("@/lib/meta-attribution.server");
+          const attribution = await loadMetaPurchaseAttribution(command.transactionId, {
+            consentGranted: true,
+          });
+
           const meta = await sendMetaPurchase({
             transactionId: command.transactionId,
             email,
@@ -511,9 +522,18 @@ export async function handlePaddleWebhook(request: Request): Promise<Response> {
             value: Math.max(0, command.amountCents) / 100,
             currency: command.currency,
             plan: command.tier && command.tier !== "Free" ? command.tier : null,
+            attribution,
           });
           if (meta.sent) {
             console.log(`[Meta CAPI] Purchase gönderildi (${command.transactionId})`);
+          } else if (meta.queued) {
+            console.log(
+              `[Meta CAPI] Purchase kuyruğa alındı, yeniden denenecek (${command.transactionId})`,
+            );
+          } else {
+            console.warn(
+              `[Meta CAPI] Purchase gönderilemedi (${command.transactionId}): ${meta.error ?? "unknown"}`,
+            );
           }
         }
       } catch (metaError) {

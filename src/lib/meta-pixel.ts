@@ -39,6 +39,10 @@ declare global {
 
 let pixelInitialized = false;
 
+/** `trackMetaEventOnce` anahtarları → sona erme zamanı (ms). */
+const onceKeys = new Map<string, number>();
+const MAX_ONCE_KEYS = 200;
+
 /**
  * Meta'nın tarayıcıda bıraktığı pazarlama çerezlerini siler.
  *
@@ -66,7 +70,10 @@ export function clearMetaBrowserCookies(): void {
  */
 function pixelDisabled(): boolean {
   try {
-    return String(import.meta.env.VITE_META_PIXEL_DISABLED ?? "") === "1";
+    const raw = String(import.meta.env.VITE_META_PIXEL_DISABLED ?? "")
+      .trim()
+      .toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
   } catch {
     return false;
   }
@@ -124,16 +131,63 @@ export function trackMetaEvent(
   name: string,
   params?: MetaEventParams,
   eventId?: string | null,
-): void {
-  if (pixelDisabled()) return;
-  if (!hasMarketingConsent()) return;
-  if (!initMetaPixel()) return;
+): boolean {
+  if (pixelDisabled()) return false;
+  if (!hasMarketingConsent()) return false;
+  if (!initMetaPixel()) return false;
   const fbq = getFbq();
-  if (!fbq) return;
+  if (!fbq) return false;
 
   const options = eventId ? { eventID: eventId } : undefined;
   if (params && options) fbq("track", name, params, options);
   else if (params) fbq("track", name, params);
   else if (options) fbq("track", name, {}, options);
   else fbq("track", name);
+  return true;
+}
+
+/**
+ * Aynı anahtar için TTL içinde YALNIZ BİR kez gönderir.
+ *
+ * NEDEN: `CompleteRegistration` başarılı kayıttan sonra iki kez tetiklenebilir
+ * (çift submit / yeniden doğrulama yarışı); `ViewContent` ise aynı ürün için
+ * hem ürün sayfasında hem derin analiz modalında gönderilebiliyordu. Meta bu
+ * olayları ayrı satırlar olarak sayar; gereksiz ikinci olay dönüşüm sayısını
+ * şişirir.
+ *
+ * Anahtar yalnız olay GERÇEKTEN kuyruğa girdiyse yazılır: izin yokken çağrı
+ * yapıldı diye sonraki izinli çağrı bastırılmaz.
+ *
+ * @param ttlMs `Infinity` → anahtar süreç boyunca bir kez (ör. kayıt).
+ */
+export function trackMetaEventOnce(
+  key: string,
+  ttlMs: number,
+  name: string,
+  params?: MetaEventParams,
+  eventId?: string | null,
+): boolean {
+  if (!key) return trackMetaEvent(name, params, eventId);
+
+  const now = Date.now();
+  const expiresAt = onceKeys.get(key);
+  if (expiresAt !== undefined && expiresAt > now) return false;
+
+  const sent = trackMetaEvent(name, params, eventId);
+  if (!sent) return false;
+
+  // Bellek sınırı: süresi geçen anahtarlar temizlenir; hâlâ doluysa en eski
+  // anahtar düşürülür. Anahtar sayısı kullanıcı gezintisiyle sınırsız büyümez.
+  if (onceKeys.size >= MAX_ONCE_KEYS) {
+    for (const [storedKey, storedExpiry] of onceKeys) {
+      if (storedExpiry <= now) onceKeys.delete(storedKey);
+    }
+    if (onceKeys.size >= MAX_ONCE_KEYS) {
+      const oldest = onceKeys.keys().next().value;
+      if (oldest !== undefined) onceKeys.delete(oldest);
+    }
+  }
+
+  onceKeys.set(key, ttlMs === Infinity ? Infinity : now + Math.max(0, ttlMs));
+  return true;
 }

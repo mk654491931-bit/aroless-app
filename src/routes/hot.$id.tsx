@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { fetchHotProducts, HOT_FEED_QUERY_KEY } from "@/lib/hot-products";
 import { BrandLogo } from "@/components/brand-logo";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { trackMetaEventOnce } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/hot/$id")({
   ssr: false,
@@ -76,7 +76,9 @@ function HotProductPage() {
     if (!p) return;
     if (trackedId.current === p.id) return;
     trackedId.current = p.id;
-    trackMetaEvent("ViewContent", {
+    // Ürün adı anahtardır: aynı ürün derin analiz modalında da açılırsa
+    // 30 dakika içinde ikinci ViewContent gönderilmez.
+    trackMetaEventOnce(`ViewContent:product:${p.name}`, 30 * 60_000, "ViewContent", {
       content_name: p.name,
       content_type: "product",
     });

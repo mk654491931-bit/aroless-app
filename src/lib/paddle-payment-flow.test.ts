@@ -19,8 +19,10 @@ const fakes = vi.hoisted(() => {
   const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
   const result = { data: null as unknown, error: null as { message: string } | null };
   const userMetadata: Record<string, unknown> = { cookie_marketing_consent: true };
+  /** Meta CAPI outbox RPC'lerini taklit eden satırlar (event_id → kayıt). */
+  const outboxRows = new Map<string, Record<string, unknown>>();
   const chain: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "ilike", "is", "update", "order", "limit"]) {
+  for (const method of ["select", "eq", "gte", "ilike", "is", "update", "order", "limit"]) {
     chain[method] = () => chain;
   }
   chain["maybeSingle"] = async () => result;
@@ -29,6 +31,7 @@ const fakes = vi.hoisted(() => {
   return {
     rpcCalls,
     userMetadata,
+    outboxRows,
     admin: {
       from: () => chain,
       auth: {
@@ -41,6 +44,28 @@ const fakes = vi.hoisted(() => {
       },
       rpc: async (name: string, args: Record<string, unknown>) => {
         rpcCalls.push({ name, args });
+
+        // KALICI OUTBOX: enqueue → claim → finish üçlüsü gerçek akıştaki gibi
+        // taklit edilir; aksi hâlde webhook hiçbir Meta isteği atmaz.
+        if (name === "enqueue_meta_capi_event") {
+          const eventId = String(args["_event_id"]);
+          if (outboxRows.has(eventId)) return { data: "duplicate", error: null };
+          outboxRows.set(eventId, {
+            id: `row-${outboxRows.size + 1}`,
+            event_id: eventId,
+            event_name: args["_event_name"],
+            payload: args["_payload"],
+            attempts: 1,
+            max_attempts: 8,
+          });
+          return { data: "enqueued", error: null };
+        }
+        if (name === "claim_meta_capi_outbox") {
+          return { data: [...outboxRows.values()], error: null };
+        }
+        if (name === "finish_meta_capi_outbox") {
+          return { data: "sent", error: null };
+        }
         return { data: "ok", error: null };
       },
     },

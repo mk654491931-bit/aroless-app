@@ -77,6 +77,44 @@ Bu nedenle izin vermemiş bir kullanıcı için CAPI `Purchase` üretilmez.
 İzin vermeden önce yapılan bir satın almanın yenilemesi, sonradan izin
 verilmediği sürece CAPI'ye gitmez; bu bilinçli ve güvenli varsayılandır.
 
+### Eşleştirme verisi (fbp / fbc / IP / user-agent)
+
+Bu dört alan Meta'nın eşleşme kalitesini artırır ancak kişisel veridir. Kurallar:
+
+- Yalnızca checkout **açık pazarlama izniyle** açıldığında toplanır
+  (`metaAttributionFromRequest`). İzin yoksa sunucu bu verileri okumaz.
+- `_fbp`/`_fbc` çerezleri biçim doğrulamasından geçer; serbest metin atlanır.
+  IP yalnızca geçerli IPv4/IPv6 ise kabul edilir, user-agent 500 karaktere
+  kırpılır.
+- Veri Paddle `customData`'ya YAZILMAZ (yenilemelere kopyalanırdı). Yalnız o
+  transaction için `meta_capi_attribution` tablosuna yazılır ve **7 gün** sonra
+  silinir.
+- `Purchase` gönderilirken yalnız izin kapısı geçildikten sonra okunur.
+
+## Kalıcı outbox ve yeniden deneme
+
+CAPI `Purchase` tek bir `fetch` ile gönderilmez. Akış:
+
+1. Olay `meta_capi_outbox` tablosuna yazılır (`event_id` UNIQUE).
+2. Hemen gönderilir; başarılıysa `sent` işaretlenir.
+3. Meta 5xx/429/network hatası döndürürse olay `pending` kalır ve üstel geri
+   çekilmeyle yeniden denenir: 60 sn → 5 dk → 15 dk → 1 saat → 6 saat
+   (en fazla 8 deneme).
+4. 400/401/403 gibi kalıcı hatalar tekrar denenmez (`failed`).
+5. Günlük cron (`/api/cron/radar-refresh`) kuyruğu işler ve 30 günden eski
+   kayıtları siler. `?job=meta-capi` yalnız kuyruğu çalıştırır.
+6. 46 saatten eski kayıtlar Meta'nın tekilleştirme penceresi dışına çıktığı
+   için GÖNDERİLMEZ; `failed` olarak görünür kalır.
+
+Aynı `event_id` (`purchase-<Paddle txn>`) hem tarayıcıya hem sunucuya verildiği
+için yeniden denemeler Meta'da **çift `Purchase` saymaz**. Paddle aynı işlem
+için ikinci bir webhook gönderirse kuyrukta yeni satır açılmaz; yalnız süresi
+gelmiş bekleyen kayıt yeniden denenir.
+
+> **Migration gerekir:** `supabase/migrations/20261124120000_meta_capi_outbox.sql`
+> uygulanmadan RPC'ler yoktur. Kod bu durumda doğrudan gönderime düşer ve
+> uyarı loglar; kalıcı retry devreye girmez.
+
 ## Conversions API kurulumu
 
 1. Meta Events Manager → ilgili Pixel → **Settings** → **Conversions API** →
@@ -106,6 +144,10 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
 - `VITE_META_PIXEL_DISABLED` **tanımlı olmamalı**; tanımlıysa tarayıcı pikseli
   hiç yüklenmez.
 - `META_CAPI_ACCESS_TOKEN` tanımlı olmalı; yoksa sunucu `Purchase` göndermez.
+- `CRON_SECRET` (veya `JOB_WORKER_SECRET`) tanımlı olmalı; yoksa cron ucu 503
+  döner ve outbox retry'ları planlanan biçimde koşmaz.
+- `meta_capi_outbox` migration'ı uygulanmış olmalı; aksi hâlde kalıcı retry ve
+  attribution devre dışıdır (doğrudan gönderim çalışmaya devam eder).
 - `META_TEST_EVENT_CODE` production'da **boş** olmalı. Vercel'de
   `VERCEL_ENV=production`, Freebuff/Nitro'da `NODE_ENV=production` iken kod
   zaten yok sayılır; yine de yanlışlıkla test verisi üretmemek için kaldırın.
@@ -114,8 +156,11 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
   döner.
 - `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN` ve Starter/Pro/Business fiyat veya
   ürün kimliklerinden en az biri tanımlı olmalı.
-- Paddle panelindeki webhook adresi `/api/public/webhook/paddle` olmalı;
-  `/api/webhooks/paddle` uyumluluk için açıktır.
+- Paddle panelindeki webhook adresi **`https://www.aroless.tech/api/webhooks/paddle`**
+  olmalı (mevcut çalışan adres). Aynı güvenli handler
+  `https://www.aroless.tech/api/public/webhook/paddle` yolunda da açıktır; iki
+  yol da `handlePaddleWebhook`'u çağırır. Apex `aroless.tech` → `www` 308
+  yönlendirmesi yaptığı için webhook'ta **www** kullanılmalıdır.
 - Meta Events Manager'da domain doğrulaması ve (varsa) CAPI kalite kontrolü
   yapılmalı.
 
@@ -129,6 +174,9 @@ Token yoksa sunucu tarafı olaylar sessizce devre dışı kalır; tarayıcı pik
   yok sayılır; böylece canlı veri yanlışlıkla test verisine karışmaz.
 - **Ayrı token'lar:** production ve preview ortamlarına farklı
   `META_CAPI_ACCESS_TOKEN` değerleri tanımlamak en temiz ayrımdır.
+- **Paddle:** preview ortamı `PADDLE_ENV=sandbox` ve sandbox anahtarlarıyla
+  çalışmalıdır. Preview production anahtarlarına bağlıysa kod `[Paddle]`
+  uyarısı loglar; test ödemesi gerçek para çekebilir.
 
 ## Mimari notu
 
@@ -166,8 +214,11 @@ Webhook loglarında e-posta adresi yazılmaz; CAPI hata gövdesi de loglanmaz.
   “kayıt” sayılmaması için bilinçli bir tercihtir.
 - `noscript` görseli yoktur: izin kontrolü yapamadan çalışacağı için pazarlama
   rızasını delen bir istek üretirdi.
-- CAPI `Purchase` şu anda `fbp`/`fbc`, istemci IP'si ve user-agent taşımaz;
-  eşleşme e-posta özeti + kullanıcı kimliğiyle yapılır. Daha yüksek eşleşme
-  kalitesi için bu alanların checkout'ta toplanıp webhook'a taşınması gerekir.
+- `fbp`/`fbc` yalnız çerez varsa taşınır. Reklam tıklamasıyla gelen `fbclid`
+  parametresi çereze dönüşmeden checkout'a ulaşırsa (ör. ilk oturumda çerez
+  engeli) bu alan boş kalır; kod uydurma değer üretmez.
+- Sunucu tarafı yalnız `Purchase` gönderir. `CompleteRegistration`,
+  `ViewContent` ve `InitiateCheckout` tarayıcıdan gider; sunucudan ikinci kez
+  gönderilmez.
 - `PricingCard` yüzeyinde tarayıcı `Purchase` yoktur; dönüşüm sunucu CAPI'den
   gelir. Bu bileşen şu anda uygulamada kullanılmıyor.

@@ -13,9 +13,13 @@ import {
   buildMetaCapiPayload,
   hasMetaCapiConsent,
   normalizeMetaConsent,
+  sanitizeMetaBrowserId,
+  sanitizeMetaClientIp,
+  sanitizeMetaUserAgent,
   sendMetaCapiEvent,
   sendMetaPurchase,
   sha256Hex,
+  type MetaCapiOutboxLike,
 } from "./meta-capi.server";
 
 type CapiPayload = {
@@ -24,7 +28,7 @@ type CapiPayload = {
     event_id?: string;
     event_time: number;
     event_source_url?: string;
-    user_data?: { em?: string[]; external_id?: string[]; fbp?: string };
+    user_data?: { em?: string[]; external_id?: string[]; fbp?: string; fbc?: string };
     custom_data?: Record<string, unknown>;
   }>;
   test_event_code?: string;
@@ -67,7 +71,11 @@ describe("buildMetaCapiPayload", () => {
       eventId: "purchase-txn_1",
       eventTime: 1_700_000_000,
       eventSourceUrl: "https://aroless.tech/pricing",
-      userData: { email: "  Buyer@Example.com ", externalId: "user-1", fbp: "fb.1.123" },
+      userData: {
+        email: "  Buyer@Example.com ",
+        externalId: "user-1",
+        fbp: "fb.1.1700000000000.123456",
+      },
       value: 59,
       currency: "USD",
       customData: { content_name: "Pro" },
@@ -79,13 +87,34 @@ describe("buildMetaCapiPayload", () => {
     expect(event.event_source_url).toBe("https://aroless.tech/pricing");
     expect(event.user_data?.em).toEqual([sha256Hex("buyer@example.com")]);
     expect(event.user_data?.external_id).toEqual([sha256Hex("user-1")]);
-    expect(event.user_data?.fbp).toBe("fb.1.123");
+    expect(event.user_data?.fbp).toBe("fb.1.1700000000000.123456");
     expect(event.custom_data).toMatchObject({ content_name: "Pro", value: 59, currency: "USD" });
 
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain("Buyer@Example.com");
     expect(serialized).not.toContain("buyer@example.com");
     expect(serialized).not.toContain("user-1");
+  });
+
+  it("geçersiz fbp/fbc/IP değerlerini göndermez, user-agent'ı sınırlar", () => {
+    const payload = buildMetaCapiPayload({
+      eventName: "Purchase",
+      userData: {
+        fbp: "kötü-niyetli-deger",
+        fbc: "fb.1.1700000000000.IwAR123",
+        clientIp: "not-an-ip",
+        userAgent: "Mozilla/5.0\n\u0000test",
+      },
+    }) as unknown as CapiPayload;
+
+    expect(payload.data[0]?.user_data?.fbp).toBeUndefined();
+    expect(payload.data[0]?.user_data?.fbc).toBe("fb.1.1700000000000.IwAR123");
+    expect(
+      (payload.data[0]?.user_data as { client_ip_address?: string } | undefined)?.client_ip_address,
+    ).toBeUndefined();
+    expect(
+      (payload.data[0]?.user_data as { client_user_agent?: string } | undefined)?.client_user_agent,
+    ).toBe("Mozilla/5.0 test");
   });
 
   it("test event kodu yalnız tanımlıysa eklenir", () => {
@@ -155,29 +184,146 @@ describe("sendMetaCapiEvent", () => {
   });
 });
 
-describe("sendMetaPurchase", () => {
-  it("Purchase'ı işlem kimliğiyle ve gerçek tutarla gönderir", async () => {
+describe("kullanıcı verisi doğrulama", () => {
+  it("fbp/fbc yalnız Meta biçimindeyse kabul edilir", () => {
+    expect(sanitizeMetaBrowserId("fb.1.1700000000000.123456")).toBe("fb.1.1700000000000.123456");
+    expect(sanitizeMetaBrowserId("fb.2.1700000000000.IwAR_abc-123")).toBe(
+      "fb.2.1700000000000.IwAR_abc-123",
+    );
+    expect(sanitizeMetaBrowserId("fb.1.123.abc")).toBeNull();
+    expect(sanitizeMetaBrowserId("fb.1.1700000000000.<script>")).toBeNull();
+    expect(sanitizeMetaBrowserId("   ")).toBeNull();
+  });
+
+  it("yalnız geçerli IPv4/IPv6 kabul edilir", () => {
+    expect(sanitizeMetaClientIp("203.0.113.7")).toBe("203.0.113.7");
+    expect(sanitizeMetaClientIp("2001:db8::1")).toBe("2001:db8::1");
+    expect(sanitizeMetaClientIp("unknown")).toBeNull();
+    expect(sanitizeMetaClientIp("1.2.3.4\n5.6.7.8")).toBeNull();
+  });
+
+  it("user-agent tek satıra indirilir ve 500 karakterle sınırlanır", () => {
+    expect(sanitizeMetaUserAgent("  A\n\tB  ")).toBe("A B");
+    expect(sanitizeMetaUserAgent("x".repeat(700))).toHaveLength(500);
+    expect(sanitizeMetaUserAgent("   ")).toBeNull();
+  });
+});
+
+describe("sendMetaPurchase (outbox)", () => {
+  function fakeOutbox(
+    enqueue: MetaCapiOutboxLike["enqueue"],
+    dispatch: MetaCapiOutboxLike["dispatch"],
+  ): MetaCapiOutboxLike {
+    return { enqueue, dispatch };
+  }
+
+  it("Purchase'ı kalıcı kuyruğa yazar ve event_id'yi korur", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
+    const enqueue = vi.fn<MetaCapiOutboxLike["enqueue"]>(async () => "enqueued");
+    const dispatch = vi.fn<MetaCapiOutboxLike["dispatch"]>(async () => ({ sent: true }));
+
+    const result = await sendMetaPurchase(
+      {
+        transactionId: "txn_abc",
+        email: "buyer@example.com",
+        userId: "user-1",
+        value: 39,
+        currency: "USD",
+        plan: "Starter",
+        attribution: {
+          fbp: "fb.1.1700000000000.123456",
+          fbc: "fb.1.1700000000000.IwAR123",
+          clientIp: "203.0.113.7",
+          userAgent: "Mozilla/5.0",
+        },
+      },
+      { outbox: fakeOutbox(enqueue, dispatch) },
+    );
+
+    expect(result).toEqual({ sent: true });
+    expect(dispatch).toHaveBeenCalledWith("purchase-txn_abc");
+    const queued = enqueue.mock.calls[0]?.[0] as unknown as {
+      eventId: string;
+      eventName: string;
+      event: {
+        value: number;
+        currency: string;
+        userData: Record<string, unknown>;
+        customData: Record<string, unknown>;
+      };
+    };
+    expect(queued.eventId).toBe("purchase-txn_abc");
+    expect(queued.eventName).toBe("Purchase");
+    expect(queued.event.value).toBe(39);
+    expect(queued.event.customData).toMatchObject({
+      content_name: "Starter",
+      content_type: "product",
+    });
+    expect(queued.event.userData).toMatchObject({
+      email: "buyer@example.com",
+      externalId: "user-1",
+      fbp: "fb.1.1700000000000.123456",
+      fbc: "fb.1.1700000000000.IwAR123",
+      clientIp: "203.0.113.7",
+      userAgent: "Mozilla/5.0",
+    });
+  });
+
+  it("aynı event_id ikinci kez kuyruğa girmez; deduplicated döner", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
+    const enqueue = vi.fn(async () => "duplicate" as const);
+    const dispatch = vi.fn(async () => ({ sent: true }));
+
+    const result = await sendMetaPurchase(
+      { transactionId: "txn_abc", value: 59, currency: "USD", plan: "Pro" },
+      { outbox: fakeOutbox(enqueue, dispatch) },
+    );
+    expect(result).toEqual({ sent: true, deduplicated: true });
+  });
+
+  it("token yoksa kuyruğa yazmaz", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "");
+    const enqueue = vi.fn();
+    const dispatch = vi.fn();
+
+    const result = await sendMetaPurchase(
+      { transactionId: "txn_abc", value: 59, currency: "USD" },
+      { outbox: fakeOutbox(enqueue as never, dispatch as never) },
+    );
+    expect(result).toEqual({ sent: false, skipped: "missing_token" });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("outbox migration'ı yoksa doğrudan gönderime düşer", async () => {
     vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await sendMetaPurchase({
-      transactionId: "txn_abc",
-      email: "buyer@example.com",
-      userId: "user-1",
-      value: 39,
-      currency: "USD",
-      plan: "Starter",
-    });
-    expect(result).toEqual({ sent: true });
+    const result = await sendMetaPurchase(
+      { transactionId: "txn_abc", email: "buyer@example.com", value: 39, currency: "USD" },
+      {
+        outbox: fakeOutbox(
+          async () => {
+            throw new Error("Could not find the function public.enqueue_meta_capi_event");
+          },
+          vi.fn(async () => ({ sent: false })),
+        ),
+      },
+    );
 
+    expect(result).toEqual({ sent: true });
     const call = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
     const body = JSON.parse(call[1].body) as CapiPayload;
-    expect(body.data[0]).toMatchObject({
-      event_name: "Purchase",
-      event_id: "purchase-txn_abc",
-      custom_data: { content_name: "Starter", content_type: "product", value: 39, currency: "USD" },
-    });
-    expect(body.data[0].user_data?.em).toEqual([sha256Hex("buyer@example.com")]);
+    expect(body.data[0]?.event_id).toBe("purchase-txn_abc");
+    expect(body.data[0]?.user_data?.em).toEqual([sha256Hex("buyer@example.com")]);
+  });
+
+  it("işlem kimliği yoksa göndermez", async () => {
+    vi.stubEnv("META_CAPI_ACCESS_TOKEN", "test-token");
+    const result = await sendMetaPurchase(
+      { transactionId: "  ", value: 1, currency: "USD" },
+      { outbox: fakeOutbox(vi.fn() as never, vi.fn() as never) },
+    );
+    expect(result).toEqual({ sent: false, error: "missing_event_id" });
   });
 });

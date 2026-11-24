@@ -7,7 +7,7 @@ import { useFxRates } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { PricingModal } from "@/components/pricing-modal";
 import { publicPageHead } from "@/lib/seo";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { trackMetaEventOnce } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/pricing")({
   head: () => {
@@ -80,8 +80,13 @@ function PricingPage() {
   const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
 
   // Fiyatları görüntüleyenler, Meta tarafında yeniden pazarlama kitlesine girer.
+  // Aynı sayfa kısa sürede yeniden çizilirse (StrictMode / route yeniden
+  // mount) 30 dakika içinde ikinci kez gönderilmez.
   useEffect(() => {
-    trackMetaEvent("ViewContent", { content_name: "Pricing", content_type: "product" });
+    trackMetaEventOnce("ViewContent:Pricing", 30 * 60_000, "ViewContent", {
+      content_name: "Pricing",
+      content_type: "product",
+    });
   }, []);
 
   useEffect(() => {

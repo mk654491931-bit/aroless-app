@@ -33,7 +33,7 @@ import { requiredConsentGiven, type LegalConsent } from "@/lib/signup-consent";
 import { AuthShowcase } from "@/components/auth-showcase";
 import { ExampleReviews, type ExampleReview } from "@/components/landing/sections";
 import { oauthRedirectUrl } from "@/lib/runtime-env";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { trackMetaEventOnce } from "@/lib/meta-pixel";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -344,7 +344,14 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         // Hesap GERÇEKTEN açıldı (e-posta doğrulandı + oturum kuruldu).
-        trackMetaEvent("CompleteRegistration", { content_name: "Aroless", status: true });
+        // Aynı e-posta için ikinci kez gönderilmez: çift submit / yarış
+        // durumunda dönüşüm iki kez sayılmaz.
+        trackMetaEventOnce(
+          `CompleteRegistration:${email.trim().toLowerCase()}`,
+          Infinity,
+          "CompleteRegistration",
+          { content_name: "Aroless", status: true },
+        );
         if (referralCode) {
           // Profil satırı girişten hemen sonra oluşmayabilir; tekrar denemek
           // için kodu localStorage'da birak (index.tsx bu işi tamamlar).

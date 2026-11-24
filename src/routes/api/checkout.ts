@@ -51,11 +51,17 @@ export const Route = createFileRoute("/api/checkout")({
           }
 
           const { createPaddleCheckoutSession } = await import("@/lib/paddle.server");
+          // Eşleştirme verisi YALNIZ açık pazarlama izniyle toplanır.
+          const attribution =
+            parsed.data.marketingConsent === true
+              ? (await import("@/lib/meta-attribution.server")).metaAttributionFromRequest(request)
+              : null;
           const session = await createPaddleCheckoutSession({
             userId: userData.user.id,
             email: userData.user.email,
             plan: parsed.data.plan,
             marketingConsent: parsed.data.marketingConsent === true,
+            attribution,
           });
 
           return json(

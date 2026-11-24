@@ -133,6 +133,63 @@ describe("supabase/migrations yeniden calistirilabilirligi", () => {
  * sayısının `src/lib/affiliate.ts` (`COMMISSION_MAX_MONTHS`) ile AYNI olduğunu
  * kilitler.
  */
+/**
+ * META CAPI OUTBOX — kalıcı kuyruk ve izinli attribution.
+ *
+ * Bu testler migration'ın canlıya UYGULANDIĞINI kanıtlamaz; yalnız dosyanın
+ * gerekli güvenlik/idempotency sözleşmesini taşıdığını kilitler. Uygulama adımı
+ * (`supabase db push` / Lovable migration) operasyon tarafındadır.
+ */
+describe("Meta CAPI outbox migration", () => {
+  const file = filenames.find((name) => name.includes("meta_capi_outbox"));
+
+  it("vardır ve adı geçerlidir", () => {
+    expect(file).toBeDefined();
+    expect(/^\d{14}_.+\.sql$/.test(file!)).toBe(true);
+  });
+
+  it("event_id UNIQUE + SKIP LOCKED + 46 saat sınırı taşır", () => {
+    const sql = readMigration(file!);
+    expect(sql).toMatch(/CONSTRAINT meta_capi_outbox_event_id_key UNIQUE \(event_id\)/);
+    expect(sql).toContain("FOR UPDATE SKIP LOCKED");
+    expect(sql).toContain("interval '46 hours'");
+    expect(sql).toContain("'expired_dedup_window'");
+    expect(sql).toContain("ON CONFLICT (event_id) DO NOTHING");
+  });
+
+  it("iki tablo da RLS açık ve yalnız service_role'a açıktır", () => {
+    const sql = readMigration(file!);
+    for (const table of ["meta_capi_outbox", "meta_capi_attribution"]) {
+      expect(sql).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY;`);
+      expect(sql).toMatch(
+        new RegExp(`REVOKE ALL ON TABLE public\\.${table} FROM PUBLIC, anon, authenticated;`),
+      );
+      expect(sql).toMatch(new RegExp(`GRANT [^;]+ ON TABLE public\\.${table} TO service_role;`));
+    }
+  });
+
+  it("RPC'ler security definer ve yalnız service_role tarafından çalıştırılır", () => {
+    const sql = readMigration(file!);
+    for (const fn of [
+      "enqueue_meta_capi_event",
+      "claim_meta_capi_outbox",
+      "finish_meta_capi_outbox",
+      "cleanup_meta_capi_outbox",
+    ]) {
+      expect(sql).toContain(`FUNCTION public.${fn}`);
+      expect(sql).toMatch(
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn}[^;]+TO service_role;`, "s"),
+      );
+    }
+  });
+
+  it("saklama sınırları: outbox 30 gün, attribution 7 gün", () => {
+    const sql = readMigration(file!);
+    expect(sql).toContain("interval '30 days'");
+    expect(sql).toContain("interval '7 days'");
+  });
+});
+
 describe("affiliate komisyon penceresi (max 12 ay)", () => {
   const capFile = filenames.find((name) => name.includes("affiliate_commission_cap"));
 

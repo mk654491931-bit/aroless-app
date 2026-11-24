@@ -138,6 +138,86 @@ describe("fbq olay gönderimi", () => {
   });
 });
 
+describe("trackMetaEventOnce", () => {
+  function stubPixelDom() {
+    vi.stubGlobal("document", {
+      getElementById: () => null,
+      createElement: () => ({}),
+      head: { appendChild: () => undefined },
+    });
+  }
+
+  function tracked(queue: unknown[][], name: string) {
+    return queue.filter((entry) => entry[0] === "track" && entry[1] === name);
+  }
+
+  it("aynı anahtar TTL içinde ikinci kez gönderilmez", async () => {
+    stubLocalStorage(consentStored(true));
+    stubPixelDom();
+    const { trackMetaEventOnce } = await import("./meta-pixel");
+
+    expect(
+      trackMetaEventOnce("ViewContent:product:X", 30 * 60_000, "ViewContent", {
+        content_name: "X",
+      }),
+    ).toBe(true);
+    expect(
+      trackMetaEventOnce("ViewContent:product:X", 30 * 60_000, "ViewContent", {
+        content_name: "X",
+      }),
+    ).toBe(false);
+
+    const queue = (window as unknown as { fbq: { queue: unknown[][] } }).fbq.queue;
+    expect(tracked(queue, "ViewContent")).toHaveLength(1);
+  });
+
+  it("TTL dolduktan sonra yeni görüntüleme sayılır", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-24T10:00:00.000Z"));
+    stubLocalStorage(consentStored(true));
+    stubPixelDom();
+    const { trackMetaEventOnce } = await import("./meta-pixel");
+
+    trackMetaEventOnce("ViewContent:product:X", 30 * 60_000, "ViewContent", {
+      content_name: "X",
+    });
+    vi.setSystemTime(new Date("2026-11-24T10:30:01.000Z"));
+    trackMetaEventOnce("ViewContent:product:X", 30 * 60_000, "ViewContent", {
+      content_name: "X",
+    });
+
+    const queue = (window as unknown as { fbq: { queue: unknown[][] } }).fbq.queue;
+    expect(tracked(queue, "ViewContent")).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it("izin yokken başarısız çağrı anahtarı kilitlemez", async () => {
+    const map = stubLocalStorage(consentStored(false));
+    stubPixelDom();
+    const { trackMetaEventOnce } = await import("./meta-pixel");
+
+    expect(
+      trackMetaEventOnce("CompleteRegistration:a@b.com", Infinity, "CompleteRegistration"),
+    ).toBe(false);
+
+    map.set("aroless_cookie_consent", consentStored(true).aroless_cookie_consent as string);
+    expect(
+      trackMetaEventOnce("CompleteRegistration:a@b.com", Infinity, "CompleteRegistration"),
+    ).toBe(true);
+
+    const queue = (window as unknown as { fbq: { queue: unknown[][] } }).fbq.queue;
+    expect(tracked(queue, "CompleteRegistration")).toHaveLength(1);
+  });
+
+  it("VITE_META_PIXEL_DISABLED=true da pikseli kapatır", async () => {
+    stubLocalStorage(consentStored(true));
+    vi.stubEnv("VITE_META_PIXEL_DISABLED", "true");
+    stubPixelDom();
+    const { trackMetaEvent } = await import("./meta-pixel");
+    expect(trackMetaEvent("PageView")).toBe(false);
+  });
+});
+
 describe("Purchase tekilleştirme kimliği", () => {
   it("Paddle işlem kimliğinden sabit biçimde türetilir", async () => {
     const { purchaseEventId } = await import("./meta-config");

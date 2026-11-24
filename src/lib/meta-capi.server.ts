@@ -16,7 +16,18 @@
  */
 import { createHash } from "node:crypto";
 
+import {
+  sanitizeMetaBrowserId,
+  sanitizeMetaClientIp,
+  sanitizeMetaUserAgent,
+} from "@/lib/meta-capi-user-data";
 import { META_PIXEL_ID, purchaseEventId } from "@/lib/meta-config";
+
+export {
+  sanitizeMetaBrowserId,
+  sanitizeMetaClientIp,
+  sanitizeMetaUserAgent,
+} from "@/lib/meta-capi-user-data";
 
 const GRAPH_HOST = "https://graph.facebook.com";
 const DEFAULT_API_VERSION = "v23.0";
@@ -27,6 +38,10 @@ export type MetaCapiResult = {
   skipped?: "missing_token";
   /** Gönderim denendi ama başarısız oldu (HTTP/network). */
   error?: string;
+  /** Olay gönderilemedi ama outbox'ta yeniden denenecek. */
+  queued?: boolean;
+  /** Aynı `event_id` daha önce kuyruğa yazılmıştı (idempotent). */
+  deduplicated?: boolean;
 };
 
 export type MetaCapiUserData = {
@@ -36,6 +51,14 @@ export type MetaCapiUserData = {
   userAgent?: string | null;
   fbp?: string | null;
   fbc?: string | null;
+};
+
+/** Checkout anında izinle toplanan, yalnız `Purchase` için kullanılan veriler. */
+export type MetaCapiAttribution = {
+  fbp?: string | null;
+  fbc?: string | null;
+  clientIp?: string | null;
+  userAgent?: string | null;
 };
 
 export type MetaCapiEventInput = {
@@ -49,7 +72,16 @@ export type MetaCapiEventInput = {
   currency?: string | null;
 };
 
+/** Token eksikliği her istekte değil, süreç başına BİR kez loglanır. */
 let warnedMissingToken = false;
+
+export function logMissingCapiTokenOnce(): void {
+  if (warnedMissingToken) return;
+  warnedMissingToken = true;
+  console.warn(
+    "[Meta CAPI] META_CAPI_ACCESS_TOKEN tanımlı değil — sunucu tarafı olaylar devre dışı.",
+  );
+}
 
 /**
  * Gerçek production dağıtımı mı?
@@ -137,10 +169,14 @@ export function buildMetaCapiPayload(input: MetaCapiEventInput): Record<string, 
   if (email) userData.em = [sha256Hex(normalizedEmail(email))];
   const externalId = input.userData?.externalId?.trim();
   if (externalId) userData.external_id = [sha256Hex(externalId)];
-  if (input.userData?.clientIp) userData.client_ip_address = input.userData.clientIp;
-  if (input.userData?.userAgent) userData.client_user_agent = input.userData.userAgent;
-  if (input.userData?.fbp) userData.fbp = input.userData.fbp;
-  if (input.userData?.fbc) userData.fbc = input.userData.fbc;
+  const clientIp = sanitizeMetaClientIp(input.userData?.clientIp);
+  if (clientIp) userData.client_ip_address = clientIp;
+  const userAgent = sanitizeMetaUserAgent(input.userData?.userAgent);
+  if (userAgent) userData.client_user_agent = userAgent;
+  const fbp = sanitizeMetaBrowserId(input.userData?.fbp);
+  if (fbp) userData.fbp = fbp;
+  const fbc = sanitizeMetaBrowserId(input.userData?.fbc);
+  if (fbc) userData.fbc = fbc;
   if (Object.keys(userData).length > 0) event.user_data = userData;
 
   const customData: Record<string, unknown> = { ...(input.customData ?? {}) };
@@ -160,12 +196,7 @@ export function buildMetaCapiPayload(input: MetaCapiEventInput): Record<string, 
 export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<MetaCapiResult> {
   const token = process.env.META_CAPI_ACCESS_TOKEN?.trim();
   if (!token) {
-    if (!warnedMissingToken) {
-      warnedMissingToken = true;
-      console.warn(
-        "[Meta CAPI] META_CAPI_ACCESS_TOKEN tanımlı değil — sunucu tarafı olaylar devre dışı.",
-      );
-    }
+    logMissingCapiTokenOnce();
     return { sent: false, skipped: "missing_token" };
   }
 
@@ -178,12 +209,24 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<Meta
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(buildMetaCapiPayload(input)),
+      // Webhook yanıtı Meta'ya bağlı kalmasın: 10 sn'de yanıt yoksa istek
+      // iptal edilir, outbox kaydı yeniden denenir.
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       // Yanıt gövdesi loglanmaz: hata ayrıntısı istekteki kişisel verileri
       // yansıtabilir. Durum kodu teşhis için yeterlidir.
       console.warn(`[Meta CAPI] ${input.eventName} reddedildi (${res.status})`);
       return { sent: false, error: `http_${res.status}` };
+    }
+
+    // Graph API bazı hataları 200 ile bildirebilir (`{ error: ... }`). Gövde
+    // LOGLANMAZ; yalnız hata VAR MI diye bakılır ve yeniden denenmek üzere
+    // işaretlenir.
+    const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    if (body && typeof body === "object" && body.error) {
+      console.warn(`[Meta CAPI] ${input.eventName} API hatası döndürdü`);
+      return { sent: false, error: "api_error" };
     }
     return { sent: true };
   } catch (error) {
@@ -196,28 +239,74 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<Meta
 }
 
 /**
- * Başarılı Paddle tahsilatı → Meta `Purchase`.
+ * Outbox sözleşmesi — DB erişimi olmadan test edilebilir yüzey.
  *
- * `transactionId` zorunludur: hem tekilleştirme kimliği buradan türetilir hem
- * de aynı işlem için tekrar gönderim engellenir. Yenilemelerde işlem kimliği
- * farklı olduğu için her tahsilat ayrı sayılır.
+ * `event` gönderim anında `buildMetaCapiPayload` ile işlenir; böylece test
+ * olay kodu ve özetleme kararı RETRY sırasında da doğru ortama göre verilir.
  */
-export async function sendMetaPurchase(input: {
-  transactionId: string;
-  email?: string | null;
-  userId?: string | null;
-  value: number;
-  currency?: string | null;
-  plan?: string | null;
-}): Promise<MetaCapiResult> {
+export type MetaCapiOutboxLike = {
+  enqueue(event: {
+    eventId: string;
+    eventName: string;
+    event: MetaCapiEventInput;
+  }): Promise<"enqueued" | "duplicate">;
+  dispatch(eventId: string): Promise<MetaCapiResult>;
+};
+
+function isOutboxUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /could not find the function|does not exist|schema cache|meta_capi_outbox/i.test(message);
+}
+
+/**
+ * Başarılı Paddle tahsilatı → Meta `Purchase` (KALICI OUTBOX üzerinden).
+ *
+ * NEDEN OUTBOX: Meta 5xx/429 verdiğinde ya da ağ koptuğunda doğrudan `fetch`
+ * olayı kaybediyordu. Olay artık önce veritabanına yazılır, sonra gönderilir;
+ * başarısızlıkta üstel geri çekilmeyle yeniden denenir. `event_id` hem satırda
+ * UNIQUE hem Meta'ya giden olayda aynıdır → aynı Purchase iki kez sayılmaz.
+ *
+ * Migration uygulanmamışsa (RPC yok) sistem ÇALIŞMAYA DEVAM EDER: doğrudan
+ * gönderime düşülür ve durum açıkça loglanır. Bu bir geri dönüş (fallback)
+ * yolu, tercih edilen yol değildir.
+ *
+ * `transactionId` zorunludur: tekilleştirme kimliği buradan türetilir.
+ * Yenilemelerde işlem kimliği farklı olduğu için her tahsilat ayrı sayılır.
+ */
+export async function sendMetaPurchase(
+  input: {
+    transactionId: string;
+    email?: string | null;
+    userId?: string | null;
+    value: number;
+    currency?: string | null;
+    plan?: string | null;
+    /** Yalnız açık pazarlama izniyle doldurulur (webhook kapısı). */
+    attribution?: MetaCapiAttribution | null;
+  },
+  deps: { outbox?: MetaCapiOutboxLike } = {},
+): Promise<MetaCapiResult> {
+  if (!isMetaCapiConfigured()) {
+    logMissingCapiTokenOnce();
+    return { sent: false, skipped: "missing_token" };
+  }
+
+  const eventId = purchaseEventId(input.transactionId);
+  if (!eventId) return { sent: false, error: "missing_event_id" };
+
   const appUrl = (process.env.APP_URL ?? "https://aroless.tech").replace(/\/+$/, "");
-  return sendMetaCapiEvent({
+  const event: MetaCapiEventInput = {
     eventName: "Purchase",
-    eventId: purchaseEventId(input.transactionId) ?? `purchase-${input.transactionId}`,
+    eventId,
+    eventTime: Math.floor(Date.now() / 1000),
     eventSourceUrl: `${appUrl}/pricing`,
     userData: {
       email: input.email,
       externalId: input.userId,
+      fbp: input.attribution?.fbp,
+      fbc: input.attribution?.fbc,
+      clientIp: input.attribution?.clientIp,
+      userAgent: input.attribution?.userAgent,
     },
     value: Math.max(0, input.value),
     currency: input.currency || "USD",
@@ -225,5 +314,32 @@ export async function sendMetaPurchase(input: {
       content_name: input.plan ?? "Aroless",
       content_type: "product",
     },
-  });
+  };
+
+  let outbox = deps.outbox;
+  if (!outbox) {
+    const { createSupabaseMetaCapiOutbox } = await import("@/lib/meta-capi-outbox.server");
+    outbox = createSupabaseMetaCapiOutbox();
+  }
+
+  try {
+    const enqueue = await outbox.enqueue({ eventId, eventName: "Purchase", event });
+    // DUPLICATE de yine denenir: Paddle aynı işlem için ikinci bir olay
+    // gönderdiğinde, geri çekilme süresi dolmuşsa bekleyen kayıt yeniden
+    // gönderilir. Süre dolmamışsa claim boş döner → mükerrer istek yok.
+    const result = await outbox.dispatch(eventId);
+    return enqueue === "duplicate" ? { ...result, deduplicated: true } : result;
+  } catch (error) {
+    if (isOutboxUnavailable(error)) {
+      console.warn(
+        "[Meta CAPI] outbox kullanılamıyor (migration uygulanmamış olabilir) — doğrudan gönderime düşülüyor.",
+      );
+      return sendMetaCapiEvent(event);
+    }
+    console.warn(
+      "[Meta CAPI] outbox yazılamadı:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return { sent: false, error: "outbox" };
+  }
 }

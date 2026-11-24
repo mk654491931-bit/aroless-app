@@ -28,7 +28,7 @@ import { CountryInfoBox } from "@/components/country-info-box";
 import { CountryFlag } from "@/components/country-flag";
 import { Sparkline } from "@/components/sparkline";
 import { getMarketIntel } from "@/lib/market-data.functions";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { trackMetaEventOnce } from "@/lib/meta-pixel";
 import { useCountryMeta, useUsdRate } from "@/lib/rest-countries";
 import { TARGET_COUNTRIES, countryByCode } from "@/lib/countries";
 
@@ -210,7 +210,9 @@ export function ProductDeepDiveModal({
     }
     if (trackedProduct.current === product.name) return;
     trackedProduct.current = product.name;
-    trackMetaEvent("ViewContent", {
+    // Ürün sayfası aynı ürün için ViewContent göndermişse 30 dakika içinde
+    // ikinci kez gönderilmez (Meta aynı görüntülemeyi iki kez saymasın).
+    trackMetaEventOnce(`ViewContent:product:${product.name}`, 30 * 60_000, "ViewContent", {
       content_name: product.name,
       content_type: "product",
     });
