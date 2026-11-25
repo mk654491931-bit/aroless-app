@@ -11,11 +11,13 @@ import {
   LineChart,
   Lock,
   Menu,
+  RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
   TrendingUp,
   Workflow,
+  X,
 } from "lucide-react";
 import {
   Accordion,
@@ -24,6 +26,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { PLANS } from "@/lib/plans";
+import { ProfitSimulator } from "./landing/profit-simulator";
 import "./landing/landing.css";
 
 const ECOSYSTEMS = [
@@ -119,6 +122,29 @@ const PLAN_DESCRIPTIONS: Record<string, string> = {
   Pro: "Büyüyen mağazalar ve küçük ekipler için.",
   Business: "Birden fazla kanalı yöneten ekipler için.",
 };
+
+const COMPARISON = [
+  {
+    label: "Veri ve kanıt",
+    scattered: "Sekmeler, ekran görüntüleri, birbirini tutmayan tahminler",
+    aroless: "Kaynağı ve ölçüm tarihi görünen tek rapor",
+  },
+  {
+    label: "Kâr hesabı",
+    scattered: "Tedarik fiyatı görünür; kargo, komisyon ve KDV sonradan anlaşılır",
+    aroless: "Gerçek birim maliyet ve net marj aynı kartta",
+  },
+  {
+    label: "Karar kaydı",
+    scattered: "Karar verilir, gerekçe ekipte kaybolur",
+    aroless: "Risk, aksiyon ve varsayımlar ayrıştırılmış rapor",
+  },
+  {
+    label: "Ekip görünürlüğü",
+    scattered: "Herkes kendi tablosunda çalışır",
+    aroless: "Tek çalışma alanı, ortak dil ve karşılaştırma",
+  },
+];
 
 function ProductPreview() {
   return (
@@ -279,6 +305,9 @@ export function MarketingLanding() {
             <a href="#architecture" className="al-nav-link">
               Platform
             </a>
+            <a href="#profit" className="al-nav-link">
+              Kâr hesabı
+            </a>
             <a href="#pricing" className="al-nav-link">
               Fiyatlar
             </a>
@@ -307,6 +336,7 @@ export function MarketingLanding() {
               <div className="al-mobile-panel">
                 <a href="#platform">Nasıl çalışır</a>
                 <a href="#architecture">Platform</a>
+                <a href="#profit">Kâr hesabı</a>
                 <a href="#pricing">Fiyatlar</a>
                 <a href="#faq">SSS</a>
                 <Link to="/tools">Araçlar</Link>
@@ -369,6 +399,10 @@ export function MarketingLanding() {
                     <Check size={11} strokeWidth={2.4} />
                     Kayıt sonrası hemen kullanılabilir
                   </li>
+                  <li>
+                    <Check size={11} strokeWidth={2.4} />
+                    Tüm planlarda 10 modül açık
+                  </li>
                 </ul>
               </div>
 
@@ -430,6 +464,70 @@ export function MarketingLanding() {
                 );
               })}
             </div>
+
+            <div className="al-compare">
+              <div className="al-compare-intro">
+                <p className="al-eyebrow">Fark</p>
+                <h3>Dağınık araştırma yerine tek karar masası.</h3>
+                <p>
+                  Aynı ürün, aynı bütçe; fark kararın izlenebilir olması. Aroless her adımı aynı
+                  çalışma alanında birbirine bağlar.
+                </p>
+              </div>
+
+              <div className="al-compare-table" role="table" aria-label="Aroless karşılaştırması">
+                <div className="al-compare-row al-compare-header" role="row">
+                  <span role="columnheader">Karar noktası</span>
+                  <span role="columnheader">Dağınık yöntem</span>
+                  <span role="columnheader">Aroless</span>
+                </div>
+                {COMPARISON.map((row) => (
+                  <div className="al-compare-row" role="row" key={row.label}>
+                    <span className="al-compare-label" role="cell">
+                      {row.label}
+                    </span>
+                    <span className="al-compare-scattered" role="cell" data-label="Dağınık yöntem">
+                      <X size={11} strokeWidth={2.2} />
+                      {row.scattered}
+                    </span>
+                    <span className="al-compare-good" role="cell" data-label="Aroless">
+                      <Check size={12} strokeWidth={2.4} />
+                      {row.aroless}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Profit simulator */}
+        <section id="profit" className="al-section al-section-soft scroll-mt-24">
+          <div className="al-container al-calc-layout">
+            <div className="al-calc-copy">
+              <p className="al-eyebrow">Kâr hesabı</p>
+              <h2 className="al-h2">Trend güzel. Peki marj?</h2>
+              <p className="al-lead">
+                Bir ürünün talebi yüksek olabilir; kargo, komisyon ve iade girdiğinde kâr
+                kaybolabilir. Aynı hesabı her ürün için otomatik yapın.
+              </p>
+              <ul className="al-calc-points">
+                {[
+                  "Tedarik, kargo ve komisyon aynı hesapta",
+                  "Ülke bazlı KDV ve pazar yeri kuralları",
+                  "Senaryoyu kaydet, ekibinle aynı sayıyı konuş",
+                ].map((item) => (
+                  <li key={item}>
+                    <Check size={13} strokeWidth={2.4} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link to="/auth" search={{ mode: "signup" }} className="al-text-link">
+                Kendi ürününle dene <ArrowRight size={13} />
+              </Link>
+            </div>
+            <ProfitSimulator />
           </div>
         </section>
 
@@ -526,9 +624,29 @@ export function MarketingLanding() {
                     <span>/ay</span>
                   </div>
                   <p className="al-plan-desc">{PLAN_DESCRIPTIONS[plan.id]}</p>
+
+                  <div className="al-plan-quotas">
+                    {[
+                      ["Bulucu", plan.credits],
+                      ["AI araç", plan.toolRuns],
+                      ["Konsey", plan.councilRuns],
+                      ["Radar", plan.radarScans],
+                      ["Hidrojen10", plan.hydrogen10Runs],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="al-plan-quota">
+                        <strong>{Number(value).toLocaleString("tr-TR")}</strong>
+                        <span>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="al-plan-rule" />
                   <ul className="al-plan-list">
-                    {plan.features.slice(0, 5).map((feature) => (
+                    {[
+                      plan.features[0],
+                      plan.features[plan.features.length - 1],
+                      "Aylık yenilenen kullanım",
+                    ].map((feature) => (
                       <li key={feature}>
                         <Check size={12} strokeWidth={2.4} />
                         {feature}
@@ -536,7 +654,7 @@ export function MarketingLanding() {
                     ))}
                   </ul>
                   <Link to="/pricing" className="al-plan-cta">
-                    Planı incele <ArrowRight size={12} />
+                    Planı seç <ArrowRight size={12} />
                   </Link>
                 </article>
               ))}
@@ -549,6 +667,21 @@ export function MarketingLanding() {
               </Link>{" "}
               ve ödeme adımında gösterilir.
             </p>
+
+            <div className="al-pricing-trust">
+              <span>
+                <ShieldCheck size={13} /> Paddle ile güvenli ödeme
+              </span>
+              <span>
+                <Lock size={13} /> Kart bilgisi Aroless'e girilmez
+              </span>
+              <span>
+                <RefreshCw size={13} /> İstediğiniz zaman iptal
+              </span>
+              <span>
+                <FileText size={13} /> Cayma hakkı ve yasal metinler
+              </span>
+            </div>
           </div>
         </section>
 

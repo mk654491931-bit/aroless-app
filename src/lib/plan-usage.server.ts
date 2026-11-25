@@ -315,10 +315,17 @@ export async function recordPlanUsage(opts: {
 export async function recordUsageRefund(opts: {
   userId: string;
   feature: string;
+  /** İade edilen POZİTİF jeton sayısı (deftere negatif satır olarak yazılır). */
   credits: number;
 }): Promise<void> {
-  const credits = Math.min(0, Math.trunc(Number(opts.credits) || 0));
-  if (!opts.userId || credits === 0) return;
+  // ÖLÇÜLEN HATA: çağıran (`refundFeatureCredits`) pozitif tutar veriyor, eski
+  // kod `Math.min(0, …)` ile onu sıfıra indiriyordu. Sonuç: jeton bakiyeye geri
+  // dönse bile “bu ay kullanılan” sayacı dolu kalıyor ve kullanıcı bakiyesi
+  // varken PLAN_LIMIT görüyordu. İşaret burada normalize edilir; negatif girdi
+  // de aynı sonucu verir ki iki çağrı biçimi çift eksi üretmesin.
+  const amount = Math.abs(Math.trunc(Number(opts.credits) || 0));
+  if (!opts.userId || amount === 0) return;
+  const credits = -amount;
   try {
     const { error } = await supabaseAdmin.from("credit_usage_log").insert({
       user_id: opts.userId,

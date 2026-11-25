@@ -32,6 +32,14 @@ export type AdminStats = {
   monthRevenueCents: number;
   totalTransactions: number;
   totalCreditsSpent: number;
+  /** Şu anda aktif ücretli abonelik (Starter/Pro/Business). */
+  activePaidUsers: number;
+  /** Ücretsiz veya süresi dolmuş hesaplar. */
+  freeUsers: number;
+  /** Bu ay kayıt olan kullanıcılar. */
+  newUsersThisMonth: number;
+  /** Kullanıcı cüzdanlarında harcanmayı bekleyen toplam jeton. */
+  totalCreditsRemaining: number;
   isAdmin: true;
 };
 
@@ -41,29 +49,68 @@ export const getAdminStats = createServerFn({ method: "GET" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const [usersRes, txCountRes, txAllRes, creditsRes] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const monthStartIso = monthStart.toISOString();
+
+    // Tek profil taraması: kullanıcı sayısı, cüzdan bakiyesi, harcama ve
+    // aktif paket sayısı aynı satırlardan türetilir. Böylece paneldeki
+    // "kullanıcı" sayısı ile "kalan jeton" birbirinden kopuk okunmaz.
+    const [usersRes, newUsersRes, txCountRes, txAllRes] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select(
+          "credits, finder_credits, credits_spent, subscription_tier, subscription_status, current_period_end",
+          { count: "exact" },
+        ),
+      supabaseAdmin
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", monthStartIso),
       supabaseAdmin.from("transactions").select("id", { count: "exact", head: true }),
       supabaseAdmin.from("transactions").select("amount_cents, created_at"),
-      supabaseAdmin.from("profiles").select("credits_spent"),
     ]);
 
-    const totalUsers = usersRes.count ?? 0;
+    const users = (usersRes.data ?? []) as {
+      credits?: number | null;
+      finder_credits?: number | null;
+      credits_spent?: number | null;
+      subscription_tier?: string | null;
+      subscription_status?: string | null;
+      current_period_end?: string | null;
+    }[];
+    const totalUsers = usersRes.count ?? users.length;
     const totalTransactions = txCountRes.count ?? 0;
     const totalRevenueCents = (txAllRes.data ?? []).reduce(
       (s, r: { amount_cents?: number | null }) => s + (r.amount_cents ?? 0),
       0,
     );
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
-    const monthRevenueCents = (txAllRes.data ?? []).reduce((s, r: any) => {
-      return new Date(r.created_at) >= monthStart ? s + (r.amount_cents ?? 0) : s;
-    }, 0);
-    const totalCreditsSpent = (creditsRes.data ?? []).reduce(
-      (s, r: { credits_spent?: number | null }) => s + (r.credits_spent ?? 0),
+    const monthRevenueCents = (txAllRes.data ?? []).reduce(
+      (s, r: { amount_cents?: number | null; created_at?: string | null }) => {
+        return r.created_at && new Date(r.created_at) >= monthStart ? s + (r.amount_cents ?? 0) : s;
+      },
       0,
     );
+    const totalCreditsSpent = users.reduce(
+      (s, r) => s + Math.max(0, Number(r.credits_spent ?? 0)),
+      0,
+    );
+    const totalCreditsRemaining = users.reduce(
+      (s, r) =>
+        s + Math.max(0, Number(r.credits ?? 0)) + Math.max(0, Number(r.finder_credits ?? 0)),
+      0,
+    );
+
+    const paidTiers = new Set(["Starter", "Pro", "Business"]);
+    const activePaidUsers = users.filter((r) => {
+      const tier = String(r.subscription_tier ?? "Free");
+      return (
+        paidTiers.has(tier) &&
+        String(r.subscription_status ?? "") === "active" &&
+        !isPlanExpired(r.current_period_end)
+      );
+    }).length;
 
     return {
       totalUsers,
@@ -71,6 +118,10 @@ export const getAdminStats = createServerFn({ method: "GET" })
       monthRevenueCents,
       totalTransactions,
       totalCreditsSpent,
+      activePaidUsers,
+      freeUsers: Math.max(0, totalUsers - activePaidUsers),
+      newUsersThisMonth: newUsersRes.count ?? 0,
+      totalCreditsRemaining,
       isAdmin: true,
     };
   });
@@ -79,6 +130,9 @@ export type AdminUserRow = {
   id: string;
   email: string | null;
   credits: number;
+  /** Ürün Bulucu'nun ilk harcadığı hoş geldin havuzu. */
+  finder_credits: number;
+  sim_credits: number;
   credits_spent: number;
   subscription_tier: string;
   subscription_status: string;
@@ -96,7 +150,7 @@ export const listAdminUsers = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .select(
-        "id, email, credits, credits_spent, subscription_tier, subscription_status, current_period_end, promo_code, created_at",
+        "id, email, credits, finder_credits, sim_credits, credits_spent, subscription_tier, subscription_status, current_period_end, promo_code, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(50);
@@ -127,6 +181,81 @@ export const listAdminTransactions = createServerFn({ method: "GET" })
       .limit(50);
     if (error) throw new Error(error.message);
     return (data ?? []) as AdminTxRow[];
+  });
+
+export type AdminUsageRow = {
+  id: string;
+  user_id: string;
+  email: string | null;
+  tool: string;
+  /** Pozitif = tüketim, negatif = iade düzeltmesi. */
+  credits: number;
+  success: boolean;
+  created_at: string;
+  /** `meta.kind` (credits / toolRuns / councilRuns / radarScans …). */
+  kind: string | null;
+  adjustment: boolean;
+};
+
+/**
+ * Jeton defterinin son kayıtları (yalnız admin).
+ *
+ * NEDEN: “Jeton kullanımı doğru çalışıyor mu?” sorusu yalnız toplam bakiyeyle
+ * yanıtlanamaz. Burada her AI işinin hangi kullanıcıdan kaç jeton düştüğü ve
+ * iade satırlarının negatif yazıldığı görünür; destek sırasında tek tek
+ * veritabanına bakmak gerekmez.
+ */
+export const listAdminCreditUsage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<AdminUsageRow[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("credit_usage_log")
+      .select("id, user_id, tool, credits, success, created_at, meta")
+      .order("created_at", { ascending: false })
+      .limit(120);
+    if (error) throw new Error(error.message);
+
+    // Hidrojen10 cüzdandan jeton harcamaz; paketin ayrı aylık tarama hakkından
+    // düşer. Aynı defterde görünse de “jeton harcaması” gibi toplanmamalı.
+    const rows = (
+      (data ?? []) as {
+        id: string;
+        user_id: string;
+        tool: string;
+        credits: number;
+        success: boolean;
+        created_at: string;
+        meta?: Record<string, unknown> | null;
+      }[]
+    ).filter((r) => !String(r.tool ?? "").startsWith("hydrogen10"));
+    const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+    const emails = new Map<string, string | null>();
+    if (ids.length > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .in("id", ids);
+      for (const p of (profiles ?? []) as { id: string; email: string | null }[]) {
+        emails.set(p.id, p.email);
+      }
+    }
+
+    return rows.map((r) => {
+      const meta = (r.meta ?? {}) as Record<string, unknown>;
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        email: emails.get(r.user_id) ?? null,
+        tool: r.tool,
+        credits: Math.trunc(Number(r.credits ?? 0)),
+        success: !!r.success,
+        created_at: r.created_at,
+        kind: typeof meta["kind"] === "string" ? meta["kind"] : null,
+        adjustment: meta["adjustment"] === "refund" || Number(r.credits) < 0,
+      };
+    });
   });
 
 export const checkIsAdmin = createServerFn({ method: "GET" })
