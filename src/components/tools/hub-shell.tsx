@@ -58,7 +58,7 @@ export function HubShell({
   return (
     <div className="min-h-screen">
       <header className="glass top-light sticky top-0 z-40 border-b border-white/10">
-        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 sm:gap-4">
           <BrandLogo subtitle={title} />
           <Link
             to="/"
@@ -70,13 +70,13 @@ export function HubShell({
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <section className="animate-fade-in premium-card live-card relative overflow-hidden p-6">
+        <section className="animate-fade-in premium-card live-card relative overflow-hidden p-4 sm:p-6">
           <div className="hero-halo" aria-hidden="true" />
           <div
             className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full blur-3xl"
             style={{ background: "color-mix(in oklab, var(--accent-active) 22%, transparent)" }}
           />
-          <h1 className="relative flex items-center gap-2 text-2xl font-black tracking-tight md:text-3xl">
+          <h1 className="relative flex flex-wrap items-center gap-2 text-xl font-black tracking-tight sm:text-2xl md:text-3xl">
             <span>{emoji}</span> {title}
           </h1>
           <div className="flow-line relative mt-3 w-40 max-w-full" aria-hidden="true" />
@@ -132,7 +132,7 @@ export function HubShell({
           </nav>
         )}
 
-        <div className="stagger-in mt-7 grid gap-4 lg:grid-cols-2">{children}</div>
+        <div className="stagger-in mt-6 grid gap-4 sm:mt-7 lg:grid-cols-2">{children}</div>
       </main>
     </div>
   );

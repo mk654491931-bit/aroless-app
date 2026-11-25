@@ -2974,6 +2974,46 @@ input[type="range"].range-fill {
 }
 
 
+/* ---------- Mobile ergonomics ---------- */
+/* iOS Safari'de yatay/dikey dönüşte metin boyutunun kendiliğinden
+   büyümesini engelle. SAYFA YAKINLAŞTIRMASI açık kalır (maximum-scale yok). */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Mobilde ikincil üst bar kısayolları gizlenir; gezinme soldaki menüde,
+   birincil eylemler (jeton, plan, çıkış) tek şeritte kalır. */
+@media (max-width: 639px) {
+  .topbar-hide-sm {
+    display: none !important;
+  }
+}
+
+/* Yatay kaydırılan tablo/paneller: telefonlarda parmakla kaydırma ve
+   taşma zincirini kontrol et. Görünür kaydırma çubuğu yer kaplamasın. */
+@media (max-width: 767px) {
+  .scroll-x,
+  .overflow-x-auto {
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .scroll-x::-webkit-scrollbar,
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Dokunmatik cihazlarda ikon düğmeleri en az 40px hedef alanına çıkar;
+   yanlış dokunuşları azaltır (WCAG 2.5.8 hedefi). */
+@media (pointer: coarse) and (max-width: 767px) {
+  .topbar-btn {
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+  }
+}
+
 /* Mobile form fields keep >=16px text so iOS Safari never auto-zooms on
    focus (a common "jumpy page" complaint). Buttons/checkboxes/range excluded. */
 @media (max-width: 640px) {

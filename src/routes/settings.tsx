@@ -201,7 +201,7 @@ function SettingsPage() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-white/10 glass sticky top-0 z-40">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-3xl mx-auto px-3 py-3 flex items-center justify-between gap-2 sm:px-4 sm:gap-3">
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
@@ -212,15 +212,16 @@ function SettingsPage() {
             <LanguageSwitcher />
             <Link
               to="/"
-              className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 sm:px-3"
+              aria-label="Geri"
             >
-              <ArrowLeft size={14} /> Back
+              <ArrowLeft size={14} /> <span className="hidden sm:inline">Back</span>
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-5">
+      <main className="max-w-3xl mx-auto px-3 py-6 space-y-4 sm:px-4 sm:py-8 sm:space-y-5">
         <section className="glass rounded-2xl p-5">
           <h2 className="font-semibold mb-1">Kullanıcı kimliğiniz</h2>
           <p className="text-xs text-muted-foreground mb-3">
@@ -228,7 +229,7 @@ function SettingsPage() {
             gerekmez.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-lg tracking-[0.3em]">
+            <code className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-base tracking-[0.2em] sm:text-lg sm:tracking-[0.3em]">
               {(profQ.data as { public_id?: string | null } | undefined)?.public_id ?? "--------"}
             </code>
             <button
@@ -331,7 +332,7 @@ function SettingsPage() {
               Aboneliğin başlatıldı. Kredilerin tanımlandı.
             </div>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-3">
             <Info label="Email" value={profQ.data?.email ?? "—"} />
             <Info label="Plan" value={planLabelFor(profQ.data?.subscription_tier)} />
             <Info
@@ -485,7 +486,7 @@ function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-white/5 border border-white/10 p-3">
       <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold mt-0.5 truncate">{value}</div>
+      <div className="text-sm font-semibold mt-0.5 break-words">{value}</div>
     </div>
   );
 }

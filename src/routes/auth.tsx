@@ -699,8 +699,9 @@ function AuthPage() {
                 }}
               />
 
-              {/* Enterprise tier badge */}
-              <div className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-foreground backdrop-blur elite-glow">
+              {/* Enterprise tier badge — masaüstünde kartın köşesinde; telefonda
+                  logo ile çakışmaması için başlığın üstünde akış içinde. */}
+              <div className="absolute right-4 top-4 z-10 hidden items-center gap-1.5 rounded-full border border-border bg-card/60 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-foreground backdrop-blur elite-glow sm:inline-flex">
                 <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.80_0.14_200)]" />
                 AI ELITE · ENTERPRISE
               </div>
@@ -719,8 +720,12 @@ function AuthPage() {
                     Aroless
                   </span>
                 </div>
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-foreground sm:hidden">
+                  <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.80_0.14_200)]" />
+                  AI ELITE · ENTERPRISE
+                </span>
 
-                <h2 className="light-trace mt-5 text-2xl font-bold tracking-tight">
+                <h2 className="light-trace mt-4 text-2xl font-bold tracking-tight sm:mt-5">
                   {mode === "signin" ? "Welcome back" : "Create your account"}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">

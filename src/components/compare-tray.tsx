@@ -106,15 +106,15 @@ export function CompareModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-2 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
       <div
-        className="premium-card grain mx-auto max-w-6xl rounded-2xl p-5"
+        className="premium-card grain mx-auto max-w-6xl rounded-2xl p-3 sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="inline-flex items-center gap-2 text-sm font-semibold">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h3 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
             <Columns3 size={15} className="text-[oklch(0.68_0.15_255)]" />
             Yan yana karşılaştırma · {products.length} ürün
           </h3>
@@ -171,7 +171,7 @@ export function CompareModal({
           </table>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:mt-5 md:grid-cols-2 xl:grid-cols-3">
           {products.map((p) => (
             <div key={p.name} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
               <div className="text-xs font-semibold">

@@ -95,7 +95,7 @@ function NotificationsPage() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-white/10 glass sticky top-0 z-40">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-3xl mx-auto px-3 py-3 flex items-center justify-between gap-2 sm:px-4 sm:gap-3">
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-lg glow bg-gradient-to-br from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
@@ -104,14 +104,15 @@ function NotificationsPage() {
           </div>
           <Link
             to="/dashboard"
-            className="text-xs rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 hover:bg-white/10 flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 sm:px-3"
+            aria-label="Dashboard'a dön"
           >
-            <ArrowLeft size={14} /> Dashboard
+            <ArrowLeft size={14} /> <span className="hidden sm:inline">Dashboard</span>
           </Link>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-3 py-6 space-y-4 sm:px-4 sm:py-8 sm:space-y-6">
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -144,8 +145,8 @@ function NotificationsPage() {
         </div>
 
         <div className="glass rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Bell size={16} />
               <h2 className="font-semibold">Inbox</h2>
               {unreadCount > 0 && (
@@ -157,9 +158,10 @@ function NotificationsPage() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAll}
-                className="text-xs flex items-center gap-1.5 text-[oklch(0.85_0.15_255)] hover:underline"
+                className="inline-flex items-center gap-1.5 text-xs text-[oklch(0.85_0.15_255)] hover:underline"
+                aria-label="Mark all read"
               >
-                <Check size={14} /> Mark all read
+                <Check size={14} /> <span className="hidden sm:inline">Mark all read</span>
               </button>
             )}
           </div>
@@ -180,7 +182,7 @@ function NotificationsPage() {
                 className={`py-3 flex items-start justify-between gap-3 ${n.read ? "opacity-60" : ""}`}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-muted-foreground">
                       {TYPE_LABELS[n.type] || n.type}
                     </span>
@@ -194,9 +196,10 @@ function NotificationsPage() {
                 {!n.read && (
                   <button
                     onClick={() => handleMarkRead(n.id)}
-                    className="text-xs rounded-lg bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 flex items-center gap-1 shrink-0"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
+                    aria-label="Okundu olarak işaretle"
                   >
-                    <Check size={12} /> Read
+                    <Check size={12} /> <span className="hidden sm:inline">Read</span>
                   </button>
                 )}
               </li>

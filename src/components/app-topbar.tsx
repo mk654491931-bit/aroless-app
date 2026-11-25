@@ -248,7 +248,7 @@ export function AppTopbar() {
                 <PopoverContent
                   align="end"
                   sideOffset={8}
-                  className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
+                  className="w-[min(300px,calc(100vw-1.5rem))] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
                 >
                   <div className="space-y-3 p-4">
                     <div className="flex items-center justify-between">
@@ -334,17 +334,16 @@ export function AppTopbar() {
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs sm:hidden"
+                    className="inline-flex min-h-9 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs sm:hidden"
                     title={`Jeton ${creditsLabel} (${breakdownLabel}) — detay için tıkla`}
                   >
-                    <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {creditsLabel}/
-                    {quota.credits}
+                    <Coins size={12} className="text-[oklch(0.85_0.18_90)]" /> {creditsLabel}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent
                   align="end"
                   sideOffset={8}
-                  className="w-[300px] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
+                  className="w-[min(300px,calc(100vw-1.5rem))] border-white/10 bg-[#141a2a] p-0 text-white shadow-xl"
                 >
                   <div className="space-y-3 p-4">
                     <p className="text-xs font-semibold tracking-wide text-white/90">
@@ -440,13 +439,16 @@ export function AppTopbar() {
               )}
             </Link>
           ) : null}
-          <Link to="/notifications" className="topbar-btn" title="Notifications">
+          {/* Mobilde gezinme zaten soldaki menüde: bu üç kısayol dar ekranda
+              üst barı yatay kaydırmaya zorluyordu. Şerit; jeton, plan ve
+              çıkış gibi birincil eylemleri tek ekranda tutar. */}
+          <Link to="/notifications" className="topbar-btn topbar-hide-sm" title="Notifications">
             <Bell size={14} />
           </Link>
-          <Link to="/dashboard" className="topbar-btn" title="Dashboard">
+          <Link to="/dashboard" className="topbar-btn topbar-hide-sm" title="Dashboard">
             <LayoutDashboard size={14} />
           </Link>
-          <Link to="/settings" className="topbar-btn" title="Settings">
+          <Link to="/settings" className="topbar-btn topbar-hide-sm" title="Settings">
             <SettingsIcon size={14} />
           </Link>
           {/* Dil / tema / palet / imleç tek kümede: açılır-kapanır, tercih kalıcı. */}

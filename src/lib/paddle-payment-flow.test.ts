@@ -153,6 +153,34 @@ afterEach(() => {
   }
 });
 
+/**
+ * YENİLEME ÖDEMESİ — aynı aboneliğin ikinci dönemi.
+ *
+ * Paddle yenilemede YENİ bir işlem kimliği gönderir; `customData.plan`
+ * kopyalanmamış olsa bile paket fiyat kimliğinden çözülmeli ve her dönem
+ * için haklar yeniden tanımlanmalıdır. Kredi idempotansı işlem kimliğine
+ * bağlı olduğu için yenileme yeni bir `credit_ledger` anahtarı alır.
+ */
+function renewalBody(transactionId: string, eventId = "evt_renew_1") {
+  return JSON.stringify({
+    event_id: eventId,
+    event_type: "transaction.completed",
+    occurred_at: new Date().toISOString(),
+    data: {
+      id: transactionId,
+      subscriptionId: "sub_Pro",
+      customerId: "cus_Pro",
+      currencyCode: "USD",
+      status: "completed",
+      details: { totals: { grandTotal: amountFor.Pro } },
+      billingPeriod: { startsAt: "2026-12-09T00:00:00Z", endsAt: "2027-01-09T00:00:00Z" },
+      items: [{ price: { id: priceFor.Pro, productId: "pro_Pro" } }],
+      // Yenilemede customData.plan GELMEZ: paket yalnız fiyat/tutar ile çözülür.
+      customData: { userId: USER_ID },
+    },
+  });
+}
+
 function cancellationBody() {
   return JSON.stringify({
     event_id: "evt_cancel_1",
@@ -195,6 +223,27 @@ describe("Paddle ödeme → hesap açma + jeton", () => {
       expect(args["_sim_credits"]).toBe(item.sim);
     });
   }
+
+  it("yenileme ödemesi paketi korur ve her dönem için yeniden jeton tanımlar", async () => {
+    const { handlePaddleWebhook } = await import("./paddle-webhook.server");
+
+    const first = await handlePaddleWebhook(requestFor(renewalBody("txn_renew_1")));
+    expect(first.status).toBe(200);
+    const firstArgs = fakes.rpcCalls.filter((c) => c.name === "process_paddle_event")[0]!.args;
+    expect(firstArgs["_tier"]).toBe("Pro");
+    expect(firstArgs["_transaction_id"]).toBe("txn_renew_1");
+    expect(firstArgs["_search_credits"]).toBe(136);
+    expect(firstArgs["_sim_credits"]).toBe(10);
+    expect(firstArgs["_period_start"]).toBe("2026-12-09T00:00:00Z");
+
+    // İkinci dönem: YENİ işlem kimliği → defterde yeni anahtar, haklar tekrar.
+    const second = await handlePaddleWebhook(requestFor(renewalBody("txn_renew_2", "evt_renew_2")));
+    expect(second.status).toBe(200);
+    const processed = fakes.rpcCalls.filter((c) => c.name === "process_paddle_event");
+    expect(processed).toHaveLength(2);
+    expect(processed[1]!.args["_transaction_id"]).toBe("txn_renew_2");
+    expect(processed[1]!.args["_search_credits"]).toBe(136);
+  });
 
   it("iptal olayı hesabı Free'ye indirir ve jeton istemez", async () => {
     const { handlePaddleWebhook } = await import("./paddle-webhook.server");

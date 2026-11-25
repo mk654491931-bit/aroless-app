@@ -29,7 +29,7 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 md:px-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-10 md:px-6">
       <header className="print:hidden">
         <nav className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground">
@@ -54,7 +54,7 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card/70 px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent/40"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/70 px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent/40 sm:w-auto"
           >
             <Download className="h-4 w-4" />
             PDF Olarak İndir
@@ -79,7 +79,32 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
         </div>
       </header>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
+      {/* Telefon: uzun hukuki metinde gezinmeyi kolaylaştıran açılır içindekiler.
+          Masaüstünde aynı liste sol sütunda kalıcıdır. */}
+      <details className="mt-6 rounded-xl border border-border bg-card/40 p-4 lg:hidden print:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground [&::-webkit-details-marker]:hidden">
+          <ListTree className="h-3.5 w-3.5" /> İçindekiler
+        </summary>
+        <ul className="mt-3 space-y-1">
+          {doc.sections.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => scrollTo(s.id)}
+                className={`w-full rounded-md px-2 py-2 text-left text-xs leading-snug transition-colors ${
+                  active === s.id
+                    ? "bg-accent/40 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s.heading}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <div className="mt-6 grid gap-6 sm:mt-8 sm:gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="hidden lg:block print:hidden">
           <div className="sticky top-24 rounded-xl border border-border bg-card/40 p-4 backdrop-blur">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -105,7 +130,7 @@ export function LegalLayout({ doc }: { doc: LegalDoc }) {
           </div>
         </aside>
 
-        <main className="min-w-0 rounded-2xl border border-border bg-card/30 p-5 backdrop-blur md:p-8 print:border-0 print:bg-transparent print:p-0">
+        <main className="min-w-0 rounded-2xl border border-border bg-card/30 p-4 backdrop-blur sm:p-5 md:p-8 print:border-0 print:bg-transparent print:p-0">
           <LegalDocBody doc={doc} />
           <p className="mt-10 border-t border-border pt-5 text-xs text-muted-foreground">
             Bu belge bilgilendirme amaçlıdır ve Aroless tarafından güncellenir. Sorularınız için

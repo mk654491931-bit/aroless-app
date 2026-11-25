@@ -134,8 +134,8 @@ function PricingPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-12">
-        <div className="mb-8 flex items-center justify-between gap-3">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <BrandLogo />
           <Link
             to="/auth"
@@ -147,7 +147,7 @@ function PricingPage() {
         </div>
 
         <div className="text-center">
-          <h1 className="text-3xl font-extrabold md:text-5xl">
+          <h1 className="text-balance text-3xl font-extrabold md:text-5xl">
             Şeffaf <span className="text-gradient">fiyatlandırma</span>
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground md:text-base">
@@ -178,7 +178,7 @@ function PricingPage() {
             return (
               <div
                 key={p.id}
-                className={`glass rounded-2xl p-6 ${p.highlight ? "ring-2 ring-primary/50" : ""}`}
+                className={`glass rounded-2xl p-5 sm:p-6 ${p.highlight ? "ring-2 ring-primary/50" : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
@@ -244,7 +244,30 @@ function PricingPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Modüllerin tamamı her pakette açık; değişen tek şey kullanım miktarı.
           </p>
-          <div className="mt-4 overflow-x-auto">
+          {/* Telefon: yatay kaydırılan tablo yerine üç paket kartı. Her değer
+              tek sütunda okunur; tablo yalnız md ve üstünde gösterilir. */}
+          <div className="mt-4 space-y-3 md:hidden">
+            {PLANS.map((p) => (
+              <div key={p.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+                  <span className="text-sm font-semibold">{p.label}</span>
+                  <span className="text-xs text-muted-foreground">{price(p.usd)}/ay</span>
+                </div>
+                <dl className="mt-2 space-y-1.5 text-xs">
+                  {USAGE_ROWS.map((row) => (
+                    <div key={row.key} className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">{row.label}</dt>
+                      <dd className="font-semibold tabular-nums">
+                        {p[row.key].toLocaleString("tr-TR")}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto md:block">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">

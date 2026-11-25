@@ -265,9 +265,9 @@ function DashboardPage() {
   const paid = tier === "Starter" || tier === "Pro" || tier === "Business";
 
   return (
-    <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <main className="max-w-7xl mx-auto px-3 py-6 space-y-4 sm:px-4 sm:py-8 sm:space-y-6">
       {/* ── Hero: greeting + profile + status + quick actions ───────────── */}
-      <header className="glass relative overflow-hidden rounded-2xl p-6">
+      <header className="glass relative overflow-hidden rounded-2xl p-4 sm:p-6">
         <div className="pointer-events-none absolute -top-24 right-0 h-64 w-64 rounded-full bg-[oklch(0.62_0.17_255)]/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-[oklch(0.52_0.15_262)]/10 blur-3xl" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
@@ -302,9 +302,9 @@ function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <div
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-right"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-right sm:px-4 sm:py-2"
               title="Kredi bakiyesi"
             >
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -350,7 +350,7 @@ function DashboardPage() {
       </header>
 
       {/* ── KPI strip ───────────────────────────────────────────────────── */}
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Kpi icon={History} label="Analiz" value={analyses.length} sub="Son 14 gün" />
         <Kpi icon={Bookmark} label="Kayıtlı ürün" value={favorites.length} sub="Kütüphane" />
         {/* `|| 1` idi: hiç koleksiyon yokken KPI "1" gösterip kullanıcıyı
@@ -367,13 +367,13 @@ function DashboardPage() {
       </section>
 
       {/* ── Activity + credit balance ───────────────────────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <ChartCard
           icon={<Sparkles size={15} />}
           title="Analiz aktivitesi (son 14 gün)"
           className="lg:col-span-2"
         >
-          <div className="h-56">
+          <div className="h-48 sm:h-56">
             <ResponsiveContainer>
               <AreaChart data={days} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                 <defs>
@@ -445,9 +445,9 @@ function DashboardPage() {
       </section>
 
       {/* ── Engine quality radar + verdict distribution ─────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         <ChartCard icon={<Target size={15} />} title="Kayıtlı ürün kalite radarı">
-          <div className="h-64">
+          <div className="h-56 sm:h-64">
             {favorites.length === 0 ? (
               <EmptyState
                 icon={<Target size={18} />}
@@ -481,7 +481,7 @@ function DashboardPage() {
         </ChartCard>
 
         <ChartCard icon={<Package size={15} />} title="Satılabilirlik kararları">
-          <div className="h-64">
+          <div className="h-56 sm:h-64">
             {verdictPie.length === 0 ? (
               <EmptyState
                 icon={<Package size={18} />}
@@ -507,9 +507,9 @@ function DashboardPage() {
       </section>
 
       {/* ── Top recommendations + collections ───────────────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <ChartCard icon={<Bookmark size={15} />} title="Koleksiyonlara göre kayıtlar">
-          <div className="h-56">
+          <div className="h-48 sm:h-56">
             {collectionData.length === 0 ? (
               <EmptyState
                 icon={<Bookmark size={18} />}
@@ -576,7 +576,7 @@ function DashboardPage() {
       </section>
 
       {/* ── Recent activity ─────────────────────────────────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         <ChartCard icon={<Bell size={15} />} title="Son bildirimler">
           {notifQ.isLoading ? (
             <div className="space-y-2 py-2">
@@ -700,14 +700,14 @@ const Kpi = memo(function Kpi({
   sub?: string;
 }) {
   return (
-    <div className="glass rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-white/20">
+    <div className="glass rounded-2xl p-4 transition hover:-translate-y-0.5 hover:border-white/20 sm:p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[oklch(0.62_0.17_255)]/25 to-[oklch(0.52_0.15_262)]/25">
           <Icon size={14} className="text-[oklch(0.85_0.15_255)]" />
         </div>
       </div>
-      <div className="mt-3 text-2xl font-bold">{value.toLocaleString()}</div>
+      <div className="mt-2 text-xl font-bold sm:mt-3 sm:text-2xl">{value.toLocaleString()}</div>
       {sub && <div className="mt-0.5 text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -725,7 +725,7 @@ const ChartCard = memo(function ChartCard({
   className?: string;
 }) {
   return (
-    <div className={`glass rounded-2xl p-5 ${className}`}>
+    <div className={`glass rounded-2xl p-4 sm:p-5 ${className}`}>
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
         <span className="text-[oklch(0.85_0.15_255)]">{icon}</span> {title}
       </h2>
@@ -804,9 +804,9 @@ function SkeletonRow() {
 /** Shimmer placeholder so the first post-login paint never jumps. */
 function DashboardSkeleton() {
   return (
-    <main className="max-w-7xl mx-auto animate-pulse px-4 py-8 space-y-6">
+    <main className="max-w-7xl mx-auto animate-pulse px-3 py-6 space-y-4 sm:px-4 sm:py-8 sm:space-y-6">
       <div className="glass h-36 rounded-2xl" />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="glass h-24 rounded-2xl" />
         ))}
