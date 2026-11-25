@@ -44,6 +44,18 @@ export type OpenCheckoutOptions = {
   /** Called for every Paddle.js checkout event (e.g. checkout.completed). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onEvent?: (event: any) => void;
+  /**
+   * Ödeme öncesi alınan mesafeli satış onayı izi.
+   *
+   * Sunucu transaction'ında customData'yı sunucu yazar; bu alan yalnız ham
+   * fiyat yedek yolunda kullanılır. Paddle customData'yı aboneliğe kopyalar,
+   * böylece "onay alınmadan ödeme alındı" iddiasına karşı kayıt kalır.
+   */
+  legal?: {
+    version: string;
+    acceptedAt: string;
+    withdrawalWaived: boolean;
+  } | null;
 };
 
 /**
@@ -196,6 +208,11 @@ export async function openPaddleOverlay(
     // yedeğinde yazılır. İzin yoksa açıkça "denied" gönderilir — webhook'un
     // CAPI kapısı varsayılan olarak reddeder.
     customData["marketingConsent"] = hasMarketingConsent() ? "granted" : "denied";
+    if (options?.legal) {
+      customData["legalVersion"] = options.legal.version;
+      customData["legalAcceptedAt"] = options.legal.acceptedAt;
+      customData["withdrawalWaived"] = options.legal.withdrawalWaived ? "true" : "false";
+    }
     const userId = await currentUserId();
     if (userId) customData["userId"] = userId;
     // Kullanıcı kimliği alınamadıysa bile plan bilgisi paketin doğru

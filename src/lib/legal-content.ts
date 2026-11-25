@@ -8,14 +8,30 @@ export type LegalDoc = {
   sections: LegalSection[];
 };
 
-export const LAST_UPDATED = "4 Ağustos 2026";
+export const LEGAL_VERSION = "2026-11-25";
+export const LAST_UPDATED = "25 Kasım 2026";
+
+/**
+ * Satıcı/hizmet sağlayıcı künyesi — TEK KAYNAK.
+ *
+ * Kayıtlı ticari unvan, MERSİS, vergi dairesi/no, adres ve telefon bilgileri
+ * depoda tutulmuyor; uydurulması hukuken yanlış olur. Ödeme/faturalandırma
+ * Paddle üzerinden yürüdüğü için kayıtlı satıcı künyesi Paddle ödeme ekranında
+ * ve faturada gösterilir. Bu alanlar netleştiğinde yalnız burası güncellenir.
+ */
+export const SELLER = {
+  brand: "Aroless",
+  website: "https://www.aroless.tech",
+  email: "mk65449191@gmail.com",
+  paymentProvider: "Paddle",
+} as const;
 
 export const TOS: LegalDoc = {
   slug: "kullanim-kosullari",
   title: "Kullanım Koşulları",
   short: "Kullanım Koşulları",
   summary:
-    "Aroless B2B e-ticaret altyapı platformunun kullanımına ilişkin hak, yükümlülük ve sorumluluk sınırlarını düzenler.",
+    "Aroless platformunun kullanımına ilişkin hak, yükümlülük ve sorumlulukları; tüketici ve ticari kullanıcı ayrımı ile emredici tüketici hukuku güvencelerini düzenler.",
   updated: LAST_UPDATED,
   sections: [
     {
@@ -24,7 +40,8 @@ export const TOS: LegalDoc = {
       body: [
         'İşbu Kullanım Koşulları ("Sözleşme"); Aroless platformunu işleten hizmet sağlayıcı ("Aroless") ile platforma kayıt olan gerçek veya tüzel kişi kullanıcı ("Kullanıcı" veya "Üye") arasında elektronik ortamda kurulur.',
         "Platforma kayıt olarak, hesabınızı kullanarak veya hizmetlerin herhangi bir bileşenine erişerek işbu Sözleşme'yi, KVKK Aydınlatma Metni'ni, Veri İşleme Sözleşmesi'ni ve Çerez Politikası'nı okuduğunuzu ve kabul ettiğinizi beyan edersiniz.",
-        "Aroless, işletmeler arası (B2B) bir yazılım hizmeti (SaaS) sunar; tüketiciye yönelik bir satış platformu değildir.",
+        "Aroless öncelikle işletmeler arası (B2B) bir yazılım hizmeti (SaaS) sunar. Bununla birlikte, bir Kullanıcı 6502 sayılı Tüketicinin Korunması Hakkında Kanun anlamında tüketici sıfatını taşıyorsa, ücretli mesafeli aboneliklerde Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi ayrıca uygulanır; işbu Sözleşme'nin hiçbir hükmü tüketicinin emredici mevzuattan doğan haklarını sınırlandırmaz.",
+        "Ücretli aboneliğe ilişkin satıcı/hizmet sağlayıcı künyesi, Ön Bilgilendirme Formu'nda ve Paddle ödeme ekranında/faturada gösterilir. Paddle, ödeme ve faturalandırma süreçlerinde Merchant of Record olarak hareket eder.",
       ],
     },
     {
@@ -32,8 +49,8 @@ export const TOS: LegalDoc = {
       heading: "2. Hizmet Tanımı",
       body: [
         "Aroless; ürün araştırma, tedarikçi analizi, maliyet ve kâr simülasyonu, trend radarı, reklam istihbaratı ve uyum araçlarından oluşan bir yapay zekâ destekli e-ticaret altyapısıdır.",
-        "Platform üzerinde üretilen skorlar, tahminler ve öneriler karar destek amaçlıdır; yatırım, hukuki, vergisel veya gümrük danışmanlığı niteliği taşımaz.",
-        "Aroless, hizmet kapsamındaki modülleri geliştirmek, değiştirmek veya sonlandırmak hakkını saklı tutar; esaslı değişiklikler makul süre önce Kullanıcı'ya bildirilir.",
+        "Platform üzerinde üretilen skorlar, tahminler ve öneriler karar destek amaçlıdır; yatırım, hukuki, vergisel veya gümrük danışmanlığı niteliği taşımaz. Yapay zekâ çıktılarının doğruluğu ticari bir sonuç garantisi değildir.",
+        "Aroless, hizmet kapsamındaki modülleri geliştirmek, değiştirmek veya sonlandırmak hakkını saklı tutar; esaslı değişiklikler makul süre önce Kullanıcı'ya bildirilir ve tüketici Kullanıcı'nın bu nedenle sözleşmeyi feshetme hakkı saklıdır.",
       ],
     },
     {
@@ -42,7 +59,7 @@ export const TOS: LegalDoc = {
       body: [
         "Kullanıcı, kayıt sırasında verdiği bilgilerin doğru, güncel ve eksiksiz olduğunu taahhüt eder.",
         "Hesap kimlik bilgilerinin gizliliğinden ve hesap üzerinden gerçekleştirilen tüm işlemlerden Kullanıcı sorumludur. Yetkisiz erişim şüphesi derhâl Aroless'ya bildirilmelidir.",
-        "18 yaşından küçük kişiler ve ticari faaliyet ehliyeti bulunmayanlar platforma üye olamaz.",
+        "18 yaşından küçükler platforma üye olamaz. Ticari kullanıcılar bakımından ayrıca ticari faaliyet ehliyeti aranır.",
       ],
     },
     {
@@ -50,8 +67,11 @@ export const TOS: LegalDoc = {
       heading: "4. Abonelik, Kredi ve Ödeme",
       body: [
         "Analiz ve simülasyon işlemleri kredi tüketir. Kredi bakiyesi, paket satın alımı veya abonelik yenilenmesi ile artar.",
-        "Ücretler, satın alma anında görüntülenen fiyat listesi üzerinden tahsil edilir. Vergiler yürürlükteki mevzuata göre eklenir.",
-        "Tüketilmiş krediler iade edilmez. Hizmetin sunulamadığı teknik kesintilerde tüketilen kredi, talep üzerine Kullanıcı hesabına iade edilir.",
+        "Abonelik, aksi açıkça belirtilmedikçe aylıktır ve Kullanıcı iptal edene kadar her ay otomatik yenilenir. İptal, içinde bulunulan dönemin sonunda yürürlüğe girer; Kullanıcı dönem sonuna kadar paketin tüm özelliklerini kullanmaya devam eder ve sonraki dönem tahsilatı yapılmaz.",
+        "Ödenecek bedel, ödeme ekranında tüm vergiler dahil gösterilen toplam tutardır. TRY karşılığı yalnızca bilgilendirme amaçlıdır; tahsilat USD üzerinden yapılabilir ve kart sağlayıcısının kur/komisyon farkı uygulanabilir.",
+        "Tüketici Kullanıcılar bakımından 6502 sayılı Kanun'un 48. maddesi ile Mesafeli Sözleşmeler Yönetmeliği'nden doğan cayma, ayıplı hizmet ve iade hakları saklıdır. İptal, geçmiş dönem ücretlerini geriye dönük iade etmez; ancak bu hüküm tüketicinin yasal cayma ve iade haklarını ortadan kaldırmaz.",
+        "Kullanılmamış krediler, abonelik döneminin sonunda sona erer. Hizmetin sunulamadığı teknik kesintilerde tüketilen kredi, talep üzerine Kullanıcı hesabına iade edilir; tüketicinin ayıplı hizmete ilişkin hakları saklıdır.",
+        "Fiyat değişiklikleri geriye etkili değildir; yürürlük tarihinden önce Kullanıcı'ya bildirilir. Tüketici Kullanıcı, esaslı fiyat değişikliğini kabul etmeyerek aboneliğini sona erdirebilir.",
       ],
     },
     {
@@ -60,7 +80,7 @@ export const TOS: LegalDoc = {
       body: [
         "Platformun tersine mühendisliğe tabi tutulması, otomatik araçlarla toplu veri çekilmesi (scraping), API anahtarlarının paylaşılması veya hizmetin yeniden satılması yasaktır.",
         "Yasa dışı, yanıltıcı, üçüncü kişilerin fikri mülkiyet haklarını ihlal eden veya rekabet hukukuna aykırı içerik üretilmesi amacıyla platform kullanılamaz.",
-        "İhlal hâlinde Aroless, hesabı bildirimsiz askıya alabilir veya kapatabilir.",
+        "İhlal hâlinde Aroless, ihlâlin ağırlığına göre hesabı askıya alabilir veya kapatabilir; tüketici Kullanıcı'ya kural ihlali dışındaki nedenlerle uygulanan işlemlerde yasal hakları saklıdır.",
       ],
     },
     {
@@ -69,38 +89,55 @@ export const TOS: LegalDoc = {
       body: [
         "Platform yazılımı, arayüzü, modelleri, skorlama metodolojisi ve markası Aroless'ya aittir.",
         "Kullanıcı'nın platforma yüklediği veriler Kullanıcı'ya aittir; Aroless bu verileri yalnızca hizmetin sunulması amacıyla işler.",
-        "Kullanıcı, platform çıktısı olan raporları kendi ticari faaliyetinde serbestçe kullanabilir.",
+        "Kullanıcı, platform çıktısı olan raporları kendi ticari faaliyetinde serbestçe kullanabilir. Kullanıcı, girdiği veriler ve çıktıları kullanırken üçüncü kişilerin fikri mülkiyet ve kişisel veri haklarını ihlal etmemekle yükümlüdür.",
       ],
     },
     {
       id: "sorumluluk",
       heading: "7. Sorumluluğun Sınırlandırılması",
       body: [
-        'Hizmet "olduğu gibi" sunulur. Aroless, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.',
-        "Aroless'nın toplam sorumluluğu, ihlalin gerçekleştiği tarihten önceki 12 ay içinde Kullanıcı tarafından ödenen toplam hizmet bedeli ile sınırlıdır.",
-        "Dolaylı zararlar, kâr kaybı ve veri kaybından doğan talepler kapsam dışıdır.",
+        'Hizmet "olduğu gibi" sunulur; ancak bu ifade mevzuatın zorunlu kıldığı garantileri ve tüketicinin ayıplı hizmete ilişkin haklarını ortadan kaldırmaz. Aroless, yapay zekâ çıktılarının doğruluğu, güncelliği veya belirli bir ticari sonucu sağlayacağı konusunda garanti vermez.',
+        "Ticari Kullanıcılar bakımından Aroless'nın toplam sorumluluğu, ihlalin gerçekleştiği tarihten önceki 12 ay içinde Kullanıcı tarafından ödenen toplam hizmet bedeli ile sınırlıdır; dolaylı zararlar, kâr kaybı ve veri kaybından doğan talepler bu kapsamın dışındadır.",
+        "Bu sınırlama; kasıt, ağır ihmal, hile, ölüm veya bedensel zarar hâllerini, 6502 sayılı Kanun, 6098 sayılı Türk Borçlar Kanunu ve 6698 sayılı KVKK'nın emredici hükümlerinden doğan sorumluluğu ortadan kaldırmaz. Tüketici Kullanıcı'nın yasal hakları her hâlde saklıdır.",
+        "Mücbir sebep, doğal afet, salgın, savaş, altyapı/İnternet kesintisi veya Aroless'nın makul kontrolü dışındaki nedenlerle ifa gecikirse Aroless sorumlu tutulamaz; tüketicinin kanuni hakları saklıdır.",
       ],
     },
     {
       id: "fesih",
       heading: "8. Sözleşmenin Feshi",
       body: [
-        "Kullanıcı, hesabını dilediği zaman kapatarak sözleşmeyi feshedebilir.",
-        "Fesih hâlinde hesaba ilişkin veriler, yasal saklama süreleri saklı kalmak kaydıyla 30 gün içinde silinir veya anonim hâle getirilir.",
+        "Kullanıcı, hesabını dilediği zaman kapatarak sözleşmeyi feshedebilir. Ücretli abonelikte iptal, içinde bulunulan dönemin sonunda yürürlüğe girer.",
+        "Aroless, Sözleşme'ye esaslı aykırılık hâlinde hesabı makul bildirimle askıya alabilir veya feshedebilir; tüketici Kullanıcı'nın yasal hakları saklıdır.",
+        "Fesih hâlinde hesaba ilişkin kişisel veriler, yasal saklama süreleri (özellikle Türk Ticaret Kanunu ve vergi mevzuatı) saklı kalmak kaydıyla en geç 30 gün içinde silinir veya anonim hâle getirilir. Yasal saklama süresi gereken kayıtlar, süre sonunda silinir.",
+        "Aroless'nın haklı bir neden olmaksızın feshetmesi hâlinde tüketici Kullanıcı, kullanılmayan döneme isabet eden bedeli iade alır; diğer yasal hakları saklıdır.",
       ],
     },
     {
       id: "uyusmazlik",
-      heading: "9. Uygulanacak Hukuk ve Yetki",
+      heading: "9. Uygulanacak Hukuk ve Uyuşmazlık Çözümü",
       body: [
         "İşbu Sözleşme Türkiye Cumhuriyeti hukukuna tabidir.",
-        "Uyuşmazlıklarda İstanbul (Çağlayan) Mahkemeleri ve İcra Daireleri yetkilidir. Ticari uyuşmazlıklarda arabuluculuk dava şartıdır.",
+        "Tüketici Kullanıcılar; Ticaret Bakanlığı'nın her yıl belirlediği parasal sınırın altındaki uyuşmazlıklarda, yerleşim yerlerindeki veya tüketici işleminin yapıldığı yerdeki Tüketici Hakem Heyeti'ne başvurmak zorundadır. Parasal sınırın üzerindeki uyuşmazlıklarda ve hakem heyeti kararına itirazda Tüketici Mahkemesi'ne başvurulur; 6502 sayılı Kanun'un 73/A maddesi uyarınca dava açmadan önce arabuluculuk dava şartıdır (hakem heyeti kapsamındaki uyuşmazlıklar hariç).",
+        "Tüketici Kullanıcı, 6502 sayılı Kanun'un 73. maddesi uyarınca kendi yerleşim yerinde veya tüketici işleminin yapıldığı yerdeki Tüketici Mahkemesi'nde dava açabilir. Bu madde, tüketicinin kanuni yetki haklarını sınırlandırmaz.",
+        "Ticari Kullanıcılar bakımından İstanbul (Çağlayan) Mahkemeleri ve İcra Daireleri yetkilidir; ticari uyuşmazlıklarda arabuluculuk dava şartıdır.",
+      ],
+    },
+    {
+      id: "bildirim",
+      heading: "10. Bildirimler, Değişiklikler ve Ticari İletiler",
+      body: [
+        "Sözleşmeye ilişkin bildirimler, Kullanıcı'nın hesabında kayıtlı e-posta adresine yapılır. Kullanıcı, e-posta adresini güncel tutmakla yükümlüdür.",
+        "Aroless, Sözleşme'yi ve hizmet koşullarını değiştirebilir. Değişiklikler yürürlük tarihinden önce bildirilir ve geriye etkili uygulanmaz. Tüketici Kullanıcı, esaslı değişikliği kabul etmeyerek aboneliğini sona erdirebilir.",
+        "Ticari elektronik iletiler (kampanya, bülten, ürün duyurusu) yalnızca 6563 sayılı Elektronik Ticaretin Düzenlenmesi Hakkında Kanun ve ilgili yönetmelik uyarınca alınan ön onay ile gönderilir. Kullanıcı, her iletideki ret bağlantısından veya İYS üzerinden onayını geri alabilir; onay vermemek veya geri almak hizmetin sunulmasını engellemez.",
       ],
     },
     {
       id: "iletisim-tos",
-      heading: "10. İletişim",
-      body: ["Sözleşmeye ilişkin talepleriniz için: mk65449191@gmail.com"],
+      heading: "11. İletişim",
+      body: [
+        "Sözleşmeye ilişkin talepleriniz için: mk65449191@gmail.com · https://www.aroless.tech",
+        "Ücretli aboneliklerde satıcı/hizmet sağlayıcı künyesi, Ön Bilgilendirme Formu'nda ve Paddle ödeme ekranında/faturada yer alır. Paddle'ın kayıtlı satıcı bilgileri ödeme ekranında ve faturada gösterilir.",
+      ],
     },
   ],
 };
@@ -118,7 +155,7 @@ export const KVKK: LegalDoc = {
       heading: "1. Veri Sorumlusunun Kimliği",
       body: [
         '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca veri sorumlusu sıfatıyla Aroless hareket etmektedir.',
-        "İletişim: mk65449191@gmail.com",
+        "Veri sorumlusu iletişim: mk65449191@gmail.com · https://www.aroless.tech. Ticari unvan, MERSİS/vergi kimlik numarası, kayıtlı adres ve telefon bilgileri Paddle ödeme ekranında/faturada gösterilir; ayrıca bu adresten talep edilebilir.",
       ],
     },
     {
@@ -160,7 +197,8 @@ export const KVKK: LegalDoc = {
       body: [
         "Kişisel veriler; barındırma, veritabanı, e-posta gönderimi, ödeme altyapısı ve yapay zekâ model sağlayıcıları gibi hizmet sağlayıcılarla, yalnızca hizmetin sunulması amacıyla ve sözleşmesel güvenceler altında paylaşılır.",
         "Pazarlama izni verilmesi hâlinde reklam ölçümü için Meta Platforms ile sınırlı veri (SHA-256 özetli e-posta/kullanıcı kimliği, `_fbp`/`_fbc` çerez kimlikleri, IP adresi, tarayıcı user-agent bilgisi ve olay bilgisi) paylaşılır; ödeme kartı bilgileri paylaşılmaz.",
-        "Bazı hizmet sağlayıcıların sunucuları yurt dışında bulunabilir. Bu durumda aktarım, KVKK m.9 kapsamında standart sözleşme hükümleri veya açık rızaya dayanılarak gerçekleştirilir.",
+        "Bazı hizmet sağlayıcıların sunucuları yurt dışında bulunabilir. Bu durumda aktarım, KVKK m.9 kapsamında Kişisel Verileri Koruma Kurulu'nun yeterlilik kararına, standart sözleşmeye, bağlayıcı şirket kurallarına veya açık rızaya dayanılarak gerçekleştirilir.",
+        "Aroless, veri minimizasyonu ilkesine uygun olarak yalnızca hizmetin sunulması ve yasal yükümlülüklerin yerine getirilmesi için gerekli kişisel verileri işler; gereksiz verileri toplamaz.",
         "Yasal talep hâlinde yetkili kamu kurum ve kuruluşlarıyla paylaşım yapılabilir.",
       ],
     },
@@ -168,9 +206,10 @@ export const KVKK: LegalDoc = {
       id: "saklama",
       heading: "6. Saklama Süreleri",
       body: [
-        "Üyelik verileri, üyelik süresince ve sona ermesinden itibaren 10 yıl (Türk Ticaret Kanunu) boyunca saklanır.",
+        "Üyelik ve hesap verileri, üyelik süresince ve sona ermesinden itibaren işleme amacının gerektirdiği süre boyunca saklanır; amaç sona erdiğinde silinir veya anonim hâle getirilir.",
+        "Ticari defter, fatura, muhasebe ve ödeme kayıtları, Türk Ticaret Kanunu ve vergi mevzuatı uyarınca 10 yıl saklanır. Bu kayıtlar yasal saklama süresi boyunca yalnızca ilgili mevzuatın öngördüğü amaçlarla kullanılır.",
         "Log ve işlem güvenliği kayıtları en az 2 yıl saklanır.",
-        "Pazarlama izni, izin geri alınana kadar saklanır; geri alma sonrası kayıt 3 yıl ispat amacıyla tutulur.",
+        "Ticari elektronik ileti onayı İYS üzerinden yönetilir; onay geri alınana kadar, geri alma kaydı ise ispat amacıyla 3 yıl saklanır. Pazarlama verileri bu süre sonunda silinir veya anonimleştirilir.",
       ],
     },
     {
@@ -396,7 +435,7 @@ export const AFFILIATE_TERMS: LegalDoc = {
       heading: "5. Vergi ve Yasal Yükümlülükler",
       body: [
         "Komisyon geliri katılımcının kendi geliridir; vergi, mükellefiyet ve beyan yükümlülükleri katılımcıya aittir.",
-        "Aroless yalnızca ödemeyi yapar ve ödeme kaydını tutar. Vergi kimlik/mükellef numarası alanı OPSİYONELDİR ve şirket olmayan katılımcı için ödeme şartı değildir.",
+        "Aroless ödemeyi yapar ve mevzuatın gerektirdiği ödeme/vergi kayıtlarını tutar. Vergi kimlik/mükellef numarası alanı OPSİYONELDİR ve şirket olmayan katılımcı için ödeme şartı değildir; ancak Aroless, mevzuatın gerektirdiği hâllerde stopaj, bildirim veya ek belge talep edebilir ve katılımcı bu bilgileri sağlamakla yükümlüdür.",
         "Bazı ülkelerde banka veya Wise, yüksek tutarlı transferlerde ek bilgi isteyebilir; bu durumda talep Aroless tarafından iletilir.",
       ],
     },
@@ -431,6 +470,231 @@ export const AFFILIATE_TERMS: LegalDoc = {
   ],
 };
 
-export const LEGAL_DOCS: LegalDoc[] = [TOS, KVKK, DPA, COOKIES, AFFILIATE_TERMS];
+/**
+ * ÖN BİLGİLENDİRME FORMU — 6502 m.48 ve Mesafeli Sözleşmeler Yönetmeliği m.5.
+ *
+ * Tüketici, ödeme yapmadan ÖNCE bu formdaki bilgilerin tamamına ulaşabilmelidir.
+ * Bu yüzden satıcı künyesi, tüm vergiler dahil bedel, ifa süresi, cayma hakkı ve
+ * uyuşmazlık mercileri ayrı bölümlerdir; metin pazarlama diliyle kısaltılmaz.
+ */
+export const ON_BILGILENDIRME: LegalDoc = {
+  slug: "on-bilgilendirme-formu",
+  title: "Ön Bilgilendirme Formu",
+  short: "Ön Bilgilendirme Formu",
+  summary:
+    "6502 sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği uyarınca, ücretli abonelik satın almadan önce tüketiciye sunulan bilgilendirme formu.",
+  updated: LAST_UPDATED,
+  sections: [
+    {
+      id: "satici",
+      heading: "1. Satıcı ve Hizmet Sağlayıcı Bilgileri",
+      body: [
+        "Bu form, 6502 sayılı Tüketicinin Korunması Hakkında Kanun'un 48. maddesi ve Mesafeli Sözleşmeler Yönetmeliği'nin 5. maddesi uyarınca, herhangi bir ödeme yapılmadan önce sunulur.",
+        "Satıcı/Hizmet sağlayıcı: Aroless · İnternet sitesi: https://www.aroless.tech · E-posta: mk65449191@gmail.com",
+        "Ödeme ve faturalandırma: Paddle (Merchant of Record). Paddle'ın ticari unvanı, kayıtlı adresi, vergi bilgileri ve iletişim bilgileri ödeme ekranında ve faturada gösterilir. Kart bilgileri Aroless'e iletilmez.",
+        "Paddle'ın ticari unvanı, kayıtlı adresi, vergi bilgileri ve iletişim bilgileri ödeme ekranında ve faturada gösterilir. Aroless'un kayıtlı ticari unvanı, MERSİS/vergi kimlik numarası, açık adresi ve telefonu için mk65449191@gmail.com adresine başvurulabilir; bu bilgiler ödeme öncesinde talep üzerine iletilir.",
+        "Şikâyetler için iletişim: mk65449191@gmail.com. Aroless, şikâyetleri en geç 30 gün içinde yanıtlar.",
+      ],
+    },
+    {
+      id: "konu",
+      heading: "2. Sözleşmenin Konusu ve Hizmetin Temel Nitelikleri",
+      body: [
+        "Sözleşmenin konusu, Aroless'in elektronik ortamda sunduğu yapay zekâ destekli e-ticaret altyapısına (SaaS) aylık abonelik erişimidir.",
+        "Hizmet; ürün araştırma, tedarikçi analizi, maliyet ve kâr simülasyonu, trend radarı, reklam istihbaratı ve uyum araçlarını içerir. Paket adı, aylık kredi/kullanım limitleri ve özellikler ödeme ekranında ve /pricing sayfasında gösterilir.",
+        "Hizmet dijitaldir; fiziksel mal teslimi, kargo veya teslimat adresi yoktur. Hizmete erişim için İnternet bağlantısı, güncel bir tarayıcı ve kullanıcı hesabı gerekir.",
+        "Yapay zekâ çıktıları karar destek amaçlıdır; yatırım, hukuki, vergisel veya gümrük danışmanlığı değildir ve belirli bir ticari sonuç garantisi vermez.",
+      ],
+    },
+    {
+      id: "fiyat",
+      heading: "3. Fiyat, Vergiler, Ödeme ve Ek Masraflar",
+      body: [
+        "Sözleşme bedeli, ödeme ekranında tüm vergiler dahil olarak gösterilen toplam tutardır. Liste fiyatları USD cinsindendir; TRY karşılığı yalnızca bilgilendirme amaçlıdır ve kart sağlayıcısının kur/komisyon farkı uygulanabilir.",
+        "Fiziksel teslimat olmadığı için kargo veya teslim masrafı yoktur. Ödeme ekranında gösterilen toplam tutar dışında zorunlu ek masraf alınmaz.",
+        "Ödeme, Paddle üzerinden kredi/banka kartı ile yapılır. Ödeme sağlayıcısı kendi güvenlik ve doğrulama kurallarını uygulayabilir. Fatura Paddle tarafından düzenlenir ve ödeme sonrası e-posta ile iletilir.",
+        "Uzaktan iletişim aracının kullanımı için olağan İnternet/telefon tarifeniz dışında Aroless tarafından ayrıca ücret alınmaz.",
+        "Fiyat değişiklikleri geriye etkili değildir; yürürlük tarihinden önce bildirilir. Tüketici, esaslı fiyat değişikliğini kabul etmeyerek aboneliğini sona erdirebilir.",
+      ],
+    },
+    {
+      id: "ifa",
+      heading: "4. İfa, Abonelik Süresi ve Yenileme",
+      body: [
+        "Abonelik, aksi açıkça belirtilmedikçe bir aylık dönem için kurulur ve tüketici iptal edene kadar her ay otomatik olarak yenilenir.",
+        "Hizmete erişim, ödemenin onaylanmasını takiben derhal açılır. Hizmetin ifasına, tüketicinin cayma süresi dolmadan başlanması için ayrıca açık onay alınır (bkz. bölüm 6).",
+        "İptal, hesap ayarlarından veya mk65449191@gmail.com adresine yazılı bildirimle her zaman yapılabilir. İptal, içinde bulunulan dönemin sonunda yürürlüğe girer; tüketici dönem sonuna kadar hizmeti kullanmaya devam eder ve sonraki dönem tahsilatı yapılmaz.",
+        "Aroless, hizmeti sözleşmeye uygun ve ticari ölçüde makul özenle sunmakla yükümlüdür. Bakım, güvenlik veya teknik zorunluluk hâllerinde hizmette geçici kesintiler olabilir; tüketicinin ayıplı hizmete ilişkin hakları saklıdır.",
+        "Depozito, teminat veya ek güvence istenmez. Dijital içerikte tüketiciyi kısıtlayan teknik koruma önlemi uygulanmaz; hizmet standart İnternet tarayıcısıyla çalışır.",
+      ],
+    },
+    {
+      id: "cayma",
+      heading: "5. Cayma Hakkı, Süresi ve Kullanım Usulü",
+      body: [
+        "Tüketici, mesafeli sözleşmenin kurulduğu tarihten itibaren 14 gün içinde herhangi bir gerekçe göstermeksizin ve cezai şart ödemeksizin sözleşmeden cayma hakkına sahiptir (6502 sayılı Kanun m.48).",
+        "Cayma hakkı süresi hizmet sözleşmelerinde sözleşmenin kurulduğu gün başlar. Cayma bildiriminin süre içinde Aroless'e yöneltilmiş olması yeterlidir.",
+        "Cayma bildirimi: mk65449191@gmail.com adresine ad-soyad, sipariş/işlem numarası, hizmetin adı ve bildirim tarihini içerecek şekilde yazılı olarak; veya hesap ayarlarındaki destek kanalından yapılabilir. Aşağıdaki örnek cayma formu da kullanılabilir.",
+        "Cayma hakkının kullanılması hâlinde, tahsil edilen tüm ödemeler, bildirimin Aroless'e ulaşmasından itibaren en geç 14 gün içinde, tüketicinin kullandığı ödeme aracına uygun ve tüketiciye herhangi bir masraf veya yükümlülük getirilmeksizin iade edilir (Mesafeli Sözleşmeler Yönetmeliği m.12).",
+        "Aroless, cayma hakkı konusunda tüketiciyi bilgilendirdiğini ispatla yükümlüdür. Tüketici gerektiği şekilde bilgilendirilmezse 14 günlük süreyle bağlı olmaz; bu süre her hâlde cayma süresinin bittiği tarihten itibaren bir yıl sonra sona erer (6502 sayılı Kanun m.48).",
+        "Örnek cayma formu: “Kime: Aroless, mk65449191@gmail.com. Bu formla aşağıdaki hizmetin satışına ilişkin sözleşmeden cayma hakkımı kullandığımı beyan ederim. Sipariş tarihi/işlem no: … · Hizmet: … · Bedel: … · Tüketicinin adı-soyadı: … · Adresi: … · Tarih: …”",
+      ],
+    },
+    {
+      id: "cayma-istisna",
+      heading: "6. Cayma Hakkının İstisnası ve Derhal İfa Onayı",
+      body: [
+        "Mesafeli Sözleşmeler Yönetmeliği m.15/1-(ğ) ve (h) uyarınca; elektronik ortamda anında ifa edilen hizmetlerde veya cayma süresi sona ermeden tüketicinin onayıyla ifaya başlanan hizmetlerde cayma hakkı kullanılamaz.",
+        "Aroless, hizmete hemen erişebilmeniz için ödeme öncesinde ayrı bir onay kutusuyla; hizmetin cayma süresi dolmadan derhal ifasına başlanmasını talep ettiğinizi ve bu nedenle cayma hakkınızı kaybedeceğinizi açıkça onaylatır. Bu onayı vermezseniz abonelik başlatılmaz.",
+        "Hizmete hemen erişmek istemiyorsanız, 14 günlük cayma süresinin dolmasından sonra başlatılmak üzere mk65449191@gmail.com adresine yazabilirsiniz. Bu durumda cayma hakkınız korunur.",
+        "Cayma hakkının kullanıldığı hâllerde hizmete erişim derhal durdurulur; yukarıdaki onay verilmemişse tahsil edilen tüm ödemeler m.12 uyarınca iade edilir.",
+      ],
+    },
+    {
+      id: "uyusmazlik-on",
+      heading: "7. Şikâyet, Uyuşmazlık ve Yetkili Merciler",
+      body: [
+        "Tüketici, şikâyetini önce mk65449191@gmail.com adresine iletebilir. Aroless, talebi en geç 30 gün içinde yanıtlar.",
+        "Tüketici Hakem Heyeti: Ticaret Bakanlığı'nın her yıl belirlediği parasal sınırın altındaki uyuşmazlıklarda tüketici hakem heyetine başvuru zorunludur. Başvuru, tüketicinin yerleşim yerinde veya tüketici işleminin yapıldığı yerdeki hakem heyetine yapılabilir (6502 sayılı Kanun m.68).",
+        "Tüketici Mahkemesi: Parasal sınırın üzerindeki uyuşmazlıklarda ve hakem heyeti kararına itirazda tüketici mahkemesine başvurulur. 6502 sayılı Kanun m.73/A uyarınca dava açmadan önce arabuluculuk dava şartıdır; tüketici hakem heyetinin görevi kapsamındaki uyuşmazlıklar bu şarttan muaftır.",
+        "Tüketici, kendi yerleşim yerinde veya tüketici işleminin yapıldığı yerdeki tüketici mahkemesinde dava açabilir. Bu form, tüketicinin kanuni haklarını veya yetki seçimini sınırlandırmaz.",
+      ],
+    },
+    {
+      id: "diger-on",
+      heading: "8. Diğer Bilgiler ve Yürürlük",
+      body: [
+        "Bu form, Mesafeli Satış Sözleşmesi'nin ayrılmaz ekidir. Form ile sözleşme arasında çelişki olursa tüketici lehine olan hüküm uygulanır.",
+        "Tüketicinin 6502 sayılı Kanun, 6098 sayılı Türk Borçlar Kanunu ve 6698 sayılı KVKK'dan doğan hakları saklıdır. Bu formdaki hiçbir ifade, tüketici aleyhine yorumlanamaz.",
+        "Form, ödeme öncesinde elektronik ortamda sunulur; onay tarih-saatiyle birlikte saklanır. Güncel sürüm https://www.aroless.tech/legal/on-bilgilendirme-formu adresindedir.",
+      ],
+    },
+  ],
+};
+
+/**
+ * MESAFELİ SATIŞ SÖZLEŞMESİ — 6502 m.48 ve Mesafeli Sözleşmeler Yönetmeliği.
+ *
+ * Ön Bilgilendirme Formu ile birlikte okunur. Abonelik, cayma, iade, ayıplı
+ * hizmet ve uyuşmazlık hükümleri burada sözleşme diliyle bağlayıcı hâle gelir.
+ */
+export const MESAFELI_SATIS: LegalDoc = {
+  slug: "mesafeli-satis-sozlesmesi",
+  title: "Mesafeli Satış Sözleşmesi",
+  short: "Mesafeli Satış Sözleşmesi",
+  summary:
+    "Aroless dijital aboneliklerinin elektronik ortamda satışına ilişkin taraflar, bedel, ifa, cayma, iade ve uyuşmazlık hükümleri.",
+  updated: LAST_UPDATED,
+  sections: [
+    {
+      id: "taraflar-ms",
+      heading: "1. Taraflar",
+      body: [
+        "Satıcı/Hizmet Sağlayıcı: Aroless · https://www.aroless.tech · mk65449191@gmail.com. Ödeme ve faturalandırma Paddle (Merchant of Record) tarafından yürütülür; Paddle'ın ticari unvanı, kayıtlı adresi, vergi bilgileri ve iletişim bilgileri ödeme ekranında ve faturada gösterilir. Aroless'un kayıtlı ticari unvanı, MERSİS/vergi kimlik numarası, açık adres ve telefon bilgileri için mk65449191@gmail.com adresine başvurulabilir.",
+        "Alıcı/Tüketici: Ödeme ekranında siparişi onaylayan gerçek kişi. Ad-soyad, e-posta ve fatura bilgileri sipariş sırasında alınır.",
+        "Ödeme ve faturalandırma: Paddle (Merchant of Record). Paddle'ın kayıtlı satıcı bilgileri ödeme ekranında ve faturada yer alır. Paddle, ödeme, vergi ve fatura süreçlerini yürütür.",
+        "Taraflar, işbu sözleşmenin elektronik ortamda kurulduğunu ve onay kaydının sözleşmenin ispatı için saklanacağını kabul eder.",
+      ],
+    },
+    {
+      id: "konu-ms",
+      heading: "2. Sözleşmenin Konusu ve Kurulması",
+      body: [
+        "İşbu sözleşme, 6502 sayılı Tüketicinin Korunması Hakkında Kanun'un 48. maddesi ve Mesafeli Sözleşmeler Yönetmeliği kapsamında, Alıcı'nın elektronik ortamda satın aldığı Aroless dijital aboneliğine ilişkin hak ve yükümlülükleri düzenler.",
+        "Sözleşme, Alıcı'nın ödeme ekranında Ön Bilgilendirme Formu'nu ve işbu sözleşmeyi okuyup onaylaması, ardından ödeme yükümlülüğü doğuran satın alma düğmesine tıklamasıyla kurulur.",
+        "Ön Bilgilendirme Formu işbu sözleşmenin ayrılmaz ekidir. Sözleşme ile form arasında çelişki olursa tüketici lehine olan hüküm uygulanır.",
+      ],
+    },
+    {
+      id: "hizmet-ms",
+      heading: "3. Hizmetin Nitelikleri ve İfa",
+      body: [
+        "Aroless, seçilen pakete göre ürün araştırma, tedarikçi analizi, maliyet/kâr simülasyonu, trend radarı, reklam istihbaratı ve uyum araçlarını dijital ortamda sunar. Paket özellikleri ve kullanım limitleri /pricing sayfasında ve ödeme ekranında gösterilir.",
+        "Hizmetin ifasına, ödemenin onaylanmasıyla başlanır. Fiziksel teslimat yoktur; erişim kullanıcı hesabı üzerinden sağlanır.",
+        "Aroless, hizmeti sözleşmeye uygun olarak ifa etmekle yükümlüdür. Bakım, güvenlik ve teknik zorunluluklar nedeniyle makul süreli kesintiler olabilir; tüketicinin ayıplı hizmete ilişkin hakları saklıdır.",
+        "Yapay zekâ çıktıları karar destek niteliğindedir; yatırım, hukuki, vergisel veya gümrük danışmanlığı değildir. Aroless, çıktıların doğruluğu veya belirli bir ticari sonuç sağlayacağı konusunda garanti vermez; bu hüküm tüketicinin kanuni haklarını sınırlandırmaz.",
+      ],
+    },
+    {
+      id: "bedel-ms",
+      heading: "4. Bedel, Vergi ve Ödeme",
+      body: [
+        "Sözleşme bedeli, ödeme ekranında tüm vergiler dahil gösterilen toplam tutardır. Liste fiyatları USD cinsindendir; TRY karşılığı bilgilendirme amaçlıdır. Kart sağlayıcısının kur/komisyon farkı uygulayabileceği ödeme ekranında belirtilir.",
+        "Ödeme, Paddle üzerinden kredi/banka kartı ile yapılır. Kart bilgileri Aroless'e iletilmez. Fatura Paddle tarafından düzenlenir.",
+        "Ödeme başarısız olursa Aroless hizmeti askıya alabilir; tüketiciye makul bildirim yapılır ve ödeme tamamlandığında erişim yeniden açılır. Tüketicinin yasal hakları saklıdır.",
+        "Fiyat değişiklikleri geriye etkili değildir; yürürlük tarihinden önce bildirilir. Tüketici, esaslı fiyat değişikliğini kabul etmeyerek sözleşmeyi feshedebilir.",
+      ],
+    },
+    {
+      id: "sure-ms",
+      heading: "5. Süre, Yenileme ve İptal",
+      body: [
+        "Abonelik, aksi açıkça belirtilmedikçe bir aylık dönem için kurulur ve tüketici iptal edene kadar her ay otomatik yenilenir.",
+        "Tüketici, hesap ayarlarından veya mk65449191@gmail.com adresine yazılı bildirimle aboneliğini her zaman iptal edebilir. İptal, içinde bulunulan dönemin sonunda yürürlüğe girer; dönem sonuna kadar erişim sürer ve sonraki dönem tahsilatı yapılmaz.",
+        "İptal, geçmiş dönem ücretlerini geriye dönük iade etmez. Ancak bu hüküm; cayma hakkı, ayıplı hizmet, haksız şart ve diğer emredici tüketici haklarını ortadan kaldırmaz.",
+        "Aroless, aboneliği haklı bir neden olmaksızın sona erdirirse tüketici, kullanılmayan döneme isabet eden bedeli iade alır; diğer yasal hakları saklıdır.",
+      ],
+    },
+    {
+      id: "cayma-ms",
+      heading: "6. Cayma Hakkı ve İade",
+      body: [
+        "Tüketici, sözleşmenin kurulduğu tarihten itibaren 14 gün içinde herhangi bir gerekçe göstermeksizin ve cezai şart ödemeksizin sözleşmeden cayma hakkına sahiptir.",
+        "Cayma bildirimi, Ön Bilgilendirme Formu'nun 5. bölümünde açıklanan yöntemle mk65449191@gmail.com adresine yapılır. Bildirimin süre içinde gönderilmesi yeterlidir.",
+        "Cayma hakkının kullanılması hâlinde, tahsil edilen tüm ödemeler, bildirimin Aroless'e ulaşmasından itibaren en geç 14 gün içinde, kullanılan ödeme aracına uygun ve masrafsız olarak iade edilir.",
+        "Cayma hakkı konusunda gerektiği şekilde bilgilendirme yapılmazsa tüketici 14 günlük süreyle bağlı olmaz; süre en geç cayma süresinin bittiği tarihten bir yıl sonra sona erer.",
+      ],
+    },
+    {
+      id: "istisna-ms",
+      heading: "7. Derhal İfa ve Cayma Hakkının İstisnası",
+      body: [
+        "Mesafeli Sözleşmeler Yönetmeliği m.15/1-(ğ) ve (h) uyarınca, elektronik ortamda anında ifa edilen hizmetlerde veya cayma süresi dolmadan tüketicinin onayıyla ifaya başlanan hizmetlerde cayma hakkı kullanılamaz.",
+        "Aroless, hizmete hemen erişim için ödeme öncesinde ayrı bir onay kutusuyla tüketicinin derhal ifa talebini ve cayma hakkını kaybedeceği bilgisini alır. Bu onay alınmadan abonelik başlatılmaz.",
+        "Tüketici, derhal ifa onayı vermek zorunda değildir. Hizmete hemen erişmek istemiyorsa 14 gün sonra başlatılmak üzere Aroless'e başvurabilir; bu durumda cayma hakkı korunur.",
+        "Derhal ifa onayı alınmadan hizmet başlatılmışsa tüketici cayma hakkını kullanabilir ve tahsil edilen tüm ödemeler iade edilir.",
+      ],
+    },
+    {
+      id: "ayipli-ms",
+      heading: "8. Ayıplı Hizmet ve Sorumluluk",
+      body: [
+        "Aroless, hizmeti sözleşmeye uygun olarak ifa etmekle yükümlüdür. Hizmetin sözleşmede belirlenen sürede başlamaması veya kararlaştırılan/objektif olarak sahip olması gereken özellikleri taşımaması hâlinde hizmet ayıplı sayılır (6502 sayılı Kanun m.13).",
+        "Ayıplı hizmet hâlinde tüketici, 6502 sayılı Kanun m.15 uyarınca hizmetin yeniden görülmesi, ayıp oranında bedelden indirim veya sözleşmeden dönme haklarından birini kullanabilir; Türk Borçlar Kanunu uyarınca tazminat da talep edebilir.",
+        "Ticari kullanıcılar bakımından Aroless'nın toplam sorumluluğu, ihlal tarihinden önceki 12 ayda ödenen hizmet bedeliyle sınırlıdır; dolaylı zararlar, kâr kaybı ve veri kaybı kapsam dışıdır. Bu sınırlama kasıt, ağır ihmal, hile, ölüm/bedensel zarar ve emredici mevzuat hükümlerini kapsamaz.",
+        "Mücbir sebep, doğal afet, salgın, savaş, altyapı/İnternet kesintisi gibi Aroless'nın makul kontrolü dışındaki nedenlerle ifa gecikirse Aroless sorumlu tutulamaz; tüketicinin kanuni hakları saklıdır.",
+      ],
+    },
+    {
+      id: "fikri-ms",
+      heading: "9. Fikri Mülkiyet ve Kullanım Sınırları",
+      body: [
+        "Platform yazılımı, arayüzü, modelleri, skorlama metodolojisi ve markası Aroless'ya aittir. Tüketiciye, abonelik süresi boyunca kişisel ve devredilemez bir kullanım lisansı verilir.",
+        "Hizmetin tersine mühendisliğe tabi tutulması, otomatik araçlarla toplu veri çekilmesi, API anahtarlarının paylaşılması veya yeniden satılması yasaktır.",
+        "Tüketicinin platforma yüklediği veriler kendisine aittir. Tüketici, girdiği veriler ve çıktılar bakımından üçüncü kişilerin fikri mülkiyet ve kişisel veri haklarını ihlal etmemekle yükümlüdür.",
+      ],
+    },
+    {
+      id: "uyusmazlik-ms",
+      heading: "10. Uyuşmazlık, Yetki ve Yürürlük",
+      body: [
+        "İşbu sözleşme Türkiye Cumhuriyeti hukukuna tabidir. Tüketici, 6502 sayılı Kanun m.68 uyarınca yerleşim yerindeki veya işlemin yapıldığı yerdeki Tüketici Hakem Heyeti'ne; m.73 uyarınca kendi yerleşim yerindeki veya işlemin yapıldığı yerdeki Tüketici Mahkemesi'ne başvurabilir.",
+        "6502 sayılı Kanun m.73/A uyarınca tüketici mahkemesinde dava açmadan önce arabuluculuk dava şartıdır; tüketici hakem heyetinin görevi kapsamındaki uyuşmazlıklar bu şarttan muaftır.",
+        "Ticari kullanıcılar bakımından İstanbul (Çağlayan) Mahkemeleri ve İcra Daireleri yetkilidir; ticari uyuşmazlıklarda arabuluculuk dava şartıdır.",
+        "Sözleşmenin herhangi bir hükmünün geçersiz sayılması diğer hükümleri etkilemez. Sözleşme, Ön Bilgilendirme Formu ve ödeme ekranındaki onaylarla birlikte taraflar arasındaki anlaşmayı oluşturur.",
+      ],
+    },
+  ],
+};
+
+export const LEGAL_DOCS: LegalDoc[] = [
+  TOS,
+  MESAFELI_SATIS,
+  ON_BILGILENDIRME,
+  KVKK,
+  DPA,
+  COOKIES,
+  AFFILIATE_TERMS,
+];
 
 export const getLegalDoc = (slug: string) => LEGAL_DOCS.find((d) => d.slug === slug);

@@ -4,7 +4,8 @@
  * NEDEN VAR: Ayarlar'da ücretli kullanıcı için "Aboneliği iptal et" düğmesi
  * yoktu; kullanıcı ya desteğe yazmak zorundaydı ya da aboneliği hiç
  * durduramıyordu. Ürün kuralı nettir:
- *   • bu ay için ödenen ücret İADE EDİLMEZ,
+ *   • kullanılan dönem için ödenen ücret, yasal cayma/tüketici hakları saklı
+ *     kalmak kaydıyla iade edilmez,
  *   • gelecek ay TAHSİLAT YAPILMAZ.
  * Paddle'ın `POST /subscriptions/{id}/cancel` ucu `effective_from:
  * "next_billing_period"` ile tam olarak bunu yapar: dönem sonuna kadar erişim

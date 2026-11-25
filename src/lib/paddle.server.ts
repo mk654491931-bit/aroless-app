@@ -22,6 +22,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Environment, Paddle } from "@paddle/paddle-node-sdk";
 import type { MetaCapiAttribution } from "@/lib/meta-capi.server";
 import { PLAN_BY_ID, PLAN_CREDIT_GRANTS, PLANS } from "@/lib/plans";
+import { LEGAL_VERSION } from "@/lib/legal-content";
 
 export type PlanId = "Starter" | "Pro" | "Business";
 
@@ -412,6 +413,10 @@ export async function createPaddleCheckoutSession(opts: {
    * okur. Gönderilmezse varsayılan **denied** olur (izin yoksa ölçüm yok).
    */
   marketingConsent?: boolean;
+  /** Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi onayı. */
+  legalAccepted?: boolean;
+  /** Derhal ifa ve cayma hakkının kaybı onayı (Mesafeli Sözleşmeler Yönetmeliği m.15/1-h). */
+  immediatePerformanceAccepted?: boolean;
   /**
    * Checkout isteğinden doğrulanmış Meta eşleştirme verisi.
    *
@@ -421,6 +426,11 @@ export async function createPaddleCheckoutSession(opts: {
    */
   attribution?: MetaCapiAttribution | null;
 }): Promise<CheckoutSession> {
+  if (opts.legalAccepted !== true || opts.immediatePerformanceAccepted !== true) {
+    throw new Error(
+      "Mesafeli satış ve derhal ifa onayları alınmadan ödeme başlatılamaz. Lütfen onay kutularını işaretleyin.",
+    );
+  }
   const plan = isPlanId(opts.plan) ? opts.plan : "Pro";
   const settings = paddleSettings();
   if (!settings) {
@@ -457,6 +467,10 @@ export async function createPaddleCheckoutSession(opts: {
         plan,
         source: "aroless-web",
         marketingConsent: opts.marketingConsent === true ? "granted" : "denied",
+        // Onay izi SUNUCUDA yazılır; istemci customData'yı değiştiremez.
+        legalVersion: LEGAL_VERSION,
+        legalAcceptedAt: new Date().toISOString(),
+        withdrawalWaived: "true",
       },
     });
 

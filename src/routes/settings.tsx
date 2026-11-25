@@ -366,7 +366,8 @@ function SettingsPage() {
                 {endLabel
                   ? `${endLabel} tarihine kadar tüm özellikler açık kalır.`
                   : "Dönem sonuna kadar tüm özellikler açık kalır."}{" "}
-                Bu tarihten sonra tahsilat yapılmaz. Bu ay için ödenen ücret iade edilmez.
+                Bu tarihten sonra tahsilat yapılmaz. Kullanılan dönem için ödenen ücret, yasal cayma
+                ve tüketici hakları saklı kalmak kaydıyla iade edilmez.
               </p>
             </div>
           ) : subView.state === "past_due" ? (
@@ -465,7 +466,8 @@ function CancelSubscriptionButton({
             {endLabel
               ? `${endLabel} tarihine kadar tüm özellikler açık kalır.`
               : "Dönem sonuna kadar tüm özellikler açık kalır."}{" "}
-            Bu ay için ödediğin ücret iade edilmez ve gelecek ay tahsilat yapılmaz.
+            Kullanılan dönem için ödediğin ücret, yasal cayma ve tüketici hakları saklı kalmak
+            kaydıyla iade edilmez; gelecek ay tahsilat yapılmaz.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

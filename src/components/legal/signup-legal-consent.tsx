@@ -8,7 +8,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { LegalDocBody } from "@/components/legal/legal-doc-body";
-import { TOS, KVKK, DPA, type LegalDoc } from "@/lib/legal-content";
+import {
+  TOS,
+  KVKK,
+  DPA,
+  MESAFELI_SATIS,
+  ON_BILGILENDIRME,
+  type LegalDoc,
+} from "@/lib/legal-content";
 import {
   applyConsent,
   toggleConsent,
@@ -104,6 +111,28 @@ export function SignupLegalConsent({
           <span className="text-muted-foreground/70">(İsteğe bağlı)</span>
         </>,
       )}
+
+      {/* Kayıt bir satın alma değildir; mesafeli satış onayı checkout'ta alınır.
+          Kullanıcı yine de hangi belgelerin ödeme öncesinde onaylanacağını görür. */}
+      <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/75">
+        Ücretli aboneliklerde{" "}
+        <a
+          href="/legal/on-bilgilendirme-formu"
+          onClick={openDoc(ON_BILGILENDIRME)}
+          className={linkCls}
+        >
+          Ön Bilgilendirme Formu
+        </a>{" "}
+        ve{" "}
+        <a
+          href="/legal/mesafeli-satis-sozlesmesi"
+          onClick={openDoc(MESAFELI_SATIS)}
+          className={linkCls}
+        >
+          Mesafeli Satış Sözleşmesi
+        </a>{" "}
+        ödeme öncesinde ayrıca onaylatılır.
+      </p>
 
       <Sheet open={doc !== null} onOpenChange={(o) => !o && setDoc(null)}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">

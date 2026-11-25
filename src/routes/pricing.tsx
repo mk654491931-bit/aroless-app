@@ -56,7 +56,11 @@ const FAQ = [
   },
   {
     q: "İstediğim zaman iptal edebilir miyim?",
-    a: "Evet. Abonelik dönem sonuna kadar aktif kalır, otomatik yenileme durur.",
+    a: "Evet. Abonelik dönem sonuna kadar aktif kalır, otomatik yenileme durur. Tüketici iseniz 14 günlük cayma hakkınız ve yasal iade haklarınız saklıdır.",
+  },
+  {
+    q: "Tüketici olarak hangi haklara sahibim?",
+    a: "6502 sayılı Kanun kapsamında 14 günlük cayma hakkınız, ayıplı hizmet ve iade haklarınız bulunur. Ayrıntılar Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi'nde; onaylar ödeme öncesinde ayrıca alınır.",
   },
   {
     q: "TRY fiyatı nasıl hesaplanıyor?",
@@ -239,6 +243,34 @@ function PricingPage() {
           })}
         </div>
 
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-relaxed text-muted-foreground">
+          <p>
+            <strong className="font-semibold text-foreground">Aylık abonelik:</strong> İptal edilene
+            kadar her ay otomatik yenilenir. Ödenecek toplam tutar, uygulanan vergilerle birlikte
+            Paddle ödeme ekranında gösterilir; onaylamadan önce kontrol edin.
+          </p>
+          <p className="mt-2">
+            Tüketici iseniz 14 günlük cayma hakkınız ve yasal haklarınız saklıdır. Satın alma
+            öncesinde{" "}
+            <Link
+              to="/legal/$slug"
+              params={{ slug: "on-bilgilendirme-formu" }}
+              className="font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand,var(--primary))]"
+            >
+              Ön Bilgilendirme Formu
+            </Link>{" "}
+            ve{" "}
+            <Link
+              to="/legal/$slug"
+              params={{ slug: "mesafeli-satis-sozlesmesi" }}
+              className="font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand,var(--primary))]"
+            >
+              Mesafeli Satış Sözleşmesi
+            </Link>{" "}
+            onayı ayrıca alınır.
+          </p>
+        </div>
+
         <div className="mt-12 glass rounded-2xl p-6">
           <h2 className="font-semibold">Paketlere göre aylık kullanım</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -319,9 +351,16 @@ function PricingPage() {
           ))}
         </div>
 
-        <div className="mt-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-muted-foreground">
           <ShieldCheck size={14} /> Ödemeler Paddle üzerinden güvenle işlenir · istediğin zaman
-          iptal
+          iptal ·{" "}
+          <Link
+            to="/legal/$slug"
+            params={{ slug: "mesafeli-satis-sozlesmesi" }}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Mesafeli satış koşulları
+          </Link>
         </div>
       </div>
 

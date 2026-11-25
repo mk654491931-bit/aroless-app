@@ -2,7 +2,8 @@
  * AYARLAR → ABONELİK: "Aboneliği iptal et" akışının SAF (istemci-güvenli) kararı.
  *
  * ÜRÜN KURALI: iptal, dönem SONUNDA yürürlüğe girer.
- *   • Bu ay için ödenen ücret İADE EDİLMEZ.
+ *   • Kullanılan dönem için ödenen ücret, yasal cayma/tüketici hakları saklı
+ *     kalmak kaydıyla iade edilmez.
  *   • Gelecek ay tahsilat YAPILMAZ.
  *   • Kullanıcı dönem sonuna kadar paketin tüm özelliklerini kullanmaya devam eder.
  *

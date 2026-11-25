@@ -12,6 +12,16 @@ const InputSchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
   /** Checkout anındaki pazarlama çerez tercihi; yoksa varsayılan HAYIR. */
   marketingConsent: z.boolean().optional(),
+  /**
+   * Mesafeli satış onayları. Ödeme yükümlülüğü doğmadan ÖNCE alınmalıdır;
+   * sunucu da bunları zorunlu tutar ki istemci kapısı atlatılamasın.
+   */
+  legalAccepted: z.boolean().refine((value) => value === true, {
+    message: "Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi onayı zorunludur.",
+  }),
+  immediatePerformanceAccepted: z.boolean().refine((value) => value === true, {
+    message: "Derhal ifa ve cayma hakkının kaybı onayı zorunludur.",
+  }),
 });
 
 /**
@@ -57,6 +67,8 @@ export const createCheckout = createServerFn({ method: "POST" })
       email: profile?.email ?? null,
       plan: data.plan,
       marketingConsent: data.marketingConsent === true,
+      legalAccepted: data.legalAccepted === true,
+      immediatePerformanceAccepted: data.immediatePerformanceAccepted === true,
       attribution,
     });
 

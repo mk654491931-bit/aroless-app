@@ -52,6 +52,24 @@ export function SiteFooter() {
             <li>
               <Link
                 to="/legal/$slug"
+                params={{ slug: "mesafeli-satis-sozlesmesi" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <FileText className="h-3.5 w-3.5" /> Mesafeli Satış Sözleşmesi
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/legal/$slug"
+                params={{ slug: "on-bilgilendirme-formu" }}
+                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <FileText className="h-3.5 w-3.5" /> Ön Bilgilendirme Formu
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/legal/$slug"
                 params={{ slug: "kvkk-aydinlatma-metni" }}
                 className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
               >
@@ -109,6 +127,10 @@ export function SiteFooter() {
               >
                 <ExternalLink className="h-3.5 w-3.5" /> mk65449191@gmail.com
               </a>
+            </li>
+            <li className="text-xs leading-relaxed text-muted-foreground/80">
+              Satıcı: Aroless · Ödeme ve faturalandırma: Paddle (Merchant of Record). Kayıtlı satıcı
+              bilgileri ödeme ekranında ve faturada gösterilir.
             </li>
           </ul>
         </div>

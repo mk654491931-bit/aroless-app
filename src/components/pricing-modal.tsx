@@ -20,6 +20,7 @@ import { getFullProfile } from "@/lib/analysis.functions";
 import { useMoney } from "@/lib/currency";
 import { X, Check, Sparkles, Zap, Crown } from "lucide-react";
 import { PLAN_BY_ID, PLANS, type PlanId } from "@/lib/plans";
+import { LEGAL_VERSION } from "@/lib/legal-content";
 
 const ICONS = { Starter: Sparkles, Pro: Zap, Business: Crown } as const;
 
@@ -40,6 +41,12 @@ export function PricingModal({
   const { currency, rate, fmt, isLive } = useMoney();
   const [loading, setLoading] = useState<PlanId | null>(null);
   const [paid, setPaid] = useState(false);
+  // Mesafeli satış onayları. İkisi de ödeme ÖNCESİNDE alınır; biri eksikse
+  // satın alma düğmeleri kapalıdır. Derhal ifa onayı, cayma hakkının kaybı
+  // bilgisini ayrı bir kutuda taşır (Mesafeli Sözleşmeler Yönetmeliği m.15/1-h).
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [immediateAccepted, setImmediateAccepted] = useState(false);
+  const legalReady = legalAccepted && immediateAccepted;
   const qc = useQueryClient();
   const autoRan = useRef<PlanId | null>(null);
   /** Meta Pixel `Purchase` — paket, tutar ve tekilleştirme kimliği. */
@@ -130,6 +137,10 @@ export function PricingModal({
    */
   const subscribe = useCallback(
     async (plan: PlanId) => {
+      if (!legalReady) {
+        toast.error("Devam etmek için ön bilgilendirme ve cayma onaylarını işaretleyin.");
+        return;
+      }
       setLoading(plan);
       setPaid(false);
       pendingPlan.current = plan;
@@ -152,7 +163,12 @@ export function PricingModal({
         // Önce server transaction'ı kullanılır; userId + plan metadata'sı
         // güvenilir biçimde webhook'a taşınır.
         const session = await checkout({
-          data: { plan, marketingConsent: hasMarketingConsent() },
+          data: {
+            plan,
+            marketingConsent: hasMarketingConsent(),
+            legalAccepted: true,
+            immediatePerformanceAccepted: true,
+          },
         });
         email = session.email;
         purchaseId.current = purchaseEventId(session.transactionId) ?? purchaseId.current;
@@ -164,7 +180,17 @@ export function PricingModal({
             priceId: session.priceId,
             email: session.email,
           },
-          { email: session.email, plan, promo, onEvent: onCheckoutEvent },
+          {
+            email: session.email,
+            plan,
+            promo,
+            onEvent: onCheckoutEvent,
+            legal: {
+              version: LEGAL_VERSION,
+              acceptedAt: new Date().toISOString(),
+              withdrawalWaived: true,
+            },
+          },
         );
       } catch (error) {
         console.warn("[Paddle] Server transaction unavailable; using Vite price checkout.", error);
@@ -173,7 +199,18 @@ export function PricingModal({
       // Vercel'de yalnızca VITE_PADDLE_* tanımlıysa, Paddle.js fiyat checkout'u
       // doğrudan ilgili planın public price ID'siyle açılır.
       if (!opened) {
-        opened = await openPaddlePlanCheckout(plan, { email, promo, onEvent: onCheckoutEvent });
+        opened = await openPaddlePlanCheckout(plan, {
+          email,
+          promo,
+          onEvent: onCheckoutEvent,
+          // Sunucu transaction'ı kullanılamazsa yedek fiyat checkout'una da
+          // onay izi yazılır; aksi hâlde kanıt yalnız tarayıcıda kalırdı.
+          legal: {
+            version: LEGAL_VERSION,
+            acceptedAt: new Date().toISOString(),
+            withdrawalWaived: true,
+          },
+        });
       }
 
       if (opened) {
@@ -188,7 +225,7 @@ export function PricingModal({
       }
       setLoading(null);
     },
-    [checkout, promoFn, onCheckoutEvent],
+    [checkout, promoFn, onCheckoutEvent, legalReady],
   );
 
   useEffect(() => {
@@ -202,26 +239,32 @@ export function PricingModal({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
-      // Modal kapanınca doğrulama durumu SIFIRLANIR. Aksi hâlde sonraki açılışta
-      // `paid` hâlâ true kalır, hook anında yeniden tetiklenir ve kullanıcı
-      // hiç ödeme yapmadan “abonelik başlatıldı” akışı başlardı — bu, olmayan
-      // bir abonelik iddiası olurdu.
-      setPaid(false);
-      autoRan.current = null;
-      pendingPlan.current = null;
-      setExpectedTier(null);
-      purchaseId.current = null;
-      purchaseValue.current = null;
     };
   }, [open, onClose]);
 
-  // /pricing'den gelen `initialPlan`: modal açılır açılmaz o paketin ödemesi açılır.
+  // Modal KAPANDIĞINDA doğrulama ve onay durumu sıfırlanır. Ayrı effect:
+  // `onClose` her render'da yeni bir fonksiyon olabilir; temizlik effect'ine
+  // bağlanırsa kullanıcı kutuyu işaretlerken onaylar sıfırlanabilirdi.
   useEffect(() => {
-    if (!open || !initialPlan) return;
+    if (open) return;
+    setPaid(false);
+    setLegalAccepted(false);
+    setImmediateAccepted(false);
+    autoRan.current = null;
+    pendingPlan.current = null;
+    setExpectedTier(null);
+    purchaseId.current = null;
+    purchaseValue.current = null;
+  }, [open]);
+
+  // /pricing'den gelen `initialPlan`: onaylar verilmeden ödeme AÇILMAZ. İki kutu
+  // işaretlendiğinde seçilen paketin ödemesi bir kez açılır.
+  useEffect(() => {
+    if (!open || !initialPlan || !legalReady) return;
     if (autoRan.current === initialPlan) return;
     autoRan.current = initialPlan;
     void subscribe(initialPlan);
-  }, [open, initialPlan, subscribe]);
+  }, [open, initialPlan, legalReady, subscribe]);
 
   if (!open) return null;
 
@@ -261,6 +304,58 @@ export function PricingModal({
             </div>
           )}
         </div>
+        <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-[11px] leading-relaxed text-muted-foreground">
+          <p>
+            <strong className="font-semibold text-foreground">Aylık abonelik:</strong> İptal edilene
+            kadar her ay otomatik yenilenir. Ödenecek toplam tutar, uygulanan vergilerle birlikte
+            Paddle ödeme ekranında gösterilir.
+          </p>
+          <label className="mt-2.5 flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={legalAccepted}
+              onChange={(event) => setLegalAccepted(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[oklch(0.62_0.17_255)]"
+            />
+            <span>
+              <a
+                href="/legal/on-bilgilendirme-formu"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand,var(--primary))]"
+              >
+                Ön Bilgilendirme Formu
+              </a>{" "}
+              ve{" "}
+              <a
+                href="/legal/mesafeli-satis-sozlesmesi"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand,var(--primary))]"
+              >
+                Mesafeli Satış Sözleşmesi
+              </a>
+              'ni okudum, anladım ve onaylıyorum.
+            </span>
+          </label>
+          <label className="mt-2 flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={immediateAccepted}
+              onChange={(event) => setImmediateAccepted(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[oklch(0.62_0.17_255)]"
+            />
+            <span>
+              Hizmetin cayma süresi dolmadan derhal ifasına başlanmasını talep ediyorum; bu nedenle
+              14 günlük cayma hakkımı kaybedeceğim konusunda bilgilendirildim.
+            </span>
+          </label>
+          <p className="mt-2 text-[10px] text-muted-foreground/75">
+            Hizmete hemen erişmek istemiyorsanız, 14 gün sonra başlatılmak üzere destek ekibimize
+            yazabilirsiniz; cayma hakkınız korunur.
+          </p>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => {
             const Icon = ICONS[p.id];
@@ -309,7 +404,7 @@ export function PricingModal({
                 </ul>
                 <button
                   onClick={() => subscribe(p.id)}
-                  disabled={loading !== null || confirmation.status === "pending"}
+                  disabled={loading !== null || confirmation.status === "pending" || !legalReady}
 
                   className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${p.highlight ? "bg-linear-to-r from-[oklch(0.62_0.17_255)] to-[oklch(0.52_0.15_262)] text-white glow" : "bg-white/10 hover:bg-white/15"} disabled:opacity-60`}
                 >
@@ -324,7 +419,12 @@ export function PricingModal({
           })}
         </div>
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Secure checkout by Paddle. Cancel anytime.
+          Secure checkout by Paddle. Cancel anytime.{" "}
+          {!legalReady && (
+            <span className="block text-[11px] text-amber-200/90">
+              Devam etmek için yukarıdaki iki onayı işaretleyin.
+            </span>
+          )}
         </p>
       </div>
     </div>,

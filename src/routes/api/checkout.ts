@@ -8,6 +8,13 @@ const BodySchema = z.object({
   plan: z.enum(["Starter", "Pro", "Business"]).default("Pro"),
   /** Checkout anındaki pazarlama çerez tercihi; yoksa varsayılan HAYIR. */
   marketingConsent: z.boolean().optional(),
+  /** Mesafeli satış onayları — sunucu tarafında da zorunlu. */
+  legalAccepted: z.boolean().refine((value) => value === true, {
+    message: "Mesafeli satış onayı zorunludur.",
+  }),
+  immediatePerformanceAccepted: z.boolean().refine((value) => value === true, {
+    message: "Derhal ifa onayı zorunludur.",
+  }),
 });
 
 function json(payload: unknown, status: number) {
@@ -47,7 +54,13 @@ export const Route = createFileRoute("/api/checkout")({
 
           const parsed = BodySchema.safeParse(await request.json().catch(() => ({})));
           if (!parsed.success) {
-            return json({ error: "Geçersiz istek: plan Starter/Pro/Business olmalı." }, 400);
+            return json(
+              {
+                error:
+                  "Geçersiz istek: plan Starter/Pro/Business olmalı ve mesafeli satış onayları verilmiş olmalıdır.",
+              },
+              400,
+            );
           }
 
           const { createPaddleCheckoutSession } = await import("@/lib/paddle.server");
@@ -61,6 +74,8 @@ export const Route = createFileRoute("/api/checkout")({
             email: userData.user.email,
             plan: parsed.data.plan,
             marketingConsent: parsed.data.marketingConsent === true,
+            legalAccepted: parsed.data.legalAccepted === true,
+            immediatePerformanceAccepted: parsed.data.immediatePerformanceAccepted === true,
             attribution,
           });
 

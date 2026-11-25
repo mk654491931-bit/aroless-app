@@ -9,10 +9,13 @@ export const Route = createFileRoute("/legal/")({
       {
         name: "description",
         content:
-          "Aroless kullanım koşulları, KVKK aydınlatma metni, veri işleme sözleşmesi ve çerez politikası tek merkezde.",
+          "Aroless kullanım koşulları, mesafeli satış sözleşmesi, ön bilgilendirme formu, KVKK aydınlatma metni, veri işleme sözleşmesi ve çerez politikası tek merkezde.",
       },
       { property: "og:title", content: "Yasal & Uyum Merkezi — Aroless" },
-      { property: "og:description", content: "KVKK, DPA, ToS ve çerez politikası belgeleri." },
+      {
+        property: "og:description",
+        content: "KVKK, DPA, ToS, mesafeli satış ve ön bilgilendirme belgeleri.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -27,8 +30,8 @@ function LegalIndex() {
         <Shield className="h-6 w-6 text-[var(--brand,var(--primary))]" /> Yasal & Uyum Merkezi
       </h1>
       <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-        Aroless'nın sözleşmeleri, KVKK dokümanları ve çerez politikası. Son güncelleme:{" "}
-        {LAST_UPDATED}.
+        Aroless'nın sözleşmeleri, tüketici satış belgeleri, KVKK dokümanları ve çerez politikası.
+        Son güncelleme: {LAST_UPDATED}.
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
