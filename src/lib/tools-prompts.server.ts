@@ -190,8 +190,8 @@ Yorumları temaya göre grupla; satın almayı engelleyen itirazları, memnuniye
 
     case "price-strategy":
       return `${BASE}
-Ürün: ${f(c, "product")} | Landed cost: $${f(c, "cost")} | Kanal: ${f(c, "channel", "Amazon US")} | Rakip fiyatları: ${f(c, "competitors")}
-Kâr koruyan bir fiyat bandı belirle: giriş fiyatı, hedef fiyat, taban fiyat (kupon/indirim sınırı). Kanal komisyonu, fulfillment, iade ve reklam payını hesaba kat. metrics: Önerilen fiyat (tone action), Net marj % (tone profit), Taban fiyat (tone warning), Başabaş dönüşüm oranı. table: ["Senaryo","Fiyat $","Net marj $","Net marj %","Not"]. bullets: lansman fiyatlama takvimi, kupon ve bundle hamleleri.`;
+Ürün: ${f(c, "product")} | Landed cost: $${f(c, "cost")} | Kanal: ${f(c, "channel", "Amazon US")} | Hedef net marj: %${f(c, "targetMargin", "20")} | Rakip fiyatları: ${f(c, "competitors")}
+Kâr koruyan bir fiyat bandı belirle: giriş fiyatı, hedef fiyat, taban fiyat (kupon/indirim sınırı). Kanal komisyonu, fulfillment, iade ve reklam payını hesaba kat. Önce başabaş fiyatı, sonra hedef marjı sağlayan taban fiyatı hesapla; önerilen fiyatı rakip medyanıyla karşılaştır. metrics: Önerilen fiyat (tone action), Net marj % (tone profit), Taban fiyat (tone warning), Başabaş dönüşüm oranı. table: ["Senaryo","Fiyat $","Net marj $","Net marj %","Not"]. bullets: lansman fiyatlama takvimi, kupon ve bundle hamleleri.`;
 
     case "hs-classifier":
       return `${BASE}

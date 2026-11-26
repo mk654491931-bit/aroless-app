@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Zap,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,53 @@ function ScoreRing({ value }: { value: number }) {
   );
 }
 
+function auditMarkdown(row: StoreAuditRow): string {
+  const r = row.report;
+  const lines: string[] = [
+    `# Mağaza denetimi — ${row.url}`,
+    "",
+    `- Sağlık skoru: **${row.health_score}/100**`,
+    `- Denetim: ${new Date(row.created_at).toLocaleString("tr-TR")}`,
+    `- Tahmini dönüşüm artışı: %${r.estimated_cr_gain_pct}`,
+    "",
+    r.summary,
+    "",
+    "## Dönüşüm kırıcıları",
+    ...(r.conversion_killers ?? []).map((item) => `- ${item}`),
+    "",
+    "## Güçlü yönler",
+    ...(r.strengths ?? []).map((item) => `- ${item}`),
+    "",
+    "## Bulgular ve düzeltmeler",
+  ];
+  for (const issue of r.issues ?? []) {
+    lines.push(
+      `### [${issue.severity}] ${issue.area}`,
+      `- **Bulgu:** ${issue.finding}`,
+      `- **Etki:** ${issue.impact}`,
+      `- **Çözüm:** ${issue.fix}`,
+      "",
+    );
+  }
+  lines.push("## Güven sinyalleri");
+  for (const signal of r.trust_signals ?? []) {
+    lines.push(`- ${signal.present ? "✅" : "❌"} ${signal.signal}`);
+  }
+  lines.push("", "## 1 saatlik hızlı kazanımlar");
+  for (const item of r.quick_wins ?? []) lines.push(`- ${item}`);
+  lines.push("", "---", "Aroless AI Mağaza Denetçisi — düzeltmeleri yayına almadan önce doğrula.");
+  return lines.join("\n");
+}
+
+function downloadAudit(row: StoreAuditRow) {
+  const blob = new Blob([auditMarkdown(row)], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `magaza-denetimi-${row.health_score}-${row.created_at.slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function Report({ row }: { row: StoreAuditRow }) {
   const r = row.report;
   return (
@@ -106,6 +154,14 @@ function Report({ row }: { row: StoreAuditRow }) {
             <Zap size={11} /> Tüm düzeltmelerle tahmini dönüşüm artışı: %{r.estimated_cr_gain_pct}
           </div>
         </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="gap-1.5"
+          onClick={() => downloadAudit(row)}
+        >
+          <Download size={13} /> Raporu indir
+        </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

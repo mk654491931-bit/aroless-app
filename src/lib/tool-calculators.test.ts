@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   capitalPlan,
+  channelMarginPlan,
   channelProfile,
   desiPlan,
+  fbaSizeTier,
   landedCostPlan,
   leadTimePlan,
   milestonePlan,
+  parsePriceList,
+  priceStrategyPlan,
   reverseCostPlan,
 } from "./tool-calculators";
 
@@ -108,6 +112,68 @@ describe("desiPlan", () => {
     expect(plan.volumetricKg).toBe(1.85);
     expect(plan.billableKg).toBe(1.85);
     expect(plan.isVolumetric).toBe(true);
+  });
+});
+
+describe("fbaSizeTier", () => {
+  it("küçük standart ve büyük standart kademelerini ayırır", () => {
+    const small = fbaSizeTier({ l: 20, w: 15, h: 1.5, weight: 0.3 });
+    expect(small.tier).toBe("small-standard");
+    expect(small.label).toBe("Small standard");
+
+    const large = fbaSizeTier({ l: 30, w: 22, h: 14, weight: 0.9 });
+    expect(large.tier).toBe("large-standard");
+    expect(large.blocker).toBeNull();
+  });
+
+  it("ağırlık sınırını aşınca ekstra büyük sınıf ve nedeni döner", () => {
+    const oversized = fbaSizeTier({ l: 30, w: 22, h: 14, weight: 30 });
+    expect(oversized.tier).toBe("extra-large");
+    expect(oversized.blocker).toContain("Ağırlık");
+  });
+});
+
+describe("channelMarginPlan", () => {
+  it("dört kanalı karşılaştırır ve en kârlıyı seçer", () => {
+    const plan = channelMarginPlan({ price: 39.99, cost: 8.5 });
+    expect(plan.rows).toHaveLength(4);
+    expect(plan.best).not.toBeNull();
+    expect(plan.worst).not.toBeNull();
+    expect(plan.best!.netProfit).toBeGreaterThanOrEqual(plan.worst!.netProfit);
+    expect(plan.rows.find((row) => row.id === "amazon-eu")?.vatPct).toBe(20);
+    expect(plan.spread).toBeGreaterThan(0);
+  });
+
+  it("maliyet fiyatı aşınca tüm kanalları zararda işaretler", () => {
+    const plan = channelMarginPlan({ price: 10, cost: 25 });
+    expect(plan.rows.every((row) => !row.feasible)).toBe(true);
+  });
+});
+
+describe("fiyat stratejisi", () => {
+  it("farklı fiyat yazımlarını ayrıştırır", () => {
+    expect(parsePriceList("$24.99, 27,50, 1,299.00, 19,99")).toEqual([24.99, 27.5, 1299, 19.99]);
+  });
+
+  it("başabaş, taban ve önerilen fiyatı hesaplar", () => {
+    const plan = priceStrategyPlan({
+      cost: 8,
+      competitors: "24.99, 27.50, 19.99",
+      channel: "Amazon US",
+      targetMarginPct: 20,
+    });
+    expect(plan.competitor?.median).toBe(24.99);
+    expect(plan.suggestedPrice).toBeGreaterThanOrEqual(plan.floorPrice);
+    expect(plan.breakEvenPrice).toBeLessThan(plan.floorPrice);
+    expect(plan.feasible).toBe(true);
+    expect(plan.marginAtSuggested).toBeGreaterThan(15);
+  });
+
+  it("rakip fiyatı yoksa taban fiyatla ve 'veri yok' konumuyla döner", () => {
+    const plan = priceStrategyPlan({ cost: 8, competitors: "", channel: "Shopify" });
+    expect(plan.competitor).toBeNull();
+    expect(plan.suggestedPrice).toBe(plan.floorPrice);
+    expect(plan.positioning).toBe("veri yok");
   });
 });
 

@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Columns3,
+  Download,
   Loader2,
   Scale,
   Sparkles,
@@ -109,6 +110,46 @@ export function ComparePage() {
   }
 
   const summary = summaryMut.data;
+
+  const exportComparison = () => {
+    if (selectedFavorites.length < 2) return;
+    const escape = (value: unknown) => {
+      const text = String(value ?? "").replace(/\r?\n/g, " ");
+      return /[",;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const header = [
+      "urun",
+      "trend_skoru",
+      "marj_pct",
+      "marj_tipi",
+      "rekabet",
+      "satilabilirlik",
+      "platform_uyumu",
+      "neden_kazaniyor",
+      "koleksiyon",
+    ];
+    const rows = selectedFavorites.map((favorite) => {
+      const margin = marginForRanking(favorite.product);
+      return [
+        favorite.product.name,
+        favorite.product.trend_score ?? "",
+        margin.pct ?? "",
+        margin.pct === null ? "ölçülmedi" : margin.kind === "gross" ? "brüt" : "net",
+        favorite.product.competition_level ?? "",
+        favorite.product.sellability_verdict ?? "",
+        favorite.product.platform_fit ?? "",
+        favorite.product.why_winning ?? "",
+        favorite.collection_name ?? "",
+      ];
+    });
+    const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `aroless-karsilastirma-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <div className="min-h-screen">
@@ -260,6 +301,14 @@ export function ComparePage() {
                   <Sparkles size={14} />
                 )}
                 AI ile karşılaştır
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                disabled={selectedFavorites.length < 2}
+                onClick={exportComparison}
+              >
+                <Download size={14} /> CSV indir
               </Button>
             </aside>
           </div>

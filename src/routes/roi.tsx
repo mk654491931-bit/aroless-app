@@ -4,7 +4,16 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Wallet, Loader2, Plus, Trash2, TrendingUp, TrendingDown, Target } from "lucide-react";
+import {
+  Wallet,
+  Loader2,
+  Plus,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Download,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +105,7 @@ function RoiPage() {
   const { user, loading } = useAuth();
   const [form, setForm] = useState({ ...BLANK });
   const [open, setOpen] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState("");
 
   const listFn = useServerFn(listRoiEntries);
   const saveFn = useServerFn(saveRoiEntry);
@@ -111,8 +121,11 @@ function RoiPage() {
 
   const q = useQuery({ queryKey: ["roi-entries"], queryFn: () => listFn(), enabled: !!user });
   const entries = useMemo(() => (q.data ?? []) as RoiEntry[], [q.data]);
-  const agg = useMemo(() => aggregateRoi(entries), [entries]);
-  const currency = entries[0]?.currency ?? "USD";
+  const agg = useMemo(
+    () => aggregateRoi(entries, displayCurrency || undefined),
+    [entries, displayCurrency],
+  );
+  const currency = agg.currency;
 
   const save = useMutation({
     mutationFn: () => saveFn({ data: { ...form, notes: form.notes || null } }),
@@ -140,6 +153,53 @@ function RoiPage() {
     type: "number" as const,
   });
 
+  const exportCsv = () => {
+    if (!entries.length) return;
+    const escape = (value: unknown) => {
+      const text = String(value ?? "").replace(/\r?\n/g, " ");
+      return /[",;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const header = [
+      "urun",
+      "platform",
+      "ulke",
+      "para_birimi",
+      "siparis",
+      "iade",
+      "ciro",
+      "net_kar",
+      "marj_pct",
+      "roas_x",
+      "basabas_roas_x",
+      "cac",
+      "beklenen_marj_pct",
+      "not",
+    ];
+    const rows = agg.rows.map(({ entry, stats }) => [
+      entry.product_name,
+      entry.platform,
+      entry.country,
+      entry.currency,
+      stats.netOrders,
+      entry.refunds,
+      stats.revenue.toFixed(2),
+      stats.netProfit.toFixed(2),
+      stats.marginPct.toFixed(1),
+      (stats.roasPct / 100).toFixed(2),
+      stats.breakEvenRoas.toFixed(2),
+      stats.cac.toFixed(2),
+      entry.expected_margin_pct ?? "",
+      entry.notes ?? "",
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `aroless-roi-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <PageHero
@@ -147,11 +207,42 @@ function RoiPage() {
         title="Kâr / ROI Takip Paneli"
         description="Gerçek mağaza rakamlarını gir, AI tahminleriyle karşılaştır. Hangi ürün gerçekten para kazandırıyor gör."
         actions={
-          <Button size="sm" onClick={() => setOpen((v) => !v)}>
-            <Plus size={14} className="mr-1" /> Ürün ekle
-          </Button>
+          <>
+            {entries.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={exportCsv}>
+                <Download size={14} className="mr-1" /> CSV
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setOpen((v) => !v)}>
+              <Plus size={14} className="mr-1" /> Ürün ekle
+            </Button>
+          </>
         }
       />
+
+      {entries.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-muted-foreground">
+          <span className="uppercase tracking-wider">KPI para birimi</span>
+          <Select value={agg.currency} onValueChange={setDisplayCurrency}>
+            <SelectTrigger className="h-7 w-[90px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agg.currencies.map((code) => (
+                <SelectItem key={code} value={code} className="text-xs">
+                  {code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {agg.mixedCurrencies && (
+            <span className="text-[var(--warning)]">
+              Karışık para birimi: toplamlar yalnız seçili para biriminde gösterilir; satırlar kendi
+              para biriminde kalır.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-6">
         <Stat label="Ciro" value={money(agg.revenue, currency)} />

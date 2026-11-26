@@ -1,5 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { memo, useEffect, useMemo, type ComponentType, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -8,6 +15,7 @@ import {
   Bell,
   Bookmark,
   CreditCard,
+  Download,
   History,
   Package,
   Radar,
@@ -15,7 +23,9 @@ import {
   Settings,
   Sparkles,
   Target,
+  Trash2,
   TrendingUp,
+  Wrench,
   Zap,
 } from "lucide-react";
 import {
@@ -45,6 +55,18 @@ import { listNotifications, type NotificationRow } from "@/lib/notifications.fun
 import { creditBalances } from "@/lib/credits";
 import { planLabelFor } from "@/lib/plan-usage";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { Badge } from "@/components/ui/badge";
+import { TOOL_HUBS } from "@/lib/tools-catalog";
+import {
+  buildToolHistoryCsv,
+  buildToolReport,
+  formatToolRunTime,
+  getToolRunsServerSnapshot,
+  getToolRunsSnapshot,
+  removeToolRun,
+  subscribeToolRuns,
+  type ToolRun,
+} from "@/lib/tool-report";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -109,6 +131,19 @@ function timeAgo(iso: string): string {
   });
 }
 
+function toolRoute(toolId: string): string {
+  return TOOL_HUBS.find((hub) => hub.tools.some((tool) => tool.id === toolId))?.route ?? "/tools";
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function DashboardPage() {
   useTranslation();
   const nav = useNavigate();
@@ -146,6 +181,12 @@ function DashboardPage() {
     queryFn: () => notifFn(),
     enabled: !!user,
   });
+  const toolRuns = useSyncExternalStore(
+    subscribeToolRuns,
+    getToolRunsSnapshot,
+    getToolRunsServerSnapshot,
+  );
+  const recentToolRuns = useMemo<ToolRun[]>(() => toolRuns.slice(0, 6), [toolRuns]);
 
   const favorites = useMemo(() => (favQ.data as FavoriteRow[] | undefined) ?? [], [favQ.data]);
   const analyses = useMemo(() => (anaQ.data as AnalysisRow[] | undefined) ?? [], [anaQ.data]);
@@ -364,6 +405,125 @@ function DashboardPage() {
         {/* "ayırıcı" ile yazılır: i18n katmanı "·" çevresindeki parçaları ayrı
             çevirebiliyor, aksi hâlde `${spent} harcandı` tek parça kalıyordu. */}
         <Kpi icon={CreditCard} label="Kalan kredi" value={credits} sub={`${spent} · harcandı`} />
+      </section>
+
+      {/* ── Son araç analizleri — tarayıcıda saklanan çalışma defteri ────── */}
+      <section className="glass rounded-2xl p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <span className="text-[oklch(0.85_0.15_255)]">
+              <Wrench size={15} />
+            </span>{" "}
+            Son araç analizleri
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <span className="hidden text-[10px] text-muted-foreground sm:inline">
+              Bu tarayıcıda saklanır
+            </span>
+            {toolRuns.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadTextFile(
+                      `aroless-arac-gecmisi-${new Date().toISOString().slice(0, 10)}.csv`,
+                      buildToolHistoryCsv(toolRuns),
+                      "text/csv;charset=utf-8",
+                    )
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] hover:bg-white/10"
+                >
+                  <Download size={11} /> CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Tüm yerel araç geçmişi silinsin mi?")) {
+                      for (const run of [...toolRuns]) removeToolRun(run.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground hover:bg-white/10"
+                >
+                  <Trash2 size={11} /> Temizle
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        {recentToolRuns.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-5 text-center text-xs text-muted-foreground">
+            Henüz kaydedilmiş araç analizi yok. Bir araç çalıştır; sonuç burada ve ilgili araçta
+            otomatik geri yüklenir.
+            <Link
+              to="/tools"
+              className="ms-2 inline-flex items-center gap-1 text-[oklch(0.85_0.15_255)] hover:underline"
+            >
+              Araç merkezine git <ArrowUpRight size={11} />
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-3 divide-y divide-white/5">
+            {recentToolRuns.map((run) => (
+              <div key={run.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={toolRoute(run.toolId)}
+                    hash={run.toolId}
+                    className="flex min-w-0 items-center gap-2 font-medium hover:text-[oklch(0.85_0.15_255)]"
+                  >
+                    <span className="truncate">{run.title}</span>
+                    {run.result.verdict && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 border-white/10 text-[9px] text-muted-foreground"
+                      >
+                        {run.result.verdict}
+                      </Badge>
+                    )}
+                  </Link>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {run.result.headline || "Analiz kaydı"}
+                  </div>
+                </div>
+                <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+                  {formatToolRunTime(run.ranAt)}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadTextFile(
+                        `${run.toolId}-${run.ranAt.slice(0, 10)}.md`,
+                        buildToolReport(run),
+                        "text/markdown;charset=utf-8",
+                      )
+                    }
+                    aria-label="Raporu indir"
+                    title="Markdown raporu indir"
+                    className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  >
+                    <Download size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeToolRun(run.id)}
+                    aria-label="Geçmişten sil"
+                    title="Geçmişten sil"
+                    className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-red-400"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {toolRuns.length > recentToolRuns.length && (
+              <p className="pt-2 text-[10px] text-muted-foreground">
+                +{toolRuns.length - recentToolRuns.length} daha eski çalışma · CSV ile tamamını
+                indir.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* ── Activity + credit balance ───────────────────────────────────── */}

@@ -1,5 +1,6 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,7 +12,19 @@ import {
   RefreshCw,
   Clock,
   Zap,
+  Bookmark,
+  BookmarkCheck,
+  Search,
+  X,
 } from "lucide-react";
+import {
+  EMPTY_NEWS_FILTER,
+  filterNews,
+  newsCategories,
+  newsKey,
+  toggleSavedNews,
+  type NewsFilterState,
+} from "@/lib/news-filter";
 import { PageHero } from "@/components/page-hero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,7 +117,15 @@ function SkeletonCard() {
   );
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+function NewsCard({
+  item,
+  saved,
+  onToggleSave,
+}: {
+  item: NewsItem;
+  saved: boolean;
+  onToggleSave: () => void;
+}) {
   return (
     <article className="premium-card flex flex-col p-4">
       <div className="flex items-center justify-between gap-2">
@@ -118,9 +139,25 @@ function NewsCard({ item }: { item: NewsItem }) {
               ? "Orta etki"
               : "Düşük etki"}
         </Badge>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          {item.category} · {item.date}
-        </span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
+            {item.category} · {item.date}
+          </span>
+          <button
+            type="button"
+            onClick={onToggleSave}
+            aria-pressed={saved}
+            aria-label={saved ? "Haber kaydını kaldır" : "Haberi kaydet"}
+            title={saved ? "Kaydı kaldır" : "Sonra okumak için kaydet"}
+            className={`shrink-0 rounded p-1 transition-colors ${
+              saved
+                ? "text-[var(--profit)] hover:bg-[var(--profit)]/10"
+                : "text-muted-foreground hover:bg-white/10 hover:text-foreground"
+            }`}
+          >
+            {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+          </button>
+        </div>
       </div>
 
       <h3 className="mt-2.5 text-sm font-bold leading-snug">{item.title}</h3>
@@ -278,6 +315,19 @@ function LiveFeed() {
   );
 }
 
+const SAVED_NEWS_KEY = "aroless:news-saved:v1";
+
+function readSavedNews(): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SAVED_NEWS_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string").slice(0, 60)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function NewsPage() {
   const q = useQuery({
     queryKey: ["ecom-news"],
@@ -285,6 +335,39 @@ function NewsPage() {
     staleTime: 30 * 60 * 1000,
     retry: 1,
   });
+  const [saved, setSaved] = useState<string[]>([]);
+  const [filter, setFilter] = useState<NewsFilterState>({ ...EMPTY_NEWS_FILTER });
+
+  useEffect(() => {
+    setSaved(readSavedNews());
+  }, []);
+
+  const allItems = useMemo(() => q.data ?? [], [q.data]);
+  const categories = useMemo(() => newsCategories(allItems), [allItems]);
+  const savedKeys = useMemo(() => new Set(saved), [saved]);
+  const filtered = useMemo(
+    () => filterNews(allItems, filter, savedKeys),
+    [allItems, filter, savedKeys],
+  );
+  const savedCount = saved.length;
+
+  const toggleSave = (item: NewsItem) => {
+    setSaved((previous) => {
+      const next = toggleSavedNews(previous, newsKey(item));
+      try {
+        window.localStorage.setItem(SAVED_NEWS_KEY, JSON.stringify(next));
+      } catch {
+        /* gizli mod */
+      }
+      return next;
+    });
+  };
+  const resetFilter = () => setFilter({ ...EMPTY_NEWS_FILTER });
+  const filtersActive =
+    filter.query.trim() !== "" ||
+    filter.category !== "all" ||
+    filter.impact !== "all" ||
+    filter.savedOnly;
 
   return (
     <div className="min-h-screen">
@@ -321,11 +404,116 @@ function NewsPage() {
 
         <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section>
-            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              <Newspaper size={14} className="text-[var(--accent-active)]" /> Latest E-Com News
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                <Newspaper size={14} className="text-[var(--accent-active)]" /> Latest E-Com News
+              </h2>
+              {!q.isLoading && allItems.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {filtered.length} / {allItems.length} haber
+                  {savedCount > 0 ? ` · ${savedCount} kayıtlı` : ""}
+                </span>
+              )}
+            </div>
 
-            {!q.isLoading && (q.data ?? []).some((item) => item.ai === false) && (
+            {!q.isLoading && allItems.length > 0 && (
+              <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex min-w-[180px] flex-1 items-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5">
+                    <Search size={12} className="shrink-0 text-muted-foreground" />
+                    <input
+                      value={filter.query}
+                      onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
+                      placeholder="Haberlerde ara: tarife, Amazon, navlun…"
+                      className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+                    />
+                    {filter.query && (
+                      <button
+                        type="button"
+                        onClick={() => setFilter((f) => ({ ...f, query: "" }))}
+                        aria-label="Aramayı temizle"
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {(
+                      [
+                        ["all", "Tümü"],
+                        ["high", "Yüksek"],
+                        ["medium", "Orta"],
+                        ["low", "Düşük"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFilter((f) => ({ ...f, impact: value }))}
+                        className={`rounded-md border px-2 py-1 text-[10px] transition-colors ${
+                          filter.impact === value
+                            ? "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/15 text-[var(--accent-active)]"
+                            : "border-white/10 text-muted-foreground hover:bg-white/5"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFilter((f) => ({ ...f, savedOnly: !f.savedOnly }))}
+                    aria-pressed={filter.savedOnly}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition-colors ${
+                      filter.savedOnly
+                        ? "border-[var(--profit)]/40 bg-[var(--profit)]/15 text-[var(--profit)]"
+                        : "border-white/10 text-muted-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    <BookmarkCheck size={10} /> Kaydedilenler ({savedCount})
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFilter((f) => ({ ...f, category: "all" }))}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                      filter.category === "all"
+                        ? "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/15 text-[var(--accent-active)]"
+                        : "border-white/10 text-muted-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    Tüm kategoriler
+                  </button>
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setFilter((f) => ({ ...f, category }))}
+                      className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                        filter.category === category
+                          ? "border-[var(--accent-active)]/40 bg-[var(--accent-active)]/15 text-[var(--accent-active)]"
+                          : "border-white/10 text-muted-foreground hover:bg-white/5"
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                  {filtersActive && (
+                    <button
+                      type="button"
+                      onClick={resetFilter}
+                      className="ms-auto inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/5"
+                    >
+                      <X size={9} /> Filtreleri temizle
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!q.isLoading && allItems.some((item) => item.ai === false) && (
               <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[11px] text-muted-foreground">
                 AI sağlayıcısı yok: başlıklar canlı RSS kaynaklarından geliyor. Kaynak özeti
                 gösteriliyor; AI yorumu eklenmedi.
@@ -346,7 +534,27 @@ function NewsPage() {
                   <SkeletonCard />
                 </>
               )}
-              {!q.isLoading && (q.data ?? []).map((item, i) => <NewsCard key={i} item={item} />)}
+              {!q.isLoading &&
+                filtered.map((item) => (
+                  <NewsCard
+                    key={newsKey(item)}
+                    item={item}
+                    saved={savedKeys.has(newsKey(item))}
+                    onToggleSave={() => toggleSave(item)}
+                  />
+                ))}
+              {!q.isLoading && allItems.length > 0 && filtered.length === 0 && (
+                <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center text-xs text-muted-foreground md:col-span-2">
+                  Bu filtreye uyan haber yok.
+                  <button
+                    type="button"
+                    onClick={resetFilter}
+                    className="ms-2 text-[var(--accent-active)] hover:underline"
+                  >
+                    Filtreleri temizle
+                  </button>
+                </div>
+              )}
             </div>
           </section>
 

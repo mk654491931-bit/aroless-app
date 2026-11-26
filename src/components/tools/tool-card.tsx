@@ -1,5 +1,5 @@
 import { getUiLang } from "@/lib/auto-i18n/lang";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Loader2,
   Sparkles,
@@ -12,6 +12,11 @@ import {
   Cpu,
   TrendingUp,
   ExternalLink,
+  Download,
+  FileText,
+  History,
+  TableProperties,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +35,14 @@ import { useRouterState } from "@tanstack/react-router";
 import { apiFetch } from "@/lib/api-client";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { CreditCost } from "@/components/credit-cost";
+import {
+  buildToolReport,
+  formatToolRunTime,
+  latestToolRun,
+  saveToolRun,
+  tableToTsv,
+  type ToolRun,
+} from "@/lib/tool-report";
 
 export type ToolResult = {
   headline: string;
@@ -147,6 +160,7 @@ export function ToolCard({
   id,
   validate,
   creditCost = 1,
+  inputs = {},
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   title: string;
@@ -165,16 +179,43 @@ export function ToolCard({
    * harcamaz (sunucu bunu yanıtta uygular, arayüz aynı kuralı yazar).
    */
   creditCost?: number;
+  /**
+   * Sonucu tekrar üretilebilir bir rapora çevirmek için form girdileri. Verilmezse
+   * rapor yalnız çıktıyı taşır; kart yine geçmişe kaydedilir.
+   */
+  inputs?: Record<string, string>;
 }) {
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<ToolResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedTable, setCopiedTable] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
   const [highlighted, setHighlighted] = useState(false);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const qc = useQueryClient();
   const routerHash = useRouterState({ select: (s) => s.location.hash });
   const validationHint = validate?.() ?? null;
+  const toolId =
+    id ??
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+  // Son başarılı çalışmayı açılışta geri yükle: aynı analizi tekrar çalıştırıp
+  // jeton/30-90 sn harcamak yerine kullanıcı kaldığı yerden devam eder.
+  useEffect(() => {
+    const run = latestToolRun(toolId);
+    if (!run) return;
+    setResult(run.result);
+    setLastRunAt(run.ranAt);
+    setRestored(true);
+    setDismissed(false);
+  }, [toolId]);
 
   useEffect(() => {
     if (!id) return;
@@ -198,7 +239,17 @@ export function ToolCard({
     setStage(0);
     const timer = setInterval(() => setStage((s) => (s + 1) % STAGES.length), 2600);
     try {
-      setResult(await onRun());
+      const next = await onRun();
+      setResult(next);
+      setRestored(false);
+      setDismissed(false);
+      const saved = saveToolRun({
+        toolId,
+        title,
+        input: inputs,
+        result: next,
+      });
+      setLastRunAt(saved?.ranAt ?? new Date().toISOString());
     } catch (e) {
       setError((e as Error).message);
       toast.error("Analiz başarısız", { description: (e as Error).message });
@@ -211,12 +262,54 @@ export function ToolCard({
     }
   };
 
+  const currentRun = useMemo<ToolRun | null>(() => {
+    if (!result) return null;
+    return {
+      id: `${toolId}:${lastRunAt ?? "current"}`,
+      toolId,
+      title,
+      ranAt: lastRunAt ?? new Date().toISOString(),
+      input: inputs,
+      result,
+    };
+  }, [inputs, lastRunAt, result, title, toolId]);
+
   const copyDoc = async () => {
     if (!result?.document) return;
     await navigator.clipboard.writeText(result.document);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
     toast.success("Panoya kopyalandı");
+  };
+
+  const copyReport = async () => {
+    if (!currentRun) return;
+    await navigator.clipboard.writeText(buildToolReport(currentRun));
+    setCopiedReport(true);
+    setTimeout(() => setCopiedReport(false), 1600);
+    toast.success("Rapor panoya kopyalandı", {
+      description: "Metrikler, riskler ve kaynaklar dahil.",
+    });
+  };
+
+  const downloadReport = () => {
+    if (!currentRun) return;
+    const blob = new Blob([buildToolReport(currentRun)], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${toolId}-${(lastRunAt ?? new Date().toISOString()).slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const copyTable = async () => {
+    if (!result?.table) return;
+    await navigator.clipboard.writeText(tableToTsv(result.table));
+    setCopiedTable(true);
+    setTimeout(() => setCopiedTable(false), 1600);
+    toast.success("Tablo kopyalandı", { description: "Excel/Sheets'e yapıştırmaya hazır." });
   };
 
   const download = () => {
@@ -289,8 +382,14 @@ export function ToolCard({
             </div>
           )}
 
-          {result && !loading && (
+          {result && !loading && !dismissed && (
             <div className="animate-fade-in space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              {restored && lastRunAt && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--accent-active)]/25 bg-[var(--accent-active)]/10 px-2.5 py-2 text-[11px] text-[var(--accent-active)]">
+                  <History size={12} /> Son analiz geri yüklendi · {formatToolRunTime(lastRunAt)}
+                  <span className="text-muted-foreground">Güncel veri için yeniden çalıştır.</span>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   {result.verdict && (
@@ -301,8 +400,53 @@ export function ToolCard({
                   {result.headline && (
                     <p className="text-sm font-semibold leading-snug">{result.headline}</p>
                   )}
+                  {lastRunAt && (
+                    <p className="mt-1 text-[10px] text-muted-foreground/70">
+                      Kaydedildi · {formatToolRunTime(lastRunAt)}
+                    </p>
+                  )}
                 </div>
                 {(result.score ?? 0) > 0 && <ScoreRing value={result.score ?? 0} label="skor" />}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 border-y border-white/5 py-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 px-2 text-[10px]"
+                  onClick={copyReport}
+                >
+                  {copiedReport ? <Check size={11} /> : <FileText size={11} />} Raporu kopyala
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 px-2 text-[10px]"
+                  onClick={downloadReport}
+                >
+                  <Download size={11} /> Markdown indir
+                </Button>
+                {result.table && result.table.rows.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1.5 px-2 text-[10px]"
+                    onClick={copyTable}
+                  >
+                    {copiedTable ? <Check size={11} /> : <TableProperties size={11} />} Tabloyu
+                    kopyala
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ms-auto h-7 gap-1 px-2 text-[10px] text-muted-foreground"
+                  onClick={() => setDismissed(true)}
+                  aria-label="Analizi kapat"
+                  title="Analizi kapat (geçmişten silinmez)"
+                >
+                  <X size={11} /> Kapat
+                </Button>
               </div>
 
               {result.metrics.length > 0 && (

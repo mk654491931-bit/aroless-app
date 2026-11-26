@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -8,6 +9,7 @@ import {
   Check,
   ChevronRight,
   Cpu,
+  Download,
   Eye,
   Gauge,
   Loader2,
@@ -263,6 +265,45 @@ export function CommandCenter() {
           : null;
   const mb = econ ? marginBadge(econ) : null;
 
+  const exportQualifiedCsv = () => {
+    if (!products.length) return;
+    const escape = (value: unknown) => {
+      const text = String(value ?? "").replace(/\r?\n/g, " ");
+      return /[",;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const header = [
+      "urun",
+      "pazaryeri",
+      "hedef_kitle",
+      "finger_30",
+      "retail_usd",
+      "cogs_usd",
+      "net_kart_usd",
+      "net_marj_pct",
+      "disqualified",
+      "sinyal_kaynaklari",
+    ];
+    const rows = products.map(({ p, e, finger }) => [
+      p.name,
+      p.marketplace,
+      p.audience || "Broad",
+      finger,
+      p.retail_price_usd ?? "",
+      p.supplier_cost_usd ?? "",
+      e.net_profit.toFixed(2),
+      e.net_margin_pct.toFixed(1),
+      e.disqualified ? "evet" : "hayır",
+      (p.signals?.sources ?? []).join(" | "),
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `aroless-command-center-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div className="space-y-4">
       {/* header */}
@@ -305,6 +346,15 @@ export function CommandCenter() {
               <Search className="size-4" /> Scan
             </Button>
           </form>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportQualifiedCsv}
+            disabled={!products.length}
+            className="gap-2"
+          >
+            <Download className="size-4" /> CSV
+          </Button>
           <Button
             variant={logOpen ? "default" : "outline"}
             size="sm"
@@ -562,6 +612,25 @@ export function CommandCenter() {
                     </Badge>
                   )}
                 </div>
+
+                {selected && (
+                  <div className="grid gap-1.5">
+                    <Link
+                      to="/tools/growth"
+                      search={{ product: selected.name }}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[--ai]/30 bg-[--ai]/10 px-2.5 py-2 text-[11px] font-medium text-[--ai] transition-colors hover:bg-[--ai]/15"
+                    >
+                      <Sparkles className="size-3.5" /> 90 günlük plana aktar
+                    </Link>
+                    <Link
+                      to="/tools/listing"
+                      search={{ product: selected.name }}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background/40 px-2.5 py-2 text-[11px] text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+                    >
+                      <TrendingUp className="size-3.5" /> Fiyat ve listing stratejisi
+                    </Link>
+                  </div>
+                )}
 
                 {verdict.vetoed && (
                   <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">

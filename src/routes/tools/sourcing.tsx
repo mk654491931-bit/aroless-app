@@ -18,6 +18,10 @@ const SECTIONS = [
 
 export const Route = createFileRoute("/tools/sourcing")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>) => {
+    const product = typeof s["product"] === "string" ? s["product"].trim().slice(0, 120) : "";
+    return product ? { product } : {};
+  },
   head: () => ({
     meta: [
       { title: "Sourcing & Factory Hub — Aroless" },
@@ -39,12 +43,18 @@ export const Route = createFileRoute("/tools/sourcing")({
 });
 
 function SourcingHub() {
-  const [neg, setNeg] = useState({ product: "", targetPrice: "", moq: "", notes: "" });
+  const search = Route.useSearch();
+  const [neg, setNeg] = useState({
+    product: search.product ?? "",
+    targetPrice: "",
+    moq: "",
+    notes: "",
+  });
   const [offer, setOffer] = useState("");
   const [legit, setLegit] = useState({ url: "", notes: "" });
-  const [spec, setSpec] = useState({ product: "", reviews: "" });
+  const [spec, setSpec] = useState({ product: search.product ?? "", reviews: "" });
   const [comp, setComp] = useState({
-    product: "",
+    product: search.product ?? "",
     channel: "Amazon US",
     country: "US",
     material: "",
@@ -64,6 +74,7 @@ function SourcingHub() {
         title="AI Supplier Negotiator"
         description="Hedef fiyat ve MOQ'ya göre İngilizce + Çince pazarlık mesajı üretir."
         runLabel="Generate Pitch (EN/CN)"
+        inputs={neg}
         onRun={() => callTool("supplier-negotiator", neg)}
         validate={() =>
           firstValidationError(
@@ -114,6 +125,7 @@ function SourcingHub() {
         title="Supplier Offer Analyzer"
         description="Tedarikçi e-postasını yapıştır; gizli navlun kalemleri ve Incoterm risklerini çıkarır."
         runLabel="Teklifi Denetle"
+        inputs={{ offer }}
         onRun={() => callTool("offer-analyzer", { offer })}
         validate={() => requireText(offer, "Teklif metni", 20)}
       >
@@ -133,6 +145,7 @@ function SourcingHub() {
         title="Supplier Legitimacy Detector"
         description="Alibaba/1688 profil linkini analiz eder: gerçek fabrika mı, ticaret firması mı?"
         runLabel="Tedarikçiyi Doğrula"
+        inputs={legit}
         onRun={() => callTool("legitimacy-detector", legit)}
         validate={() => requireText(legit.url, "Profil URL veya firma adı", 3)}
       >
@@ -159,6 +172,7 @@ function SourcingHub() {
         title="Negative Review ➔ Spec Sheet"
         description="Rakibin 1 yıldızlı yorumlarını fabrikaya gönderilecek üretim şartnamesine çevirir."
         runLabel="Spec Sheet Üret"
+        inputs={spec}
         onRun={() => callTool("review-spec-sheet", spec)}
         validate={() =>
           firstValidationError(
@@ -190,6 +204,7 @@ function SourcingHub() {
         title="Pazaryeri Uyum & Gating Denetçisi"
         description="Satışa almadan önce kısıtlı kategori, gating ve zorunlu sertifika riskini (CPC/FCC/FDA/CE/GPSR) çıkarır."
         runLabel="Uyumu Denetle"
+        inputs={comp}
         onRun={() => callTool("compliance-check", comp)}
         validate={() => requireText(comp.product, "Ürün", 3)}
       >

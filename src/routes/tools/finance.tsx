@@ -10,6 +10,7 @@ import { firstValidationError, requirePositive, requireText } from "@/lib/tool-v
 import {
   capitalPlan,
   desiPlan,
+  fbaSizeTier,
   landedCostPlan,
   milestonePlan,
   reverseCostPlan,
@@ -27,6 +28,10 @@ const SECTIONS = [
 
 export const Route = createFileRoute("/tools/finance")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>) => {
+    const product = typeof s["product"] === "string" ? s["product"].trim().slice(0, 120) : "";
+    return product ? { product } : {};
+  },
   head: () => ({
     meta: [
       { title: "Financial & Cost Engine — Aroless" },
@@ -118,8 +123,9 @@ function ModelBreakdown({
 }
 
 function FinanceHub() {
+  const search = Route.useSearch();
   const [rev, setRev] = useState({
-    product: "",
+    product: search.product ?? "",
     retail: "39.99",
     margin: "30",
     channel: "Amazon US",
@@ -154,7 +160,7 @@ function FinanceHub() {
     trust: "yeni tedarikçi",
   });
   const [hs, setHs] = useState({
-    product: "",
+    product: search.product ?? "",
     material: "",
     destination: "US",
     price: "29.99",
@@ -183,6 +189,7 @@ function FinanceHub() {
     today: todayIso(),
   });
   const dimPlan = desiPlan({ l: dim.l, w: dim.w, h: dim.h, weight: dim.weight });
+  const tierPlan = fbaSizeTier({ l: dim.l, w: dim.w, h: dim.h, weight: dim.weight });
   const msPlan = milestonePlan({ amount: ms.amount, leadTime: ms.leadTime });
 
   return (
@@ -198,6 +205,7 @@ function FinanceHub() {
         title="Reverse Cost Engineer"
         description="Hedef satış fiyatı ve marjdan geriye doğru maksimum tedarikçi maliyetini bulur."
         runLabel="AI ile Stratejiyi Derinleştir"
+        inputs={rev}
         onRun={() => callTool("reverse-cost", rev)}
         validate={() =>
           firstValidationError(
@@ -264,6 +272,7 @@ function FinanceHub() {
         title="Landed Cost Calculator"
         description="EXW/FOB + navlun + gümrük ile gerçek kapıdan kapıya birim maliyet."
         runLabel="AI ile Maliyeti Düşür"
+        inputs={land}
         onRun={() => callTool("landed-cost", land)}
         validate={() =>
           firstValidationError(
@@ -333,6 +342,7 @@ function FinanceHub() {
         title="Minimum Capital Planner"
         description="Stok, navlun ve reklam bütçesini birlikte planla — stoksuz kalma riskini önle."
         runLabel="AI ile Nakit Akışını Planla"
+        inputs={cap}
         onRun={() => callTool("capital-planner", cap)}
         validate={() =>
           firstValidationError(
@@ -416,6 +426,7 @@ function FinanceHub() {
         title="Packaging & Desi Optimizer"
         description="Ölçüleri gir; bir alt FBA/kargo kademesine düşürecek ambalaj önerileri al."
         runLabel="AI ile Ambalajı Küçült"
+        inputs={dim}
         onRun={() => callTool("desi-optimizer", dim)}
         validate={() =>
           firstValidationError(
@@ -470,12 +481,24 @@ function FinanceHub() {
             value={`${dimPlan.billableKg} kg`}
             tone={dimPlan.isVolumetric ? "warning" : "profit"}
           />
+          <Stat
+            label="FBA kademesi"
+            value={tierPlan.label}
+            tone={tierPlan.tier === "extra-large" ? "warning" : "neutral"}
+          />
+          <Stat
+            label="Çevre / ağırlık"
+            value={`${tierPlan.girthIn} inç · ${tierPlan.weightLb} lb`}
+          />
         </div>
         <p className="text-[10px] text-muted-foreground">
           Formül: cm³ ÷ {dimPlan.divisor}.{" "}
           {dimPlan.isVolumetric
             ? "Hacim baskın; kutu küçültme doğrudan kargo kademesini düşürebilir."
-            : "Gerçek ağırlık baskın; kutu küçültmek tek başına kademe düşürmeyebilir."}
+            : "Gerçek ağırlık baskın; kutu küçültmek tek başına kademe düşürmeyebilir."}{" "}
+          FBA kademesi yaklaşık ABD sınıflandırmasıdır; kesin ücret için Amazon hesaplayıcısını
+          doğrula.
+          {tierPlan.blocker ? ` ${tierPlan.blocker}.` : ""}
         </p>
       </ToolCard>
 
@@ -485,6 +508,7 @@ function FinanceHub() {
         title="Supplier Milestone Shield"
         description="30/70 ödeme planını görselleştirir ve kur riski uyarısı üretir."
         runLabel="AI ile Ödeme Planını Koru"
+        inputs={ms}
         onRun={() => callTool("milestone-shield", ms)}
         validate={() => requirePositive(ms.amount, "Sipariş tutarı")}
       >
@@ -552,6 +576,7 @@ function FinanceHub() {
         title="HS Kodu & Gümrük Vergisi Bulucu"
         description="Ürünün HS/HTS kodunu, hedef pazar gümrük vergisini, VAT'ını ve zorunlu sertifikalarını çıkarır."
         runLabel="Kodu ve Vergiyi Çıkar"
+        inputs={hs}
         onRun={() => callTool("hs-classifier", hs)}
         validate={() =>
           firstValidationError(

@@ -13,6 +13,8 @@ import {
   Sparkles,
   Swords,
   Target,
+  Download,
+  History,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { HubShell } from "@/components/tools/hub-shell";
 import { ToolCard, Field, callTool } from "@/components/tools/tool-card";
 import { firstValidationError, requirePositive, requireText } from "@/lib/tool-validation";
-import { leadTimePlan } from "@/lib/tool-calculators";
+import { channelMarginPlan, formatUsd, leadTimePlan } from "@/lib/tool-calculators";
+import { buildToolReport, formatToolRunTime, saveToolRun, type ToolRun } from "@/lib/tool-report";
 
 const SECTIONS = [
   { id: "consensus", label: "AI Konsensüs" },
@@ -147,11 +150,83 @@ function Gauge360({ value, label, color }: { value: number; label: string; color
   );
 }
 
+function consensusRun(input: Record<string, string>, data: Consensus, ranAt: string): ToolRun {
+  const results = data.results?.length
+    ? data.results
+    : [data.gemini, data.groq, data.openrouter, data.lovable].filter((engine): engine is Engine =>
+        Boolean(engine),
+      );
+  const engineRows = results.map((engine) => [
+    ENGINE_LABELS[engine.provider ?? ""] ?? engine.provider ?? "Motor",
+    `${Math.round(engine.score)}/100`,
+    engine.note,
+  ]);
+  return {
+    id: `consensus:${ranAt}`,
+    toolId: "consensus",
+    title: "Multi-AI Consensus Score",
+    ranAt,
+    input,
+    result: {
+      headline: `Hibrit konsensüs skoru %${data.hybrid} · ${data.engines ?? results.length} motor yanıt verdi.`,
+      verdict:
+        data.hybrid >= 70
+          ? `GİRİLİR — %${data.hybrid}`
+          : data.hybrid >= 45
+            ? `TEST ET — %${data.hybrid}`
+            : `DİKKAT — %${data.hybrid}`,
+      score: data.hybrid,
+      metrics: [
+        {
+          label: "Hibrit skor",
+          value: `%${data.hybrid}`,
+          tone: data.hybrid >= 70 ? "profit" : "warning",
+        },
+        { label: "Motor uyumu", value: `%${data.agreement ?? 0}`, tone: "action" },
+        { label: "Yanıt veren motor", value: `${data.engines ?? results.length}`, tone: "neutral" },
+      ],
+      bullets: results.map(
+        (engine) =>
+          `${ENGINE_LABELS[engine.provider ?? ""] ?? engine.provider ?? "Motor"}: ${engine.score}/100 — ${engine.note}`,
+      ),
+      table: {
+        columns: ["Motor", "Skor", "Gerekçe"],
+        rows: engineRows,
+      },
+      document: null,
+      risks:
+        (data.agreement ?? 0) < 60 && results.length > 1
+          ? ["Motorlar arasındaki uyum düşük; tek skor yerine ayrık gerekçeleri oku."]
+          : [],
+      actions: ["Skoru 90 günlük büyüme planına taşı ve en zayıf boyutu test et."],
+      assumptions: ["Motorlar aynı ürün/pazar girdisini bağımsız puanladı."],
+      provider: "çok motorlu konsensüs",
+      providers: results.map((engine) => engine.provider ?? "motor"),
+      confidence: data.agreement,
+      sources: [],
+    },
+  };
+}
+
 function ConsensusCard() {
   const [input, setInput] = useState({ product: "", country: "US", price: "39.99", cost: "8.50" });
   const [data, setData] = useState<Consensus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  const downloadConsensusReport = () => {
+    if (!data || !lastRunAt) return;
+    const run = consensusRun(input, data, lastRunAt);
+    const blob = new Blob([buildToolReport(run)], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `consensus-${lastRunAt.slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const run = async () => {
     if (input.product.trim().length < 2) {
@@ -167,7 +242,17 @@ function ConsensusCard() {
       });
       if (!res.ok)
         throw new Error((await res.json().catch(() => ({}))).error ?? "Consensus başarısız");
-      setData((await res.json()) as Consensus);
+      const next = (await res.json()) as Consensus;
+      setData(next);
+      const ranAt = new Date().toISOString();
+      const saved = saveToolRun({
+        toolId: "consensus",
+        title: "Multi-AI Consensus Score",
+        input,
+        result: consensusRun(input, next, ranAt).result,
+        ranAt,
+      });
+      setLastRunAt(saved?.ranAt ?? ranAt);
     } catch (e) {
       toast.error("Analiz başarısız", { description: (e as Error).message });
     } finally {
@@ -238,6 +323,19 @@ function ConsensusCard() {
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
               {loading ? "Motorlar çalışıyor…" : "Consensus Skorunu Hesapla"}
             </Button>
+            {data && lastRunAt && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--ai)]/25 bg-[var(--ai)]/10 px-2.5 py-2 text-[11px] text-[var(--ai)]">
+                <History size={12} /> Konsensüs kaydedildi · {formatToolRunTime(lastRunAt)}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ms-auto h-6 gap-1 px-1.5 text-[10px]"
+                  onClick={downloadConsensusReport}
+                >
+                  <Download size={11} /> Raporu indir
+                </Button>
+              </div>
+            )}
             {data && (
               <div className="space-y-2 text-xs text-muted-foreground">
                 {(data.results?.length
@@ -318,6 +416,7 @@ function GrowthPlanCard({ initialProduct }: { initialProduct?: string }) {
       title="90 Günlük Büyüme Planı"
       description="Ürünün birim ekonomisini, kanal maliyetlerini ve reklam bütçesini tek plana bağlar; 0-30, 31-60 ve 61-90 gün için ölçülebilir aksiyonlar üretir."
       runLabel="90 Günlük Planı Çıkar"
+      inputs={input}
       onRun={() => callTool("growth-plan", input)}
       validate={() =>
         firstValidationError(
@@ -383,7 +482,11 @@ function GrowthPlanCard({ initialProduct }: { initialProduct?: string }) {
 function GrowthHub() {
   const search = Route.useSearch();
   const today = new Date().toISOString().slice(0, 10);
-  const [bundle, setBundle] = useState({ product: "", price: "39.99", channel: "Amazon US" });
+  const [bundle, setBundle] = useState({
+    product: search.product ?? "",
+    price: "39.99",
+    channel: "Amazon US",
+  });
   const [lead, setLead] = useState({
     today,
     production: "25",
@@ -392,7 +495,11 @@ function GrowthHub() {
     stock: "600",
     velocity: "14",
   });
-  const [arb, setArb] = useState({ product: "", cost: "8.5", price: "39.99" });
+  const [arb, setArb] = useState({
+    product: search.product ?? "",
+    cost: "8.5",
+    price: "39.99",
+  });
   const [hook, setHook] = useState("");
   const [ci, setCi] = useState({
     competitor: "",
@@ -409,6 +516,7 @@ function GrowthHub() {
     stock: lead.stock,
     velocity: lead.velocity,
   });
+  const arbPlan = channelMarginPlan({ price: arb.price, cost: arb.cost });
 
   return (
     <HubShell
@@ -427,6 +535,7 @@ function GrowthHub() {
         title="AI Bundle & AOV Booster"
         description="Düşük maliyetli tamamlayıcı ürünlerle sepet ortalamasını yükselt."
         runLabel="Bundle Önerileri Getir"
+        inputs={bundle}
         onRun={() => callTool("bundle-booster", bundle)}
         validate={() =>
           firstValidationError(
@@ -465,6 +574,7 @@ function GrowthHub() {
         title="Lead-Time Countdown"
         description="Üretim + transit + depo girişini toplayıp tam yeniden sipariş tarihini verir."
         runLabel="AI ile Gecikme Senaryosu Çıkar"
+        inputs={lead}
         onRun={() => callTool("lead-time", lead)}
         validate={() =>
           firstValidationError(
@@ -573,6 +683,7 @@ function GrowthHub() {
         title="Cross-Border Arbitrage Matrix"
         description="Amazon US, Amazon EU ve TikTok Shop marjlarını yan yana karşılaştırır."
         runLabel="Pazar Matrisini Çıkar"
+        inputs={arb}
         onRun={() => callTool("arbitrage-matrix", arb)}
         validate={() =>
           firstValidationError(
@@ -605,6 +716,68 @@ function GrowthHub() {
             />
           </Field>
         </div>
+
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/20">
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 px-2.5 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Anlık kanal marjı
+            </span>
+            <span className="rounded border border-[var(--accent-active)]/25 px-1.5 py-0.5 text-[9px] text-[var(--accent-active)]">
+              AI beklemeden · model
+            </span>
+          </div>
+          <table className="w-full min-w-[420px] text-[11px]">
+            <thead className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
+              <tr className="border-b border-white/5">
+                <th className="px-2.5 py-1.5 text-left font-medium">Kanal</th>
+                <th className="px-2 py-1.5 text-right font-medium">Kesinti</th>
+                <th className="px-2 py-1.5 text-right font-medium">KDV</th>
+                <th className="px-2 py-1.5 text-right font-medium">Net kâr</th>
+                <th className="px-2.5 py-1.5 text-right font-medium">Marj</th>
+              </tr>
+            </thead>
+            <tbody>
+              {arbPlan.rows.map((row) => {
+                const best = arbPlan.best?.id === row.id;
+                return (
+                  <tr
+                    key={row.id}
+                    className={best ? "bg-[var(--profit)]/10" : "border-t border-white/5"}
+                  >
+                    <td className="px-2.5 py-1.5">
+                      <span className="font-medium">{row.label}</span>
+                      {best && (
+                        <span className="ms-1.5 rounded bg-[var(--profit)]/15 px-1 py-0.5 text-[9px] text-[var(--profit)]">
+                          en iyi
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">
+                      {formatUsd(row.fees)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">
+                      {row.vat ? formatUsd(row.vat) : "—"}
+                    </td>
+                    <td
+                      className={`px-2 py-1.5 text-right font-mono font-semibold ${
+                        row.netProfit >= 0 ? "text-[var(--profit)]" : "text-[var(--warning)]"
+                      }`}
+                    >
+                      {formatUsd(row.netProfit)}
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right font-mono">{row.marginPct}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="border-t border-white/5 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground/70">
+            {arbPlan.best
+              ? `En iyi: ${arbPlan.best.label} · ${formatUsd(arbPlan.best.netProfit)} net. Kanallar arası fark ${formatUsd(arbPlan.spread)}.`
+              : "Fiyat ve maliyet girildiğinde kanal karşılaştırması anında hesaplanır."}{" "}
+            Amazon EU'da %20 KDV modeli kullanılır; ülkeye göre değişebilir.
+          </p>
+        </div>
       </ToolCard>
 
       <ToolCard
@@ -613,6 +786,7 @@ function GrowthHub() {
         title="Competitor Ad Hook Extractor"
         description="Rakip reklam metnindeki psikolojik kancaları ve doymamış açıları ortaya çıkarır."
         runLabel="Kancaları Çöz"
+        inputs={{ adCopy: hook }}
         onRun={() => callTool("ad-hook-extractor", { adCopy: hook })}
         validate={() => requireText(hook, "Rakip reklam metni", 20)}
       >
@@ -632,6 +806,7 @@ function GrowthHub() {
         title="Rakip İlan İstihbaratı"
         description="Rakibin fiyat/yorum/zayıf noktalarını parçalar ve fiyat–ürün–görsel ekseninde kazanma planı çıkarır."
         runLabel="Rakibi Parçala"
+        inputs={ci}
         onRun={() => callTool("competitor-intel", ci)}
         validate={() =>
           firstValidationError(

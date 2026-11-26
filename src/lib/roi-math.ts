@@ -66,23 +66,75 @@ export function computeRoi(e: RoiEntry): RoiStats {
   };
 }
 
-export function aggregateRoi(entries: RoiEntry[]) {
+type CurrencyTotals = {
+  rows: number;
+  revenue: number;
+  profit: number;
+  ads: number;
+  orders: number;
+  marginPct: number;
+  roasPct: number;
+  cac: number;
+  winners: number;
+  losers: number;
+};
+
+/**
+ * Toplam KPI'ları TEK para biriminde üretir.
+ *
+ * Önceden farklı para birimlerindeki satırlar doğrudan toplanıyordu: 1.000 TRY
+ * ile 1.000 USD aynı "ciro" sayılıyordu. Bu, panelin en tehlikeli hatasıydı
+ * çünkü kullanıcı gerçek kârı yanlış okuyabiliyordu. Artık para birimi seçilir;
+ * diğer para birimleri ayrı gruplarda kalır ve toplama karışmaz.
+ */
+export function aggregateRoi(entries: RoiEntry[], currency?: string) {
   const rows = entries.map((e) => ({ entry: e, stats: computeRoi(e) }));
-  const revenue = rows.reduce((s, r) => s + r.stats.revenue, 0);
-  const profit = rows.reduce((s, r) => s + r.stats.netProfit, 0);
-  const ads = rows.reduce((s, r) => s + (Number(r.entry.ad_spend) || 0), 0);
-  const orders = rows.reduce((s, r) => s + r.stats.netOrders, 0);
+  const currencies = [...new Set(rows.map((row) => row.entry.currency || "USD"))].sort();
+  const activeCurrency = currency && currencies.includes(currency) ? currency : (currencies[0] ?? "USD");
+  const aggregateRows = rows.filter((row) => (row.entry.currency || "USD") === activeCurrency);
+
+  const totalsFor = (scoped: typeof rows): CurrencyTotals => {
+    const revenue = scoped.reduce((s, r) => s + r.stats.revenue, 0);
+    const profit = scoped.reduce((s, r) => s + r.stats.netProfit, 0);
+    const ads = scoped.reduce((s, r) => s + (Number(r.entry.ad_spend) || 0), 0);
+    const orders = scoped.reduce((s, r) => s + r.stats.netOrders, 0);
+    return {
+      rows: scoped.length,
+      revenue,
+      profit,
+      ads,
+      orders,
+      marginPct: revenue > 0 ? (profit / revenue) * 100 : 0,
+      roasPct: ads > 0 ? (revenue / ads) * 100 : 0,
+      cac: orders > 0 ? ads / orders : 0,
+      winners: scoped.filter((r) => r.stats.netProfit > 0).length,
+      losers: scoped.filter((r) => r.stats.netProfit <= 0).length,
+    };
+  };
+
+  const aggregate = totalsFor(aggregateRows);
+  const byCurrency = Object.fromEntries(
+    currencies.map((code) => [
+      code,
+      totalsFor(rows.filter((row) => (row.entry.currency || "USD") === code)),
+    ]),
+  ) as Record<string, CurrencyTotals>;
+
   return {
     rows,
-    revenue,
-    profit,
-    ads,
-    orders,
-    marginPct: revenue > 0 ? (profit / revenue) * 100 : 0,
-    roasPct: ads > 0 ? (revenue / ads) * 100 : 0,
-    cac: orders > 0 ? ads / orders : 0,
-    winners: rows.filter((r) => r.stats.netProfit > 0).length,
-    losers: rows.filter((r) => r.stats.netProfit <= 0).length,
+    currency: activeCurrency,
+    currencies,
+    mixedCurrencies: currencies.length > 1,
+    byCurrency,
+    revenue: aggregate.revenue,
+    profit: aggregate.profit,
+    ads: aggregate.ads,
+    orders: aggregate.orders,
+    marginPct: aggregate.marginPct,
+    roasPct: aggregate.roasPct,
+    cac: aggregate.cac,
+    winners: aggregate.winners,
+    losers: aggregate.losers,
   };
 }
 
