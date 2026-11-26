@@ -12,6 +12,7 @@ import {
   Star,
   Search,
   Activity,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ import { RadarSparkline } from "@/components/radar-sparkline";
 import { creditErrorMessage } from "@/lib/credits";
 import { formatPercentBand } from "@/features/finder/utils/ranges";
 import { toast } from "sonner";
+import { downloadTextFile, exportDate, rowsToCsv, safeFilename } from "@/lib/module-export";
 
 export const Route = createFileRoute("/radar")({
   ssr: false,
@@ -223,6 +225,46 @@ function RadarPage() {
   const top = items.length ? Math.max(...items.map((i) => i.momentum)) : 0;
   const liveCount = items.filter((i) => i.payload?.trend_source === "google-trends").length;
 
+  function downloadRadarCsv() {
+    if (!items.length) return;
+    const csv = rowsToCsv([
+      [
+        "Urun",
+        "Nis",
+        "Kategori",
+        "Platform",
+        "Kazanan skoru",
+        "Momentum %",
+        "Min fiyat",
+        "Max fiyat",
+        "Tahmini marj %",
+        "Canli trend",
+        "Trend anahtari",
+        "Gerekce",
+      ],
+      ...items.map((item) => [
+        item.title,
+        item.niche,
+        item.category,
+        item.platform,
+        item.winner_score,
+        item.momentum,
+        item.price_min,
+        item.price_max,
+        item.est_margin_pct,
+        item.payload?.trend_source === "google-trends" ? "evet" : "hayir",
+        item.payload?.keyword ?? "",
+        item.reason ?? "",
+      ]),
+    ]);
+    downloadTextFile(
+      `${safeFilename(`kazanan-radar-${country}-${exportDate()}`)}.csv`,
+      csv,
+      "text/csv;charset=utf-8",
+    );
+    toast.success(`${items.length} ürün CSV olarak indirildi`);
+  }
+
   if (loading || !user) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -251,6 +293,16 @@ function RadarPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1.5"
+              onClick={downloadRadarCsv}
+              disabled={!items.length}
+              title="Bugünün radarını CSV olarak indir"
+            >
+              <Download size={13} /> CSV
+            </Button>
             <Button
               size="sm"
               variant="outline"

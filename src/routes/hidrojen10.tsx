@@ -11,6 +11,7 @@ import {
   CircleDot,
   Clock3,
   Database,
+  Download,
   ExternalLink,
   Filter,
   History,
@@ -91,6 +92,9 @@ import {
 } from "@/lib/hydrogen10.functions";
 import { usageLabelFor } from "@/lib/plan-usage";
 import { cn } from "@/lib/utils";
+import { buildHydrogen10Csv } from "@/lib/hydrogen10-export";
+import { downloadTextFile, exportDate, safeFilename } from "@/lib/module-export";
+import { toast } from "sonner";
 
 type H10SearchParams = {
   q: string;
@@ -1259,6 +1263,16 @@ function Hydrogen10Page() {
   const totalOffers =
     success?.products.reduce((sum, product) => sum + product.offers.length, 0) ?? 0;
 
+  function downloadFilteredCsv() {
+    if (!success || !filtered.length) return;
+    downloadTextFile(
+      `${safeFilename(`hidrojen10-${success.query}-${exportDate()}`)}.csv`,
+      buildHydrogen10Csv(filtered),
+      "text/csv;charset=utf-8",
+    );
+    toast.success(`${filtered.length} ürün CSV olarak indirildi`);
+  }
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8">
@@ -1470,12 +1484,23 @@ function Hydrogen10Page() {
                     teklif · {formatH10Count(success.rowCount)} gözlem
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className={cn("text-[10px]", h10StatusTone(success.status))}
-                >
-                  {h10StatusLabel(success.status)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={cn("text-[10px]", h10StatusTone(success.status))}
+                  >
+                    {h10StatusLabel(success.status)}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-[11px]"
+                    onClick={downloadFilteredCsv}
+                    disabled={!filtered.length}
+                  >
+                    <Download size={11} /> CSV ({filtered.length})
+                  </Button>
+                </div>
               </div>
 
               <FiltersBar

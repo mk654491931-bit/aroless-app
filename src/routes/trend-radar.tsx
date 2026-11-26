@@ -2,7 +2,7 @@ import { withProGate } from "@/components/pro-route-gate";
 import { CreditCost } from "@/components/credit-cost";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Activity,
   Bot,
@@ -17,6 +17,7 @@ import {
   Sparkles,
   TrendingUp,
   Zap,
+  Download,
 } from "lucide-react";
 import {
   Line,
@@ -57,6 +58,7 @@ import {
 import { HubShell } from "@/components/tools/hub-shell";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
+import { downloadTextFile, exportDate, rowsToCsv, safeFilename } from "@/lib/module-export";
 
 export const Route = createFileRoute("/trend-radar")({
   ssr: false,
@@ -420,6 +422,42 @@ function TrendRadar() {
   const statusOf = (s: TrendSource) => statuses.find((x) => x.source === s);
   const localEngine = synth?.engines?.includes("deterministic") ?? false;
 
+  function downloadTrendCsv() {
+    if (!visible.length) return;
+    const csv = rowsToCsv([
+      [
+        "Trend",
+        "Kaynak",
+        "Tür",
+        "Kategori",
+        "Bölge",
+        "Arama hacmi",
+        "Büyüme %",
+        "AI skoru",
+        "Tespit",
+      ],
+      ...visible
+        .slice(0, 200)
+        .map((trend) => [
+          trend.trend_name,
+          trend.source,
+          trend.kind,
+          trend.category,
+          trend.region,
+          trend.metrics.search_volume,
+          trend.metrics.growth_rate,
+          scoreOf(trend),
+          trend.scraped_at,
+        ]),
+    ]);
+    downloadTextFile(
+      `${safeFilename(`trend-radar-${region}-${category}-${exportDate()}`)}.csv`,
+      csv,
+      "text/csv;charset=utf-8",
+    );
+    toast.success(`${visible.length} trend CSV olarak indirildi`);
+  }
+
   return (
     <HubShell
       emoji="📡"
@@ -651,14 +689,21 @@ function TrendRadar() {
                         {b.signal}
                       </Badge>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="mt-2 h-7 px-2 text-xs text-cyan-300"
-                      onClick={() => openBrief(b.trend_name)}
-                    >
-                      AI Ürün Brifingi <ChevronRight size={13} />
-                    </Button>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-cyan-300"
+                        onClick={() => openBrief(b.trend_name)}
+                      >
+                        AI Ürün Brifingi <ChevronRight size={13} />
+                      </Button>
+                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                        <Link to="/council" search={{ q: b.trend_name }}>
+                          Konseye taşı <ChevronRight size={13} />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -810,13 +855,24 @@ function TrendRadar() {
 
       {/* --------------------------------------------------------- trend feed */}
       <Card className="lg:col-span-2 border-white/10 bg-slate-950/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Search size={16} className="text-cyan-400" /> Trend Feed & AI Strategy
-          </CardTitle>
-          <CardDescription>
-            {visible.length} sinyal — kaynak, hız, AI talep skoru ve ilk tespit zamanı.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 pb-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Search size={16} className="text-cyan-400" /> Trend Feed & AI Strategy
+            </CardTitle>
+            <CardDescription>
+              {visible.length} sinyal — kaynak, hız, AI talep skoru ve ilk tespit zamanı.
+            </CardDescription>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5 text-xs"
+            onClick={downloadTrendCsv}
+            disabled={!visible.length}
+          >
+            <Download size={13} /> CSV indir
+          </Button>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -860,14 +916,23 @@ function TrendRadar() {
                       {new Date(t.scraped_at).toLocaleTimeString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs text-cyan-300"
-                        onClick={() => openBrief(t.trend_name)}
-                      >
-                        Generate AI Product Brief
-                      </Button>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-cyan-300"
+                          onClick={() => openBrief(t.trend_name)}
+                        >
+                          Generate AI Product Brief
+                        </Button>
+                        <Link
+                          to="/council"
+                          search={{ q: t.trend_name }}
+                          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+                        >
+                          Konseyde analiz et <ChevronRight size={10} />
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

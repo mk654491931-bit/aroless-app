@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   Mail,
   FlaskConical,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ import {
   deleteCreativeAsset,
   type CreativeAssetRow,
 } from "@/lib/creative-studio.functions";
+import { buildStudioMarkdown } from "@/lib/studio-export";
+import { downloadTextFile, exportDate, safeFilename } from "@/lib/module-export";
 
 export const Route = createFileRoute("/studio")({
   ssr: false,
@@ -120,33 +123,53 @@ function KitView({ row, onRegenerate }: { row: CreativeAssetRow; onRegenerate?: 
       </TabsList>
 
       <div className="premium-card mt-3 p-4 text-sm">
-        {meta && (
-          <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
-            <Badge variant="outline" className="border-white/10">
-              Motorlar: {meta.engines.join(" + ") || "—"}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={
-                meta.coverage >= 100
-                  ? "border-[var(--profit)]/40 text-[var(--profit)]"
-                  : "border-amber-500/40 text-amber-300"
-              }
-            >
-              Kapsam %{meta.coverage}
-            </Badge>
-            {meta.repaired && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+          {meta && (
+            <>
               <Badge variant="outline" className="border-white/10">
-                Eksikler onarım turuyla tamamlandı
+                Motorlar: {meta.engines.join(" + ") || "—"}
               </Badge>
-            )}
-            {meta.missing_sections.length > 0 && (
-              <Badge variant="outline" className="border-amber-500/40 text-amber-300">
-                Eksik: {meta.missing_sections.join(", ")}
+              <Badge
+                variant="outline"
+                className={
+                  meta.coverage >= 100
+                    ? "border-[var(--profit)]/40 text-[var(--profit)]"
+                    : "border-amber-500/40 text-amber-300"
+                }
+              >
+                Kapsam %{meta.coverage}
               </Badge>
-            )}
-          </div>
-        )}
+              {meta.repaired && (
+                <Badge variant="outline" className="border-white/10">
+                  Eksikler onarım turuyla tamamlandı
+                </Badge>
+              )}
+              {meta.missing_sections.length > 0 && (
+                <Badge variant="outline" className="border-amber-500/40 text-amber-300">
+                  Eksik: {meta.missing_sections.join(", ")}
+                </Badge>
+              )}
+            </>
+          )}
+          <button
+            onClick={() => {
+              downloadTextFile(
+                `${safeFilename(`kreatif-${row.product_name}-${exportDate()}`)}.md`,
+                buildStudioMarkdown({
+                  product_name: row.product_name,
+                  platform: row.platform,
+                  payload: kit,
+                  created_at: row.created_at,
+                }),
+                "text/markdown;charset=utf-8",
+              );
+              toast.success("Kreatif paket indirildi");
+            }}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold hover:bg-white/10"
+          >
+            <Download size={12} /> Markdown indir
+          </button>
+        </div>
 
         <div className="mb-3 rounded-lg border border-white/10 bg-white/5 p-3">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">

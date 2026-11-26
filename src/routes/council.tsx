@@ -1,6 +1,6 @@
 import { withProGate } from "@/components/pro-route-gate";
 import { getUiLang } from "@/lib/auto-i18n/lang";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,6 +19,8 @@ import {
   Truck,
   ShieldAlert,
   Palette,
+  Download,
+  ArrowUpRight,
 } from "lucide-react";
 import { HubShell } from "@/components/tools/hub-shell";
 import { CreditCost } from "@/components/credit-cost";
@@ -26,6 +28,8 @@ import { AnalysisFailureCard } from "@/components/analysis-failure";
 import { pollCouncilAnalysis, runCouncilAnalysis } from "@/lib/council.functions";
 import { TARGET_COUNTRIES } from "@/lib/countries";
 import type { CouncilReport } from "@/lib/council.server";
+import { buildCouncilMarkdown } from "@/lib/council-export";
+import { downloadTextFile, exportDate, safeFilename } from "@/lib/module-export";
 
 const STAGES = [
   { icon: ShieldCheck, label: "Fingerprint & Turnstile doğrulanıyor…" },
@@ -102,7 +106,8 @@ function ScoreRing({ score }: { score: number }) {
 }
 
 function CouncilPage() {
-  const [query, setQuery] = useState("");
+  const search = Route.useSearch();
+  const [query, setQuery] = useState(search.q ?? "");
   const [country, setCountry] = useState("GLOBAL");
   const [stage, setStage] = useState(-1);
   const [report, setReport] = useState<CouncilReport | null>(null);
@@ -110,6 +115,16 @@ function CouncilPage() {
   const qc = useQueryClient();
   const runFn = useServerFn(runCouncilAnalysis);
   const pollFn = useServerFn(pollCouncilAnalysis);
+
+  const downloadReport = () => {
+    if (!report) return;
+    downloadTextFile(
+      `${safeFilename(`konsey-${report.query}-${exportDate()}`)}.md`,
+      buildCouncilMarkdown(report),
+      "text/markdown;charset=utf-8",
+    );
+    toast.success("Konsey raporu indirildi");
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -258,6 +273,48 @@ function CouncilPage() {
                     Önbellekten (24s) · kredi harcanmadı
                   </div>
                 )}
+                <button
+                  onClick={downloadReport}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
+                >
+                  <Download size={12} /> Markdown raporu indir
+                </button>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-4">
+              <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Bu kararı sonraki modüllere taşı
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/tools/growth"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold text-[oklch(0.9_0.12_255)] hover:bg-[oklch(0.62_0.17_255)]/20"
+                >
+                  Büyüme planı <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/tools/listing"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold text-[oklch(0.9_0.12_255)] hover:bg-[oklch(0.62_0.17_255)]/20"
+                >
+                  Listing ve fiyat <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/tools/finance"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold text-[oklch(0.9_0.12_255)] hover:bg-[oklch(0.62_0.17_255)]/20"
+                >
+                  Finans ve maliyet <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/studio"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[oklch(0.62_0.17_255)]/30 bg-[oklch(0.62_0.17_255)]/10 px-3 py-1.5 text-xs font-semibold text-[oklch(0.9_0.12_255)] hover:bg-[oklch(0.62_0.17_255)]/20"
+                >
+                  Reklam kreatifi <ArrowUpRight size={12} />
+                </Link>
               </div>
             </div>
 
@@ -389,6 +446,9 @@ function CouncilPage() {
 }
 
 export const Route = createFileRoute("/council")({
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s["q"] === "string" && s["q"].trim() ? s["q"].trim().slice(0, 160) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "14'lü AI Konsey — Aroless AI Ürün Analizi" },

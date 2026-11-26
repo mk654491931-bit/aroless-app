@@ -25,6 +25,9 @@ import {
   Target,
   Copy,
   Check,
+  Download,
+  ArrowUpDown,
+  Star,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -36,6 +39,9 @@ import { creditErrorMessage } from "@/lib/credits";
 import { getUiLang } from "@/lib/auto-i18n/lang";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { BrandLogo } from "@/components/brand-logo";
+import { useWatchlist } from "@/hooks/use-watchlist";
+import { buildViralAdMarkdown, buildViralAdText } from "@/lib/viral-ad-export";
+import { downloadTextFile, exportDate, rowsToCsv, safeFilename } from "@/lib/module-export";
 
 export const Route = createFileRoute("/viral-ads")({
   ssr: false,
@@ -125,8 +131,12 @@ function ViralAdsPage() {
   const [q, setQ] = useState("");
   const [platform, setPlatform] = useState("");
   const [niche, setNiche] = useState("");
+  const [sortBy, setSortBy] = useState<"viral" | "velocity" | "fresh" | "views">("viral");
+  const [savedOnly, setSavedOnly] = useState(false);
   const [playing, setPlaying] = useState<LiveAd | null>(null);
   const [building, setBuilding] = useState<LiveAd | null>(null);
+  const watchlist = useWatchlist("viral-ads");
+  const savedIds = watchlist.ids;
 
   useEffect(() => {
     if (!loading && !user)
@@ -149,8 +159,8 @@ function ViralAdsPage() {
   });
 
   const filtered = useMemo(() => {
-    const rows = adsQ.data ?? [];
-    return rows.filter((a) => {
+    const rows = (adsQ.data ?? []).filter((a) => {
+      if (savedOnly && !savedIds.includes(a.id)) return false;
       if (platform && a.platform !== platform) return false;
       if (niche && a.niche !== niche) return false;
       if (q.trim()) {
@@ -164,7 +174,18 @@ function ViralAdsPage() {
       }
       return true;
     });
-  }, [adsQ.data, q, platform, niche]);
+    return rows.sort((a, b) => {
+      if (sortBy === "views") return b.views - a.views;
+      if (sortBy === "velocity")
+        return (b.metrics?.views_per_hour ?? 0) - (a.metrics?.views_per_hour ?? 0);
+      if (sortBy === "fresh")
+        return (
+          (a.metrics?.age_hours ?? Number.POSITIVE_INFINITY) -
+          (b.metrics?.age_hours ?? Number.POSITIVE_INFINITY)
+        );
+      return (b.metrics?.virality_score ?? 0) - (a.metrics?.virality_score ?? 0);
+    });
+  }, [adsQ.data, q, platform, niche, sortBy, savedOnly, savedIds]);
 
   if (loading || !user) {
     return (
@@ -184,6 +205,50 @@ function ViralAdsPage() {
     return scores.length ? Math.round(scores.reduce((s, n) => s + n, 0) / scores.length) : 0;
   })();
   const topVelocity = Math.max(0, ...(adsQ.data ?? []).map((a) => a.metrics?.views_per_hour ?? 0));
+
+  function downloadCsv() {
+    if (!filtered.length) return;
+    const csv = rowsToCsv([
+      [
+        "Reklam",
+        "Kanal",
+        "Platform",
+        "Niş",
+        "Ülke",
+        "İzlenme",
+        "Beğeni",
+        "Viralite",
+        "İzlenme/saat",
+        "Etkileşim %",
+        "Yaş (saat)",
+        "Yayın",
+        "Kaydedildi",
+        "URL",
+      ],
+      ...filtered.map((ad) => [
+        ad.title,
+        ad.channel,
+        ad.platform,
+        ad.niche,
+        ad.country,
+        ad.views,
+        ad.likes,
+        ad.metrics?.virality_score ?? "",
+        ad.metrics?.views_per_hour ?? "",
+        ad.metrics?.engagement_pct ?? "",
+        ad.metrics?.age_hours ?? "",
+        ad.created_at,
+        savedIds.includes(ad.id) ? "evet" : "hayir",
+        ad.video_url,
+      ]),
+    ]);
+    downloadTextFile(
+      `${safeFilename(`viral-ads-${exportDate()}`)}.csv`,
+      csv,
+      "text/csv;charset=utf-8",
+    );
+    toast.success(`${filtered.length} reklam CSV olarak indirildi`);
+  }
 
   return (
     <div className="min-h-screen">
@@ -229,7 +294,7 @@ function ViralAdsPage() {
         </div>
 
         {!adsQ.isLoading && (adsQ.data?.length ?? 0) > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <StatCard
               icon={Megaphone}
               label="Live ads"
@@ -259,7 +324,7 @@ function ViralAdsPage() {
               className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[oklch(0.62_0.17_255)]"
             />
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
             <FilterSelect
               label="Platform"
               value={platform}
@@ -274,23 +339,68 @@ function ViralAdsPage() {
               options={NICHES}
               icon={TrendingUp}
             />
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {filtered.length} ads · {nicheCount} niş · gerçek virality skoruna göre sıralı
-            </span>
-            {(q || platform || niche) && (
-              <button
-                onClick={() => {
-                  setQ("");
-                  setPlatform("");
-                  setNiche("");
-                }}
-                className="text-[oklch(0.85_0.15_255)] hover:underline"
+            <div className="relative">
+              <ArrowUpDown
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="w-full rounded-lg bg-white/5 border border-white/10 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[oklch(0.62_0.17_255)] appearance-none"
               >
-                Clear filters
+                <option value="viral" className="bg-[oklch(0.20_0.035_255)]">
+                  Viralite skoru
+                </option>
+                <option value="velocity" className="bg-[oklch(0.20_0.035_255)]">
+                  Saatlik izlenme
+                </option>
+                <option value="fresh" className="bg-[oklch(0.20_0.035_255)]">
+                  En yeni
+                </option>
+                <option value="views" className="bg-[oklch(0.20_0.035_255)]">
+                  Toplam izlenme
+                </option>
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              {filtered.length} ads · {nicheCount} niş · seçili sıralamaya göre
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSavedOnly((value) => !value)}
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 transition ${
+                  savedOnly
+                    ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
+                    : "border-white/10 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                <Star size={12} fill={savedOnly ? "currentColor" : "none"} /> Kaydedilenler (
+                {watchlist.count})
               </button>
-            )}
+              <button
+                onClick={downloadCsv}
+                disabled={!filtered.length}
+                className="inline-flex items-center gap-1 text-[oklch(0.85_0.15_255)] hover:underline disabled:opacity-40"
+              >
+                <Download size={12} /> CSV indir
+              </button>
+              {(q || platform || niche || savedOnly) && (
+                <button
+                  onClick={() => {
+                    setQ("");
+                    setPlatform("");
+                    setNiche("");
+                    setSavedOnly(false);
+                  }}
+                  className="text-[oklch(0.85_0.15_255)] hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
           </div>
         </section>
 
@@ -324,6 +434,8 @@ function ViralAdsPage() {
               <AdCard
                 key={ad.id}
                 ad={ad}
+                saved={savedIds.includes(ad.id)}
+                onToggleSave={() => watchlist.toggle(ad.id)}
                 onPlay={() => setPlaying(ad)}
                 onBuild={() => setBuilding(ad)}
               />
@@ -338,7 +450,19 @@ function ViralAdsPage() {
   );
 }
 
-function AdCard({ ad, onPlay, onBuild }: { ad: LiveAd; onPlay: () => void; onBuild: () => void }) {
+function AdCard({
+  ad,
+  saved,
+  onToggleSave,
+  onPlay,
+  onBuild,
+}: {
+  ad: LiveAd;
+  saved: boolean;
+  onToggleSave: () => void;
+  onPlay: () => void;
+  onBuild: () => void;
+}) {
   const engagement =
     ad.metrics?.engagement_pct ?? (ad.views > 0 ? Math.round((ad.likes / ad.views) * 100) : 0);
   const score = ad.metrics?.virality_score ?? 0;
@@ -380,8 +504,21 @@ function AdCard({ ad, onPlay, onBuild }: { ad: LiveAd; onPlay: () => void; onBui
       </button>
 
       <div className="p-4 flex-1 flex flex-col">
-        <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_255)] mb-1 font-semibold">
-          {ad.niche}
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-[10px] uppercase tracking-wider text-[oklch(0.85_0.15_255)] font-semibold">
+            {ad.niche}
+          </div>
+          <button
+            onClick={onToggleSave}
+            title={saved ? "Kaydedilenlerden çıkar" : "Sonra bakmak için kaydet"}
+            className={`rounded-md border p-1 transition ${
+              saved
+                ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
+                : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Star size={11} fill={saved ? "currentColor" : "none"} />
+          </button>
         </div>
         <h3 className="font-bold text-[15px] leading-snug line-clamp-2">{ad.title}</h3>
         <div className="text-xs text-muted-foreground mt-1 truncate">{ad.channel}</div>
@@ -571,32 +708,23 @@ function ViralAdModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
 
   const copyAll = async () => {
     if (!result) return;
-    const script = result.script
-      .map((b) => `${b.second} | ${b.visual} | VO: ${b.voiceover} | Yazi: ${b.text_overlay}`)
-      .join("\n");
-    const text = [
-      `HOOK: ${result.hook_variants[0] ?? ""}`,
-      result.hook_variants[1] ? `HOOK B: ${result.hook_variants[1]}` : "",
-      result.hook_variants[2] ? `HOOK C: ${result.hook_variants[2]}` : "",
-      "",
-      "SCRIPT",
-      script,
-      "",
-      `CTA: ${result.cta}`,
-      `HEDEFLEME: ${result.targeting}`,
-      `NEDEN: ${result.why}`,
-      `Beklenen: hook ${result.predicted.hook_rate} · CTR ${result.predicted.ctr} · CPM ${result.predicted.cpm}`,
-      `Ölçülen referans: ${result.source_numbers}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(buildViralAdText(ad, result));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Kopyalanamadı", { description: "Tarayıcı pano iznini kontrol edin." });
     }
+  };
+
+  const downloadBlueprint = () => {
+    if (!result) return;
+    downloadTextFile(
+      `${safeFilename(`viral-plan-${ad.niche}-${exportDate()}`)}.md`,
+      buildViralAdMarkdown(ad, result),
+      "text/markdown;charset=utf-8",
+    );
+    toast.success("Reklam planı indirildi");
   };
 
   return (
@@ -782,15 +910,23 @@ function ViralAdModal({ ad, onClose }: { ad: LiveAd; onClose: () => void }) {
                 ))}
               </div>
 
-              <div className="flex items-center justify-between gap-3 text-[10px] text-muted-foreground">
-                <span>Kaynak: {result.source_numbers}</span>
-                <button
-                  onClick={copyAll}
-                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
-                >
-                  {copied ? <Check size={12} /> : <Copy size={12} />}
-                  {copied ? "Kopyalandı" : "Tümünü kopyala"}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] text-muted-foreground">
+                <span className="min-w-0 truncate">Kaynak: {result.source_numbers}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    onClick={downloadBlueprint}
+                    className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                  >
+                    <Download size={12} /> Markdown
+                  </button>
+                  <button
+                    onClick={copyAll}
+                    className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                  >
+                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                    {copied ? "Kopyalandı" : "Tümünü kopyala"}
+                  </button>
+                </div>
               </div>
             </>
           )}

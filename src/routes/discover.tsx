@@ -13,7 +13,17 @@
 
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, BarChart3, Layers3, Search, Sparkles, Store, Tag } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  Download,
+  Layers3,
+  Search,
+  Sparkles,
+  Store,
+  Tag,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +50,9 @@ import type {
   TopProduct,
 } from "@/lib/product-discovery.types";
 import type { DiscoveryWinner } from "@/lib/product-discovery.functions";
+import { buildDiscoveryCsv } from "@/lib/discovery-export";
+import { downloadTextFile, exportDate, safeFilename } from "@/lib/module-export";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/discover")({
   ssr: false,
@@ -396,6 +409,16 @@ function NicheScanResults({
     };
   }, [products]);
 
+  function downloadCsv() {
+    if (!products.length) return;
+    downloadTextFile(
+      `${safeFilename(`nis-taramasi-${products[0]?.name ?? "rapor"}-${exportDate()}`)}.csv`,
+      buildDiscoveryCsv(products),
+      "text/csv;charset=utf-8",
+    );
+    toast.success(`${products.length} aday CSV olarak indirildi`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -409,12 +432,17 @@ function NicheScanResults({
             {report.categories.length} kategori
           </p>
         </div>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/5 px-3 py-2 text-xs font-semibold transition hover:bg-white/10"
-        >
-          Kazanan ürünleri ana sayfada bul <ArrowRight size={13} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={downloadCsv}>
+            <Download size={13} /> CSV indir
+          </Button>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/5 px-3 py-2 text-xs font-semibold transition hover:bg-white/10"
+          >
+            Kazanan ürünleri ana sayfada bul <ArrowRight size={13} />
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-relaxed text-muted-foreground">
@@ -581,16 +609,39 @@ function NicheScanResults({
                 </p>
               )}
 
-              {product.url && (
-                <a
-                  href={product.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent-active)] hover:underline"
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {product.url && (
+                  <a
+                    href={product.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent-active)] hover:underline"
+                  >
+                    Kaynağa git ↗
+                  </a>
+                )}
+                <Link
+                  to="/tools/growth"
+                  search={{ product: product.name }}
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
                 >
-                  Kaynağa git ↗
-                </a>
-              )}
+                  Büyüme planı <ArrowUpRight size={10} />
+                </Link>
+                <Link
+                  to="/tools/listing"
+                  search={{ product: product.name }}
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                >
+                  Listing ve fiyat <ArrowUpRight size={10} />
+                </Link>
+                <Link
+                  to="/studio"
+                  search={{ product: product.name }}
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                >
+                  Kreatif üret <ArrowUpRight size={10} />
+                </Link>
+              </div>
             </article>
           );
         })}

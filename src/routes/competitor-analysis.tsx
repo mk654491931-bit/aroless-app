@@ -1,5 +1,5 @@
 import { withProGate } from "@/components/pro-route-gate";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -13,6 +13,9 @@ import {
   Search,
   Swords,
   TrendingUp,
+  Download,
+  ArrowUpDown,
+  ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +27,14 @@ import { CountryInfoBox } from "@/components/country-info-box";
 import { CountryFlag } from "@/components/country-flag";
 import { Sparkline } from "@/components/sparkline";
 import { DraggableCopilot } from "@/components/draggable-copilot";
+import {
+  buildCompetitorCsv,
+  buildCompetitorMarkdown,
+  competitorSummary,
+  sortCompetitorSellers,
+  type CompetitorSort,
+} from "@/lib/competitor-export";
+import { downloadTextFile, exportDate, safeFilename } from "@/lib/module-export";
 
 type SearchParams = { q?: string; country?: string };
 
@@ -59,6 +70,7 @@ function CompetitorAnalysisPage() {
   const [query, setQuery] = useState(search.q ?? "");
   const [country, setCountry] = useState(search.country ?? DEFAULT_TARGET_COUNTRY);
   const [report, setReport] = useState<CompetitorReport | null>(null);
+  const [sort, setSort] = useState<CompetitorSort>("sales");
   const fn = useServerFn(analyzeCompetitors);
 
   useEffect(() => {
@@ -82,6 +94,31 @@ function CompetitorAnalysisPage() {
   }, [search.q]);
 
   const c = countryByCode(country);
+  const sortedSellers = useMemo(
+    () => (report ? sortCompetitorSellers(report.sellers, sort) : []),
+    [report, sort],
+  );
+  const summary = useMemo(() => (report ? competitorSummary(report.sellers) : null), [report]);
+
+  function downloadCsv() {
+    if (!report) return;
+    downloadTextFile(
+      `${safeFilename(`rakip-analizi-${report.query}-${exportDate()}`)}.csv`,
+      buildCompetitorCsv(report),
+      "text/csv;charset=utf-8",
+    );
+    toast.success("Rakip tablosu indirildi");
+  }
+
+  function downloadMarkdown() {
+    if (!report) return;
+    downloadTextFile(
+      `${safeFilename(`rakip-raporu-${report.query}-${exportDate()}`)}.md`,
+      buildCompetitorMarkdown(report, c.name),
+      "text/markdown;charset=utf-8",
+    );
+    toast.success("Rakip raporu indirildi");
+  }
 
   return (
     <div className="min-h-screen">
@@ -161,18 +198,56 @@ function CompetitorAnalysisPage() {
         {report && (
           <>
             <section className="premium-card grain rounded-2xl p-5">
-              <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <h2 className="text-sm font-semibold flex items-center gap-2">
                   <Gauge size={14} /> Aktif Satıcı Radarı — <CountryFlag code={country} size={13} />{" "}
                   {c.name}
                 </h2>
-                <span className="text-xs text-muted-foreground">
-                  Ortalama pazar fiyatı:{" "}
-                  <span className="text-foreground font-semibold">
-                    ${report.avg_price_usd.toFixed(2)}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    Ortalama pazar fiyatı:{" "}
+                    <span className="text-foreground font-semibold">
+                      ${report.avg_price_usd.toFixed(2)}
+                    </span>
                   </span>
-                </span>
+                  <button
+                    onClick={downloadCsv}
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10"
+                  >
+                    <Download size={11} /> CSV
+                  </button>
+                  <button
+                    onClick={downloadMarkdown}
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10"
+                  >
+                    <Download size={11} /> Markdown
+                  </button>
+                </div>
               </div>
+              {summary && summary.count > 0 && (
+                <div className="mb-3 grid grid-cols-2 gap-2 text-center text-xs md:grid-cols-4">
+                  {[
+                    { label: "Satıcı", value: summary.count },
+                    {
+                      label: "Fiyat aralığı",
+                      value: `$${summary.minPrice.toFixed(0)}–${summary.maxPrice.toFixed(0)}`,
+                    },
+                    { label: "Medyan fiyat", value: `$${summary.medianPrice.toFixed(2)}` },
+                    {
+                      label: "Tahmini aylık satış",
+                      value: summary.totalMonthlySales.toLocaleString("tr-TR"),
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-lg border border-white/10 bg-white/[0.03] p-2"
+                    >
+                      <div className="font-bold text-foreground">{item.value}</div>
+                      <div className="text-[9px] uppercase text-muted-foreground">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {report.trend_monthly && report.trend_monthly.length > 1 && (
                 <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
@@ -201,6 +276,20 @@ function CompetitorAnalysisPage() {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
+                  <div className="mb-2 flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
+                    <ArrowUpDown size={11} />
+                    <span>Sırala:</span>
+                    <select
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value as CompetitorSort)}
+                      className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-foreground outline-none"
+                    >
+                      <option value="sales">Aylık satış</option>
+                      <option value="price">Fiyat</option>
+                      <option value="rating">Puan</option>
+                      <option value="authority">Domain yetkisi</option>
+                    </select>
+                  </div>
                   <table className="w-full text-xs">
                     <thead className="text-muted-foreground">
                       <tr className="text-left">
@@ -223,7 +312,7 @@ function CompetitorAnalysisPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.sellers.map((s, i) => (
+                      {sortedSellers.map((s, i) => (
                         <tr key={i} className="border-t border-white/10">
                           <td className="py-2 pr-3 font-semibold">{s.seller}</td>
                           <td className="py-2 pr-3">
@@ -321,6 +410,42 @@ function CompetitorAnalysisPage() {
                 )}
               </section>
             )}
+
+            <section className="premium-card grain rounded-2xl p-4">
+              <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Rakip raporunu sonraki adıma taşı
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/tools/listing"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--accent-active)] hover:bg-[var(--accent-active)]/20"
+                >
+                  Fiyat ve listing <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/tools/growth"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--accent-active)] hover:bg-[var(--accent-active)]/20"
+                >
+                  Büyüme planı <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/studio"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--accent-active)] hover:bg-[var(--accent-active)]/20"
+                >
+                  Reklam kreatifi <ArrowUpRight size={12} />
+                </Link>
+                <Link
+                  to="/tools/finance"
+                  search={{ product: report.query }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-active)]/30 bg-[var(--accent-active)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--accent-active)] hover:bg-[var(--accent-active)]/20"
+                >
+                  Maliyet hesabı <ArrowUpRight size={12} />
+                </Link>
+              </div>
+            </section>
           </>
         )}
       </main>
